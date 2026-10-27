@@ -238,11 +238,11 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 - **NPCs and monsters** — the **Place on Map** button on a creature in the **Creature Library**, or on a token template.
 - **Anything you built yourself** — **Place on Map** in the **Token Manager**.
 
-Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
+Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included. On a touch screen, put your finger on a token and slide it to the square, or tap it and then tap the square, as the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) describes; with a wall, fog or light tool up, your finger goes to the tool instead.
 
 Clicking a token also selects it, with a dashed light-blue ring, and right-clicking a token selects the one whose menu opens. A click on empty ground clears the selection; dragging the map leaves it alone. While a wall, fog or light tool, the ruler or the area template is up, a click goes to that tool, so the selection stays as it was. Switching maps starts with nothing selected.
 
-**From the keyboard.** Once you have clicked the map, the arrow keys move the selected token a square, or five with **Shift**, with the view following it, and **[** and **]** turn it 45 degrees. **,** and **.** (or **<** and **>**) step through every token the map shows you, hidden ones included: in the turn order during a fight, the rest row by row from the top, and the view pans to keep the selection in sight. **Enter** opens the token's menu at the token, panning it into view first and keeping the menu inside the map. **Esc** lets go of one thing a press: the menu, a held token, your tool, then the selection. While the wall **Select** tool holds walls, the arrow keys move the walls instead (see [Selecting and Moving Walls](#selecting-and-moving-walls)). The keys go to the map only while it has the keyboard: a click anywhere else, such as on the chat or a panel, gives them to that, a window open over the map takes them, and **Shift+Tab** takes the keyboard back to the page. A selected token your screen no longer draws, such as one in a preview that the previewed player cannot see, stays selected and the keys leave it alone.
+**From the keyboard.** Once you have clicked the map, the arrow keys move the selected token a square, or five with **Shift**, with the view following it, and **[** and **]** turn it 45 degrees. **,** and **.** (or **<** and **>**) step through every token the map shows you, hidden ones included: in the turn order during a fight, the rest row by row from the top, and the view pans to keep the selection in sight. **Enter** opens the token's menu at the token, panning it into view first and keeping the menu inside the map. **Esc** lets go of one thing a press: the menu, the armed **Ping**, a held token, your tool, then the selection. While the wall **Select** tool holds walls, the arrow keys move the walls instead (see [Selecting and Moving Walls](#selecting-and-moving-walls)). The keys go to the map only while it has the keyboard: a click anywhere else, such as on the chat or a panel, gives them to that, a window open over the map takes them, and **Shift+Tab** takes the keyboard back to the page. A selected token your screen no longer draws, such as one in a preview that the previewed player cannot see, stays selected and the keys leave it alone.
 
 *GIF pending — Placing a token and moving it into position.*
 
@@ -272,7 +272,7 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
 - Set which way the token faces in **Facing**, in degrees clockwise (see [Turning a Token](#turning-a-token))
-- Apply or remove conditions. A D&D 5e campaign is offered all fifteen D&D 5e conditions, the same set the character sheet uses, and a Call of Cthulhu campaign the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. In every game system you can also type a condition of your own, such as *Frightened 2* or *Blessed*, and press Enter or **+** to add it; it can be up to 60 characters, and a token can carry up to 50 conditions. Typing a listed condition adds the listed one, and one the token already has is not added twice. Click a condition above the list to take it off. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
+- Apply or remove conditions. A D&D 5e campaign is offered all fifteen D&D 5e conditions, the same set the character sheet uses, and a Call of Cthulhu campaign the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. In every game system you can also type a condition of your own, such as *Frightened 2* or *Blessed*, and press Enter or **+** to add it; it can be up to 60 characters, and a token can carry up to 50 conditions. Typing a listed condition adds the listed one, and one the token already has is not added twice. Click a condition above the list to take it off. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, or tap it on a touch screen, players included — they can't act around a condition they can't identify
 
 If a change cannot be saved, for example while the connection is down, a message says why. A button or a list goes back to what it was; what you typed into a box (the name, initiative, notes or the stat block) stays there, so you can put it right and save it again. Changes made to the token elsewhere while the editor is open, by you in another tab or by a player on their own token, show as they arrive. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
 
@@ -841,6 +841,18 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 
 On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token.
 
+### On a touch screen
+
+On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) describes works for you, on every token. And:
+
+| To | Do this |
+|---|---|
+| Open a token's menu, for **Edit Token**, **Hide from Players** and the rest | Press and hold the token for half a second. It is the menu a right-click opens there, item for item. |
+| Lock or unlock a door | Press and hold the door for its menu. A tap opens or closes it, as a click does. |
+| Use a wall, fog or light tool | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
+
+A stylus never opens a menu by holding; use a finger.
+
 ## Combat and Initiative
 
 ### Starting the Initiative Tracker
@@ -927,6 +939,8 @@ Click the map, put the cursor where you mean and press **Tab**. A dot with radia
 - Everyone can ping, and each person's colour is assigned automatically and stays consistent.
 - Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
 - Rapid repeat pings are rate-limited server-side and quietly dropped.
+
+Without a keyboard, click or tap **Ping** in the map's toolbar, then the spot. On a touch screen you can also press and hold an empty part of the map for half a second; on a token or a door that opens its menu instead (see [On a touch screen](#on-a-touch-screen)).
 
 ### Updating HP
 
@@ -1025,7 +1039,7 @@ Open the **Walls** panel, one of the DM tool panels stacked at the top right of 
 - **Polygon** — Click to place corners of a room; click near the starting point to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
 
-On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
+On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 

@@ -20,6 +20,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } 
 import { render, screen, act } from '@testing-library/react';
 import type { CampaignMap, Token } from '@/types';
 import { mouse } from '@/test/pointer';
+import { recordDrawing, nextFrame, pictures, FakeImage } from '@/test/recordingCanvas';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -277,108 +278,7 @@ const onPage = (x: number, y: number) => ({ clientX: x + 100, clientY: y + 50 })
 /** The centre of square (x, y); grid y counts up from the bottom row. */
 const square = (x: number, y: number) => onPage(x * 50 + 25, (19 - y) * 50 + 25);
 
-// ── What each layer draws ────────────────────────────────────────────────────
-
-interface Call { method: string; args: unknown[] }
-
-/**
- * A 2D context that records every method called on it and keeps whatever is
- * assigned to it. A method's answer is a gradient-like object, or empty pixels
- * for the two that hand pixels back, enough for the layers' draws to run.
- */
-function recordingContext(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; calls: Call[] } {
-  const calls: Call[] = [];
-  const answer = { addColorStop: () => undefined, width: 0 };
-  const pixels = (w: unknown, h: unknown) => {
-    const width = Number(w) || 0;
-    const height = Number(h) || 0;
-    return { width, height, data: new Uint8ClampedArray(width * height * 4) };
-  };
-  const props: Record<string, unknown> = { canvas };
-  const ctx = new Proxy(props, {
-    get(target, prop) {
-      if (typeof prop !== 'string') return undefined;
-      if (prop in target) return target[prop];
-      return (...args: unknown[]) => {
-        calls.push({ method: prop, args });
-        if (prop === 'createImageData') return pixels(args[0], args[1]);
-        if (prop === 'getImageData') return pixels(args[2], args[3]);
-        return answer;
-      };
-    },
-    set(target, prop, value) {
-      if (typeof prop === 'string') target[prop] = value;
-      return true;
-    },
-  });
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
-}
-
-/** Every picture the map asked for, to load by hand: jsdom loads none. */
-const pictures: FakeImage[] = [];
-class FakeImage {
-  onload: (() => void) | null = null;
-  onerror: ((e: unknown) => void) | null = null;
-  crossOrigin = '';
-  width = 1000;
-  height = 1000;
-  private source = '';
-  set src(value: string) { this.source = value; pictures.push(this); }
-  get src() { return this.source; }
-  load() { act(() => { this.onload?.(); }); }
-}
-
-/** Lets the map's render loop draw its next frame. */
-async function nextFrame() {
-  await act(async () => {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  });
-}
-
-/**
- * Gives every canvas in the tests of the calling group a recording context,
- * and stands in for the browser's pictures.
- */
-function recordDrawing() {
-  const recorded = new Map<HTMLCanvasElement, Call[]>();
-
-  beforeEach(() => {
-    recorded.clear();
-    pictures.length = 0;
-    vi.stubGlobal('Image', FakeImage);
-    const contexts = new Map<HTMLCanvasElement, CanvasRenderingContext2D>();
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-      configurable: true,
-      writable: true,
-      value(this: HTMLCanvasElement) {
-        let ctx = contexts.get(this);
-        if (!ctx) {
-          const made = recordingContext(this);
-          ctx = made.ctx;
-          contexts.set(this, ctx);
-          recorded.set(this, made.calls);
-        }
-        return ctx;
-      },
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { value: () => null, configurable: true, writable: true });
-  });
-
-  return {
-    recorded,
-    /** The calls the canvas has had since the last look. */
-    take(canvas: HTMLCanvasElement): Call[] {
-      const calls = recorded.get(canvas) ?? [];
-      const taken = calls.slice();
-      calls.length = 0;
-      return taken;
-    },
-  };
-}
+// ── What each layer draws (src/test/recordingCanvas.ts) ─────────────────────
 
 /** Clearing a layer: the identity transform, then every pixel. */
 const cleared = (w: number, h: number) => [

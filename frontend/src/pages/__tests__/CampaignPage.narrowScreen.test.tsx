@@ -161,3 +161,16 @@ it('takes the keyboard while the window is narrow', async () => {
     vi.unstubAllGlobals();
   }
 });
+
+// On a phone or a tablet the browser's toolbar comes and goes, and `100vh`
+// is the height with it gone, so the bottom of a page that tall sat under
+// the toolbar. The dynamic viewport height follows the toolbar. jsdom lays
+// nothing out, so the class is what can be checked here.
+it('is as tall as the screen shows, toolbar or not', () => {
+  render(<CampaignPage />);
+  fireEvent.click(screen.getByRole('button', { name: 'Continue anyway' }));
+
+  const page = document.querySelector('header')!.parentElement!;
+  expect(page.className.split(/\s+/)).toContain('h-dvh');
+  expect(page.className.split(/\s+/)).not.toContain('h-screen');
+});

@@ -326,3 +326,122 @@ describe('reset', () => {
     expect(labels()).toEqual(['tap']);
   });
 });
+
+// Android makes its own long-press and sends `contextmenu`, often before the
+// recogniser's 500 ms. The page tells the recogniser, and the press is held
+// as after a long-press: whichever comes second does nothing.
+describe("the browser's own long-press", () => {
+  it('holds a press: no long-press from the timer and no tap on the lift', () => {
+    const { r, labels } = setup();
+    r.down(touch(1, 100, 100));
+    vi.advanceTimersByTime(400);
+
+    expect(r.hold(1)).toBe(true);
+    vi.advanceTimersByTime(600);
+    r.up(touch(1, 100, 100));
+    expect(labels()).toEqual([]);
+
+    // The next press starts afresh.
+    r.down(touch(2, 100, 100));
+    r.up(touch(2, 100, 100));
+    expect(labels()).toEqual(['tap']);
+  });
+
+  it('holds nothing once the timer has made the long-press, nor twice', () => {
+    const { r, labels } = setup();
+    r.down(touch(1, 100, 100));
+    vi.advanceTimersByTime(500);
+    expect(r.hold(1)).toBe(false);
+    r.up(touch(1, 100, 100));
+
+    r.down(touch(2, 100, 100));
+    expect(r.hold(2)).toBe(true);
+    expect(r.hold(2)).toBe(false);
+    expect(labels()).toEqual(['long-press']);
+  });
+
+  it('holds no drag, no pinch and no finger it never saw', () => {
+    const { r, labels } = setup();
+    expect(r.hold(9)).toBe(false);
+    r.down(touch(1, 100, 100));
+    r.move(touch(1, 150, 100));
+    expect(r.hold(1)).toBe(false);
+    r.up(touch(1, 150, 100));
+
+    r.down(touch(2, 100, 100));
+    r.down(touch(3, 200, 100));
+    expect(r.hold(2)).toBe(false);
+    r.up(touch(2, 100, 100));
+    r.up(touch(3, 200, 100));
+    expect(labels()).toEqual(['drag start', 'drag end', 'pinch start', 'pinch end']);
+  });
+
+  // The page asks, so a right-click with some other touch on the glass is
+  // not taken for the browser's long-press.
+  it('says which press is held, by the timer or by hold, until it lifts', () => {
+    const { r } = setup();
+    expect(r.isHeld(1)).toBe(false);
+    r.down(touch(1, 100, 100));
+    expect(r.isHeld(1)).toBe(false);
+    vi.advanceTimersByTime(500);
+    expect(r.isHeld(1)).toBe(true);
+    r.up(touch(1, 100, 100));
+    expect(r.isHeld(1)).toBe(false);
+
+    r.down(touch(2, 100, 100));
+    r.hold(2);
+    expect(r.isHeld(2)).toBe(true);
+    r.up(touch(2, 100, 100));
+
+    r.down(touch(3, 100, 100));
+    r.move(touch(3, 150, 100));
+    expect(r.isHeld(3)).toBe(false);
+    r.up(touch(3, 150, 100));
+  });
+
+  it('a held press then cancelled by the browser ends quietly', () => {
+    const { r, labels } = setup();
+    r.down(touch(1, 100, 100));
+    r.hold(1);
+    r.cancel(touch(1, 100, 100));
+    vi.advanceTimersByTime(1000);
+    expect(labels()).toEqual([]);
+  });
+});
+
+// Under a DM tool a press is the tool's for as long as it is held, so a DM
+// who rests a finger on a wall's end before dragging it still drags it.
+describe('a press that may not long-press', () => {
+  it('becomes a drag after any time held still', () => {
+    const { r, labels } = setup({ longPressAt: () => false });
+    r.down(touch(1, 100, 100));
+    vi.advanceTimersByTime(900);
+    r.move(touch(1, 150, 100));
+    r.up(touch(1, 150, 100));
+
+    expect(labels()).toEqual(['drag start', 'drag end']);
+  });
+
+  it('is a tap when it lifts, however long it was held', () => {
+    const { r, labels } = setup({ longPressAt: () => false });
+    r.down(touch(1, 100, 100));
+    vi.advanceTimersByTime(900);
+    r.up(touch(1, 100, 100));
+
+    expect(labels()).toEqual(['tap']);
+  });
+
+  it('is asked once, as each press lands, with the sample it landed at', () => {
+    const asked: PointerSample[] = [];
+    const { r, labels } = setup({ longPressAt: (s) => { asked.push(s); return s.x > 50; } });
+    r.down(touch(1, 10, 10));
+    vi.advanceTimersByTime(600);
+    r.up(touch(1, 10, 10));
+    r.down(touch(2, 100, 100));
+    vi.advanceTimersByTime(600);
+    r.up(touch(2, 100, 100));
+
+    expect(asked).toEqual([touch(1, 10, 10), touch(2, 100, 100)]);
+    expect(labels()).toEqual(['tap', 'long-press']);
+  });
+});

@@ -192,6 +192,8 @@ You can **drag the dividers** between the columns to resize them, and collapse t
 
 **In a window narrower than 1024 pixels**, such as a laptop with two windows side by side, a tablet or a phone, the page first shows a **Desktop Required** notice. Click **Continue anyway** to open the table there: it keeps the same three-column desktop layout, so the panels are cramped, and the header's buttons wrap onto a second row. Your browser remembers the choice, so the notice does not come back; clearing the site's data for your CozyVTT brings it back. A layout made for phones is planned for a later release.
 
+**On a tablet** in landscape, 1024 pixels wide or more, the table opens as on a computer and works by touch: slide a token with your finger, tap a token for its details, press and hold for a menu, and pinch to zoom (see [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). The page is as tall as the browser shows it, so on a phone or a tablet its bottom stays above the browser's toolbar.
+
 ---
 
 ### Adding Maps
@@ -662,7 +664,7 @@ still appears, marked as having no notes.
 
 ### Moving Around the Map
 
-The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. Nothing you do there changes anyone else's view.
+The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. Nothing you do there changes anyone else's view, except a **Ping**, which the whole table sees.
 
 | Control | What it does |
 |---|---|
@@ -670,6 +672,7 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 | **Fit to Screen** | Shows the whole map in the space available |
 | **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
+| **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging |
 
 To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.
 
@@ -679,7 +682,7 @@ When the DM has placed your character's token on the map, you can move it: **cli
 
 Clicking the token also selects it. Then the arrow keys move it one square at a time, or five with **Shift**, and **[** and **]** turn it (see [Moving Your Token](PLAYER_GUIDE.md#moving-your-token) in the player guide).
 
-On a touch screen, tap the token, then tap the square to put it down. Lifting your finger leaves the token in your hand; to put it back, tap the square it came from.
+On a touch screen, put your finger on the token, slide it to the square and lift; or tap the token, then tap the square. A token you have tapped stays in your hand, drawn faded on its own square, while you move the map; to put it back, tap the square it came from. See [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) in the player guide.
 
 *GIF pending — Moving a player token.*
 

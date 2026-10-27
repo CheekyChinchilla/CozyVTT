@@ -148,7 +148,7 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['Shift + arrow keys'], does: 'Move the selected token five squares', who: 'actors' },
   { keys: ['[', ']'], does: 'Turn the selected token 45 degrees anticlockwise or clockwise', who: 'actors' },
   { keys: ['Enter'], does: "Open the selected token's menu", who: 'everyone' },
-  { keys: ['Esc'], does: 'Let go of one thing: the menu, a held token, the tool, then the selection', who: 'everyone' },
+  { keys: ['Esc'], does: 'Let go of one thing: the menu, the armed Ping, a held token, the tool, then the selection', who: 'everyone' },
   { keys: ['Tab'], does: 'Ping the map where the pointer is', who: 'everyone' },
   { keys: ['Alt + click'], does: 'Place a spell area off the grid, with the AoE tool', who: 'everyone' },
   { keys: ['?'], does: 'Show these shortcuts', who: 'everyone' },

@@ -32,7 +32,7 @@ const viewport: Viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, m
 
 const state = (t: Token): TokenDrawState => ({
   tokens: [t], tokenImages: new Map(), animatingTokens: new Map(), heldAt: {}, now: 0,
-  draggedToken: null, dragOffset: null, hoverCoords: null, hoverTokenId: null, revealedCells: null,
+  draggedToken: null, heldDrawnAt: null, hoverTokenId: null, revealedCells: null,
   isDM: true, dmShowSpiritTokens: true, dmViewBothPlanes: false, spiritAccentColor: '#000',
   characterHpCache: {}, isOwnToken: () => false, currentTurnTokenId: null, pulsePhase: 0.5, peekTokenId: null, selectedTokenId: null,
 });

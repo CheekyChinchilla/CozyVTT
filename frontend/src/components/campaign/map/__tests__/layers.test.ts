@@ -131,8 +131,7 @@ function baseTokenState(overrides: Partial<TokenDrawState> = {}): TokenDrawState
     heldAt: {},
     now: Date.now(),
     draggedToken: null,
-    dragOffset: null,
-    hoverCoords: null,
+    heldDrawnAt: null,
     hoverTokenId: null,
     revealedCells: null,
     isDM: false,
@@ -365,7 +364,7 @@ describe('drawTokens', () => {
     const ctx = makeMockCtx();
     drawTokens(ctx, baseTokenState({
       tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false,
-      draggedToken: veiled, dragOffset: { x: 0, y: 0 }, hoverCoords: { x: 1, y: 1 },
+      draggedToken: veiled, heldDrawnAt: { x: 1, y: 1 },
     }), viewport3x3);
     expect(count(ctx, 'drawImage')).toBe(0);
     expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?').length).toBeGreaterThanOrEqual(1);
@@ -670,8 +669,7 @@ describe('the selection ring', () => {
       // The store has turned it since it was picked up.
       tokens: [{ ...held, rotation: 90 }],
       draggedToken: held,
-      dragOffset: { x: 0, y: 0 },
-      hoverCoords: { x: 1, y: 1 },
+      heldDrawnAt: { x: 1, y: 1 },
       selectedTokenId: 'a',
     }), viewport3x3);
 
@@ -681,6 +679,51 @@ describe('the selection ring', () => {
     // The ghost stands on the middle square, centre (75, 75), and carries the ring.
     const ring = ctx.calls.filter((c) => c.method === 'arc' && (c.args[2] as number) > 25);
     expect(ring.map((c) => [c.args[0], c.args[1], c.args[2]])).toEqual([[75, 75, 48], [75, 75, 48]]);
+  });
+});
+
+describe('a held token', () => {
+  /** Each arc drawn, with the opacity it was drawn at. */
+  function recordArcs(ctx: MockCtx): Array<{ x: number; y: number; r: number; alpha: number }> {
+    const arcs: Array<{ x: number; y: number; r: number; alpha: number }> = [];
+    const record = ctx.arc.bind(ctx);
+    ctx.arc = (x: number, y: number, r: number, start: number, end: number, ccw?: boolean) => {
+      arcs.push({ x, y, r, alpha: ctx.globalAlpha });
+      record(x, y, r, start, end, ccw);
+    };
+    return arcs;
+  }
+
+  // A finger has lifted, or a pen has gone out of range: no pointer is over
+  // the map, and the held token was not drawn at all.
+  it('is drawn faded on its own square while no pointer carries it', () => {
+    const held = makeToken('a', { position: { x: 2, y: 0 } });
+    const ctx = makeMockCtx();
+    const arcs = recordArcs(ctx);
+    drawTokens(ctx, baseTokenState({ tokens: [held], draggedToken: held, heldDrawnAt: { x: 2, y: 0 } }), viewport3x3);
+
+    // Square (2, 0) is the bottom-right corner, centre (125, 125).
+    expect(arcs).toEqual([{ x: 125, y: 125, r: 25, alpha: 0.6 }]);
+    expect(count(ctx, 'stroke')).toBe(0);
+  });
+
+  it('carries the selection ring there when it is selected', () => {
+    const held = makeToken('a', { position: { x: 2, y: 0 } });
+    const ctx = makeMockCtx();
+    const arcs = recordArcs(ctx);
+    drawTokens(ctx, baseTokenState({ tokens: [held], draggedToken: held, heldDrawnAt: { x: 2, y: 0 }, selectedTokenId: 'a' }), viewport3x3);
+
+    expect(arcs.map(({ x, y, r }) => [x, y, r])).toEqual([[125, 125, 25], [125, 125, 48], [125, 125, 48]]);
+    expect(count(ctx, 'stroke')).toBe(2);
+  });
+
+  it('is drawn once, as the faded copy, and nowhere else', () => {
+    const held = makeToken('a', { position: { x: 2, y: 0 } });
+    const ctx = makeMockCtx();
+    const arcs = recordArcs(ctx);
+    drawTokens(ctx, baseTokenState({ tokens: [held], draggedToken: held, heldDrawnAt: { x: 0, y: 2 } }), viewport3x3);
+
+    expect(arcs).toEqual([{ x: 25, y: 25, r: 25, alpha: 0.6 }]);
   });
 });
 

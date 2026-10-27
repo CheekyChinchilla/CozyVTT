@@ -30,9 +30,13 @@ export interface TokenDrawState {
   heldAt: Readonly<Record<string, { x: number; y: number }>>;
   /** Timestamp for tween progress (Date.now() at frame time). */
   now: number;
+  /** The token this page holds, drawn faded at `heldDrawnAt` and nowhere else. */
   draggedToken: Token | null;
-  dragOffset: { x: number; y: number } | null;
-  hoverCoords: { x: number; y: number } | null;
+  /**
+   * The square the held token is drawn on (map/tokenHold.ts): under the
+   * pointer carrying it, or its own square while none does.
+   */
+  heldDrawnAt: { x: number; y: number } | null;
   hoverTokenId: string | null;
   /** Player fog cells — tokens centered in unrevealed cells are hidden. */
   revealedCells: Set<number> | null;
@@ -577,18 +581,15 @@ export function drawTokens(
     }
   }
 
-  // Dragged token as ghost — ghost position = cursor cell minus the pickup
-  // offset, so whichever cell of the token was clicked stays anchored under
-  // the cursor during drag.
-  if (state.draggedToken && state.dragOffset && state.hoverCoords) {
+  // The held token as a faded ghost, where the hold says: under the pointer
+  // carrying it, with the square it was taken by under the pointer, or on
+  // its own square when nothing carries it (a finger has lifted, a pen is out
+  // of range).
+  if (state.draggedToken && state.heldDrawnAt) {
     const draggedToken = state.draggedToken;
     const tokenImg = cachedTokenImage(draggedToken, state.tokenImages);
-    const maxPosX = mapWidth - draggedToken.size.width;
-    const maxPosY = mapHeight - draggedToken.size.height;
-    const ghostPosX = Math.max(0, Math.min(maxPosX, state.hoverCoords.x - state.dragOffset.x));
-    const ghostPosY = Math.max(0, Math.min(maxPosY, state.hoverCoords.y - state.dragOffset.y));
-    const ghostX = ghostPosX * gridSize;
-    const ghostY = gridYToTopPx(ghostPosY, draggedToken.size.height, mapHeight, gridSize);
+    const ghostX = state.heldDrawnAt.x * gridSize;
+    const ghostY = gridYToTopPx(state.heldDrawnAt.y, draggedToken.size.height, mapHeight, gridSize);
 
     const ghostW = draggedToken.size.width * gridSize;
     const ghostH = draggedToken.size.height * gridSize;
