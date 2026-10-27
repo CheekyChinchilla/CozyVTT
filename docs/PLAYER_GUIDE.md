@@ -308,6 +308,8 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
+On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the card's **✕**, the items of the token, door and character menus, the close buttons of messages and of the **Roll...** pickers, and the icon buttons in the page's header. A menu taller than the screen scrolls. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
+
 ### Two creatures can't stand in the same square
 
 Try to finish a move on a square somebody is already standing in and the move is refused, with a note saying who is in the way. That matches the rules: you can move *past* another creature, but you can't end your move on top of one.

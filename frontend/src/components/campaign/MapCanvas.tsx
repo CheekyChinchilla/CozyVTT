@@ -3195,7 +3195,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return () => window.removeEventListener('click', handleClick);
   }, [doorContextMenu]);
 
-  // After context menu renders, adjust position so it doesn't overflow the viewport
+  // After context menu renders, adjust position so it doesn't overflow the
+  // viewport; again when Move to Map… opens or closes, which changes its
+  // height. On a touch screen its height is capped at the viewport's (the
+  // menu scrolls), so a menu opened upward from the point keeps its top on
+  // the screen.
   useEffect(() => {
     if (!contextMenu || !contextMenuRef.current) {
       setContextMenuPos(null);
@@ -3214,7 +3218,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       adjustedY = Math.max(area.top, Math.min(contextMenu.y, area.bottom - rect.height));
     }
     setContextMenuPos({ x: adjustedX, y: adjustedY });
-  }, [contextMenu]);
+  }, [contextMenu, contextMenuMoveToMapOpen]);
 
   // A menu opened from the keyboard puts the cursor on its first item once
   // it is placed, and so visible: a hidden button cannot take focus.
@@ -3401,7 +3405,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         <Button
           onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
           disabled={mapControls.zoom <= mapControls.minZoom}
-          variant="secondary" className="p-2"
+          variant="secondary" iconOnly
           title="Zoom Out"
           aria-label="Zoom Out"
         >
@@ -3417,7 +3421,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         <Button
           onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
           disabled={mapControls.zoom >= mapControls.maxZoom}
-          variant="secondary" className="p-2"
+          variant="secondary" iconOnly
           title="Zoom In"
           aria-label="Zoom In"
         >
@@ -3430,7 +3434,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         {/* Reset View — fit and center the map in the canvas */}
         <Button
           onClick={() => mapControls.fitToScreen(canvasSize.width, canvasSize.height)}
-          variant="secondary" className="p-2"
+          variant="secondary" iconOnly
           title="Fit to Screen"
           aria-label="Fit to Screen"
         >
@@ -3440,7 +3444,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         {/* Toggle Grid */}
         <Button
           onClick={() => setShowGrid((prev) => !prev)}
-          variant="secondary" className={`p-2 ${showGrid ? 'bg-moss-green/20' : ''}`}
+          variant="secondary" iconOnly className={showGrid ? 'bg-moss-green/20' : undefined}
           title="Toggle Grid"
           aria-label="Toggle Grid"
         >
@@ -3451,7 +3455,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         {showGrid && (
           <Button
             onClick={() => setGridColor((prev) => (prev === 'black' ? 'white' : 'black'))}
-            variant="secondary" className="p-2"
+            variant="secondary" iconOnly
             title={gridColorLabel}
             aria-label={gridColorLabel}
           >
@@ -3465,7 +3469,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <div className="w-px h-6 bg-moss-green/20" />
             <Button
               onClick={handleToggleRuler}
-              variant="secondary" className={`p-2 ${showRuler ? 'bg-moss-green/20' : ''}`}
+              variant="secondary" iconOnly className={showRuler ? 'bg-moss-green/20' : undefined}
               title="Ruler — measure distance"
               aria-label="Ruler — measure distance"
             >
@@ -3474,7 +3478,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             {showRuler && (
               <Button
                 onClick={() => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber')}
-                variant="secondary" className="p-2"
+                variant="secondary" iconOnly
                 title={rulerColorLabel}
                 aria-label={rulerColorLabel}
               >
@@ -3485,7 +3489,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             {/* Toggle AoE tool */}
             <Button
               onClick={handleToggleAoE}
-              variant="secondary" className={`p-2 ${showAoE ? 'bg-moss-green/20' : ''}`}
+              variant="secondary" iconOnly className={showAoE ? 'bg-moss-green/20' : undefined}
               title="AoE Shape — area of effect overlay"
               aria-label="AoE Shape — area of effect overlay"
             >
@@ -3495,7 +3499,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             {/* Ping: Tab's ping without a keyboard, for the next tap or click */}
             <Button
               onClick={() => setPingArmed((armed) => !armed)}
-              variant="secondary" className={`p-2 ${pingArmed ? 'bg-moss-green/20' : ''}`}
+              variant="secondary" iconOnly className={pingArmed ? 'bg-moss-green/20' : undefined}
               aria-label="Ping"
               aria-pressed={pingArmed}
               title="Ping: tap or click the map to show everyone a spot"
@@ -3511,7 +3515,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <div className="w-px h-6 bg-moss-green/20" />
             <Button
               onClick={() => setDmShowSpiritTokens((prev) => !prev)}
-              variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
+              variant="secondary" iconOnly className={dmShowSpiritTokens ? 'bg-spirit-purple/15' : undefined}
               title={spiritTokensLabel}
               aria-label={spiritTokensLabel}
             >
@@ -3913,7 +3917,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
           style={{
             left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
             top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
@@ -3931,7 +3935,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   keeps its character after the character leaves. */}
               {campaignHasCharacter(contextMenu.token.characterId) && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
                     const characterId = contextMenu.token.characterId!;
                     const tokenId = contextMenu.token.id;
@@ -3950,7 +3954,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               )}
               {canRollForToken(contextMenu.token) && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
                     const token = contextMenu.token;
                     const picker = {
@@ -3976,14 +3980,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {canRotateToken(contextMenu.token) && (
             <>
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 title={`Turn ${ROTATION_STEP} degrees anticlockwise`}
                 onClick={() => { void rotateToken(contextMenu.token.id, -ROTATION_STEP); }}
               >
                 Rotate Left
               </button>
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 title={`Turn ${ROTATION_STEP} degrees clockwise`}
                 onClick={() => { void rotateToken(contextMenu.token.id, ROTATION_STEP); }}
               >
@@ -4005,7 +4009,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   rendered this entry a second time. */}
               {cmType === TokenType.NPC && !cmToken.characterId && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
                     const tokenId = cmToken.id;
                     const x = contextMenu.x;
@@ -4023,7 +4027,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   sections stay hidden. */}
               {(
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
                     closeTokenMenu();
                     onEditToken?.(cmToken);
@@ -4036,7 +4040,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {/* Add to Initiative — DM only */}
               {currentMap && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
                   onClick={() => {
                     const token = contextMenu.token;
                     closeTokenMenu();
@@ -4049,7 +4053,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Duplicate Token — all types, DM only */}
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 onClick={async () => {
                   if (!campaign?.id || !currentMap?.id) return;
                   const token = contextMenu.token;
@@ -4084,7 +4088,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Save as Template — DM only */}
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 onClick={async () => {
                   if (!campaign?.id) return;
                   const token = contextMenu.token;
@@ -4115,7 +4119,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {/* Hide from / Reveal to players — every token; see utils/dmTokenMenu.ts */}
               {controls.hide && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
                     if (!campaign?.id || !currentMap?.id) return;
                     const token = contextMenu.token;
@@ -4134,7 +4138,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {/* Obscure / Reveal identity — every token; see utils/dmTokenMenu.ts */}
               {controls.obscure && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
                     if (!campaign?.id || !currentMap?.id) return;
                     const token = contextMenu.token;
@@ -4155,7 +4159,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 contextMenu.token.layer === TokenLayer.TOKEN ? (
                   <button
                     disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
+                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
                     onClick={async () => {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
@@ -4176,7 +4180,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 ) : (
                   <button
                     disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50"
+                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50"
                     onClick={async () => {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
@@ -4203,7 +4207,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {(campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id).length > 0 && (
                 <div>
                   <button
-                    className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
+                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
                     onClick={(e) => {
                       e.stopPropagation();
                       setContextMenuMoveToMapOpen(!contextMenuMoveToMapOpen);
@@ -4222,7 +4226,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                           .map((targetMap) => (
                             <button
                               key={targetMap.id}
-                              className="w-full px-2 py-1.5 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
+                              className="w-full px-2 py-1.5 pointer-coarse:min-h-11 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
                               onClick={async () => {
                                 if (!campaign?.id || !currentMap?.id) return;
                                 const token = contextMenu.token;
@@ -4254,7 +4258,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Asks first, through the same dialog as the Token Roster. */}
               <button
-                className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
                 onClick={() => {
                   setRemovingToken(contextMenu.token);
                   closeTokenMenu();
@@ -4349,7 +4353,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           Same flex-column sizing as the token menu above; see the note there. */}
       {doorContextMenu && (
         <div
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
           style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -4363,7 +4367,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Open — available when door is closed */}
           {doorContextMenu.door.type === 'door-closed' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-open')}
             >
               Open Door
@@ -4373,7 +4377,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Close — available when door is open */}
           {doorContextMenu.door.type === 'door-open' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
             >
               Close Door
@@ -4383,7 +4387,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Lock — DM only, available when door is open or closed */}
           {isDM && doorContextMenu.door.type !== 'door-locked' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-locked')}
             >
               Lock Door
@@ -4393,7 +4397,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Unlock — DM only, available when door is locked */}
           {isDM && doorContextMenu.door.type === 'door-locked' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
             >
               Unlock Door

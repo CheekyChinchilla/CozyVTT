@@ -139,7 +139,7 @@ export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove,
             onClick={onClose}
             aria-label="Close details"
             title="Close details"
-            className="pointer-events-auto -mr-2 -mt-1 p-2 shrink-0 rounded-cozy text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors"
+            className="pointer-events-auto -mr-2 -mt-1 p-2 shrink-0 touch-target inline-flex items-center justify-center rounded-cozy text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors"
           >
             <X className="w-4 h-4" aria-hidden="true" />
           </button>

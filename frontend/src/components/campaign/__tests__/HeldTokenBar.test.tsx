@@ -34,3 +34,13 @@ describe('HeldTokenBar', () => {
     expect(bar.className).toMatch(/\btop-\d+\b/);
   });
 });
+
+describe('HeldTokenBar on a touch screen', () => {
+  // Put back was a small button, about 32 pixels tall, and the bar shows
+  // only for a finger's or a pen's hold.
+  it('makes Put back big enough for a finger', () => {
+    render(<HeldTokenBar name="Goblin Scout" onPutBack={() => undefined} />);
+
+    expect(screen.getByRole('button', { name: 'Put back' }).className.split(/\s+/)).toContain('touch-target');
+  });
+});

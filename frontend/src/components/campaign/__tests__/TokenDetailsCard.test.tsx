@@ -30,4 +30,14 @@ describe('TokenDetailsCard', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // It was 32 pixels square, and the card shows only after a finger's or a
+  // pen's tap. jsdom cannot show a touch screen's size, so the classes are
+  // what is checked.
+  it('has a close button big enough for a finger, with its cross in the middle', () => {
+    render(<TokenDetailsCard token={wolf} square={wolf.position} hp={null} mayMove onClose={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Close details' }).className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+  });
 });

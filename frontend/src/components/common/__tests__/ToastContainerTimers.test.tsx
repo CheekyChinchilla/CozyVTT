@@ -5,6 +5,8 @@
  * each card was handed a new dismiss function each time. A message that
  * arrived while others were up made them all wait out its time, so messages
  * that came one after another all left together.
+ *
+ * A card's close button is big enough for a finger on a touch screen.
  */
 
 import { it, expect, vi, afterEach } from 'vitest';
@@ -45,4 +47,14 @@ it('takes the first message away after its own time, while a later one stays', (
 
   expect(screen.queryByText('Saved the map')).toBeNull();
   expect(screen.getByText('Token placed')).toBeTruthy();
+});
+
+// The close button was the 16-pixel cross alone. jsdom cannot show a touch
+// screen's size, so the classes are what is checked.
+it('gives a card a close button big enough for a finger, with its cross in the middle', () => {
+  render(<ToastProvider><Trigger /><ToastContainer /></ToastProvider>);
+  act(() => show('Saved the map', 'success', 5000));
+
+  expect(screen.getByRole('button', { name: 'Dismiss notification' }).className.split(/\s+/))
+    .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
 });

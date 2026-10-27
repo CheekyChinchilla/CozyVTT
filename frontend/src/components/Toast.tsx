@@ -98,7 +98,7 @@ export default function Toast({
             </div>
             <button
               onClick={onClose}
-              className="shrink-0 ml-2 hover:opacity-70 transition-opacity"
+              className="shrink-0 ml-2 touch-target inline-flex items-center justify-center hover:opacity-70 transition-opacity"
               aria-label="Close notification"
             >
               <X className="w-4 h-4" />

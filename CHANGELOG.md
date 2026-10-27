@@ -25,6 +25,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table as before until someone chooses a person.
 - **Reload any page left open through the upgrade.** Until then it shows a whisper to you as an ordinary message; only you and its sender are sent it.
+- **On a phone or a tablet, the map's toolbar, the menus and some buttons are bigger.** With a mouse they look as before.
 
 ### Added
 
@@ -52,6 +53,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **A player turns their token only while the session is live, as they move it.** While the session is paused or has ended, a player's **Rotate Left** and **Rotate Right**, and the **[** and **]** keys, are gone or do nothing, and the server refuses a turn sent some other way. Turning was the one change to a token's place on the map a player could still make during a pause. The DM turns any token at any time, and a player can still change their token's conditions.
 
 - **Lighting on a very large map is worked out at a slightly lower resolution.** On a lit map of more than 16,777,216 pixels, such as 5,000 by 3,400, the darkness, light and line of sight a player sees are worked out on a slightly smaller picture, so their edges are a little softer. That is the largest canvas Safari on an iPhone or iPad can hold. Maps up to that size look as before.
+
+- **On a phone or a tablet, the map's toolbar, the menus and some buttons are bigger.** Where a finger is the pointer, these are at least 44 by 44 pixels, the size a fingertip needs: the map's toolbar, **Ping** among its buttons; **Put back**; the card's **✕** (**Close details**); the items of the token, door and character menus, and the maps that **Move to Map…** lists; the close buttons of messages and of the **Roll...** pickers; the icon buttons in the campaign page's header; the edit and delete icons on the **Character Templates** page; the **Add** buttons of the character sheet editors; and **Load more** under a list of pictures. A menu taller than the screen scrolls. With a mouse all of these keep their size, and the other controls keep theirs on a phone or a tablet too.
 
 ### Fixed
 
