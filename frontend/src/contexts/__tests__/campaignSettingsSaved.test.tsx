@@ -76,3 +76,14 @@ it("ignores another campaign's settings", async () => {
 
   expect(latest!.campaign).toMatchObject({ name: 'The Sunken Crown', chatCooldownEnabled: false });
 });
+
+// A player's Draw button follows the setting, so it goes the moment the DM
+// turns Players may draw off, and comes back when they turn it on.
+it('takes whether players may draw', async () => {
+  await open();
+  saved({ ...settings, playersMayDraw: false });
+  expect(latest!.campaign?.playersMayDraw).toBe(false);
+
+  saved({ ...settings, playersMayDraw: true });
+  expect(latest!.campaign?.playersMayDraw).toBe(true);
+});

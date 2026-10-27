@@ -389,12 +389,13 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, [updateVibeSettings]);
 
   // The DM saved Campaign Settings. A player at the table takes them without a
-  // reload: the chat box's cooldown, the campaign's name and description.
+  // reload: the chat box's cooldown, the campaign's name and description, and
+  // whether they may draw on the map.
   useEffect(() => {
     const handleSettings = (data: CampaignSettingsUpdatedBroadcast) => {
       if (shownCampaignId.current !== data?.campaignId) return;
-      const { name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = data;
-      setCampaign((prev) => (prev ? { ...prev, name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds } : null));
+      const { name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw } = data;
+      setCampaign((prev) => (prev ? { ...prev, name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw } : null));
     };
     socketClient.on('campaign.settings.updated', handleSettings);
     return () => {

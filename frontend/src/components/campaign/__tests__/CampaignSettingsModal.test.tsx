@@ -169,3 +169,42 @@ describe('the Campaign Settings panel as a dialog', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+// Players may draw on the map unless the DM turns it off here; it takes
+// effect at once, for a table in play.
+describe('Players may draw', () => {
+  const toggle = () => screen.getByRole('switch', { name: 'Players may draw' });
+
+  it('shows the campaign’s setting, on unless the DM turned it off', () => {
+    current = { ...campaign(), playersMayDraw: true } as Campaign;
+    const { unmount } = render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
+    unmount();
+
+    current = { ...campaign(), playersMayDraw: false } as Campaign;
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    expect(toggle()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('is saved as soon as it is switched, alone', async () => {
+    current = { ...campaign(), playersMayDraw: true } as Campaign;
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+
+    fireEvent.click(toggle());
+
+    expect(toggle()).toHaveAttribute('aria-checked', 'false');
+    await waitFor(() => expect(updateCampaign).toHaveBeenCalledWith('c1', { playersMayDraw: false }));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Only you can draw on the map now', 'success'));
+  });
+
+  it('goes back as it was, saying why, when the save fails', async () => {
+    current = { ...campaign(), playersMayDraw: true } as Campaign;
+    updateCampaign.mockRejectedValueOnce(Object.assign(new Error('nope'), { response: { data: { message: 'The server is busy' } } }));
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+
+    fireEvent.click(toggle());
+
+    await waitFor(() => expect(toggle()).toHaveAttribute('aria-checked', 'true'));
+    expect(showToast).toHaveBeenCalledWith(expect.any(String), 'error');
+  });
+});

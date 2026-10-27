@@ -76,6 +76,11 @@ export default function CampaignSettingsModal({
   const [description, setDescription] = useState('');
   const [savingGeneral, setSavingGeneral] = useState(false);
 
+  // ── Players may draw ─────────────────────────
+  // What the switch shows while its save is on its way; the campaign's own
+  // value otherwise, which the settings broadcast keeps current.
+  const [playersMayDrawShown, setPlayersMayDrawShown] = useState<boolean | null>(null);
+
   // ── Chat settings ────────────────────────────
   const [chatCooldownEnabled, setChatCooldownEnabled] = useState(false);
   const [chatCooldownSeconds, setChatCooldownSeconds] = useState(5);
@@ -168,6 +173,20 @@ export default function CampaignSettingsModal({
       showToast(apiErrorMessage(err) ?? 'Failed to save settings', 'error');
     } finally {
       setSavingGeneral(false);
+    }
+  };
+
+  /** Players may draw: saved as soon as it is switched, so it reaches a table in play at once. */
+  const handlePlayersMayDraw = async (next: boolean) => {
+    setPlayersMayDrawShown(next);
+    try {
+      await campaignService.updateCampaign(campaign.id, { playersMayDraw: next });
+      await refreshCampaign();
+      showToast(next ? 'Players may draw on the map now' : 'Only you can draw on the map now', 'success');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Could not change who may draw on the map', 'error');
+    } finally {
+      setPlayersMayDrawShown(null);
     }
   };
 
@@ -386,6 +405,32 @@ export default function CampaignSettingsModal({
                     </>
                   )}
                 </Button>
+              </div>
+
+              {/* ── Players may draw ── */}
+              <div className="pt-4 mt-4 border-t border-moss-green/15 flex items-center justify-between gap-4">
+                <div>
+                  <p id="cs-players-may-draw" className="text-sm font-semibold text-stone-gray">Players may draw</p>
+                  <p className="text-xs text-warm-gray mt-0.5">
+                    Players can draw on the map and point the laser, except while the session is paused or has ended. You can always draw. Saved at once.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={playersMayDrawShown ?? campaign.playersMayDraw ?? true}
+                  aria-labelledby="cs-players-may-draw"
+                  onClick={() => void handlePlayersMayDraw(!(playersMayDrawShown ?? campaign.playersMayDraw ?? true))}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
+                    (playersMayDrawShown ?? campaign.playersMayDraw ?? true) ? 'bg-moss-green' : 'bg-warm-gray/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      (playersMayDrawShown ?? campaign.playersMayDraw ?? true) ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* ── Export ── */}

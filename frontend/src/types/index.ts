@@ -1199,6 +1199,7 @@ export interface UpdateCampaignRequest {
   spiritLayerStyle?: string;
   chatCooldownEnabled?: boolean;
   chatCooldownSeconds?: number;
+  playersMayDraw?: boolean;
 }
 
 // Character
