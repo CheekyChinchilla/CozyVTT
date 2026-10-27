@@ -67,6 +67,12 @@
  * The longest chat message. The server refuses a message over it and the
  * chat box stops at it. The file is kept identical in both packages.
  *
+ * The drawing limits: the kinds of drawing, how many a map's markup layer
+ * holds and how many points, a stroke's width, a label's length. The server
+ * refuses a drawing outside them and the draw tool keeps to them. The file is
+ * kept identical in both packages, and its audiences and layers are the
+ * database's two enums.
+ *
  * The files each kind of asset may be uploaded as. The server decides by a
  * file's bytes; the Upload Asset dialog checks a file's extension against the
  * same list, and refused Ogg, WAV and Markdown files the server takes while
@@ -180,6 +186,7 @@ import { flexibleBasicTemplate } from '../utils/character-templates/flexible-tem
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
 import { ChatMessageSchema } from '../validators/chat';
+import { DRAWING_AUDIENCES, DRAWING_LAYERS } from '../validators/drawingLimits';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { Prisma } from '@prisma/client';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
@@ -443,6 +450,22 @@ describe('the kinds of chat message', () => {
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
+  });
+});
+
+describe('the drawing limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/drawingLimits.ts')).toBe(read('backend/src/validators/drawingLimits.ts'));
+  });
+
+  it.each([
+    ['DrawingAudience', DRAWING_AUDIENCES],
+    ['DrawingLayer', DRAWING_LAYERS],
+  ] as const)('name the values of %s the database has, in its order', (name, values) => {
+    const block = new RegExp(`enum ${name} \\{([^}]*)\\}`).exec(read('backend/prisma/schema.prisma'));
+    if (!block) throw new Error(`no enum ${name} in the schema; update this test`);
+    const database = block[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    expect([...values]).toEqual(database);
   });
 });
 
