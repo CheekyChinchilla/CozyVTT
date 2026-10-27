@@ -14,6 +14,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
+import { recordDrawing, nextFrame, pictures } from '@/test/recordingCanvas';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -21,6 +22,7 @@ const h = vi.hoisted(() => {
   const state = {
     userRole: 'DM' as string,
     currentMap: null as unknown,
+    status: 'ACTIVE' as string,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<[string, unknown]> = [];
@@ -58,7 +60,10 @@ vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => 
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
   const noop = () => undefined;
-  const campaign = { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, memberships: [], characters: [] };
+  const campaign = {
+    id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, memberships: [], characters: [],
+    get status() { return h.state.status; },
+  };
   return {
     useCampaign: () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
@@ -214,7 +219,7 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith() });
+  h.set({ userRole: 'DM', currentMap: mapWith(), status: 'ACTIVE' });
 });
 
 describe('what the map asks of the browser', () => {
@@ -357,6 +362,314 @@ describe('a held token that leaves the map', () => {
 
     expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 5, y: 10 }]);
     expect(sentOf('token.move.end')).toEqual([]);
+  });
+});
+
+describe('a finger carrying a token', () => {
+  it('picks up a token it may move as it moves, and puts it down where it lifts, selected', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+
+    swipe(1, square(0, 19), square(1, 19), square(2, 18), square(3, 17));
+
+    expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a' }]);
+    expect(sentOf('token.move').length).toBeGreaterThan(0);
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 17 }]);
+    expect(useGameStore.getState().tokens['tok-goblin'].position).toEqual({ x: 3, y: 17 });
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-goblin');
+    // Nothing is held after: a tap on empty ground puts nothing down.
+    tap(2, square(9, 9));
+    expect(sentOf('token.move.end')).toHaveLength(1);
+  });
+
+  // The server decides each frame and the drop per player by sight, so a
+  // finger must send what a mouse sends.
+  it('sends the table the events a mouse carry sends, in the same shape', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    const shapes = () => h.sent
+      .filter(([e]) => e.startsWith('token.'))
+      .map(([e, p]) => `${e} ${Object.keys(p as object).sort().join(',')}`)
+      .filter((line, i, all) => all.indexOf(line) === i);
+
+    mouse.down(surface(), square(0, 19));
+    mouse.up(surface(), square(0, 19));
+    mouse.move(surface(), square(3, 19));
+    mouse.down(surface(), square(3, 19));
+    mouse.up(surface(), square(3, 19));
+    mouse.leave(surface());
+    const byMouse = shapes();
+    h.sent.length = 0;
+    // Frames are sent at most every 16 ms, and the mouse sent one just now.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.now() + 1000);
+      swipe(1, square(3, 19), square(4, 19), square(6, 19));
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(byMouse).toEqual([
+      'token.move.start mapId,tokenId',
+      'token.move mapId,tokenId,x,y',
+      'token.move.end mapId,tokenId,x,y',
+    ]);
+    expect(shapes()).toEqual(byMouse);
+  });
+
+  const creature = () => token('tok-wolf', 'Wolf', 10, 9);
+  const mine = () => token('tok-mine', 'Aldra', 10, 9, { type: TokenType.PLAYER, controlledBy: 'me' });
+  it.each([
+    ['a player, from a creature', 'PLAYER', 'ACTIVE', creature],
+    ['a player, from their own token while the session is paused', 'PLAYER', 'PAUSED', mine],
+    ['a spectator, from a player\'s token', 'SPECTATOR', 'ACTIVE', mine],
+  ] as const)('pans the map for %s, carrying nothing', (_who, userRole, status, which) => {
+    h.set({ userRole, status });
+    render(<MapCanvas />);
+    show(which());
+
+    swipe(1, square(10, 9), px(545, 525), px(575, 525));
+
+    expect(sentOf('token.move.start')).toEqual([]);
+    expect(sentOf('token.move.end')).toEqual([]);
+    mouse.move(surface(), px(60, 10), 0);
+    expect(readout()).toBe('(0, 19)');
+  });
+
+  it("carries a player's own token out from under a creature drawn over it", () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(mine(), creature());
+
+    swipe(1, square(10, 9), square(11, 9), square(12, 9));
+
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-mine', mapId: 'map-a', x: 12, y: 9 }]);
+  });
+
+  it('toggles no door it ends on', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [seg('d1', 100, 100, 200, 100, 'door-closed')] }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+
+    swipe(1, square(0, 19), px(100, 80), px(150, 104));
+
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 17 }]);
+    expect(sentOf('wall:update')).toEqual([]);
+  });
+});
+
+describe('a carry let go of before the finger lifts', () => {
+  /** A finger presses the goblin on (0, 19) and carries it to (2, 19), still down. */
+  function carry() {
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    const finger = contact('touch', 1);
+    finger.down(surface(), square(0, 19));
+    finger.move(surface(), square(1, 19));
+    finger.move(surface(), square(2, 19));
+    return finger;
+  }
+  const lastMove = () => sentOf('token.move').slice(-1)[0];
+
+  it('goes back where it was picked up when a second finger lands, and the two fingers zoom', () => {
+    render(<MapCanvas />);
+    const first = carry();
+
+    const second = contact('touch', 2, false);
+    second.down(surface(), px(800, 800));
+    second.move(surface(), px(900, 800));
+    second.up(surface(), px(900, 800));
+    first.up(surface(), square(2, 19));
+
+    expect(lastMove()).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
+    expect(sentOf('token.move.end')).toEqual([]);
+    expect(zoom()).not.toBe('100%');
+    // Nothing is held after.
+    tap(3, px(10, 10));
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+
+  it('goes back where it was picked up when the browser takes the pointer', () => {
+    render(<MapCanvas />);
+    const finger = carry();
+
+    finger.cancel(surface());
+
+    expect(lastMove()).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
+    expect(sentOf('token.move.end')).toEqual([]);
+    tap(2, px(10, 10));
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+
+  // A pen wins over fingers: its landing ends the finger's carry, and the
+  // pen's own press must not then put the token down where the pen landed.
+  it('goes back where it was picked up when a pen lands, and the pen puts nothing down', () => {
+    render(<MapCanvas />);
+    const finger = carry();
+
+    const pen = contact('pen', 5);
+    pen.down(surface(), square(6, 19));
+    pen.up(surface(), square(6, 19));
+    finger.up(surface(), square(2, 19));
+
+    expect(lastMove()).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+
+  it('goes back where it was picked up when the window loses focus', () => {
+    render(<MapCanvas />);
+    const finger = carry();
+
+    act(() => { window.dispatchEvent(new Event('blur')); });
+    finger.move(surface(), square(5, 19));
+    finger.up(surface(), square(5, 19));
+
+    expect(lastMove()).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+});
+
+// One finger picks up, pans and places.
+describe('a token held by a tap, and the next finger', () => {
+  const goblin = () => token('tok-goblin', 'Goblin', 0, 19);
+
+  it('is carried by a drag that starts on its own square, and put down where the finger lifts', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+
+    swipe(2, square(0, 19), square(2, 19), square(4, 19));
+
+    expect(sentOf('token.move.start')).toHaveLength(1);
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 4, y: 19 }]);
+  });
+
+  it('stays held while a drag anywhere else pans the map, and a tap then puts it down where it lands', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+
+    swipe(2, px(500, 500), px(520, 500), px(550, 500));
+    expect(sentOf('token.move')).toEqual([]);
+    expect(sentOf('token.move.end')).toEqual([]);
+
+    // The map moved 50 pixels right: screen (575, 525) is square (10, 9).
+    tap(3, px(575, 525));
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 10, y: 9 }]);
+  });
+
+  it.each([
+    ['from a still finger', false],
+    ['whose first finger slid first', true],
+  ])('stays held through a pinch %s, and a tap then puts it down', (_how, slid) => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+
+    const a = contact('touch', 2);
+    const b = contact('touch', 3, false);
+    a.down(surface(), px(400, 500));
+    if (slid) a.move(surface(), px(420, 500));
+    b.down(surface(), px(600, 500));
+    a.move(surface(), px(350, 500));
+    b.move(surface(), px(650, 500));
+    a.up(surface(), px(350, 500));
+    b.up(surface(), px(650, 500));
+    expect(sentOf('token.move')).toEqual([]);
+
+    tap(4, px(500, 400));
+    expect(sentOf('token.move.end')).toEqual([expect.objectContaining({ tokenId: 'tok-goblin' })]);
+  });
+
+  it('stays held while the zoom buttons change the view', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+
+    fireEvent.click(screen.getByTitle('Zoom In'));
+    fireEvent.click(screen.getByTitle('Zoom Out'));
+    tap(2, square(5, 19));
+
+    expect(sentOf('token.move')).toEqual([]);
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 5, y: 19 }]);
+  });
+});
+
+describe('where a held token is drawn', () => {
+  const drawing = recordDrawing();
+  const tokenLayer = () => document.querySelectorAll('canvas')[1];
+  /** The circles the token layer drew in its last frame, in map pixels. */
+  async function circles(): Promise<Array<[number, number, number]>> {
+    drawing.take(tokenLayer());
+    await nextFrame();
+    return drawing.take(tokenLayer()).filter((c) => c.method === 'arc').map((c) => [c.args[0], c.args[1], c.args[2]] as [number, number, number]);
+  }
+  async function shown() {
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    await nextFrame();
+  }
+  // Square (0, 19) is the top-left corner: its circle is centred on (25, 25).
+  const onItsSquare: [number, number, number] = [25, 25, 25];
+
+  it('stays drawn on its own square after the tap that took it lifts', async () => {
+    await shown();
+    tap(1, square(0, 19));
+
+    expect(await circles()).toContainEqual(onItsSquare);
+  });
+
+  it('stays on its square while one finger pans the map', async () => {
+    await shown();
+    tap(1, square(0, 19));
+    const finger = contact('touch', 2);
+    finger.down(surface(), px(500, 500));
+    finger.move(surface(), px(560, 500));
+
+    expect(await circles()).toContainEqual(onItsSquare);
+  });
+
+  it('follows a finger that carries it', async () => {
+    await shown();
+    const finger = contact('touch', 1);
+    finger.down(surface(), square(0, 19));
+    finger.move(surface(), square(1, 19));
+    finger.move(surface(), square(3, 19));
+
+    const drawn = await circles();
+    expect(drawn).toContainEqual([175, 25, 25]);
+    expect(drawn).not.toContainEqual(onItsSquare);
+  });
+
+  // Drawn where the table is told it is: a mouse carrying it past the map's
+  // edge leaves it at the edge.
+  it('stays at the map\'s edge while a mouse carries it past the edge', async () => {
+    await shown();
+    mouse.down(surface(), square(0, 19));
+    mouse.up(surface(), square(0, 19));
+    mouse.move(surface(), square(19, 19));
+    mouse.move(surface(), px(1040, 25));
+
+    // Square (19, 19), the top-right corner, is centred on (975, 25).
+    expect(await circles()).toContainEqual([975, 25, 25]);
+  });
+
+  it('goes back to its square, for the table too, when a pen that carried it goes out of range', async () => {
+    await shown();
+    const pen = contact('pen', 5);
+    pen.down(surface(), square(0, 19));
+    pen.up(surface(), square(0, 19));
+    pen.move(surface(), square(3, 19), { buttons: 0 });
+    expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 19 }]);
+
+    pen.leave(surface());
+
+    expect(sentOf('token.move').slice(-1)).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
+    expect(await circles()).toContainEqual(onItsSquare);
+    // Still held: the pen's next tap puts it down.
+    pen.down(surface(), square(6, 19));
+    pen.up(surface(), square(6, 19));
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 6, y: 19 }]);
   });
 });
 

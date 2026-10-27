@@ -137,7 +137,7 @@ The page has three main areas:
 - If you're curious about your fellow adventurers, it's all here
 
 ### Center — The Map
-This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)).
+This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)).
 
 ### Right Sidebar — Your Tools
 A tabbed panel — click a tab to switch between:
@@ -290,6 +290,18 @@ Your movement is visible to everyone in real time — your party can watch you c
 *Screenshot pending — Paused session banner blocking movement.*
 
 If your token is missing or in the wrong place, just let your DM know in chat — they can adjust it.
+
+### On a touch screen
+
+On a tablet, or a phone after **Continue anyway**, your finger does what the mouse does, and a little more:
+
+| To | Do this |
+|---|---|
+| Move your token | Put your finger on it, slide it to the square and lift: it goes down where you lift, and stays selected. A second finger on the glass before you lift puts it back where it was. |
+| Move it in two taps | Tap your token, then tap the square. In between it stays in your hand, drawn faded on its own square with the selection ring, so you can move the map with one finger, or pinch, and keep hold of it. Slide the token from its own square to carry it, or tap the square it came from to put it back. |
+| Move the map | Slide one finger anywhere but on a token you can move. Pinch two fingers to zoom, about your fingers. |
+
+A stylus works as a mouse: tap your token to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
 ### Two creatures can't stand in the same square
 

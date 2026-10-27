@@ -55,7 +55,7 @@ import {
   type Viewport,
 } from './map/layers';
 import { createVisionCache } from './map/vision';
-import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp, isTokenVisibleTo } from './map/tokenHitTest';
+import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp, isTokenVisibleTo, tokenCoversCell } from './map/tokenHitTest';
 import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
 import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
@@ -75,7 +75,7 @@ import {
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
 import { useWallLightRequest } from './map/useWallLightRequest';
-import { releaseHeldToken } from './map/tokenHold';
+import { releaseHeldToken, carriedSquare, heldDrawnAt } from './map/tokenHold';
 import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
@@ -218,6 +218,25 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const tokenImages = useTokenImages(tokens);
   const [draggedToken, setDraggedToken] = useState<Token | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * The square under the pointer carrying the held token, while one does: a
+   * mouse or a hovering pen over the map, or a finger dragging it. Null for
+   * a token a finger tapped up and lifted from, which is drawn on its own
+   * square (map/tokenHold.ts).
+   */
+  const [carrierSquare, setCarrierSquare] = useState<Position | null>(null);
+  /**
+   * A finger's drag that carries a token, from its down to its lift: which
+   * token, and the square of it the finger took it by. A ref, since the
+   * drag's down and first move arrive in one event.
+   */
+  const carryRef = useRef<{ tokenId: string; offset: Position } | null>(null);
+  /**
+   * The held token's id as of now, not as of the last render: a pen landing
+   * during a finger's carry puts the token back and then presses, in one
+   * event, and that press must not put down a token no longer held.
+   */
+  const heldIdRef = useRef<string | null>(null);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
   /** Initiative of the token being pointed at — for the details panel. */
   const hoverInitiative = useTokenInitiative(hoverToken?.id ?? null);
@@ -504,14 +523,24 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // it was picked up on, it goes back to the square this page last heard of,
   // which someone else's move may have changed since.
   const cancelHold = () => {
-    if (draggedToken && currentMap && canEmit()) {
-      const onItsMap = (heldOnMapRef.current ?? currentMap.id) === currentMap.id;
-      const home = (onItsMap ? useGameStore.getState().tokens[draggedToken.id] : undefined) ?? draggedToken;
-      socket!.emitTokenMove(releaseHeldToken(home, heldOnMapRef.current ?? currentMap.id));
-    }
+    showHeldTokenHome();
+    endHold();
+  };
+  /** Tell the table the held token is on its own square again, as the hold goes on or ends. */
+  const showHeldTokenHome = () => {
+    if (!draggedToken || !currentMap || !canEmit()) return;
+    const onItsMap = (heldOnMapRef.current ?? currentMap.id) === currentMap.id;
+    const home = (onItsMap ? useGameStore.getState().tokens[draggedToken.id] : undefined) ?? draggedToken;
+    socket!.emitTokenMove(releaseHeldToken(home, heldOnMapRef.current ?? currentMap.id));
+  };
+  /** The hold is over, by a put-down, a put-back or the token going: nothing is held or carried. */
+  const endHold = useCallback(() => {
     setDraggedToken(null);
     setDragOffset(null);
-  };
+    setCarrierSquare(null);
+    carryRef.current = null;
+    heldIdRef.current = null;
+  }, []);
   // The map a held token was picked up on, which is where it goes back to if
   // the map changes while it is held.
   const heldOnMapRef = useRef<string | null>(null);
@@ -537,8 +566,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const letGoIfGone = useEffectEvent((mapId: string, stillThere: (tokenId: string) => boolean) => {
     if (!draggedToken || heldOnMapRef.current !== mapId || stillThere(draggedToken.id)) return;
-    setDraggedToken(null);
-    setDragOffset(null);
+    endHold();
   });
 
   // The wall tools, with the wall selection (map/tools/useWallTool.ts).
@@ -1574,6 +1602,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     }
 
     // 5. Tokens (+ drag ghost)
+    const held = previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken;
     drawTokens(ctx, {
       tokens: drawn,
       tokenImages,
@@ -1582,9 +1611,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       now: Date.now(),
       // In a preview the ghost is the token as the viewer is sent it, or
       // nothing when the viewer would not have it at all.
-      draggedToken: previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken,
-      dragOffset,
-      hoverCoords,
+      draggedToken: held,
+      heldDrawnAt: held
+        ? heldDrawnAt(
+          tokens.find((t) => t.id === held.id) ?? held,
+          carrierSquare && dragOffset ? { square: carrierSquare, offset: dragOffset } : null,
+          currentMap,
+        )
+        : null,
       hoverTokenId: hoverToken?.id ?? null,
       revealedCells: viewerRevealed,
       isDM: renderIsDM,
@@ -1601,7 +1635,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, selectedTokenId, isDM, previewControls]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, carrierSquare, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, selectedTokenId, isDM, previewControls]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1867,7 +1901,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   useEffect(() => {
     markDirty('tokens');
     if (wallMode || showRuler || showAoE || fogMode) markDirty('overlay');
-  }, [markDirty, hoverCoords, draggedToken, dragOffset, wallMode, showRuler, showAoE, fogMode]);
+  }, [markDirty, hoverCoords, draggedToken, dragOffset, carrierSquare, wallMode, showRuler, showAoE, fogMode]);
 
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
@@ -2107,27 +2141,38 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     useGameStore.getState().selectToken(token.id);
 
     // Clear drag state
-    if (draggedToken?.id === token.id) {
-      setDraggedToken(null);
-      setDragOffset(null);
-    }
+    if (draggedToken?.id === token.id || carryRef.current?.tokenId === token.id) endHold();
     console.log('✅ Token placed, state cleared');
     return sendable;
   };
 
   /**
-   * Tokens and panning, when no other tool took the event: a click picks a
-   * token up or puts the held one down, and a drag on empty ground pans.
+   * Tokens and panning, when no other tool took the event: a click or a tap
+   * picks a token up or puts the held one down, and a drag on empty ground
+   * pans. A finger's drag that starts on a token the viewer may move carries
+   * it and puts it down where the finger lifts. With a token held by a tap, a
+   * drag that starts on that token's own square carries it the same way, and
+   * a drag anywhere else pans the map with the token still held.
    */
   const tokenTool: MapTool = {
     down({ e, via, gridCoords }: PointerAt) {
       if (!currentMap) return false;
         // If we're already holding a token, place it on this click
-        if (draggedToken && dragOffset) {
-          // Finalize token position (snap to grid)
-          const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-          const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
-          putDown(draggedToken, { x: Math.floor(finalX), y: Math.floor(finalY) });
+        if (draggedToken && dragOffset && heldIdRef.current === draggedToken.id) {
+          if (via === 'drag') {
+            const own = useGameStore.getState().tokens[draggedToken.id] ?? draggedToken;
+            if (tokenCoversCell(own, gridCoords.x, gridCoords.y)) {
+              // Taken again by whichever of its squares the finger landed on.
+              const offset = { x: gridCoords.x - own.position.x, y: gridCoords.y - own.position.y };
+              carryRef.current = { tokenId: own.id, offset };
+              setDragOffset(offset);
+            } else {
+              groundPressRef.current = { x: e.clientX, y: e.clientY, panned: false, clears: false };
+              mapControls.startDrag(e);
+            }
+            return true;
+          }
+          putDown(draggedToken, carriedSquare({ square: gridCoords, offset: dragOffset }, draggedToken.size, currentMap));
           return true;
         }
 
@@ -2144,11 +2189,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           if (showRuler) putRulerAway();
           console.log('👆 Picking up token:', token.name);
           heldOnMapRef.current = currentMap.id;
+          heldIdRef.current = token.id;
+          const offset = { x: gridCoords.x - token.position.x, y: gridCoords.y - token.position.y };
           setDraggedToken(token);
-          setDragOffset({
-            x: gridCoords.x - token.position.x,
-            y: gridCoords.y - token.position.y,
-          });
+          setDragOffset(offset);
+          setCarrierSquare(null);
+          if (via === 'drag') carryRef.current = { tokenId: token.id, offset };
 
           // Emit token.move.start event
           if (canEmit() && currentMap.id) {
@@ -2161,9 +2207,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             console.warn('⚠️ Cannot emit token.move.start - socket not connected');
           }
           // A click or a tap selects what it picks up, if the screen draws it;
-          // a finger's drag does not.
+          // a finger's drag does not until it puts the token down.
           if (via !== 'drag' && drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
-        } else if (!draggedToken) {
+        } else {
           // A click or a tap on a token this viewer may not move selects it,
           // found as the viewer sees the map: in Player Preview, only what
           // the preview draws. On empty ground it clears the selection when
@@ -2176,37 +2222,58 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         }
       return true;
     },
-    up() {
+    up(at?: PointerAt) {
+      // A finger that carried a token puts it down where it lifted, by the
+      // put-down a click makes, and the token stays selected.
+      const carry = carryRef.current;
+      if (carry) {
+        // The carry is still recorded while it is put down, so the hold ends
+        // even before a render has caught up with the drag's pick-up.
+        const token = useGameStore.getState().tokens[carry.tokenId];
+        if (token && at && currentMap) putDown(token, carriedSquare({ square: at.gridCoords, offset: carry.offset }, token.size, currentMap));
+        else cancelHold();
+        carryRef.current = null;
+        return;
+      }
       const press = groundPressRef.current;
       groundPressRef.current = null;
       if (press?.clears && !press.panned) useGameStore.getState().selectToken(null);
     },
-    // The browser or a second finger took the pointer: a pan stops. A token
-    // held by a click stays held.
+    // The browser, a second finger or the window losing focus took the
+    // pointer: a pan stops, and a token a finger was carrying goes back where
+    // it was picked up. A token held by a click or a tap stays held.
     cancel() {
       groundPressRef.current = null;
       mapControls.stopDrag();
+      if (carryRef.current) cancelHold();
     },
-    move({ e, gridCoords }: PointerAt) {
+    move({ e, via, gridCoords }: PointerAt) {
       if (!currentMap) return false;
-        // Handle token dragging
-        if (draggedToken && dragOffset) {
-          // Calculate new token position (snapped to grid)
-          const newX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-          const newY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
+        // What this move carries: for a finger, the token its drag took; for
+        // a mouse or a pen, the held token, wherever it goes over the map.
+        const carry = carryRef.current;
+        const carried = via === 'drag'
+          ? (carry ? { token: useGameStore.getState().tokens[carry.tokenId], offset: carry.offset } : null)
+          : (draggedToken && dragOffset ? { token: draggedToken, offset: dragOffset } : null);
+        if (carried?.token) {
+          const { token, offset } = carried;
+          const square = carriedSquare({ square: gridCoords, offset }, token.size, currentMap);
 
           // Throttle move events to 60fps
           const now = Date.now();
           if (canEmit() && currentMap.id && now - lastMoveEmitRef.current >= MOVE_THROTTLE_MS) {
             const event: TokenMoveEvent = {
-              tokenId: draggedToken.id,
+              tokenId: token.id,
               mapId: currentMap.id,
-              x: Math.floor(newX),
-              y: Math.floor(newY),
+              x: square.x,
+              y: square.y,
             };
             socket!.emitTokenMove(event);
             lastMoveEmitRef.current = now;
           }
+
+          // The ghost is drawn under the pointer carrying it.
+          setCarrierSquare((prev) => (prev && prev.x === gridCoords.x && prev.y === gridCoords.y ? prev : gridCoords));
 
           // Keep the hover panel honest while dragging. It used to be updated only
           // in the branch below, so a held token left the last name it happened to
@@ -2549,6 +2616,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'mouse') {
       if (draggedToken) cancelHold();
       mapControls.stopDrag();
+    } else if (e.buttons === 0 && draggedToken && carrierSquare) {
+      // A pen that carried a held token as it hovered has gone out of range:
+      // the token stays held, drawn on its own square, and the table is
+      // shown it there again.
+      showHeldTokenHome();
+      setCarrierSquare(null);
     }
 
     // Clear hover state, unless a finger or a pen is still pressing

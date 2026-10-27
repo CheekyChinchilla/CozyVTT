@@ -679,7 +679,7 @@ When the DM has placed your character's token on the map, you can move it: **cli
 
 Clicking the token also selects it. Then the arrow keys move it one square at a time, or five with **Shift**, and **[** and **]** turn it (see [Moving Your Token](PLAYER_GUIDE.md#moving-your-token) in the player guide).
 
-On a touch screen, tap the token, then tap the square to put it down. Lifting your finger leaves the token in your hand; to put it back, tap the square it came from.
+On a touch screen, put your finger on the token, slide it to the square and lift; or tap the token, then tap the square. A token you have tapped stays in your hand, drawn faded on its own square, while you move the map; to put it back, tap the square it came from. See [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) in the player guide.
 
 *GIF pending — Moving a player token.*
 
