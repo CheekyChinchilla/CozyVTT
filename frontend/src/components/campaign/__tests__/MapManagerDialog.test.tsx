@@ -1,6 +1,7 @@
 /**
  * The Map Library is a dialog: announced by name, closed by Escape and a
  * named Close button. Escape in Create Map or Edit Map closes only that one.
+ * A map card's icon buttons are named as their tooltips are.
  */
 
 import { it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -66,4 +67,14 @@ it.each([
   await waitFor(() => expect(screen.queryByRole('dialog', { name })).toBeNull());
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByRole('dialog', { name: 'Map Library' })).toBeInTheDocument();
+});
+
+// They showed only an icon, with the name in a tooltip.
+it("names a map card's icon buttons as their tooltips do", async () => {
+  render(<MapManager isOpen onClose={() => {}} />);
+  await screen.findByText('Cave');
+
+  for (const title of ['Edit map', 'Export as .uvtt file', 'Delete map']) {
+    expect(screen.getByTitle(title)).toHaveAttribute('aria-label', title);
+  }
 });

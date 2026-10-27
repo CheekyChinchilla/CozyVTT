@@ -75,3 +75,14 @@ describe('the ambient volume slider', () => {
     expect(emitAtmosphereAudioSet).toHaveBeenCalledWith({ assetId: 'rain', volume: 0.3, loop: true });
   });
 });
+
+// They showed only an icon, or a bare slider, with the name in a tooltip.
+describe('the ambient audio controls', () => {
+  it('are named as their tooltips are', () => {
+    render(<AtmospherePanel isOpen onClose={() => {}} />);
+
+    for (const title of ['Stop audio', 'Mute', 'Volume']) {
+      expect(screen.getByTitle(title)).toHaveAttribute('aria-label', title);
+    }
+  });
+});

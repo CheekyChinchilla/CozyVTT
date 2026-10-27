@@ -315,6 +315,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
               <button
                 onClick={() => handleAudioSelect(null)}
                 title="Stop audio"
+                aria-label="Stop audio"
                 className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors shrink-0"
               >
                 <StopCircle className="w-4 h-4" />
@@ -330,6 +331,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                 <button
                   onClick={handleMuteToggle}
                   title={isMuted ? 'Unmute' : 'Mute'}
+                  aria-label={isMuted ? 'Unmute' : 'Mute'}
                   className="text-stone-gray hover:text-brand-ink transition-colors shrink-0"
                 >
                   {isMuted || volume === 0
@@ -347,6 +349,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                   onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
                   className="flex-1 accent-moss-green"
                   title="Volume"
+                  aria-label="Volume"
                 />
                 <span className="text-xs text-stone-gray w-8 text-right shrink-0">
                   {Math.round((isMuted ? 0 : volume) * 100)}%

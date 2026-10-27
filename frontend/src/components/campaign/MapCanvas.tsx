@@ -3240,6 +3240,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     ? `Selected ${tokenDisplayName(selectedToken)}, square ${selectedToken.position.x}, ${selectedToken.position.y}`
     : '';
 
+  // The toolbar buttons that say what they show now: the tooltip and the
+  // name a screen reader hears.
+  const gridColorLabel = `Grid Color: ${gridColor === 'black' ? 'Black' : 'White'}`;
+  const rulerColorLabel = `Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`;
+  const spiritTokensLabel = dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show';
+
   // ============================================
   // Render
   // ============================================
@@ -3397,6 +3403,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           disabled={mapControls.zoom <= mapControls.minZoom}
           variant="secondary" className="p-2"
           title="Zoom Out"
+          aria-label="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
         </Button>
@@ -3412,6 +3419,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           disabled={mapControls.zoom >= mapControls.maxZoom}
           variant="secondary" className="p-2"
           title="Zoom In"
+          aria-label="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
         </Button>
@@ -3424,6 +3432,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           onClick={() => mapControls.fitToScreen(canvasSize.width, canvasSize.height)}
           variant="secondary" className="p-2"
           title="Fit to Screen"
+          aria-label="Fit to Screen"
         >
           <Maximize2 className="w-4 h-4" />
         </Button>
@@ -3433,6 +3442,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           onClick={() => setShowGrid((prev) => !prev)}
           variant="secondary" className={`p-2 ${showGrid ? 'bg-moss-green/20' : ''}`}
           title="Toggle Grid"
+          aria-label="Toggle Grid"
         >
           <Grid3x3 className="w-4 h-4" />
         </Button>
@@ -3442,7 +3452,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           <Button
             onClick={() => setGridColor((prev) => (prev === 'black' ? 'white' : 'black'))}
             variant="secondary" className="p-2"
-            title={`Grid Color: ${gridColor === 'black' ? 'Black' : 'White'}`}
+            title={gridColorLabel}
+            aria-label={gridColorLabel}
           >
             <Palette className="w-4 h-4" />
           </Button>
@@ -3456,6 +3467,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               onClick={handleToggleRuler}
               variant="secondary" className={`p-2 ${showRuler ? 'bg-moss-green/20' : ''}`}
               title="Ruler — measure distance"
+              aria-label="Ruler — measure distance"
             >
               <Ruler className={`w-4 h-4 ${showRuler ? 'text-brand-ink' : ''}`} />
             </Button>
@@ -3463,7 +3475,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               <Button
                 onClick={() => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber')}
                 variant="secondary" className="p-2"
-                title={`Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`}
+                title={rulerColorLabel}
+                aria-label={rulerColorLabel}
               >
                 <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
               </Button>
@@ -3474,6 +3487,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               onClick={handleToggleAoE}
               variant="secondary" className={`p-2 ${showAoE ? 'bg-moss-green/20' : ''}`}
               title="AoE Shape — area of effect overlay"
+              aria-label="AoE Shape — area of effect overlay"
             >
               <Zap className={`w-4 h-4 ${showAoE ? 'text-brand-ink' : ''}`} />
             </Button>
@@ -3498,7 +3512,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <Button
               onClick={() => setDmShowSpiritTokens((prev) => !prev)}
               variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
-              title={dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show'}
+              title={spiritTokensLabel}
+              aria-label={spiritTokensLabel}
             >
               <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
             </Button>

@@ -6,10 +6,13 @@
  * HTML: React warned about it in the console, and a screen reader read the
  * row and the star as one control. The row's button also did not say whether
  * the row was open.
+ *
+ * The star, and the creature form's button that removes a trait or an
+ * action, showed only an icon; they are named as their tooltips are.
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CreatureTemplate } from '@/types';
 
@@ -77,4 +80,21 @@ it('says why a favourite could not be changed', async () => {
   await screen.findByText('Boss Bat');
   await userEvent.click(screen.getByRole('button', { name: 'Add to favorites' }));
   expect(await screen.findByText('Too many requests, please slow down')).toBeInTheDocument();
+});
+
+it('names the star as its tooltip does', async () => {
+  render(<CreatureLibrary isOpen onClose={() => {}} />);
+  await screen.findByText('Boss Bat');
+  expect(screen.getByTitle('Add to favorites')).toHaveAttribute('aria-label', 'Add to favorites');
+});
+
+it("names the form's button that removes a trait", async () => {
+  render(<CreatureLibrary isOpen onClose={() => {}} />);
+  await screen.findByText('Boss Bat');
+  await userEvent.click(screen.getByRole('button', { name: /Create Custom/ }));
+  await userEvent.click(screen.getByRole('button', { name: /Advanced Stats/ }));
+  const traits = screen.getByText('Traits', { selector: 'label' }).parentElement!;
+  await userEvent.click(within(traits).getByRole('button', { name: /Add/ }));
+
+  expect(screen.getByTitle('Remove')).toHaveAttribute('aria-label', 'Remove');
 });
