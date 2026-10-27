@@ -13,7 +13,7 @@ import { useTableRoll } from '@/hooks/useTableRoll';
 import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useCoarsePointer } from '@/hooks/useMediaQuery';
 import type {
   Token,
   TokenMoveStartEvent,
@@ -194,7 +194,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const heldBarRef = useRef<HTMLDivElement>(null);
   const topBand = useTopBand(topBandRef, toolbarRef, containerRef);
   // A touch screen's bigger toolbar buttons (`touch-target`).
-  const coarsePointer = useMediaQuery('(pointer: coarse)');
+  const coarsePointer = useCoarsePointer();
   const mapHintId = useId();
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());

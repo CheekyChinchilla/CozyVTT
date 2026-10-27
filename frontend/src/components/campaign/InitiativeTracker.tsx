@@ -36,6 +36,9 @@ import { useTokenListIgnoringMovement, useCombatState, usePeekTokenId, useGameSt
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
+import { useCoarsePointer } from '@/hooks/useMediaQuery';
+import { useLongPress } from '@/hooks/useLongPress';
+import { showRowWhileDraggedByGrip } from '@/utils/rowDrag';
 import { api } from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -140,6 +143,8 @@ interface CombatantRowProps {
   /** This token is being pointed at — from this list, or from the map. */
   isPeeked: boolean;
   isDM: boolean;
+  /** The primary pointer is a finger: the DM drags the row by its grip only. */
+  coarsePointer: boolean;
   /**
    * Whether this viewer may roll initiative for this combatant. True for the DM
    * on every row, and for a player only on a token they control — so a player
@@ -159,7 +164,7 @@ interface CombatantRowProps {
   onDragEnd: () => void;
   /** Move this combatant one place up (-1) or down (1). */
   onMove: (tokenId: string, step: -1 | 1) => void;
-  /** Right-clicking the row offers this viewer something: the sheet, rolls, or both. */
+  /** Right-clicking the row, or a finger's long-press on it, offers this viewer something: the sheet, rolls, or both. */
   hasMenu: boolean;
   /** Double-clicking the row opens the combatant's character sheet. */
   hasSheet: boolean;
@@ -181,7 +186,7 @@ function menuPoint(e: React.MouseEvent): { x: number; y: number; byKeyboard: boo
 }
 
 function CombatantRow({
-  entry, isActive, isPeeked, isDM, canRoll, isDragOver, reorderHintId,
+  entry, isActive, isPeeked, isDM, coarsePointer, canRoll, isDragOver, reorderHintId,
   onSetInitiative, onRoll, onRemove,
   onDragStart, onDragOver, onDrop, onDragEnd, onMove,
   hasMenu, hasSheet, onOpenMenu, onOpenSheet,
@@ -194,6 +199,13 @@ function CombatantRow({
   // (the input's blur) leaves it where the click put it.
   const refocusValue = useRef(false);
   const name = tokenDisplayName(entry);
+  // A finger held on the row opens its menu, as a right-click does; the grip
+  // and an input being typed in never long-press.
+  const longPress = useLongPress((at) => onOpenMenu(entry.tokenId, at.clientX, at.clientY, false));
+  // On a touch screen the row drags by its grip only, so the long-press is
+  // free to open the menu: an iPad's own drag would otherwise lift the row
+  // at about the same moment.
+  const rowDrags = isDM && !coarsePointer;
 
   useEffect(() => {
     if (editing) {
@@ -220,16 +232,25 @@ function CombatantRow({
 
   return (
     <div
-      draggable={isDM}
-      onDragStart={isDM ? (e) => onDragStart(e, entry.tokenId) : undefined}
+      draggable={rowDrags}
+      onDragStart={isDM ? (e) => {
+        showRowWhileDraggedByGrip(e);
+        onDragStart(e, entry.tokenId);
+      } : undefined}
       onDragOver={isDM ? (e) => onDragOver(e, entry.tokenId) : undefined}
       onDrop={isDM ? (e) => onDrop(e, entry.tokenId) : undefined}
       onDragEnd={isDM ? onDragEnd : undefined}
       onMouseEnter={() => useGameStore.getState().setPeekToken(entry.tokenId, 'tracker')}
       onMouseLeave={() => useGameStore.getState().setPeekToken(null, 'tracker')}
-      // With nothing to offer, the browser keeps its own menu.
+      onPointerDown={hasMenu ? longPress.onPointerDown : undefined}
+      onPointerMove={hasMenu ? longPress.onPointerMove : undefined}
+      onPointerUp={hasMenu ? longPress.onPointerUp : undefined}
+      onPointerCancel={hasMenu ? longPress.onPointerCancel : undefined}
+      // With nothing to offer, the browser keeps its own menu, as it does in
+      // a value being typed. Android's own long-press is the hook's.
       onContextMenu={hasMenu ? (e) => {
         if ((e.target as Element).closest('input')) return;
+        if (longPress.takeContextMenu(e)) return;
         e.preventDefault();
         const at = menuPoint(e);
         onOpenMenu(entry.tokenId, at.x, at.y, at.byKeyboard);
@@ -242,7 +263,9 @@ function CombatantRow({
       // On a touch screen the die and bin are 44 pixels each, too wide to
       // sit beside everything else in a narrow rail: they go to a line of
       // their own, on the right.
-      className={`flex items-center gap-2 p-2 rounded-lg transition-colors pointer-coarse:flex-wrap ${
+      // No text selection or callout from a held finger; a value being
+      // typed stays selectable.
+      className={`flex items-center gap-2 p-2 rounded-lg transition-colors pointer-coarse:flex-wrap select-none [-webkit-touch-callout:none] [&_input]:select-text ${
         isDragOver
           ? 'border-t-2 border-moss-green'
           : isActive
@@ -251,15 +274,18 @@ function CombatantRow({
               // Mirrors the map: hovering a token there tints its row here.
               ? 'bg-moss-green/10 border border-moss-green/40'
               : 'hover:bg-moss-green/5 border border-transparent'
-      } ${isDM ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      } ${rowDrags ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
       {/* Drag handle (DM) or active dot (players). The handle also takes the
-          Up and Down arrow keys, which move the row one place. */}
+          Up and Down arrow keys, which move the row one place. It drags with
+          every pointer, and is the only part of the row a finger drags. */}
       {isDM
         ? (
           <button
             type="button"
             data-grip-token={entry.tokenId}
+            data-drag-grip
+            draggable
             aria-label={`Move ${name}`}
             aria-describedby={reorderHintId}
             onKeyDown={(e) => {
@@ -270,7 +296,7 @@ function CombatantRow({
                 onMove(entry.tokenId, e.key === 'ArrowUp' ? -1 : 1);
               }
             }}
-            className="shrink-0 rounded-sm cursor-grab active:cursor-grabbing focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50"
+            className="shrink-0 touch-target inline-flex items-center justify-center rounded-sm cursor-grab active:cursor-grabbing focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50"
           >
             <GripVertical className="w-3.5 h-3.5 text-stone-gray/40 hover:text-stone-gray transition-colors" aria-hidden="true" />
           </button>
@@ -286,6 +312,9 @@ function CombatantRow({
         <img
           src={entry.imageUrl}
           alt={entry.name}
+          // A picture is a drag of its own to a browser: on a touch screen
+          // only the grip drags.
+          draggable={coarsePointer ? false : undefined}
           className={`w-8 h-8 rounded-full object-cover shrink-0 border-2 ${
             isActive ? 'border-warm-amber' : 'border-moss-green/20'
           }`}
@@ -432,6 +461,7 @@ export default function InitiativeTracker() {
 
   const isDM = userRole === 'DM';
   const mapId = currentMap?.id ?? null;
+  const coarsePointer = useCoarsePointer();
 
   // ── A combatant's sheet and rolls ────────────────────────────────────────
   //
@@ -439,7 +469,11 @@ export default function InitiativeTracker() {
   // same rules (utils/tokenCharacter), and the DM a creature's rolls. Only for
   // a token on the map being shown: one on another map is not loaded here.
 
-  const [menu, setMenu] = useState<{ tokenId: string; x: number; y: number; byKeyboard: boolean } | null>(null);
+  // `opening` counts the menus opened, so each is a menu of its own, placed
+  // at its point: a long-press on another row brings no mousedown to close
+  // the one open.
+  const [menu, setMenu] = useState<{ tokenId: string; x: number; y: number; byKeyboard: boolean; opening: number } | null>(null);
+  const menuOpenings = useRef(0);
   const [sheet, setSheet] = useState<{ character: Character; tokenId: string } | null>(null);
   const [characterRolls, setCharacterRolls] = useState<{ tokenId: string; characterId: string; x: number; y: number } | null>(null);
   const [creatureRolls, setCreatureRolls] = useState<{ tokenId: string; x: number; y: number } | null>(null);
@@ -689,6 +723,7 @@ export default function InitiativeTracker() {
                     isActive={combatState.active && entry.tokenId === combatState.currentTokenId}
                     isPeeked={entry.tokenId === peekTokenId}
                     isDM={isDM}
+                    coarsePointer={coarsePointer}
                     canRoll={canRollFor(entry.tokenId)}
                     mapId={mapId}
                     isDragOver={isDM && dragOverTokenId === entry.tokenId}
@@ -706,7 +741,10 @@ export default function InitiativeTracker() {
                       return offersSheet(token) || offersCharacterRolls(token) || offersCreatureRolls(token);
                     })()}
                     hasSheet={offersSheet(tokenOf(entry.tokenId))}
-                    onOpenMenu={(tokenId, x, y, byKeyboard) => setMenu({ tokenId, x, y, byKeyboard })}
+                    onOpenMenu={(tokenId, x, y, byKeyboard) => {
+                      menuOpenings.current += 1;
+                      setMenu({ tokenId, x, y, byKeyboard, opening: menuOpenings.current });
+                    }}
                     onOpenSheet={openSheet}
                   />
                 ))}
@@ -802,6 +840,7 @@ export default function InitiativeTracker() {
         const { tokenId, x, y } = menu;
         return (
           <CharacterContextMenu
+            key={menu.opening}
             x={x}
             y={y}
             autoFocus={menu.byKeyboard}

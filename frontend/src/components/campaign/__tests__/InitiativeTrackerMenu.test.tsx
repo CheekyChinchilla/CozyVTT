@@ -9,7 +9,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { contact } from '@/test/pointer';
 import InitiativeTracker from '../InitiativeTracker';
 import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
@@ -198,5 +199,33 @@ describe('the menu from the keyboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Alice' }), { detail: 1 });
 
     expect(menuItem('View Character Sheet')).not.toBeInTheDocument();
+  });
+});
+
+// A touch screen has no right button: a finger held on the row opens the
+// same menu, item for item, for a player as for the DM.
+describe('the menu from a finger held on the row', () => {
+  const labels = () => [...document.querySelectorAll<HTMLElement>('div.fixed.z-50 button')].map((b) => b.textContent);
+
+  it.each([
+    ['their own character', 'Alice', ['View Character Sheet', 'Roll...']],
+    ["another player's character", 'Bob', ['View Character Sheet']],
+  ])("is the right-click's for a player, on %s", (_what, name, items) => {
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 40 });
+    const byRightClick = labels();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const finger = contact('touch', 1);
+      finger.down(screen.getByText(name), { clientX: 40, clientY: 40 });
+      act(() => { vi.advanceTimersByTime(500); });
+      finger.up(screen.getByText(name), { clientX: 40, clientY: 40 });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(byRightClick).toEqual(items);
+    expect(labels()).toEqual(byRightClick);
   });
 });
