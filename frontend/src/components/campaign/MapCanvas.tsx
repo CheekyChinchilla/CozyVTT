@@ -10,7 +10,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { campaignHasCharacter as campaignHasTokenCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
 import { useTableRoll } from '@/hooks/useTableRoll';
-import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp } from '@/stores/gameStore';
+import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type {
@@ -54,7 +54,7 @@ import {
   type Viewport,
 } from './map/layers';
 import { createVisionCache } from './map/vision';
-import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
+import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp, isTokenVisibleTo } from './map/tokenHitTest';
 import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
 import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
@@ -64,7 +64,7 @@ import { useMeasureTools } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
 import type { MapTool, PointerAt } from './map/tools/types';
-import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, PEN_ERASER_BUTTON, type MapPointer } from './map/mapPointer';
+import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, PEN_ERASER_BUTTON, type MapPointer } from './map/mapPointer';
 import { createGestureRecognizer, type Gesture } from './map/gestures';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
@@ -154,6 +154,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Token being pointed at from the initiative tracker. Null while the map is
   // the one pointing — the blue hover outline already marks that case.
   const peekTokenId = useMapPeekTokenId();
+  // The token this page has selected, which the keyboard acts on.
+  const selectedTokenId = useSelectedTokenId();
   const prefersReducedMotion = useReducedMotion();
   // joinedEpoch is 0 until this connection has authenticated into the campaign,
   // and a new number after each rejoin. Anything that asks the server for map
@@ -481,8 +483,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const releaseHoldOnMapSwitch = useEffectEvent(() => {
     if (draggedToken) cancelHold();
   });
+  // A held token goes back, and the selection goes, when the map changes:
+  // the next map starts with nothing selected.
   useEffect(() => {
     releaseHoldOnMapSwitch();
+    useGameStore.getState().selectToken(null);
   }, [currentMap?.id]);
 
   // The wall tools, with the wall selection (map/tools/useWallTool.ts).
@@ -1496,10 +1501,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       // Held at mid-breath under reduced motion, where no pulse loop runs.
       pulsePhase: prefersReducedMotion ? 0.5 : pulsePhaseAt(Date.now()),
       peekTokenId,
+      selectedTokenId,
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, isDM, previewControls]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, selectedTokenId, isDM, previewControls]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1751,7 +1757,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
-  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, previewing, previewSelection]);
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, selectedTokenId, previewing, previewSelection]);
 
   // Publish this map's own token hover so the initiative tracker can tint the
   // matching row — the other half of the cross-highlight.
@@ -1800,6 +1806,35 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }),
     [userRole, effectiveRevealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
   );
+
+  /**
+   * The tokens the map draws for this viewer, as the token layer decides it:
+   * in Player Preview what the preview shows, else every token this viewer
+   * can see. A selection is made, said and acted on only among these, so it
+   * never lands on a token the screen does not show.
+   */
+  const drawnTokens = useMemo((): Token[] => {
+    if (!currentMap) return [];
+    if (!previewing) return tokens.filter((t) => isTokenVisibleTo(t, tokenView));
+    const viewport: Viewport = {
+      zoom: mapControls.zoom,
+      panOffset: mapControls.panOffset,
+      gridSize: currentMap.gridSize,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    };
+    const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
+    const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
+    return shown.filter((t) => isTokenVisibleTo(t, {
+      isDM: false,
+      revealedCells: viewerRevealed,
+      isOwnToken: viewerOwn,
+      dmShowSpiritTokens,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    }));
+  }, [currentMap, previewing, tokens, tokenView, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, previewControls, previewedPlane, viewerRevealed, dmShowSpiritTokens]);
+  const drawnIds = useMemo(() => new Set(drawnTokens.map((t) => t.id)), [drawnTokens]);
 
   /**
    * Check if a grid coordinate is within a token's bounds
@@ -1899,11 +1934,19 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const MOVE_THROTTLE_MS = 16;
 
   /**
+   * A press the token tool took on the ground or on a token this viewer may
+   * not move, until it lifts: where it began, whether the map has been
+   * dragged since, and whether its lift clears the selection (a click on
+   * empty ground does; a drag never does).
+   */
+  const groundPressRef = useRef<{ x: number; y: number; panned: boolean; clears: boolean } | null>(null);
+
+  /**
    * Tokens and panning, when no other tool took the event: a click picks a
    * token up or puts the held one down, and a drag on empty ground pans.
    */
   const tokenTool: MapTool = {
-    down({ e, gridCoords }: PointerAt) {
+    down({ e, via, gridCoords }: PointerAt) {
       if (!currentMap) return false;
         // If we're already holding a token, place it on this click
         if (draggedToken && dragOffset) {
@@ -1959,7 +2002,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             y: Math.floor(finalY),
           });
 
-          // Clear drag state
+          // Clear drag state; the token put down stays selected
+          useGameStore.getState().selectToken(draggedToken.id);
           setDraggedToken(null);
           setDragOffset(null);
           console.log('✅ Token placed, state cleared');
@@ -1995,15 +2039,31 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           } else {
             console.warn('⚠️ Cannot emit token.move.start - socket not connected');
           }
+          // A click or a tap selects what it picks up, if the screen draws it;
+          // a finger's drag does not.
+          if (via !== 'drag' && drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
         } else if (!draggedToken) {
+          // A click or a tap on a token this viewer may not move selects it,
+          // found as the viewer sees the map: in Player Preview, only what
+          // the preview draws. On empty ground it clears the selection when
+          // the button lifts, unless the press dragged the map.
+          const seen = via === 'drag' ? null : getHoverTokenAt(gridCoords.x, gridCoords.y);
+          if (seen) useGameStore.getState().selectToken(seen.id);
+          groundPressRef.current = { x: e.clientX, y: e.clientY, panned: false, clears: via !== 'drag' && !seen };
           // Only start panning if we're not holding a token
           mapControls.startDrag(e);
         }
       return true;
     },
+    up() {
+      const press = groundPressRef.current;
+      groundPressRef.current = null;
+      if (press?.clears && !press.panned) useGameStore.getState().selectToken(null);
+    },
     // The browser or a second finger took the pointer: a pan stops. A token
     // held by a click stays held.
     cancel() {
+      groundPressRef.current = null;
       mapControls.stopDrag();
     },
     move({ e, gridCoords }: PointerAt) {
@@ -2039,6 +2099,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         } else {
           // Handle map panning
           mapControls.handleDrag(e);
+          const press = groundPressRef.current;
+          if (press && !press.panned && Math.hypot(e.clientX - press.x, e.clientY - press.y) > CLICK_COUNT_PX) press.panned = true;
 
           // Update hover token
           const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
@@ -2533,6 +2595,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // token whose menu would be empty for this viewer is passed over.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
     if (token && tokenMenuHasItems(token)) {
+      if (drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
       setContextMenu({ token, x: e.clientX, y: e.clientY });
       return;
     }
@@ -2614,6 +2677,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   // (Token tween + fog reveal rAF loops live in ./map/useMapAnimations)
 
+  // What a screen reader hears of the selection: the token and its square,
+  // said again as it moves. Nothing for a token the screen does not draw.
+  const selectedToken = selectedTokenId && drawnIds.has(selectedTokenId) ? tokens.find((t) => t.id === selectedTokenId) : undefined;
+  const selectionAnnouncement = selectedToken
+    ? `Selected ${tokenDisplayName(selectedToken)}, square ${selectedToken.position.x}, ${selectedToken.position.y}`
+    : '';
+
   // ============================================
   // Render
   // ============================================
@@ -2672,6 +2742,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           onContextMenu={handleContextMenu}
         />
       </div>
+
+      <p role="status" aria-live="polite" className="sr-only">{selectionAnnouncement}</p>
 
       {/* Vibe hue tint overlay — color tint layered on top of canvas */}
       {activeVibeEffect && (

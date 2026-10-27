@@ -270,6 +270,8 @@ One thing to know: if the DM has **paused** the session, your rolls from the **D
 
 When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
 
+**Selecting a token.** Clicking a token also selects it, and a dashed light-blue ring marks it until you click empty ground or select another; dragging the map leaves it selected. You can select any token you can see, yours or not, by clicking it; a right-click selects the token too when its menu opens for you. A token that isn't yours is only selected, never picked up. A screen reader says which token is selected and on which square.
+
 *GIF pending — Picking up a player token and placing it across the map.*
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).

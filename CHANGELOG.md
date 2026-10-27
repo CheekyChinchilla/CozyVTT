@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **A click on a token selects it.** A dashed light-blue ring marks the token you selected, outside the gold turn ring and the white ring the initiative tracker draws. A click on a token you may move still picks it up, as before, and selects it too; a click on any other token only selects it, and a right-click selects the token whose menu it opens. A click on empty ground clears the selection, and dragging the map leaves it alone. While a wall, fog or light tool, the ruler or the area template is up, a click goes to that tool and the selection stays as it was. A screen reader says which token is selected and on which square. Switching maps starts with nothing selected.
+
 - **Pinch to zoom and drag to pan the map on a touch screen.** On a tablet, pinching two fingers on the map zooms it about them, from 10% to 300% as the buttons do, and dragging one finger over empty ground moves the view; the page itself no longer zooms or scrolls under the map. A tap works as a click and a double tap finishes a wall line, and with a DM tool up one finger draws a fog box or a wall stroke, or moves a wall or a light. A second finger cancels what the first began. A stylus works as a mouse, and a hand resting beside it does nothing. A mouse works as before. Dragging tokens and opening the menus by touch follow in the same release.
 
 ### Changed

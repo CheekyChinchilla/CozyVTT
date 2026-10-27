@@ -17,6 +17,9 @@
 //   - CampaignContext owns campaign-level metadata and low-frequency
 //     UI state (vibe, atmosphere, session).
 //   Never represent the same datum in two of these places.
+//   Two things here are the page's own and fed by no socket: the
+//   cross-highlight peek and the selected token. They sit beside the
+//   tokens because the map, the tracker and the keyboard all read them.
 //
 // Write access: components and socket handlers mutate ONLY through the
 // targeted actions below (patch/add/remove by id). Never rebuild the
@@ -75,6 +78,13 @@ interface GameState {
   peekTokenId: string | null;
   peekSource: 'tracker' | 'map' | null;
   /**
+   * The token this page has selected, by a click or the keyboard: what the
+   * arrow keys move, the turn keys turn and Enter opens the menu of. Kept
+   * across a new token list while the list still holds it, since the server
+   * sends the whole map again after any change to a token.
+   */
+  selectedTokenId: string | null;
+  /**
    * Characters' hit points by character id, seeded from the roster and
    * kept current by `character.hp.updated`. Read by the roster and the
    * map's HP bars; here so a change in a fight re-renders only those.
@@ -102,6 +112,8 @@ interface GameState {
   setCombatState: (combat: CombatState) => void;
   /** Point at a token from either side; pass null to clear. */
   setPeekToken: (tokenId: string | null, source: 'tracker' | 'map') => void;
+  /** Select a token on the map, or nothing. */
+  selectToken: (tokenId: string | null) => void;
   /** `character.hp.updated`: one character's hit points. */
   setCharacterHp: (characterId: string, hp: CharacterHpInfo) => void;
   /** The roster's answer: every character it lists that has hit points. */
@@ -117,14 +129,16 @@ export const useGameStore = create<GameState>((set, get) => ({
   combat: EMPTY_COMBAT,
   peekTokenId: null,
   peekSource: null,
+  selectedTokenId: null,
   characterHp: {},
 
   setTokens: (list) =>
-    set({
+    set((s) => ({
       tokens: Object.fromEntries(list.map((t) => [t.id, t])),
       tokenOrder: list.map((t) => t.id),
       heldAt: {},
-    }),
+      selectedTokenId: s.selectedTokenId !== null && list.some((t) => t.id === s.selectedTokenId) ? s.selectedTokenId : null,
+    })),
 
   applyTokenMove: (tokenId, position) => {
     const token = get().tokens[tokenId];
@@ -166,7 +180,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       if (!s.tokens[tokenId]) return s;
       const tokens = { ...s.tokens };
       delete tokens[tokenId];
-      return { tokens, tokenOrder: s.tokenOrder.filter((id) => id !== tokenId), heldAt: withoutKey(s.heldAt, tokenId) };
+      return {
+        tokens,
+        tokenOrder: s.tokenOrder.filter((id) => id !== tokenId),
+        heldAt: withoutKey(s.heldAt, tokenId),
+        selectedTokenId: s.selectedTokenId === tokenId ? null : s.selectedTokenId,
+      };
     }),
 
   patchToken: (tokenId, patch) => {
@@ -191,6 +210,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ peekTokenId: tokenId, peekSource: tokenId === null ? null : source });
   },
 
+  selectToken: (tokenId) => {
+    if (get().selectedTokenId !== tokenId) set({ selectedTokenId: tokenId });
+  },
+
   setCharacterHp: (characterId, hp) => set((s) => ({ characterHp: { ...s.characterHp, [characterId]: hp } })),
 
   seedCharacterHp: (entries) =>
@@ -203,7 +226,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   clearGameState: () =>
-    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, characterHp: {} }),
+    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null, characterHp: {} }),
 }));
 
 // ============================================
@@ -307,6 +330,11 @@ export function useTokenInitiative(tokenId: string | null): number | null | unde
 /** The pointed-at token, whichever side is pointing — for the tracker's row tint. */
 export function usePeekTokenId(): string | null {
   return useGameStore((s) => s.peekTokenId);
+}
+
+/** The token this page has selected, or null. */
+export function useSelectedTokenId(): string | null {
+  return useGameStore((s) => s.selectedTokenId);
 }
 
 /**

@@ -240,6 +240,8 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 
 Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
 
+Clicking a token also selects it, with a dashed light-blue ring, and right-clicking a token selects the one whose menu opens. A click on empty ground clears the selection; dragging the map leaves it alone. While a wall, fog or light tool, the ruler or the area template is up, a click goes to that tool, so the selection stays as it was. Switching maps starts with nothing selected.
+
 *GIF pending — Placing a token and moving it into position.*
 
 ### Token Display Modes

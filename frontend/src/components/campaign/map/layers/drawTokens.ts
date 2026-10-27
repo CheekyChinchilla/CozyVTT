@@ -1,7 +1,7 @@
 // ============================================
 // Token layer — token images/placeholders, spirit + disposition rings,
-// turn highlight, HP bars, hidden-token dots, hover outline, condition
-// badges, and the drag ghost.
+// turn highlight, the selection ring, HP bars, hidden-token dots, hover
+// outline, condition badges, and the drag ghost.
 // Pure: no React, no component closures. Ownership checks arrive as a
 // predicate; animation progress uses the caller-provided `now`.
 // ============================================
@@ -56,6 +56,12 @@ export interface TokenDrawState {
    * static treatment than the turn ring, and can apply at the same time.
    */
   peekTokenId: string | null;
+  /**
+   * The token this page has selected (the store's `selectedTokenId`), which
+   * the keyboard acts on. Ringed only where the token is drawn, so a token
+   * this viewer cannot see shows nothing.
+   */
+  selectedTokenId: string | null;
 }
 
 // ── Turn highlight ──────────────────────────────────────────────────────────
@@ -93,6 +99,19 @@ const PEEK_RING_CASING_WIDTH = 4;
 const PEEK_RING_CORE_WIDTH = 2;
 const PEEK_WASH = 'rgba(255, 255, 255, 0.18)';
 
+// ── Selection ring ──────────────────────────────────────────────────────────
+// The token the keyboard acts on. The same dark casing, a cyan core and a
+// dash, so it reads apart from the solid gold turn ring and the solid white
+// tracker ring, and outside both of them, so a token that is acting, pointed
+// at and selected shows three distinct rings. Static: it marks a choice, not
+// something happening.
+const SELECT_RING_CASING = 'rgba(0, 0, 0, 0.85)';
+const SELECT_RING_CORE = '#4dd8ff';
+const SELECT_RING_GAP = 23;
+const SELECT_RING_CASING_WIDTH = 4;
+const SELECT_RING_CORE_WIDTH = 2;
+const SELECT_RING_DASH = [7, 4];
+
 /**
  * Trace a token's outline, optionally inflated by `gap`: a circle for
  * pog/top-down, a rounded rect for full-art. `gap: 0` gives the token's own
@@ -103,7 +122,7 @@ function traceTokenOutline(
   displayMode: string,
   gap: number,
   zoom: number,
-  geom: { tokenX: number; tokenY: number; tokenWidth: number; tokenHeight: number; centerX: number; centerY: number; radius: number }
+  geom: TokenGeometry
 ): void {
   ctx.beginPath();
   if (displayMode === 'full-art') {
@@ -120,6 +139,24 @@ function traceTokenOutline(
   } else {
     ctx.arc(geom.centerX, geom.centerY, geom.radius + gap, 0, Math.PI * 2);
   }
+}
+
+type TokenGeometry = { tokenX: number; tokenY: number; tokenWidth: number; tokenHeight: number; centerX: number; centerY: number; radius: number };
+
+/** The selection ring around a token's outline, dashed, in screen pixels at any zoom. */
+function drawSelectionRing(ctx: CanvasRenderingContext2D, displayMode: string, zoom: number, geom: TokenGeometry): void {
+  const gap = SELECT_RING_GAP / zoom;
+  ctx.save();
+  ctx.setLineDash(SELECT_RING_DASH.map((d) => d / zoom));
+  ctx.strokeStyle = SELECT_RING_CASING;
+  ctx.lineWidth = SELECT_RING_CASING_WIDTH / zoom;
+  traceTokenOutline(ctx, displayMode, gap, zoom, geom);
+  ctx.stroke();
+  ctx.strokeStyle = SELECT_RING_CORE;
+  ctx.lineWidth = SELECT_RING_CORE_WIDTH / zoom;
+  traceTokenOutline(ctx, displayMode, gap, zoom, geom);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**
@@ -324,6 +361,12 @@ export function drawTokens(
       ctx.lineWidth = PEEK_RING_CORE_WIDTH / zoom;
       traceTokenOutline(ctx, displayMode, gap, zoom, geom);
       ctx.stroke();
+    }
+
+    // Selection ring, outside the other two, inside the loop for the same
+    // reason as the turn ring: only a token this viewer can see is ringed.
+    if (state.selectedTokenId === token.id) {
+      drawSelectionRing(ctx, displayMode, zoom, geom);
     }
 
     // Spirit-layer ring for DM (dashed accent-colored outline)
@@ -556,8 +599,11 @@ export function drawTokens(
 
     ctx.save();
     ctx.globalAlpha = 0.6;
-    // Carried facing the way it faces.
-    turnAboutCentre(ctx, draggedToken.rotation, ghostCX, ghostCY);
+    // Carried facing the way it faces now: the token as the store has it, so
+    // a turn while it is held shows on the ghost. The held copy is the token
+    // as it was picked up.
+    const live = state.tokens.find((t) => t.id === draggedToken.id) ?? draggedToken;
+    turnAboutCentre(ctx, live.rotation, ghostCX, ghostCY);
 
     if (tokenImg) {
       if (ghostDisplayMode === 'full-art') {
@@ -588,5 +634,11 @@ export function drawTokens(
     }
 
     ctx.restore();
+
+    if (state.selectedTokenId === draggedToken.id) {
+      drawSelectionRing(ctx, ghostDisplayMode, zoom, {
+        tokenX: ghostX, tokenY: ghostY, tokenWidth: ghostW, tokenHeight: ghostH, centerX: ghostCX, centerY: ghostCY, radius: ghostR,
+      });
+    }
   }
 }
