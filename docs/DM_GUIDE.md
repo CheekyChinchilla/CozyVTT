@@ -841,6 +841,18 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 
 On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token.
 
+### On a touch screen
+
+On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) describes works for you, on every token. And:
+
+| To | Do this |
+|---|---|
+| Open a token's menu, for **Edit Token**, **Hide from Players** and the rest | Press and hold the token for half a second. It is the menu a right-click opens there, item for item. |
+| Lock or unlock a door | Press and hold the door for its menu. A tap opens or closes it, as a click does. |
+| Use a wall, fog or light tool | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
+
+A stylus never opens a menu by holding; use a finger.
+
 ## Combat and Initiative
 
 ### Starting the Initiative Tracker
@@ -927,6 +939,8 @@ Click the map, put the cursor where you mean and press **Tab**. A dot with radia
 - Everyone can ping, and each person's colour is assigned automatically and stays consistent.
 - Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
 - Rapid repeat pings are rate-limited server-side and quietly dropped.
+
+On a touch screen, press and hold an empty part of the map for half a second; on a token or a door that opens its menu instead (see [On a touch screen](#on-a-touch-screen)).
 
 ### Updating HP
 
@@ -1025,7 +1039,7 @@ Open the **Walls** panel, one of the DM tool panels stacked at the top right of 
 - **Polygon** — Click to place corners of a room; click near the starting point to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
 
-On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
+On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 

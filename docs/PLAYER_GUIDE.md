@@ -279,7 +279,7 @@ When the DM has placed your character's token on the map, you can move it: click
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
-**Turning your token.** To show which way you're facing, right-click your token and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control, while the session is live: like moving, turning waits while it is paused or has ended.
+**Turning your token.** To show which way you're facing, right-click your token (on a touch screen, press and hold it) and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control, while the session is live: like moving, turning waits while it is paused or has ended.
 
 **When you can't move your token:**
 - If the session is **Paused**, moving and turning your token are disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
@@ -300,8 +300,11 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 | Move your token | Put your finger on it, slide it to the square and lift: it goes down where you lift, and stays selected. A second finger on the glass before you lift puts it back where it was. |
 | Move it in two taps | Tap your token, then tap the square. In between it stays in your hand, drawn faded on its own square with the selection ring, so you can move the map with one finger, or pinch, and keep hold of it. Slide the token from its own square to carry it, or tap the square it came from to put it back. |
 | Move the map | Slide one finger anywhere but on a token you can move. Pinch two fingers to zoom, about your fingers. |
+| Open a token's menu | Press and hold the token for half a second: the menu a right-click opens there opens, with the same items, and the token is selected. Lift your finger and tap an item. |
+| Open or close a door | Tap it, as you would click it. Press and hold it for its menu. |
+| Point at the map | Press and hold the spot for half a second, on empty ground or on a token that has no menu for you: everyone sees your ping there, as with **Tab**. |
 
-A stylus works as a mouse: tap your token to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
+A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
 ### Two creatures can't stand in the same square
 
@@ -486,6 +489,8 @@ A few things worth knowing:
 - Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
 
 If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
+
+On a touch screen, press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
 
 The DM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
 

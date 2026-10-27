@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, createEvent } from '@testing-library/react';
 import { TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
@@ -23,6 +23,8 @@ const h = vi.hoisted(() => {
     userRole: 'DM' as string,
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
+    memberships: [] as Array<{ userId: string; role: string; user: { displayName: string } }>,
+    characters: [] as Array<{ id: string; userId: string; name: string }>,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<[string, unknown]> = [];
@@ -61,8 +63,10 @@ vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
   const noop = () => undefined;
   const campaign = {
-    id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, memberships: [], characters: [],
+    id: 'campaign-1', name: 'Test', spiritLayerEnabled: false,
     get status() { return h.state.status; },
+    get memberships() { return h.state.memberships; },
+    get characters() { return h.state.characters; },
   };
   return {
     useCampaign: () => {
@@ -95,6 +99,7 @@ vi.mock('@/contexts/WebSocketContext', async () => {
     emitTokenMoveStart: record('token.move.start'),
     emitTokenMove: record('token.move'),
     emitTokenMoveEnd: record('token.move.end'),
+    emitMapPing: record('map.ping'),
   } as Record<string, unknown>, {
     get(target, prop: string) {
       if (prop in target) return target[prop];
@@ -219,7 +224,7 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith(), status: 'ACTIVE' });
+  h.set({ userRole: 'DM', currentMap: mapWith(), status: 'ACTIVE', memberships: [], characters: [] });
 });
 
 describe('what the map asks of the browser', () => {
@@ -673,6 +678,352 @@ describe('where a held token is drawn', () => {
   });
 });
 
+describe('a long-press', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const wait = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
+  /** A finger pressed and held still at `at`; the caller lifts it. */
+  function hold(id: number, at: { clientX: number; clientY: number }, ms = 500) {
+    const finger = contact('touch', id);
+    finger.down(surface(), at);
+    wait(ms);
+    return {
+      lift() {
+        finger.up(surface(), at);
+        finger.leave(surface());
+      },
+      finger,
+    };
+  }
+  /** The labels of the menu open over the map, in order. */
+  const menuLabels = () => [...document.querySelectorAll<HTMLElement>('div.fixed.z-50 button')].map((b) => b.textContent);
+  const goblin = () => token('tok-goblin', 'Goblin', 0, 19);
+  const door = () => seg('d1', 100, 100, 200, 100, 'door-closed');
+
+  it('opens the token menu on a token the viewer may move, picks nothing up and selects it, and the lift taps nothing', () => {
+    render(<MapCanvas />);
+    show(goblin());
+
+    const press = hold(1, square(0, 19));
+    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-goblin');
+    press.lift();
+
+    expect(sentOf('token.move.start')).toEqual([]);
+    expect(sentOf('map.ping')).toEqual([]);
+    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+  });
+
+  // iOS may send a click, and the mouse events before it, after a long
+  // press. The token menu closes on a click, the roster's menu on a mousedown.
+  it('swallows the click and the mousedown that follow its lift, once', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    const heard = vi.fn();
+    document.addEventListener('mousedown', heard);
+    try {
+      hold(1, square(0, 19)).lift();
+
+      fireEvent.mouseDown(document.body, { detail: 1 });
+      fireEvent.click(document.body, { detail: 1 });
+      expect(heard).not.toHaveBeenCalled();
+      expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+
+      // The next real press is the user's: its click closes the menu.
+      fireEvent.pointerDown(document.body, { pointerType: 'touch', pointerId: 2 });
+      fireEvent.mouseDown(document.body, { detail: 1 });
+      fireEvent.click(document.body, { detail: 1 });
+      expect(heard).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Remove from Map')).not.toBeInTheDocument();
+    } finally {
+      document.removeEventListener('mousedown', heard);
+    }
+  });
+
+  // Enter or Space on a focused button clicks it with no pointer at all,
+  // and a click count of 0: that click is the user's.
+  it('lets a click from the keyboard through after the lift, and still swallows the pointer\'s', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    const heard = vi.fn();
+    document.addEventListener('click', heard);
+    try {
+      hold(1, square(0, 19)).lift();
+
+      fireEvent.click(document.body, { detail: 0 });
+      expect(heard).toHaveBeenCalledTimes(1);
+      fireEvent.click(document.body, { detail: 1 });
+      expect(heard).toHaveBeenCalledTimes(1);
+    } finally {
+      document.removeEventListener('click', heard);
+    }
+  });
+
+  it('swallows nothing once the window has lost focus during the press', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    const press = hold(1, square(0, 19));
+    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+
+    act(() => { window.dispatchEvent(new Event('blur')); });
+    press.lift();
+    fireEvent.click(document.body, { detail: 1 });
+
+    expect(screen.queryByText('Remove from Map')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['the DM, on a creature', 'DM', () => token('tok-goblin', 'Goblin', 0, 19)],
+    ['a player, on their own character', 'PLAYER', () => token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me', characterId: 'char-me' })],
+    ['a spectator, on a character', 'SPECTATOR', () => token('tok-mara', 'Mara', 0, 19, { type: TokenType.PLAYER, controlledBy: 'other', characterId: 'char-other' })],
+  ] as const)('offers %s what a right-click there offers, in the same order', (_who, userRole, which) => {
+    h.set({
+      userRole,
+      memberships: [{ userId: 'me', role: userRole, user: { displayName: 'Me' } }],
+      characters: [{ id: 'char-me', userId: 'me', name: 'Aldra' }, { id: 'char-other', userId: 'other', name: 'Mara' }],
+    });
+    render(<MapCanvas />);
+    show(which());
+
+    fireEvent.contextMenu(surface(), square(0, 19));
+    const byRightClick = menuLabels();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(menuLabels()).toEqual([]);
+    const press = hold(1, square(0, 19));
+    const byLongPress = menuLabels();
+    press.lift();
+
+    expect(byRightClick.length).toBeGreaterThan(0);
+    expect(byLongPress).toEqual(byRightClick);
+  });
+
+  it('opens the door menu on a door the map offers, and pings nothing', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [door()] }) });
+    render(<MapCanvas />);
+
+    fireEvent.contextMenu(surface(), px(150, 104));
+    const byRightClick = menuLabels();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    hold(1, px(150, 104)).lift();
+
+    expect(byRightClick).toEqual(['Open Door', 'Lock Door']);
+    expect(menuLabels()).toEqual(byRightClick);
+    expect(sentOf('map.ping')).toEqual([]);
+  });
+
+  it('pings once on empty ground, at the map pixel under the finger', () => {
+    render(<MapCanvas />);
+
+    const press = hold(1, px(510, 260));
+    wait(1000);
+    press.lift();
+
+    expect(sentOf('map.ping')).toEqual([{ mapId: 'map-a', x: 510, y: 260 }]);
+    expect(menuLabels()).toEqual([]);
+  });
+
+  it('pings nothing off the edge of the map', () => {
+    render(<MapCanvas />);
+
+    hold(1, px(1010, 400)).lift();
+
+    expect(sentOf('map.ping')).toEqual([]);
+  });
+
+  it("pings on a creature whose menu would be empty for the player", () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(goblin());
+
+    fireEvent.contextMenu(surface(), square(0, 19));
+    expect(menuLabels()).toEqual([]);
+    hold(1, square(0, 19)).lift();
+
+    expect(menuLabels()).toEqual([]);
+    expect(sentOf('map.ping')).toEqual([{ mapId: 'map-a', x: 25, y: 25 }]);
+  });
+
+  it('puts a token held by a tap back, and opens the menu of the token it presses', () => {
+    render(<MapCanvas />);
+    show(goblin(), token('tok-wolf', 'Wolf', 4, 19));
+    tap(1, square(0, 19));
+
+    hold(2, square(4, 19)).lift();
+
+    expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
+    expect(sentOf('token.move.end')).toEqual([]);
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-wolf');
+    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+  });
+
+  it('is still a long-press with a finger that jitters under the slop, and none with one that moves past it first', () => {
+    render(<MapCanvas />);
+    show(goblin());
+
+    const finger = contact('touch', 1);
+    finger.down(surface(), px(25, 25));
+    wait(200);
+    finger.move(surface(), px(30, 25));
+    wait(300);
+    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+    finger.up(surface(), px(30, 25));
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    const other = contact('touch', 2);
+    other.down(surface(), px(25, 25));
+    wait(300);
+    other.move(surface(), px(45, 25));
+    wait(1000);
+    expect(menuLabels()).toEqual([]);
+    other.up(surface(), px(45, 25));
+  });
+
+  // A press under a DM tool is the tool's for as long as it is held.
+  it('does not exist under a DM tool: a press held 600 ms then dragged draws a fog box', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    show(goblin());
+    fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
+    fireEvent.click(screen.getByText('Fog of War'));
+    fireEvent.click(screen.getByLabelText('Fog reveal box'));
+
+    const finger = contact('touch', 1);
+    finger.down(surface(), px(60, 60));
+    wait(600);
+    finger.move(surface(), px(120, 90));
+    finger.move(surface(), px(160, 110));
+    finger.up(surface(), px(160, 110));
+
+    expect(menuLabels()).toEqual([]);
+    expect(sentOf('map.ping')).toEqual([]);
+    expect(sentOf('fog:operation')).toHaveLength(1);
+  });
+
+  it('makes nothing of a pen held still', () => {
+    render(<MapCanvas />);
+
+    const pen = contact('pen', 5);
+    pen.down(surface(), px(510, 260));
+    wait(800);
+    pen.up(surface(), px(510, 260));
+
+    expect(menuLabels()).toEqual([]);
+    expect(sentOf('map.ping')).toEqual([]);
+  });
+
+  // A stylus makes no long-press of its own, but a browser may turn a
+  // stylus held still into a right-click (Windows Ink does).
+  it("opens nothing for the browser's right-click while a stylus tip is down", () => {
+    render(<MapCanvas />);
+    show(goblin());
+
+    const pen = contact('pen', 5);
+    pen.down(surface(), square(0, 19));
+    const event = createEvent.contextMenu(surface(), { ...square(0, 19), button: 2 });
+    fireEvent(surface(), event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(menuLabels()).toEqual([]);
+    pen.up(surface(), square(0, 19));
+  });
+
+  it.each([
+    ['with nothing else on the glass', false],
+    ['while a palm rests on the glass', true],
+  ])("opens the menu for a stylus's barrel button, %s", (_how, palm) => {
+    render(<MapCanvas />);
+    show(goblin());
+
+    const pen = contact('pen', 5);
+    pen.down(surface(), square(0, 19), { button: 2, buttons: 2 });
+    const hand = contact('touch', 7);
+    if (palm) hand.down(surface(), px(600, 700));
+    fireEvent.contextMenu(surface(), { ...square(0, 19), button: 2 });
+
+    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+    pen.up(surface(), square(0, 19), { button: 2 });
+    if (palm) hand.up(surface(), px(600, 700));
+  });
+
+  describe("and the browser's own, which Android makes", () => {
+    /** The context menu event a browser sends for a long press, as Chrome does with a pointer type or as a plain mouse event. */
+    function browserLongPress(at: { clientX: number; clientY: number }, pointerType?: string): Event {
+      const event = createEvent.contextMenu(surface(), at);
+      if (pointerType) Object.defineProperty(event, 'pointerType', { value: pointerType });
+      fireEvent(surface(), event);
+      return event;
+    }
+
+    it.each([['with', 'touch'], ['without', undefined]])('opens one menu %s a pointer type on the event, picking nothing up, before the timer', (_how, pointerType) => {
+      render(<MapCanvas />);
+      show(goblin());
+
+      const finger = contact('touch', 1);
+      finger.down(surface(), square(0, 19));
+      wait(400);
+      const event = browserLongPress(square(0, 19), pointerType);
+      expect(event.defaultPrevented).toBe(true);
+      expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+      // Lifted at 450 ms, before the recogniser's own timer would run.
+      wait(50);
+      finger.up(surface(), square(0, 19));
+      wait(500);
+
+      expect(sentOf('token.move.start')).toEqual([]);
+      expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+    });
+
+    it.each([
+      ['the timer after it', (finger: ReturnType<typeof contact>) => { wait(200); finger.up(surface(), px(510, 260)); }],
+      ['a lift at 450 ms after it', (finger: ReturnType<typeof contact>) => { wait(50); finger.up(surface(), px(510, 260)); wait(500); }],
+      ['the browser taking the pointer after it', (finger: ReturnType<typeof contact>) => { finger.cancel(surface()); wait(500); }],
+    ])('pings once on empty ground, with %s', (_then, then) => {
+      render(<MapCanvas />);
+
+      const finger = contact('touch', 1);
+      finger.down(surface(), px(510, 260));
+      wait(400);
+      browserLongPress(px(510, 260), 'touch');
+      then(finger);
+
+      expect(sentOf('map.ping')).toEqual([{ mapId: 'map-a', x: 510, y: 260 }]);
+    });
+
+    it('does nothing more after the timer, and the browser shows no menu of its own', () => {
+      render(<MapCanvas />);
+
+      const finger = contact('touch', 1);
+      finger.down(surface(), px(510, 260));
+      wait(500);
+      const event = browserLongPress(px(510, 260));
+      finger.up(surface(), px(510, 260));
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(sentOf('map.ping')).toHaveLength(1);
+    });
+
+    it('opens nothing under a DM tool, and the press can still drag', () => {
+      h.set({ currentMap: mapWith({ fogEnabled: true }) });
+      render(<MapCanvas />);
+      fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
+      fireEvent.click(screen.getByText('Fog of War'));
+      fireEvent.click(screen.getByLabelText('Fog reveal box'));
+
+      const finger = contact('touch', 1);
+      finger.down(surface(), px(60, 60));
+      wait(400);
+      const event = browserLongPress(px(60, 60), 'touch');
+      finger.move(surface(), px(160, 110));
+      finger.up(surface(), px(160, 110));
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(menuLabels()).toEqual([]);
+      expect(sentOf('fog:operation')).toHaveLength(1);
+    });
+  });
+});
+
 // A finger landing on the map while the on-screen keyboard is up for the
 // chat would close the keyboard: the map takes the keys only once the
 // finger's gesture reaches it.
@@ -713,6 +1064,18 @@ describe('the keys and a finger', () => {
     finger.down(surface(), px(500, 500));
     finger.move(surface(), px(560, 500));
     expect(document.activeElement).toBe(theMap());
+  });
+
+  it('go to the map on a long-press', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      withChatBox();
+      contact('touch', 1).down(surface(), px(510, 260));
+      act(() => { vi.advanceTimersByTime(500); });
+      expect(document.activeElement).toBe(theMap());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('go to the map at once on a mouse or a pen press, as before', () => {

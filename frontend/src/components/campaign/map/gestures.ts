@@ -18,6 +18,10 @@
 // - a second finger turns a press or a drag into a pinch (a drag is
 //   cancelled first); a pinch ends when either finger lifts, and the finger
 //   left behind starts nothing until it lifts and touches again;
+// - a press that `longPressAt` refuses as it lands has no timer: held still
+//   for any time it is still a tap on lift, or a drag once it moves;
+// - `hold` holds a press as the long-press timer would, emitting nothing:
+//   the browser made its own long-press (Android's contextmenu);
 // - a third touch, and any touch after a long-press, is ignored;
 // - cancel (the browser took the pointer) ends whatever is in progress: a
 //   drag is cancelled, a pinch ends, a press is dropped;
@@ -53,6 +57,12 @@ export interface GestureOptions {
   longPressMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /**
+   * Whether a press may become a long-press, asked once as it lands. Without
+   * one it may. A press refused here has no timer, so it stays a press for as
+   * long as it is held: a tap on lift, or a drag once it moves the slop.
+   */
+  longPressAt?: (s: PointerSample) => boolean;
 }
 
 export interface GestureRecognizer {
@@ -60,6 +70,15 @@ export interface GestureRecognizer {
   move(s: PointerSample): void;
   up(s: PointerSample): void;
   cancel(s: PointerSample): void;
+  /**
+   * The browser made its own long-press of this finger, as Android does with
+   * its contextmenu: the press is held, as after a long-press, so its lift is
+   * no tap and the timer emits nothing. True when it held the press; false
+   * once the timer has, or for a drag, a pinch or a finger it never saw.
+   */
+  hold(id: number): boolean;
+  /** Whether this finger's press is held, by the timer's long-press or by `hold`, until it lifts. */
+  isHeld(id: number): boolean;
   /** Forget every pointer and gesture without emitting anything. */
   reset(): void;
 }
@@ -81,6 +100,7 @@ export function createGestureRecognizer(emit: (g: Gesture) => void, options: Ges
   const longPressMs = options.longPressMs ?? 500;
   const setTimer = options.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
   const clearTimer = options.clearTimer ?? ((handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+  const longPressAt = options.longPressAt ?? (() => true);
 
   let phase: Phase = 'idle';
   /** Every touch down that the recogniser saw land, whether or not it counts. */
@@ -147,7 +167,7 @@ export function createGestureRecognizer(emit: (g: Gesture) => void, options: Ges
         phase = 'press';
         pressNumber += 1;
         const press = pressNumber;
-        timer = setTimer(() => onLongPress(press), longPressMs);
+        if (longPressAt(s)) timer = setTimer(() => onLongPress(press), longPressMs);
         return;
       }
       case 'press':
@@ -232,6 +252,15 @@ export function createGestureRecognizer(emit: (g: Gesture) => void, options: Ges
     cancel(s) {
       if (s.kind === 'pen') pens.delete(s.id);
       else if (s.kind === 'touch') touchCancel(s);
+    },
+    hold(id) {
+      if (phase !== 'press' || !fingers.has(id)) return false;
+      stopTimer();
+      phase = 'held';
+      return true;
+    },
+    isHeld(id) {
+      return phase === 'held' && fingers.has(id);
     },
     reset() {
       stopTimer();

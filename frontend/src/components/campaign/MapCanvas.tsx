@@ -129,6 +129,12 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   return '#9370DB'; // wispy default = spirit-purple
 }
 
+/**
+ * How long after a long-pressing finger lifts the click and the mousedown
+ * it may bring are still swallowed (iOS sends them as the finger lifts).
+ */
+const LONG_PRESS_CLICK_MS = 1000;
+
 /** The screen's pixel ratio; 1 where there is no window to ask. */
 function readDeviceRatio(): number {
   return typeof window === 'undefined' ? 1 : window.devicePixelRatio;
@@ -2430,18 +2436,26 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // (map/gestures.ts): a tap as a down and an up where it landed, a drag as a
   // down where it landed, moves and an up. A drag the tools do not take pans
   // the map, through the token tool; a door opens on a tap only. A second
-  // finger cancels what the first began and pinches the zoom; a long-press
-  // reaches no tool. A pen is a mouse to the tools, and while one is down
-  // every finger is ignored.
+  // finger cancels what the first began and pinches the zoom. A long-press
+  // reaches no tool: it opens the menu a right-click opens there, or pings
+  // where none opens, and under a DM tool there is none, so a press held
+  // still stays the tool's. A pen is a mouse to the tools, makes no
+  // long-press, and while one is down every finger is ignored.
 
   /** The press each finger began with, which its tap or drag reaches the tools as. */
   const fingerDownsRef = useRef(new Map<number, MapPointer>());
+  /** The pens whose tip, not a barrel button, is on the glass. */
+  const penTipsRef = useRef(new Set<number>());
   /** The pointer event being handled, which a gesture it ends in is made from. */
   const gestureEventRef = useRef<MapPointer | null>(null);
   /** Set from a finger's drag reaching the tools until it ends. */
   const fingerPressRef = useRef(false);
   const gestureHandlerRef = useRef<(g: Gesture) => void>(() => undefined);
-  const [gestures] = useState(() => createGestureRecognizer((g) => gestureHandlerRef.current(g)));
+  /** Whether a press may long-press, asked as it lands: not while a wall, fog or light tool is up. */
+  const longPressAllowedRef = useRef(true);
+  const [gestures] = useState(() => createGestureRecognizer((g) => gestureHandlerRef.current(g), {
+    longPressAt: () => longPressAllowedRef.current,
+  }));
 
   const handleGesture = (g: Gesture) => {
     const current = gestureEventRef.current;
@@ -2454,6 +2468,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       const press: MapPointer = { ...down, clientX: g.at.x, clientY: g.at.y, button: 0, buttons: 1, preventDefault: () => undefined };
       pressButton(withClickCount(press, g.at.t), 'tap');
       releaseButton(0, at('tap'));
+    } else if (g.type === 'long-press') {
+      if (!fingerDownsRef.current.has(g.at.id)) return;
+      longPress(g.at.id, g.at.x, g.at.y);
     } else if (g.type === 'drag') {
       if (g.phase === 'start') {
         const down = fingerDownsRef.current.get(g.from.id);
@@ -2489,7 +2506,60 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
   useEffect(() => {
     gestureHandlerRef.current = handleGesture;
+    longPressAllowedRef.current = !(wallMode || fogMode || lightMode);
   });
+
+  /**
+   * A finger's long-press, by the recogniser's timer or the browser's own
+   * (Android's contextmenu), at page point (x, y): the map takes the keys,
+   * the click a lift may bring is swallowed, and the menu a right-click
+   * opens there opens; where none would, the map is pinged there.
+   */
+  const longPress = (pointerId: number, x: number, y: number) => {
+    focusMap();
+    swallowAfterLongPressRef.current = { pointerId, until: Infinity, left: new Set(['mousedown', 'click']) };
+    if (!openMenuAt(x, y)) pingAt(x, y);
+  };
+
+  /**
+   * iOS can send a click, and the mouse events before it, when a finger
+   * lifts from a long-press, and the menu just opened closes on a click (the
+   * token and door menus) or a mousedown (the roster's). The first of each
+   * after a long-press is swallowed, unless a new press starts first or a
+   * second has passed since the finger lifted.
+   */
+  const swallowAfterLongPressRef = useRef<{ pointerId: number; until: number; left: Set<string> } | null>(null);
+  useEffect(() => {
+    const onPress = () => { swallowAfterLongPressRef.current = null; };
+    const onMouse = (event: MouseEvent) => {
+      const armed = swallowAfterLongPressRef.current;
+      if (!armed || !armed.left.has(event.type)) return;
+      // Enter or Space on a focused control clicks it with no pointer and a
+      // click count of 0: that click is the user's.
+      if (event.type === 'click' && event.detail === 0) return;
+      if (performance.now() > armed.until) {
+        swallowAfterLongPressRef.current = null;
+        return;
+      }
+      armed.left.delete(event.type);
+      if (armed.left.size === 0) swallowAfterLongPressRef.current = null;
+      event.stopImmediatePropagation();
+      event.preventDefault();
+    };
+    window.addEventListener('pointerdown', onPress, true);
+    window.addEventListener('mousedown', onMouse, true);
+    window.addEventListener('click', onMouse, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPress, true);
+      window.removeEventListener('mousedown', onMouse, true);
+      window.removeEventListener('click', onMouse, true);
+    };
+  }, []);
+  /** The finger of a long-press has lifted: what it may bring is swallowed for a second more. */
+  const longPressLifted = (pointerId: number) => {
+    const armed = swallowAfterLongPressRef.current;
+    if (armed?.pointerId === pointerId && armed.until === Infinity) armed.until = performance.now() + LONG_PRESS_CLICK_MS;
+  };
 
   /** Hand a finger's or a pen's event to the recogniser, which may answer with a gesture. */
   const feedGesture = (step: 'down' | 'move' | 'up' | 'cancel', e: MapPointer, t: number) => {
@@ -2506,6 +2576,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const dropGestures = useEffectEvent(() => {
     gestures.reset();
     fingerDownsRef.current.clear();
+    penTipsRef.current.clear();
+    swallowAfterLongPressRef.current = null;
     if (!fingerPressRef.current) return;
     fingerPressRef.current = false;
     cancelPointer();
@@ -2525,8 +2597,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const e = fromPointerEvent(event);
     // A press on the map gives it the keys; one on a panel over it does not.
-    // A finger's does once its gesture is known, a tap or a drag, so a
-    // pinch while typing in the chat keeps the on-screen keyboard.
+    // A finger's does once its gesture is known, a tap, a drag or a
+    // long-press, so a pinch while typing in the chat keeps the on-screen
+    // keyboard.
     if (e.kind !== 'touch') focusMap();
     if (e.kind !== 'mouse') capturePointer(event);
     if (e.kind === 'touch') {
@@ -2535,6 +2608,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       return;
     }
     if (e.kind === 'pen') {
+      if (e.button === 0) penTipsRef.current.add(e.pointerId);
       // A finger's gesture under way ends before the pen's press arrives.
       feedGesture('down', e, event.timeStamp);
       if (e.button === PEN_ERASER_BUTTON) return;
@@ -2567,9 +2641,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'touch') {
       feedGesture('up', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
+      longPressLifted(e.pointerId);
       return;
     }
     if (e.kind === 'pen') {
+      penTipsRef.current.delete(e.pointerId);
       feedGesture('up', e, event.timeStamp);
       if (e.button === PEN_ERASER_BUTTON) return;
     }
@@ -2582,9 +2658,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'touch') {
       feedGesture('cancel', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
+      longPressLifted(e.pointerId);
       return;
     }
-    if (e.kind === 'pen') feedGesture('cancel', e, event.timeStamp);
+    if (e.kind === 'pen') {
+      penTipsRef.current.delete(e.pointerId);
+      feedGesture('cancel', e, event.timeStamp);
+    }
     cancelPointer();
   };
 
@@ -2914,14 +2994,16 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     });
   };
 
-  const handleContextMenu = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const e = fromMouseEvent(event);
-    e.preventDefault();
-    if (!canvasRef.current || !currentMap) return;
-    // The right button pans while a wall, fog or light tool is up, so no menu
-    // opens: some browsers send this event as the button goes down, before
-    // any drag, so a drag cannot be told from a click here.
-    if ((wallMode || fogMode || lightMode) && isDM) return;
+  /**
+   * Open the menu a right-click or a long-press opens at page point
+   * (clientX, clientY), and say whether one opened: the token menu on a
+   * token whose menu has something for this viewer, selecting it, else the
+   * door menu on a door the map offers. A held token goes back first, as a
+   * right-click always put it back. One function decides both, so a finger
+   * is offered exactly what a mouse is.
+   */
+  const openMenuAt = (clientX: number, clientY: number): boolean => {
+    if (!canvasRef.current || !currentMap) return false;
 
     // Always close any open door context menu first
     setDoorContextMenu(null);
@@ -2931,17 +3013,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
     // Get grid + screen coordinates of click
     const rect = canvasRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const screenX = clientX - rect.left;
+    const screenY = clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
 
     // Check tokens first — they sit on a higher visual layer than doors. A
     // token whose menu would be empty for this viewer is passed over.
+    // TODO(play): in Player Preview this finds a token the preview does not draw, a hidden creature
+    // included, and opens the DM's menu at it on the shared screen; look it up through the preview's
+    // drawn list (getHoverTokenAt) while previewing, as the click's pick-up does.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
     if (token && tokenMenuHasItems(token)) {
       if (drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
-      setContextMenu({ token, x: e.clientX, y: e.clientY });
-      return;
+      setContextMenu({ token, x: clientX, y: clientY });
+      return true;
     }
     setContextMenu(null);
 
@@ -2950,9 +3035,53 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!wallMode && !fogMode) {
       const door = doorAt(screenToMapPx(screenX, screenY));
       if (door) {
-        setDoorContextMenu({ door, x: e.clientX, y: e.clientY });
+        setDoorContextMenu({ door, x: clientX, y: clientY });
+        return true;
       }
     }
+    return false;
+  };
+
+  /** Ping the map at page point (clientX, clientY), if that is on the map. */
+  const pingAt = (clientX: number, clientY: number) => {
+    if (!canvasRef.current || !currentMap) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const at = screenToMapPx(clientX - rect.left, clientY - rect.top);
+    const onMap = at.x >= 0 && at.y >= 0 && at.x <= currentMap.width * currentMap.gridSize && at.y <= currentMap.height * currentMap.gridSize;
+    if (onMap) socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
+  };
+
+  const handleContextMenu = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const e = fromMouseEvent(event);
+    e.preventDefault();
+    if (!canvasRef.current || !currentMap) return;
+    // The right button pans while a wall, fog or light tool is up, so no menu
+    // opens: some browsers send this event as the button goes down, before
+    // any drag, so a drag cannot be told from a click here. A finger's
+    // long-press does nothing there either, and its press stays free to drag.
+    if ((wallMode || fogMode || lightMode) && isDM) return;
+
+    // A stylus opens no menu by holding, but some browsers turn a stylus
+    // held still into a right-click (Windows Ink does). Its barrel button's
+    // right-click presses button 2, not the tip, and opens the menu.
+    if (penTipsRef.current.size > 0) return;
+
+    // A finger's press the recogniser is timing is the browser's own
+    // long-press (Android's), whatever pointer type the event carries, which
+    // Firefox's may not: the recogniser holds the press, so its lift is no
+    // tap, and the long-press opens what its own timer would have. One it
+    // already holds was the timer's: whichever of the two comes second does
+    // nothing. Any other touch on the glass, such as a palm the recogniser
+    // ignores beside a stylus, leaves a right-click a right-click.
+    for (const pointerId of fingerDownsRef.current.keys()) {
+      if (gestures.hold(pointerId)) {
+        longPress(pointerId, e.clientX, e.clientY);
+        return;
+      }
+      if (gestures.isHeld(pointerId)) return;
+    }
+
+    openMenuAt(e.clientX, e.clientY);
   };
 
   /**
