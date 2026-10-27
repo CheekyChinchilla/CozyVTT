@@ -966,6 +966,17 @@ export const MAP_FIELDS_THAT_DO_NOT_RESEND_THE_MAP = {
 } as const satisfies Partial<Record<keyof MapRow, string>>;
 
 /**
+ * What PUT /maps/:id reads of the map under its lock: the size walls and
+ * lights scale from, those two lists, whether fog was on, and each column
+ * whose change sends the map again. Only these, so a rename does not hold
+ * the lock while it reads the fog grid and every token.
+ */
+const MAP_EDIT_LOCKED_READ = {
+  ...(Object.fromEntries(MAP_FIELDS_THAT_RESEND_THE_MAP.map((key) => [key, true])) as Record<(typeof MAP_FIELDS_THAT_RESEND_THE_MAP)[number], true>),
+  width: true, height: true, gridSize: true, wallSegments: true, lights: true, fogEnabled: true,
+} as const satisfies Prisma.MapSelect;
+
+/**
  * PUT /api/campaigns/:campaignId/maps/:id
  * Update a map
  * Requires: DM role
@@ -1139,21 +1150,26 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // Walls, doors and lights are stored in map pixels, and the picture is
     // drawn across width × gridSize by height × gridSize, so when either side
     // of that changes they scale with it, each axis by its own change, and
-    // stay on the art. Read and written under the map's lock, so no wall edit
-    // lands between the two.
-    const size = (field: 'width' | 'height' | 'gridSize') =>
-      typeof updateData[field] === 'number' ? (updateData[field] as number) : existingMap[field];
-    const kx = (size('width') * size('gridSize')) / (existingMap.width * existingMap.gridSize);
-    const ky = (size('height') * size('gridSize')) / (existingMap.height * existingMap.gridSize);
-    const { updatedMap, moved } = await withMapsLocked([id], async (tx) => {
-      if (kx === 1 && ky === 1) return { updatedMap: await tx.map.update({ where: { id }, data: updateData }), moved: null };
-      const current = await tx.map.findUniqueOrThrow({ where: { id }, select: { wallSegments: true, lights: true } });
+    // stay on the art. The scale is taken from the map as it is under the
+    // lock, the walls and lights with it. Two edits at once used to scale
+    // from the size each read before the lock, so both doubled the walls,
+    // and a form sending back the old grid size left them doubled. `before`
+    // is that row, for what this edit changed; existingMap stays the check
+    // of what was sent.
+    const { updatedMap, before, moved } = await withMapsLocked([id], async (tx) => {
+      const current = await tx.map.findUniqueOrThrow({ where: { id }, select: MAP_EDIT_LOCKED_READ });
+      const size = (field: 'width' | 'height' | 'gridSize') =>
+        typeof updateData[field] === 'number' ? (updateData[field] as number) : current[field];
+      const kx = (size('width') * size('gridSize')) / (current.width * current.gridSize);
+      const ky = (size('height') * size('gridSize')) / (current.height * current.gridSize);
+      if (kx === 1 && ky === 1) {
+        return { updatedMap: await tx.map.update({ where: { id }, data: updateData }), before: current, moved: null };
+      }
       const walls = scaledWalls(current.wallSegments, kx, ky);
       const lights = scaledLights(current.lights, kx, ky);
-      updateData.wallSegments = toJson(walls);
-      updateData.lights = toJson(lights);
       return {
-        updatedMap: await tx.map.update({ where: { id }, data: updateData }),
+        updatedMap: await tx.map.update({ where: { id }, data: { ...updateData, wallSegments: toJson(walls), lights: toJson(lights) } }),
+        before: current,
         moved: { wallsBefore: current.wallSegments, walls, lightsBefore: current.lights, lights },
       };
     });
@@ -1184,7 +1200,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // Fog switched on: push the fog state at once. A client asks for it when
     // its flag flips, but the flip it sees first is its own optimistic one,
     // sent before this row was written, and the server had nothing to answer.
-    if (updatedMap.fogEnabled && !existingMap.fogEnabled) {
+    if (updatedMap.fogEnabled && !before.fogEnabled) {
       try {
         await broadcastFogState(getSocketInstance(), campaignId, id, loadFogState(updatedMap, updatedMap.fogData as FogState | null));
       } catch { /* non-fatal */ }
@@ -1192,7 +1208,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
     // Every client gets the map again as they can now see it when the edit
     // changes what it draws or which tokens a player is sent.
-    if (MAP_FIELDS_THAT_RESEND_THE_MAP.some((key) => updatedMap[key] !== existingMap[key])) {
+    if (MAP_FIELDS_THAT_RESEND_THE_MAP.some((key) => updatedMap[key] !== before[key])) {
       // Only for the map the table is on. A map being edited in the library is
       // nobody's canvas, and map.changed would put every client onto it.
       await resendIfCurrent(campaignId, updatedMap);
