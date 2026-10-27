@@ -87,8 +87,9 @@ describe('sizeBackingStore', () => {
     expect(canvas.style.height).toBe('600px');
   });
 
-  // Today's canvas took its width from an attribute, which drops the
-  // fraction; the CSS box followed it. At ratio 1 that is kept exactly.
+  // A container's size is often fractional. The pixel size drops the
+  // fraction and the CSS size is the pixels over the ratio, so at ratio 1
+  // each canvas pixel covers exactly one CSS pixel.
   it('floors the pixel size and sets the CSS size to the pixels over the ratio', () => {
     const canvas = document.createElement('canvas');
     sizeBackingStore(canvas, 812.5, 600.75, 1);

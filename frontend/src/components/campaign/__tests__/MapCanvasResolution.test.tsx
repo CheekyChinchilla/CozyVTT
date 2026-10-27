@@ -266,12 +266,125 @@ function sizes() {
 }
 
 const sentOf = (event: string) => h.sent.filter(([e]) => e === event).map(([, p]) => p);
+/** A server event, delivered to the listeners the page registered. */
+function fire(event: string, payload: unknown) {
+  act(() => { h.handlers.get(event)?.forEach((fn) => (fn as (data: unknown) => void)(payload)); });
+}
 const readout = () => screen.queryByText(/^\(-?\d+, -?\d+\)$/)?.textContent ?? null;
 
 /** Page position of map pixel (x, y) at 100% with no pan. */
 const onPage = (x: number, y: number) => ({ clientX: x + 100, clientY: y + 50 });
 /** The centre of square (x, y); grid y counts up from the bottom row. */
 const square = (x: number, y: number) => onPage(x * 50 + 25, (19 - y) * 50 + 25);
+
+// ── What each layer draws ────────────────────────────────────────────────────
+
+interface Call { method: string; args: unknown[] }
+
+/**
+ * A 2D context that records every method called on it and keeps whatever is
+ * assigned to it. A method's answer is a gradient-like object, or empty pixels
+ * for the two that hand pixels back, enough for the layers' draws to run.
+ */
+function recordingContext(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; calls: Call[] } {
+  const calls: Call[] = [];
+  const answer = { addColorStop: () => undefined, width: 0 };
+  const pixels = (w: unknown, h: unknown) => {
+    const width = Number(w) || 0;
+    const height = Number(h) || 0;
+    return { width, height, data: new Uint8ClampedArray(width * height * 4) };
+  };
+  const props: Record<string, unknown> = { canvas };
+  const ctx = new Proxy(props, {
+    get(target, prop) {
+      if (typeof prop !== 'string') return undefined;
+      if (prop in target) return target[prop];
+      return (...args: unknown[]) => {
+        calls.push({ method: prop, args });
+        if (prop === 'createImageData') return pixels(args[0], args[1]);
+        if (prop === 'getImageData') return pixels(args[2], args[3]);
+        return answer;
+      };
+    },
+    set(target, prop, value) {
+      if (typeof prop === 'string') target[prop] = value;
+      return true;
+    },
+  });
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
+}
+
+/** Every picture the map asked for, to load by hand: jsdom loads none. */
+const pictures: FakeImage[] = [];
+class FakeImage {
+  onload: (() => void) | null = null;
+  onerror: ((e: unknown) => void) | null = null;
+  crossOrigin = '';
+  width = 1000;
+  height = 1000;
+  private source = '';
+  set src(value: string) { this.source = value; pictures.push(this); }
+  get src() { return this.source; }
+  load() { act(() => { this.onload?.(); }); }
+}
+
+/** Lets the map's render loop draw its next frame. */
+async function nextFrame() {
+  await act(async () => {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
+}
+
+/**
+ * Gives every canvas in the tests of the calling group a recording context,
+ * and stands in for the browser's pictures.
+ */
+function recordDrawing() {
+  const recorded = new Map<HTMLCanvasElement, Call[]>();
+
+  beforeEach(() => {
+    recorded.clear();
+    pictures.length = 0;
+    vi.stubGlobal('Image', FakeImage);
+    const contexts = new Map<HTMLCanvasElement, CanvasRenderingContext2D>();
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      writable: true,
+      value(this: HTMLCanvasElement) {
+        let ctx = contexts.get(this);
+        if (!ctx) {
+          const made = recordingContext(this);
+          ctx = made.ctx;
+          contexts.set(this, ctx);
+          recorded.set(this, made.calls);
+        }
+        return ctx;
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { value: () => null, configurable: true, writable: true });
+  });
+
+  return {
+    recorded,
+    /** The calls the canvas has had since the last look. */
+    take(canvas: HTMLCanvasElement): Call[] {
+      const calls = recorded.get(canvas) ?? [];
+      const taken = calls.slice();
+      calls.length = 0;
+      return taken;
+    },
+  };
+}
+
+/** Clearing a layer: the identity transform, then every pixel. */
+const cleared = (w: number, h: number) => [
+  { method: 'setTransform', args: [1, 0, 0, 1, 0, 0] },
+  { method: 'clearRect', args: [0, 0, w, h] },
+];
 
 describe('the canvases at the screen ratio', () => {
   it('at ratio 1 are the container size, as before', () => {
@@ -307,12 +420,19 @@ describe('the canvases at the screen ratio', () => {
 });
 
 describe('a change of ratio', () => {
-  it('resizes the canvases when the window moves to a screen of another density', () => {
+  const drawing = recordDrawing();
+
+  it('resizes the canvases and draws them again when the window moves to a screen of another density', async () => {
     render(<MapCanvas />);
+    await nextFrame();
     expect(sizes()[0]).toEqual([800, 600, '800px', '600px']);
+    for (const layer of layers()) drawing.take(layer);
 
     moveToScreen(2);
     expect(sizes()).toEqual(Array(3).fill([1600, 1200, '800px', '600px']));
+    // Resizing a canvas empties it, so each layer is drawn again at once.
+    await nextFrame();
+    for (const layer of layers()) expect(drawing.take(layer).slice(0, 2)).toEqual(cleared(1600, 1200));
 
     // The query is asked again for the new ratio, so a move back is heard too.
     moveToScreen(1);
@@ -369,90 +489,8 @@ describe('a pointer at ratio 2', () => {
   });
 });
 
-// ── What each layer draws ────────────────────────────────────────────────────
-
-interface Call { method: string; args: unknown[] }
-
-/**
- * A 2D context that records every method called on it and keeps whatever is
- * assigned to it. A method's answer is a gradient-like object, enough for the
- * layers' draws to run.
- */
-function recordingContext(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; calls: Call[] } {
-  const calls: Call[] = [];
-  const answer = { addColorStop: () => undefined, width: 0 };
-  const props: Record<string, unknown> = { canvas };
-  const ctx = new Proxy(props, {
-    get(target, prop) {
-      if (typeof prop !== 'string') return undefined;
-      if (prop in target) return target[prop];
-      return (...args: unknown[]) => { calls.push({ method: prop, args }); return answer; };
-    },
-    set(target, prop, value) {
-      if (typeof prop === 'string') target[prop] = value;
-      return true;
-    },
-  });
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
-}
-
-/** Every picture the map asked for, to load by hand: jsdom loads none. */
-const pictures: FakeImage[] = [];
-class FakeImage {
-  onload: (() => void) | null = null;
-  onerror: ((e: unknown) => void) | null = null;
-  crossOrigin = '';
-  width = 1000;
-  height = 1000;
-  private source = '';
-  set src(value: string) { this.source = value; pictures.push(this); }
-  get src() { return this.source; }
-  load() { act(() => { this.onload?.(); }); }
-}
-
-/** Lets the map's render loop draw its next frame. */
-async function nextFrame() {
-  await act(async () => {
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  });
-}
-
 describe('each layer at ratio 2', () => {
-  const recorded = new Map<HTMLCanvasElement, Call[]>();
-
-  beforeEach(() => {
-    recorded.clear();
-    pictures.length = 0;
-    vi.stubGlobal('Image', FakeImage);
-    const contexts = new Map<HTMLCanvasElement, CanvasRenderingContext2D>();
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-      configurable: true,
-      writable: true,
-      value(this: HTMLCanvasElement) {
-        let ctx = contexts.get(this);
-        if (!ctx) {
-          const made = recordingContext(this);
-          ctx = made.ctx;
-          contexts.set(this, ctx);
-          recorded.set(this, made.calls);
-        }
-        return ctx;
-      },
-    });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { value: () => null, configurable: true, writable: true });
-  });
-
-  /** The calls the layer has had since the last look. */
-  function take(canvas: HTMLCanvasElement): Call[] {
-    const calls = recorded.get(canvas) ?? [];
-    const taken = calls.slice();
-    calls.length = 0;
-    return taken;
-  }
+  const drawing = recordDrawing();
 
   it('clears every pixel and writes "No map loaded" at the CSS centre at the CSS size', async () => {
     setRatio(2);
@@ -460,20 +498,14 @@ describe('each layer at ratio 2', () => {
     await nextFrame();
 
     const [terrain, tokensLayer, top] = layers();
-    const drawn = take(terrain);
-    expect(drawn.slice(0, 2)).toEqual([
-      { method: 'setTransform', args: [1, 0, 0, 1, 0, 0] },
-      { method: 'clearRect', args: [0, 0, 1600, 1200] },
-    ]);
+    const drawn = drawing.take(terrain);
+    expect(drawn.slice(0, 2)).toEqual(cleared(1600, 1200));
     const text = drawn.findIndex((c) => c.method === 'fillText');
     expect(drawn[text].args).toEqual(['No map loaded', 400, 300]);
     const before = drawn.slice(0, text).filter((c) => c.method === 'setTransform');
     expect(before[before.length - 1]?.args).toEqual([2, 0, 0, 2, 0, 0]);
     for (const layer of [tokensLayer, top]) {
-      expect(take(layer).slice(0, 2)).toEqual([
-        { method: 'setTransform', args: [1, 0, 0, 1, 0, 0] },
-        { method: 'clearRect', args: [0, 0, 1600, 1200] },
-      ]);
+      expect(drawing.take(layer).slice(0, 2)).toEqual(cleared(1600, 1200));
     }
   });
 
@@ -488,9 +520,35 @@ describe('each layer at ratio 2', () => {
     const zoom = (600 * 0.9) / 1000;
     const pan = { x: (800 - 1000 * zoom) / 2, y: (600 - 1000 * zoom) / 2 };
     for (const layer of layers()) {
-      const transforms = take(layer).filter((c) => c.method === 'setTransform').map((c) => c.args);
+      const transforms = drawing.take(layer).filter((c) => c.method === 'setTransform').map((c) => c.args);
       expect(transforms).toContainEqual([2 * zoom, 0, 0, 2 * zoom, 2 * pan.x, 2 * pan.y]);
     }
+  });
+
+  // The memory pass works on canvases the size of the screen's pixels, so the
+  // ratio the map draws at has to reach it.
+  it('builds the explored-memory mask of a lit map through the same transform', async () => {
+    setRatio(2);
+    h.set({
+      userRole: 'PLAYER',
+      currentMap: mapWith({ lightingEnabled: true, explorationEnabled: true, globalIllumination: false }),
+    });
+    render(<MapCanvas />);
+    act(() => { useGameStore.getState().setTokens([{ ...token('tok-me', 'Me', 5, 13), controlledBy: 'me' } as Token]); });
+    fire('exploration:state', { mapId: 'map-a', userId: 'me', cells: [0, 1, 2, 21] });
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+
+    // The remembered squares, one pixel each, drawn onto a screen-sized mask.
+    const isExplored = (src: unknown) => src instanceof HTMLCanvasElement && src.width === 20 && src.height === 20;
+    const mask = [...drawing.recorded].find(([canvas, calls]) =>
+      !canvas.isConnected && canvas.width === 1600 && canvas.height === 1200
+      && calls.some((c) => c.method === 'drawImage' && isExplored(c.args[0])))?.[0];
+    expect(mask).toBeDefined();
+    const zoom = (600 * 0.9) / 1000;
+    const pan = { x: (800 - 1000 * zoom) / 2, y: (600 - 1000 * zoom) / 2 };
+    const transforms = drawing.take(mask!).filter((c) => c.method === 'setTransform').map((c) => c.args);
+    expect(transforms).toContainEqual([2 * zoom, 0, 0, 2 * zoom, 2 * pan.x, 2 * pan.y]);
   });
 });
 
