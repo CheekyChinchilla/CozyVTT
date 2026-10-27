@@ -1212,6 +1212,23 @@ describe("the map's focus stop", () => {
     press('Tab', { shiftKey: true });
     expect(sentOf('map.ping')).toHaveLength(1);
   });
+
+  // A panel divider takes focus but is no form control; Tab pressed on one
+  // while the pointer rested on the map pinged, and focus never moved on.
+  it.each([
+    ['a panel divider', () => screen.getByRole('separator', { name: 'Resize' })],
+    ['the page itself', () => document.body],
+  ])('leaves Tab to the page with focus on %s, though the pointer rests on the map', (_where, target) => {
+    render(<><MapCanvas /><div role="separator" tabIndex={0} aria-label="Resize" /></>);
+    click(at(10, 10));
+    mouse.move(surface(), at(10, 10));
+    const el = target();
+    if (el === document.body) (document.activeElement as HTMLElement | null)?.blur();
+    else el.focus();
+
+    expect(pressOn(el, 'Tab')).toBe(false);
+    expect(sentOf('map.ping')).toHaveLength(0);
+  });
 });
 
 describe('turning while the session is paused or ended', () => {

@@ -920,10 +920,10 @@ This works for combatants on the map you are showing. One whose token is on anot
 
 ### Pinging a Location
 
-Put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
+Click the map, put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
 
 - The cursor has to be over the map; Tab does nothing over the sidebar or chat.
-- Tab still behaves normally when you're typing or navigating with the keyboard, so it won't interfere with the rest of the interface. Once you have clicked the map, **Shift+Tab** leaves it.
+- Tab pings only once you have clicked the map. While you type, or with a button or a panel divider focused, Tab moves between controls as usual, and **Shift+Tab** leaves the map.
 - Everyone can ping, and each person's colour is assigned automatically and stays consistent.
 - Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
 - Rapid repeat pings are rate-limited server-side and quietly dropped.
