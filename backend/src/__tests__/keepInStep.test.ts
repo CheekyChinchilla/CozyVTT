@@ -76,7 +76,10 @@
  * The fields of a drawing: what the schema takes, what the server sends,
  * the API document's Drawing schema and the WebSocket guide's table of them;
  * and what a campaign archive carries of one, which the import reads with
- * the same schema.
+ * the same schema. The browser declares a drawing as it is sent, and each
+ * drawing event the draw tool sends, in frontend/src/types/drawings.ts:
+ * those are held to the server's interface and to the schemas the events
+ * are read with.
  *
  * The files each kind of asset may be uploaded as. The server decides by a
  * file's bytes; the Upload Asset dialog checks a file's extension against the
@@ -196,7 +199,10 @@ import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
 import { ChatMessageSchema } from '../validators/chat';
 import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS } from '../validators/drawingLimits';
-import { NewDrawingSchema } from '../validators/drawings';
+import {
+  NewDrawingSchema, DrawingPreviewSchema, DrawingAddEventSchema, DrawingRemoveEventSchema, DrawingClearMineEventSchema,
+  DrawingClearEventSchema, DrawingPreviewEventSchema, DrawingsRequestEventSchema,
+} from '../validators/drawings';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { Prisma, type MapDrawing } from '@prisma/client';
 import { drawingForArchive } from '../services/mapDrawings';
@@ -530,6 +536,55 @@ describe('the fields of a drawing', () => {
     const rows = table.split('\n').filter((l) => /^\| `\w+` \|/.test(l)).map((l) => /^\| `(\w+)`/.exec(l)![1]);
     expect(rows.sort()).toEqual(taken);
   });
+});
+
+// The page holds a drawing as the server sends it, and the draw tool sends
+// each drawing event in the shape its schema reads. A field the server adds
+// and the page does not declare is one it never draws; one the tool sends
+// that the schema does not take is dropped on the way.
+describe('a drawing as the page holds it, and the drawing events the page sends', () => {
+  const types = read('frontend/src/types/drawings.ts');
+  const names = (name: string) => interfaceFields(types, name).map((line) => {
+    const m = /^(\w+)\??:/.exec(line);
+    if (!m) throw new Error(`${name} has a line this test cannot read: ${line}`);
+    return m[1];
+  });
+
+  it('has the fields DrawingSent has, of the same types', () => {
+    expect(interfaceFields(types, 'Drawing')).toEqual(interfaceFields(read('backend/src/services/mapDrawings.ts'), 'DrawingSent'));
+  });
+
+  // `opId` is no field of an event's schema: the handlers read it from the
+  // payload as it came (websocket/opId.ts) and echo it.
+  const sent: Array<[string, { shape: object }, string[]]> = [
+    ['NewDrawing', NewDrawingSchema, []],
+    ['DrawingPreview', DrawingPreviewSchema, []],
+    ['DrawingAddEvent', DrawingAddEventSchema, ['opId']],
+    ['DrawingRemoveEvent', DrawingRemoveEventSchema, ['opId']],
+    ['DrawingClearMineEvent', DrawingClearMineEventSchema, ['opId']],
+    ['DrawingClearEvent', DrawingClearEventSchema, ['opId']],
+    ['DrawingPreviewEvent', DrawingPreviewEventSchema, []],
+    ['DrawingsRequestEvent', DrawingsRequestEventSchema, []],
+  ];
+  it.each(sent)('%s names the fields its schema takes, and no others', (name, schema, echoed) => {
+    expect(names(name).sort()).toEqual([...Object.keys(schema.shape), ...echoed].sort());
+  });
+
+  // What the page reads of each drawing event the server sends. The server
+  // declares each payload where it builds it (services/mapDrawings.ts) and
+  // the handlers hold what they send to it; the names and which may be
+  // left out must agree. The drawing inside is the check above's.
+  const withOptional = (source: string, name: string) => interfaceFields(source, name).map((line) => {
+    const m = /^(\w+)(\??):/.exec(line);
+    if (!m) throw new Error(`${name} has a line this test cannot read: ${line}`);
+    return `${m[1]}${m[2]}`;
+  }).sort();
+  it.each(['DrawingAddedBroadcast', 'DrawingRemovedBroadcast', 'DrawingsClearedBroadcast', 'DrawingPreviewedBroadcast', 'DrawingsStateBroadcast'])(
+    '%s has the fields the server sends, the same ones optional',
+    (name) => {
+      expect(withOptional(types, name)).toEqual(withOptional(read('backend/src/services/mapDrawings.ts'), name));
+    },
+  );
 });
 
 // A campaign archive carries each drawing as the exporter writes it and the

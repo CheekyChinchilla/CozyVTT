@@ -9,7 +9,7 @@
  */
 
 import type { MapDrawing, Prisma } from '@prisma/client';
-import { pointsCanMatter, type MarkupHeld } from '../validators/drawings';
+import { pointsCanMatter, type MarkupHeld, type DrawingPreview } from '../validators/drawings';
 import { prisma } from '../config/database';
 import { getSocketInstance, emitToMapReadersAs } from '../websocket/utils';
 import { drawingSentTo } from '../utils/drawingRules';
@@ -34,6 +34,48 @@ export interface DrawingSent {
   points: Array<[number, number]>;
   text: string | null;
   createdAt: string;
+}
+
+// What each drawing event the server sends carries. The frontend declares
+// the same fields, the same ones optional (keepInStep.test.ts), and the
+// handlers hold what they send to these.
+
+/** `drawing:added`: to each reader the drawing may be sent to, the sender included. */
+export interface DrawingAddedBroadcast {
+  mapId: string;
+  drawing: DrawingSent;
+  /** The add's own, echoed for its sender. */
+  opId?: string;
+  /** The preview the drawing ends. */
+  previewId?: string;
+}
+
+/** `drawing:removed`: to the readers who had the drawing. */
+export interface DrawingRemovedBroadcast {
+  mapId: string;
+  drawingId: string;
+  opId?: string;
+}
+
+/** `drawings:cleared`: to the readers who had any of them; `authorId` for a Clear mine. */
+export interface DrawingsClearedBroadcast {
+  mapId: string;
+  layer: 'MARKUP' | 'GROUND';
+  authorId?: string;
+  opId?: string;
+}
+
+/** `drawing:previewed`: one frame of someone's stroke, as the server read it. */
+export interface DrawingPreviewedBroadcast {
+  mapId: string;
+  userId: string | undefined;
+  preview: DrawingPreview;
+}
+
+/** `drawings:state`: a map's drawings as the reader may be sent them, in drawing order. */
+export interface DrawingsStateBroadcast {
+  mapId: string;
+  drawings: DrawingSent[];
 }
 
 /** The points a stored drawing holds, as pairs of numbers; anything else in the column is left out. */
@@ -168,7 +210,7 @@ export async function resendDrawings(campaignId: string, mapId: string): Promise
     await withMapsLocked([mapId], async (tx) => {
       const all = await drawingsFor(mapId, 'DM', tx);
       await emitToMapReadersAs(io, campaignId, mapId, 'drawings:state', (role) => ({
-        event: 'drawings:state', data: { mapId, drawings: all.filter((d) => drawingSentTo(role, d)) },
+        event: 'drawings:state', data: { mapId, drawings: all.filter((d) => drawingSentTo(role, d)) } satisfies DrawingsStateBroadcast,
       }));
     });
   } catch (error) {

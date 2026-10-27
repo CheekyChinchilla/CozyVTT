@@ -31,7 +31,11 @@ import {
   DrawingPreviewEventSchema, DrawingsRequestEventSchema, drawingOutsideMap, markupLimitReached,
   DRAWING_OUTSIDE_MAP_MESSAGE, MARKUP_FULL_MESSAGE, MARKUP_POINTS_FULL_MESSAGE,
 } from '../../validators/drawings';
-import { drawingSent, drawingsFor, markupHeld } from '../../services/mapDrawings';
+import {
+  drawingSent, drawingsFor, markupHeld,
+  type DrawingAddedBroadcast, type DrawingRemovedBroadcast, type DrawingsClearedBroadcast, type DrawingPreviewedBroadcast,
+  type DrawingsStateBroadcast,
+} from '../../services/mapDrawings';
 
 /** What a drawing write reads of the map under its lock: whose it is, its extent, and its campaign's state. */
 const LOCKED_MAP = {
@@ -151,7 +155,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       const sent = drawingSent(row);
       const labels = { ...echoedOpId(data), ...(previewId ? { previewId } : {}) };
       await emitToMapReadersAs(io, campaignId, mapId, 'drawing:added', (reader) =>
-        drawingSentTo(reader, row) ? { event: 'drawing:added', data: { mapId, drawing: sent, ...labels } } : null
+        drawingSentTo(reader, row) ? { event: 'drawing:added', data: { mapId, drawing: sent, ...labels } satisfies DrawingAddedBroadcast } : null
       );
       ack?.({ ok: true, id: row.id, ...echoedOpId(data) });
     } catch (error) {
@@ -198,7 +202,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
 
       const removed = outcome.done;
       await emitToMapReadersAs(io, campaignId, mapId, 'drawing:removed', (reader) =>
-        drawingSentTo(reader, removed) ? { event: 'drawing:removed', data: { mapId, drawingId, ...echoedOpId(data) } } : null
+        drawingSentTo(reader, removed) ? { event: 'drawing:removed', data: { mapId, drawingId, ...echoedOpId(data) } satisfies DrawingRemovedBroadcast } : null
       );
       ack?.({ ok: true, ...echoedOpId(data) });
     } catch (error) {
@@ -247,7 +251,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       }
 
       const { all, forEveryone } = outcome.done;
-      const cleared = { mapId, layer: 'MARKUP', authorId: userId, ...echoedOpId(data) };
+      const cleared = { mapId, layer: 'MARKUP', authorId: userId, ...echoedOpId(data) } satisfies DrawingsClearedBroadcast;
       await emitToMapReadersAs(io, campaignId, mapId, 'drawings:cleared', (reader) =>
         (reader === 'DM' ? all : forEveryone) > 0 ? { event: 'drawings:cleared', data: cleared } : null
       );
@@ -293,7 +297,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       }
 
       const { all, forEveryone } = outcome.done;
-      const cleared = { mapId, layer, ...echoedOpId(data) };
+      const cleared = { mapId, layer, ...echoedOpId(data) } satisfies DrawingsClearedBroadcast;
       await emitToMapReadersAs(io, campaignId, mapId, 'drawings:cleared', (reader) =>
         (reader === 'DM' ? all : forEveryone) > 0 ? { event: 'drawings:cleared', data: cleared } : null
       );
@@ -356,7 +360,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       if (!allowed) return;
 
       const shown = { ...preview, audience: socket.role === 'DM' && !preview.laser ? preview.audience : 'ALL' as const };
-      const frame = { mapId, userId: socket.userId, preview: shown };
+      const frame = { mapId, userId: socket.userId, preview: shown } satisfies DrawingPreviewedBroadcast;
       for (const s of await campaignSockets(io, campaignId)) {
         if (s.id === socket.id) continue;
         const reader = (s as unknown as AuthenticatedSocket).role;
@@ -387,7 +391,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, campaign: { select: { currentMapId: true } } } });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       const drawings = await drawingsFor(mapId, 'DM');
-      socket.emit('drawings:state', { mapId, drawings: drawings.filter((d) => drawingSentTo(socket.role, d)) });
+      socket.emit('drawings:state', { mapId, drawings: drawings.filter((d) => drawingSentTo(socket.role, d)) } satisfies DrawingsStateBroadcast);
     } catch (error) {
       logger.error('drawings:request failed', { err: error });
     }
