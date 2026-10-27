@@ -50,6 +50,7 @@ import {
   PING_DURATION_MS,
   type ActivePing,
   type AoEShape,
+  type LightingComposite,
   type Viewport,
 } from './map/layers';
 import { createVisionCache } from './map/vision';
@@ -384,6 +385,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Light coverage is built here first so it can be intersected with the
   // viewer's line of sight before joining the coverage mask.
   const lightOnlyOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  // What the three map-space lighting canvases were last drawn from; while
+  // it holds, a repaint of the overlay reuses them.
+  const lightingCompositeRef = useRef<LightingComposite | null>(null);
   // Explored memory pass: two screen-sized scratch canvases, allocated on first use.
   const memoryMaskOffscreenRef = useRef<HTMLCanvasElement | null>(null);
   const memoryOffscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -929,6 +933,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
     lightOnlyOffscreenRef.current = null;
+    lightingCompositeRef.current = null;
     // A change to the same map's walls or lights arrives through the socket;
     // loading them here again would wipe the DM's undo history.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per map switch
@@ -1548,10 +1553,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         memoryMaskCanvas: memoryMaskOffscreenRef,
         memoryCanvas: memoryOffscreenRef,
         dpr,
+        compositeCache: lightingCompositeRef,
       }, viewport);
 
       // Report what this viewer has just seen, at most every 300 ms, from the
-      // coverage mask just built, to whoever's memory this is: the player's
+      // coverage mask, which is this frame's whether it was drawn now or kept
+      // from an earlier frame, to whoever's memory this is: the player's
       // own, or the player the DM is previewing. A preview writes too, so a
       // token the DM moves for an absent player still remembers its ground.
       // The party and an uncontrolled token explore as nobody, and write
