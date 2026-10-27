@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 @import './styles/tailwind3-palette.css';
 
+/* A screen under 500 px tall, such as a phone turned sideways: wide enough
+   for the sm: layouts, too short for a window's margins and chrome. Sorted
+   after the breakpoints, so `sm:p-4 short:p-0` is p-0 on such a screen. */
+@custom-variant short (@media (max-height: 499.98px));
+
 @theme {
   /* ── Semantic theme colors, from the --rgb-* channels below ── */
   --color-brand: rgb(var(--rgb-brand));

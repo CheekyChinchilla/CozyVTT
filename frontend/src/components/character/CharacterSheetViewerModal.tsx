@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Shield, User as UserIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +24,7 @@ import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
 
 // Import editor modal
 import CharacterSheetEditorModal from './CharacterSheetEditorModal';
+import { SHEET_SHELL_DIALOG, SHEET_SHELL_OVERLAY } from './sheetShell';
 import { errorSummary } from '@/utils/errors';
 
 interface CharacterSheetViewerModalProps {
@@ -184,21 +186,25 @@ export default function CharacterSheetViewerModal({
     }
   };
 
+  // Portaled to the body, as Modal is: it is opened inside the roster, the
+  // initiative tracker and the map, where an ancestor with a transform or a
+  // backdrop filter would hold a fixed overlay inside itself. On a phone, and
+  // on a screen too short for a window (a phone turned sideways), it takes
+  // the whole screen; from sm up it is a window.
   return (
     <>
-    {/* m-0: the roster renders this inside its spaced list (space-y-4), whose
-        margin would otherwise leave a strip of the window uncovered. */}
-    <div className="fixed inset-0 z-50 m-0 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+    {createPortal(
+    <div className={SHEET_SHELL_OVERLAY}>
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="character-sheet-viewer-title"
-        className="bg-soft-cream border-2 border-moss-green/30 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col"
+        className={SHEET_SHELL_DIALOG}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-moss-green/20 bg-parchment/30">
-          <div className="flex-1">
+        <div data-sheet-shell="header" className="flex items-start justify-between p-3 sm:p-6 short:p-3 border-b border-moss-green/20 bg-parchment/30">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 rounded-full bg-moss-green/10">
                 <UserIcon className="w-5 h-5 text-brand-ink" />
@@ -207,7 +213,7 @@ export default function CharacterSheetViewerModal({
                 <h2 id="character-sheet-viewer-title" className="text-2xl font-bold text-brand-ink">
                   {character.name}
                 </h2>
-                <div className="flex items-center gap-3 text-sm text-warm-gray">
+                <div className="flex flex-wrap items-center gap-x-3 text-sm text-warm-gray">
                   <span>Player: {ownerName}</span>
                   <span>•</span>
                   <span>{gameSystemName(character.gameSystem)}</span>
@@ -233,7 +239,7 @@ export default function CharacterSheetViewerModal({
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
+              className="touch-target inline-flex items-center justify-center p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
             >
               <X className="w-5 h-5 text-stone-gray" />
             </button>
@@ -244,23 +250,25 @@ export default function CharacterSheetViewerModal({
             inside the dialog, and not across the whole page; a new version of
             the character tries it again. Keyed on the character alone, so a
             sheet that is drawn keeps its open tab through every update. */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div data-sheet-shell="content" className="flex-1 overflow-y-auto p-3 sm:p-6 short:p-3">
           <CharacterSheetErrorBoundary key={character.id} resetKey={character.updatedAt}>
             {renderCharacterSheet()}
           </CharacterSheetErrorBoundary>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 border-t border-moss-green/20 bg-parchment/30">
+        <div data-sheet-shell="footer" className="flex items-center justify-end gap-3 p-2 sm:p-4 short:p-2 border-t border-moss-green/20 bg-parchment/30">
           <button
             onClick={onClose}
-            className="px-6 py-2 rounded-lg bg-stone-gray/10 text-stone-gray hover:bg-stone-gray/20 transition-colors"
+            className="touch-target px-6 py-2 rounded-lg bg-stone-gray/10 text-stone-gray hover:bg-stone-gray/20 transition-colors"
           >
             Close
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
+    )}
 
       {/* Character Editor Modal */}
       {showEditor && (

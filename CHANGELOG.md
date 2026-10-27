@@ -76,6 +76,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The dashboard fits a phone narrower than 400 pixels when you are an administrator.** The header's Refresh, Admin, Logout and profile buttons stayed on one line beside the title, so on a Pixel 10 or an iPhone the whole page scrolled sideways. They now move below the title when the line is too narrow for both.
 
+- **Character sheets fit a phone.** A character's sheet and its editor opened as a window with a margin, a border and padded edges at every size, so on a phone about two thirds of the screen's width was left for the sheet. On a screen less than 640 pixels wide, or less than 500 pixels tall such as a phone turned sideways, they now take the whole screen with a smaller header and footer; on a wider and taller screen they open as before. On a phone or a tablet their close buttons are 44 by 44 pixels.
+
 - **Tapping a box on an iPhone or an iPad no longer zooms the page.** Safari zooms in when a text box, a drop-down list or a text area with text smaller than 16 pixels is tapped, and the page stays zoomed after you leave the box. Most boxes on a character sheet were that small, and many on the campaign page too. On a phone or a tablet their text is now 16 pixels, and a box with bigger text, such as a sheet's name, keeps its size. With a mouse nothing changes.
 
 ## [1.5.4] - 2026-10-25
