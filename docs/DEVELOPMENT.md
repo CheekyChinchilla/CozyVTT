@@ -628,7 +628,11 @@ Some of those deserve a note:
   differs between the two, when the chat limit file
   (`backend/src/validators/chatLimits.ts`, copied as
   `frontend/src/constants/chatLimits.ts` for the chat box) differs between
-  the two or the chat box writes the number itself, when the upload types file
+  the two or the chat box writes the number itself, when the drawing limits
+  file (`backend/src/validators/drawingLimits.ts`, copied as
+  `frontend/src/constants/drawingLimits.ts` for the draw tool) differs between
+  the two or its audiences and layers differ from the `DrawingAudience` and
+  `DrawingLayer` enums in `schema.prisma`, when the upload types file
   (`backend/src/validators/uploadTypes.ts`, copied as
   `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
   differs between the two,

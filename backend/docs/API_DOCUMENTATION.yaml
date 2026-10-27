@@ -2586,6 +2586,14 @@ paths:
                   type: integer
                   minimum: 1
                   maximum: 300
+                playersMayDraw:
+                  type: boolean
+                  description: >-
+                    Whether players may draw on the map (`drawing:add`,
+                    `drawing:preview`); the DM always may. A player's own
+                    drawings stay theirs to erase while it is off. Anything
+                    but `true` or `false` answers 400 with "playersMayDraw
+                    must be true or false".
       responses:
         '200':
           description: Campaign updated
@@ -7087,6 +7095,14 @@ paths:
         `lights:replaced`, as for a bulk replace and with no `opId`, so open
         pages draw them where they now are.
 
+        Drawings are stored in map pixels too, and are scaled under the same
+        lock, every drawing on the map in one statement: each point by the
+        same factor on each axis, rounded to whole pixels and kept within 500
+        squares of the resized map's edges, and each width by the mean of
+        the two factors, kept to 1 to 64. Every member who may read the map
+        is then sent `drawings:state` with the drawings they may have, read
+        under the map's lock.
+
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
         address (`/api/assets/<kind>/<id>`); a bare id is stored as
         `/api/assets/maps/<id>`, and anything else, an outside URL included,
@@ -7919,6 +7935,46 @@ paths:
                     $ref: '#/components/schemas/Wall'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/campaigns/{campaignId}/maps/{id}/drawings:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    get:
+      tags:
+        - Maps
+      summary: List the drawings on a map
+      description: |
+        The map's drawings as the caller may be sent them, in the order they
+        are drawn: by `sortKey`, then the time each was made, then `id`. The
+        DM is given every drawing; a player or spectator only those whose
+        `audience` is `ALL`. Available to the DM for any map of the
+        campaign, and to other members for the campaign's current map only
+        (404 otherwise, the answer for a map that does not exist).
+        Drawings are made, erased and cleared over the live table
+        (`drawing:add`, `drawing:remove`, `drawing:clear_mine`,
+        `drawing:clear`; see the WebSocket guide).
+      operationId: listDrawings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The drawings the caller may be sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drawings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Drawing'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -9333,7 +9389,15 @@ paths:
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
-        without a picture. Each user may export 20 campaigns an hour
+        without a picture. Each map file (`maps/map-<n>.json`, written without
+        indentation) carries the map's drawings in `drawings`, in drawing
+        order, each with the `Drawing` fields but `id`, `authorId` and
+        `createdAt`; a drawing for the DM alone keeps `audience: DM`. Its
+        `annotations` is written as `[]`: releases up to 1.5.4 store an
+        archive's `annotations` and send them to every member, and leave out
+        a key they do not know, such as `drawings`. A map file over 10 MB is
+        refused with 422 as above; a map holding all the drawing it may, a
+        full fog and 5,000 walls writes about 5 MB. Each user may export 20 campaigns an hour
         (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from imports and
         previews, and run one archive operation at a time.
       operationId: exportCampaign
@@ -9582,7 +9646,9 @@ paths:
         for its spirit layer picture).
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Maps and assets are created in the archive's order, each
+        current map, and with `playersMayDraw` as the archive's
+        `campaign.json` gives it: on for an archive made before the
+        setting existed. Maps and assets are created in the archive's order, each
         a millisecond after the last, and an export lists maps oldest first,
         so the map list comes back in the original's order and the first map
         is the oldest. Imported tokens are linked to no character and
@@ -9604,7 +9670,16 @@ paths:
         cannot store is left out on its own: a token is listed in `skipped`,
         and walls, doors and lights are counted in `warnings`, as are those
         more than 500 squares outside their map. A map keeps its first 1,000
-        tokens, 5,000 walls and 200 lights. Fog whose grid does not match its
+        tokens, 5,000 walls and 200 lights. A map's drawings come from its
+        file's `drawings`, and from `annotations`, which an older archive may
+        hold: each entry is held to what `drawing:add` takes and to the map's
+        region, imported with a new id and no author, and one that is not, a
+        drawing on the ground layer or a record of another shape included, is
+        left out and counted in `warnings` (`Map "<name>": left out 1 drawing
+        the app cannot store.`); so are those past the 2,000 drawings and
+        200,000 points a map's markup layer holds, and a `drawings` or
+        `annotations` that is not a list (`Map "<name>": left out its
+        annotations, which could not be read.`). Fog whose grid does not match its
         map is dropped, as the server would rebuild it anyway. A map is
         left out whole when its width, height, grid size or feet per square
         are outside the map limits (1 to 500 squares, grid size 10 to 500,
@@ -12280,6 +12355,10 @@ components:
           type: integer
           default: 5
           description: 1 to 300 when written.
+        playersMayDraw:
+          type: boolean
+          default: true
+          description: Whether players may draw on the map while the session is live; the DM always may.
         rollHistoryClearedAt:
           type: string
           format: date-time
@@ -13459,6 +13538,82 @@ components:
             * `door-locked` — blocks vision; only DM can unlock.
             * `window` — does not block vision.
       required: [id, x1, y1, x2, y2, type]
+
+    Drawing:
+      type: object
+      description: |
+        One drawing on a map: a stroke, a shape or a text label. Made over
+        the live table with `drawing:add`, which takes the same fields but
+        `id`, `authorId` and `createdAt`, the server's to set.
+      properties:
+        id:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Who drew it; null once that account is deleted.
+        audience:
+          type: string
+          enum: [ALL, DM]
+          description: Who is sent it. A player's drawing is always `ALL`.
+        layer:
+          type: string
+          enum: [MARKUP]
+          description: Drawings are made on the markup layer, over the grid.
+        kind:
+          type: string
+          enum: [pen, line, arrow, rect, ellipse, polygon, text]
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+        fillColor:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          nullable: true
+          description: The fill of a `rect`, an `ellipse` or a `polygon`; null for none.
+        width:
+          type: integer
+          minimum: 1
+          maximum: 64
+          description: The stroke's width in map pixels.
+        rotation:
+          type: integer
+          minimum: 0
+          maximum: 359
+        sortKey:
+          type: integer
+          minimum: -1000000
+          maximum: 1000000
+          description: The drawing's place in its layer's order; drawings with the same one are drawn in the order they were made.
+        points:
+          type: array
+          minItems: 1
+          maxItems: 2000
+          description: |
+            `[x, y]` pairs in whole map pixels from the map's top-left
+            corner, each within 250,000 of it and 500 grid squares of the
+            map's edges. A `pen` has 2 or more, a `polygon` 3 or more, a
+            `line`, `arrow`, `rect` and `ellipse` exactly 2, a `text` label 1.
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: integer
+              minimum: -250000
+              maximum: 250000
+          example: [[120, 80], [340, 80]]
+        text:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: A `text` label's words, without control characters; null for every other kind.
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, authorId, audience, layer, kind, color, fillColor, width, rotation, sortKey, points, text, createdAt]
 
     WallInput:
       type: object

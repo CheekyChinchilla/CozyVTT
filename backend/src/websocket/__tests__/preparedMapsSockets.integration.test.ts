@@ -72,6 +72,7 @@ const REQUESTS: Array<[string, string, string]> = [
   ['lights:request', 'lights:replaced', 'lights'],
   ['fog:request_state', 'fog:cells', 'fog'],
   ['exploration:request', 'exploration:state', 'explored memory'],
+  ['drawings:request', 'drawings:state', 'drawings'],
 ];
 
 describe.each(REQUESTS)('%s', (request, reply, what) => {
@@ -146,6 +147,25 @@ describe('a token moved on a prepared map', () => {
 // A player's writes follow the same rule as their reads: a map the DM has
 // prepared is not theirs to change until it is shown, even where it holds a
 // token they control or an unlocked door.
+describe('the DM drawing on a prepared map', () => {
+  it('reaches no player, stored or as a preview', async () => {
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const noDrawing = expectNoEvent(player, 'drawing:added', 800);
+    const noPreview = expectNoEvent(player, 'drawing:previewed', 800);
+    dm.emit('drawing:preview', { mapId: preparedId, preview: { previewId: 'dm-1', kind: 'pen', color: '#1a1a1a', width: 2, points: [[1, 1]] } });
+    const answer = await dm.timeout(5000).emitWithAck('drawing:add', {
+      mapId: preparedId, drawing: { kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [10, 10]] },
+    });
+    expect(answer).toMatchObject({ ok: true });
+    await noDrawing;
+    await noPreview;
+    await prisma.mapDrawing.deleteMany({ where: { mapId: preparedId } });
+    player.disconnect();
+    dm.disconnect();
+  });
+});
+
 describe('a player writing to a prepared map', () => {
   const SCOUT = 'scout-token';
   const door = { id: randomUUID(), x1: 0, y1: 50, x2: 50, y2: 50, type: 'door-closed' };
@@ -208,6 +228,21 @@ describe('a player writing to a prepared map', () => {
     expect(getState(campaignId).combatants[0].initiative).toBeNull();
     clearState(campaignId);
     player.disconnect();
+  });
+
+  it('refuses drawing there, and drops their preview of a stroke there', async () => {
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const answer = await player.timeout(5000).emitWithAck('drawing:add', {
+      mapId: preparedId, drawing: { kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [10, 10]] },
+    });
+    expect(answer).toEqual({ ok: false, error: 'Map not found' });
+    expect(await prisma.mapDrawing.count({ where: { mapId: preparedId } })).toBe(0);
+    const quiet = expectNoEvent(dm, 'drawing:previewed', 600);
+    player.emit('drawing:preview', { mapId: preparedId, preview: { previewId: 'p1', kind: 'pen', color: '#1a1a1a', width: 2, points: [[1, 1]] } });
+    await quiet;
+    player.disconnect();
+    dm.disconnect();
   });
 
   it('refuses opening a door there', async () => {

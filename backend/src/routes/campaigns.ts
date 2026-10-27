@@ -23,7 +23,7 @@ import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPA
 import { UpdateSessionNotesSchema, EndSessionSchema } from '../validators/sessionNotes';
 import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
 import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
-import type { Prisma } from '@prisma/client';
+import type { GameSystem, Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
 import { inSerializableTransaction } from '../utils/serializable';
 import { toJson, readJsonObject } from '../utils/prisma-json';
@@ -48,6 +48,7 @@ import {
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fsp from 'fs/promises';
+import { resendDrawings } from '../services/mapDrawings';
 const router = Router();
 
 /**
@@ -438,6 +439,21 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
 });
 
 /**
+ * `campaign.settings.updated`: the Campaign Settings every member's page
+ * shows, as stored, sent when the DM saves any of them. The frontend declares
+ * the same fields (keepInStep.test.ts).
+ */
+export interface CampaignSettingsUpdatedBroadcast {
+  campaignId: string;
+  name: string;
+  description: string | null;
+  gameSystem: GameSystem | null;
+  chatCooldownEnabled: boolean;
+  chatCooldownSeconds: number;
+  playersMayDraw: boolean;
+}
+
+/**
  * PUT /api/campaigns/:campaignId
  * Update campaign settings
  * Requires: Campaign DM role
@@ -452,7 +468,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
         message: parsed.error.issues[0]?.message ?? 'Invalid campaign data',
       });
     }
-    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = parsed.data;
+    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw } = parsed.data;
 
     const updateData: Prisma.CampaignUpdateInput = {};
     if (name !== undefined) updateData.name = name;
@@ -469,6 +485,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (spiritLayerStyle !== undefined) updateData.spiritLayerStyle = spiritLayerStyle;
     if (chatCooldownEnabled !== undefined) updateData.chatCooldownEnabled = chatCooldownEnabled;
     if (chatCooldownSeconds !== undefined) updateData.chatCooldownSeconds = chatCooldownSeconds;
+    if (playersMayDraw !== undefined) updateData.playersMayDraw = playersMayDraw;
 
     // Handle gameSystem update
     if (gameSystem !== undefined) {
@@ -497,18 +514,21 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       : { ...outcome.campaign, ...(await saveVibeSettings(campaignId, req.session.userId!, vibeSettings)) };
 
     // Every member's page shows these, so a player at the table follows them
-    // without a reload: the chat box's cooldown, the campaign's name.
-    // The change is saved either way, so a failed broadcast is only logged.
-    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds].some((value) => value !== undefined)) {
+    // without a reload: the chat box's cooldown, the campaign's name, whether
+    // they may draw. The change is saved either way, so a failed broadcast is
+    // only logged.
+    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw].some((value) => value !== undefined)) {
       try {
-        broadcastToCampaign(campaignId, 'campaign.settings.updated', {
+        const settings: CampaignSettingsUpdatedBroadcast = {
           campaignId,
           name: campaign.name,
           description: campaign.description,
           gameSystem: campaign.gameSystem,
           chatCooldownEnabled: campaign.chatCooldownEnabled,
           chatCooldownSeconds: campaign.chatCooldownSeconds,
-        });
+          playersMayDraw: campaign.playersMayDraw,
+        };
+        broadcastToCampaign(campaignId, 'campaign.settings.updated', settings);
       } catch (error) {
         logger.error('Campaign settings saved but not sent to the table', { err: error, campaignId });
       }
@@ -1023,8 +1043,8 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
  * What the open pages need after members' roles change, the new roles
  * already applied to their live connections: the roster panel regroups
  * (it groups by role from its own list), and each copy of the initiative
- * order and of the map the table is on is sent again as the new roles see
- * it. A spectator on a lit map is sent no tokens, a player their own and
+ * order, of the map the table is on and of its drawings is sent again as
+ * the new roles see it. A spectator on a lit map is sent no tokens, a player their own and
  * what they see, a DM every hidden creature and its notes.
  */
 async function followNewRoles(campaignId: string, userIds: string[]): Promise<void> {
@@ -1032,7 +1052,11 @@ async function followNewRoles(campaignId: string, userIds: string[]): Promise<vo
   await resendInitiative(campaignId);
   const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
-  if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+  if (!map) return;
+  await broadcastMapData(getSocketInstance(), campaignId, map);
+  // A drawing for the DM alone goes with the seat: the new DM's page is sent
+  // it, and the old DM's page is sent the list without it.
+  await resendDrawings(campaignId, map.id);
 }
 
 /**

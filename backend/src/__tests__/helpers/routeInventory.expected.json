@@ -1214,6 +1214,16 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps/:id/drawings",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
       "method": "PUT",
       "path": "/api/campaigns/:campaignId/maps/:id/walls",
       "handlers": [

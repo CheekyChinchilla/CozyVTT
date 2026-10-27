@@ -47,7 +47,7 @@ const entry = (tokenId: string, initiative: number): CombatantEntry => ({
   tokenId, mapId, name: tokenId, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null,
 });
 
-/** What the map holds at the start of every test. */
+/** What the map holds at the start of every test, with one drawing (below). */
 const MAP_CONTENTS = {
   tokens: toJson([token(tokenA), token(tokenB), token(tokenC)]),
   wallSegments: toJson([wall]),
@@ -60,6 +60,7 @@ const PAYLOADS: Record<string, () => unknown> = {
   'atmosphere.audio.set': () => ({ assetId: null }),
   'atmosphere.effect.set': () => ({ effect: 'rain' }),
   'dice.clearHistory': () => undefined,
+  'drawing:clear': () => ({ mapId, layer: 'MARKUP' }),
   'exploration:reset': () => ({ mapId }),
   'fog:operation': () => ({ mapId, operation: { op: 'reveal_all' } }),
   'initiative.add': () => ({ tokenId: tokenC, mapId }),
@@ -91,6 +92,7 @@ const REACHES_TABLE_AS: Record<string, string> = {
   'atmosphere.audio.set': 'atmosphere.audio.updated',
   'atmosphere.effect.set': 'atmosphere.effect.updated',
   'dice.clearHistory': 'dice.historyCleared',
+  'drawing:clear': 'drawings:cleared',
   'exploration:reset': 'exploration:state',
   'fog:operation': 'fog:cells',
   'initiative.add': 'initiative.state',
@@ -122,12 +124,13 @@ function dmOnlyInGuide(): string[] {
 
 /** Everything the refusals could have changed, as stored. */
 async function snapshot(): Promise<string> {
-  const [campaign, map, rolls] = await Promise.all([
+  const [campaign, map, rolls, drawings] = await Promise.all([
     prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } }),
     prisma.map.findUniqueOrThrow({ where: { id: mapId } }),
     prisma.diceRoll.count({ where: { campaignId } }),
+    prisma.mapDrawing.count({ where: { mapId } }),
   ]);
-  return JSON.stringify({ campaign, map, rolls, combat: getState(campaignId) });
+  return JSON.stringify({ campaign, map, rolls, drawings, combat: getState(campaignId) });
 }
 
 /** Who is at the table, sent as sockets join; not anyone's action. */
@@ -169,6 +172,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await prisma.map.update({ where: { id: mapId }, data: MAP_CONTENTS });
+  // One drawing for everyone, which only the DM may clear.
+  await prisma.mapDrawing.deleteMany({ where: { mapId } });
+  await prisma.mapDrawing.create({ data: { mapId, authorId: null, kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [50, 50]] } });
   clearState(campaignId);
   setState(campaignId, { active: true, round: 1, currentTokenId: tokenA, combatants: [entry(tokenA, 15), entry(tokenB, 10)] });
 });

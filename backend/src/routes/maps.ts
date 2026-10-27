@@ -42,10 +42,12 @@ import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
 import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
+import { currentMapChanged } from '../websocket/handlers/drawings';
 import { readTokens, toJson } from '../utils/prisma-json';
+import { drawingsFor, resendDrawings, scaleDrawings } from '../services/mapDrawings';
 import type { Map as MapRow, Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE, SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE, SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, geometryRegion, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
 /**
  * The largest UVTT file accepted. The picture travels as base64 text, about
@@ -1147,10 +1149,10 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       });
     }
 
-    // Walls, doors and lights are stored in map pixels, and the picture is
-    // drawn across width × gridSize by height × gridSize, so when either side
-    // of that changes they scale with it, each axis by its own change, and
-    // stay on the art. The scale is taken from the map as it is under the
+    // Walls, doors, lights and drawings are stored in map pixels, and the
+    // picture is drawn across width × gridSize by height × gridSize, so when
+    // either side of that changes they scale with it, each axis by its own
+    // change, and stay on the art. The scale is taken from the map as it is under the
     // lock, the walls and lights with it. Two edits at once used to scale
     // from the size each read before the lock, so both doubled the walls,
     // and a form sending back the old grid size left them doubled. `before`
@@ -1167,10 +1169,14 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       }
       const walls = scaledWalls(current.wallSegments, kx, ky);
       const lights = scaledLights(current.lights, kx, ky);
+      const updated = await tx.map.update({ where: { id }, data: { ...updateData, wallSegments: toJson(walls), lights: toJson(lights) } });
+      // The drawings in one statement, kept to the region the map's new
+      // size lets them reach (validators/maps.ts).
+      const drawingsScaled = await scaleDrawings(tx, id, kx, ky, geometryRegion(updated));
       return {
-        updatedMap: await tx.map.update({ where: { id }, data: { ...updateData, wallSegments: toJson(walls), lights: toJson(lights) } }),
+        updatedMap: updated,
         before: current,
-        moved: { wallsBefore: current.wallSegments, walls, lightsBefore: current.lights, lights },
+        moved: { wallsBefore: current.wallSegments, walls, lightsBefore: current.lights, lights, drawingsScaled },
       };
     });
 
@@ -1181,6 +1187,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     if (moved) {
       await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, moved.wallsBefore, moved.walls));
       await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => lightsReplacedSentTo(role, id, moved.lightsBefore, moved.lights));
+      if (moved.drawingsScaled > 0) await resendDrawings(campaignId, id);
     }
 
     // Any per-map flag change reaches every connected client at once, as one
@@ -1339,6 +1346,8 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
     if (!updatedCampaign) {
       return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
     }
+    // Strokes under way on the map the table has left are decided again.
+    currentMapChanged(campaignId);
 
     // Every page goes onto the new map, each member's as they may see it,
     // whoever asked: the DM's page, another tab or a script.
@@ -2106,6 +2115,25 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
   } catch (error) {
     logger.error('Error fetching wall segments', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch wall segments' });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/maps/:id/drawings
+ * The map's drawings as the caller may be sent them, in drawing order: the
+ * DM every one, anyone else those for everyone (all roles). A map the caller
+ * may not read is answered as one that is not there.
+ */
+router.get('/:id/drawings', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, id } = req.params;
+    const role = req.campaignMembership!.role;
+    const map = await findMapInCampaign(campaignId, id, res, role);
+    if (!map) return;
+    return res.status(200).json({ drawings: await drawingsFor(id, role) });
+  } catch (error) {
+    logger.error('Error fetching drawings', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch drawings' });
   }
 });
 

@@ -422,6 +422,7 @@ erDiagram
         string spiritLayerStyle
         bool spiritLayerEnabled
         bool chatCooldownEnabled
+        bool playersMayDraw
     }
 
     CampaignMembership {
@@ -482,6 +483,20 @@ erDiagram
         string mapId FK
         string userId FK
         json explored
+    }
+
+    MapDrawing {
+        string id PK
+        string mapId FK
+        string authorId FK
+        DrawingAudience audience
+        DrawingLayer layer
+        string kind
+        string color
+        string fillColor
+        int width
+        json points
+        string text
     }
 
     Asset {
@@ -624,6 +639,8 @@ erDiagram
     Map ||--o{ Campaign : "is shown by"
     Map ||--o{ MapExploration : "remembered in"
     User ||--o{ MapExploration : "explores"
+    Map ||--o{ MapDrawing : "is drawn on in"
+    User ||--o{ MapDrawing : "draws"
     Campaign ||--o{ Message : "has"
     User ||--o{ Message : "writes"
     User ||--o{ Message : "receives whispers"
@@ -840,6 +857,8 @@ This filtering lives in `src/utils/spirit-layer.ts` and is applied before each c
 
 Walls and lights are not filtered by sight, since each browser works out its own sight from the walls, but two of their details are the DM's: `wallsSentTo` sends anyone but the DM a `door-locked` door as `door-closed`, and `lightsSentTo` sends them only the lights that are on (`spirit-layer.ts`). Every path that sends walls or lights applies them: the map fetch and `map.changed` (`filterMapData`), `walls:request` and `lights:request`, the REST reads, and the live edits, which go out per reader through `emitToMapReadersAs` (`websocket/utils.ts`), so a light turned on or off reaches a player as `light:added` or `light:removed` (`lightChangeSentTo`). A player is sent nothing for a change that leaves their copy as it was: a closed door locked or unlocked (`wallChangeSentTo`), a light that is off added, changed or deleted, or one that is on set to the values it has (`lightReachesPlayers`, `lightChangeReachesPlayers`, `lightChangeSentTo`, `lightRemovalSentTo`), or a whole list replaced with one that is the same for them (`wallsReplacedSentTo`, `lightsReplacedSentTo`), since the event alone would tell them something had happened there. On a lit map the same tests (`wallChangeReachesPlayers`, `lightChangeReachesPlayers`, `lightReachesPlayers`, `wallListChangeReachesPlayers`, `lightListChangeReachesPlayers`) decide whether players are sent the map again afterwards (`resendSightAfterChange` in `websocket/shared.ts`), which would tell them the same.
 
+Drawings on a map are rows of `MapDrawing`, not a column of the map, so a stroke is one small write and never a rewrite of the map's lists. `websocket/handlers/drawings.ts` takes each add, erase and clear under the map's lock (`withMapsLocked`), where it reads the map, its campaign's status and **Players may draw** and counts what the markup layer holds (2,000 drawings and 200,000 points, `validators/drawingLimits.ts`). Who may draw and erase, and who is sent a drawing, is `utils/drawingRules.ts`, kept identical in the browser; every send of a drawing, live or over REST (`services/mapDrawings.ts`), asks `drawingSentTo`, so one the DM keeps for themselves goes to the DM's sockets alone. A preview frame of a stroke being drawn is passed on and not stored; whether its sender may draw is decided once a second for each stroke. Drawings for everyone reach every reader of the map whatever the fog, as walls do. Edit Map scales a map's drawings with its walls, in one `UPDATE` under the same lock (`scaleDrawings`), and every reader is then sent the list again (`resendDrawings`), as each page of the map on screen is after a role change or a DM handover. A campaign archive carries a map's drawings in its file's `drawings`, and writes its `annotations` empty, since releases up to 1.5.4 send an archive's annotations to every member (`services/campaignExporter.ts`); an import checks each as `drawing:add` would (`campaignImportContent.ts`).
+
 ### Vision model
 
 Dynamic lighting asks one question of every point on the map: how well does this viewer make it out? The answer is decided once, in `visibilityRule.ts`, and used on both sides:
@@ -853,7 +872,7 @@ The map a member is sent is built from an allowlist: `filterMapData` (`utils/spi
 
 The rule, in order: walls first, always (nothing outside a viewer's line of sight is seen, lit or not); then the map's **Global Illumination** flag (everything in sight is bright); then darkvision and light, which add up the way the mask is composited: bright is 1.0, dim is 0.5, so dim + dim is bright and darkvision in dim light is bright. A viewer's own square is always dim: you know where you stand. Explored memory is never an input: the map image is already in every client, so what to grey in is a rendering concern; token positions are not.
 
-Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts (it holds `vibeAudio.ts`, the rule for which track a vibe period names, `doorFog.ts` and `dice-parser.ts` in step too), the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
+Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts (it holds `vibeAudio.ts`, the rule for which track a vibe period names, `doorFog.ts`, `drawingRules.ts`, who may draw and erase on a map and who is sent a drawing, and `dice-parser.ts` in step too), the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
 
 A fifth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all, a Huge token against a wall). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
 

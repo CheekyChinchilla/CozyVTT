@@ -17,10 +17,11 @@
 4. [Event Reference](#event-reference)
 5. [Token Movement — a worked example](#token-movement--a-worked-example)
 6. [Fog, lighting and explored memory](#fog-lighting-and-explored-memory)
-7. [Error Handling](#error-handling)
-8. [Client Examples](#client-examples)
-9. [Testing](#testing)
-10. [Event Inventory](#event-inventory)
+7. [Drawings on the map](#drawings-on-the-map)
+8. [Error Handling](#error-handling)
+9. [Client Examples](#client-examples)
+10. [Testing](#testing)
+11. [Event Inventory](#event-inventory)
 
 ---
 
@@ -70,10 +71,11 @@ Three things people expect on the socket are not there:
   one or nothing; when the vibe ends while its track plays, with none. A track
   the DM put on over the vibe is left playing.
 - **Saving Campaign Settings** is a REST call (`PUT /api/campaigns/{campaignId}`).
-  When it changes the name, description, game system or chat cooldown, every
-  connected member is sent `campaign.settings.updated` with `campaignId`,
-  `name`, `description`, `gameSystem`, `chatCooldownEnabled` and
-  `chatCooldownSeconds` as stored. A refused save sends nothing.
+  When it changes the name, description, game system, chat cooldown or
+  **Players may draw**, every connected member is sent
+  `campaign.settings.updated` with `campaignId`, `name`, `description`,
+  `gameSystem`, `chatCooldownEnabled`, `chatCooldownSeconds` and
+  `playersMayDraw` as stored. A refused save sends nothing.
 
 ### Architecture
 
@@ -764,7 +766,7 @@ given away), and no screen keeps drawing it at the last frame.
 
 Three things decide what a player's map shows, and each has one source of truth.
 
-**Flood ceilings.** Every event below has a per-user ceiling, counted across all of that user's sockets, so opening more connections does not multiply it. They are abuse ceilings. Every event whose row says "`error` once", and `exploration:reveal`, has a ceiling at least five times the busiest real use of that event, from the web client at a fast table or from the community MCP bridge, so nobody playing reaches one; a test plays that use and fails if one drops below five times it. The silent ceilings are not all held to that: `token.move` allows 150 frames a second against about 60 a second from one drag, and `map.ping` is kept low on purpose, since a ping is a deliberate gesture. An event past its ceiling changes nothing. Where the table says "`error` once", the socket that sent it gets one `error` saying so (the text says what was refused and what to do: most start "Too many", and the dice refusal starts "Rate limit exceeded"), and any further refusals of that event on that socket in the next ten seconds are silent. Nothing is logged per refusal, so a flood fills neither the socket nor the log. A `dice.roll` is counted before its contents are checked, so a malformed roll, or one from a spectator, uses the allowance as a valid one does.
+**Flood ceilings.** Every event below has a per-user ceiling, counted across all of that user's sockets, so opening more connections does not multiply it. They are abuse ceilings. Every event whose row says "`error` once", and `exploration:reveal`, has a ceiling at least five times the busiest real use of that event, from the web client at a fast table or from the community MCP bridge, so nobody playing reaches one; a test plays that use and fails if one drops below five times it. The silent ceilings are not all held to that: `token.move` allows 150 frames a second against about 60 a second from one drag, `drawing:preview` 60 frames a second against the draw tool's 20, and `map.ping` is kept low on purpose, since a ping is a deliberate gesture. An event past its ceiling changes nothing. Where the table says "`error` once", the socket that sent it gets one `error` saying so (the text says what was refused and what to do: most start "Too many", and the dice refusal starts "Rate limit exceeded"), and any further refusals of that event on that socket in the next ten seconds are silent. Nothing is logged per refusal, so a flood fills neither the socket nor the log. A `dice.roll` is counted before its contents are checked, so a malformed roll, or one from a spectator, uses the allowance as a valid one does.
 
 | Event | Ceiling per user | Past it |
 | --- | --- | --- |
@@ -775,13 +777,18 @@ Three things decide what a player's map shows, and each has one source of truth.
 | `token.move.start` | 30 a second | `error` once |
 | `token.move.end` | 30 a second, a budget of its own | `error` once |
 | The DM's events: `map.change`, `atmosphere.effect.set`, `atmosphere.audio.set`, `vibe.update`, `spirit_layer.toggle`, `spirit_layer.style_change`, `spirit_layer.token.toggle`, `initiative.add`, `initiative.remove`, `initiative.set`, `initiative.reorder`, `initiative.start`, `initiative.next`, `initiative.end`, the DM's own `initiative.roll`, `dice.clearHistory`, `exploration:reset` | 50 a second, each | `error` once |
+| `drawing:add` | 20 a second and 300 a minute; each is a write under the map's lock | `error` once; an add sent with an acknowledgement is refused through it, every time |
+| `drawing:remove` | 20 a second | `error` once; through the acknowledgement when there is one |
+| `drawing:clear_mine` | 5 every ten seconds | `error` once; through the acknowledgement when there is one |
+| `drawing:clear` | 5 every ten seconds, a budget of its own | `error` once; through the acknowledgement when there is one |
 | `token.move` (drag frames) | 150 a second; the server also passes on at most one frame per 16 ms per socket | dropped silently |
 | `dice.roll` | 50 a second and 200 a minute; a spectator's roll is counted, then refused before its fields are read. A player's `initiative.roll` counts against the same budget, before anything in it is checked | `error` once, starting "Rate limit exceeded"; a roll sent with an acknowledgement is refused through it, every time, which the web client's dice panel waits out |
 | Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`) | 40 a second between them | dropped silently |
 | `fog:operation` | 10 a second | dropped silently |
 | `exploration:reveal` | 40 a second; what they report is written at most once a second per map and user | dropped silently |
 | `map.ping` | 10 every ten seconds | dropped silently |
-| The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `presence.request`, `initiative.request_state`) | 5 a second, each; a client sends each once per load | dropped silently |
+| `drawing:preview` (preview frames and the laser pointer) | 60 a second, every stroke and socket together; the draw tool sends at most 20 | dropped silently |
+| The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `drawings:request`, `presence.request`, `initiative.request_state`) | 5 a second, each; a client sends each once per load | dropped silently |
 
 An `initiative.request_state` while nothing is in the order is answered from memory without any database work. The only event with no ceiling of its own is `ping`, answered to its own socket alone.
 
@@ -820,6 +827,41 @@ An `initiative.request_state` while nothing is in the order is answered from mem
 **Initiative** is kept in memory per campaign and sent as `initiative.state` to each member as they may see it. The DM gets every combatant with its token as it is now; a player gets only the combatants the role filter keeps for them (a hidden token, one on the other plane, or one on a map the campaign is not showing, is absent, and the turn pointer with it; the lighting rule is not applied, so a combatant out of their sight on a lit or fogged map is still listed), with the name, portrait and hit points exactly as that token is sent to them, so a creature's hit points appear only once its bar is on or they control the token. The order is sent again whenever a token in it changes, over REST or a spirit-plane toggle, so the tracker follows the token, and whenever a member's view of it can change: a map switch, a plane crossing through any token of theirs, a role change, or a bound character's new picture; a deleted token or map leaves the order. A send that a later send to the campaign overtakes is dropped, whether the later one was started by a change to the order or by a change to a combatant's token (its hit points, or hiding it), so the newest state always arrives last. An `initiative.roll` that throws dice is stored in the dice history like any roll, and its `dice.rolled` entry carries the stored `id`. When every member who is not a DM is sent the token (it is visible, on the material plane and on the map the campaign is showing) the roll is public and goes to everyone; otherwise it is stored and sent as a secret roll: `dice.rolled` with `secret: true` to the roller's sockets, `dice.rolled.secret` to every other DM's. The server names it: an obscured token as "Unknown creature", in the history and for everyone but the roller, whose copy carries the token's name; the `characterName` a client sends along is not used. No entry is made when no dice are thrown, as for a Call of Cthulhu investigator, whose initiative is their Dexterity. A player rolls once for a token each time it joins the order: another roll is refused with `You have rolled initiative for this fight already. Ask your DM to change it.`, until the token leaves the order or the fight ends. A roll for a token deleted while it was worked out is refused with `Token not found` and adds nothing to the order. A token bound to a character rolls from that character's sheet only when the character belongs to the campaign the roll is made in.
 
 **Explored memory** is per user, per map, switched by `Map.explorationEnabled`. A client reports the cells its vision has covered with `exploration:reveal`; the server unions them with what it holds, stores them in the fog grid's shape, and sends the user's whole memory as `exploration:state` to that user's sockets in the campaign and to the DM sockets previewing that user, so a DM's Player Preview follows a player's memory as it grows. The reports that arrive within a second are written together, at most once a second per map and user, so the memory a client is sent can trail its reports by up to a second; reports that add no cell the server does not already hold are neither written nor answered. A DM socket is previewing the user its last `exploration:request` named; one that has named nobody is sent no one else's memory, and the web client asks once more naming nobody when a preview closes. A DM may name another member in `exploration:reveal` and write that player's memory on their behalf, which is what Player Preview does as the previewed token moves; anyone else may only write their own. A report for a map the sender may not write to, or one whose memory is off, is dropped without an `error`: the client sends reports on its own, and one can cross a map switch or the DM turning memory off. `exploration:request` returns a user's own memory (a DM may name another user, for Player Preview, and from then on follows that user's), and `exploration:reset` lets the DM forget everyone's memory of a map. On a map too large for fog (see above), `exploration:request` answers `error` with the same message and `exploration:reveal` is dropped without one. **The server never reads explored memory when deciding which tokens to send.** It only greys in map artwork every client already holds, so a forged reveal can show a player nothing they were not already given.
+
+## Drawings on the map
+
+A drawing is a stroke, a shape or a text label on a map, stored as one row and sent to everyone who may read the map. Who may draw, erase and be sent one is decided by `utils/drawingRules.ts`, and the limits are in `validators/drawingLimits.ts`; both files are shared byte for byte with the client, which offers what they allow.
+
+**Who may draw.** The DM, on any map of the campaign, at any time. A player, on the map the campaign is showing, while the campaign's **Players may draw** is on (`playersMayDraw`, on by default; see `PUT /api/campaigns/:campaignId`), except while the session is paused or has ended (status `PAUSED` or `INACTIVE`), the rule a player's token moves follow. A spectator never. `drawing:add` refuses with `Spectators cannot draw on the map`, `The DM has turned off drawing for players` or `Players cannot draw while the session is paused or ended`, and a player's add on any map but the current one with `Map not found`, as for a map of another campaign or an id that names nothing. The same rule decides `drawing:preview`, the laser pointer included.
+
+**What a drawing is.** `drawing:add` takes `mapId`, `drawing`, and optionally `opId` (as on wall and light edits) and `previewId` (the stroke's preview, below). `drawing` has these fields; any other, an `id` or an `authorId` included, is ignored, since the server makes the id and takes the author from the connection:
+
+| Field | What it takes |
+| --- | --- |
+| `kind` | `pen`, `line`, `arrow`, `rect`, `ellipse`, `polygon` or `text` |
+| `points` | `[[x, y], ...]` in whole map pixels from the map's top-left corner, as walls and lights are: within 250,000 of the corner either way, and no more than 500 of the map's squares past its edges (`A drawing reaches too far outside the map. …`). A `pen` has 2 to 2,000 points, a `polygon` 3 to 2,000 corners, a `line`, an `arrow`, a `rect` and an `ellipse` exactly 2, and a `text` label exactly 1 |
+| `color` | `#rrggbb` |
+| `fillColor` | `#rrggbb`, or `null`, the default; only a `rect`, an `ellipse` or a `polygon` may be filled |
+| `width` | a whole number of map pixels, 1 to 64 |
+| `text` | a `text` label's words: 1 to 200 characters once control characters and direction marks are removed and the ends trimmed; left out, or `null`, for every other kind |
+| `audience` | `ALL`, the default, or `DM`; a player's drawing is stored as `ALL` whatever they send |
+| `layer` | `MARKUP`, the default and the only layer drawn on so far; anything else is refused with `Drawings can only be made on the MARKUP layer` |
+| `rotation` | whole degrees, 0 to 359, default 0 |
+| `sortKey` | a whole number from -1,000,000 to 1,000,000, default 0. Drawings are drawn, and sent, in `sortKey` order, then in the order they were made, then by `id` |
+
+A field outside these is refused with a message saying what is wrong, such as `A polygon needs at least 3 corners`, and nothing is stored.
+
+**What a map holds.** A map's markup layer holds at most 2,000 drawings, and 200,000 points across them, so that a map holding all of them, a full fog and 5,000 walls fits in the 10 MB one map file of a campaign archive may hold (about 5 MB), with room beside them for about 800 tokens carrying the longest stat block in the SRD; the export refuses a map whose file would pass 10 MB, and says so. An add past either is refused with `This map holds as many drawings as it can. Erase some first.` or `This map holds as much drawing as it can. Erase some first.`; neither says how many it holds, since the count takes in drawings a player is not sent. Both are counted under the map's lock with the add, so adds sent together cannot pass them, and every other drawing write, and Edit Map, takes the same lock. The drawings are counted first; their points are added up only once the layer holds enough drawings for the budget to be within reach, a hundred of the longest strokes, since that reads every drawing's points.
+
+**Answers.** `drawing:add`, `drawing:remove`, `drawing:clear_mine` and `drawing:clear` take an acknowledgement function as their last argument and answer it once: `drawing:add` with `{ ok: true, id, opId }`, `id` being the new drawing's, and the others with `{ ok: true, opId }`; a refusal is `{ ok: false, error }`, with no `error` event. Without one, a refusal is an `error` event, as for every other event.
+
+**Who is sent what.** `drawing:added` carries `mapId`, `drawing` (the fields above, with `id`, `authorId`, which is null once that account is deleted, and `createdAt`), and the `opId` and `previewId` the add was sent with. It goes to every socket that may read the map, the whole campaign for the map it is showing and the DM's sockets for any other, the sender's included; a drawing whose `audience` is `DM` goes to the DM's sockets alone. Every path follows that rule: `drawing:removed`, `drawings:cleared`, `drawings:state`, the previews, and the REST read, `GET /api/campaigns/:campaignId/maps/:id/drawings`. A drawing for everyone reaches every player who may read the map whatever the fog, as walls and doors do; their browsers draw it under the fog.
+
+**Erasing.** `drawing:remove` takes `mapId` and `drawingId`. The DM may erase any drawing. A player may erase only their own drawings for everyone (`You can erase only your own drawings`), at any time, during a pause or with **Players may draw** off too; a drawing for the DM alone goes with the DM's seat, so one who has left it cannot erase those they wrote in it, which they are no longer sent. A spectator may erase none, their own from before a demotion included (`Spectators cannot erase drawings`). A drawing that is not on the map named, or one the sender is not sent, is answered `Drawing not found`, as an id that names nothing is. `drawing:removed` (`mapId`, `drawingId`, `opId`) goes to the readers who had the drawing. `drawing:clear_mine` takes `mapId` and erases every drawing of the sender's on the map's markup layer that the same rule lets them erase: all of them for the DM, those for everyone for a player. `drawing:clear`, the DM's alone (`Only the DM can clear the drawings`), takes `mapId` and `layer` (`MARKUP`, the default) and erases every drawing on it. Both send `drawings:cleared` (`mapId`, `layer`, `opId`, and from `drawing:clear_mine` the sender's id as `authorId`) to the readers who had any of the drawings erased, and nothing when there were none.
+
+**Previews and the laser pointer.** While a stroke is drawn, the draw tool sends `drawing:preview` with `mapId` and `preview`: `previewId` (1 to 64 letters, digits, hyphens or underscores, the stroke's own label), `kind`, `color`, `width`, `audience`, `laser` (true for the laser pointer, whose stroke is never stored), `points` (at most 64 a frame; a stroke sends the points it added since its last frame) and `end` (true on a stroke's last frame, kept or cancelled, so other screens drop it at once). Nothing is stored. `drawing:previewed` (`mapId`, the sender's `userId`, `preview`) goes to every other socket that may read the map, never back to the socket that sent it (the sender's other tabs are sent it); a player's frames and the laser pointer's are for everyone, the DM's for the DM alone when its `audience` says so. Whether the sender may draw there, and which map the campaign is showing, is decided at most once a second for each stroke, so a pause or **Players may draw** turned off reaches a stroke already under way within a second; a map switch reaches it at its next frame. A frame past the 60 a second one user may send, a refused one and a malformed one are dropped without an answer. An add may carry its stroke's `previewId`, which `drawing:added` echoes, so the other screens put the stored drawing in the preview's place.
+
+**Asking for a map's drawings.** `drawings:request` with `mapId` is answered with `drawings:state` (`mapId`, `drawings` in drawing order), the drawings the sender may be sent, for a map they may read; for any other map it answers nothing, as `walls:request` does. The server also sends `drawings:state` by itself, to every socket that may read the map and with the drawings each may have, so a page replaces its list: after `PUT /api/campaigns/:campaignId/maps/:id` changes the map's drawn size and so scales its drawings (each point across and down by the map's own two changes, rounded to whole pixels and kept within 500 squares of the resized map's edges, each width by their mean, kept to 1 to 64), and, for the map the campaign is showing, after a member's role changes or the DM's seat is handed over, so a page never keeps a drawing for the DM alone once its role may not have it. That list is read and sent under the map's lock, so a drawing added or erased meanwhile is in it or arrives after it.
 
 ## Error Handling
 
@@ -1237,6 +1279,12 @@ _Who may send it is read from the shared permission predicates each handler call
 | `chat.message` | Any member | User sends chat message. |
 | `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
 | `dice.roll` | DM and players | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |
+| `drawing:add` | DM, or a player while **Players may draw** is on and the session is live | Draw on a map: the DM, or a player while Players may draw is on and the session is live. |
+| `drawing:clear` | DM only | DM erases every drawing on one layer of a map, the markup layer so far. |
+| `drawing:clear_mine` | DM, or the drawing's player | Erase every drawing of the sender's on a map's markup layer, at any time; never a spectator. |
+| `drawing:preview` | DM, or a player while **Players may draw** is on and the session is live | One frame of a stroke on its way, or of the laser pointer, from someone who may draw there now; nothing is stored. |
+| `drawing:remove` | DM, or the drawing's player | Erase one drawing: the DM any, a player their own, at any time. |
+| `drawings:request` | Any member | Any campaign member asks for a map's drawings, on (re)join and on opening a map. |
 | `exploration:request` | Any member | what this user has explored on a map. |
 | `exploration:reset` | DM only | DM forgets every player's explored areas on a map. |
 | `exploration:reveal` | Any member | a player's vision covered these cells; remember them (a DM may name another member with userId to record theirs). |
@@ -1293,6 +1341,11 @@ _Sent to: map readers are every member while the map is the one the campaign is 
 | `dice.historyCleared` | The campaign | `dice.ts` |
 | `dice.rolled` | Members the handler picks; the campaign; the sender | `dice.ts` |
 | `dice.rolled.secret` | Members the handler picks | `dice.ts` |
+| `drawing:added` | Map readers, as their role sees it | `drawings.ts` |
+| `drawing:previewed` | Members the handler picks | `drawings.ts` |
+| `drawing:removed` | Map readers, as their role sees it | `drawings.ts` |
+| `drawings:cleared` | Map readers, as their role sees it | `drawings.ts` |
+| `drawings:state` | Map readers, as their role sees it; the sender | `drawings.ts` |
 | `exploration:state` | Map readers; members the handler picks; the sender | `exploration.ts` |
 | `fog:cells` | Members the handler picks; the sender | `fog.ts` |
 | `fog:updated` | Members the handler picks; the sender | `fog.ts` |

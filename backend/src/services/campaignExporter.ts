@@ -25,6 +25,7 @@ import { extractAssetId } from '../utils/asset-urls';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
+import { DRAWING_ORDER, drawingForArchive } from './mapDrawings';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -184,7 +185,13 @@ export async function prepareCampaignExport(
       feetPerSquare: map.feetPerSquare,
       diagonalRule: map.diagonalRule,
       tokens,
-      annotations: map.annotations || [],
+      // Empty: releases up to 1.5.4 store an archive's annotations and send
+      // them to every member of the campaign, so a drawing for the DM alone
+      // must not be here. They drop a key they do not know, such as
+      // `drawings`. Map.annotations, which nothing reads, is not written.
+      annotations: [],
+      // The map's drawings, in drawing order and without their authors.
+      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map(drawingForArchive),
       wallSegments: map.wallSegments || [],
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
@@ -275,13 +282,17 @@ export async function prepareCampaignExport(
     currentVibe: campaign.currentVibe,
     spiritLayerEnabled: campaign.spiritLayerEnabled,
     spiritLayerStyle: campaign.spiritLayerStyle,
+    playersMayDraw: campaign.playersMayDraw,
   };
 
   // 10. The archive's data files, written before the pictures.
   const dataFiles: Array<{ name: string; content: string }> = [
     { name: 'manifest.json', content: JSON.stringify(manifest, null, 2) },
     { name: 'campaign.json', content: JSON.stringify(campaignSettings, null, 2) },
-    ...mapDataArray.map((map, i) => ({ name: `maps/map-${i}.json`, content: JSON.stringify(map, null, 2) })),
+    // Without indentation, which made a map file several times its size: a
+    // map holding all the drawing, fog and walls it may fits in the 10 MB
+    // a data file may hold, and an import reads it whole.
+    ...mapDataArray.map((map, i) => ({ name: `maps/map-${i}.json`, content: JSON.stringify(map) })),
   ];
   if (creaturesData.length > 0) {
     dataFiles.push({ name: 'creatures/creatures.json', content: JSON.stringify(creaturesData, null, 2) });

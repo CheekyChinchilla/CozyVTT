@@ -20,7 +20,6 @@ import {
   ImportMapSchema,
   ImportTokenSchema,
   ImportFogSchema,
-  ImportAnnotationsSchema,
   ImportGameSystemSchema,
   CreatureTemplateSchema,
   TokenTemplateImportSchema,
@@ -28,6 +27,7 @@ import {
 } from '../validators/campaignImport';
 import { MAP_LIMITS, GEOMETRY_MARGIN_SQUARES, wallWithinMap, lightWithinMap } from '../validators/maps';
 import { WallSegmentSchema, LightSourceSchema, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES } from '../validators/walls';
+import { NewDrawingSchema, drawingOutsideMap, markupLimitReached, DRAWING_LIMITS } from '../validators/drawings';
 import { clampTokenPosition } from '../utils/mapTokens';
 import { cutText } from '../utils/cutText';
 
@@ -153,6 +153,8 @@ export interface MapContext {
 export interface PreparedMap {
   data: Omit<Prisma.MapUncheckedCreateInput, 'id' | 'campaignId'>;
   tokenCount: number;
+  /** Its drawings, in the archive's order, written once the map is. */
+  drawings: PreparedDrawing[];
 }
 
 interface PlacedToken extends Omit<ImportToken, 'position'> {
@@ -205,12 +207,7 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
     else if (fog.data.fogCols === map.width && fog.data.fogRows === map.height && fog.data.cellPx === map.gridSize) fogData = fog.data;
   }
 
-  let annotations: Prisma.InputJsonValue = [];
-  if (map.annotations !== undefined && map.annotations !== null) {
-    const parsedAnnotations = ImportAnnotationsSchema.safeParse(map.annotations);
-    if (parsedAnnotations.success) annotations = parsedAnnotations.data as Prisma.InputJsonValue;
-    else say('left out its annotations, which could not be read.');
-  }
+  const drawings = prepareDrawings([[map.drawings, 'drawings'], [map.annotations, 'annotations']], map, say);
 
   // A map's picture and spirit layer can only be map pictures, as on Create
   // Map. One the archive names that came in as a token picture or a sound
@@ -227,6 +224,7 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
   const spiritLayerUrl = picture(map.spiritLayerAssetRef, 'spirit layer picture');
   return {
     tokenCount: tokens.length,
+    drawings,
     data: {
       name,
       imageUrl,
@@ -238,7 +236,8 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
       feetPerSquare: map.feetPerSquare,
       diagonalRule: map.diagonalRule ?? 'flat',
       tokens: tokens as unknown as Prisma.InputJsonValue,
-      annotations,
+      // Unused: a map's drawings are rows of MapDrawing.
+      annotations: [],
       wallSegments: wallSegments as unknown as Prisma.InputJsonValue,
       fogData,
       lightingEnabled: map.lightingEnabled ?? false,
@@ -353,6 +352,59 @@ function prepareWalls(raw: unknown, map: MapGeometry, say: (what: string) => voi
     say(`left out the last ${count(walls.length - kept.length, 'wall or door', 'walls or doors')}: a map can hold ${MAX_WALL_SEGMENTS.toLocaleString('en-US')}.`);
   }
   return kept;
+}
+
+/** A drawing ready to be written, without its map, id, author and time. */
+export type PreparedDrawing = Omit<Prisma.MapDrawingCreateManyInput, 'id' | 'mapId' | 'authorId' | 'createdAt' | 'pattern' | 'stamp'>;
+
+/**
+ * A map's drawings, from its file's `drawings`, where an export writes
+ * them, and its `annotations`, which an export writes empty: releases up
+ * to 1.5.4 store an archive's annotations and send them to every member,
+ * so a drawing for the DM alone must never be there. Each entry of either
+ * is held to what `drawing:add` stores and to the region the map's walls
+ * may reach, and the map to what its markup layer holds (markupLimitReached).
+ * Archives from before drawings existed carry `[]` in `annotations`, and
+ * some carried records of another shape, which nothing drew; what is not a
+ * drawing is left out and counted.
+ */
+function prepareDrawings(sources: Array<[unknown, string]>, map: MapGeometry, say: (what: string) => void): PreparedDrawing[] {
+  const entries: unknown[] = [];
+  for (const [raw, what] of sources) {
+    if (raw === undefined || raw === null) continue;
+    if (Array.isArray(raw)) entries.push(...raw);
+    else say(`left out its ${what}, which could not be read.`);
+  }
+  const drawings: PreparedDrawing[] = [];
+  const left = { invalid: 0, outside: 0, overCount: 0, overPoints: 0 };
+  let points = 0;
+  for (const entry of entries) {
+    const parsed = NewDrawingSchema.safeParse(entry);
+    if (!parsed.success) {
+      left.invalid++;
+      continue;
+    }
+    if (drawingOutsideMap(parsed.data.points, map)) {
+      left.outside++;
+      continue;
+    }
+    const limit = markupLimitReached({ drawings: drawings.length, points }, parsed.data.points.length);
+    if (limit === 'drawings') left.overCount++;
+    else if (limit === 'points') left.overPoints++;
+    else {
+      points += parsed.data.points.length;
+      drawings.push(parsed.data);
+    }
+  }
+  if (left.invalid) say(`left out ${count(left.invalid, 'drawing')} the app cannot store.`);
+  if (left.outside) say(`left out ${count(left.outside, 'drawing')} more than ${GEOMETRY_MARGIN_SQUARES} squares outside the map.`);
+  if (left.overCount) {
+    say(`left out the last ${count(left.overCount, 'drawing')}: a map holds ${DRAWING_LIMITS.maxMarkupPerMap.toLocaleString('en-US')} on its markup layer.`);
+  }
+  if (left.overPoints) {
+    say(`left out ${count(left.overPoints, 'drawing')} past the ${DRAWING_LIMITS.maxMarkupPointsPerMap.toLocaleString('en-US')} points a map holds on its markup layer.`);
+  }
+  return drawings;
 }
 
 /** A map's lights, each as the light routes store one, with a new id. */
