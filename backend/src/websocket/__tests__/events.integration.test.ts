@@ -946,6 +946,28 @@ describe('map pings', () => {
     dm.disconnect();
     player.disconnect();
   });
+
+  // Every screen draws a ping where it says, so one far off any map is
+  // dropped as a non-number is: silently, and before the limit, so a burst
+  // of them costs the sender none of their ten pings.
+  it('ignores a ping far off any map, and counts none against the limit', async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(player2Cookie, campaignId);
+
+    const first = waitForEvent<{ x: number; y: number }>(dm, 'map.pinged');
+    const silent = expectNoEvent(player, 'error');
+    for (let i = 0; i < 6; i++) player.emit('map.ping', { mapId, x: i % 2 === 0 ? 1e9 : -1e9, y: 10 });
+    for (let i = 0; i < 6; i++) player.emit('map.ping', { mapId, x: 10, y: i % 2 === 0 ? 1e9 : -1e9 });
+    player.emit('map.ping', { mapId, x: 7, y: 8 });
+
+    const received = await first;
+    expect(received.x).toBe(7);
+    expect(received.y).toBe(8);
+    await silent;
+
+    dm.disconnect();
+    player.disconnect();
+  });
 });
 
 // ── 7. Chat ──────────────────────────────────────────────────────────────────

@@ -378,6 +378,8 @@ export function useWallTool({
           type: wallType,
         };
 
+        // TODO(ui): past MAP_LIMITS.maxWallSegments the server refuses wall:add and this wall
+        // stays drawn, as do the door and polygon adds; refuse at the cap before drawing.
         // Optimistic local add (push to undo history)
         pushWallHistory([...wallSegments, newSeg]);
 

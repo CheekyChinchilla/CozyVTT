@@ -1514,6 +1514,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
         const fresh = seen ? diffNew(exploredCells, seen) : [];
         if (fresh.length > 0) {
+          // TODO(play): a report over MAX_EXPLORATION_REPORT_CELLS (20,000) is refused whole and none of it stored; send it in parts.
           addExplored(fresh);
           socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh, userId: exploringAs });
         }

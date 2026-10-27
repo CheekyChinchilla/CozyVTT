@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CoordinateSchema } from './maps';
+import { MAP_LIMITS, MAX_EXPLORATION_REPORT_CELLS, MAX_FOG_CELLS } from './mapLimits';
 
 /** What an add answers when the id it names is already on the map. */
 export const DUPLICATE_WALL_ID_MESSAGE = 'A wall segment with that id is already on this map';
@@ -32,13 +33,20 @@ function refuseRepeatedIds(what: 'wall segments' | 'light sources') {
 }
 
 /** Most wall segments, doors included, one map holds. */
-export const MAX_WALL_SEGMENTS = 5000;
+export const MAX_WALL_SEGMENTS = MAP_LIMITS.maxWallSegments;
 /** Most light sources one map holds. */
-export const MAX_LIGHT_SOURCES = 200;
+export const MAX_LIGHT_SOURCES = MAP_LIMITS.maxLightSources;
+
+/**
+ * What a wall or light past the map's cap answers, from a whole list and
+ * from an add, over the socket and the REST routes alike.
+ */
+export const TOO_MANY_WALLS_MESSAGE = `Maximum ${MAX_WALL_SEGMENTS} wall segments per map`;
+export const TOO_MANY_LIGHTS_MESSAGE = `Maximum ${MAX_LIGHT_SOURCES} light sources per map`;
 
 export const WallSegmentsArraySchema = z
   .array(WallSegmentSchema)
-  .max(MAX_WALL_SEGMENTS, `Maximum ${MAX_WALL_SEGMENTS} wall segments per map`)
+  .max(MAX_WALL_SEGMENTS, TOO_MANY_WALLS_MESSAGE)
   .superRefine(refuseRepeatedIds('wall segments'));
 
 // ── Light Sources ────────────────────────────────────────────────────────────
@@ -61,7 +69,7 @@ export const LightSourceSchema = LightSourceBaseShape.refine(
 
 export const LightSourcesArraySchema = z
   .array(LightSourceBaseShape)
-  .max(MAX_LIGHT_SOURCES, `Maximum ${MAX_LIGHT_SOURCES} light sources per map`)
+  .max(MAX_LIGHT_SOURCES, TOO_MANY_LIGHTS_MESSAGE)
   .superRefine((lights, ctx) => {
     for (let i = 0; i < lights.length; i++) {
       if (lights[i].dimRadius < lights[i].brightRadius) {
@@ -87,14 +95,23 @@ export const LightSourceUpdateSchema = z.object({
 
 // ── Fog Operations ───────────────────────────────────────────────────────────
 
+/**
+ * What a reveal or hide naming more cells than the largest map has answers.
+ * A cell is a grid square, so no box on any map names more.
+ */
+export const TOO_MANY_FOG_CELLS_MESSAGE =
+  `A fog operation can name at most ${MAX_FOG_CELLS.toLocaleString('en-US')} cells. Use reveal_all or hide_all for the whole map.`;
+
+const FogCellsSchema = z.array(z.number().int().nonnegative()).max(MAX_FOG_CELLS, TOO_MANY_FOG_CELLS_MESSAGE);
+
 export const FogOperationSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('reveal'),
-    cells: z.array(z.number().int().nonnegative()),
+    cells: FogCellsSchema,
   }),
   z.object({
     op: z.literal('hide'),
-    cells: z.array(z.number().int().nonnegative()),
+    cells: FogCellsSchema,
   }),
   z.object({ op: z.literal('reveal_all') }),
   z.object({ op: z.literal('hide_all') }),
@@ -108,7 +125,7 @@ export const FogOperationSchema = z.discriminatedUnion('op', [
  */
 export const ExplorationRevealSchema = z.object({
   mapId: z.string().uuid(),
-  cells: z.array(z.number().int().nonnegative()).max(20000),
+  cells: z.array(z.number().int().nonnegative()).max(MAX_EXPLORATION_REPORT_CELLS),
   /** Whose memory to write. Only a DM may name someone else (Player Preview). */
   userId: z.string().uuid().optional(),
 });

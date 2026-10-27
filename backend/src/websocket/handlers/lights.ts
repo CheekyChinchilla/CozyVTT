@@ -6,7 +6,7 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { LightSourceSchema, LightSourcesArraySchema, DUPLICATE_LIGHT_ID_MESSAGE } from '../../validators/walls';
+import { LightSourceSchema, LightSourcesArraySchema, DUPLICATE_LIGHT_ID_MESSAGE, MAX_LIGHT_SOURCES, TOO_MANY_LIGHTS_MESSAGE } from '../../validators/walls';
 import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReadersAs } from '../utils';
@@ -14,7 +14,7 @@ import {
   lightChangeReachesPlayers, lightChangeSentTo, lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo,
   lightsReplacedSentTo, lightsSentTo,
 } from '../../utils/spirit-layer';
-import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
+import { mapEditLimiter, MAP_EDITS_PER_SECOND, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { lightOutsideMap, LIGHT_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
@@ -43,7 +43,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can add light sources' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, light } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -62,7 +62,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         if (lightOutsideMap([added], map)) return { refused: LIGHT_OUTSIDE_MAP_MESSAGE };
 
         const existing = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-        if (existing.length >= 200) return { refused: 'Maximum 200 light sources per map' };
+        if (existing.length >= MAX_LIGHT_SOURCES) return { refused: TOO_MANY_LIGHTS_MESSAGE };
         if (existing.some((l) => l.id === added.id)) return { refused: DUPLICATE_LIGHT_ID_MESSAGE };
 
         await tx.map.update({ where: { id: mapId }, data: { lights: toJson([...existing, added]) } });
@@ -95,7 +95,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can remove light sources' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, lightId } = data;
       if (!mapId || !lightId) { socket.emit('error', { message: 'mapId and lightId required' }); return; }
@@ -137,7 +137,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can update light sources' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, light } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -195,7 +195,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Only DMs can replace light sources' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, lights } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }

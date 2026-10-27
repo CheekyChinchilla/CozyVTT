@@ -141,7 +141,9 @@ export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second p
 // blunt a misbehaving/malicious client, so over-limit events are dropped
 // silently rather than surfaced as an error toast (same policy as fog).
 export const tokenMoveLimiter = new RateLimiter(); // Max 150 drag frames (token.move)/second per user
-export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per user
+export const mapEditLimiter = new RateLimiter();   // Max MAP_EDITS_PER_SECOND wall/light edits/second per user
+/** Wall and light edits one user may send a second, the eight edit events together. */
+export const MAP_EDITS_PER_SECOND = 40;
 // Map pings are a deliberate human gesture, so the ceiling is low compared to
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
 // toast for pressing the ping key too often is worse than nothing happening.

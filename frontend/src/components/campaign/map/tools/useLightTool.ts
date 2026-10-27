@@ -66,6 +66,8 @@ export function useLightTool({
           color: lightPlacementDefaults.color,
           enabled: true,
         };
+        // TODO(ui): past MAP_LIMITS.maxLightSources the server refuses light:add and this
+        // light stays drawn; refuse at the cap before drawing.
         setLightSources((prev) => [...prev, newLight]);
         setSelectedLightId(newLight.id);
         const socketInstance = socket?.getSocket();

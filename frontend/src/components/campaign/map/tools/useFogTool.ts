@@ -61,6 +61,8 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
       return { ...prev, revealed };
     });
 
+    // TODO(play): an operation over the 1 MB transport limit (a box of about 142,000 squares) is
+    // lost; send reveal_all or hide_all for the whole map, and split any other operation under 1 MB.
     socket?.getSocket()?.emit('fog:operation', { mapId, operation });
   }, [mapId, fogMode, socket, setFogState]);
 

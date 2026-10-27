@@ -16,7 +16,7 @@ import {
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canReferenceAsset, isMapPicture, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
-import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE } from '../validators/walls';
+import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES, TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
@@ -966,6 +966,17 @@ export const MAP_FIELDS_THAT_DO_NOT_RESEND_THE_MAP = {
 } as const satisfies Partial<Record<keyof MapRow, string>>;
 
 /**
+ * What PUT /maps/:id reads of the map under its lock: the size walls and
+ * lights scale from, those two lists, whether fog was on, and each column
+ * whose change sends the map again. Only these, so a rename does not hold
+ * the lock while it reads the fog grid and every token.
+ */
+const MAP_EDIT_LOCKED_READ = {
+  ...(Object.fromEntries(MAP_FIELDS_THAT_RESEND_THE_MAP.map((key) => [key, true])) as Record<(typeof MAP_FIELDS_THAT_RESEND_THE_MAP)[number], true>),
+  width: true, height: true, gridSize: true, wallSegments: true, lights: true, fogEnabled: true,
+} as const satisfies Prisma.MapSelect;
+
+/**
  * PUT /api/campaigns/:campaignId/maps/:id
  * Update a map
  * Requires: DM role
@@ -1139,21 +1150,26 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // Walls, doors and lights are stored in map pixels, and the picture is
     // drawn across width × gridSize by height × gridSize, so when either side
     // of that changes they scale with it, each axis by its own change, and
-    // stay on the art. Read and written under the map's lock, so no wall edit
-    // lands between the two.
-    const size = (field: 'width' | 'height' | 'gridSize') =>
-      typeof updateData[field] === 'number' ? (updateData[field] as number) : existingMap[field];
-    const kx = (size('width') * size('gridSize')) / (existingMap.width * existingMap.gridSize);
-    const ky = (size('height') * size('gridSize')) / (existingMap.height * existingMap.gridSize);
-    const { updatedMap, moved } = await withMapsLocked([id], async (tx) => {
-      if (kx === 1 && ky === 1) return { updatedMap: await tx.map.update({ where: { id }, data: updateData }), moved: null };
-      const current = await tx.map.findUniqueOrThrow({ where: { id }, select: { wallSegments: true, lights: true } });
+    // stay on the art. The scale is taken from the map as it is under the
+    // lock, the walls and lights with it. Two edits at once used to scale
+    // from the size each read before the lock, so both doubled the walls,
+    // and a form sending back the old grid size left them doubled. `before`
+    // is that row, for what this edit changed; existingMap stays the check
+    // of what was sent.
+    const { updatedMap, before, moved } = await withMapsLocked([id], async (tx) => {
+      const current = await tx.map.findUniqueOrThrow({ where: { id }, select: MAP_EDIT_LOCKED_READ });
+      const size = (field: 'width' | 'height' | 'gridSize') =>
+        typeof updateData[field] === 'number' ? (updateData[field] as number) : current[field];
+      const kx = (size('width') * size('gridSize')) / (current.width * current.gridSize);
+      const ky = (size('height') * size('gridSize')) / (current.height * current.gridSize);
+      if (kx === 1 && ky === 1) {
+        return { updatedMap: await tx.map.update({ where: { id }, data: updateData }), before: current, moved: null };
+      }
       const walls = scaledWalls(current.wallSegments, kx, ky);
       const lights = scaledLights(current.lights, kx, ky);
-      updateData.wallSegments = toJson(walls);
-      updateData.lights = toJson(lights);
       return {
-        updatedMap: await tx.map.update({ where: { id }, data: updateData }),
+        updatedMap: await tx.map.update({ where: { id }, data: { ...updateData, wallSegments: toJson(walls), lights: toJson(lights) } }),
+        before: current,
         moved: { wallsBefore: current.wallSegments, walls, lightsBefore: current.lights, lights },
       };
     });
@@ -1184,7 +1200,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // Fog switched on: push the fog state at once. A client asks for it when
     // its flag flips, but the flip it sees first is its own optimistic one,
     // sent before this row was written, and the server had nothing to answer.
-    if (updatedMap.fogEnabled && !existingMap.fogEnabled) {
+    if (updatedMap.fogEnabled && !before.fogEnabled) {
       try {
         await broadcastFogState(getSocketInstance(), campaignId, id, loadFogState(updatedMap, updatedMap.fogData as FogState | null));
       } catch { /* non-fatal */ }
@@ -1192,7 +1208,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
     // Every client gets the map again as they can now see it when the edit
     // changes what it draws or which tokens a player is sent.
-    if (MAP_FIELDS_THAT_RESEND_THE_MAP.some((key) => updatedMap[key] !== existingMap[key])) {
+    if (MAP_FIELDS_THAT_RESEND_THE_MAP.some((key) => updatedMap[key] !== before[key])) {
       // Only for the map the table is on. A map being edited in the library is
       // nobody's canvas, and map.changed would put every client onto it.
       await resendIfCurrent(campaignId, updatedMap);
@@ -1428,19 +1444,9 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    // Validate position is within map bounds
-    if (requested.x < 0 || requested.x >= map.width ||
-        requested.y < 0 || requested.y >= map.height) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: `Token position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
-      });
-    }
-    // And its whole footprint on the map, as the client keeps it on a move.
-    // Placing from a library puts a token at the map's centre, so a large
-    // creature on a small map would otherwise hang off the far edge.
+    // Whether it is on the map, and where its footprint ends up, are judged
+    // under the map's lock, below.
     const size = shapes.value.size ?? { width: 1, height: 1 };
-    const position = clampTokenPosition(requested, size, map);
 
     // Validate layer
     const layer = tokenData.layer || 'token';
@@ -1519,7 +1525,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       characterId,
       name: tokenData.name,
       imageUrl: normalizedTokenImageUrl || '',
-      position,
+      position: requested,
       size,
       layer,
       visible: shapes.value.visible ?? true,
@@ -1545,17 +1551,29 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     // Appended under the map's lock, to the list as it is then: another
     // write landing between this route's read and its write used to be lost.
     // The token limit is counted there too, so two adds at once cannot both
-    // take the last place.
-    const appended = await withMapsLocked([mapId], async (tx) => {
-      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    // take the last place, and the position is checked against the map's
+    // size then, as a resize landing meanwhile moves the edge. The whole
+    // footprint is kept on the map, as the client keeps it on a move:
+    // placing from a library puts a token at the map's centre, so a large
+    // creature on a small map would otherwise hang off the far edge.
+    const appended = await withMapsLocked([mapId], async (tx): Promise<LockedEdit<{ map: MapRow; token: typeof newToken }>> => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true, width: true, height: true } });
+      if (requested.x < 0 || requested.x >= fresh.width || requested.y < 0 || requested.y >= fresh.height) {
+        return {
+          status: 400,
+          error: 'Validation Error',
+          message: `Token position must be within map bounds (0-${fresh.width-1}, 0-${fresh.height-1})`,
+        };
+      }
       const tokens = readTokens(fresh.tokens);
-      if (tokens.length >= MAP_LIMITS.maxTokens) return { full: tokens.length + 1 };
-      return { map: await tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...tokens, newToken]) } }) };
+      if (tokens.length >= MAP_LIMITS.maxTokens) {
+        return { status: 400, error: 'Limit Exceeded', message: tooManyTokensMessage(tokens.length + 1) };
+      }
+      const token = { ...newToken, position: clampTokenPosition(requested, size, fresh) };
+      return { done: { map: await tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...tokens, token]) } }), token } };
     });
-    if (appended.full !== undefined) {
-      return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(appended.full) });
-    }
-    const updatedMap = appended.map;
+    if (!('done' in appended)) return sendRefusal(res, appended);
+    const { map: updatedMap, token: addedToken } = appended.done;
     resendSoonIfCurrent(campaignId, mapId);
 
     // A player's spirit-layer token placed on the map the table is on moves
@@ -1565,7 +1583,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     return res.status(201).json({
       message: 'Token added successfully',
-      token: newToken,
+      token: addedToken,
       map: updatedMap,
     });
   } catch (error) {
@@ -1730,18 +1748,6 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    const requested = shapes.value.position;
-    if (requested && (requested.x < 0 || requested.x >= map.width || requested.y < 0 || requested.y >= map.height)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
-      });
-    }
-    // The whole footprint on the map, at the size the token will have.
-    const position = requested
-      ? clampTokenPosition(requested, shapes.value.size ?? existingToken.size ?? { width: 1, height: 1 }, map)
-      : undefined;
-
     // Control can only be handed to a player of this campaign: the DM needs
     // no naming, and a spectator controls nothing.
     if (shapes.value.controlledBy && !(await canHoldTokens(campaignId, shapes.value.controlledBy))) {
@@ -1749,23 +1755,6 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
         error: 'Validation Error',
         message: 'Token controlledBy must name a player of this campaign',
       });
-    }
-
-    // Metadata is merged into what the token already holds, so the size limit
-    // has to be checked against the result. Checking only the incoming patch
-    // bounded each request and not the column: a sequence of small updates
-    // carrying different keys grew the stored object without limit.
-    const mergedMetadata = shapes.value.metadata
-      ? { ...existingToken.metadata, ...shapes.value.metadata }
-      : undefined;
-    if (mergedMetadata) {
-      const merged = TokenMetadataSchema.safeParse(mergedMetadata);
-      if (!merged.success) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `Invalid token metadata: ${merged.error.issues[0]?.message ?? 'invalid'}`,
-        });
-      }
     }
 
     // New art the DM may read; the art already on the token may stay.
@@ -1776,18 +1765,17 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
-    // Build updated token (merge updates with existing)
+    // Build updated token (merge updates with existing). The position and the
+    // metadata are worked out under the lock, below.
     const changes: Partial<Token> = {
       ...(shapes.value.name && { name: shapes.value.name }),
       ...(nextImageUrl !== undefined && { imageUrl: nextImageUrl }),
-      ...(position && { position }),
       ...(shapes.value.size && { size: shapes.value.size }),
       ...(updates.layer && { layer: updates.layer }),
       ...(shapes.value.visible !== undefined && { visible: shapes.value.visible }),
       ...(updates.controlledBy !== undefined && { controlledBy: shapes.value.controlledBy ?? null }),
       ...(shapes.value.rotation !== undefined && { rotation: shapes.value.rotation }),
       ...(shapes.value.conditions && { conditions: shapes.value.conditions }),
-      ...(mergedMetadata && { metadata: mergedMetadata }),
       ...(updates.type !== undefined && { type: updates.type }),
       ...(updates.disposition !== undefined && { disposition: updates.disposition }),
       ...(updates.hp !== undefined && { hp: shapes.value.hp ?? null }),
@@ -1807,21 +1795,51 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
 
     // Merged into the token as it is under the map's lock, so a move that
     // landed since this route read it is kept, and written back to the list
-    // as it is then.
-    const written = await withMapsLocked([mapId], async (tx) => {
-      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    // as it is then. The move is checked and clamped there too, against the
+    // map's size and the token's as they are then, and the metadata merged
+    // into what the token holds then: a resize or a metadata change landing
+    // between this route's read and the lock used to be judged by the old
+    // token, leaving it off the map's edge or its metadata written over.
+    const requested = shapes.value.position;
+    const written = await withMapsLocked([mapId], async (tx): Promise<LockedEdit<{ token: Token; map: MapRow }>> => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true, width: true, height: true } });
       const tokens = readTokens(fresh.tokens);
       const index = tokens.findIndex((t) => t.id === tokenId);
-      if (index === -1) return null;
-      const token: Token = { ...tokens[index], ...changes };
+      if (index === -1) return { status: 404, error: 'Not Found', message: 'Token not found on this map' };
+      const current = tokens[index];
+
+      if (requested && (requested.x < 0 || requested.x >= fresh.width || requested.y < 0 || requested.y >= fresh.height)) {
+        return {
+          status: 400,
+          error: 'Validation Error',
+          message: `Position must be within map bounds (0-${fresh.width-1}, 0-${fresh.height-1})`,
+        };
+      }
+      // The whole footprint on the map, at the size the token will have.
+      const position = requested
+        ? clampTokenPosition(requested, shapes.value.size ?? current.size ?? { width: 1, height: 1 }, fresh)
+        : undefined;
+
+      // Metadata is merged into what the token already holds, so the size
+      // limit has to be checked against the result. Checking only the
+      // incoming patch bounded each request and not the column: a sequence
+      // of small updates carrying different keys grew the stored object
+      // without limit.
+      const metadata = shapes.value.metadata ? { ...current.metadata, ...shapes.value.metadata } : undefined;
+      if (metadata) {
+        const merged = TokenMetadataSchema.safeParse(metadata);
+        if (!merged.success) {
+          return { status: 400, error: 'Validation Error', message: `Invalid token metadata: ${merged.error.issues[0]?.message ?? 'invalid'}` };
+        }
+      }
+
+      const token: Token = { ...current, ...changes, ...(position && { position }), ...(metadata && { metadata }) };
       tokens[index] = token;
       const map = await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-      return { token, map };
+      return { done: { token, map } };
     });
-    if (!written) {
-      return res.status(404).json({ error: 'Not Found', message: 'Token not found on this map' });
-    }
-    const { token: updatedToken, map: updatedMap } = written;
+    if (!('done' in written)) return sendRefusal(res, written);
+    const { token: updatedToken, map: updatedMap } = written.done;
     resendSoonIfCurrent(campaignId, mapId);
 
     // A combatant's own change follows the token. A layer, visibility or
@@ -2146,17 +2164,19 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segment' });
     }
-    if (wallOutsideMap([parsed.data], map)) {
-      return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
-    }
 
     const segment = parsed.data;
     const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<number>> => {
-      const fresh = await tx.map.findUnique({ where: { id }, select: { wallSegments: true } });
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, wallSegments: true } });
       if (!fresh) return MAP_GONE;
+      // Against the map's size as it is now, as the socket add judges it: a
+      // grid change landing since this route read the map moves the bound.
+      if (wallOutsideMap([segment], fresh)) {
+        return { status: 400, error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE };
+      }
       const existing = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
-      if (existing.length >= 5000) {
-        return { status: 400, error: 'Limit Exceeded', message: 'Maximum 5000 wall segments per map' };
+      if (existing.length >= MAX_WALL_SEGMENTS) {
+        return { status: 400, error: 'Limit Exceeded', message: TOO_MANY_WALLS_MESSAGE };
       }
       if (existing.some((w) => w.id === segment.id)) {
         return { status: 400, error: 'Validation Error', message: DUPLICATE_WALL_ID_MESSAGE };
@@ -2329,17 +2349,18 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid light source' });
     }
-    if (lightOutsideMap([parsed.data], map)) {
-      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
-    }
 
     const added = parsed.data;
     const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<number>> => {
-      const fresh = await tx.map.findUnique({ where: { id }, select: { lights: true } });
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
       if (!fresh) return MAP_GONE;
+      // Against the map's size as it is now, as the socket add judges it.
+      if (lightOutsideMap([added], fresh)) {
+        return { status: 400, error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE };
+      }
       const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
-      if (existing.length >= 200) {
-        return { status: 400, error: 'Limit Exceeded', message: 'Maximum 200 light sources per map' };
+      if (existing.length >= MAX_LIGHT_SOURCES) {
+        return { status: 400, error: 'Limit Exceeded', message: TOO_MANY_LIGHTS_MESSAGE };
       }
       if (existing.some((l) => l.id === added.id)) {
         return { status: 400, error: 'Validation Error', message: DUPLICATE_LIGHT_ID_MESSAGE };
