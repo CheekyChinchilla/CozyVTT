@@ -1,17 +1,21 @@
 /**
  * The map's toolbar and its menus: what a screen reader calls the buttons,
- * and their size for a finger. jsdom evaluates no media query, so the size
- * is checked as the classes that set it on a touch screen.
+ * their size for a finger, and how the toolbar fits a narrow map. jsdom
+ * evaluates no media query and lays nothing out, so the size is checked as
+ * the classes that set it on a touch screen, and the fit as the structure
+ * that wraps and the places the panels under the toolbar are given from the
+ * boxes a browser would measure.
  *
  * The stand-ins are those of MapCanvasTools.test.tsx: the role and current
  * map live in a store the test changes, and the socket records what the page
  * sends. Canvas drawing is switched off.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { CampaignMap, Token } from '@/types';
 import type { WallSegment } from '@/types/walls';
+import { contact } from '@/test/pointer';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -293,5 +297,213 @@ describe('the menus on a touch screen', () => {
     const items = menuButtons();
     expect(items.map((b) => b.textContent)).toEqual(['Open Door', 'Lock Door']);
     for (const item of items) expect(classesOf(item)).toContain('pointer-coarse:min-h-11');
+  });
+});
+
+describe('the toolbar on a narrow map', () => {
+  // On a map too narrow for one row it was cut off at the map's edge, Ping
+  // with it. It wraps now, between groups that stay together.
+  it('wraps between groups, keeping the zoom buttons with their readout and the measuring tools with Ping', () => {
+    render(<MapCanvas />);
+
+    const zoom = screen.getByRole('button', { name: 'Zoom Out' }).parentElement!;
+    const measuring = screen.getByRole('button', { name: 'Ping' }).parentElement!;
+    expect(screen.getByRole('button', { name: 'Zoom In' }).parentElement).toBe(zoom);
+    expect(screen.getByText(/^\d+%$/).parentElement).toBe(zoom);
+    expect(screen.getByRole('button', { name: 'AoE Shape — area of effect overlay' }).parentElement).toBe(measuring);
+    expect(screen.getByRole('button', { name: 'Ruler — measure distance' }).parentElement).toBe(measuring);
+    expect(measuring).not.toBe(zoom);
+    const toolbar = zoom.parentElement!;
+    expect(measuring.parentElement).toBe(toolbar);
+    expect(classesOf(toolbar)).toContain('flex-wrap');
+  });
+
+  // At 44 pixels a button, a DM's toolbar was 3 pixels too wide for one row
+  // on an iPad Pro 11 in landscape with both side panels at their minimums.
+  // Its zoom readout, 64 pixels for at most "300%", is 48 there.
+  it('narrows the zoom readout on a touch screen', () => {
+    render(<MapCanvas />);
+
+    expect(classesOf(screen.getByText(/^\d+%$/))).toEqual(expect.arrayContaining(['min-w-16', 'pointer-coarse:min-w-12']));
+  });
+
+  // The band spans the map's width under the toolbar. The strip of it beside
+  // the toolbar and the label is the map's: a click, a tap, a long-press or
+  // the wheel there reaches the map.
+  it('lets the map take what lands in the band beside the toolbar and the label', () => {
+    h.set({ userRole: 'PLAYER', playerSpiritVisible: true });
+    render(<MapCanvas />);
+
+    const toolbar = screen.getByRole('button', { name: 'Zoom Out' }).parentElement!.parentElement!;
+    const label = screen.getByText('Spirit Realm').closest('.animate-pulse-soft')!;
+    expect(classesOf(toolbar.parentElement!)).toContain('pointer-events-none');
+    expect(classesOf(toolbar)).toContain('pointer-events-auto');
+    expect(classesOf(label)).toContain('pointer-events-auto');
+  });
+
+  // The label sat over the toolbar's right end, Ping under it, wherever the
+  // two met.
+  it('shares a band with the spirit realm label, which goes under the toolbar when they do not fit side by side', () => {
+    h.set({ userRole: 'PLAYER', playerSpiritVisible: true });
+    render(<MapCanvas />);
+
+    const toolbar = screen.getByRole('button', { name: 'Zoom Out' }).parentElement!.parentElement!;
+    const label = screen.getByText('Spirit Realm').closest('.animate-pulse-soft')!;
+    expect(label.parentElement).toBe(toolbar.parentElement);
+    expect(classesOf(toolbar.parentElement!)).toContain('flex-wrap');
+    expect(classesOf(label)).toContain('ml-auto');
+  });
+});
+
+/** A box at `left, top` of `width` by `height`, as getBoundingClientRect gives it. */
+const box = (left: number, top: number, width: number, height: number) =>
+  ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
+
+describe('what sits under the toolbar', () => {
+  const observed: ResizeObserverCallback[] = [];
+  class RecordingResizeObserver {
+    constructor(callback: ResizeObserverCallback) { observed.push(callback); }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  const realObserver = window.ResizeObserver;
+
+  beforeEach(() => {
+    observed.length = 0;
+    Object.defineProperty(window, 'ResizeObserver', { value: RecordingResizeObserver, configurable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(window, 'ResizeObserver', { value: realObserver, configurable: true });
+    vi.unstubAllGlobals();
+  });
+
+  /** A touch screen's pointer, as `(pointer: coarse)` answers it. */
+  function coarsePointer() {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(pointer: coarse)', media: query, onchange: null,
+      addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false,
+    }));
+  }
+
+  /**
+   * The boxes a browser would give a map `width` wide at the page's top left
+   * corner, with the toolbar's groups at the boxes given (left, top, width,
+   * height, from the map's corner), and Put back, while it shows, 254 wide
+   * and `barHeight` tall at the top it is given; then a resize, as a wrap or
+   * a change of pointer makes one.
+   */
+  function layOut(width: number, groups: Array<[number, number, number, number]>, barHeight = 52) {
+    const toolbar = screen.getByRole('button', { name: 'Zoom Out' }).parentElement!.parentElement!;
+    const band = toolbar.parentElement!;
+    const map = band.parentElement!;
+    const place = (el: Element, rect: DOMRect) => { (el as HTMLElement).getBoundingClientRect = () => rect; };
+    const right = Math.max(...groups.map(([l, , w]) => l + w)) + 9;
+    const bottom = Math.max(...groups.map(([, t, , gh]) => t + gh)) + 9;
+    place(map, box(0, 0, width, 600));
+    place(band, box(16, 16, width - 16, bottom - 16));
+    place(toolbar, box(16, 16, right - 16, bottom - 16));
+    Array.from(toolbar.children).forEach((g, i) => place(g, box(...groups[i])));
+    const bar = screen.queryByRole('button', { name: 'Put back' })?.parentElement;
+    // top-20 until it is given a top of its own.
+    if (bar) bar.getBoundingClientRect = () => box((width - 254) / 2, parseFloat(bar.style.top) || 80, 254, barHeight);
+    act(() => { for (const callback of observed) callback([], {} as ResizeObserver); });
+  }
+
+  const aoePanel = () => screen.getByText('AoE Shape').parentElement!;
+  const putBackBar = () => screen.getByRole('button', { name: 'Put back' }).parentElement!;
+  const toolStack = () => screen.getByTitle(/Drag to move the panels/).parentElement!;
+  const openAoE = () => fireEvent.click(screen.getByRole('button', { name: 'AoE Shape — area of effect overlay' }));
+
+  /** The DM holds the goblin with a tap of a finger, so the Put back bar shows. */
+  function holdByTap() {
+    act(() => { useGameStore.getState().setTokens([token('tok-goblin', 'Goblin', 10, 5)]); });
+    const finger = contact('touch', 1);
+    finger.down(surface(), square(10, 5));
+    finger.up(surface(), square(10, 5));
+    finger.leave(surface());
+  }
+
+  // One row of 34-pixel buttons on a map 754 wide, as on a 1440-pixel
+  // screen with the side panels at their defaults.
+  it('keeps the AoE panel and the tool stack in their places under one row of a mouse’s buttons', () => {
+    render(<MapCanvas />);
+    openAoE();
+    layOut(754, [[25, 25, 148, 34], [181, 25, 127, 34], [316, 25, 169, 34], [493, 25, 43, 34]]);
+
+    expect(aoePanel().style.top).toBe('');
+    expect(aoePanel().style.maxHeight).toBe('');
+    expect(classesOf(aoePanel())).toContain('top-12');
+    expect(toolStack().style.top).toBe('3.5rem');
+  });
+
+  // A pen's hold on such a screen shows Put back at its own place.
+  it('keeps Put back in its place under one row of a mouse’s buttons', () => {
+    render(<MapCanvas />);
+    holdByTap();
+    layOut(754, [[25, 25, 148, 34], [181, 25, 127, 34], [316, 25, 169, 34], [493, 25, 43, 34]]);
+
+    expect(putBackBar().style.top).toBe('');
+  });
+
+  // A map 420 wide, as a Galaxy Tab S9's in landscape between the side
+  // panels at their minimums: the measuring tools and the spirit toggle
+  // wrap onto a second row.
+  it('starts them under the toolbar when it wraps onto a second row', () => {
+    render(<MapCanvas />);
+    openAoE();
+    layOut(420, [[25, 25, 148, 34], [181, 25, 127, 34], [25, 67, 169, 34], [202, 67, 43, 34]]);
+
+    expect(aoePanel().style.top).toBe('118px');
+    expect(toolStack().style.top).toBe('118px');
+  });
+
+  // Both started at the band's foot, Put back over the AoE panel's top
+  // right, its shape buttons among what it covered.
+  it('starts the AoE panel under Put back while a token is held, and back under the toolbar after', () => {
+    render(<MapCanvas />);
+    holdByTap();
+    openAoE();
+    layOut(420, [[25, 25, 148, 34], [181, 25, 127, 34], [25, 67, 169, 34], [202, 67, 43, 34]], 62);
+
+    expect(putBackBar().style.top).toBe('118px');
+    expect(aoePanel().style.top).toBe('188px');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Put back' }));
+    expect(aoePanel().style.top).toBe('118px');
+  });
+
+  // Moved down, the panel ran past the map's foot on a short tablet, and the
+  // map's column scrolled.
+  it('keeps a moved AoE panel within the map, scrolling inside', () => {
+    render(<MapCanvas />);
+    openAoE();
+    layOut(420, [[25, 25, 148, 34], [181, 25, 127, 34], [25, 67, 169, 34], [202, 67, 43, 34]]);
+
+    expect(aoePanel().style.maxHeight).toContain('118px');
+    expect(aoePanel().style.overflowY).toBe('auto');
+  });
+
+  // A touch screen's 44-pixel buttons in one row on a map 590 wide, as an
+  // iPad Pro 11's in landscape with both side panels at their minimums: the
+  // toolbar is taller, and its buttons reach under the tool stack's corner.
+  it('starts them under the toolbar on a touch screen, and the stack too where the buttons reach its corner', () => {
+    coarsePointer();
+    render(<MapCanvas />);
+    holdByTap();
+    openAoE();
+    layOut(590, [[25, 25, 152, 44], [185, 25, 157, 44], [350, 25, 157, 44], [515, 25, 53, 44]], 62);
+
+    expect(putBackBar().style.top).toBe('86px');
+    expect(aoePanel().style.top).toBe('156px');
+    expect(toolStack().style.top).toBe('86px');
+  });
+
+  it('leaves the stack in its corner on a touch screen where the buttons end before it', () => {
+    coarsePointer();
+    render(<MapCanvas />);
+    layOut(1200, [[25, 25, 152, 44], [185, 25, 157, 44], [350, 25, 157, 44], [515, 25, 53, 44]]);
+
+    expect(toolStack().style.top).toBe('3.5rem');
   });
 });

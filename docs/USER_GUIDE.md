@@ -664,7 +664,7 @@ still appears, marked as having no notes.
 
 ### Moving Around the Map
 
-The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. Nothing you do there changes anyone else's view, except a **Ping**, which the whole table sees.
+The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. On a map too narrow for them in one row, such as a tablet's with both side panels open, the buttons wrap onto a second row, and the panels below the toolbar move down to make room. Nothing you do there changes anyone else's view, except a **Ping**, which the whole table sees.
 
 | Control | What it does |
 |---|---|

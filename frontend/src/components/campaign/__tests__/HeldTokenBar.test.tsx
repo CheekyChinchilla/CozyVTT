@@ -36,6 +36,24 @@ describe('HeldTokenBar', () => {
 });
 
 describe('HeldTokenBar on a touch screen', () => {
+  // On a narrow tablet the bar and the DM's tool stack (z-30) meet under the
+  // toolbar, and the stack covered Put back.
+  it('lies over the DM tool stack', () => {
+    const { container } = render(<HeldTokenBar name="Goblin Scout" onPutBack={() => undefined} />);
+    const layer = Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec((container.firstElementChild as HTMLElement).className)?.[1] ?? 0);
+
+    expect(layer).toBeGreaterThan(30);
+  });
+
+  it('starts at the top it is given, under a toolbar taller than one row of a mouse’s buttons', () => {
+    const { container, rerender } = render(<HeldTokenBar name="Goblin Scout" onPutBack={() => undefined} />);
+    const bar = container.firstElementChild as HTMLElement;
+    expect(bar.style.top).toBe('');
+
+    rerender(<HeldTokenBar name="Goblin Scout" onPutBack={() => undefined} top={118} />);
+    expect(bar.style.top).toBe('118px');
+  });
+
   // Put back was a small button, about 32 pixels tall, and the bar shows
   // only for a finger's or a pen's hold.
   it('makes Put back big enough for a finger', () => {

@@ -11,6 +11,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { render, fireEvent, screen, act } from '@testing-library/react';
 import { createRef, useRef } from 'react';
 import DmToolPanelContainer from '../DmToolPanelContainer';
+import type { TopBand } from '../map/toolbarLayout';
 
 describe('DmToolPanelContainer', () => {
   // With a height limit on the stack, the panels shrank to fit it, cutting
@@ -53,13 +54,36 @@ describe('DmToolPanelContainer', () => {
     expect(classes).toEqual(expect.arrayContaining(['pointer-coarse:h-6', 'touch-none']));
   });
 
+  // Its corner sat under the map's toolbar wherever the toolbar reached it:
+  // a wrapped toolbar on a narrow map, or a touch screen's bigger buttons.
+  it('starts its corner under the toolbar where the toolbar reaches it, and beside it otherwise', () => {
+    const beside = { bottom: 68, buttonsRight: 503, width: 754, wrapped: false };
+    const { container, rerender } = render(
+      <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()} band={beside}><p>Fog of War</p></DmToolPanelContainer>
+    );
+    const stack = container.firstElementChild as HTMLElement;
+    expect(stack.style.top).toBe('3.5rem');
+    expect(stack.style.right).toBe('8px');
+
+    rerender(
+      <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()} band={{ ...beside, buttonsRight: 584, width: 620, bottom: 78 }}>
+        <p>Fog of War</p>
+      </DmToolPanelContainer>
+    );
+    expect(stack.style.top).toBe('86px');
+    expect(stack.style.right).toBe('8px');
+    // jsdom rewrites calc(); the stack's height is still reckoned from its new top.
+    expect(stack.style.maxHeight).toContain('86px');
+  });
+
   it('gives the panel stack one fixed width, so long notes wrap', () => {
     const { container } = render(
       <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}>
         <p>Forgets what every player has seen of this map. Their view now is unchanged.</p>
       </DmToolPanelContainer>
     );
-    expect(container.firstElementChild?.className).toMatch(/(^|\s)w-\[200px\](\s|$)/);
+    // Set from the same number the corner's reach is worked out from.
+    expect((container.firstElementChild as HTMLElement).style.width).toBe('200px');
   });
 });
 
@@ -73,15 +97,16 @@ const box = (left: number, top: number, width: number, height: number) =>
  */
 function renderInMap() {
   let mapBox = box(100, 50, 800, 600);
-  function Map() {
+  function Map({ band }: { band: TopBand | null }) {
     const ref = useRef<HTMLDivElement>(null);
     return (
       <div ref={ref} data-testid="map">
-        <DmToolPanelContainer containerRef={ref}><p>Lights</p></DmToolPanelContainer>
+        <DmToolPanelContainer containerRef={ref} band={band}><p>Lights</p></DmToolPanelContainer>
       </div>
     );
   }
-  render(<Map />);
+  const { rerender } = render(<Map band={null} />);
+  const setBand = (band: TopBand | null) => rerender(<Map band={band} />);
   const map = screen.getByTestId('map');
   const stack = map.firstElementChild as HTMLElement;
   map.getBoundingClientRect = () => mapBox;
@@ -100,7 +125,7 @@ function renderInMap() {
     mapBox = box(100, 50, width, height);
     act(() => { window.dispatchEvent(new Event('resize')); });
   };
-  return { stack, handle, drag, resize };
+  return { stack, handle, drag, resize, setBand };
 }
 
 // A dragged stack was fixed to the window: it stayed where it was dropped
@@ -137,12 +162,20 @@ describe('moving the DM tool panels', () => {
     expect(stack.style.top).toBe('100px');
   });
 
+  // Where the DM dropped it is theirs, whatever the toolbar does.
+  it('keeps a dragged stack where it was dropped when the toolbar wraps', () => {
+    const { stack, drag, setBand } = renderInMap();
+    drag(-300, 100);
+    setBand({ bottom: 130, buttonsRight: 700, width: 800, wrapped: true });
+    expect(stack.style.top).toBe('156px');
+  });
+
   it('goes back to its corner on a double-click of the handle', () => {
     const { stack, handle, drag } = renderInMap();
     drag(-300, 100);
     fireEvent.doubleClick(handle);
     expect(stack.style.left).toBe('');
-    expect(stack.style.right).toBe('0.5rem');
+    expect(stack.style.right).toBe('8px');
     expect(stack.style.top).toBe('3.5rem');
   });
 
