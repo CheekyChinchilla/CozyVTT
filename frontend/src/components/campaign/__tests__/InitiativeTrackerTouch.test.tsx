@@ -79,6 +79,13 @@ it('lets the die and bin go to a line of their own, on the right, when the row i
   expect(classesOf(actions?.parentElement ?? null)).toContain('pointer-coarse:flex-wrap');
 });
 
+// The name, which opens the combatant's menu, was a line of text.
+it("makes a combatant's name tall enough for a finger", () => {
+  render(<InitiativeTracker />);
+
+  expect(classesOf(screen.getByRole('button', { name: 'Goblin' }))).toContain('touch-target');
+});
+
 // A player's row has a die and no bin. The name, which takes what is left,
 // counted as nothing when the row decided whether to wrap, so the die stayed
 // beside it and squeezed it to 30 pixels or so. On a touch screen the name

@@ -3748,7 +3748,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               <button
                 key={shape}
                 onClick={() => setAoEConfig((prev) => ({ ...prev, shape }))}
-                className={`text-xs px-2 py-1 rounded border transition-colors capitalize ${
+                className={`touch-target text-xs px-2 py-1 rounded border transition-colors capitalize ${
                   aoeConfig.shape === shape
                     ? 'bg-moss-green/15 border-moss-green/60 text-brand-ink font-medium'
                     : 'border-stone-gray/30 text-stone-gray hover:border-moss-green/40 hover:text-brand-ink'
@@ -3799,7 +3799,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 <button
                   key={ft}
                   onClick={() => setAoEConfig((prev) => ({ ...prev, sizeFt: ft }))}
-                  className="text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
+                  className="touch-target text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
                 >
                   {ft} ft
                 </button>
@@ -3822,7 +3822,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {aoeAnchor && (
             <button
               onClick={() => setAoEAnchor(null)}
-              className="text-xs text-stone-gray hover:text-danger-ink transition-colors"
+              className="touch-target text-xs text-stone-gray hover:text-danger-ink transition-colors"
             >
               × Clear placement
             </button>

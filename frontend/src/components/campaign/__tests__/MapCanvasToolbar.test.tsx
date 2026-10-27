@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vite
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { CampaignMap, Token } from '@/types';
 import type { WallSegment } from '@/types/walls';
-import { contact } from '@/test/pointer';
+import { contact, mouse } from '@/test/pointer';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -233,6 +233,23 @@ describe("the toolbar's size", () => {
     for (const name of names) {
       expect(classesOf(screen.getByRole('button', { name }))).toContain('touch-target');
     }
+  });
+});
+
+// Its shape buttons were about 26 pixels tall and its presets about 22.
+describe("the AoE Shape panel's size", () => {
+  it('sizes its buttons and its Snap to grid box for a finger', () => {
+    render(<MapCanvas />);
+    fireEvent.click(screen.getByTitle('AoE Shape — area of effect overlay'));
+    // A placement, so the panel offers × Clear placement.
+    const canvas = document.querySelector('canvas[class*="cursor-"]')!;
+    mouse.down(canvas, { clientX: 125, clientY: 125 });
+    mouse.up(canvas, { clientX: 125, clientY: 125 });
+
+    for (const name of ['Circle', 'Cone', 'Line', 'Cube', '10 ft', '15 ft', '20 ft', '30 ft', '60 ft', '× Clear placement']) {
+      expect(classesOf(screen.getByRole('button', { name }))).toContain('touch-target');
+    }
+    expect(classesOf(screen.getByRole('checkbox', { name: 'Snap to grid' }).closest('label')!)).toContain('touch-target');
   });
 });
 

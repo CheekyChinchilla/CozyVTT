@@ -352,7 +352,7 @@ function CombatantRow({
               const rect = e.currentTarget.getBoundingClientRect();
               onOpenMenu(entry.tokenId, rect.left, rect.bottom, e.detail === 0);
             }}
-            className={`block max-w-full text-left text-sm font-medium truncate rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}
+            className={`block max-w-full touch-target text-left text-sm font-medium truncate rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}
           >
             {name}
           </button>
