@@ -29,6 +29,9 @@ export function useMeasureTools({ isDM, markDirty }: UseMeasureToolsArgs) {
   // part-way into a square. Once set it is a fixed pivot — aiming a cone or
   // line must never move it.
   const [aoeAnchor, setAoEAnchor] = useState<AoEAnchor | null>(null);
+  // The panel's Snap to grid. Off, a placement is free, as Alt makes it: a
+  // finger or a pen has no Alt.
+  const [aoeSnap, setAoESnap] = useState(true);
   // Whether Alt is down, read off each mousemove so the un-pinned preview shows
   // what a click would actually place. Taking it from the event rather than
   // keydown/keyup means it self-corrects if the window loses focus mid-press.
@@ -120,9 +123,10 @@ export function useMeasureTools({ isDM, markDirty }: UseMeasureToolsArgs) {
         return true;
       }
       // AoE tool: click to set/move the anchor the template pivots about.
-      // Held in map pixels so Alt can place it anywhere, not just on a square.
+      // Held in map pixels so Alt, or Snap to grid off, can place it
+      // anywhere, not just on a square.
       if (showAoE) {
-        setAoEAnchor({ point: mapPx, exact: e.altKey });
+        setAoEAnchor({ point: mapPx, exact: e.altKey || !aoeSnap });
         return true;
       }
       return false;
@@ -142,6 +146,6 @@ export function useMeasureTools({ isDM, markDirty }: UseMeasureToolsArgs) {
     tool, track,
     showRuler, showAoE, handleToggleRuler, handleToggleAoE, putRulerAway,
     rulerOrigin, rulerColor, setRulerColor,
-    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef,
+    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef, aoeSnap, setAoESnap,
   };
 }

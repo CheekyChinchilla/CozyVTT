@@ -305,6 +305,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 | Open a token's menu | Press and hold the token for half a second: the menu a right-click opens there opens, with the same items, and the token is selected. Lift your finger and tap an item. |
 | Open a character's or a combatant's menu | Press and hold its row in the **Campaign Roster** or the initiative tracker for half a second: the menu a right-click opens there opens. A tap on a character still opens its sheet, and sliding your finger scrolls the panel. |
 | Open or close a door | Tap it, as you would click it. Press and hold it for its menu. |
+| Aim a spell area | With **AoE Shape** up, slide your finger from the square it comes from towards the target (see [Measuring and Spell Areas](#measuring-and-spell-areas)). Untick **Snap to grid** to place it off the grid, as **Alt** does with a mouse. |
 | Point at the map | Press and hold the spot for half a second, on empty ground or on a token that has no menu for you: everyone sees your ping there, as with **Tab**. Or tap **Ping** in the map's toolbar, then tap the spot; you can move the map first. Tap **Ping** again to put it away. |
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
@@ -375,7 +376,9 @@ Two tools in the toolbar above the map answer "can I actually reach that?" befor
 
 For a cone or a line, **click your own token first**. That square becomes the pivot, and moving the cursor swings the shape around it — the point it comes out of slides around the square's edge to follow your aim, so it always leaves on the side you're pointing and never cuts back across you. Keep turning until you can see what the attack catches.
 
-For something you cast at a distance rather than from yourself — a wall of fire, say — hold **Alt** while clicking. That drops the grid snapping and pins the shape exactly where you clicked, and it turns about that point instead.
+For something you cast at a distance rather than from yourself — a wall of fire, say — hold **Alt** while clicking, or untick **Snap to grid** in the AoE panel. That drops the grid snapping and pins the shape exactly where you clicked, and it turns about that point instead.
+
+On a touch screen, which has no cursor to aim with, put your finger on the square the cone or line comes from and slide it towards your target: the shape is pinned on that square and turns to follow your finger, and stays aimed when you lift. A tap moves a shape to the square you tap.
 
 Press **Esc** to drop the placement, and again to put the tool away.
 

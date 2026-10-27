@@ -334,7 +334,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     tool: measuring, track: trackMeasure,
     showRuler, showAoE, handleToggleRuler, handleToggleAoE, putRulerAway,
     rulerOrigin, rulerColor, setRulerColor,
-    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef,
+    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef, aoeSnap, setAoESnap,
   } = useMeasureTools({ isDM, markDirty });
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
@@ -1841,7 +1841,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         // Not bounds-checked: aiming a pinned template at something off the
         // edge of the map is legitimate.
         aimMapPx: aoeAimRef.current,
-        hoverExact: aoeAltHeldRef.current,
+        hoverExact: aoeAltHeldRef.current || !aoeSnap,
         feetPerSquare: currentMap.feetPerSquare ?? 5,
         coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
       }, viewport);
@@ -1893,7 +1893,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1947,7 +1947,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
 
   // ============================================
   // Token Hit Testing
@@ -3798,6 +3798,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             </div>
           </div>
 
+          {/* Alt's free placement, for a finger or a pen. */}
+          <label className="flex items-center gap-2 cursor-pointer touch-target">
+            <input
+              type="checkbox"
+              checked={aoeSnap}
+              onChange={(e) => setAoESnap(e.target.checked)}
+              className="accent-moss-green"
+            />
+            <span className="text-xs font-medium text-stone-gray">Snap to grid</span>
+          </label>
+
           {/* Clear the anchor */}
           {aoeAnchor && (
             <button
@@ -3812,13 +3823,16 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             {aoeAnchor ? 'Click map to reposition' : 'Click map to place shape'}
           </p>
           {/* Cone and line pivot about the square you click, so most of the
-              time you want them on your token. Alt is the escape hatch for an
-              effect cast at a distance — a wall of fire, say. */}
+              time you want them on your token. Alt, or Snap to grid off, is
+              the escape hatch for an effect cast at a distance — a wall of
+              fire, say. */}
           {(aoeConfig.shape === 'cone' || aoeConfig.shape === 'line') && (
             <p className="text-xs text-stone-gray/70">
+              {/* A finger has no hover to aim with, nor an Alt key. */}
               {aoeAnchor
-                ? 'Move the cursor to aim it around that square'
-                : 'Alt+click to place it freely, off the grid'}
+                ? (coarsePointer ? 'Drag from its square to aim it' : 'Move the cursor to aim it around that square')
+                : !aoeSnap ? 'Placed freely, off the grid'
+                  : coarsePointer ? 'Untick Snap to grid to place it freely, off the grid' : 'Alt+click to place it freely, off the grid'}
             </p>
           )}
         </div>
