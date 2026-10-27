@@ -312,7 +312,7 @@ export default function CharacterEditorPage() {
   // Loading state — full-page skeleton
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-dvh bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <CharacterSheetSkeleton />
       </div>
     );
@@ -321,7 +321,7 @@ export default function CharacterEditorPage() {
   // Error state
   if (error || !character) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
+      <div className="min-h-dvh flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
           <AlertCircle className="w-12 h-12 text-danger-ink mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
@@ -339,7 +339,7 @@ export default function CharacterEditorPage() {
   // Permission denied state
   if (permissionError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
+      <div className="min-h-dvh flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
           <Lock className="w-12 h-12 text-accent-ink mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
@@ -367,10 +367,12 @@ export default function CharacterEditorPage() {
       onConfirm={() => navigate('/characters')}
       onCancel={() => setConfirmLeave(false)}
     />
-    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-dvh bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <div className="glass-panel m-4 p-4">
-        <div className="flex items-center justify-between gap-4">
+        {/* Wraps so the buttons drop below the name on a phone narrower
+            than both. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <div className="flex items-center gap-3">
             <button
               onClick={handleBack}

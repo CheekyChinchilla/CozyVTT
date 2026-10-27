@@ -80,6 +80,7 @@ import {
   SPELL_SLOTS_MAX,
 } from '@/constants/sheetLimits';
 import { COLOR_PRESETS } from './colorPresets';
+import { SheetTabs, type SheetTab } from '../SheetTabs';
 
 /**
  * The sheet as this editor holds it.
@@ -125,12 +126,6 @@ interface Pathfinder2eCharacterEditorProps {
 
 type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'feats' | 'bio';
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
 /** The tab a refused box is on, so Save can open it. */
 function tabOfError(key: string): TabId | null {
   if (key.startsWith('loreSkills.')) return 'stats';
@@ -148,7 +143,7 @@ function tabOfError(key: string): TabId | null {
  */
 const NOT_IN_SUMMARY = new Set(['submit', 'tokenImage', 'themeColor']);
 
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
   { id: 'spells', label: 'Spells', icon: Sparkles },
@@ -920,10 +915,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     const ink = headerInk(isCustomColor ? customColorHex : selectedColor.hex);
     const headerTextColor = ink.text;
     const headerHintColor = ink.soft;
-    const headerClasses = isCustomColor ? `${headerTextColor} p-6 rounded-t-lg relative` : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+    const headerClasses = isCustomColor ? `${headerTextColor} p-3 sm:p-6 rounded-t-lg relative` : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-3 sm:p-6 rounded-t-lg relative`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Save and Cancel Buttons */}
         <div className="flex justify-end items-center space-x-2 mb-4 mr-12 sm:absolute sm:top-4 sm:right-16 sm:mb-0 sm:mr-0">
           {/* Fixed colours: the header is the player's colour, not the theme's. */}
@@ -978,31 +973,37 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         {/* From sm up, pr-64 reserves the strip the absolutely-positioned
             Save/Cancel cluster and palette button occupy above. Without it the
             Level and Hero Points fields sit underneath them. On a phone the
-            cluster is in the flow above this row instead. */}
-        <div className="flex items-start justify-between sm:pr-64">
+            cluster is in the flow above this row instead, and the portrait,
+            the name and the points are one column. */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-0 sm:pr-64">
           {/* min-w-0 so this column can shrink. Flex children default to
               min-width:auto, which lets the character-name input push out past
               the reserved padding on a narrow window and back under the
               buttons. */}
-          <div className="flex items-start space-x-4 min-w-0">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start min-w-0">
+            {/* As wide as the portrait, so its caption wraps under it on a phone. */}
             {allowTokenPicture && (
-            <div className="shrink-0 relative group">
+            <div className="shrink-0 relative group w-24 sm:w-40">
               <input type="file" id="token-upload" accept="image/*" onChange={handleTokenImageChange} className="hidden" />
               <label htmlFor="token-upload" className="cursor-pointer block relative">
                 {tokenImagePreview ? (
-                  <img src={tokenImagePreview} alt={formData.characterName || 'Character'} className="w-40 h-40 rounded-full border-4 border-white/20 object-cover" />
+                  <img src={tokenImagePreview} alt={formData.characterName || 'Character'} className="w-24 h-24 sm:w-40 sm:h-40 rounded-full border-4 border-white/20 object-cover" />
                 ) : (
-                  <div className="w-40 h-40 rounded-full border-4 border-white/20 bg-black/40 flex items-center justify-center">
-                    <User className="w-20 h-20 text-white/40" />
+                  <div className="w-24 h-24 sm:w-40 sm:h-40 rounded-full border-4 border-white/20 bg-black/40 flex items-center justify-center">
+                    <User className="w-12 h-12 sm:w-20 sm:h-20 text-white/40" />
                   </div>
                 )}
                 <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Upload className="w-12 h-12 text-white" />
+                  <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-white" />
                 </div>
               </label>
-              {errors.tokenImage && <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>{errors.tokenImage}</div>}
+              {/* TODO(sheets): from sm up this note and the personal token note below are
+                  both absolute at top-full, so with both showing (a refused picture on a
+                  character in no campaign) one is drawn over the other. Right: one
+                  positioned box under the portrait holding both, one under the other. */}
+              {errors.tokenImage && <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>{errors.tokenImage}</div>}
               {!character.campaignId && (
-                <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
+                <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>
                   Saves as personal token
                 </div>
               )}
@@ -1035,7 +1036,7 @@ id="pf2e-level" min={1} max={20} value={formData.level} onChange={(v: number) =>
             </div>
           </div>
 
-          <div className="text-right space-y-2">
+          <div className="sm:text-right space-y-2">
             <label htmlFor="pf2e-experience" className="block text-xs opacity-70">Experience Points</label>
             <NumberField
 id="pf2e-experience" min={0} value={formData.experiencePoints} onChange={(v: number) => updateField('experiencePoints', v)} className={`w-24 text-xl font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`} fallback={0} />
@@ -1047,22 +1048,6 @@ id="pf2e-hero-points" min={0} max={3} value={formData.heroPoints} onChange={(v: 
       </div>
     );
   };
-
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          // The underline in the header colour; the label in the theme's text.
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center space-x-2 px-4 py-3 font-medium transition-colors ${isActive ? 'text-ink border-b-2 -mb-0.5 bg-paper' : 'text-ink-secondary hover:text-ink hover:bg-ink/10'}`} style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : selectedColor.hex } : undefined}>
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   const renderStatsTab = () => (
     <div className="space-y-6">
@@ -1978,9 +1963,9 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
-      {renderTabs()}
+      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : selectedColor.hex} />
       {refusals.length > 0 && (
-        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+        <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
           <ul className="list-disc pl-5">
             {refusals.map((message) => (
@@ -1990,12 +1975,12 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
         </div>
       )}
       {openingChanges.length > 0 && (
-        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
+        <p role="status" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
           Some numbers on this sheet changed to follow the rules as it opened: {openingChanges.join(', ')}. Saving
           keeps the new values.
         </p>
       )}
-      <div className="p-6">
+      <div data-sheet-body className="p-3 sm:p-6">
         {activeTab === 'stats' && renderStatsTab()}
         {activeTab === 'combat' && renderCombatTab()}
         {activeTab === 'spells' && renderSpellsTab()}
@@ -2004,7 +1989,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
         {activeTab === 'bio' && renderBioTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
+        <div className="px-3 sm:px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
       )}
     </div>
   );

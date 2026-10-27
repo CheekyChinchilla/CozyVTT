@@ -22,7 +22,7 @@ import { parseRgb, readableTextOn, relativeLuminance } from '@/utils/color';
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
 const header = (container: HTMLElement) => {
-  const found = container.querySelector<HTMLElement>('.p-6.rounded-t-lg');
+  const found = container.querySelector<HTMLElement>('[data-sheet-header]');
   if (!found) throw new Error('no header');
   return found;
 };

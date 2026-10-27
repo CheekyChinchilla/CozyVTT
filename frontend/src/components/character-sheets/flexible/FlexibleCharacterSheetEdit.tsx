@@ -201,13 +201,15 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   };
 
   return (
-    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-6">
-      {/* Header with Save/Cancel */}
-      <div className="flex items-center justify-between pb-4 border-b border-moss-green/20 mb-6">
-        <div className="flex items-center gap-4">
-          {/* Token Image Upload */}
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-3 sm:p-6">
+      {/* Header with Save/Cancel, which go under the name where the row is
+          too narrow for both */}
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-moss-green/20 mb-6">
+        <div className="flex items-center gap-4 min-w-0">
+          {/* Token Image Upload, as wide as the portrait so its caption wraps
+              under it on a phone */}
           {allowTokenPicture && (
-          <div className="relative group">
+          <div className="relative group w-16 shrink-0">
             <input
               type="file"
               id="token-upload-flexible"
@@ -234,13 +236,17 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
                 <Upload className="w-6 h-6 text-white" />
               </div>
             </label>
+            {/* TODO(sheets): from sm up this note and the personal token note below are
+                both absolute at top-full, so with both showing (a refused picture on a
+                character in no campaign) one is drawn over the other. Right: one
+                positioned box under the portrait holding both, one under the other. */}
             {tokenError && (
-              <div className="absolute top-full mt-1 text-xs text-danger-ink whitespace-nowrap">
+              <div className="mt-1 text-xs text-danger-ink sm:absolute sm:top-full sm:whitespace-nowrap">
                 {tokenError}
               </div>
             )}
             {!character.campaignId && (
-              <div className="absolute top-full mt-1 text-xs text-warning-ink whitespace-nowrap">
+              <div className="mt-1 text-xs text-warning-ink sm:absolute sm:top-full sm:whitespace-nowrap">
                 Saves as personal token
               </div>
             )}

@@ -25,7 +25,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table as before until someone chooses a person.
 - **Reload any page left open through the upgrade.** Until then it shows a whisper to you as an ordinary message; only you and its sender are sent it.
-- **On a phone or a tablet, the map's toolbar, the menus and some buttons are bigger.** With a mouse they look as before.
+- **On a phone or a tablet, the map's toolbar, the menus and some buttons are bigger, and the text in boxes and drop-down lists is at least 16 pixels high.** With a mouse they look as before.
 
 ### Added
 
@@ -89,6 +89,14 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **The map's toolbar fits a narrow map.** Where the map was narrower than the toolbar, as in a window 1,024 pixels wide with both side panels open, the toolbar's last buttons ran off the map's edge; where it was a little wider, the **Spirit Realm** label or the DM's tool panels could cover the toolbar's end. The toolbar now wraps onto a second row, and the **AoE Shape** panel and the tool panels start below that row; wherever the label or the tool panels would cover the toolbar, they start below it too. Everywhere else nothing moves.
 
 - **The dashboard fits a phone narrower than 400 pixels when you are an administrator.** The header's Refresh, Admin, Logout and profile buttons stayed on one line beside the title, so on a Pixel 10 or an iPhone the whole page scrolled sideways. They now move below the title when the line is too narrow for both.
+
+- **Character sheets fit a phone.** A character's sheet and its editor opened as a window with a margin, a border and padded edges at every size, so on a phone about two thirds of the screen's width was left for the sheet. On a screen less than 640 pixels wide, or less than 500 pixels tall such as a phone turned sideways, they now take the whole screen with a smaller header and footer; on a wider and taller screen they open as before. On a phone or a tablet their close buttons are 44 by 44 pixels. On a phone the **Edit** button sits above the name, and the experience, hero points or player go under it. In an editor the portrait goes above the name with **Saves as personal token** under it; in the D&D 5e and Pathfinder 2e editors it is 96 pixels across, where it was 160. A sheet leaves 12 pixels at its edges on a phone, where it left 24.
+
+- **Every tab of a character sheet can be reached on a phone.** The row of tabs on the D&D 5e and Call of Cthulhu sheets and on the D&D 5e, Pathfinder 2e and Call of Cthulhu editors never wrapped, so where it was wider than the sheet its last tabs, such as **Biography** and **Backstory**, were cut off and could not be reached: on a phone, and for the D&D 5e and Pathfinder 2e rows on an iPad held upright too. The tabs now go onto a second row, or a third, where they do not fit on one.
+
+- **The My Characters page and the page a character is edited on no longer scroll sideways on a phone.** The buttons in their headers, and **Import** and **Create Character** on **My Characters**, stayed on one line beside the title. They now go under it where the line is too narrow for both.
+
+- **Tapping a box on an iPhone or an iPad no longer zooms the page.** Safari zooms in when a text box, a drop-down list or a text area with text smaller than 16 pixels is tapped, and the page stays zoomed after you leave the box. Most boxes on a character sheet were that small, and many on the campaign page too. On a phone or a tablet their text is now 16 pixels, and a box with bigger text, such as a sheet's name, keeps its size. With a mouse nothing changes.
 
 ## [1.5.4] - 2026-10-25
 

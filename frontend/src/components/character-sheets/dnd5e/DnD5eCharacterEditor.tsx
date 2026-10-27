@@ -79,6 +79,7 @@ import {
 } from '@/constants/sheetLimits';
 import { COLOR_PRESETS } from './colorPresets';
 import Button from '@/components/ui/Button';
+import { SheetTabs, type SheetTab } from '../SheetTabs';
 
 /**
  * The sheet as this editor holds it.
@@ -127,13 +128,7 @@ function tabOfError(key: string): TabId | null {
  */
 const NOT_IN_SUMMARY = new Set(['submit', 'tokenImage', 'themeColor']);
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
   { id: 'spells', label: 'Spells', icon: Sparkles },
@@ -1170,11 +1165,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     const headerHintColor = ink.soft;
 
     const headerClasses = isCustomColor
-      ? `${headerTextColor} p-6 rounded-t-lg relative`
-      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+      ? `${headerTextColor} p-3 sm:p-6 rounded-t-lg relative`
+      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-3 sm:p-6 rounded-t-lg relative`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Save and Cancel Buttons */}
         <div className="flex justify-end items-center space-x-2 mb-4 mr-12 sm:absolute sm:top-4 sm:right-16 sm:mb-0 sm:mr-0">
           {/* Fixed colours: the header is the player's colour, not the theme's. */}
@@ -1280,16 +1275,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* From sm up, pr-64 reserves the strip the absolutely-positioned
           Save/Cancel cluster and palette button occupy above. Without it the
           Experience Points field sits underneath them. On a phone the cluster
-          is in the flow above this row instead, where a tap reaches it. */}
-      <div className="flex items-start justify-between sm:pr-64">
+          is in the flow above this row instead, where a tap reaches it, and
+          the portrait, the name and the experience are one column. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-0 sm:pr-64">
         {/* min-w-0 so this column can shrink. Flex children default to
             min-width:auto, which lets the character-name input push out past
             the reserved padding on a narrow window and back under the
             buttons. */}
-        <div className="flex items-start space-x-4 min-w-0">
-          {/* Token Image Upload */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start min-w-0">
+          {/* Token Image Upload. As wide as the portrait, so its caption
+              wraps under it on a phone. */}
           {allowTokenPicture && (
-          <div className="shrink-0 relative group">
+          <div className="shrink-0 relative group w-24 sm:w-40">
             <input
               type="file"
               id="token-upload"
@@ -1305,24 +1302,28 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 <img
                   src={tokenImagePreview}
                   alt={formData.characterName || 'Character'}
-                  className="w-40 h-40 rounded-full border-4 border-white/20 object-cover"
+                  className="w-24 h-24 sm:w-40 sm:h-40 rounded-full border-4 border-white/20 object-cover"
                 />
               ) : (
-                <div className="w-40 h-40 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center">
-                  <User className="w-20 h-20 text-white/40" />
+                <div className="w-24 h-24 sm:w-40 sm:h-40 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center">
+                  <User className="w-12 h-12 sm:w-20 sm:h-20 text-white/40" />
                 </div>
               )}
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Upload className="w-12 h-12 text-white" />
+                <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-white" />
               </div>
             </label>
+            {/* TODO(sheets): from sm up this note and the personal token note below are
+                both absolute at top-full, so with both showing (a refused picture on a
+                character in no campaign) one is drawn over the other. Right: one
+                positioned box under the portrait holding both, one under the other. */}
             {errors.tokenImage && (
-              <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
+              <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>
                 {errors.tokenImage}
               </div>
             )}
             {!character.campaignId && (
-              <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
+              <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>
                 Saves as personal token
               </div>
             )}
@@ -1399,7 +1400,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           </div>
         </div>
 
-        <div className="text-right space-y-1">
+        <div className="sm:text-right space-y-1">
           <label htmlFor="dnd5e-experience" className="block text-xs opacity-70">Experience Points</label>
           <NumberField
             id="dnd5e-experience"
@@ -1414,35 +1415,6 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     </div>
     );
   };
-
-  // Render tabs
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            aria-current={isActive ? 'page' : undefined}
-            className={`
-              flex items-center space-x-2 px-4 py-3 font-medium transition-colors
-              ${isActive
-                ? 'text-ink border-b-2 -mb-0.5 bg-paper'
-                : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
-              }
-            `}
-            // The underline in the header colour; the label in the theme's text.
-            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : selectedColor.hex } : undefined}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   // Render Stats & Skills tab
   const renderStatsTab = () => (
@@ -3318,9 +3290,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
-      {renderTabs()}
+      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : selectedColor.hex} />
       {refusals.length > 0 && (
-        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+        <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
           <ul className="list-disc pl-5">
             {refusals.map((message) => (
@@ -3330,12 +3302,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         </div>
       )}
       {broughtWithinRange.length > 0 && (
-        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
+        <p role="status" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
           Some numbers were outside what a sheet can store and now show within it:{' '}
           {broughtWithinRange.join(', ')}. Saving keeps the new values.
         </p>
       )}
-      <div className="p-6">
+      <div data-sheet-body className="p-3 sm:p-6">
         {activeTab === 'stats' && renderStatsTab()}
         {activeTab === 'combat' && renderCombatTab()}
         {activeTab === 'spells' && renderSpellsTab()}
@@ -3344,7 +3316,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         {activeTab === 'bio' && renderBiographyTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
+        <div className="px-3 sm:px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
       )}
     </div>
   );

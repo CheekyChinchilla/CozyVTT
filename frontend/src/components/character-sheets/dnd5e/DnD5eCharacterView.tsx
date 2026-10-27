@@ -48,6 +48,7 @@ import { readProficiencyGroups } from '../../../utils/proficiencies';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
+import { SheetTabs, type SheetTab } from '../SheetTabs';
 
 interface DnD5eCharacterViewProps {
   character: Character;
@@ -71,13 +72,7 @@ interface RollPopupState {
 
 type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'features' | 'bio';
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
   { id: 'spells', label: 'Spells', icon: Sparkles },
@@ -160,16 +155,16 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     // editor chooses it.
     const ink = headerInk(isCustomColor ? customColorHex : themeColor.hex);
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative`
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Edit Button */}
         {onEdit && (
           <button
             onClick={onEdit}
-            className={`absolute top-4 right-4 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium`}
+            className={`ml-auto mb-3 w-fit sm:absolute sm:top-4 sm:right-4 sm:mb-0 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium`}
             title="Edit character"
           >
             <Edit className="w-4 h-4" />
@@ -177,8 +172,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           </button>
         )}
 
-      <div className="flex items-start justify-between pr-24">
-        <div className="flex items-start space-x-4">
+      {/* Below sm, Edit is in the flow above this row and the experience
+          goes under the name; from sm up the row clears the corner Edit sits in. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0 sm:pr-24">
+        <div className="flex items-start space-x-4 min-w-0">
           {/* Token Image */}
           <div className="shrink-0">
             {character.tokenImageUrl ? (
@@ -195,9 +192,9 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           </div>
 
           {/* Character Info */}
-          <div>
+          <div className="min-w-0">
             <h2 className="text-3xl font-bold mb-1">{data.characterName || 'Unnamed Character'}</h2>
-            <div className={`flex items-center space-x-4 ${ink.soft}`}>
+            <div className={`flex flex-wrap items-center gap-x-4 ${ink.soft}`}>
               <span>
                 Level {data.level} {data.race} {data.class}
               </span>
@@ -209,7 +206,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
         </div>
 
         {data.experiencePoints !== undefined && (
-          <div className="text-right">
+          <div className="sm:text-right">
             <div className={`text-xs ${ink.soft}`}>Experience</div>
             <div className="text-xl font-bold">{data.experiencePoints.toLocaleString()}</div>
           </div>
@@ -218,34 +215,6 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     </div>
     );
   };
-
-  // Render tabs
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              flex items-center space-x-2 px-4 py-3 font-medium transition-colors
-              ${isActive
-                ? 'text-ink border-b-2 -mb-0.5 bg-paper'
-                : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
-              }
-            `}
-            // The underline in the header colour; the label in the theme's text.
-            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   // Render Stats & Skills tab
   const renderStatsTab = () => (
@@ -812,8 +781,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   return (
     <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
       {renderHeader()}
-      {renderTabs()}
-      <div className="p-6">{renderTabContent()}</div>
+      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
+      <div data-sheet-body className="p-3 sm:p-6">{renderTabContent()}</div>
 
       {/* Advantage / Disadvantage popup (shown on right-click of any rollable stat) */}
       {rollPopup && (

@@ -187,11 +187,13 @@ export default function CharactersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-dvh bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <header className="bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-6">
+          {/* Wraps so the buttons drop below the title on a phone narrower
+              than both, as the dashboard's header does. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 py-6">
             {/* Left: Logo + Title */}
             <div className="flex items-center gap-4">
               <button
@@ -251,7 +253,7 @@ export default function CharactersPage() {
 
           {/* Create Character Section */}
           <section>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-6">
               <h2 className="text-2xl font-semibold text-brand-ink font-heading">
                 Your Characters
                 {!loading && (

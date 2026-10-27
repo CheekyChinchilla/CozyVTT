@@ -70,6 +70,7 @@ import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { COLOR_PRESETS } from './colorPresets';
+import { SheetTabs, type SheetTab } from '../SheetTabs';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -91,13 +92,7 @@ type TabId = 'overview' | 'skills' | 'combat' | 'possessions' | 'backstory';
 /** The required names Save checks, whose old messages a new check replaces. */
 const REQUIRED_NAMES_CHECKED = { occupation: true, era: true };
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'overview', label: 'Overview', icon: User },
   { id: 'skills', label: 'Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
@@ -545,11 +540,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       : 'bg-white/10 border-white/30 placeholder:text-white/50 focus:ring-white/60';
     const refusedBox = dark ? 'border-2 border-black' : 'border-2 border-white';
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative border-b-4 ${ink.border}`
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${ink.border}`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Color Picker Button */}
         <button
           onClick={() => setShowColorPicker(!showColorPicker)}
@@ -655,11 +650,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       {/* sm:pr-64, matching the other sheets: from sm up the absolute
           Save/Cancel cluster is 203px wide and starts 64px in, so it needs
           more clearance than the pr-48 that was here. On a phone the cluster
-          is in the flow above this row instead. */}
-      <div className="flex items-start space-x-4 sm:pr-64">
-        {/* Token Image */}
+          is in the flow above this row instead, and the portrait is above the
+          name. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:pr-64">
+        {/* Token Image, as wide as the portrait so its caption wraps under it
+            on a phone. */}
         {allowTokenPicture && (
-        <div className="shrink-0 relative">
+        <div className="shrink-0 relative w-24">
           <label htmlFor="token-upload" className="cursor-pointer group">
             {tokenImagePreview ? (
               <img
@@ -680,13 +677,17 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             onChange={handleTokenImageChange}
             className="hidden"
           />
+          {/* TODO(sheets): from sm up this note and the personal token note below are
+              both absolute at top-full, so with both showing (a refused picture on a
+              character in no campaign) one is drawn over the other. Right: one
+              positioned box under the portrait holding both, one under the other. */}
           {errors.tokenImage && (
-            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
+            <div className={`mt-1 text-xs ${ink.soft} sm:absolute sm:top-full sm:whitespace-nowrap`}>
               {errors.tokenImage}
             </div>
           )}
           {!character.campaignId && (
-            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
+            <div className={`mt-1 text-xs ${ink.soft} sm:absolute sm:top-full sm:whitespace-nowrap`}>
               Saves as personal token
             </div>
           )}
@@ -694,8 +695,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         )}
 
         {/* Character Info — min-w-0 alongside flex-1 so the column can shrink
-            below its content width and stay inside the reserved padding. */}
-        <div className="flex-1 min-w-0 space-y-3">
+            below its content width and stay inside the reserved padding. In
+            the phone's column it simply takes the full width. */}
+        <div className="sm:flex-1 min-w-0 space-y-3">
           <input
             type="text"
             value={formData.investigatorName || ''}
@@ -706,7 +708,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             className={`text-3xl font-bold border-2 ${box} rounded-sm px-3 py-1 w-full ${ink.text} focus:outline-hidden focus:ring-2`}
           />
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Read-only: the player name is whoever owns this investigator,
                 filled from their display name at creation. */}
             <span className={`text-sm px-2 py-1 ${ink.text} self-center`}>
@@ -732,7 +734,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             />
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {/* TODO(typing): the age is stored as text and handed to this number box
                 as it is, which shows text that is not a number as blank. Right:
                 decide what such text should show, then pass the box a number. */}
@@ -778,35 +780,6 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     </div>
     );
   };
-
-  // Render tabs
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              flex items-center space-x-2 px-4 py-3 font-medium transition-colors
-              ${
-                isActive
-                  ? 'text-ink border-b-2 -mb-0.5 bg-paper'
-                  : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
-              }
-            `}
-            // The underline in the header colour; the label in the theme's text.
-            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   // Render Overview tab
   const renderOverviewTab = () => (
@@ -1364,9 +1337,9 @@ value={formData.wealth?.cash}
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
-      {renderTabs()}
+      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
       {refusals.length > 0 && (
-        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+        <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
           <ul className="list-disc pl-5">
             {refusals.map((message) => (
@@ -1375,7 +1348,7 @@ value={formData.wealth?.cash}
           </ul>
         </div>
       )}
-      <div className="p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
+      <div data-sheet-body className="p-3 sm:p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}
@@ -1383,7 +1356,7 @@ value={formData.wealth?.cash}
         {activeTab === 'backstory' && renderBackstoryTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 py-3 text-sm text-danger-ink bg-paper">{errors.submit}</div>
+        <div className="px-3 sm:px-6 py-3 text-sm text-danger-ink bg-paper">{errors.submit}</div>
       )}
     </div>
   );
