@@ -132,6 +132,11 @@ def function_body(code, i):
     i = FUNCTION_START.match(code, i).end()
     if re.compile(r'function\b').match(code, i):
         params = code.find('(', i)
+        # TODO(docs): the body is taken to start at the first `{` after the
+        # parameters, which for `function f(): Promise<{ ok: boolean }> {` is
+        # the return type's, so the gates in the real body go unseen and the
+        # handler that calls f reads "Any member". Right: step over a return
+        # type annotation before looking for the body's brace.
         start = code.find('{', closing(code, params)) if params != -1 else -1
         return (start, closing(code, start) + 1, True) if start != -1 else None
     if code.startswith('(', i):
