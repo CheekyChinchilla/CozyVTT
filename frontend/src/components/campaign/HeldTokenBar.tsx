@@ -31,14 +31,17 @@ interface HeldTokenBarProps {
 export default function HeldTokenBar({ name, onPutBack, top = null, ref }: HeldTokenBarProps) {
   return (
     <div
-      className="absolute top-20 left-1/2 -translate-x-1/2 z-40 glass-panel bg-parchment/95 backdrop-blur-xs shadow-lg px-3 py-2 flex items-center gap-3 max-w-[calc(100%-2rem)]"
+      // As wide as it needs, up to the map's width less a margin each side:
+      // placed from the map's middle, it would otherwise stop at the half to
+      // its right. A long name is cut short; Put back keeps its one line.
+      className="absolute top-20 left-1/2 -translate-x-1/2 z-40 glass-panel bg-parchment/95 backdrop-blur-xs shadow-lg px-3 py-2 flex items-center gap-3 w-max max-w-[calc(100%-2rem)]"
       style={top !== null ? { top } : undefined}
       ref={ref}
     >
       <p className="text-sm text-stone-gray min-w-0 truncate">
         Holding <span className="font-semibold text-brand-ink">{name}</span>
       </p>
-      <Button variant="secondary" size="sm" onClick={onPutBack}>
+      <Button variant="secondary" size="sm" className="shrink-0 whitespace-nowrap" onClick={onPutBack}>
         Put back
       </Button>
     </div>

@@ -35,6 +35,30 @@ describe('HeldTokenBar', () => {
   });
 });
 
+describe('HeldTokenBar with a long name', () => {
+  // On a narrow tablet the bar ran out of room: the name was cut short, as
+  // it should be, but Put back broke onto two lines. The button keeps its
+  // width and its one line; the name gives way.
+  it('cuts the name short and keeps Put back on one line', () => {
+    render(<HeldTokenBar name="Ser Bartholomew the Unyielding, Warden of the Sunken Crown" onPutBack={() => undefined} />);
+    const putBack = screen.getByRole('button', { name: 'Put back' }).className.split(/\s+/);
+    const name = screen.getByText(/^Holding/).className.split(/\s+/);
+
+    expect(putBack).toEqual(expect.arrayContaining(['shrink-0', 'whitespace-nowrap']));
+    expect(name).toEqual(expect.arrayContaining(['min-w-0', 'truncate']));
+  });
+
+  // Placed from the map's middle, the bar was as wide as the half to its
+  // right allowed, so the name was cut at half the map's width. It is as
+  // wide as it needs, up to the map's width less a margin each side.
+  it('may be as wide as the map, less its margins, before the name gives way', () => {
+    const { container } = render(<HeldTokenBar name="Goblin Scout" onPutBack={() => undefined} />);
+
+    expect((container.firstElementChild as HTMLElement).className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['w-max', 'max-w-[calc(100%-2rem)]']));
+  });
+});
+
 describe('HeldTokenBar on a touch screen', () => {
   // On a narrow tablet the bar and the DM's tool stack (z-30) meet under the
   // toolbar, and the stack covered Put back.
