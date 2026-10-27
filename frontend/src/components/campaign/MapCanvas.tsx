@@ -500,10 +500,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   // Put a held token back where it was picked up. The per-frame moves told
   // every other client where the cursor went; without this release they keep
-  // showing the last cursor position until the token next moves.
+  // showing the last cursor position until the token next moves. On the map
+  // it was picked up on, it goes back to the square this page last heard of,
+  // which someone else's move may have changed since.
   const cancelHold = () => {
     if (draggedToken && currentMap && canEmit()) {
-      socket!.emitTokenMove(releaseHeldToken(draggedToken, heldOnMapRef.current ?? currentMap.id));
+      const onItsMap = (heldOnMapRef.current ?? currentMap.id) === currentMap.id;
+      const home = (onItsMap ? useGameStore.getState().tokens[draggedToken.id] : undefined) ?? draggedToken;
+      socket!.emitTokenMove(releaseHeldToken(home, heldOnMapRef.current ?? currentMap.id));
     }
     setDraggedToken(null);
     setDragOffset(null);
@@ -521,6 +525,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     useGameStore.getState().selectToken(null);
     setFollowedTokenId(null);
   }, [currentMap?.id]);
+  /**
+   * Let go of a held token this page has been told is gone from the map it
+   * was picked up on, sending nothing, since there is nothing left to put
+   * down or put back: `token:disappeared` took it out of this player's
+   * sight, or a `map.changed` for that map no longer carries it (the DM
+   * removed it, hid it or moved it to another map). A finger or a pen can
+   * hold a token for as long as it likes, so this can happen mid-hold. A
+   * token list replaced for another map is the map switch's: it puts the
+   * token back on the map it came from.
+   */
+  const letGoIfGone = useEffectEvent((mapId: string, stillThere: (tokenId: string) => boolean) => {
+    if (!draggedToken || heldOnMapRef.current !== mapId || stillThere(draggedToken.id)) return;
+    setDraggedToken(null);
+    setDragOffset(null);
+  });
 
   // The wall tools, with the wall selection (map/tools/useWallTool.ts).
   const {
@@ -898,6 +917,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!socket) return;
 
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
+      letGoIfGone(mapData.id, (tokenId) => (mapData.tokens ?? []).some((t) => t.id === tokenId));
       setCurrentMap(mapData);
       useGameStore.getState().setTokens(mapData.tokens || []);
 
@@ -1140,6 +1160,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // Dynamic lighting: token left this player's view
     const handleTokenDisappeared = (data: { tokenId: string; mapId: string }) => {
       if (!currentMapId || data.mapId !== currentMapId) return;
+      letGoIfGone(data.mapId, (tokenId) => tokenId !== data.tokenId);
       useGameStore.getState().removeToken(data.tokenId);
     };
 

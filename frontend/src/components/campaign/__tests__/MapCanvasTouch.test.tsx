@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import type { CampaignMap, Token } from '@/types';
+import { TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
 
@@ -85,6 +85,8 @@ vi.mock('@/contexts/WebSocketContext', async () => {
   const record = (event: string) => (payload: unknown) => { h.sent.push([event, payload]); };
   const client = new Proxy({
     getSocket: () => h.raw,
+    onMapChanged: (cb: (data: never) => void) => { h.raw.on('map.changed', cb); },
+    off: (event: string, cb: (data: never) => void) => { h.raw.off(event, cb); },
     emitTokenMoveStart: record('token.move.start'),
     emitTokenMove: record('token.move'),
     emitTokenMoveEnd: record('token.move.end'),
@@ -145,10 +147,10 @@ function mapWith(extra: Partial<CampaignMap> = {}): CampaignMap {
 }
 
 /** A one-square token; grid y counts up from the bottom row, 0, to the top, 19. */
-function token(id: string, name: string, x: number, y: number): Token {
+function token(id: string, name: string, x: number, y: number, extra: Partial<Token> = {}): Token {
   return {
     id, name, imageUrl: '', position: { x, y }, size: { width: 1, height: 1 },
-    layer: 'token', visible: true, type: 'npc', conditions: [],
+    layer: 'token', visible: true, type: 'npc', conditions: [], ...extra,
   } as unknown as Token;
 }
 
@@ -281,6 +283,80 @@ describe('a token picked up by a tap', () => {
     second.down(surface(), square(3, 19));
     second.up(surface(), square(3, 19));
     expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 19 }]);
+  });
+});
+
+describe('a held token that leaves the map', () => {
+  // Since a finger or a pen can hold a token for as long as it likes, the DM
+  // can remove, hide or move it meanwhile. The page must not go on holding a
+  // token it no longer has, and send its put-down.
+  it('is let go when the DM removes it, and the next tap sends nothing for it', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19), token('tok-wolf', 'Wolf', 9, 9));
+    tap(1, square(0, 19));
+    expect(sentOf('token.move.start')).toHaveLength(1);
+
+    // The map the server sends after the removal no longer has it.
+    fire('map.changed', { mapId: 'map-a', mapData: mapWith({ tokens: [token('tok-wolf', 'Wolf', 9, 9)] }) });
+    tap(2, square(3, 19));
+
+    expect(sentOf('token.move.end')).toEqual([]);
+    expect(sentOf('token.move')).toEqual([]);
+  });
+
+  it('is let go when the server takes it out of sight, and the next tap sends nothing for it', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
+    tap(1, square(0, 19));
+    expect(sentOf('token.move.start')).toHaveLength(1);
+
+    fire('token:disappeared', { tokenId: 'tok-mine', mapId: 'map-a' });
+    tap(2, square(3, 19));
+
+    expect(sentOf('token.move.end')).toEqual([]);
+    expect(sentOf('token.move')).toEqual([]);
+  });
+
+  it('stays held through a resend of its map that still has it', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    tap(1, square(0, 19));
+
+    fire('map.changed', { mapId: 'map-a', mapData: mapWith({ tokens: [token('tok-goblin', 'Goblin', 0, 19)] }) });
+    tap(2, square(3, 19));
+
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 19 }]);
+  });
+
+  // A switch replaces the token list too, and the list can arrive a render
+  // before the map: the hold is the switch's to end, by putting the token
+  // back on the map it came from.
+  it('goes back on the map it came from when the token list for the next map arrives first', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    const pen = contact('pen', 5);
+    pen.down(surface(), square(0, 19));
+    pen.up(surface(), square(0, 19));
+    pen.move(surface(), square(3, 19), { buttons: 0 });
+
+    act(() => { useGameStore.getState().setTokens([token('tok-x', 'X', 1, 1)]); });
+    act(() => { h.set({ currentMap: { ...mapWith(), id: 'map-b', name: 'Map B' } as unknown as CampaignMap }); });
+
+    expect(sentOf('token.move').slice(-1)).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
+  });
+
+  it('goes back to the square the table last saw it on, after someone else moved it', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    tap(1, square(0, 19));
+
+    // Another page put it down on (5, 10) while this one held it.
+    act(() => { useGameStore.getState().applyTokenMove('tok-goblin', { x: 5, y: 10 }); });
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 5, y: 10 }]);
+    expect(sentOf('token.move.end')).toEqual([]);
   });
 });
 
