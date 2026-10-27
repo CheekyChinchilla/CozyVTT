@@ -7358,8 +7358,11 @@ paths:
         token layer`). A spectator may not
         update a token at all, even one that still names them from before they
         were demoted. While the session is paused or has ended (campaign status
-        `PAUSED` or `INACTIVE`), a player's `position` change answers 403; the
-        DM may move tokens at any time. On a map the campaign is not showing, a
+        `PAUSED` or `INACTIVE`), a player's `position` or `rotation` change
+        answers 403 (`Players cannot move tokens while the session is paused
+        or ended`) and nothing in the request is stored; their `conditions`
+        alone still go through, and the DM may move and turn tokens at any
+        time. On a map the campaign is not showing, a
         player's update answers 404, as fetching that map does, even for a
         token they control; the DM may update tokens on any map. A token on
         the spirit plane answers 403 (`You cannot interact with spirit layer

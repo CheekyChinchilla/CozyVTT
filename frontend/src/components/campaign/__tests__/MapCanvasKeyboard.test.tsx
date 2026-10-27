@@ -1213,3 +1213,33 @@ describe("the map's focus stop", () => {
     expect(sentOf('map.ping')).toHaveLength(1);
   });
 });
+
+describe('turning while the session is paused or ended', () => {
+  it.each(['PAUSED', 'INACTIVE'])("sends no turn for a player's own token while %s, from the keys or the menu", async (status) => {
+    h.set({ userRole: 'PLAYER', status });
+    render(<MapCanvas />);
+    show(mine(2, 10), token('tok-hero', 'Brannoc', 6, 10, { controlledBy: 'me', characterId: 'char-1' }));
+    select('tok-mine');
+
+    await act(async () => { press(']'); });
+    expect(h.updateToken).not.toHaveBeenCalled();
+
+    // Neither token's menu offers a turn.
+    fireEvent.contextMenu(surface(), at(2, 10));
+    expect(screen.queryByText('Rotate Right')).not.toBeInTheDocument();
+    fireEvent.contextMenu(surface(), at(6, 10));
+    expect(screen.queryByText('Rotate Right')).not.toBeInTheDocument();
+  });
+
+  it('lets the DM turn any token at any time', async () => {
+    h.set({ status: 'PAUSED' });
+    render(<MapCanvas />);
+    show(goblin());
+    select('tok-goblin');
+
+    await act(async () => { press(']'); });
+    expect(h.updateToken).toHaveBeenCalledWith('campaign-1', 'map-a', 'tok-goblin', { rotation: 45 });
+    fireEvent.contextMenu(surface(), at(0, 19));
+    expect(screen.getByText('Rotate Right')).toBeInTheDocument();
+  });
+});

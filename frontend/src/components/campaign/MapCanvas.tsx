@@ -2600,10 +2600,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const canRollForToken = (token: Token): boolean => canRollTokenCharacter(user, campaign, token);
 
   /**
-   * Whether this viewer may turn a token: the DM any token, anyone else a
-   * token they control, as for moving it. The server checks the same.
+   * Whether this viewer may turn a token: by the move rule, the DM any token
+   * at any time, a player a token they control while the session is live.
+   * The server checks the same.
    */
-  const canRotateToken = (token: Token): boolean => isDM || controlsToken(token, user?.id, userRole);
+  const canRotateToken = canMoveToken;
 
   /**
    * Whether the token menu offers this viewer anything. The DM always has the
@@ -3689,7 +3690,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           )}
 
           {/* Rotate Left / Right: the DM on any token, a player on a token
-              they control. The menu stays open so presses add up. */}
+              they control while the session is live. The menu stays open so
+              presses add up. */}
           {canRotateToken(contextMenu.token) && (
             <>
               <button

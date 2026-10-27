@@ -286,7 +286,7 @@ A token can face any direction, to show which way a creature is looking or a car
 - **Select the token and press [ or ]** to turn it 45 degrees anticlockwise or clockwise, held or not.
 - **For an exact angle,** open **Edit Token** and type it in **Facing**, in degrees clockwise: 0 is the picture as uploaded, 90 a quarter turn to the right. A full turn wraps round, so 405 becomes 45.
 
-The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
+The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu or with **[** and **]**, while the session is live; during a pause, as with moving, they can't. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
 
 #### Changing a Token's Image
 
@@ -766,7 +766,7 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
-- Disables token movement for players
+- Disables token movement for players, turning included
 - Shows players a banner above the map: *Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*

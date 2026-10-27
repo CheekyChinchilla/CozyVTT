@@ -62,7 +62,8 @@ export async function canHoldTokens(campaignId: string, userId: string): Promise
  * has ended, which is what the client greys the drag out for and the guides
  * promise; until the server asked too, a scripted client moved its token
  * straight through a pause. The same statuses the client checks, so the two
- * cannot disagree. Asked by the three move events and the REST token update.
+ * cannot disagree. Asked by the three move events and the REST token update,
+ * which asks it for a turn (`rotation`) too.
  */
 export function canMoveTokensNow(role: string | undefined, campaignStatus: string): boolean {
   if (role === 'DM') return true;
