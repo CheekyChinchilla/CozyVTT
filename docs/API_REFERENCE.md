@@ -423,6 +423,14 @@ Dice rolls are not chat messages and never appear here — see
 `GET /api/campaigns/:id/dice-rolls`, which is the only path that applies the
 secret-roll rules.
 
+A whisper (`type: "WHISPER"`) is returned only to the two people it is
+between: its sender (`userId`) and its recipient (`recipientId`, with
+`recipientName` and `recipient`). Whispers between other people are left out
+of every page, the DM's included. Every other message has `recipientId`,
+`recipientName` and `recipient` set to `null`. A whisper whose recipient's
+account was deleted has `recipientId: null` and is returned to its sender
+alone.
+
 ### `GET|POST /api/campaigns/:campaignId/macros`
 
 A player's saved dice rolls for one campaign. **Requires campaign membership.**

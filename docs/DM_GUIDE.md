@@ -805,6 +805,8 @@ As the DM, chat works the same as it does for players — type and hit Enter to 
 
 This is perfect for behind-the-screen perception checks, wandering monster rolls, and dramatic reveals.
 
+**Whispers.** Choose one member in the **To** list above the message box, or start a message with `/w` or `/whisper` and their name, and only the two of you see it (see [Whispering to one person](USER_GUIDE.md#whispering-to-one-person)). Your whispers keep the DM's shield, and players find you in a **DM** group of your own at the top of their **To** list, so nobody can pass for you by taking your name. Players can whisper to you and to each other, and a whisper between two players is theirs alone: you do not see it, live or in the chat history. Whispers are stored like all chat, so whoever runs the server can read them in its database and its backups. If someone uses whispers to harass another member, removing them from the campaign stops it at once (see [Removing a Player](#removing-a-player)).
+
 *Screenshot pending — Secret dice roll option.*
 
 ### The Vibe Tracker

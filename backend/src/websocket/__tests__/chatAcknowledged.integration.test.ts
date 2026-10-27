@@ -12,9 +12,9 @@
  * `clientId` again stores and sends nothing new and answers with the first
  * message's id, so a resend after a lost answer cannot post twice.
  *
- * Delivery is decided per member, which is where whispers will plug in; for
- * now every member is sent every message. A client that passes no
- * acknowledgement is refused with `error`, as before.
+ * Delivery is decided per member: a message to everyone reaches every
+ * member, and a whisper its two people alone (whisper.integration.test.ts).
+ * A client that passes no acknowledgement is refused with `error`, as before.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */

@@ -76,6 +76,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Communication
 - **Campaign chat** — in-session messaging between all members
+- **Whispers** — a chat message to one member, seen by the two of you alone, from the **To** list or with `/w` (or `/whisper`) and a name
 - **System messages** — automatic notices when a session starts, pauses, resumes or ends, when the DM changes the time of day, and when the spirit layer is revealed or hidden
 - **Personal notes** — private per-campaign notes in Markdown, with a rendered preview and autosave; readable only by their author, enforced server-side
 - **Documents** — upload a PDF, plain text or Markdown rulebook or handout, or write one in the app, and read it without leaving CozyVTT; a DM shares documents with a campaign, and every member reads them from inside the session; text and Markdown documents can be edited by their uploader

@@ -72,6 +72,31 @@ export function canMoveTokensNow(role: string | undefined, campaignStatus: strin
 /** What both channels answer a player who moves during a pause. */
 export const PAUSED_MOVE_REFUSAL = 'Players cannot move tokens while the session is paused or ended';
 
+// The answers to a whisper this refuses, worded beside the schema that also
+// gives one (validators/chat.ts).
+export { WHISPER_SELF_REFUSAL, WHISPER_RECIPIENT_REFUSAL } from '../validators/chat';
+
+/**
+ * Who a member may whisper to: any current member of the campaign but
+ * themselves, spectators and the DM included. The sender's own right is the
+ * right to chat, which every member has. Returns the recipient's id and
+ * display name, for the message sent to both, or null when they may not be
+ * whispered to. The chat handler refuses a whisper to oneself before asking,
+ * with its own answer; this refuses it too.
+ */
+export async function whisperRecipient(
+  campaignId: string,
+  senderId: string,
+  recipientId: string
+): Promise<{ id: string; displayName: string } | null> {
+  if (recipientId === senderId) return null;
+  const membership = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId: recipientId, campaignId } },
+    select: { user: { select: { id: true, displayName: true } } },
+  });
+  return membership?.user ?? null;
+}
+
 /**
  * May this member read this map: the DM any map of the campaign; anyone else
  * only the map the campaign is showing. A prepared map is the DM's until they

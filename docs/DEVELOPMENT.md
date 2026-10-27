@@ -625,7 +625,10 @@ Some of those deserve a note:
   box) differs between the two, when the campaign limits file
   (`backend/src/validators/campaignLimits.ts`, copied as
   `frontend/src/constants/campaignLimits.ts` for the campaign dialogs)
-  differs between the two, when the upload types file
+  differs between the two, when the chat limit file
+  (`backend/src/validators/chatLimits.ts`, copied as
+  `frontend/src/constants/chatLimits.ts` for the chat box) differs between
+  the two or the chat box writes the number itself, when the upload types file
   (`backend/src/validators/uploadTypes.ts`, copied as
   `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
   differs between the two,
@@ -633,6 +636,11 @@ Some of those deserve a note:
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when
   `campaign.access.revoked` has different fields or reasons on the two sides,
+  when `chat.message` has different fields on the two sides (the handler's
+  `ChatMessageBroadcast` against the frontend's), when the kinds of chat
+  message differ between `schema.prisma` and the frontend's `MessageType`,
+  when the frontend's `ChatMessageEvent` names other fields or types than
+  `ChatMessageSchema` takes,
   when `tokenCentre.ts` differs between them, when a `SESSION_SECRET=`
   example in an example file or a guide would start a production server,
   when the themes and fonts the server accepts differ from those the app

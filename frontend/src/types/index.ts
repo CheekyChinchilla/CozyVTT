@@ -59,6 +59,7 @@ export enum MessageType {
   SYSTEM = 'SYSTEM',
   DICE_ROLL = 'DICE_ROLL',
   CHARACTER_ACTION = 'CHARACTER_ACTION',
+  WHISPER = 'WHISPER',
 }
 
 export enum TokenLayer {
@@ -1026,6 +1027,13 @@ export interface Message {
   campaignId: string;
   userId: string | null;
   user?: MessageUser;
+  /**
+   * The one member a whisper is for. Null on a message to everyone, and on a
+   * whisper whose recipient's account was deleted. A copy still being sent
+   * carries it with the type that was asked for, so Retry sends it to them.
+   */
+  recipientId?: string | null;
+  recipient?: MessageUser | null;
   type: MessageType;
   content: string;
   metadata: MessageMetadata | null;
@@ -1380,15 +1388,19 @@ export interface DiceRolledSecretEvent extends DiceRolledEvent {
 }
 
 // Chat Events
+/** The `chat.message` the client sends; its fields and types are ChatMessageSchema's (keepInStep.test.ts). */
 export interface ChatMessageEvent {
   content: string;
-  type: MessageType;
+  /** The type asked for. The server decides the rest: a player's is PLAYER, and a whisper is WHISPER. */
+  type: MessageType.PLAYER | MessageType.DM;
   /**
    * The sender's own name for the message, 1 to 64 letters, digits, hyphens
    * or underscores. It comes back on the sender's copy of the broadcast, and
    * a message resent with it is stored and sent once.
    */
   clientId?: string;
+  /** Whisper the message to this member alone, by user id. */
+  recipientId?: string;
 }
 
 /** The server's answer to a `chat.message` sent with an acknowledgement. */
@@ -1406,6 +1418,7 @@ export interface ChatSystemBroadcast {
   timestamp: string;
 }
 
+/** The `chat.message` the server sends; its fields are held to the server's by keepInStep.test.ts. */
 export interface ChatMessageBroadcast {
   id: string;
   userId: string;
@@ -1413,6 +1426,9 @@ export interface ChatMessageBroadcast {
   content: string;
   type: MessageType;
   timestamp: string;
+  /** On a whisper: the one member it is for, beside its sender, and their name. */
+  recipientId?: string;
+  recipientName?: string;
   /** On the sender's own copy only: the `clientId` it was sent with. */
   clientId?: string;
 }

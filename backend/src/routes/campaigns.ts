@@ -1308,10 +1308,14 @@ router.get('/admin/all', adminOnly, async (_req: AuthenticatedRequest, res: Resp
  * Get chat messages for a campaign
  * Requires: Campaign member
  * Chat Messages - Load last 50 messages with pagination
+ *
+ * A whisper is sent to the two people it is between, its sender and its
+ * recipient, and to nobody else: the DM reads only their own.
  */
 router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
+    const userId = req.session.userId!;
     // `before` was once sent by the client and never read here. It is still
     // ignored rather than rejected, so an older client keeps working — it simply
     // gets the newest page, which is what it got before.
@@ -1354,18 +1358,29 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
         // these rows carry the flag only inside unindexed metadata, so serving
         // them here would leak hidden rolls.
         type: { not: 'DICE_ROLL' },
-        ...(cursor
-          ? {
-              // (createdAt, id) < (cursor.createdAt, cursor.id), spelled out
-              // because Prisma cannot express a row-value comparison.
-              OR: [
-                { createdAt: { lt: cursor.createdAt } },
-                { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-              ],
-            }
-          : {}),
+        // Each condition in its own OR, both under AND: two OR keys side by
+        // side would be one object key, and whichever came last would drop
+        // the other, the cursor or the whisper rule.
+        AND: [
+          // The type marks a whisper private and the recipient says who it is
+          // for. A whisper whose recipient's account was deleted has no
+          // recipient left, and stays its sender's alone.
+          { OR: [{ type: { not: 'WHISPER' } }, { userId }, { recipientId: userId }] },
+          ...(cursor
+            ? [
+                {
+                  // (createdAt, id) < (cursor.createdAt, cursor.id), spelled out
+                  // because Prisma cannot express a row-value comparison.
+                  OR: [
+                    { createdAt: { lt: cursor.createdAt } },
+                    { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+                  ],
+                },
+              ]
+            : []),
+        ],
       },
-      include: { user: { select: MESSAGE_USER_SELECT } },
+      include: { user: { select: MESSAGE_USER_SELECT }, recipient: { select: MESSAGE_USER_SELECT } },
       // createdAt alone is not unique — a burst of system messages lands in one
       // millisecond — and paging needs a total order or rows on the boundary are
       // skipped or repeated. The existing [campaignId, createdAt] index carries
@@ -1385,6 +1400,12 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
         user: msg.user ? {
           id: msg.user.id,
           displayName: msg.user.displayName,
+        } : null,
+        recipientId: msg.recipientId,
+        recipientName: msg.recipient?.displayName || null,
+        recipient: msg.recipient ? {
+          id: msg.recipient.id,
+          displayName: msg.recipient.displayName,
         } : null,
         content: msg.content,
         type: msg.type,

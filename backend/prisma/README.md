@@ -46,7 +46,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 22 models grouped by dom
 
 **Assets & messages**
 - `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN. When the uploader's account is deleted, `uploadedById` becomes null on the uploads that stay (those in a campaign or the global library, and personal ones still in use or shared into a campaign); the avatar and every other personal upload are deleted, row and file (`services/accountDeletion.ts`)
-- `Message` — chat history (player, DM, system, dice rolls, character actions)
+- `Message` — chat history (player, DM, system, dice rolls, character actions, whispers). A `WHISPER` is for one member, named in `recipientId`; when that account is deleted the column becomes null and the whisper stays
 - `DiceRoll` — historical dice rolls with breakdowns; `userId` becomes null when the roller's account is deleted, and the roll stays
 
 **Platform**
@@ -63,7 +63,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 22 models grouped by dom
 | `GameSystem` | `DND_5E`, `PATHFINDER_2E`, `SHADOWRUN_6E`, `CALL_OF_CTHULHU_7E` |
 | `AssetType` | `MAP`, `TOKEN`, `AUDIO`, `AVATAR`, `DOCUMENT`, `OTHER` |
 | `AssetScope` | `GLOBAL`, `USER`, `CAMPAIGN` |
-| `MessageType` | `PLAYER`, `DM`, `SYSTEM`, `DICE_ROLL`, `CHARACTER_ACTION` |
+| `MessageType` | `PLAYER`, `DM`, `SYSTEM`, `DICE_ROLL`, `CHARACTER_ACTION`, `WHISPER` |
 | `LogLevel` | `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `InvitationStatus` | `PENDING`, `ACCEPTED`, `DECLINED` |
 
@@ -76,7 +76,7 @@ Note: `AssetType` includes `OTHER`, but the upload route rejects it — only MAP
 - **Cascade deletions** — deleting a campaign removes its memberships, invitations, maps (and their explored memory), sessions, messages, dice rolls, creature templates and favourites, token templates, personal notes, dice macros and document links. Its campaign-scoped assets are kept: the delete route turns each into its uploader's USER asset first, and `Asset.campaignId` is `SetNull`
 - **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
-- **Deleting a user** keeps their chat messages, dice rolls, the uploads that stay (see `Asset` above), their published character templates and the creatures they made, with the user column set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they hold the DM seat of any campaign, owned or not, or own one with nobody in the seat. It also refuses the instance's only admin
+- **Deleting a user** keeps their chat messages, dice rolls, the uploads that stay (see `Asset` above), their published character templates and the creatures they made, with the user column set to null. Whispers sent to them stay too, with `Message.recipientId` set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they hold the DM seat of any campaign, owned or not, or own one with nobody in the seat. It also refuses the instance's only admin
 
 ## JSON columns
 

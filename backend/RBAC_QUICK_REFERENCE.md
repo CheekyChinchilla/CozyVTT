@@ -100,7 +100,8 @@ tokens can see, and under manual fog only one beside a square revealed to
 them, or the answer is "You cannot see that door"). Anyone but the
 DM is sent a locked door as `door-closed`, and no light that is off.
 Chat is a socket event (`chat.message`)
-and spectators may send it. `character.hp.update`, `character.hitdice.spend`
+and spectators may send it, whispers included (see
+[Who may read a whisper](#who-may-read-a-whisper)). `character.hp.update`, `character.hitdice.spend`
 and `PUT /api/characters/:id` refuse a spectator outright, even for a
 character they own, because a token bound to it follows the sheet on every
 screen. The token-image sync that route runs repaints tokens only where the
@@ -126,6 +127,7 @@ import {
   canDeleteCampaign,
   canTransferDM,
   canRollDice,
+  whisperRecipient,
   // ... other helpers
 } from '../services/permissions';
 ```
@@ -171,6 +173,33 @@ by that alone. A token created with a `characterId` and no `controlledBy` is
 given the character's owner as controller, provided the character belongs to
 the campaign and its owner is a `PLAYER` member of it (`canHoldTokens`). A
 character owned by the DM or a spectator gives its token no controller.
+
+#### Who may read a whisper
+
+```typescript
+// Any current member but the sender; null for anyone else.
+const recipient = await whisperRecipient(campaignId, socket.userId, recipientId);
+if (!recipient) return refuse(WHISPER_RECIPIENT_REFUSAL);
+```
+
+A whisper is a chat message with a `recipientId`. Whoever may chat may send
+one, spectators included, to any current member of the campaign but
+themselves (`whisperRecipient`, one membership read; the handler refuses a
+whisper to oneself first, with `WHISPER_SELF_REFUSAL`). It is stored as type
+`WHISPER` with the recipient, and two people read it: its sender and its
+recipient. The DM is not copied, and reads a whisper only when they are one
+of the two.
+
+Both ways a whisper is read keep to that. `chat.message` sends it to the
+sender's and the recipient's sockets in the campaign (`handlers/chat.ts`),
+never through a user's own room, which spans every campaign they have open.
+`GET /api/campaigns/:campaignId/messages` returns it only to a reader who
+sent it or is its recipient, a condition under `AND` beside the cursor's.
+The type is what makes a message private: when the recipient's account is
+deleted `recipientId` becomes null, and the whisper stays its sender's alone.
+
+Whispers are stored like all chat, so whoever runs the server, and anyone
+with a backup of its database, can read them.
 
 #### Which token fields a player may change
 

@@ -17,6 +17,7 @@ import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
 import { useInitiativeSync } from '@/hooks/useInitiativeSync';
+import { usePresenceSync } from '@/hooks/usePresenceSync';
 import {
   ArrowLeft,
   Loader2,
@@ -94,6 +95,8 @@ function CampaignPageContent() {
   // ring read one source, and so the subscription survives the panel being
   // collapsed or unmounted.
   useInitiativeSync();
+  // Who is online, for the roster's dots and the chat's To list, the same way.
+  usePresenceSync(campaign?.id);
 
   // After a WebSocket reconnect, catch up via REST. The real-time stream
   // only pushes deltas; moves, wall edits and fog ops, a pause or an end, a

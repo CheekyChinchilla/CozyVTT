@@ -9,8 +9,8 @@
 //
 // BOUNDARY RULE (do not blur it):
 //   - zustand (this store) owns LIVE SESSION STATE fed by sockets:
-//     token positions, token lists, combat/initiative and characters' hit
-//     points today; walls / fog / lights may move here in future (they are
+//     token positions, token lists, combat/initiative, characters' hit
+//     points and who is online today; walls / fog / lights may move here in future (they are
 //     currently MapCanvas-local state with their own undo/redo history).
 //   - react-query owns SERVER RESOURCES fetched over REST (campaign
 //     lists, characters, assets, map metadata).
@@ -80,6 +80,12 @@ interface GameState {
    * map's HP bars; here so a change in a fight re-renders only those.
    */
   characterHp: Record<string, CharacterHpInfo>;
+  /**
+   * Who has at least one live connection to the campaign, by user id, as the
+   * last `presence.state` said; the server sends the whole set every time.
+   * Read by the roster's dots and the chat's To list.
+   */
+  onlineUserIds: ReadonlySet<string>;
 
   // ---- Actions (named after the events that drive them) ----
   /** Wholesale replace — map load, map change, reconnect resync. */
@@ -106,6 +112,8 @@ interface GameState {
   setCharacterHp: (characterId: string, hp: CharacterHpInfo) => void;
   /** The roster's answer: every character it lists that has hit points. */
   seedCharacterHp: (entries: { id: string; hp: CharacterHpInfo | null }[]) => void;
+  /** `presence.state`: the whole set of who is online. */
+  setOnlineUserIds: (userIds: readonly string[]) => void;
   /** Session teardown. */
   clearGameState: () => void;
 }
@@ -118,6 +126,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   peekTokenId: null,
   peekSource: null,
   characterHp: {},
+  onlineUserIds: new Set(),
 
   setTokens: (list) =>
     set({
@@ -202,8 +211,10 @@ export const useGameStore = create<GameState>((set, get) => ({
       return { characterHp };
     }),
 
+  setOnlineUserIds: (userIds) => set({ onlineUserIds: new Set(userIds) }),
+
   clearGameState: () =>
-    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, characterHp: {} }),
+    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, characterHp: {}, onlineUserIds: new Set() }),
 }));
 
 // ============================================
@@ -267,6 +278,11 @@ export function useTokenListIgnoringMovement(): Token[] {
 /** Characters' hit points by character id, for the roster and the map's HP bars. */
 export function useCharacterHp(): Record<string, CharacterHpInfo> {
   return useGameStore((s) => s.characterHp);
+}
+
+/** Who has a live connection to the campaign, by user id: the roster's dots and the chat's To list. */
+export function useOnlineUserIds(): ReadonlySet<string> {
+  return useGameStore((s) => s.onlineUserIds);
 }
 
 /** The whole combat snapshot — for the initiative tracker, which renders it all. */

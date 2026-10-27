@@ -40,6 +40,23 @@ export function errorCode(err: unknown): string | undefined {
 }
 
 /**
+ * The constraint a Prisma foreign key failure (`P2003`) names, or undefined
+ * for any other error. Prisma 7's PostgreSQL adapter reports it as
+ * `meta.driverAdapterError.cause.constraint.index`; Prisma's own engine put
+ * it in `meta.field_name`, followed by " (index)".
+ */
+export function foreignKeyConstraint(err: unknown): string | undefined {
+  if (errorCode(err) !== 'P2003') return undefined;
+  const meta: unknown = (err as { meta?: unknown }).meta;
+  if (!meta || typeof meta !== 'object') return undefined;
+  const cause: unknown = (meta as { driverAdapterError?: { cause?: unknown } }).driverAdapterError?.cause;
+  const index: unknown = cause && typeof cause === 'object' ? (cause as { constraint?: { index?: unknown } }).constraint?.index : undefined;
+  if (typeof index === 'string') return index;
+  const field: unknown = (meta as { field_name?: unknown }).field_name;
+  return typeof field === 'string' ? field.replace(/ \(index\)$/, '') : undefined;
+}
+
+/**
  * `err.stack` when present — for logging only.
  *
  * Duck-typed like `errorMessage` above rather than gated on `instanceof Error`.

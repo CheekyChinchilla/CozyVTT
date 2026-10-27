@@ -64,10 +64,19 @@
  * campaign over them and the campaign dialogs stop each box at them. The file
  * is kept identical in both packages.
  *
+ * The longest chat message. The server refuses a message over it and the
+ * chat box stops at it. The file is kept identical in both packages.
+ *
  * The files each kind of asset may be uploaded as. The server decides by a
  * file's bytes; the Upload Asset dialog checks a file's extension against the
  * same list, and refused Ogg, WAV and Markdown files the server takes while
  * its own list differed. The file is kept identical in both packages.
+ *
+ * The chat message the server sends and the client reads, and the kinds of
+ * chat message: the database names them, and the frontend declares its own
+ * enum, which has to name the same values. A whisper added a type and two
+ * fields to both. And the chat message the client sends, whose fields and
+ * types are the ones ChatMessageSchema takes.
  *
  * The campaign archive format version. The import window reads an archive's
  * manifest in the browser and shows it only for the version the server
@@ -170,6 +179,7 @@ import ts from 'typescript';
 import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
+import { ChatMessageSchema } from '../validators/chat';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { Prisma } from '@prisma/client';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
@@ -390,6 +400,46 @@ describe('campaign.access.revoked, which the server sends and the client reads',
   });
 });
 
+describe('chat.message, which the server sends and the client reads', () => {
+  it('has the same fields on both sides', () => {
+    expect(interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageBroadcast')).toEqual(
+      interfaceFields(read('backend/src/websocket/handlers/chat.ts'), 'ChatMessageBroadcast')
+    );
+  });
+});
+
+describe('chat.message, which the client sends and the server checks', () => {
+  const fields = interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageEvent');
+
+  it('names the fields ChatMessageSchema takes, and no others', () => {
+    const declared = fields.map((line) => {
+      const m = /^(\w+)\??:/.exec(line);
+      if (!m) throw new Error(`ChatMessageEvent has a line this test cannot read: ${line}`);
+      return m[1];
+    });
+    expect(declared.sort()).toEqual(Object.keys(ChatMessageSchema.shape).sort());
+  });
+
+  it('asks for the types the schema takes', () => {
+    const line = fields.find((l) => l.startsWith('type:')) ?? '';
+    expect([...line.matchAll(/MessageType\.(\w+)/g)].map((m) => m[1]).sort()).toEqual([...ChatMessageSchema.shape.type.unwrap().options].sort());
+  });
+});
+
+describe('the kinds of chat message', () => {
+  it('are the same in the database schema and the frontend', () => {
+    const prismaBlock = /enum MessageType \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+    const frontendBlock = /export enum MessageType \{([^}]*)\}/.exec(read('frontend/src/types/index.ts'));
+    if (!prismaBlock || !frontendBlock) throw new Error('a MessageType enum moved; update this test');
+    const database = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
+      expect(m[1]).toBe(m[2]);
+      return m[2];
+    });
+    expect(frontend).toEqual(database);
+  });
+});
+
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
@@ -479,6 +529,18 @@ describe('the limits on a token\'s conditions', () => {
 describe('the limits on a campaign\'s name and description', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/campaignLimits.ts')).toBe(read('backend/src/validators/campaignLimits.ts'));
+  });
+});
+
+describe('the longest chat message', () => {
+  it('is the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/chatLimits.ts')).toBe(read('backend/src/validators/chatLimits.ts'));
+  });
+
+  it('is what the chat box uses, with no number of its own', () => {
+    const panel = read('frontend/src/components/campaign/ChatPanel.tsx');
+    expect(panel).toContain("from '@/constants/chatLimits'");
+    expect(panel).not.toMatch(/\b2000\b|MAX_MESSAGE_LENGTH = /);
   });
 });
 

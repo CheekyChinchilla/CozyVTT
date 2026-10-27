@@ -3,18 +3,34 @@
 // ============================================
 
 import { Server } from 'socket.io';
+import type { MessageType } from '@prisma/client';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
+import { foreignKeyConstraint } from '../../utils/errors';
 import { chatMessageLimiter, withinCeiling } from '../shared';
 import { campaignSockets } from '../utils';
 import { ackFrom, refuseRequest } from '../ack';
+import { ChatMessageSchema, CHAT_CONTENT_REFUSAL, WHISPER_RECIPIENT_REFUSAL, WHISPER_SELF_REFUSAL } from '../../validators/chat';
+import { whisperRecipient } from '../../services/permissions';
 
-/** The longest message, in characters, before trimming. */
-const MAX_CHAT_MESSAGE_LENGTH = 2000;
-
-/** What a client may name a message with: a short id of its own making. */
-const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+/**
+ * The `chat.message` the server sends each member who may read the message.
+ * The frontend declares the same fields (keepInStep.test.ts).
+ */
+export interface ChatMessageBroadcast {
+  id: string;
+  userId: string;
+  userName: string;
+  content: string;
+  type: MessageType;
+  timestamp: string;
+  /** On a whisper: the one member it is for, beside its sender, and their name. */
+  recipientId?: string;
+  recipientName?: string;
+  /** On the sender's own copy only: the `clientId` it was sent with. */
+  clientId?: string;
+}
 
 /** How long a resent `clientId` is recognised. */
 const CLIENT_ID_MEMORY_MS = 10 * 60 * 1000;
@@ -45,6 +61,9 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
    * may read it. The message type comes from the sender's role, never from
    * the payload. Always under the per-user flood ceiling; the campaign's chat
    * cooldown, when the DM turns it on, is the stricter rule on top.
+   * With a `recipientId` it is a WHISPER to that member (whisperRecipient in
+   * services/permissions.ts), sent to the sender's and the recipient's
+   * sockets in this campaign and to no one else, the DM included.
    * Answered through the acknowledgement when one is passed (see ../ack.ts).
    * SECURITY: Uses server-authenticated socket.campaignId and socket.role only.
    */
@@ -61,29 +80,13 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
 
       if (!withinCeiling(socket, 'chat.message', ack)) return;
 
-      const { content, type: askedType, clientId } = (data ?? {}) as { content?: unknown; type?: unknown; clientId?: unknown };
-
-      // Validate content is provided
-      if (!content || typeof content !== 'string' || content.trim().length === 0) {
-        refuse('Message content required');
+      // The content arrives trimmed, its length counted before (validators/chat.ts).
+      const parsed = ChatMessageSchema.safeParse(data);
+      if (!parsed.success) {
+        refuse(parsed.error.issues[0]?.message ?? CHAT_CONTENT_REFUSAL);
         return;
       }
-
-      if (content.length > MAX_CHAT_MESSAGE_LENGTH) {
-        refuse(`Message too long. Maximum ${MAX_CHAT_MESSAGE_LENGTH} characters.`);
-        return;
-      }
-
-      // Validate the message type's shape, when one is given
-      if (askedType !== undefined && askedType !== 'PLAYER' && askedType !== 'DM') {
-        refuse('Invalid message type. Must be PLAYER or DM.');
-        return;
-      }
-
-      if (clientId !== undefined && (typeof clientId !== 'string' || !CLIENT_ID_PATTERN.test(clientId))) {
-        refuse('clientId must be 1 to 64 letters, digits, hyphens or underscores');
-        return;
-      }
+      const { content, type: askedType, clientId, recipientId } = parsed.data;
 
       // A message already sent under this clientId is answered, not sent again.
       if (clientId !== undefined) {
@@ -99,10 +102,28 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
         rememberedKey = key;
       }
 
+      // Who a whisper is for, asked after the clientId memory, so a resend of
+      // one that reached its recipient before they left is answered with the
+      // first id, and before the cooldown, so a refused whisper does not use
+      // it up.
+      let whisperTo: { id: string; displayName: string } | null = null;
+      if (recipientId !== undefined) {
+        if (recipientId === socket.userId) {
+          refuse(WHISPER_SELF_REFUSAL);
+          return;
+        }
+        whisperTo = await whisperRecipient(campaignId, socket.userId!, recipientId);
+        if (!whisperTo) {
+          refuse(WHISPER_RECIPIENT_REFUSAL);
+          return;
+        }
+      }
+
       // The type is decided by the sender's role on the session, not by the
       // payload: a player's message is always PLAYER. The DM's is DM unless
-      // they ask to speak as a player (out of character).
-      const type: 'PLAYER' | 'DM' = socket.role === 'DM' ? (askedType ?? 'DM') : 'PLAYER';
+      // they ask to speak as a player (out of character). A whisper is a
+      // WHISPER whoever sends it.
+      const type: 'PLAYER' | 'DM' | 'WHISPER' = whisperTo ? 'WHISPER' : socket.role === 'DM' ? (askedType ?? 'DM') : 'PLAYER';
 
       // Rate limiting: respect campaign's chatCooldown settings
       const campaignSettings = await prisma.campaign.findUnique({
@@ -125,7 +146,7 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
         });
         if (!user) throw new UserGoneError();
         const message = await prisma.message.create({
-          data: { campaignId, userId: socket.userId!, type, content: content.trim() },
+          data: { campaignId, userId: socket.userId!, type, content, recipientId: whisperTo?.id ?? null },
         });
         return { user, message };
       })();
@@ -144,25 +165,37 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
           refuse('User not found');
           return;
         }
+        // The recipient's account was deleted after they were looked up. Any
+        // other missing row, such as the campaign deleted meanwhile, is a
+        // failure to send.
+        if (whisperTo && foreignKeyConstraint(error) === 'Message_recipientId_fkey') {
+          refuse(WHISPER_RECIPIENT_REFUSAL);
+          return;
+        }
         throw error;
       }
       const { user, message } = written;
 
-      const payload = {
+      const payload: ChatMessageBroadcast = {
         id: message.id,
-        userId: socket.userId,
+        userId: socket.userId!,
         userName: user.displayName,
         content: message.content,
         type,
         timestamp: message.createdAt.toISOString(),
+        ...(whisperTo ? { recipientId: whisperTo.id, recipientName: whisperTo.displayName } : {}),
       };
 
       // Who may read a message is decided for each member here, as it is for
-      // a secret roll. Every member may read every message for now; whispers
-      // will narrow this. The sender's own sockets also get the clientId, to
-      // match the copy they are already showing.
+      // a secret roll: every member a message to everyone, and only the
+      // sender's and the recipient's sockets in this campaign a whisper.
+      // Never the user's own room, which spans every campaign they have open.
+      // Nothing is awaited between fetching the sockets and the emits. The
+      // sender's own sockets also get the clientId, to match the copy they
+      // are already showing.
       for (const s of await campaignSockets(io, campaignId)) {
         const reader = s as unknown as AuthenticatedSocket;
+        if (whisperTo && reader.userId !== socket.userId && reader.userId !== whisperTo.id) continue;
         s.emit('chat.message', reader.userId === socket.userId && clientId !== undefined ? { ...payload, clientId } : payload);
       }
       ack?.({ ok: true, id: message.id });

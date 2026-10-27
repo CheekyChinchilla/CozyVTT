@@ -10,6 +10,10 @@
  * each, since a 10 MB list of tens of thousands stopped the server. The
  * export refuses, saying why, a campaign over any of them.
  *
+ * What an archive holds stops at the campaign's maps, creatures and token
+ * templates: no chat message travels in one. A whisper is for its two people,
+ * and an archive goes to whoever imports it, a DM who reads none of them.
+ *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
@@ -21,6 +25,7 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-archive-counts-')
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
 import request from 'supertest';
+import unzipper from 'unzipper';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { IMPORT_LIMITS } from '../../validators/campaignImport';
@@ -80,6 +85,32 @@ it('imports again a campaign of 60 maps and 250 creatures', async () => {
   const imported = await dm.post('/api/campaigns/import').attach('file', file);
   expect(imported.status).toBe(201);
   expect(imported.body).toMatchObject({ mapCount: 60, creatureCount: 250 });
+});
+
+it('carries no chat message, a whisper least of all', async () => {
+  const campaignId = await campaignOf('Talkative', 1, 0);
+  const player = await createTestUser({ displayName: 'Archive Whisperer' });
+  await prisma.campaignMembership.create({ data: { userId: player.id, campaignId, role: 'PLAYER', characterIds: [] } });
+  await prisma.message.createMany({
+    data: [
+      { campaignId, userId: dmId, type: 'PLAYER', content: 'said-to-everyone-7f3a' },
+      { campaignId, userId: player.id, recipientId: dmId, type: 'WHISPER', content: 'said-in-a-whisper-9c1d' },
+    ],
+  });
+
+  const exported = await exportOf(campaignId);
+
+  expect(exported.status).toBe(200);
+  const entries = (await unzipper.Open.buffer(exported.body as Buffer)).files;
+  for (const entry of entries) {
+    const text = (await entry.buffer()).toString('utf8');
+    expect(text).not.toContain('said-to-everyone-7f3a');
+    expect(text).not.toContain('said-in-a-whisper-9c1d');
+  }
+  expect(entries.map((e) => e.path).filter((name) => /message|chat|whisper/i.test(name))).toEqual([]);
+  const manifest: unknown = JSON.parse((await entries.find((e) => e.path === 'manifest.json')!.buffer()).toString('utf8'));
+  expect(Object.keys(manifest as object).filter((key) => /message|chat|whisper/i.test(key))).toEqual([]);
+  await cleanupUsers([player.id]);
 });
 
 it('refuses to export a campaign whose archive would hold more files than an import takes, saying why', async () => {

@@ -8,7 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Upgrading from 1.5.4
+
+The upgrade is the usual one. Back up first, as always (see [Database Backups](docs/DEPLOYMENT.md#database-backups)), then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+There is a database change, made by itself on the first start: chat messages get one new column, for the person a whisper is for, and one index, and the kinds of chat message gain one, the whisper. All three are added; no message you have is changed or removed. There is no new setting and no manual step. The backend and frontend containers are rebuilt with the new code.
+
+To go back to 1.5.4 after upgrading, restore the backup you took before the upgrade. Without the restore, 1.5.4 cannot read a whisper: the chat of a campaign where one was sent shows an error in place of its history. After going back, reload every open CozyVTT tab, since a page still open from this release would send a message meant as a whisper to the whole table.
+
+#### What you will notice
+
+- **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table as before until someone chooses a person.
+- **Reload any page left open through the upgrade.** Until then it shows a whisper to you as an ordinary message; only you and its sender are sent it.
+
 ### Added
+
+- **Whisper to one person in the chat.** ([#45](https://github.com/CheekyChinchilla/CozyVTT/issues/45)) Choose someone in the new **To** list above the chat box, or start a message with `/w` or `/whisper` and their name, such as `/w Mara Meet me by the well`, and only the two of you see it, marked with a lock and **Whisper to** or **Whisper from** the other person. The DM sees a whisper only when they are one of the two: a whisper between two players is theirs alone, live and in the chat history. The line under the box names who a message will reach before it is sent. The DM has a group of their own at the top of the list, then come the members in the session; two members with the same name are told apart by their role and character, then the day they joined, so a name alone never passes for someone else. Clicking **Whisper from** on a whisper sets the list to that person. Spectators can whisper too. Whispers are stored like the rest of the chat, so whoever runs the server can read them in its database and its backups. See [Whispering to one person](docs/USER_GUIDE.md#whispering-to-one-person).
 
 - **Pinch to zoom and drag to pan the map on a touch screen.** On a tablet, pinching two fingers on the map zooms it about them, from 10% to 300% as the buttons do, and dragging one finger over empty ground moves the view; the page itself no longer zooms or scrolls under the map. A tap works as a click and a double tap finishes a wall line, and with a DM tool up one finger draws a fog box or a wall stroke, or moves a wall or a light. A second finger cancels what the first began. A stylus works as a mouse, and a hand resting beside it does nothing. A mouse works as before. Dragging tokens and opening the menus by touch follow in the same release.
 
@@ -19,6 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - *Maps.* `GET /api/campaigns/:campaignId/maps` gives each map its `campaignId` and `baseLayerUrl` as well, the fields `GET /api/campaigns/:campaignId` already gave each of its maps.
   - *Live table: limits.* A fog `reveal` or `hide` names at most 250,000 cells, the most grid squares any map has. A longer one is refused and nothing is stored: `fog:operation` answers `error` and `POST /api/campaigns/:campaignId/maps/:id/fog/operation` answers 400, both with "A fog operation can name at most 250,000 cells. Use reveal_all or hide_all for the whole map." The list had no maximum.
   - *Live table: limits.* A `map.ping` whose `x` or `y` is more than 250,000 pixels from the map's corner either way, the bound on walls and lights, is dropped with no answer, as a ping that is not a number already was, and it does not count against the sender's 10 pings every ten seconds. Any finite number used to be passed on to the table.
+  - *Live table: events.* `chat.message` takes `recipientId`, the user id of a member of the campaign, to whisper to them. The message is stored as the new type `WHISPER`, whatever `type` was sent, and the `chat.message` it sends carries `recipientId` and `recipientName`; it goes to the sender's and the recipient's connections to that campaign and to nobody else, the DM included unless they are one of the two. A whisper to yourself is answered "You cannot whisper to yourself", and one to anyone who is not a member, or with a `recipientId` that is not a user id, "That person is not in this campaign"; nothing is stored. A whisper counts against the chat cooldown and the 50 messages a second and 300 a minute as any message does. `type: "WHISPER"` is refused as before, with "Invalid message type. Must be PLAYER or DM.".
+  - *Chat history.* `GET /api/campaigns/:campaignId/messages` gives each message `recipientId`, `recipientName` and `recipient`, which are `null` on a message to everyone, and leaves out whispers between other people, for the DM too. A whisper whose recipient's account was deleted is returned to its sender alone.
 
 - **Lighting on a very large map is worked out at a slightly lower resolution.** On a lit map of more than 16,777,216 pixels, such as 5,000 by 3,400, the darkness, light and line of sight a player sees are worked out on a slightly smaller picture, so their edges are a little softer. That is the largest canvas Safari on an iPhone or iPad can hold. Maps up to that size look as before.
 

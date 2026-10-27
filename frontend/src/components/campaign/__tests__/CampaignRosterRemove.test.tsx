@@ -15,7 +15,7 @@ import { useGameStore } from '@/stores/gameStore';
 
 const getCampaignCharacters = vi.fn();
 const assignCharacterToCampaign = vi.fn();
-const socket = { on: vi.fn(), off: vi.fn(), onPresenceState: vi.fn(), requestPresence: vi.fn() };
+const socket = { on: vi.fn(), off: vi.fn() };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
