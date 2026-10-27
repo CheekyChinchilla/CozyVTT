@@ -1285,20 +1285,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
     // ── Tab: ping at the cursor ──────────────────────────────────────
     // Tab is the keyboard-navigation key and this listener is on `window`,
-    // so it is only safe to claim under strict guards: the pointer must be
-    // over the map, and focus must not be on anything the user could be
-    // navigating from or typing into. Click around the map and Tab pings;
-    // tab to any control and Tab keeps navigating as normal.
+    // so it is claimed only while the map's focus stop has the keyboard (a
+    // click on the map gives it) and the pointer is over the map. With focus
+    // anywhere else, a panel divider or the page itself included, Tab keeps
+    // navigating as normal.
     if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       const at = hoverMapPxRef.current;
       if (!at || !currentMap) return;
-
-      const el = document.activeElement as HTMLElement | null;
-      const onFormControl =
-        !!el &&
-        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(el.tagName) ||
-          el.isContentEditable);
-      if (onFormControl) return;
+      if (document.activeElement !== layersRef.current) return;
 
       e.preventDefault();
       socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });

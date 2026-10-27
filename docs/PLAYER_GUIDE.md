@@ -463,12 +463,12 @@ If a creature is somewhere you haven't explored, you won't see a ring for it —
 
 ### Pointing at the Map
 
-Saying "no, the *other* door" never works. Instead, put your mouse where you mean and press **Tab**. A dot appears with rings radiating out of it, in your colour and labelled with your name, and everyone at the table sees it in the same spot for a couple of seconds.
+Saying "no, the *other* door" never works. Instead, click the map, put your mouse where you mean and press **Tab**. A dot appears with rings radiating out of it, in your colour and labelled with your name, and everyone at the table sees it in the same spot for a couple of seconds.
 
 A few things worth knowing:
 
 - **Your mouse has to be over the map.** Tab does nothing if the cursor is over the chat panel or the sidebar.
-- **Tab still works normally everywhere else.** If you're typing in chat, or you've tabbed your way to a button, Tab keeps moving between controls as usual — it only pings when you're not in the middle of something.
+- **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
 - **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
 - **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
 - Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
