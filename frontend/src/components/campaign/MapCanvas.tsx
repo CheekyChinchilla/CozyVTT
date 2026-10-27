@@ -65,7 +65,7 @@ import { useMeasureTools } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
 import type { MapTool, PointerAt } from './map/tools/types';
-import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, PEN_ERASER_BUTTON, type MapPointer } from './map/mapPointer';
+import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
 import { createGestureRecognizer, type Gesture } from './map/gestures';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
@@ -257,6 +257,18 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   /** The Ping button has been pressed: the next tap or click on the map pings it. */
   const [pingArmed, setPingArmed] = useState(false);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
+  /**
+   * What made the last press on the map. A finger or a pen leaves no hover
+   * behind, so after one the selected token's details show in the hover
+   * card's place; after a mouse the hover card is all there is.
+   */
+  const [lastPressKind, setLastPressKind] = useState<PointerKind | null>(null);
+  /**
+   * The token whose details were closed. They stay closed while it stays
+   * selected, and show again for another token or on the next tap on a
+   * token, the same one included: a tap is a fresh act of selecting.
+   */
+  const [selectionDetailsClosedFor, setSelectionDetailsClosedFor] = useState<string | null>(null);
 
   // Context menu state. One opened by Enter is held inside the map.
   const [contextMenu, setContextMenu] = useState<{
@@ -2237,14 +2249,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           }
           // A click or a tap selects what it picks up, if the screen draws it;
           // a finger's drag does not until it puts the token down.
-          if (via !== 'drag' && drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
+          if (via !== 'drag' && drawnIds.has(token.id)) {
+            useGameStore.getState().selectToken(token.id);
+            setSelectionDetailsClosedFor(null);
+          }
         } else {
           // A click or a tap on a token this viewer may not move selects it,
           // found as the viewer sees the map: in Player Preview, only what
           // the preview draws. On empty ground it clears the selection when
           // the button lifts, unless the press dragged the map.
           const seen = via === 'drag' ? null : getHoverTokenAt(gridCoords.x, gridCoords.y);
-          if (seen) useGameStore.getState().selectToken(seen.id);
+          if (seen) {
+            useGameStore.getState().selectToken(seen.id);
+            setSelectionDetailsClosedFor(null);
+          }
           groundPressRef.current = { x: e.clientX, y: e.clientY, panned: false, clears: via !== 'drag' && !seen };
           // Only start panning if we're not holding a token
           mapControls.startDrag(e);
@@ -2642,6 +2660,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // long-press, so a pinch while typing in the chat keeps the on-screen
     // keyboard.
     if (e.kind !== 'touch') focusMap();
+    setLastPressKind(e.kind);
     if (e.kind !== 'mouse') capturePointer(event);
     if (e.kind === 'touch') {
       fingerDownsRef.current.set(e.pointerId, e);
@@ -3210,6 +3229,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // What a screen reader hears of the selection: the token and its square,
   // said again as it moves. Nothing for a token the screen does not draw.
   const selectedToken = selectedShown();
+  // The selected token's details, after a finger's or a pen's press, where
+  // no hover card shows: the token as the screen draws it (in a preview, as
+  // the previewed viewer is sent it), and nothing for one it does not draw.
+  const selectionDetails = selectedToken && !(hoverToken && hoverCoords) && selectionDetailsClosedFor !== selectedToken.id
+    && (lastPressKind === 'touch' || lastPressKind === 'pen')
+    ? drawnTokens.find((t) => t.id === selectedToken.id) ?? null
+    : null;
   const selectionAnnouncement = selectedToken
     ? `Selected ${tokenDisplayName(selectedToken)}, square ${selectedToken.position.x}, ${selectedToken.position.y}`
     : '';
@@ -3770,8 +3796,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* Hover Coordinates */}
-      {hoverCoords && !hoverToken && (
+      {/* Hover Coordinates, unless the selection's details sit there */}
+      {hoverCoords && !hoverToken && !selectionDetails && (
         <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
           <span className="text-xs text-stone-gray font-mono font-semibold">
             ({hoverCoords.x}, {hoverCoords.y})
@@ -3791,6 +3817,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           hp={visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing)}
           imageSrc={cachedTokenImage(hoverToken, tokenImages)?.src}
           mayMove={canMoveToken(hoverToken)}
+        />
+      )}
+
+      {/* The selected token's details, in the same place, after a tap: a
+          finger has no hover. Closed, they stay closed until the selection
+          changes; the selection itself stays, for the keys. */}
+      {selectionDetails && (
+        <TokenDetailsCard
+          token={selectionDetails}
+          square={selectionDetails.position}
+          hp={visibleTokenHp(selectionDetails, characterHpCache, isDM && !previewing)}
+          imageSrc={cachedTokenImage(selectionDetails, tokenImages)?.src}
+          mayMove={canMoveToken(selectionDetails)}
+          onClose={() => setSelectionDetailsClosedFor(selectionDetails.id)}
         />
       )}
 

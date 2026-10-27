@@ -10,8 +10,8 @@
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, createEvent } from '@testing-library/react';
-import { TokenType, type CampaignMap, type Token } from '@/types';
+import { render, screen, fireEvent, act, createEvent, within } from '@testing-library/react';
+import { TokenLayer, TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
 import { recordDrawing, nextFrame, pictures } from '@/test/recordingCanvas';
@@ -1037,7 +1037,7 @@ describe('Put back', () => {
     pointer.down(surface(), square(0, 19));
     pointer.up(surface(), square(0, 19));
     pointer.leave(surface());
-    expect(screen.getByText('Goblin')).toBeInTheDocument();
+    expect(putBack()!.parentElement).toHaveTextContent('Holding Goblin');
     fireEvent.click(putBack()!);
 
     expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
@@ -1239,6 +1239,241 @@ describe('the Ping button', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
     expect(sentOf('map.ping')).toEqual([]);
+  });
+});
+
+// A finger has no hover, so after a tap the hover card is gone with the
+// finger: the selected token's details show instead.
+describe('the details of the selected token', () => {
+  const wolf = () => token('tok-wolf', 'Dire Wolf', 4, 19, { conditions: ['poisoned', 'prone'] });
+  const card = () => screen.queryByText('Dire Wolf')?.closest('.glass-panel') ?? null;
+  const close = () => screen.getByRole('button', { name: 'Close details' });
+
+  it('show after a player taps a creature, conditions in full, and stay once the finger has gone', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf());
+
+    tap(1, square(4, 19));
+
+    expect(card()).not.toBeNull();
+    expect(within(card() as HTMLElement).getByText('poisoned')).toBeInTheDocument();
+    expect(within(card() as HTMLElement).getByText('prone')).toBeInTheDocument();
+    expect(within(card() as HTMLElement).getByText('(4, 19)')).toBeInTheDocument();
+    expect(within(card() as HTMLElement).getByText('Not yours to move')).toBeInTheDocument();
+  });
+
+  it('show the token a finger has just put down, on its new square', () => {
+    render(<MapCanvas />);
+    show(wolf());
+
+    swipe(1, square(4, 19), square(5, 19), square(7, 18));
+
+    expect(within(card() as HTMLElement).getByText('(7, 18)')).toBeInTheDocument();
+  });
+
+  it("show after a pen's tap too", () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf());
+
+    const pen = contact('pen', 5);
+    pen.down(surface(), square(4, 19));
+    pen.up(surface(), square(4, 19));
+    pen.leave(surface());
+
+    expect(card()).not.toBeNull();
+  });
+
+  // With a mouse, the hover card is all there is, as before.
+  it("do not show for a mouse's selection once the pointer has left the token", () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf());
+
+    mouse.move(surface(), square(4, 19));
+    mouse.down(surface(), square(4, 19));
+    mouse.up(surface(), square(4, 19));
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-wolf');
+    expect(card()).not.toBeNull();
+    mouse.leave(surface());
+
+    expect(card()).toBeNull();
+  });
+
+  it('give way to the card of a token the mouse points at', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf(), token('tok-bat', 'Bat', 8, 19));
+    tap(1, square(4, 19));
+
+    mouse.move(surface(), square(8, 19));
+
+    expect(screen.getByText('Bat')).toBeInTheDocument();
+    expect(card()).toBeNull();
+  });
+
+  // A tap on a token is a fresh act of selecting it, the same token too.
+  it('close on Close details, and come back on the next tap on a token, the same one included', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf(), token('tok-bat', 'Bat', 8, 19));
+    tap(1, square(4, 19));
+
+    fireEvent.click(close());
+    expect(card()).toBeNull();
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-wolf');
+    tap(2, square(4, 19));
+    expect(card()).not.toBeNull();
+
+    fireEvent.click(close());
+    tap(3, square(8, 19));
+    expect(screen.getByText('Bat')).toBeInTheDocument();
+  });
+
+  it('stay closed while nothing selects a token again', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf());
+    tap(1, square(4, 19));
+    fireEvent.click(close());
+
+    swipe(2, px(500, 500), px(520, 500), px(550, 500));
+
+    expect(card()).toBeNull();
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-wolf');
+  });
+
+  // The card stays until it is closed, over the bottom-left of the map,
+  // where a player may well want to put a token down.
+  describe('over the squares under it', () => {
+    const CARD = { left: 16, top: 800, right: 368, bottom: 984 };
+    const CLOSE = { left: 330, top: 808, right: 362, bottom: 840 };
+    const inside = (r: typeof CARD, p: { clientX: number; clientY: number }) =>
+      p.clientX >= r.left && p.clientX <= r.right && p.clientY >= r.top && p.clientY <= r.bottom;
+    /** Whether a hit test passes through an element, by the pointer-events class nearest it. */
+    const passesThrough = (el: Element) => {
+      for (let at: Element | null = el; at; at = at.parentElement) {
+        if (at.classList.contains('pointer-events-auto')) return false;
+        if (at.classList.contains('pointer-events-none')) return true;
+      }
+      return false;
+    };
+    /**
+     * The element a browser's hit test finds at a page point, standing in for
+     * the one jsdom does not do: the card's close button, the card, or the map.
+     */
+    function hitTest(p: { clientX: number; clientY: number }): Element {
+      const button = screen.getByRole('button', { name: 'Close details' });
+      const panel = button.closest('.glass-panel')!;
+      if (inside(CLOSE, p) && !passesThrough(button)) return button;
+      if (inside(CARD, p) && !passesThrough(panel)) return panel;
+      return surface();
+    }
+    const mine = () => token('tok-mine', 'Aldra', 12, 10, { type: TokenType.PLAYER, controlledBy: 'me' });
+
+    it('let a tap on a square under the card reach the map', () => {
+      h.set({ userRole: 'PLAYER' });
+      render(<MapCanvas />);
+      show(mine());
+      tap(1, square(12, 10));
+      expect(screen.getByRole('button', { name: 'Close details' })).toBeInTheDocument();
+
+      // Square (2, 1), centred on (125, 925), is under the card.
+      const point = square(2, 1);
+      const target = hitTest(point);
+      const finger = contact('touch', 2);
+      finger.down(target, point);
+      finger.up(target, point);
+
+      expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-mine', mapId: 'map-a', x: 2, y: 1 }]);
+    });
+
+    it('keep Close details for a tap on it', () => {
+      h.set({ userRole: 'PLAYER' });
+      render(<MapCanvas />);
+      show(mine());
+      tap(1, square(12, 10));
+
+      const target = hitTest({ clientX: 346, clientY: 824 });
+      fireEvent.click(target);
+
+      expect(screen.queryByRole('button', { name: 'Close details' })).toBeNull();
+    });
+  });
+
+  it('go when the selection is cleared by a tap on empty ground', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf());
+    tap(1, square(4, 19));
+
+    tap(2, square(10, 10));
+
+    expect(useGameStore.getState().selectedTokenId).toBeNull();
+    expect(card()).toBeNull();
+  });
+
+  it('take the place of the square readout while a finger pans', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(wolf());
+    tap(1, square(4, 19));
+
+    const finger = contact('touch', 2);
+    finger.down(surface(), px(500, 500));
+    finger.move(surface(), px(560, 500));
+
+    // The one square shown is the card's.
+    const squares = screen.getAllByText(/^\(-?\d+, -?\d+\)$/);
+    expect(squares).toHaveLength(1);
+    expect(card()!.contains(squares[0])).toBe(true);
+    finger.up(surface(), px(560, 500));
+  });
+
+  describe('for a selection the screen does not draw', () => {
+    it('show nothing once the selection has gone under fog', () => {
+      h.set({ userRole: 'PLAYER', currentMap: mapWith({ fogEnabled: true }) });
+      render(<MapCanvas />);
+      show(wolf());
+      fire('fog:cells', { mapId: 'map-a', revealedCells: Array.from({ length: 400 }, (_, i) => i) });
+      tap(1, square(4, 19));
+      expect(card()).not.toBeNull();
+
+      fire('fog:cells', { mapId: 'map-a', revealedCells: [] });
+
+      expect(card()).toBeNull();
+    });
+
+    it('show nothing once spirit tokens are hidden from the DM', () => {
+      render(<MapCanvas />);
+      show(token('tok-wolf', 'Dire Wolf', 4, 19, { layer: TokenLayer.SPIRIT }));
+      tap(1, square(4, 19));
+      tap(2, square(4, 19));
+      expect(card()).not.toBeNull();
+
+      fireEvent.click(screen.getByTitle('Spirit tokens shown, click to hide'));
+
+      expect(card()).toBeNull();
+    });
+
+    it('show nothing for a hidden creature in Player Preview', () => {
+      h.set({
+        currentMap: mapWith({ fogEnabled: true }),
+        memberships: [{ userId: 'alice', role: 'PLAYER', user: { displayName: 'Alice' } }],
+      });
+      render(<MapCanvas />);
+      show(token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' }), token('tok-wolf', 'Dire Wolf', 4, 19, { visible: false }));
+      fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(true) } });
+      // The DM taps the hidden creature, picking it up, and taps it down again.
+      tap(1, square(4, 19));
+      tap(2, square(4, 19));
+      expect(card()).not.toBeNull();
+
+      fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+
+      expect(card()).toBeNull();
+    });
   });
 });
 

@@ -11,6 +11,7 @@
 // ============================================
 
 import type { ReactNode } from 'react';
+import { X } from 'lucide-react';
 import type { Position, Token } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import { useTokenInitiative } from '@/stores/gameStore';
@@ -31,6 +32,13 @@ interface TokenDetailsCardProps {
   imageSrc?: string;
   /** Whether this viewer may move the token; if not, the card says so. */
   mayMove: boolean;
+  /**
+   * Given, the card has a close button that calls it, and lets every other
+   * press through to the map under it: the selection's card stays over the
+   * map until it is closed, where a player may want to put a token down.
+   * The hover card goes with the pointer and has neither.
+   */
+  onClose?: () => void;
 }
 
 /** One labelled row. The labels line up, so the panel reads as a list. */
@@ -45,7 +53,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove }: TokenDetailsCardProps) {
+export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove, onClose }: TokenDetailsCardProps) {
   // `undefined` means "not in the turn order": the row is left out rather
   // than shown blank. `null` means it is, but nothing has rolled.
   const initiative = useTokenInitiative(token.id);
@@ -53,7 +61,7 @@ export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove 
   const conditions = token.conditions ?? [];
 
   return (
-    <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg">
+    <div className={`absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg${onClose ? ' pointer-events-none' : ''}`}>
       <div className="flex items-start gap-3.5">
         {/* Large enough to actually recognise the art. On the map a token
             is often only a few dozen pixels at play zoom, which is what
@@ -124,6 +132,18 @@ export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove 
             </div>
           )}
         </div>
+
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close details"
+            title="Close details"
+            className="pointer-events-auto -mr-2 -mt-1 p-2 shrink-0 rounded-cozy text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
+        )}
 
       </div>
     </div>

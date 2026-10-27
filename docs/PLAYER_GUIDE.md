@@ -301,6 +301,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 | Move it in two taps | Tap your token, then tap the square. In between it stays in your hand, drawn faded on its own square with the selection ring, so you can move the map with one finger, or pinch, and keep hold of it. Slide the token from its own square to carry it, or tap the square it came from to put it back. |
 | Put back a token you are holding | Tap **Put back** in the bar at the top of the map, which names the token. It does what **Esc** does. |
 | Move the map | Slide one finger anywhere but on a token you can move. Pinch two fingers to zoom, about your fingers. |
+| Read a token's details | Tap it. It is selected, and its card shows at the bottom left of the map, as hovering it with a mouse would (see [Pointing at a token](#pointing-at-a-token)). The card lets taps through to the map under it, except on its **✕**, which closes it until you next tap a token, the same one included. |
 | Open a token's menu | Press and hold the token for half a second: the menu a right-click opens there opens, with the same items, and the token is selected. Lift your finger and tap an item. |
 | Open or close a door | Tap it, as you would click it. Press and hold it for its menu. |
 | Point at the map | Press and hold the spot for half a second, on empty ground or on a token that has no menu for you: everyone sees your ping there, as with **Tab**. Or tap **Ping** in the map's toolbar, then tap the spot; you can move the map first. Tap **Ping** again to put it away. |
@@ -337,7 +338,7 @@ If a session shows no notes, your DM simply didn't write any that night.
 
 ### Pointing at a token
 
-Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are holding a token: the card follows the square under your cursor, so you can see who is already standing where you are about to land.
+Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are holding a token: the card follows the square under your cursor, so you can see who is already standing where you are about to land. On a touch screen, which has no hover, tap a token instead: the card shows the token you selected, and taps on the map under it still reach the map. Close it with **✕**; it shows again the next time you tap a token.
 
 You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. A grey token with a question mark is something you can see but cannot make out: the DM has obscured it, and your browser is not sent its name, picture, conditions, hit points or who controls it until they reveal it. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
 
