@@ -69,7 +69,7 @@ import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_
 import { createGestureRecognizer, type Gesture } from './map/gestures';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
-  encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
+  encodePreviewSelection, decodePreviewSelection, resolvePreviewSelection, followStepTokens, type PreviewSelection,
   previewTokens,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
@@ -340,20 +340,32 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
 
   // Player Preview: the DM's canvas drawn through chosen eyes, a player's, one
-  // token's, or the whole party's. Those tokens supply the vision, the fog
-  // comes from the grid the DM already holds, and the same visibility rule
-  // decides what is drawn.
+  // token's, the whole party's, or the selected token's (Follow my
+  // selection). Those tokens supply the vision, the fog comes from the grid
+  // the DM already holds, and the same visibility rule decides what is drawn.
   const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
+  // Follow my selection looks through the selected token, and with nothing
+  // selected through the last one it followed on this map: clearing the
+  // selection must not drop the projector back to the DM's view.
+  const following = previewSelection?.kind === 'selected';
+  const [followedTokenId, setFollowedTokenId] = useState<string | null>(null);
+  useEffect(() => {
+    if (following && selectedTokenId !== null) setFollowedTokenId(selectedTokenId);
+  }, [following, selectedTokenId]);
+  const previewViewer = useMemo(
+    () => resolvePreviewSelection(previewSelection, selectedTokenId ?? followedTokenId),
+    [previewSelection, selectedTokenId, followedTokenId]
+  );
   // The plane the previewed viewer is on, by the server's rule: a player whose
   // token has crossed to the spirit layer is sent that plane and sees through
   // that token, so the preview draws the spirit realm as their screen does.
   const previewedPlane = useMemo(
-    () => previewPlane(previewSelection, tokens, campaign?.spiritLayerEnabled ?? false),
-    [previewSelection, tokens, campaign?.spiritLayerEnabled]
+    () => previewPlane(previewViewer, tokens, campaign?.spiritLayerEnabled ?? false),
+    [previewViewer, tokens, campaign?.spiritLayerEnabled]
   );
-  const previewOwn = useMemo(() => previewOwnFor(previewSelection, previewedPlane), [previewSelection, previewedPlane]);
+  const previewOwn = useMemo(() => previewOwnFor(previewViewer, previewedPlane), [previewViewer, previewedPlane]);
   // Whose tokens the preview shows whole; differs from sight only for the party.
-  const previewControls = useMemo(() => previewControlsFor(previewSelection), [previewSelection]);
+  const previewControls = useMemo(() => previewControlsFor(previewViewer), [previewViewer]);
   const viewerOwn = previewing ? previewOwn : isOwnToken;
   const previewChoices = useMemo(
     () => previewOptions(campaign?.memberships ?? [], tokens),
@@ -505,6 +517,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     releaseHoldOnMapSwitch();
     useGameStore.getState().selectToken(null);
+    setFollowedTokenId(null);
   }, [currentMap?.id]);
 
   // The wall tools, with the wall selection (map/tools/useWallTool.ts).
@@ -1009,7 +1022,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // player's own, or the player the DM is previewing as; the DM's own view
   // explores as nobody.
   const explorationEnabled = currentMap?.explorationEnabled ?? true;
-  const exploringAs = previewing ? previewMemoryUser(previewSelection, tokens, campaign?.memberships ?? []) : (isDM ? null : user?.id ?? null);
+  const exploringAs = previewing ? previewMemoryUser(previewViewer, tokens, campaign?.memberships ?? []) : (isDM ? null : user?.id ?? null);
   const { exploredCells, addExplored } = useExploredMemory(
     socket,
     currentMap?.id,
@@ -1823,7 +1836,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
-  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, selectedTokenId, previewing, previewSelection]);
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, selectedTokenId, previewing, previewViewer]);
 
   // Publish this map's own token hover so the initiative tracker can tint the
   // matching row — the other half of the cross-highlight.
@@ -2677,13 +2690,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   /**
    * Select the next token along (`.`) or the one before (`,`): for the DM
-   * any token the map draws, for anyone else their own, paused or not; in
-   * the turn order during a fight, then by row from the top and by column.
+   * any token the map draws, and while following the selection in a preview
+   * the whole party too; for anyone else their own, paused or not; in the
+   * turn order during a fight, then by row from the top and by column.
    * False when there is nothing to step to. A key held down steps once.
    */
   const stepSelection = (direction: StepDirection, repeat: boolean): boolean => {
     if (!currentMap) return false;
-    const ordered = selectableTokens(drawnTokens, isDM ? () => true : isOwnToken, useGameStore.getState().combat);
+    // Following the selection, the party is in reach wherever it stands.
+    const candidates = previewing && following ? followStepTokens(tokens, drawnTokens, previewedPlane) : drawnTokens;
+    const ordered = selectableTokens(candidates, isDM ? () => true : isOwnToken, useGameStore.getState().combat);
     if (ordered.length === 0) return false;
     if (repeat) return true;
     const nextId = nextSelectedId(ordered, selectedTokenId, direction);
@@ -3318,6 +3334,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               className="px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
             >
               {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
+              {/* Looks through whichever token is selected, as , and . step. */}
+              <option value={encodePreviewSelection({ kind: 'selected' })}>Follow my selection</option>
               {(['players', 'tokens'] as const).map((group) => {
                 const entries = previewChoices.filter((o) => o.group === group);
                 if (entries.length === 0) return null;

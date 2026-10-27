@@ -1243,3 +1243,107 @@ describe('turning while the session is paused or ended', () => {
     expect(screen.getByText('Rotate Right')).toBeInTheDocument();
   });
 });
+
+/**
+ * Follow my selection in Player Preview: the DM's canvas looks through the
+ * selected token, and steps through only what that view shows. Whose eyes
+ * the preview uses shows in the explored ground it asks the server for; a
+ * hidden token shows in the hover card only in the DM's own view.
+ */
+describe('Follow my selection', () => {
+  const alya = () => token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' });
+  const lurker = () => token('tok-h', 'Lurker', 3, 10, { visible: false });
+  const borin = () => token('tok-b', 'Borin', 5, 10, { type: TokenType.PLAYER, controlledBy: 'bob' });
+  const memoryAskedFor = () => sentOf('exploration:request').map((p) => (p as { userId?: string }).userId ?? null);
+  /** The hover card's name line; the picker lists the same names as options. */
+  const card = (name: string) => screen.queryByText(name, { selector: 'span' });
+
+  beforeEach(() => {
+    h.set({
+      currentMap: mapNamed('map-a', { lightingEnabled: true, globalIllumination: true, explorationEnabled: true }),
+      memberships: [
+        { userId: 'alice', role: 'PLAYER', user: { displayName: 'Alice' } },
+        { userId: 'bob', role: 'PLAYER', user: { displayName: 'Bob' } },
+      ],
+    });
+  });
+
+  function follow() {
+    fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+    fireEvent.change(screen.getByLabelText('Player or token to preview as'), { target: { value: 'selected' } });
+  }
+
+  it('is offered in the picker, and stays chosen as the tokens change', () => {
+    render(<MapCanvas />);
+    show(alya(), borin());
+    follow();
+    expect(screen.getByLabelText('Player or token to preview as')).toHaveValue('selected');
+
+    show(borin());
+
+    expect(screen.getByLabelText('Player or token to preview as')).toHaveValue('selected');
+  });
+
+  it('looks through each token as the selection steps, passing over what that view does not show', () => {
+    render(<MapCanvas />);
+    show(alya(), lurker(), borin());
+    follow();
+    select('tok-a');
+    expect(memoryAskedFor().slice(-1)).toEqual(['alice']);
+
+    press('.');
+
+    expect(selected()).toBe('tok-b');
+    expect(memoryAskedFor().slice(-1)).toEqual(['bob']);
+  });
+
+  it('keeps the last token it followed when the selection is cleared, never the DM view', () => {
+    render(<MapCanvas />);
+    show(alya(), lurker(), borin());
+    mouse.move(surface(), at(3, 10));
+    expect(card('Lurker')).toBeInTheDocument();
+    mouse.leave(surface());
+    follow();
+    select('tok-b');
+    const asked = sentOf('exploration:request').length;
+
+    press('Escape');
+
+    expect(selected()).toBeNull();
+    expect(sentOf('exploration:request')).toHaveLength(asked);
+    mouse.move(surface(), at(3, 10));
+    expect(card('Lurker')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Toggle DM player view preview')).toHaveTextContent('DM View');
+  });
+
+  it("steps through a split party on a lit map, from nothing selected, and never to what is hidden", () => {
+    // No light and no darkvision: each token sees its own square only.
+    h.set({ currentMap: mapNamed('map-a', { lightingEnabled: true, globalIllumination: false, explorationEnabled: true }) });
+    render(<MapCanvas />);
+    show(
+      alya(),
+      token('tok-b', 'Borin', 15, 3, { type: TokenType.PLAYER, controlledBy: 'bob' }),
+      token('tok-ghost', 'Ghost', 9, 15, { type: TokenType.PLAYER, visible: false }),
+      token('tok-goblin', 'Goblin', 8, 8),
+    );
+    follow();
+
+    press('.');
+    expect(selected()).toBe('tok-a');
+    press('.');
+    expect(selected()).toBe('tok-b');
+    press('.');
+    expect(selected()).toBe('tok-a');
+  });
+
+  it('before anything is selected, shows a view with no tokens of its own', () => {
+    render(<MapCanvas />);
+    show(alya(), lurker(), borin());
+    follow();
+
+    mouse.move(surface(), at(3, 10));
+    expect(card('Lurker')).not.toBeInTheDocument();
+    mouse.move(surface(), at(2, 10));
+    expect(card('Alya')).not.toBeInTheDocument();
+  });
+});

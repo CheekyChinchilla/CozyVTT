@@ -11,6 +11,8 @@ import {
   previewControlsFor,
   previewTokens,
   previewPlane,
+  resolvePreviewSelection,
+  followStepTokens,
   type PreviewSelection,
 } from '../previewSelection';
 import type { CampaignMembership, Token } from '@/types';
@@ -53,6 +55,7 @@ describe('encoding', () => {
     { kind: 'player', userId: 'alice' },
     { kind: 'token', tokenId: 'hero' },
     { kind: 'party' },
+    { kind: 'selected' },
   ])('round-trips %j', (selection) => {
     expect(decodePreviewSelection(encodePreviewSelection(selection))).toEqual(selection);
   });
@@ -327,5 +330,66 @@ describe('previewTokens', () => {
   it('drops what the preview would not show at all, before masking', () => {
     const hidden = token({ id: 'h', name: 'Ambusher', visible: false, obscured: true });
     expect(previewTokens([hidden], nobody, nobody, null, viewport, 'material')).toEqual([]);
+  });
+});
+
+/**
+ * Follow my selection: the preview looks through whichever token the DM has
+ * selected. It must never fall back to the DM's own view, which on a
+ * projector would show every hidden token and the whole fog.
+ */
+describe('Follow my selection', () => {
+  it('is kept by the picker whatever the tokens, even with none on the map', () => {
+    const follow: PreviewSelection = { kind: 'selected' };
+    expect(reconcilePreviewSelection(follow, [], all)).toBe(follow);
+    expect(reconcilePreviewSelection(follow, [], [])).toBe(follow);
+  });
+
+  it('looks through the selected token', () => {
+    expect(resolvePreviewSelection({ kind: 'selected' }, 'wizard')).toEqual({ kind: 'token', tokenId: 'wizard' });
+    const own = previewOwnFor(resolvePreviewSelection({ kind: 'selected' }, 'wizard'), 'material');
+    expect(all.filter(own).map((t) => t.id)).toEqual(['wizard']);
+  });
+
+  it('with nothing to follow, is a view with no tokens of its own, never no view at all', () => {
+    const resolved = resolvePreviewSelection({ kind: 'selected' }, null);
+    expect(resolved).not.toBeNull();
+    expect(resolved?.kind).toBe('token');
+    expect(withUnseen.filter(previewOwnFor(resolved, 'material'))).toEqual([]);
+    expect(previewMemoryUser(resolved, withUnseen, [member('alice', 'PLAYER', 'Alice')])).toBeNull();
+    expect(previewPlane(resolved, withUnseen, false)).toBe('material');
+  });
+
+  it('leaves every other choice as it is', () => {
+    const party: PreviewSelection = { kind: 'party' };
+    expect(resolvePreviewSelection(party, 'wizard')).toBe(party);
+    expect(resolvePreviewSelection({ kind: 'player', userId: 'alice' }, 'wizard')).toEqual({ kind: 'player', userId: 'alice' });
+    expect(resolvePreviewSelection(null, 'wizard')).toBeNull();
+  });
+});
+
+describe('what Follow my selection steps through', () => {
+  const near = token({ id: 'near', name: 'Near', type: TokenType.PLAYER, controlledBy: 'alice' });
+  const far = token({ id: 'far', name: 'Far', type: TokenType.PLAYER, controlledBy: 'bob' });
+  const hidden = token({ id: 'hidden', name: 'Hidden', type: TokenType.PLAYER, visible: false });
+  const monk = token({ id: 'monk', name: 'Monk', type: TokenType.PLAYER, layer: TokenLayer.SPIRIT });
+  const seenGoblin = token({ id: 'seen-goblin', name: 'Goblin' });
+  const unseenGoblin = token({ id: 'unseen-goblin', name: 'Goblin' });
+  const everyone = [near, far, hidden, monk, seenGoblin, unseenGoblin];
+  const ids = (list: readonly Token[]) => list.map((t) => t.id).sort();
+
+  it('is what the preview draws and every visible party token on its plane, wherever it stands', () => {
+    expect(ids(followStepTokens(everyone, [near, seenGoblin], 'material'))).toEqual(['far', 'near', 'seen-goblin']);
+  });
+
+  it('is the party alone before anything is followed', () => {
+    expect(ids(followStepTokens(everyone, [], 'material'))).toEqual(['far', 'near']);
+    expect(ids(followStepTokens(everyone, [], 'spirit'))).toEqual(['monk']);
+  });
+
+  it('never holds a hidden token, nor a creature the preview cannot see', () => {
+    const list = ids(followStepTokens(everyone, [near], 'material'));
+    expect(list).not.toContain('hidden');
+    expect(list).not.toContain('unseen-goblin');
   });
 });
