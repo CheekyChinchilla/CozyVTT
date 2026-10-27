@@ -80,6 +80,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Every tab of a character sheet can be reached on a phone.** The row of tabs on the D&D 5e and Call of Cthulhu sheets and on the D&D 5e, Pathfinder 2e and Call of Cthulhu editors never wrapped, so where it was wider than the sheet its last tabs, such as **Biography** and **Backstory**, were cut off and could not be reached: on a phone, and for the D&D 5e and Pathfinder 2e rows on an iPad held upright too. The tabs now go onto a second row, or a third, where they do not fit on one.
 
+- **The My Characters page and the page a character is edited on no longer scroll sideways on a phone.** The buttons in their headers, and **Import** and **Create Character** on **My Characters**, stayed on one line beside the title. They now go under it where the line is too narrow for both.
+
 - **Tapping a box on an iPhone or an iPad no longer zooms the page.** Safari zooms in when a text box, a drop-down list or a text area with text smaller than 16 pixels is tapped, and the page stays zoomed after you leave the box. Most boxes on a character sheet were that small, and many on the campaign page too. On a phone or a tablet their text is now 16 pixels, and a box with bigger text, such as a sheet's name, keeps its size. With a mouse nothing changes.
 
 ## [1.5.4] - 2026-10-25
