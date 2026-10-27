@@ -19,6 +19,7 @@ import { emitToMapReaders } from '../utils';
 import { pingLimiter } from '../shared';
 import { prisma } from '../../config/database';
 import { canReadMap } from '../../services/permissions';
+import { CoordinateSchema } from '../../validators/maps';
 
 /** Max pings per user per window, and the window itself. */
 const PING_LIMIT = 10;
@@ -41,8 +42,10 @@ export function registerPingHandlers(io: Server, socket: AuthenticatedSocket): v
       const { mapId, x, y } = data ?? {};
 
       if (!mapId || typeof mapId !== 'string') return;
-      if (typeof x !== 'number' || typeof y !== 'number') return;
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      // A number within MAX_COORDINATE of the map's corner, the bound on walls
+      // and lights: every screen draws the ping where it says. Checked before
+      // the limit, so a refused ping costs no allowance and no read.
+      if (!CoordinateSchema.safeParse(x).success || !CoordinateSchema.safeParse(y).success) return;
 
       // Silent drop over the limit — see the note in shared.ts.
       if (!pingLimiter.check(socket.userId!, PING_LIMIT, PING_WINDOW_MS)) return;

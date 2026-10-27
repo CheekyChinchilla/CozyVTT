@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - *Maps.* A map's `annotations` is an empty array for everyone, the DM included, in `GET /api/campaigns/:campaignId/maps/:id`, the reply to `PUT .../maps/:id/tokens/:tokenId` and `map.changed`. It carried whatever a campaign import had stored from its archive. Nothing in the app reads it.
   - *Maps.* `GET /api/campaigns/:campaignId/maps` gives each map its `campaignId` and `baseLayerUrl` as well, the fields `GET /api/campaigns/:campaignId` already gave each of its maps.
   - *Live table: limits.* A fog `reveal` or `hide` names at most 250,000 cells, the most grid squares any map has. A longer one is refused and nothing is stored: `fog:operation` answers `error` and `POST /api/campaigns/:campaignId/maps/:id/fog/operation` answers 400, both with "A fog operation can name at most 250,000 cells. Use reveal_all or hide_all for the whole map." The list had no maximum.
+  - *Live table: limits.* A `map.ping` whose `x` or `y` is more than 250,000 pixels from the map's corner either way, the bound on walls and lights, is dropped with no answer, as a ping that is not a number already was, and it does not count against the sender's 10 pings every ten seconds. Any finite number used to be passed on to the table.
 
 ### Fixed
 
