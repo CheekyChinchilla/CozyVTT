@@ -25,7 +25,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
-  PanelRightOpen, Settings, BookOpen } from 'lucide-react';
+  PanelRightOpen, Settings, BookOpen, Keyboard } from 'lucide-react';
 import {
   Group,
   Panel,
@@ -54,6 +54,7 @@ import TokenTemplateLibrary from '@/components/campaign/TokenTemplateLibrary';
 import TokenRoster from '@/components/campaign/TokenRoster';
 import CampaignSettingsModal from '@/components/campaign/CampaignSettingsModal';
 import CampaignDocumentsModal from '@/components/documents/CampaignDocumentsModal';
+import ShortcutsPanel from '@/components/campaign/ShortcutsPanel';
 import SessionSidebar from '@/components/campaign/SessionSidebar';
 import SessionToolbar, { type SessionToolKey } from '@/components/campaign/SessionToolbar';
 import ConnectionStatus from '@/components/ConnectionStatus';
@@ -134,6 +135,8 @@ function CampaignPageContent() {
   const [isAtmospherePanelOpen, setIsAtmospherePanelOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDocumentsOpen, setIsDocumentsOpen] = useState(false);
+  // The keyboard shortcuts window, opened from the header or by ? on the map.
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isCreatureLibraryOpen, setIsCreatureLibraryOpen] = useState(false);
   const [isTokenTemplateLibraryOpen, setIsTokenTemplateLibraryOpen] = useState(false);
   const [quickEditToken, setQuickEditToken] = useState<Token | null>(null);
@@ -389,6 +392,15 @@ function CampaignPageContent() {
               onClick={() => setIsDocumentsOpen(true)}
             />
           </Tooltip>
+          <Tooltip content="Keyboard shortcuts" side="bottom">
+            <Button
+              variant="ghost"
+              iconOnly
+              icon={Keyboard}
+              aria-label="Keyboard shortcuts"
+              onClick={() => setIsShortcutsOpen(true)}
+            />
+          </Tooltip>
 
           {/* Sidebar collapse toggles (all roles) */}
           <div className="h-6 w-px bg-moss-green/20" />
@@ -467,7 +479,7 @@ function CampaignPageContent() {
                   </div>
                 }
               >
-                <MapCanvas onEditToken={setQuickEditToken} />
+                <MapCanvas onEditToken={setQuickEditToken} onShowShortcuts={() => setIsShortcutsOpen(true)} />
               </Suspense>
             </section>
           </Panel>
@@ -571,6 +583,8 @@ function CampaignPageContent() {
           isDM={userRole === 'DM'}
         />
       )}
+
+      <ShortcutsPanel open={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} role={userRole} />
 
       {/* Atmosphere Player — mounts for ALL users, manages ambient audio sync */}
       <AtmospherePlayer />

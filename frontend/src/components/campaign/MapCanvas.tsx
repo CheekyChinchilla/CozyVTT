@@ -79,7 +79,7 @@ import { releaseHeldToken } from './map/tokenHold';
 import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
-import { keyBelongsToMap, mapKeyAction, createRepeatPacer, ARROW_REPEAT_MS } from './map/keyboard';
+import { keyBelongsToMap, mapKeyAction, createRepeatPacer, ARROW_REPEAT_MS, MAP_KEYS_HINT } from './map/keyboard';
 import { selectableTokens, nextSelectedId, squareFromArrow, panToKeepInView, settleArrowEcho, type ArrowKey, type StepDirection } from './map/selection';
 import { tokenCentre } from '@/utils/tokenCentre';
 import { createOwnEdits } from './map/ownEdits';
@@ -142,9 +142,11 @@ type DmTool =
 
 interface MapCanvasProps {
   onEditToken?: (token: Token) => void;
+  /** The ? key: the page shows the keyboard shortcuts window, which it holds. */
+  onShowShortcuts?: () => void;
 }
 
-export default function MapCanvas({ onEditToken }: MapCanvasProps) {
+export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasProps) {
   const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
   const characterHpCache = useCharacterHp();
   // Live token state comes from the game store, not the campaign context —
@@ -2756,13 +2758,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   /**
    * The keys that act on the selected token: the arrows move it, [ and ]
-   * turn it, , and . step the selection, Enter opens its menu. True when the
-   * map used the key; only then is the browser kept from doing anything with
-   * it. A held [, ], , or . acts once per press, and a held arrow at the
-   * pacer's rate.
+   * turn it, , and . step the selection, Enter opens its menu; and ? asks
+   * for the shortcuts window. True when the map used the key; only then is
+   * the browser kept from doing anything with it. A held [, ], , . or ?
+   * acts once per press, and a held arrow at the pacer's rate.
    */
   const tokenKey = (e: KeyboardEvent): boolean => {
-    if (!currentMap) return false;
     const action = mapKeyAction(e);
     if (!action || !keyBelongsToMap(e, layersRef.current, contextMenuRef.current)) return false;
     const selected = selectedShown();
@@ -2781,6 +2782,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       case 'menu':
         if (!selected || !tokenMenuHasItems(selected)) return false;
         if (!e.repeat) openTokenMenuAt(selected);
+        break;
+      case 'shortcuts':
+        if (!onShowShortcuts) return false;
+        if (!e.repeat) onShowShortcuts();
         break;
     }
     e.preventDefault();
@@ -3008,9 +3013,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         />
       </div>
 
-      <p id={mapHintId} className="sr-only">
-        Click a token, or press full stop or comma, to select one. Arrow keys move it, square brackets turn it, and Enter opens its menu. Escape lets go. Shift+Tab leaves the map.
-      </p>
+      <p id={mapHintId} className="sr-only">{MAP_KEYS_HINT}</p>
       <p role="status" aria-live="polite" className="sr-only">{selectionAnnouncement}</p>
 
       {/* Vibe hue tint overlay — color tint layered on top of canvas */}

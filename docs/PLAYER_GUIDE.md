@@ -601,7 +601,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 ### Keyboard Shortcuts
 
-On the map, once you've clicked it:
+On the map, once you've clicked it. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see this list on screen.
 
 | Action | Shortcut |
 |--------|---------|
@@ -613,6 +613,7 @@ On the map, once you've clicked it:
 | Let go of one thing: the menu, a held token, the tool, then the selection | `Esc` |
 | Ping the map | `Tab` (cursor over the map) |
 | Place a spell area off the grid | `Alt + click` (AoE tool) |
+| Show these shortcuts | `?` |
 
 **Shift+Tab** moves the keyboard from the map back to the page's controls.
 

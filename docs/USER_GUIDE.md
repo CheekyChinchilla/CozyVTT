@@ -257,7 +257,7 @@ Each token has:
 
 **Moving tokens:** During a session, click a token to pick it up, move the pointer to where it should go, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. Everyone connected sees the movement as it happens.
 
-**Selecting and the keyboard:** Clicking a token also selects it, marked with a dashed light-blue ring, and the keyboard then acts on it: the arrow keys move it a square (five with **Shift**), **,** and **.** step to the previous or next token you can act on, and **Enter** opens its menu. Every key is in [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts).
+**Selecting and the keyboard:** Clicking a token also selects it, marked with a dashed light-blue ring, and the keyboard then acts on it: the arrow keys move it a square (five with **Shift**), **,** and **.** step to the previous or next token you can act on, and **Enter** opens its menu. Press **?** on the map for every key, or see [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts).
 
 **Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces, or select it and press **[** or **]**. The DM can turn any token at any time, and set an exact angle in **Edit Token**; a player can turn the tokens they control while the session is live, as they move them.
 

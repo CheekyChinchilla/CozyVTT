@@ -822,6 +822,23 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 
 ---
 
+### Keyboard Shortcuts
+
+Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo:
+
+| Action | Shortcut |
+|--------|---------|
+| Nudge the selected walls one pixel | `Arrow keys` |
+| Nudge the selected walls one square | `Shift + arrow keys` |
+| Select every wall, in **Select** mode | `Ctrl + A` |
+| Add a wall to the selection, or take it out | `Shift + click` |
+| Delete the selected walls | `Delete` `Backspace` |
+| Finish a wall line | `Double-click` |
+| Undo the last wall change | `Ctrl + Z` |
+| Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
+
+On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token.
+
 ## Combat and Initiative
 
 ### Starting the Initiative Tracker

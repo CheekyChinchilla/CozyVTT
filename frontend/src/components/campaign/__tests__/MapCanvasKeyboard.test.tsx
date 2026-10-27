@@ -1347,3 +1347,28 @@ describe('Follow my selection', () => {
     expect(card('Alya')).not.toBeInTheDocument();
   });
 });
+
+describe('the ? key', () => {
+  it('asks the page to show the shortcuts, once for a key held down', () => {
+    const onShowShortcuts = vi.fn();
+    render(<MapCanvas onShowShortcuts={onShowShortcuts} />);
+
+    press('?', { shiftKey: true });
+    press('?', { shiftKey: true, repeat: true });
+
+    expect(onShowShortcuts).toHaveBeenCalledTimes(1);
+  });
+
+  it('types a question mark in the chat box, as any other key there does', () => {
+    const onShowShortcuts = vi.fn();
+    render(<MapCanvas onShowShortcuts={onShowShortcuts} />);
+    const chat = document.createElement('textarea');
+    document.body.append(chat);
+    chat.focus();
+
+    expect(pressOn(chat, '?')).toBe(false);
+
+    expect(onShowShortcuts).not.toHaveBeenCalled();
+    chat.remove();
+  });
+});

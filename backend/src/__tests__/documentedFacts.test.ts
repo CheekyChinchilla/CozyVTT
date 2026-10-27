@@ -730,3 +730,95 @@ describe('the install-script list the guides describe', () => {
     }
   });
 });
+
+describe('the keyboard shortcuts the guides list', () => {
+  // MAP_SHORTCUTS is what the map's ? window shows. The guides spell each
+  // key the same way, as a code span, so a key added, changed or dropped
+  // there fails here until the guide's table says the same. What is held is
+  // the keys and who they are for (which guide's table); the descriptions
+  // are not compared, since each guide words them for its readers. Read as
+  // text: Jest cannot import the frontend's modules. One shortcut per line,
+  // and every row of the list is counted, so a row written another way
+  // fails here.
+  const source = read('frontend/src/components/campaign/map/keyboard.ts');
+  const listStart = source.indexOf('export const MAP_SHORTCUTS');
+  const listEnd = source.indexOf('\n];', listStart);
+  if (listStart === -1 || listEnd === -1) throw new Error('keyboard.ts no longer declares MAP_SHORTCUTS as a list closed by ];');
+  const declared = source.slice(listStart, listEnd);
+  const shortcuts = declared
+    .split('\n')
+    .filter((line) => /^\s*\{ keys: \[/.test(line))
+    .map((line) => {
+      const keys = /keys: \[(.*?)\], does:/.exec(line)?.[1] ?? '';
+      return {
+        keys: [...keys.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1].replace(/\\(.)/g, '$1')).sort(),
+        who: /who: '(\w+)'/.exec(line)?.[1],
+      };
+    });
+
+  /** The keys of each row of the first table after `heading`, from the row's code spans. */
+  function tableKeys(rel: string, heading: string): string[][] {
+    const guide = read(rel);
+    const start = guide.indexOf(heading);
+    if (start === -1) throw new Error(`${rel} no longer has the heading ${heading}`);
+    const lines = guide.slice(start).split('\n');
+    const first = lines.findIndex((line) => line.startsWith('|'));
+    const end = lines.findIndex((line, i) => i > first && !line.startsWith('|'));
+    return lines
+      .slice(first + 2, end)
+      .map((row) => [...row.matchAll(/`([^`]+)`/g)].map((m) => m[1]).sort())
+      .filter((keys) => keys.length > 0);
+  }
+
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((k, i) => k === b[i]);
+  const tables = [
+    { rel: 'docs/PLAYER_GUIDE.md', mine: (who?: string) => who === 'everyone' || who === 'actors' },
+    { rel: 'docs/DM_GUIDE.md', mine: (who?: string) => who === 'dm' },
+  ];
+
+  it('are read from the source in its one-line form, every row of it', () => {
+    expect(shortcuts.length).toBe((declared.match(/\bwho:/g) ?? []).length);
+    expect(shortcuts.length).toBeGreaterThanOrEqual(15);
+    for (const s of shortcuts) {
+      expect(s.keys.length).toBeGreaterThan(0);
+      expect(['everyone', 'actors', 'dm']).toContain(s.who);
+    }
+  });
+
+  // The map's screen-reader hint names the token keys in words. Every key a
+  // player can use on the map, but Tab and the clicks, is named there.
+  const spoken: Record<string, string> = {
+    'Arrow keys': 'arrow keys',
+    'Shift + arrow keys': 'with shift',
+    ',': 'comma',
+    '<': 'comma',
+    '.': 'full stop',
+    '>': 'full stop',
+    '[': 'square brackets',
+    ']': 'square brackets',
+    Enter: 'enter',
+    Esc: 'escape',
+    '?': 'question mark',
+  };
+  it("are each named in the map's screen-reader hint", () => {
+    const hint = /export const MAP_KEYS_HINT =\s*'([^']*)'/.exec(source)?.[1];
+    if (hint === undefined) throw new Error('keyboard.ts no longer declares MAP_KEYS_HINT as one quoted string');
+    const named = shortcuts
+      .filter((s) => s.who !== 'dm')
+      .flatMap((s) => s.keys)
+      .filter((k) => k !== 'Tab' && !k.includes('click'));
+    for (const k of named) {
+      const word = spoken[k];
+      if (word === undefined) throw new Error(`no spoken name for the key ${k}: add it here and to MAP_KEYS_HINT`);
+      expect(hint.toLowerCase()).toContain(word);
+    }
+  });
+
+  it.each(tables)("are each a row of $rel's Keyboard Shortcuts table, and the table lists no others", ({ rel, mine }) => {
+    const rows = tableKeys(rel, '### Keyboard Shortcuts');
+    const listed = shortcuts.filter((s) => mine(s.who));
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed.filter((s) => !rows.some((row) => same(row, s.keys))).map((s) => s.keys)).toEqual([]);
+    expect(rows.filter((row) => !listed.some((s) => same(row, s.keys)))).toEqual([]);
+  });
+});

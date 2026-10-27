@@ -181,6 +181,12 @@ describe('what a key asks the map for', () => {
     expect(mapKeyAction(key('Enter', { shiftKey: true }))).toBeNull();
   });
 
+  it('shows the shortcuts with ?, however the layout types it', () => {
+    // Shift+/ on a US keyboard, Shift+, on a French one: either way the key is ?.
+    expect(mapKeyAction(key('?', { shiftKey: true }))).toEqual({ kind: 'shortcuts' });
+    expect(mapKeyAction(key('?', { shiftKey: true, metaKey: true }))).toBeNull();
+  });
+
   it('asks for nothing on any other key', () => {
     expect(mapKeyAction(key('a'))).toBeNull();
     expect(mapKeyAction(key('Tab'))).toBeNull();
