@@ -692,6 +692,8 @@ one shared function rather than one per component.
   - A box with `flex-1` in a row takes `min-w-0`, so it shrinks beside the row's buttons instead of pushing them off the edge. A row of more boxes than fit wraps (`flex flex-wrap gap-2 sm:flex-nowrap`), with the box that names the row on a line of its own (`basis-full sm:basis-0`) or filling the first line beside a small box (`basis-[calc(100%-4.25rem)] sm:basis-0`). A heading with an **Add** button beside it wraps too (`flex flex-wrap items-center justify-between gap-2`).
   - A box keeps its own width from `sm` up: add the phone's classes in front of it and leave its own where they are (`min-w-0 flex-1 sm:flex-initial w-28`).
   - A button that removes a row (**×**) takes `touch-target inline-flex items-center justify-center`, 44 by 44 px where the pointer is coarse, and the row or the grid column it sits in leaves room for it there.
+  - A control that shows only while the pointer is over its row (`opacity-0 group-hover:opacity-100`) shows where nothing can hover too (`[@media(hover:none)]:opacity-100`): a finger never brings it up.
+  - An entry the player drags into a new place is a `DragEntry` (`frontend/src/components/character-sheets/flexible/components/DragEntry.tsx`), which a finger drags by its grip and a mouse from anywhere but a text box. A `Reorder.Item` on its own drags from anywhere, by touch too, so a swipe that starts on it moves it and the page does not scroll.
 
 The editor calls `onSave(data, showToast?, tokenImageUrl?)`; the generic save chain (CharacterEditorPage → API) handles persistence — you don't wire anything else.
 

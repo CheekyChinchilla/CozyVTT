@@ -5,6 +5,7 @@
 import React from 'react';
 import { Plus, Trash2, GripVertical, CheckSquare, Square } from 'lucide-react';
 import { Reorder } from 'framer-motion';
+import { DragEntry } from '../DragEntry';
 import type { ListSection } from '../../../../../types/flexible-character-sheet';
 import { generateId } from '../../utils/section-helpers';
 import { FLEXIBLE_MAX_ROWS, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
@@ -48,22 +49,29 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
       {section.items.length > 0 ? (
         <Reorder.Group axis="y" values={section.items} onReorder={reorderItems} className="space-y-2">
           {section.items.map((item) => (
-            <Reorder.Item key={item.id} value={item}>
-              <div className="flex items-center gap-2 p-2 bg-ink/5 border border-moss-green/20 rounded-lg group hover:bg-ink/10 transition-colors">
-                <div className="shrink-0 cursor-grab active:cursor-grabbing">
-                  <GripVertical className="w-5 h-5 text-stone-gray" />
-                </div>
+            <DragEntry key={item.id} value={item}>
+              {(grip) => (
+                <div className="flex items-center gap-2 p-2 bg-ink/5 border border-moss-green/20 rounded-lg group hover:bg-ink/10 transition-colors">
+                  <div
+                    data-drag-grip
+                    onPointerDown={grip.onPointerDown}
+                    className={`shrink-0 touch-target inline-flex items-center justify-center cursor-grab active:cursor-grabbing ${grip.className}`}
+                  >
+                    <GripVertical className="w-5 h-5 text-stone-gray" />
+                  </div>
 
-                <button
-                  onClick={() =>
-                    updateItem(item.id, { checked: !item.checked })
-                  }
-                  className="shrink-0"
-                >
-                  {item.checked ? (
-                    <CheckSquare className="w-5 h-5 text-brand-ink" />
-                  ) : (
-                    <Square className="w-5 h-5 text-stone-gray" />
+                  <button
+                    onClick={() =>
+                      updateItem(item.id, { checked: !item.checked })
+                    }
+                    // TODO(sheets): this tick has no accessible name or state; it wants
+                    // aria-label "Done" (or the entry's text) and aria-pressed.
+                    className="shrink-0"
+                  >
+                    {item.checked ? (
+                      <CheckSquare className="w-5 h-5 text-brand-ink" />
+                    ) : (
+                      <Square className="w-5 h-5 text-stone-gray" />
                   )}
                 </button>
 
@@ -72,19 +80,20 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
                   value={item.text}
                   onChange={(e) => updateItem(item.id, { text: e.target.value })}
                   maxLength={SHEET_SHORT_TEXT_MAX}
-                  className="flex-1 bg-transparent border-none focus:outline-hidden text-warm-gray"
+                  className="min-w-0 flex-1 bg-transparent border-none focus:outline-hidden text-warm-gray"
                   placeholder="Enter item text..."
                 />
 
                 <button
                   onClick={() => removeItem(item.id)}
-                  className="shrink-0 p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
+                  className="shrink-0 touch-target inline-flex items-center justify-center p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-danger/15"
                   title="Remove item"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-            </Reorder.Item>
+              )}
+            </DragEntry>
           ))}
         </Reorder.Group>
       ) : (

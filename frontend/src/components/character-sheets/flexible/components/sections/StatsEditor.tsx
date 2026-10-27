@@ -60,7 +60,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
           >
             <button
               onClick={() => removeField(field.id)}
-              className="absolute top-2 right-2 p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
+              className="absolute top-2 right-2 touch-target inline-flex items-center justify-center p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-danger/15"
               title="Remove stat"
             >
               <Trash2 className="w-4 h-4" />
@@ -72,7 +72,8 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                 value={field.name}
                 onChange={(e) => updateField(field.id, { name: e.target.value })}
                 maxLength={SHEET_NAME_MAX}
-                className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-brand-ink"
+                // Clear of the delete button where it always shows.
+                className="w-full [@media(hover:none)]:pr-12 text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-brand-ink"
                 placeholder="Stat name"
               />
 
