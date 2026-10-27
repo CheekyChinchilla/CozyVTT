@@ -3583,6 +3583,11 @@ paths:
         Dice rolls are not chat messages and are never returned here — they are
         served by `GET /api/campaigns/{campaignId}/dice-rolls`, which is the
         only path that applies the secret-roll rules.
+
+        A whisper (`type` WHISPER) is returned only to its sender and its
+        recipient; whispers between other people are left out of every page,
+        the DM's included. One whose recipient's account was deleted has a
+        null `recipientId` and is returned to its sender alone.
       operationId: getMessages
       security:
         - cookieAuth: []
@@ -13188,10 +13193,28 @@ components:
               format: uuid
             displayName:
               type: string
+        recipientId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The one member a WHISPER is for. Null on every other message, and on a whisper whose recipient's account was deleted.
+        recipientName:
+          type: string
+          nullable: true
+          description: The recipient's display name; null when there is no recipient.
+        recipient:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            displayName:
+              type: string
         type:
           type: string
-          enum: [PLAYER, DM, SYSTEM, DICE_ROLL, CHARACTER_ACTION]
-          description: DICE_ROLL messages are never returned by the message history; dice have their own history.
+          enum: [PLAYER, DM, SYSTEM, DICE_ROLL, CHARACTER_ACTION, WHISPER]
+          description: DICE_ROLL messages are never returned by the message history; dice have their own history. A WHISPER is returned to its sender and its recipient alone.
         content:
           type: string
         metadata:
