@@ -532,8 +532,10 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
       </div>
 
       {/* Characters */}
+      {/* Not indented on a touch screen, where the hit point buttons are 44
+          pixels each and need the room. */}
       {member.characters.length > 0 && (
-        <div className="ml-9 space-y-1">
+        <div className="ml-9 pointer-coarse:ml-0 space-y-1">
           {member.characters.map((character) => {
             // The DM may place any character. This used to also require a token
             // picture, which meant the handle only existed on characters that
@@ -619,32 +621,40 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                     )}
                   </div>
                   {/* HP controls row */}
+                  {/* On a touch screen the buttons are 44 pixels each, and four
+                      of them do not fit one line of a narrow panel: the row
+                      wraps, keeping each pair together, the plus pair on the
+                      right. */}
                   {canAdjust && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => onHpDelta(character.id, -5)}
-                        className="flex items-center justify-center w-5 h-5 rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
-                        title="−5 HP"
-                      >−5</button>
-                      <button
-                        onClick={() => onHpDelta(character.id, -1)}
-                        className="flex items-center justify-center w-5 h-5 rounded-sm text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
-                        title="−1 HP"
-                      ><Minus className="w-3 h-3" /></button>
+                    <div className="flex items-center gap-1 pointer-coarse:flex-wrap">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => onHpDelta(character.id, -5)}
+                          className="flex items-center justify-center w-5 h-5 touch-target rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
+                          title="−5 HP"
+                        >−5</button>
+                        <button
+                          onClick={() => onHpDelta(character.id, -1)}
+                          className="flex items-center justify-center w-5 h-5 touch-target rounded-sm text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
+                          title="−1 HP"
+                        ><Minus className="w-3 h-3" /></button>
+                      </div>
                       <span className="flex-1 text-center text-xs font-semibold text-stone-gray">
                         {hp.current}<span className="font-normal text-warm-gray">/{hp.max}</span>
                         {hp.temp > 0 && <span className="text-info-ink ml-0.5">+{hp.temp}</span>}
                       </span>
-                      <button
-                        onClick={() => onHpDelta(character.id, 1)}
-                        className="flex items-center justify-center w-5 h-5 rounded-sm text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
-                        title="+1 HP"
-                      ><Plus className="w-3 h-3" /></button>
-                      <button
-                        onClick={() => onHpDelta(character.id, 5)}
-                        className="flex items-center justify-center w-5 h-5 rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
-                        title="+5 HP"
-                      >+5</button>
+                      <div className="flex items-center gap-1 pointer-coarse:ml-auto">
+                        <button
+                          onClick={() => onHpDelta(character.id, 1)}
+                          className="flex items-center justify-center w-5 h-5 touch-target rounded-sm text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
+                          title="+1 HP"
+                        ><Plus className="w-3 h-3" /></button>
+                        <button
+                          onClick={() => onHpDelta(character.id, 5)}
+                          className="flex items-center justify-center w-5 h-5 touch-target rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
+                          title="+5 HP"
+                        >+5</button>
+                      </div>
                     </div>
                   )}
                   {/* Read-only HP display for spectators/others who can't adjust */}

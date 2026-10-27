@@ -136,7 +136,9 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
   const hp = hpLabel(token);
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-cozy hover:bg-moss-green/5 group">
+    // On a touch screen the actions are 44 pixels each, too wide to sit beside
+    // the name in a narrow panel: the row lets them go under it.
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-cozy hover:bg-moss-green/5 group pointer-coarse:flex-wrap">
       {/* Token image */}
       {token.imageUrl ? (
         <img
@@ -165,14 +167,14 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
       {/* Actions — shown on hover, while one has keyboard focus, and always on a
           screen with no hover (touch), where they would otherwise be tappable
           before they could be seen. */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0 pointer-coarse:shrink pointer-coarse:flex-wrap pointer-coarse:justify-end pointer-coarse:ml-auto">
         {/* Edit — every token type */}
         {onEditToken && (
           <button
             onClick={() => onEditToken(token)}
             title="Edit token"
             aria-label={`Edit ${token.name}`}
-            className="p-1.5 rounded-sm hover:bg-moss-green/10 text-brand-ink transition-colors"
+            className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-brand-ink transition-colors"
           >
             <Edit2 className="w-3.5 h-3.5" />
           </button>
@@ -183,7 +185,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           onClick={handleToggleVisible}
           title={token.visible ? 'Hide from players' : 'Show to players'}
           aria-label={token.visible ? `Hide ${token.name} from players` : `Show ${token.name} to players`}
-          className="p-1.5 rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors"
+          className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors"
         >
           {token.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
@@ -193,7 +195,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           onClick={handleToggleObscured}
           title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
           aria-label={token.obscured ? `Reveal identity of ${token.name}` : `Obscure identity of ${token.name}`}
-          className={`p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
+          className={`p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
         >
           <HelpCircle className="w-3.5 h-3.5" />
         </button>
@@ -204,7 +206,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           disabled={isDuplicating}
           title="Duplicate token"
           aria-label={`Duplicate ${token.name}`}
-          className="p-1.5 rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors disabled:opacity-40"
+          className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors disabled:opacity-40"
         >
           {isDuplicating ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -219,7 +221,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           disabled={isDeleting}
           title="Remove from map"
           aria-label={`Remove ${token.name} from map`}
-          className="p-1.5 rounded-sm hover:bg-danger/10 text-danger-ink/60 hover:text-danger-ink transition-colors disabled:opacity-40"
+          className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-danger/10 text-danger-ink/60 hover:text-danger-ink transition-colors disabled:opacity-40"
         >
           {isDeleting ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
