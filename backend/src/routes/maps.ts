@@ -1444,19 +1444,9 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    // Validate position is within map bounds
-    if (requested.x < 0 || requested.x >= map.width ||
-        requested.y < 0 || requested.y >= map.height) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: `Token position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
-      });
-    }
-    // And its whole footprint on the map, as the client keeps it on a move.
-    // Placing from a library puts a token at the map's centre, so a large
-    // creature on a small map would otherwise hang off the far edge.
+    // Whether it is on the map, and where its footprint ends up, are judged
+    // under the map's lock, below.
     const size = shapes.value.size ?? { width: 1, height: 1 };
-    const position = clampTokenPosition(requested, size, map);
 
     // Validate layer
     const layer = tokenData.layer || 'token';
@@ -1535,7 +1525,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       characterId,
       name: tokenData.name,
       imageUrl: normalizedTokenImageUrl || '',
-      position,
+      position: requested,
       size,
       layer,
       visible: shapes.value.visible ?? true,
@@ -1561,17 +1551,29 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     // Appended under the map's lock, to the list as it is then: another
     // write landing between this route's read and its write used to be lost.
     // The token limit is counted there too, so two adds at once cannot both
-    // take the last place.
-    const appended = await withMapsLocked([mapId], async (tx) => {
-      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    // take the last place, and the position is checked against the map's
+    // size then, as a resize landing meanwhile moves the edge. The whole
+    // footprint is kept on the map, as the client keeps it on a move:
+    // placing from a library puts a token at the map's centre, so a large
+    // creature on a small map would otherwise hang off the far edge.
+    const appended = await withMapsLocked([mapId], async (tx): Promise<LockedEdit<{ map: MapRow; token: typeof newToken }>> => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true, width: true, height: true } });
+      if (requested.x < 0 || requested.x >= fresh.width || requested.y < 0 || requested.y >= fresh.height) {
+        return {
+          status: 400,
+          error: 'Validation Error',
+          message: `Token position must be within map bounds (0-${fresh.width-1}, 0-${fresh.height-1})`,
+        };
+      }
       const tokens = readTokens(fresh.tokens);
-      if (tokens.length >= MAP_LIMITS.maxTokens) return { full: tokens.length + 1 };
-      return { map: await tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...tokens, newToken]) } }) };
+      if (tokens.length >= MAP_LIMITS.maxTokens) {
+        return { status: 400, error: 'Limit Exceeded', message: tooManyTokensMessage(tokens.length + 1) };
+      }
+      const token = { ...newToken, position: clampTokenPosition(requested, size, fresh) };
+      return { done: { map: await tx.map.update({ where: { id: mapId }, data: { tokens: toJson([...tokens, token]) } }), token } };
     });
-    if (appended.full !== undefined) {
-      return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(appended.full) });
-    }
-    const updatedMap = appended.map;
+    if (!('done' in appended)) return sendRefusal(res, appended);
+    const { map: updatedMap, token: addedToken } = appended.done;
     resendSoonIfCurrent(campaignId, mapId);
 
     // A player's spirit-layer token placed on the map the table is on moves
@@ -1581,7 +1583,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
 
     return res.status(201).json({
       message: 'Token added successfully',
-      token: newToken,
+      token: addedToken,
       map: updatedMap,
     });
   } catch (error) {
@@ -2162,14 +2164,16 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segment' });
     }
-    if (wallOutsideMap([parsed.data], map)) {
-      return res.status(400).json({ error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE });
-    }
 
     const segment = parsed.data;
     const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<number>> => {
-      const fresh = await tx.map.findUnique({ where: { id }, select: { wallSegments: true } });
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, wallSegments: true } });
       if (!fresh) return MAP_GONE;
+      // Against the map's size as it is now, as the socket add judges it: a
+      // grid change landing since this route read the map moves the bound.
+      if (wallOutsideMap([segment], fresh)) {
+        return { status: 400, error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE };
+      }
       const existing = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
       if (existing.length >= MAX_WALL_SEGMENTS) {
         return { status: 400, error: 'Limit Exceeded', message: TOO_MANY_WALLS_MESSAGE };
@@ -2345,14 +2349,15 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid light source' });
     }
-    if (lightOutsideMap([parsed.data], map)) {
-      return res.status(400).json({ error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE });
-    }
 
     const added = parsed.data;
     const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<number>> => {
-      const fresh = await tx.map.findUnique({ where: { id }, select: { lights: true } });
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
       if (!fresh) return MAP_GONE;
+      // Against the map's size as it is now, as the socket add judges it.
+      if (lightOutsideMap([added], fresh)) {
+        return { status: 400, error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE };
+      }
       const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
       if (existing.length >= MAX_LIGHT_SOURCES) {
         return { status: 400, error: 'Limit Exceeded', message: TOO_MANY_LIGHTS_MESSAGE };
