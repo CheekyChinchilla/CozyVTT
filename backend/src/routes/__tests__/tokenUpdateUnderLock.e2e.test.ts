@@ -8,7 +8,8 @@
  * a player's move to the far column waited left it hanging off the map, and
  * metadata the DM set meanwhile was written over by a merge with the old
  * copy. The bounds, the clamp and the metadata merge are now worked out
- * under the lock.
+ * under the lock, and who is told of a drop is judged by the token as the
+ * drop wrote it: a token the DM hid meanwhile went on reaching players.
  *
  * Each case holds the lock, sends the update, waits until it is in line for
  * the lock (so it has read the map), changes the token and commits.
@@ -21,7 +22,7 @@ import request from 'supertest';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupCampaigns, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
-import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { createWsTestServer, waitForEvent, type WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { withMapsLocked, writersWaitingFor } from '../../utils/mapTokens';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import type { Token } from '../../websocket/shared';
@@ -32,6 +33,7 @@ const app = createTestApp();
 let server: WsTestServer;
 let dmId: string;
 let playerId: string;
+let otherPlayerId: string;
 let campaignId: string;
 let mapId: string;
 let dm: ReturnType<typeof request.agent>;
@@ -82,17 +84,38 @@ async function changeTokenWhileWaiting<T>(write: () => Promise<T>, change: (toke
 
 const growToTwoByTwo = (t: Token): Token => ({ ...t, size: { width: 2, height: 2 } });
 
+/** The events of `names` a client is sent from now on, in order. */
+function recordEvents(client: ClientSocket, names: string[]): string[] {
+  const seen: string[] = [];
+  for (const name of names) client.on(name, () => seen.push(name));
+  return seen;
+}
+
+/**
+ * A round trip on the client's connection. Everything the server sent it
+ * before answering arrives first, so a broadcast that reached another
+ * member before this was sent has reached this client too, or never will.
+ */
+async function roundTrip(client: ClientSocket): Promise<void> {
+  const pong = waitForEvent(client, 'pong');
+  client.emit('ping');
+  await pong;
+}
+
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
   const dmUser = await createTestUser({ email: `tokenlock-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
   const playerUser = await createTestUser({ email: `tokenlock-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
+  const otherUser = await createTestUser({ email: `tokenlock-other-${stamp}@test.cozyvtt.local`, displayName: 'Other' });
   dmId = dmUser.id;
   playerId = playerUser.id;
+  otherPlayerId = otherUser.id;
   campaignId = (await createTestCampaign(dmId, { name: `Token lock ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
       { userId: dmId, campaignId, role: 'DM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: otherPlayerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   mapId = (await prisma.map.create({
@@ -118,7 +141,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([dmId, playerId, otherPlayerId]);
   await prisma.$disconnect();
 });
 
@@ -142,6 +165,30 @@ describe('a move to the last column while the DM grows the token', () => {
       expect((await storedHero())?.position).toEqual({ x: 8, y: 1 });
     } finally {
       page.disconnect();
+    }
+  });
+});
+
+describe('a drop while the DM hides the token', () => {
+  it('is not sent to another player, and the DM is still told', async () => {
+    const page = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const other = await server.connectAndAuth(await server.loginAs(otherPlayerId), campaignId);
+    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    try {
+      const dmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(dmPage, 'token.moved', 5000);
+      const otherSaw = recordEvents(other, ['token.moved']);
+      await changeTokenWhileWaiting(
+        async () => { page.emit('token.move.end', { tokenId: HERO, mapId, x: 5, y: 1 }); },
+        (t) => ({ ...t, visible: false })
+      );
+      expect(await dmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 5, y: 1 }));
+      await roundTrip(other);
+      expect(otherSaw).toEqual([]);
+      expect(await storedHero()).toEqual(expect.objectContaining({ visible: false, position: { x: 5, y: 1 } }));
+    } finally {
+      page.disconnect();
+      other.disconnect();
+      dmPage.disconnect();
     }
   });
 });

@@ -572,8 +572,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // it by the token's size then, the rule the client applies before it
       // sends a drop; everyone, the mover included, is told where it went.
       // Judged by the map read before the lock, a token the DM grew or a map
-      // the DM shrank meanwhile was left hanging off the edge.
-      const dropped = await withMapsLocked([mapId], async (tx): Promise<{ refused: string } | { x: number; y: number; tokens: Token[] }> => {
+      // the DM shrank meanwhile was left hanging off the edge. Who is told
+      // is judged by the token as written there too: one the DM hid
+      // meanwhile had its new square sent to players.
+      const dropped = await withMapsLocked([mapId], async (tx): Promise<{ refused: string } | { written: Token; tokens: Token[] }> => {
         const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true, width: true, height: true } });
         if (dropX < 0 || dropX >= fresh.width || dropY < 0 || dropY >= fresh.height) return { refused: 'Token position out of bounds' };
         const tokens = readTokens(fresh.tokens);
@@ -582,14 +584,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         const position = clampTokenPosition({ x: dropX, y: dropY }, tokens[index].size ?? { width: 1, height: 1 }, fresh);
         tokens[index] = { ...tokens[index], position };
         await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-        return { ...position, tokens };
+        return { written: tokens[index], tokens };
       });
       if ('refused' in dropped) {
         socket.emit('error', { message: dropped.refused });
         return;
       }
-      const { x, y, tokens: updatedTokens } = dropped;
-      token.position = { x, y };
+      const { written, tokens: updatedTokens } = dropped;
+      const { x, y } = written.position;
 
       if (map.lightingEnabled) {
         // Dynamic lighting: per-player visibility filtering. The plane and
@@ -640,7 +642,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           if (moved) {
             // Visible: position update AND the full token (frontend deduplicates),
             // in case this player did not have it yet.
-            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: moverShownTo(token, authedSocket) });
+            s.emit('token.moved', { tokenId, mapId, x, y, movedBy: moverShownTo(written, authedSocket) });
             s.emit('token:appeared', { token: moved, mapId });
           } else if (mayHave.has(tokenId)) {
             s.emit('token:disappeared', { tokenId, mapId });
@@ -648,7 +650,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
           // If a player moved their OWN token, their view changed: re-sync all
           // OTHER tokens so those that left or entered view go at once.
-          if (viewer && token.controlledBy === viewer) {
+          if (viewer && written.controlledBy === viewer) {
             for (const otherToken of forRole) {
               if (otherToken.id === tokenId) continue; // already handled above
               // Skip own tokens — always included by filterTokensByLighting
@@ -664,10 +666,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         }
       } else {
         // The sender included, as confirmation that the write went through.
-        // TODO(play): who is told is judged by the token read before the lock, so one the DM hid
-        // meanwhile still has its new square sent to players; judge it by the token in updatedTokens.
         await emitMoveToVisibleSockets(
-          'token.moved', token, mapId, map.campaign.currentMapId, { tokenId, mapId, x, y }, true
+          'token.moved', written, mapId, map.campaign.currentMapId, { tokenId, mapId, x, y }, true
         );
       }
 
