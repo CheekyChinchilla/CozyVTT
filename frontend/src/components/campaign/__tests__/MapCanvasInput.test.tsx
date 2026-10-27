@@ -13,8 +13,8 @@
  * and a square is 50 pixels.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { TokenType, type CampaignMap, type Token } from '@/types';
 import { mouse } from '@/test/pointer';
 
@@ -362,4 +362,101 @@ describe('a right-click', () => {
       expect(screen.getByText('Obscure Identity')).toBeInTheDocument();
     },
   );
+});
+
+// Nothing pinned the hover card before it moved into its own component
+// (TokenDetailsCard): what it shows, by who is looking.
+describe('the card a hovered token shows', () => {
+  afterEach(() => {
+    act(() => { useGameStore.getState().clearGameState(); });
+  });
+
+  /** The card over the map, found by the name in it. */
+  const card = (name: string) => screen.getByText(name).closest('.glass-panel') as HTMLElement;
+  const hover = (point: { clientX: number; clientY: number }) => mouse.move(surface(), point);
+  const inOrder = (initiative: number | null) => act(() => {
+    useGameStore.getState().setCombatState({
+      active: true, round: 1, currentTokenId: null,
+      combatants: [{ tokenId: 'tok-goblin', mapId: 'map-a', name: 'Goblin Scout', imageUrl: '', initiative, hp: null, type: 'npc', disposition: null }],
+    });
+  });
+
+  it('names the token and the square under the pointer, and lists its conditions in full', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin Scout', 0, 19, { conditions: ['poisoned', 'prone'] }));
+
+    hover(at(0, 19));
+
+    const shown = card('Goblin Scout');
+    expect(within(shown).getByText('(0, 19)')).toBeInTheDocument();
+    expect(within(shown).getByText('poisoned')).toBeInTheDocument();
+    expect(within(shown).getByText('prone')).toBeInTheDocument();
+  });
+
+  it("shows a creature's own hit points to the DM, and to a player only once its HP bar is on", () => {
+    const wounded = (showHpBar: boolean) => token('tok-goblin', 'Goblin Scout', 0, 19, { hp: { current: 5, max: 7, temp: 2 }, showHpBar });
+    render(<MapCanvas />);
+    show(wounded(false));
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).getByText('5/7')).toBeInTheDocument();
+    expect(within(card('Goblin Scout')).getByText('+2')).toBeInTheDocument();
+
+    act(() => { h.set({ userRole: 'PLAYER' }); });
+    hover(at(1, 19));
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).queryByText('5/7')).toBeNull();
+    expect(within(card('Goblin Scout')).queryByText('HP')).toBeNull();
+
+    show(wounded(true));
+    hover(at(1, 19));
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).getByText('5/7')).toBeInTheDocument();
+  });
+
+  it("shows a character's hit points from its sheet, to a player too", () => {
+    h.set({ userRole: 'PLAYER' });
+    act(() => { useGameStore.getState().setCharacterHp('char-mara', { current: 12, max: 20, temp: 0 }); });
+    render(<MapCanvas />);
+    show(token('tok-mara', 'Mara', 0, 19, { type: TokenType.PLAYER, characterId: 'char-mara', hp: { current: 1, max: 1, temp: 0 } }));
+
+    hover(at(0, 19));
+
+    expect(within(card('Mara')).getByText('12/20')).toBeInTheDocument();
+  });
+
+  it('has an Initiative row only while the token is in the turn order, with a dash before it rolls', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).queryByText('Initiative')).toBeNull();
+
+    inOrder(null);
+    expect(within(card('Goblin Scout')).getByText('Initiative')).toBeInTheDocument();
+    expect(within(card('Goblin Scout')).getByText('—')).toBeInTheDocument();
+
+    inOrder(14);
+    expect(within(card('Goblin Scout')).getByText('14')).toBeInTheDocument();
+  });
+
+  it('says "Not yours to move" on a token the viewer may not move, and nothing on their own', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(goblin(), token('tok-mine', 'Aldra', 2, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
+
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).getByText('Not yours to move')).toBeInTheDocument();
+
+    hover(at(2, 19));
+    expect(within(card('Aldra')).queryByText('Not yours to move')).toBeNull();
+  });
+
+  it('is gone once the pointer leaves the token', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    hover(at(0, 19));
+    expect(screen.getByText('Goblin Scout')).toBeInTheDocument();
+
+    hover(at(5, 5));
+    expect(screen.queryByText('Goblin Scout')).toBeNull();
+  });
 });

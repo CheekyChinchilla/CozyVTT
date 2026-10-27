@@ -3,14 +3,14 @@
 // HTML Canvas-based map viewer with zoom/pan controls
 // ============================================
 
-import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap, MapPin } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { campaignHasCharacter as campaignHasTokenCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
 import { useTableRoll } from '@/hooks/useTableRoll';
-import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
+import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type {
@@ -56,7 +56,7 @@ import {
 } from './map/layers';
 import { createVisionCache } from './map/vision';
 import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp, isTokenVisibleTo, tokenCoversCell } from './map/tokenHitTest';
-import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
+import { cachedTokenImage } from './map/layers/drawTokens';
 import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { useFogTool } from './map/tools/useFogTool';
@@ -113,6 +113,7 @@ import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallC
 import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
+import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
@@ -256,8 +257,6 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   /** The Ping button has been pressed: the next tap or click on the map pings it. */
   const [pingArmed, setPingArmed] = useState(false);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
-  /** Initiative of the token being pointed at — for the details panel. */
-  const hoverInitiative = useTokenInitiative(hoverToken?.id ?? null);
 
   // Context menu state. One opened by Enter is held inside the map.
   const [contextMenu, setContextMenu] = useState<{
@@ -3780,111 +3779,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* Hover Token Name.
-
-          Conditions are listed here in full, for everyone rather than the DM
-          alone. The badges drawn on the token are only two letters each, which
-          is enough to tell them apart at a glance but not to learn them — and a
-          player who cannot read what is afflicting a creature cannot play
-          around it. */}
-      {hoverToken && hoverCoords && (() => {
-        // Only what this viewer may see. A player token follows its character
-        // sheet, which every campaign member can already read; an NPC's own hit
-        // points are the DM's to reveal, so they appear only once the HP bar is
-        // turned on. Same rule the bar on the token itself draws by.
-        const hp = visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing);
-        const image = cachedTokenImage(hoverToken, tokenImages);
-        const conditions = hoverToken.conditions ?? [];
-        // `undefined` means "not in the turn order" — the row is left out
-        // rather than shown blank. `null` means it is, but nothing has rolled.
-        const inTurnOrder = hoverInitiative !== undefined;
-
-        /** One labelled row. The labels line up, so the panel reads as a list. */
-        const Row = ({ label, children }: { label: string; children: ReactNode }) => (
-          <div className="flex items-baseline gap-2">
-            <span className="w-19 shrink-0 text-[11px] uppercase tracking-wide text-warm-gray">
-              {label}
-            </span>
-            <span className="min-w-0 text-sm text-brand-ink">{children}</span>
-          </div>
-        );
-
-        return (
-          <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg">
-            <div className="flex items-start gap-3.5">
-              {/* Large enough to actually recognise the art. On the map a token
-                  is often only a few dozen pixels at play zoom, which is what
-                  made "token images are hard to see" a real complaint. */}
-              {image ? (
-                <img
-                  src={image.src}
-                  alt=""
-                  className="w-18 h-18 rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
-                />
-              ) : (
-                <div
-                  className="w-18 h-18 rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
-                  style={{ backgroundColor: placeholderColor(hoverToken) }}
-                  aria-hidden="true"
-                >
-                  {(hoverToken.name || '?').charAt(0).toUpperCase()}
-                </div>
-              )}
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                  <span className="text-sm font-semibold text-brand-ink truncate">
-                    {tokenDisplayName(hoverToken)}
-                  </span>
-                  <span className="text-xs text-stone-gray font-mono shrink-0">
-                    ({hoverCoords.x}, {hoverCoords.y})
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  {hp && (
-                    <Row label="HP">
-                      <span className="font-mono">
-                        {hp.current}/{hp.max}
-                        {hp.temp > 0 && <span className="text-info-ink"> +{hp.temp}</span>}
-                      </span>
-                    </Row>
-                  )}
-
-                  {conditions.length > 0 && (
-                    <Row label="Conditions">
-                      <span className="flex flex-wrap gap-1">
-                        {conditions.map((condition) => (
-                          <span
-                            key={condition}
-                            className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[11px] font-medium text-brand-ink capitalize"
-                          >
-                            {condition}
-                          </span>
-                        ))}
-                      </span>
-                    </Row>
-                  )}
-
-                  {inTurnOrder && (
-                    <Row label="Initiative">
-                      <span className="font-mono">
-                        {hoverInitiative === null ? '—' : hoverInitiative}
-                      </span>
-                    </Row>
-                  )}
-                </div>
-
-                {!canMoveToken(hoverToken) && (
-                  <div className="mt-1.5 text-[11px] text-warm-gray italic">
-                    Not yours to move
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* The hovered token's details (TokenDetailsCard), with only what this
+          viewer may see. A player token follows its character sheet, which
+          every campaign member can already read; an NPC's own hit points are
+          the DM's to reveal, so they appear only once the HP bar is turned
+          on, the rule the bar on the token itself draws by. */}
+      {hoverToken && hoverCoords && (
+        <TokenDetailsCard
+          token={hoverToken}
+          square={hoverCoords}
+          hp={visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing)}
+          imageSrc={cachedTokenImage(hoverToken, tokenImages)?.src}
+          mayMove={canMoveToken(hoverToken)}
+        />
+      )}
 
       {/* Image Loading State */}
       {imageState === 'loading' && (
