@@ -67,6 +67,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **In Player Preview a click no longer picks up a creature the preview does not show.** A click on the square of a hidden creature, or of one the previewed player cannot see, picked it up without showing it, and the next click put it down somewhere new. A click now picks up only a token the preview draws; on any other square it drags the view. To move a hidden creature, return to your own view first.
 
+- **The campaign page stays above the browser's toolbar on a phone or a tablet.** The page took the height of the screen with the browser's toolbar hidden, so while the toolbar showed, as it does in Safari on an iPhone after **Continue anyway**, the bottom of the page, with the bottom of the map and the side panels, was under it. The page now takes the height the browser leaves it, toolbar or not.
+
 - **The dashboard fits a phone narrower than 400 pixels when you are an administrator.** The header's Refresh, Admin, Logout and profile buttons stayed on one line beside the title, so on a Pixel 10 or an iPhone the whole page scrolled sideways. They now move below the title when the line is too narrow for both.
 
 ## [1.5.4] - 2026-10-25

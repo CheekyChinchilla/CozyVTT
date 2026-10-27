@@ -288,7 +288,10 @@ function CampaignPageContent() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    // The dynamic viewport height: on a phone or a tablet the browser's
+    // toolbar comes and goes, and h-screen (100vh) is the height without it,
+    // which put the bottom of the page under the toolbar.
+    <div className="h-dvh flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header Bar */}
       {/* Wraps onto a second row in a narrow window instead of running off its edge. */}
       <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
