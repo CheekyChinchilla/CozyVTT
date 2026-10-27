@@ -22,6 +22,7 @@ import type { Message, ChatMessageBroadcast } from '@/types';
 import Button from '@/components/ui/Button';
 import { errorMessage, errorSummary } from '@/utils/errors';
 import type { ChatSystemBroadcast } from '@/types';
+import { MAX_CHAT_MESSAGE_LENGTH } from '@/constants/chatLimits';
 
 /** Messages per page. The server caps this at 100. */
 const PAGE_SIZE = 50;
@@ -32,11 +33,8 @@ const PAGE_SIZE = 50;
  */
 const MAX_RESYNC_PAGES = 10;
 
-/** The longest message the server accepts, in characters. */
-const MAX_MESSAGE_LENGTH = 2000;
-
 /** Shown under the box once a message is this close to the limit. */
-const LENGTH_WARNING_AT = MAX_MESSAGE_LENGTH - 200;
+const LENGTH_WARNING_AT = MAX_CHAT_MESSAGE_LENGTH - 200;
 
 /**
  * A name for a message being sent, which the server gives back on the
@@ -675,7 +673,7 @@ export default function ChatPanel() {
               aria-describedby="chat-hint"
               className={`input-cozy flex-1 text-sm resize-none min-h-[60px] max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
               rows={2}
-              maxLength={MAX_MESSAGE_LENGTH}
+              maxLength={MAX_CHAT_MESSAGE_LENGTH}
               // Read-only through the cooldown, not disabled: disabling the
               // box threw keyboard focus to the page after every message.
               readOnly={!canSend}
@@ -703,7 +701,7 @@ export default function ChatPanel() {
           )}
           {canSend && messageInput.length >= LENGTH_WARNING_AT && (
             <p className="text-xs text-warning-ink text-center" aria-live="polite">
-              {messageInput.length} of {MAX_MESSAGE_LENGTH} characters
+              {messageInput.length} of {MAX_CHAT_MESSAGE_LENGTH} characters
             </p>
           )}
           {canSend && messageInput.length < LENGTH_WARNING_AT && (

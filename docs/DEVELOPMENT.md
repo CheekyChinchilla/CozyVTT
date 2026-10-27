@@ -625,7 +625,10 @@ Some of those deserve a note:
   box) differs between the two, when the campaign limits file
   (`backend/src/validators/campaignLimits.ts`, copied as
   `frontend/src/constants/campaignLimits.ts` for the campaign dialogs)
-  differs between the two, when the upload types file
+  differs between the two, when the chat limit file
+  (`backend/src/validators/chatLimits.ts`, copied as
+  `frontend/src/constants/chatLimits.ts` for the chat box) differs between
+  the two or the chat box writes the number itself, when the upload types file
   (`backend/src/validators/uploadTypes.ts`, copied as
   `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
   differs between the two,

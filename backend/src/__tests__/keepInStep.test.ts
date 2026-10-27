@@ -64,6 +64,9 @@
  * campaign over them and the campaign dialogs stop each box at them. The file
  * is kept identical in both packages.
  *
+ * The longest chat message. The server refuses a message over it and the
+ * chat box stops at it. The file is kept identical in both packages.
+ *
  * The files each kind of asset may be uploaded as. The server decides by a
  * file's bytes; the Upload Asset dialog checks a file's extension against the
  * same list, and refused Ogg, WAV and Markdown files the server takes while
@@ -479,6 +482,18 @@ describe('the limits on a token\'s conditions', () => {
 describe('the limits on a campaign\'s name and description', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/campaignLimits.ts')).toBe(read('backend/src/validators/campaignLimits.ts'));
+  });
+});
+
+describe('the longest chat message', () => {
+  it('is the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/chatLimits.ts')).toBe(read('backend/src/validators/chatLimits.ts'));
+  });
+
+  it('is what the chat box uses, with no number of its own', () => {
+    const panel = read('frontend/src/components/campaign/ChatPanel.tsx');
+    expect(panel).toContain("from '@/constants/chatLimits'");
+    expect(panel).not.toMatch(/\b2000\b|MAX_MESSAGE_LENGTH = /);
   });
 });
 

@@ -9,12 +9,7 @@ import logger from '../../utils/logger';
 import { chatMessageLimiter, withinCeiling } from '../shared';
 import { campaignSockets } from '../utils';
 import { ackFrom, refuseRequest } from '../ack';
-
-/** The longest message, in characters, before trimming. */
-const MAX_CHAT_MESSAGE_LENGTH = 2000;
-
-/** What a client may name a message with: a short id of its own making. */
-const CLIENT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+import { ChatMessageSchema, CHAT_CONTENT_REFUSAL } from '../../validators/chat';
 
 /** How long a resent `clientId` is recognised. */
 const CLIENT_ID_MEMORY_MS = 10 * 60 * 1000;
@@ -61,29 +56,13 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
 
       if (!withinCeiling(socket, 'chat.message', ack)) return;
 
-      const { content, type: askedType, clientId } = (data ?? {}) as { content?: unknown; type?: unknown; clientId?: unknown };
-
-      // Validate content is provided
-      if (!content || typeof content !== 'string' || content.trim().length === 0) {
-        refuse('Message content required');
+      // The content arrives trimmed, its length counted before (validators/chat.ts).
+      const parsed = ChatMessageSchema.safeParse(data);
+      if (!parsed.success) {
+        refuse(parsed.error.issues[0]?.message ?? CHAT_CONTENT_REFUSAL);
         return;
       }
-
-      if (content.length > MAX_CHAT_MESSAGE_LENGTH) {
-        refuse(`Message too long. Maximum ${MAX_CHAT_MESSAGE_LENGTH} characters.`);
-        return;
-      }
-
-      // Validate the message type's shape, when one is given
-      if (askedType !== undefined && askedType !== 'PLAYER' && askedType !== 'DM') {
-        refuse('Invalid message type. Must be PLAYER or DM.');
-        return;
-      }
-
-      if (clientId !== undefined && (typeof clientId !== 'string' || !CLIENT_ID_PATTERN.test(clientId))) {
-        refuse('clientId must be 1 to 64 letters, digits, hyphens or underscores');
-        return;
-      }
+      const { content, type: askedType, clientId } = parsed.data;
 
       // A message already sent under this clientId is answered, not sent again.
       if (clientId !== undefined) {
@@ -125,7 +104,7 @@ export function registerChatHandlers(io: Server, socket: AuthenticatedSocket): v
         });
         if (!user) throw new UserGoneError();
         const message = await prisma.message.create({
-          data: { campaignId, userId: socket.userId!, type, content: content.trim() },
+          data: { campaignId, userId: socket.userId!, type, content },
         });
         return { user, message };
       })();
