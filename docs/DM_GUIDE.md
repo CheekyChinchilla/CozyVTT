@@ -748,6 +748,34 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 
 > Sizes use the map's **feet per square** setting (**Grid Scale** in Edit Map), which defaults to 5 ft. If your templates look twice or half the size you expect, check that value first.
 
+### Drawing on the map
+
+Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
+
+| Tool | How |
+|---|---|
+| **Pen** | Drag to draw freehand. A click makes a dot. |
+| **Line**, **Arrow** | Drag from one end to the other. An arrow's head is where you let go, and grows with the width. |
+| **Rectangle**, **Ellipse** | Drag from one corner of the box to the other. |
+| **Polygon** | Click or tap each corner, then the first corner again, or **Done** in the panel, to close it once it has three. **Cancel**, or **Esc**, drops it. |
+| **Text label** | Click or tap where the label's top left corner goes, type up to 200 characters and press **Enter**. **Esc** drops it, and a click elsewhere on the map keeps it and starts another. Its letters are four times the width tall. |
+| **Eraser** | Click or tap a drawing to erase it. |
+| **Laser pointer** | Drag to point. Everyone sees the trail fade within 3 seconds of where you pointed; nothing is kept. |
+
+- **Colour**: one of the eight in the panel, or **Another colour** for any other.
+- **Width**: from 1 to 64, in the map's own pixels, so a stroke grows and shrinks with the zoom like the map does.
+- **Fill shapes**: fills a rectangle, an ellipse or a polygon with its colour, which the map shows through.
+- **Snap to grid**: puts the ends of lines and arrows, and the corners of shapes and polygons, on the nearest corner or middle of a square.
+- **Only I can see this**: the drawing is yours alone. On your screen it is dashed and faded, so you can tell it from what the table sees; it never reaches a player's browser, and it is left out of **Preview Player View**. The box is not offered with the laser pointer, which goes to everyone.
+
+While the drawing tools are up a click draws: it picks up no token and opens no door. The right mouse button moves the map, and with a finger two fingers move and pinch it. One finger draws; for the eraser, the text label and the polygon a tap acts and a slide moves the map. A second finger, or **Esc**, drops a stroke you are drawing from every screen; the laser pointer's trail fades as it would.
+
+Drawings are the topmost layer of the map: they show over the tokens, and over a player's fog and the dark of a lit map, so the table can plan over ground it cannot see yet ("we'll head this way"). A drawing for everyone shows to every player wherever it is; to keep a note from the players, tick **Only I can see this**. **Preview Player View** shows the drawings over its fog, as a player sees them, and none of yours alone.
+
+Players can draw too, except while the session is paused or has ended; a spectator cannot. While a player may not draw, their **Draw** offers only the eraser and **Clear mine**, for drawings of their own on the map, and is gone when they have none. A player can erase only their own drawings, with the eraser or **Clear mine**, and you can erase anyone's. **Clear drawings** erases every drawing on the map, yours and the players', after asking.
+
+A map holds 2,000 drawings, and 200,000 points between them, so that it always fits in a campaign export. Past either, a new drawing is refused with "This map holds as many drawings as it can. Erase some first." or "This map holds as much drawing as it can. Erase some first.", and the stroke goes from the map. A pen stroke keeps only the points it needs to follow its line to within 2 pixels on screen. A campaign export carries every drawing, yours alone among them, and an import brings them back; a Universal VTT export does not carry drawings. When **Edit Map** changes a map's size, its drawings are stretched with it, as its walls are.
+
 ### Starting a Session
 
 When your players are ready, click **Start Session** in the right sidebar's **Session** tab. This:
@@ -852,7 +880,7 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 | Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
 | Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
 | Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
-| Use a wall, fog or light tool | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
+| Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
 
 A stylus never opens a menu by holding; use a finger.
 

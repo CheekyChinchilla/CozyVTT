@@ -21,7 +21,7 @@
 // is shown (map/drawingPreviews.ts).
 // ============================================
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { DoneAck } from '@/types';
 import type {
   Drawing, DrawingAddAck, DrawingAddEvent, DrawingRemoveEvent, DrawingClearMineEvent, DrawingClearEvent, DrawingPreviewEvent,
@@ -271,5 +271,8 @@ export function useMapDrawings({ socket, mapId, joinedEpoch, role, userId, markD
     if (previews.current.delete(key)) markDirty('overlay');
   }, [markDirty]);
 
-  return { drawings, previews, add, erase, clearMine, clearAll, sendPreview, showPreview, dropPreview };
+  return useMemo(
+    () => ({ drawings, previews, add, erase, clearMine, clearAll, sendPreview, showPreview, dropPreview }),
+    [drawings, add, erase, clearMine, clearAll, sendPreview, showPreview, dropPreview],
+  );
 }

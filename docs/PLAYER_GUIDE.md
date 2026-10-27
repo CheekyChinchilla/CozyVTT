@@ -308,6 +308,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 | Measure a distance | With the **Ruler** up, tap the square, or slide one finger to it; the line stays after you lift (see [Measuring and Spell Areas](#measuring-and-spell-areas)). |
 | Aim a spell area | With **AoE Shape** up, slide your finger from the square it comes from towards the target (see [Measuring and Spell Areas](#measuring-and-spell-areas)). Untick **Snap to grid** to place it off the grid, as **Alt** does with a mouse. |
 | Point at the map | Press and hold the spot for half a second, on empty ground or on a token that has no menu for you: everyone sees your ping there, as with **Tab**. Or tap **Ping** in the map's toolbar, then tap the spot; you can move the map first. Tap **Ping** again to put it away. |
+| Draw on the map | With **Draw** up, one finger draws and two fingers move and pinch the map; with the eraser, the text label or the polygon, one finger moves the map too, and a tap acts. Holding a finger still opens no menu (see [Drawing and pointing](#drawing-and-pointing)). |
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
@@ -502,6 +503,28 @@ A few things worth knowing:
 If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
 
 **Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
+
+### Drawing and pointing
+
+**Draw** (the pencil, after **Ping** in the map's toolbar) opens the drawing tools in the top right corner of the map, with the pen chosen. Sketch a plan, circle a door, label a room: everyone at the table sees it as you draw, and it stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** to put the tools away.
+
+| Tool | How |
+|---|---|
+| **Pen** | Drag to draw freehand. A click makes a dot. |
+| **Line**, **Arrow** | Drag from one end to the other. |
+| **Rectangle**, **Ellipse** | Drag from one corner of the box to the other. |
+| **Polygon** | Click or tap each corner, then the first corner again, or **Done**, to close it. |
+| **Text label** | Click or tap where it goes, type it and press **Enter**. |
+| **Eraser** | Click or tap one of your own drawings to erase it. |
+| **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. |
+
+Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the DM can erase anyone's.
+
+While the tools are up, a click draws, so it does not pick up your token. Put them away to move it. With a mouse the right button moves the map; on a touch screen, two fingers do.
+
+You can draw except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
+
+Drawings are the topmost layer of the map: they show over the tokens, the fog and the dark, so you can plan over ground you have not seen yet ("we'll head this way"). The laser pointer shows over everything too, as a ping does.
 
 The DM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
 
