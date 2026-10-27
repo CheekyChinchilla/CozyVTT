@@ -102,9 +102,12 @@ export default function DmToolPanelContainer({ children, containerRef }: DmToolP
   // notes wrap instead of widening every panel when it is opened.
   return (
     <div ref={panelRef} style={style} className="flex flex-col gap-1.5 w-[200px] overflow-y-auto *:shrink-0">
-      {/* Drag handle, kept in view while the panels below it scroll */}
+      {/* Drag handle, kept in view while the panels below it scroll. Taller
+          for a finger on a touch screen, and it takes the touch itself:
+          left to the browser, a finger's drag scrolled the stack and
+          cancelled the move. */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-center py-0.5 cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors"
+        className="sticky top-0 z-10 flex items-center justify-center py-0.5 pointer-coarse:h-6 touch-none cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

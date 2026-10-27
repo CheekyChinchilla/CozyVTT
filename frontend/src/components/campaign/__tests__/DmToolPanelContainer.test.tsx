@@ -39,6 +39,20 @@ describe('DmToolPanelContainer', () => {
     expect(classes).toEqual(expect.arrayContaining(['sticky', 'top-0']));
   });
 
+  // The handle was 12 pixels tall, and a finger's drag on it scrolled the
+  // stack, which cancelled the drag. On a touch screen it is 24 tall and
+  // takes the touch itself; jsdom evaluates no media query, so the classes
+  // are what is checked.
+  it('gives the drag handle room for a finger, and keeps the touch from scrolling the stack', () => {
+    render(
+      <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}>
+        <p>Fog of War</p>
+      </DmToolPanelContainer>
+    );
+    const classes = screen.getByTitle(/Drag to move the panels/).className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['pointer-coarse:h-6', 'touch-none']));
+  });
+
   it('gives the panel stack one fixed width, so long notes wrap', () => {
     const { container } = render(
       <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}>
