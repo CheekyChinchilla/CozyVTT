@@ -1908,13 +1908,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * is what hovering and the context menu want. Picking a token up has to look
    * further down the stack: an NPC sharing the square is drawn on top of it, and
    * stopping at that NPC left a player unable to pick up their own token at all.
+   *
+   * In Player Preview only what the preview draws can be taken. The DM's own
+   * view counts hidden creatures, so a click on a hidden creature's square
+   * picked it up unseen and the next click put it down somewhere new.
    */
   const getMovableTokenAtPosition = useCallback(
     (gridX: number, gridY: number): Token | null => {
       if (!currentMap) return null;
-      return pickMovableTokenAt(tokens, gridX, gridY, canMoveToken, tokenView);
+      if (!previewing) return pickMovableTokenAt(tokens, gridX, gridY, canMoveToken, tokenView);
+      // The drawn list holds the tokens as the viewer is sent them; the one
+      // taken is the token as it is.
+      const hit = pickMovableTokenAt(drawnTokens, gridX, gridY, canMoveToken);
+      return hit ? tokens.find((t) => t.id === hit.id) ?? null : null;
     },
-    [tokens, currentMap, canMoveToken, tokenView]
+    [tokens, currentMap, canMoveToken, tokenView, previewing, drawnTokens]
   );
 
   // ============================================

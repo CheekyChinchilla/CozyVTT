@@ -358,6 +358,18 @@ describe('selecting in Player Preview', () => {
     expect(selected()).toBe('tok-a');
   });
 
+  it('picks up only a token the preview draws, and drags the view on any other square', () => {
+    render(<MapCanvas />);
+    show(alya(), lurker());
+    previewAsAlice();
+
+    click(at(3, 10));
+    expect(sentOf('token.move.start')).toEqual([]);
+    // Nothing is held, so the next click picks Alya up.
+    click(at(2, 10));
+    expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-a', mapId: 'map-a' }]);
+  });
+
   it('says nothing of a selected token the preview does not draw', () => {
     render(<MapCanvas />);
     show(alya(), lurker());
