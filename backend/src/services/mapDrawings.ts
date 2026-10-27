@@ -64,6 +64,26 @@ export function drawingSent(row: MapDrawing): DrawingSent {
 }
 
 /**
+ * A drawing as a campaign archive carries it, in its map file's
+ * `annotations`: the fields `drawing:add` takes, without its id, its author
+ * or its time, which the importing server sets.
+ */
+export function drawingForArchive(row: MapDrawing) {
+  return {
+    audience: row.audience,
+    layer: row.layer,
+    kind: row.kind,
+    color: row.color,
+    fillColor: row.fillColor,
+    width: row.width,
+    rotation: row.rotation,
+    sortKey: row.sortKey,
+    points: pointsOf(row.points),
+    text: row.text,
+  };
+}
+
+/**
  * The order a map's drawings are drawn in, and so sent in: by `sortKey`,
  * then the order they were made, then their id, so every page draws two
  * drawings made in the same millisecond the same way round.

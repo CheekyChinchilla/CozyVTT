@@ -89,7 +89,7 @@ Several models use Prisma's `Json` type for flexibility:
 |---|---|
 | `Campaign.vibeSettings` | Vibe periods with color/audio config |
 | `Map.tokens` | Array of token objects (position, image, HP, conditions, stat block, etc.) |
-| `Map.annotations` | Unused, always `[]`, and never sent to members; drawings are rows of `MapDrawing` (fog is `Map.fogData`) |
+| `Map.annotations` | Unused, always `[]`, and never sent to members; drawings are rows of `MapDrawing`, which a campaign archive carries under each map file's `drawings` (fog is `Map.fogData`) |
 | `Map.wallSegments` | Wall geometry (`WallSegment[]`) |
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |

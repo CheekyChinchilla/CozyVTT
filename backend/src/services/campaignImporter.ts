@@ -869,6 +869,14 @@ export async function importCampaign(
             await tx.map.create({
               data: { ...prepared.data, id: mapId, campaignId: newCampaignId, createdAt: new Date(importedAt + assets.length + i) },
             });
+            // In one statement, after their map, with no author and each a
+            // millisecond after the last, so drawings with the same sortKey
+            // keep the archive's order.
+            if (prepared.drawings.length > 0) {
+              await tx.mapDrawing.createMany({
+                data: prepared.drawings.map((drawing, n) => ({ ...drawing, mapId, authorId: null, createdAt: new Date(importedAt + n) })),
+              });
+            }
             firstMapId ??= mapId;
             mapCount++;
             tokenCount += prepared.tokenCount;

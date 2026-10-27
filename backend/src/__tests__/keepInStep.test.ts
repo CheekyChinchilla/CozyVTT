@@ -74,7 +74,9 @@
  * database's two enums.
  *
  * The fields of a drawing: what the schema takes, what the server sends,
- * the API document's Drawing schema and the WebSocket guide's table of them.
+ * the API document's Drawing schema and the WebSocket guide's table of them;
+ * and what a campaign archive carries of one, which the import reads with
+ * the same schema.
  *
  * The files each kind of asset may be uploaded as. The server decides by a
  * file's bytes; the Upload Asset dialog checks a file's extension against the
@@ -196,7 +198,8 @@ import { ChatMessageSchema } from '../validators/chat';
 import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS } from '../validators/drawingLimits';
 import { NewDrawingSchema } from '../validators/drawings';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
-import { Prisma } from '@prisma/client';
+import { Prisma, type MapDrawing } from '@prisma/client';
+import { drawingForArchive } from '../services/mapDrawings';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
 
 const root = path.resolve(__dirname, '../../..');
@@ -526,6 +529,26 @@ describe('the fields of a drawing', () => {
     const table = guide.slice(at).split('\n\n')[1] ?? '';
     const rows = table.split('\n').filter((l) => /^\| `\w+` \|/.test(l)).map((l) => /^\| `(\w+)`/.exec(l)![1]);
     expect(rows.sort()).toEqual(taken);
+  });
+});
+
+// A campaign archive carries each drawing as the exporter writes it and the
+// importer reads it with the schema that decides what is stored. A field the
+// schema takes and the exporter leaves out is lost on every round trip.
+describe('a drawing as a campaign archive carries it', () => {
+  const row: MapDrawing = {
+    id: 'drawing', mapId: 'map', authorId: null, audience: 'ALL', layer: 'MARKUP', kind: 'line', color: '#1a1a1a',
+    fillColor: null, pattern: null, stamp: null, width: 2, rotation: 0, sortKey: 0, points: [[0, 0], [1, 1]], text: null,
+    createdAt: new Date(0),
+  };
+
+  it('has the fields the import takes, and no others', () => {
+    expect(Object.keys(drawingForArchive(row)).sort()).toEqual(Object.keys(NewDrawingSchema.shape).sort());
+  });
+
+  it('is stored by the import in columns of MapDrawing, every field of it', () => {
+    const columns: string[] = Object.values(Prisma.MapDrawingScalarFieldEnum);
+    expect(Object.keys(NewDrawingSchema.shape).filter((field) => !columns.includes(field))).toEqual([]);
   });
 });
 
