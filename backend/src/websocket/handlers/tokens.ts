@@ -572,11 +572,20 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // it by the token's size then, the rule the client applies before it
       // sends a drop; everyone, the mover included, is told where it went.
       // Judged by the map read before the lock, a token the DM grew or a map
-      // the DM shrank meanwhile was left hanging off the edge. Who is told
-      // is judged by the token as written there too: one the DM hid
-      // meanwhile had its new square sent to players.
-      const dropped = await withMapsLocked([mapId], async (tx): Promise<{ refused: string } | { written: Token; tokens: Token[] }> => {
-        const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true, width: true, height: true } });
+      // the DM shrank meanwhile was left hanging off the edge. Who is told,
+      // and on a lit map what each player sees, is judged by the token and
+      // the map as they are there too: a token the DM hid, a map the DM lit
+      // or a door the DM closed meanwhile was judged as it had been. The
+      // current map is read there as well, for who may read this one.
+      const dropped = await withMapsLocked([mapId], async (tx) => {
+        const fresh = await tx.map.findUniqueOrThrow({
+          where: { id: mapId },
+          select: {
+            tokens: true, width: true, height: true, gridSize: true,
+            lightingEnabled: true, wallSegments: true, lights: true, globalIllumination: true,
+            campaign: { select: { currentMapId: true } },
+          },
+        });
         if (dropX < 0 || dropX >= fresh.width || dropY < 0 || dropY >= fresh.height) return { refused: 'Token position out of bounds' };
         const tokens = readTokens(fresh.tokens);
         const index = tokens.findIndex((t) => t.id === tokenId);
@@ -584,16 +593,18 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         const position = clampTokenPosition({ x: dropX, y: dropY }, tokens[index].size ?? { width: 1, height: 1 }, fresh);
         tokens[index] = { ...tokens[index], position };
         await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-        return { written: tokens[index], tokens };
+        return { written: tokens[index], stored: { ...fresh, tokens } };
       });
       if ('refused' in dropped) {
         socket.emit('error', { message: dropped.refused });
         return;
       }
-      const { written, tokens: updatedTokens } = dropped;
+      const { written, stored } = dropped;
+      const updatedTokens = stored.tokens;
+      const currentMapId = stored.campaign.currentMapId;
       const { x, y } = written.position;
 
-      if (map.lightingEnabled) {
+      if (stored.lightingEnabled) {
         // Dynamic lighting: per-player visibility filtering. The plane and
         // hidden-token rules (filterTokensByRole, the same call the map fetch
         // makes) come first, then line of sight, so a player is never sent a
@@ -612,7 +623,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             continue;
           }
           if (!authedSocket.userId) continue;
-          if (!canReadMap(authedSocket.role, mapId, map.campaign.currentMapId)) continue;
+          if (!canReadMap(authedSocket.role, mapId, currentMapId)) continue;
 
           const viewer = viewerIdFor(authedSocket.role, authedSocket.userId);
           const forRole = filterTokensByRole(
@@ -624,13 +635,13 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
           const visible = filterTokensByLighting(
             forRole,
             viewer,
-            map.wallSegments as unknown as WallSegment[],
-            map.width,
-            map.height,
-            map.gridSize,
+            stored.wallSegments as unknown as WallSegment[],
+            stored.width,
+            stored.height,
+            stored.gridSize,
             true,
-            map.lights,
-            map.globalIllumination
+            stored.lights,
+            stored.globalIllumination
           );
           const visibleById = new Map(visible.map((t) => [t.id, t]));
           // Only a token this player may have at all is ever named to them:
@@ -667,7 +678,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       } else {
         // The sender included, as confirmation that the write went through.
         await emitMoveToVisibleSockets(
-          'token.moved', written, mapId, map.campaign.currentMapId, { tokenId, mapId, x, y }, true
+          'token.moved', written, mapId, currentMapId, { tokenId, mapId, x, y }, true
         );
       }
 

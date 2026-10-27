@@ -8,8 +8,9 @@
  * a player's move to the far column waited left it hanging off the map, and
  * metadata the DM set meanwhile was written over by a merge with the old
  * copy. The bounds, the clamp and the metadata merge are now worked out
- * under the lock, and who is told of a drop is judged by the token as the
- * drop wrote it: a token the DM hid meanwhile went on reaching players.
+ * under the lock, and who is told of a drop is judged by the token and the
+ * map as the drop wrote them: a token the DM hid meanwhile went on reaching
+ * players, and so did one on a map the DM lit meanwhile.
  *
  * Each case holds the lock, sends the update, waits until it is in line for
  * the lock (so it has read the map), changes the token and commits.
@@ -19,6 +20,7 @@
 
 import { randomUUID } from 'crypto';
 import request from 'supertest';
+import type { Prisma } from '@prisma/client';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupCampaigns, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
@@ -59,10 +61,11 @@ async function writeWaitingForLock(): Promise<void> {
 }
 
 /**
- * Hold the map's lock, start `write`, and once it waits for the lock change
- * the token with `change` and commit. Resolves with what `write` resolves to.
+ * Hold the map's lock, start `write`, and once it waits for the lock run
+ * `change` in the holder's transaction and commit. Resolves with what
+ * `write` resolves to.
  */
-async function changeTokenWhileWaiting<T>(write: () => Promise<T>, change: (token: Token) => Token): Promise<T> {
+async function whileWriteWaits<T>(write: () => Promise<T>, change: (tx: Prisma.TransactionClient) => Promise<unknown>): Promise<T> {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   let locked!: () => void;
@@ -70,9 +73,7 @@ async function changeTokenWhileWaiting<T>(write: () => Promise<T>, change: (toke
   const holder = withMapsLocked([mapId], async (tx) => {
     locked();
     await gate;
-    const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-    const tokens = readTokens(fresh.tokens).map((t) => (t.id === HERO ? change(t) : t));
-    await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+    await change(tx);
   });
   await holding;
   const writing = write();
@@ -80,6 +81,15 @@ async function changeTokenWhileWaiting<T>(write: () => Promise<T>, change: (toke
   release();
   await holder;
   return writing;
+}
+
+/** whileWriteWaits, the change being one to the token. */
+function changeTokenWhileWaiting<T>(write: () => Promise<T>, change: (token: Token) => Token): Promise<T> {
+  return whileWriteWaits(write, async (tx) => {
+    const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    const tokens = readTokens(fresh.tokens).map((t) => (t.id === HERO ? change(t) : t));
+    await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+  });
 }
 
 const growToTwoByTwo = (t: Token): Token => ({ ...t, size: { width: 2, height: 2 } });
@@ -133,7 +143,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await prisma.map.update({ where: { id: mapId }, data: { width: 10, height: 10, tokens: toJson([hero()]) } });
+  await prisma.map.update({ where: { id: mapId }, data: { width: 10, height: 10, lightingEnabled: false, wallSegments: toJson([]), tokens: toJson([hero()]) } });
 });
 
 afterAll(async () => {
@@ -185,6 +195,63 @@ describe('a drop while the DM hides the token', () => {
       await roundTrip(other);
       expect(otherSaw).toEqual([]);
       expect(await storedHero()).toEqual(expect.objectContaining({ visible: false, position: { x: 5, y: 1 } }));
+    } finally {
+      page.disconnect();
+      other.disconnect();
+      dmPage.disconnect();
+    }
+  });
+});
+
+describe('a drop while the DM turns dynamic lighting on', () => {
+  // The other player has no token, so on a lit map they are sent no other.
+  it('reaches another player only as the lit map lets them see it', async () => {
+    const page = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const other = await server.connectAndAuth(await server.loginAs(otherPlayerId), campaignId);
+    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    try {
+      const dmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(dmPage, 'token.moved', 5000);
+      const otherSaw = recordEvents(other, ['token.moved', 'token:appeared']);
+      await whileWriteWaits(
+        async () => { page.emit('token.move.end', { tokenId: HERO, mapId, x: 5, y: 1 }); },
+        (tx) => tx.map.update({ where: { id: mapId }, data: { lightingEnabled: true } })
+      );
+      expect(await dmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 5, y: 1 }));
+      await roundTrip(other);
+      expect(otherSaw).toEqual([]);
+    } finally {
+      page.disconnect();
+      other.disconnect();
+      dmPage.disconnect();
+    }
+  });
+});
+
+describe('a drop while the DM closes a door on a lit map', () => {
+  // A door the full height of the map at x = 250 px, between the other
+  // player's token in square 1 and the drop in square 7. Everything in line
+  // of sight is lit (Global Illumination), so only the door decides.
+  const door = (type: 'door-open' | 'door-closed') => [{ id: randomUUID(), x1: 250, y1: 0, x2: 250, y2: 500, type }];
+  const otherToken = () => ({ ...hero(), id: randomUUID(), name: 'Other', position: { x: 1, y: 1 }, controlledBy: otherPlayerId });
+
+  it('is not sent to a player the closed door now hides it from', async () => {
+    await prisma.map.update({
+      where: { id: mapId },
+      data: { lightingEnabled: true, globalIllumination: true, wallSegments: toJson(door('door-open')), tokens: toJson([hero(), otherToken()]) },
+    });
+    const page = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const other = await server.connectAndAuth(await server.loginAs(otherPlayerId), campaignId);
+    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    try {
+      const dmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(dmPage, 'token.moved', 5000);
+      const otherSaw = recordEvents(other, ['token.moved', 'token:appeared']);
+      await whileWriteWaits(
+        async () => { page.emit('token.move.end', { tokenId: HERO, mapId, x: 7, y: 1 }); },
+        (tx) => tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson(door('door-closed')) } })
+      );
+      expect(await dmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 7, y: 1 }));
+      await roundTrip(other);
+      expect(otherSaw).toEqual([]);
     } finally {
       page.disconnect();
       other.disconnect();
