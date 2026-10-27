@@ -715,22 +715,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [currentMap?.spiritLayerUrl]);
 
   // ============================================
-  // Auto-Fit: Center and fit map when a new map image finishes loading
+  // Auto-Fit: centre and fit a new map once its picture has loaded and the
+  // canvas has a size
   // ============================================
 
   useEffect(() => {
-    // Only fit when image is ready, canvas is measured, and we haven't already fitted this map
+    // Fit when the picture is ready and the canvas is measured, whichever
+    // comes second, once per map. A resize after that leaves the view alone;
+    // the Reset View button fits again.
     if (!imageLoaded || canvasSize.width === 0 || canvasSize.height === 0 || !currentMap?.id) return;
     if (lastFittedMapIdRef.current === currentMap.id) return;
 
     lastFittedMapIdRef.current = currentMap.id;
     mapControls.fitToScreen(canvasSize.width, canvasSize.height);
-    // Users can use the Reset View button to fit again.
-    // TODO(play): a picture that loads while the canvas still measures 0x0
-    // never fits, since the size is not a dependency; lastFittedMapIdRef
-    // already limits the fit to once per map, so the size can be added.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapControls is a new object each render; lastFittedMapIdRef keeps the fit to once per map
-  }, [imageLoaded, currentMap?.id]);
+  }, [imageLoaded, currentMap?.id, canvasSize.width, canvasSize.height]);
 
   // ============================================
   // WebSocket Event Listeners

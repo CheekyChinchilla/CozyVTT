@@ -493,3 +493,43 @@ describe('each layer at ratio 2', () => {
     }
   });
 });
+
+// ── Fitting a new map to the view ────────────────────────────────────────────
+
+describe('fitting a new map to the view', () => {
+  beforeEach(() => {
+    pictures.length = 0;
+    vi.stubGlobal('Image', FakeImage);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const zoom = () => screen.getByText(/^\d+%$/).textContent;
+  const loadMap = () => pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+
+  // A map opened while its panel is collapsed or still being laid out
+  // measures 0 by 0 when the picture arrives.
+  it('fits a map whose picture loaded while the map measured 0 by 0, once the map has a size', () => {
+    container.width = 0;
+    container.height = 0;
+    render(<MapCanvas />);
+    loadMap();
+    expect(zoom()).toBe('100%');
+
+    resizeContainer(800, 600);
+
+    expect(zoom()).toBe('54%');
+  });
+
+  it('fits a map once: a later resize leaves the view as it is', () => {
+    render(<MapCanvas />);
+    loadMap();
+    expect(zoom()).toBe('54%');
+
+    resizeContainer(400, 300);
+
+    expect(zoom()).toBe('54%');
+  });
+});
