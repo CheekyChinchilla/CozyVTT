@@ -3,7 +3,7 @@
 // HTML Canvas-based map viewer with zoom/pan controls
 // ============================================
 
-import { useEffect, useEffectEvent, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -94,6 +94,7 @@ import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
+import { applyViewport, clearLayer, effectiveDpr, sizeBackingStore } from './map/layerCanvas';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
@@ -121,6 +122,11 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   if (effect === 'shadow') return '#9b6dcc';
   if (effect === 'dream') return '#d4a0f0';
   return '#9370DB'; // wispy default = spirit-purple
+}
+
+/** The screen's pixel ratio; 1 where there is no window to ask. */
+function readDeviceRatio(): number {
+  return typeof window === 'undefined' ? 1 : window.devicePixelRatio;
 }
 
 /** The DM's editing tool, from the wall, fog or light panel. */
@@ -160,11 +166,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // receives all pointer input and holds the overlay draw layer; terrain and
   // tokens sit beneath it. All three are the same size and share one world
   // transform, so their composite is pixel-identical to the old single canvas.
+  // Each holds its CSS size times the screen's ratio in pixels
+  // (map/layerCanvas.ts); everything else here is in CSS pixels.
   const canvasRef = useRef<HTMLCanvasElement>(null);        // overlay layer + input
   const terrainCanvasRef = useRef<HTMLCanvasElement>(null); // map image, grid, fog, spirit
   const tokenCanvasRef = useRef<HTMLCanvasElement>(null);   // tokens + drag ghost
   const containerRef = useRef<HTMLDivElement>(null);
-  const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; CSS-transformed during pan
+  const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; carries the vibe filter
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());
   // Lazily-created AudioContext for spirit layer transition sound, closed
@@ -180,6 +188,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [gridColor, setGridColor] = useState<'black' | 'white'>('black');
   const [hoverCoords, setHoverCoords] = useState<{ x: number; y: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  // The screen's pixel ratio, as the browser reports it. It changes with the
+  // browser's zoom and when the window moves to a screen of another density.
+  const [deviceRatio, setDeviceRatio] = useState(readDeviceRatio);
+  // The ratio the canvases are drawn at: the screen's, within the limits.
+  const dpr = effectiveDpr(deviceRatio, canvasSize.width, canvasSize.height);
   const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -569,6 +582,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * Update canvas size to match container
    */
   const updateCanvasSize = useCallback(() => {
+    // The browser's zoom changes the ratio and fires the window's resize.
+    setDeviceRatio(readDeviceRatio());
     if (!containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
@@ -599,6 +614,40 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       observer.disconnect();
     };
   }, [updateCanvasSize]);
+
+  /**
+   * A window moved to a screen of another density changes the ratio and
+   * usually not the size, so no resize reports it. A query for the current
+   * resolution stops matching then; it is asked again for the new ratio.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    let query: MediaQueryList | null = null;
+    const onChange = () => {
+      setDeviceRatio(readDeviceRatio());
+      listen();
+    };
+    const listen = () => {
+      query?.removeEventListener('change', onChange);
+      query = window.matchMedia(`(resolution: ${readDeviceRatio()}dppx)`);
+      query.addEventListener('change', onChange);
+    };
+    listen();
+    return () => query?.removeEventListener('change', onChange);
+  }, []);
+
+  /**
+   * Size the three canvases: their CSS size times the ratio in pixels. Done
+   * here, after React has written the page and before the browser paints,
+   * since assigning a canvas's size clears it; a change repaints every layer.
+   */
+  useLayoutEffect(() => {
+    let changed = false;
+    for (const canvas of [terrainCanvasRef.current, tokenCanvasRef.current, canvasRef.current]) {
+      if (canvas && sizeBackingStore(canvas, canvasSize.width, canvasSize.height, dpr)) changed = true;
+    }
+    if (changed) markDirty('terrain', 'tokens', 'overlay');
+  }, [canvasSize, dpr, markDirty]);
 
   // ============================================
   // Map Image Loading
@@ -1310,21 +1359,20 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    clearLayer(ctx);
 
-    // If no map, show empty state
+    // If no map, show empty state, in CSS pixels at the centre
     if (!currentMap || !imageLoaded || !mapImage) {
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = '#8b7d6b'; // stone-gray
       ctx.font = '16px system-ui';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('No map loaded', canvas.width / 2, canvas.height / 2);
+      ctx.fillText('No map loaded', canvas.width / dpr / 2, canvas.height / dpr / 2);
+      ctx.restore();
       return;
     }
-
-    ctx.save();
-    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
-    ctx.scale(mapControls.zoom, mapControls.zoom);
 
     const viewport: Viewport = {
       zoom: mapControls.zoom,
@@ -1333,6 +1381,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapWidth: currentMap.width,
       mapHeight: currentMap.height,
     };
+
+    ctx.save();
+    applyViewport(ctx, viewport, dpr);
 
     const renderIsDM = isDM && !previewing;
     // isInSpiritRealm is true if the campaign-wide toggle is on OR this
@@ -1381,7 +1432,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1392,12 +1443,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    clearLayer(ctx);
     if (!currentMap || !imageLoaded || !mapImage) return;
-
-    ctx.save();
-    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
-    ctx.scale(mapControls.zoom, mapControls.zoom);
 
     const viewport: Viewport = {
       zoom: mapControls.zoom,
@@ -1406,6 +1453,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapWidth: currentMap.width,
       mapHeight: currentMap.height,
     };
+
+    ctx.save();
+    applyViewport(ctx, viewport, dpr);
 
     const renderIsDM = isDM && !previewing;
 
@@ -1445,7 +1495,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, isDM, previewControls]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, isDM, previewControls]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1457,12 +1507,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    clearLayer(ctx);
     if (!currentMap || !imageLoaded || !mapImage) return;
-
-    ctx.save();
-    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
-    ctx.scale(mapControls.zoom, mapControls.zoom);
 
     const viewport: Viewport = {
       zoom: mapControls.zoom,
@@ -1471,6 +1517,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapWidth: currentMap.width,
       mapHeight: currentMap.height,
     };
+
+    ctx.save();
+    applyViewport(ctx, viewport, dpr);
 
     const renderIsDM = isDM && !previewing;
 
@@ -1499,6 +1548,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         terrainCanvas: terrainCanvasRef.current,
         memoryMaskCanvas: memoryMaskOffscreenRef,
         memoryCanvas: memoryOffscreenRef,
+        dpr,
       }, viewport);
 
       // Report what this viewer has just seen, at most every 300 ms, from the
@@ -1659,7 +1709,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -2571,8 +2621,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     >
       {/* Three stacked canvases. The vibe CSS filter is applied to
           the wrapper so it tints the composite of all three, matching the old
-          single-canvas behaviour. The wrapper is also the CSS-transform target
-          for pan gestures. Only the top canvas takes input. A press on the
+          single-canvas behaviour. The layout effect above sizes them at the
+          screen's ratio. Only the top canvas takes input. A press on the
           map selects no text and a long-press opens no callout; the panels
           over it keep theirs. */}
       <div
@@ -2586,20 +2636,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       >
         <canvas
           ref={terrainCanvasRef}
-          width={canvasSize.width}
-          height={canvasSize.height}
           className="absolute inset-0 pointer-events-none"
         />
         <canvas
           ref={tokenCanvasRef}
-          width={canvasSize.width}
-          height={canvasSize.height}
           className="absolute inset-0 pointer-events-none"
         />
         <canvas
           ref={canvasRef}
-          width={canvasSize.width}
-          height={canvasSize.height}
           className={`absolute inset-0 touch-none ${
             draggedToken ? 'cursor-grabbing' :
             wallMode === 'wall-draw' ? 'cursor-crosshair' :

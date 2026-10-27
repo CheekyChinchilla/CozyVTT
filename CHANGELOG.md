@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- **The map is drawn at your screen's resolution.** On phones, tablets and high-density displays the map, its tokens and its walls were drawn at one pixel per screen point and enlarged, so their edges looked soft. They are now drawn at the display's own density, up to three pixels per point.
+
 - **The dashboard fits a phone narrower than 400 pixels when you are an administrator.** The header's Refresh, Admin, Logout and profile buttons stayed on one line beside the title, so on a Pixel 10 or an iPhone the whole page scrolled sideways. They now move below the title when the line is too narrow for both.
 
 ## [1.5.4] - 2026-10-25

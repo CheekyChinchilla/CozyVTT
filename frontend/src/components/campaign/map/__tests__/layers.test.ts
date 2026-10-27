@@ -725,7 +725,7 @@ describe('computeVisionState', () => {
  * which a refactor could otherwise drop in silence.
  */
 describe('drawDynamicLighting', () => {
-  interface OpCall { method: string; op: string; fillStyle: string; src?: unknown }
+  interface OpCall { method: string; op: string; fillStyle: string; filter: string; src?: unknown; args: unknown[] }
 
   /**
    * A context that records the composite operation and fill style in force at
@@ -739,11 +739,11 @@ describe('drawDynamicLighting', () => {
       globalCompositeOperation: 'source-over',
       fillStyle: '', filter: 'none', globalAlpha: 1, imageSmoothingEnabled: true,
       createRadialGradient: (...args: number[]) => { gradients.push(args); return gradient; },
-    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string };
+    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string; filter: string };
     for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
       'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage', 'setTransform', 'translate', 'scale']) {
       (ctx as unknown as Record<string, unknown>)[m] = (...args: unknown[]) =>
-        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle), src: args[0] });
+        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle), filter: String(ctx.filter), src: args[0], args });
     }
     return { ctx, ops, gradients };
   }
@@ -753,11 +753,16 @@ describe('drawDynamicLighting', () => {
     current: { width: w, height: h, getContext: () => ctx } as unknown as HTMLCanvasElement,
   });
 
-  const viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 3, mapHeight: 3 };
+  const viewport: Viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 3, mapHeight: 3 };
   const W = 150, H = 150;
   const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
 
-  function run(opts: { withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean; withMemory?: boolean }) {
+  function run(opts: {
+    withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean; withMemory?: boolean;
+    /** The screen's pixel ratio, and the view; 1 and the plain view by default. */
+    dpr?: number; view?: Pick<Viewport, 'zoom' | 'panOffset'>;
+  }) {
+    const at: Viewport = { ...viewport, ...opts.view };
     const main = makeOpRecorder();
     const lighting = makeOpRecorder();
     const coverage = makeOpRecorder();
@@ -770,7 +775,7 @@ describe('drawDynamicLighting', () => {
     const token = makeToken('a', { sightRadius: opts.sightRadius ?? 0 } as Partial<Token>);
     const myTokens = opts.noTokens ? [] : [token];
     const gi = opts.globalIllumination ?? false;
-    const vision = computeVisionState(myTokens, opts.withLight ? [light] : [], [], viewport, { globalIllumination: gi });
+    const vision = computeVisionState(myTokens, opts.withLight ? [light] : [], [], at, { globalIllumination: gi });
 
     const lightHolder = holderFor(lightOnly.ctx, W, H);
     const coverageHolder = holderFor(coverage.ctx, W, H);
@@ -788,7 +793,8 @@ describe('drawDynamicLighting', () => {
       terrainCanvas,
       memoryMaskCanvas: holderFor(memoryMask.ctx, W, H),
       memoryCanvas: holderFor(memory.ctx, W, H),
-    }, viewport);
+      dpr: opts.dpr ?? 1,
+    }, at);
 
     return { main, lighting, lightOnly, coverage, memoryMask, memory, explored, lightCanvas: lightHolder.current, coverageCanvas: coverageHolder.current };
   }
@@ -833,6 +839,36 @@ describe('drawDynamicLighting', () => {
     expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'source-over' && c.fillStyle === 'rgba(15, 12, 25, 0.65)')).toBe(true);
     expect(memory.ops.some((c) => c.method === 'drawImage' && c.op === 'destination-in')).toBe(true);
     expect(main.ops.filter((c) => c.method === 'drawImage')).toHaveLength(2); // memory, then the darkness
+  });
+
+  // The memory pass works on screen-sized canvases, whose pixels are the
+  // screen's: its mask is drawn through the same transform as the layers.
+  it('builds the memory mask through the world transform at the screen ratio', () => {
+    const view = { zoom: 1.5, panOffset: { x: 10, y: -4 } };
+    const { memoryMask } = run({ withLight: false, withMemory: true, dpr: 2, view });
+    const transforms = memoryMask.ops.filter((c) => c.method === 'setTransform').map((c) => c.args);
+    expect(transforms).toContainEqual([3, 0, 0, 3, 20, -8]);
+    expect(memoryMask.ops.some((c) => c.method === 'translate' || c.method === 'scale')).toBe(false);
+    // The explored raster and the three subtractions all go through it.
+    const set = memoryMask.ops.findIndex((c) => c.method === 'setTransform' && c.args[0] === 3);
+    const draws = memoryMask.ops.filter((c, i) => c.method === 'drawImage' && i > set);
+    expect(draws).toHaveLength(4);
+  });
+
+  it('builds the memory mask at ratio 1 as translate(pan) then scale(zoom) did', () => {
+    const view = { zoom: 1.5, panOffset: { x: 10, y: -4 } };
+    const { memoryMask } = run({ withLight: false, withMemory: true, dpr: 1, view });
+    const transforms = memoryMask.ops.filter((c) => c.method === 'setTransform').map((c) => c.args);
+    expect(transforms).toContainEqual([1.5, 0, 0, 1.5, 10, -4]);
+  });
+
+  // A canvas filter's length is in the canvas's own pixels.
+  it('softens the darkness edge over 4 CSS pixels at any ratio', () => {
+    const blurAt = (dpr: number) => {
+      const draws = run({ withLight: true, dpr }).main.ops.filter((c) => c.method === 'drawImage');
+      return draws[draws.length - 1]?.filter;
+    };
+    expect([blurAt(1), blurAt(2), blurAt(3)]).toEqual(['blur(4px)', 'blur(8px)', 'blur(12px)']);
   });
 
   it('runs no memory pass when nothing is remembered', () => {

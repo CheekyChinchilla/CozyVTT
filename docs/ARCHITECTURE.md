@@ -264,7 +264,7 @@ src/
 ├── components/
 │   ├── ui/            Shared UI primitives (Button, Modal, SlideOver, Input, Field, Tooltip)
 │   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
-│   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, animation/render-loop hooks, the one pointer shape the tools read (mapPointer.ts) and the touch gesture recogniser (gestures.ts)
+│   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, animation/render-loop hooks, the canvases' size and transform at the screen's pixel ratio (layerCanvas.ts), the one pointer shape the tools read (mapPointer.ts) and the touch gesture recogniser (gestures.ts)
 │   │       └── tools/ Each map tool's pointer and key handling: walls, lights, doors, fog boxes, the ruler and AoE template
 │   ├── character-sheets/  Game system sheet renderers
 │   ├── common/        Reusable primitives (ToastContainer, ConfirmDialog, EmptyState, etc.)
@@ -1156,6 +1156,8 @@ Early in development, the client passed `campaignId` in every WebSocket event pa
 ### Why HTML Canvas instead of a SVG or DOM-based map renderer?
 
 Canvas provides the best performance for the use case: pan, zoom, token rendering, and real-time movement at 60fps with potentially hundreds of tokens. SVG struggles at scale, and DOM-based approaches add layout overhead that compounds with zoom transforms. The map draws on three stacked canvases (terrain / tokens / overlay) coordinated by a single animation-frame loop, so dragging a token repaints only the token layer, and vision polygons are memoized so panning re-raycasts nothing.
+
+Each canvas holds its CSS size times the screen's pixel ratio in pixels and keeps its CSS size, so a phone or a high-density display gets one canvas pixel per screen pixel (`map/layerCanvas.ts`). The ratio is the browser's `devicePixelRatio`, read again on every resize (the browser's zoom) and when a `(resolution: …dppx)` media query stops matching (a window moved to another screen); it is capped at 3 and lowered so no canvas holds more than 16,777,216 pixels, the largest Safari on iOS draws, but never below 1 on a screen of ratio 1 or more. Every layer clears with `clearLayer` and draws through one transform, `applyViewport`: the zoom and the pan, multiplied by the ratio. At ratio 1 that is the same matrix as the old translate then scale. The viewport, hit testing, `screenToGrid` and every tool stay in CSS pixels; only the pixel store and that transform know the ratio. The explored-memory pass, which works on screen-sized scratch canvases, builds its mask through the same transform, and the darkness's blur is given in canvas pixels, so it is multiplied by the ratio too.
 
 Input reaches the map through its tools, one module each in `components/campaign/map/tools/`. MapCanvas owns the pointer and keyboard listeners and offers each event to the tools in a fixed order until one takes it: walls, lights, doors, the fog boxes, the ruler and AoE template, and last tokens and panning. That order is what decides a click when two tools are up, since the ruler or the AoE template can stay up beside a DM tool. Escape asks them in its own order, the most transient thing first. A new tool is one more module in that list.
 

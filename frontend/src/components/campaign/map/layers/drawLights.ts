@@ -14,6 +14,7 @@ import { gridYToCentrePx } from '../coords';
 import type { LightToolMode } from '@/components/campaign/DmLightControls';
 import { mapSizePx, type Viewport } from './types';
 import type { VisionSource } from '../vision';
+import { applyViewport } from '../layerCanvas';
 import { BRIGHT, DIM } from '@/utils/visibilityRule';
 
 /** Mutable holder for a persistent offscreen canvas (a React ref works). */
@@ -50,6 +51,11 @@ export interface LightingDrawState {
   /** Two screen-sized scratch canvases for the memory pass, allocated on first use. */
   memoryMaskCanvas: CanvasHolder;
   memoryCanvas: CanvasHolder;
+  /**
+   * The ratio the visible canvases are drawn at (map/layerCanvas.ts). The
+   * memory pass works in their pixels, and the blur is measured in them.
+   */
+  dpr: number;
 }
 
 function ensureCanvas(holder: CanvasHolder, w: number, h: number): HTMLCanvasElement {
@@ -217,7 +223,8 @@ export function drawDynamicLighting(
   // Canvas blend modes act within one canvas, and this overlay is transparent
   // where the map is, so the remembered tier is a desaturated, darkened copy
   // of the terrain canvas, kept only where the viewer has been and cannot
-  // see now. Screen-sized, in screen space; skipped when nothing is
+  // see now. Screen-sized, in the screen's pixels, so the mask is drawn
+  // through the same transform as the layers; skipped when nothing is
   // remembered, which is every DM view and every unlit map.
   if (state.explored && state.terrainCanvas) {
     const sw = state.terrainCanvas.width;
@@ -228,8 +235,7 @@ export function drawDynamicLighting(
     maskCtx.setTransform(1, 0, 0, 1, 0, 0);
     maskCtx.clearRect(0, 0, sw, sh);
     maskCtx.imageSmoothingEnabled = false;
-    maskCtx.translate(viewport.panOffset.x, viewport.panOffset.y);
-    maskCtx.scale(viewport.zoom, viewport.zoom);
+    applyViewport(maskCtx, viewport, state.dpr);
     maskCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
     // What is in sight now is not memory. Dim areas are 0.5 alpha, so three
     // subtractions leave 12.5%, visually nothing.
@@ -282,9 +288,10 @@ export function drawDynamicLighting(
   }
   offCtx.globalCompositeOperation = 'source-over';
 
-  // Composite onto main canvas with soft blur edge
+  // Composite onto main canvas with soft blur edge. A filter's length is in
+  // the canvas's own pixels, so the ratio keeps the edge 4 CSS pixels wide.
   ctx.save();
-  ctx.filter = 'blur(4px)';
+  ctx.filter = `blur(${4 * state.dpr}px)`;
   ctx.drawImage(offscreen, 0, 0);
   ctx.filter = 'none';
   ctx.restore();
