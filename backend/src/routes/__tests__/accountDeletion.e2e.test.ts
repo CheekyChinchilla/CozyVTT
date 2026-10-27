@@ -81,6 +81,25 @@ it('deletes a player who has rolled and uploaded, keeping the rolls and campaign
   expect((await prisma.asset.findUniqueOrThrow({ where: { id: campaignArt.id } })).uploadedById).toBeNull();
 });
 
+it('keeps what a deleted player drew on a map, with no author', async () => {
+  const dm = await member('Deletion DM');
+  const leaver = await member('Deletion Artist');
+  const campaignId = await campaignRunBy(dm.user.id, dm.user.id, [leaver.user.id]);
+  const map = await prisma.map.create({
+    data: { campaignId, name: 'Sketched', imageUrl: '', baseLayerUrl: '', width: 5, height: 5, tokens: [], annotations: [] },
+  });
+  const drawing = await prisma.mapDrawing.create({
+    data: { mapId: map.id, authorId: leaver.user.id, kind: 'pen', color: '#3d8bd9', width: 3, points: [[1, 1], [9, 4], [20, 2]] },
+  });
+
+  const res = await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD });
+  expect(res.status).toBe(200);
+
+  const kept = await prisma.mapDrawing.findUniqueOrThrow({ where: { id: drawing.id } });
+  expect(kept.authorId).toBeNull();
+  expect(kept.points).toEqual([[1, 1], [9, 4], [20, 2]]);
+});
+
 // A person deleting their account to remove their data had their avatar and
 // their private uploads kept on the server for good, readable by admins
 // alone. Those go with the account now: the avatar always, and a personal

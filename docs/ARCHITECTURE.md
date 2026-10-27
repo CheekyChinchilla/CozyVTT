@@ -422,6 +422,7 @@ erDiagram
         string spiritLayerStyle
         bool spiritLayerEnabled
         bool chatCooldownEnabled
+        bool playersMayDraw
     }
 
     CampaignMembership {
@@ -482,6 +483,20 @@ erDiagram
         string mapId FK
         string userId FK
         json explored
+    }
+
+    MapDrawing {
+        string id PK
+        string mapId FK
+        string authorId FK
+        DrawingAudience audience
+        DrawingLayer layer
+        string kind
+        string color
+        string fillColor
+        int width
+        json points
+        string text
     }
 
     Asset {
@@ -624,6 +639,8 @@ erDiagram
     Map ||--o{ Campaign : "is shown by"
     Map ||--o{ MapExploration : "remembered in"
     User ||--o{ MapExploration : "explores"
+    Map ||--o{ MapDrawing : "is drawn on in"
+    User ||--o{ MapDrawing : "draws"
     Campaign ||--o{ Message : "has"
     User ||--o{ Message : "writes"
     User ||--o{ Message : "receives whispers"

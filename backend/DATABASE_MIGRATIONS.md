@@ -147,6 +147,21 @@ about; the list is not exhaustive.
   going back to 1.5.4 means restoring a backup taken before the upgrade:
   1.5.4's client does not know `WHISPER`, and its chat history route answers
   500 for any page that holds a whisper.
+- `20261027171654_add_map_drawings` - The `MapDrawing` table, one row per
+  drawing on a map, with its two enums, `DrawingAudience` (`ALL`, `DM`) and
+  `DrawingLayer` (`MARKUP`, `GROUND`), and `Campaign.playersMayDraw`. Two
+  `CREATE TYPE ... AS ENUM`, one `ALTER TABLE ... ADD COLUMN` with a
+  constant default, one `CREATE TABLE`, one index on `mapId` and two foreign
+  keys: `mapId` to `Map` with `ON DELETE CASCADE`, so a drawing goes with its
+  map and so with its campaign, and `authorId` to `User` with `ON DELETE SET
+  NULL`, so a drawing stays when its author's account is deleted. No
+  existing row is changed or removed. `playersMayDraw` is `NOT NULL DEFAULT
+  true`: every existing campaign lets its players draw, as a new one does,
+  and on PostgreSQL 11 and later a constant default is written to the
+  catalogue alone, with no rewrite of the table. Nothing here adds a value to
+  an existing enum, so the new types can be used at once. 1.5.4 runs on an
+  upgraded database: it reads neither the table nor the column, and a
+  campaign it makes takes the default.
 
 ## Data migrations (one-off scripts)
 

@@ -79,6 +79,20 @@ enum InvitationStatus {
   DECLINED
 }
 
+// Who a drawing on a map is sent to: everyone who may read the map, or the
+// DM alone.
+enum DrawingAudience {
+  ALL
+  DM
+}
+
+// Where a drawing sits on a map: MARKUP over the grid, GROUND under it for
+// DM-drawn map art. Only MARKUP is accepted so far (validators/drawings.ts).
+enum DrawingLayer {
+  MARKUP
+  GROUND
+}
+
 // ============================================
 // USER MANAGEMENT
 // ============================================
@@ -137,6 +151,7 @@ model User {
   personalNotes       PersonalNote[]
   diceMacros          DiceMacro[]
   mapExplorations     MapExploration[]
+  drawings            MapDrawing[]
   documentLinks       CampaignDocument[]
 
   @@index([email])
@@ -212,6 +227,10 @@ model Campaign {
   // Chat Settings
   chatCooldownEnabled Boolean @default(false)
   chatCooldownSeconds Int     @default(5)
+
+  // Drawing Settings
+  // Players may draw on the map while the session is live; the DM always may.
+  playersMayDraw Boolean @default(true)
 
   // Dice Settings
   // When the DM clears roll history, this records when — rolls older than it
@@ -513,8 +532,47 @@ model Map {
   // Relations
   activeCampaigns Campaign[] @relation("CurrentMap")
   explorations    MapExploration[]
+  drawings        MapDrawing[]
 
   @@index([campaignId])
+}
+
+/// One drawing on one map: a stroke, a shape or a text label, with who drew
+/// it and who is sent it. Points are in whole map pixels from the map's
+/// top-left corner, as walls and lights are. `Map.annotations` predates this
+/// table and holds nothing the app reads.
+model MapDrawing {
+  id        String          @id @default(uuid())
+  mapId     String
+  map       Map             @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  /// Null once the author's account is deleted; the drawing stays, the DM's to erase.
+  authorId  String?
+  author    User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  audience  DrawingAudience @default(ALL)
+  layer     DrawingLayer    @default(MARKUP)
+  /// pen, line, arrow, rect, ellipse, polygon or text (validators/drawingLimits.ts)
+  kind      String
+  /// The stroke, #rrggbb
+  color     String
+  /// The fill, #rrggbb; null for none
+  fillColor String?
+  /// A texture name; null for a flat fill. Not accepted yet
+  pattern   String?
+  /// A glyph name, for a stamp. Not accepted yet
+  stamp     String?
+  /// Map pixels, 1 to 64
+  width     Int
+  /// Degrees, 0 to 359
+  rotation  Int             @default(0)
+  /// Drawing order within a layer, then createdAt
+  sortKey   Int             @default(0)
+  /// [[x, y], ...] in whole map pixels, top-left origin
+  points    Json
+  /// A text label's words; null for every other kind
+  text      String?
+  createdAt DateTime        @default(now())
+
+  @@index([mapId])
 }
 
 /// What one player has explored on one map: the cells their vision has

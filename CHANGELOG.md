@@ -17,7 +17,7 @@ git pull origin main
 docker compose up -d --build
 ```
 
-There is a database change, made by itself on the first start: chat messages get one new column, for the person a whisper is for, and one index, and the kinds of chat message gain one, the whisper. All three are added; no message you have is changed or removed. There is no new setting and no manual step. The backend and frontend containers are rebuilt with the new code.
+There is a database change, made by itself on the first start: chat messages get one new column, for the person a whisper is for, and one index, and the kinds of chat message gain one, the whisper. Maps gain a table for what is drawn on them, and campaigns one column, for whether players may draw, which is on for every campaign you have. All of it is added; no message, map or campaign you have is changed or removed. There is no new server setting and no manual step. The backend and frontend containers are rebuilt with the new code.
 
 To go back to 1.5.4 after upgrading, restore the backup you took before the upgrade. Without the restore, 1.5.4 cannot read a whisper: the chat of a campaign where one was sent shows an error in place of its history. After going back, reload every open CozyVTT tab, since a page still open from this release would send a message meant as a whisper to the whole table.
 
