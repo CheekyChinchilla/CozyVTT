@@ -1485,6 +1485,7 @@ export interface CampaignSettingsUpdatedBroadcast {
   gameSystem: GameSystem | null;
   chatCooldownEnabled: boolean;
   chatCooldownSeconds: number;
+  playersMayDraw: boolean;
 }
 
 // Atmosphere Events

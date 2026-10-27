@@ -195,6 +195,7 @@ describe('an archive exported by 1.5.0', () => {
       ['Goblin', true, true, 12],
       ['Orc', false, false, 12],
     ]);
-    expect(campaign).toMatchObject({ spiritLayerEnabled: true, spiritLayerStyle: 'wispy', gameSystem: 'DND_5E' });
+    // Every campaign let players draw before the setting existed.
+    expect(campaign).toMatchObject({ spiritLayerEnabled: true, spiritLayerStyle: 'wispy', gameSystem: 'DND_5E', playersMayDraw: true });
   });
 });

@@ -811,6 +811,7 @@ export async function importCampaign(
               currentVibe: campaignSettings.currentVibe || null,
               spiritLayerEnabled: campaignSettings.spiritLayerEnabled ?? false,
               spiritLayerStyle: campaignSettings.spiritLayerStyle ?? 'wispy',
+              playersMayDraw: campaignSettings.playersMayDraw ?? true,
             },
           });
           await tx.campaignMembership.create({

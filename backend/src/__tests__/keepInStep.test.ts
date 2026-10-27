@@ -81,6 +81,10 @@
  * same list, and refused Ogg, WAV and Markdown files the server takes while
  * its own list differed. The file is kept identical in both packages.
  *
+ * The Campaign Settings the server sends every member's page when the DM
+ * saves them, `campaign.settings.updated`: Players may draw was added to
+ * the route, and the payload is declared on each side.
+ *
  * The chat message the server sends and the client reads, and the kinds of
  * chat message: the database names them, and the frontend declares its own
  * enum, which has to name the same values. A whisper added a type and two
@@ -415,6 +419,14 @@ describe('chat.message, which the server sends and the client reads', () => {
   it('has the same fields on both sides', () => {
     expect(interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageBroadcast')).toEqual(
       interfaceFields(read('backend/src/websocket/handlers/chat.ts'), 'ChatMessageBroadcast')
+    );
+  });
+});
+
+describe('campaign.settings.updated, which the server sends and the client reads', () => {
+  it('has the same fields on both sides', () => {
+    expect(interfaceFields(read('frontend/src/types/index.ts'), 'CampaignSettingsUpdatedBroadcast')).toEqual(
+      interfaceFields(read('backend/src/routes/campaigns.ts'), 'CampaignSettingsUpdatedBroadcast')
     );
   });
 });

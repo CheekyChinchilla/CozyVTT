@@ -23,7 +23,7 @@ import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPA
 import { UpdateSessionNotesSchema, EndSessionSchema } from '../validators/sessionNotes';
 import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
 import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
-import type { Prisma } from '@prisma/client';
+import type { GameSystem, Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
 import { inSerializableTransaction } from '../utils/serializable';
 import { toJson, readJsonObject } from '../utils/prisma-json';
@@ -438,6 +438,21 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
 });
 
 /**
+ * `campaign.settings.updated`: the Campaign Settings every member's page
+ * shows, as stored, sent when the DM saves any of them. The frontend declares
+ * the same fields (keepInStep.test.ts).
+ */
+export interface CampaignSettingsUpdatedBroadcast {
+  campaignId: string;
+  name: string;
+  description: string | null;
+  gameSystem: GameSystem | null;
+  chatCooldownEnabled: boolean;
+  chatCooldownSeconds: number;
+  playersMayDraw: boolean;
+}
+
+/**
  * PUT /api/campaigns/:campaignId
  * Update campaign settings
  * Requires: Campaign DM role
@@ -452,7 +467,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
         message: parsed.error.issues[0]?.message ?? 'Invalid campaign data',
       });
     }
-    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = parsed.data;
+    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw } = parsed.data;
 
     const updateData: Prisma.CampaignUpdateInput = {};
     if (name !== undefined) updateData.name = name;
@@ -469,6 +484,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (spiritLayerStyle !== undefined) updateData.spiritLayerStyle = spiritLayerStyle;
     if (chatCooldownEnabled !== undefined) updateData.chatCooldownEnabled = chatCooldownEnabled;
     if (chatCooldownSeconds !== undefined) updateData.chatCooldownSeconds = chatCooldownSeconds;
+    if (playersMayDraw !== undefined) updateData.playersMayDraw = playersMayDraw;
 
     // Handle gameSystem update
     if (gameSystem !== undefined) {
@@ -497,18 +513,21 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       : { ...outcome.campaign, ...(await saveVibeSettings(campaignId, req.session.userId!, vibeSettings)) };
 
     // Every member's page shows these, so a player at the table follows them
-    // without a reload: the chat box's cooldown, the campaign's name.
-    // The change is saved either way, so a failed broadcast is only logged.
-    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds].some((value) => value !== undefined)) {
+    // without a reload: the chat box's cooldown, the campaign's name, whether
+    // they may draw. The change is saved either way, so a failed broadcast is
+    // only logged.
+    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw].some((value) => value !== undefined)) {
       try {
-        broadcastToCampaign(campaignId, 'campaign.settings.updated', {
+        const settings: CampaignSettingsUpdatedBroadcast = {
           campaignId,
           name: campaign.name,
           description: campaign.description,
           gameSystem: campaign.gameSystem,
           chatCooldownEnabled: campaign.chatCooldownEnabled,
           chatCooldownSeconds: campaign.chatCooldownSeconds,
-        });
+          playersMayDraw: campaign.playersMayDraw,
+        };
+        broadcastToCampaign(campaignId, 'campaign.settings.updated', settings);
       } catch (error) {
         logger.error('Campaign settings saved but not sent to the table', { err: error, campaignId });
       }

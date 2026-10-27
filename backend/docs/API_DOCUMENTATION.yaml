@@ -2586,6 +2586,14 @@ paths:
                   type: integer
                   minimum: 1
                   maximum: 300
+                playersMayDraw:
+                  type: boolean
+                  description: >-
+                    Whether players may draw on the map (`drawing:add`,
+                    `drawing:preview`); the DM always may. A player's own
+                    drawings stay theirs to erase while it is off. Anything
+                    but `true` or `false` answers 400 with "playersMayDraw
+                    must be true or false".
       responses:
         '200':
           description: Campaign updated
@@ -9622,7 +9630,9 @@ paths:
         for its spirit layer picture).
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Maps and assets are created in the archive's order, each
+        current map, and with `playersMayDraw` as the archive's
+        `campaign.json` gives it: on for an archive made before the
+        setting existed. Maps and assets are created in the archive's order, each
         a millisecond after the last, and an export lists maps oldest first,
         so the map list comes back in the original's order and the first map
         is the oldest. Imported tokens are linked to no character and
@@ -12320,6 +12330,10 @@ components:
           type: integer
           default: 5
           description: 1 to 300 when written.
+        playersMayDraw:
+          type: boolean
+          default: true
+          description: Whether players may draw on the map while the session is live; the DM always may.
         rollHistoryClearedAt:
           type: string
           format: date-time

@@ -71,10 +71,11 @@ Three things people expect on the socket are not there:
   one or nothing; when the vibe ends while its track plays, with none. A track
   the DM put on over the vibe is left playing.
 - **Saving Campaign Settings** is a REST call (`PUT /api/campaigns/{campaignId}`).
-  When it changes the name, description, game system or chat cooldown, every
-  connected member is sent `campaign.settings.updated` with `campaignId`,
-  `name`, `description`, `gameSystem`, `chatCooldownEnabled` and
-  `chatCooldownSeconds` as stored. A refused save sends nothing.
+  When it changes the name, description, game system, chat cooldown or
+  **Players may draw**, every connected member is sent
+  `campaign.settings.updated` with `campaignId`, `name`, `description`,
+  `gameSystem`, `chatCooldownEnabled`, `chatCooldownSeconds` and
+  `playersMayDraw` as stored. A refused save sends nothing.
 
 ### Architecture
 

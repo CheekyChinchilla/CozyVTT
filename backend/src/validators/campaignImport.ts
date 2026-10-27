@@ -111,6 +111,9 @@ export const CampaignSettingsSchema = z.object({
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
   spiritLayerStyle: z.string().max(100, { abort: true }).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
+  // Absent from archives made before the setting; such a campaign imports
+  // with players allowed to draw, as every campaign had at the upgrade.
+  playersMayDraw: z.boolean().optional().catch(undefined),
 }).strip();
 
 // ── Token (within a map) ────────────────────────────────────────────────────

@@ -59,6 +59,7 @@ describe('rejected bodies', () => {
     ['chatCooldownSeconds over 300', { chatCooldownSeconds: 301 }],
     ['chatCooldownSeconds that is not a number', { chatCooldownSeconds: 'soon' }],
     ['chatCooldownEnabled that is not a boolean', { chatCooldownEnabled: 1 }],
+    ['playersMayDraw that is not a boolean', { playersMayDraw: 'yes' }],
     ['a vibe period filter outside the allowlist', { vibeSettings: { periods: [{ name: 'Day', hue: '#ffffff', filter: 'url(https://evil.example/f.svg#x)' }] } }],
     ['a vibe period hue that is not a hex colour', { vibeSettings: { periods: [{ name: 'Day', hue: 'url(x)', filter: 'none' }] } }],
     ['a spiritLayerStyle outside the allowlist', { spiritLayerStyle: 'custom:url(https://evil.example/x.svg):wispy' }],
@@ -84,6 +85,7 @@ describe('accepted bodies', () => {
       vibeSettings: { periods: [{ name: 'Day', hue: '#ffffff', filter: 'brightness(0.9) saturate(1.1)' }], currentPeriod: 'Day' },
       chatCooldownEnabled: true,
       chatCooldownSeconds: 30,
+      playersMayDraw: false,
       // A mass-assignment attempt: neither is a field the route updates.
       ownerId: 'not-yours',
       id: 'nope',
@@ -100,6 +102,7 @@ describe('accepted bodies', () => {
     expect(stored.vibeSettings).toMatchObject({ currentPeriod: 'Day' });
     expect(stored.chatCooldownEnabled).toBe(true);
     expect(stored.chatCooldownSeconds).toBe(30);
+    expect(stored.playersMayDraw).toBe(false);
     expect(stored.ownerId).toBe(dmId);
     expect(stored.id).toBe(campaignId);
   });

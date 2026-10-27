@@ -275,6 +275,7 @@ export async function prepareCampaignExport(
     currentVibe: campaign.currentVibe,
     spiritLayerEnabled: campaign.spiritLayerEnabled,
     spiritLayerStyle: campaign.spiritLayerStyle,
+    playersMayDraw: campaign.playersMayDraw,
   };
 
   // 10. The archive's data files, written before the pictures.
