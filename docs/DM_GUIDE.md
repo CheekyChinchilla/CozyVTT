@@ -850,7 +850,7 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 | Open a token's menu, for **Edit Token**, **Hide from Players** and the rest | Press and hold the token for half a second. It is the menu a right-click opens there, item for item. |
 | Lock or unlock a door | Press and hold the door for its menu. A tap opens or closes it, as a click does. |
 | Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
-| Reorder the initiative tracker | Drag a combatant by the grip at the left of its row. |
+| Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
 | Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
 | Use a wall, fog or light tool | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
 
@@ -894,7 +894,7 @@ Since values are saved on the token, you can always click a number and correct i
 
 ### Managing Turn Order
 
-Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances; on a touch screen, drag a combatant by the grip at the left of its row, since holding the rest of the row opens its menu.
+Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances; on a touch screen, drag a combatant by the grip at the left of its row, since holding the rest of the row opens its menu, or tap the up and down arrows beside its dice button, which move it one place, as the arrow keys below do. A browser that cannot drag by touch still has the arrows.
 
 To reorder from the keyboard:
 

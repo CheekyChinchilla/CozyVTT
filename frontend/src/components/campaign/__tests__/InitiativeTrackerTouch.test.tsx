@@ -25,8 +25,9 @@ import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 
+const seat = vi.hoisted(() => ({ role: 'DM' }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: 'DM', currentMap: { id: 'map-a' } }),
+  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-a' } }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }),
@@ -53,6 +54,7 @@ const ogreToken: Token = { ...goblinToken, id: 'ogre', name: 'Ogre' };
 const ogre: CombatantEntry = { ...goblin, tokenId: 'ogre', name: 'Ogre', initiative: 3 };
 
 beforeEach(() => {
+  seat.role = 'DM';
   emitInitiativeReorder.mockReset();
   useGameStore.getState().setTokens([goblinToken, ogreToken]);
   useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [goblin] });
@@ -273,5 +275,73 @@ describe("the DM's drag to reorder", () => {
 
     expect(emitInitiativeReorder).toHaveBeenCalledWith({ orderedTokenIds: ['ogre', 'goblin'] });
     expect(setDragImage).toHaveBeenCalledWith(rowOf('Ogre'), expect.any(Number), expect.any(Number));
+  });
+});
+
+// The order moved by a drag, which a touch screen may not do, or by the
+// grip's arrow keys, which a tablet may have none of.
+describe('Up and Down on a touch screen', () => {
+  const trollToken: Token = { ...goblinToken, id: 'troll', name: 'Troll' };
+  const troll: CombatantEntry = { ...goblin, tokenId: 'troll', name: 'Troll', initiative: 1 };
+  beforeEach(() => {
+    useGameStore.getState().setTokens([goblinToken, ogreToken, trollToken]);
+    useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [goblin, ogre, troll] });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('move a combatant one place, as the grip\'s arrow keys do, and say where it went', () => {
+    const { unmount } = render(<InitiativeTracker />);
+    fireEvent.keyDown(gripOf('Goblin'), { key: 'ArrowDown' });
+    const byKey = emitInitiativeReorder.mock.calls.slice();
+    const saidByKey = screen.getByRole('status').textContent;
+    unmount();
+    emitInitiativeReorder.mockReset();
+    useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [goblin, ogre, troll] });
+
+    onATouchScreen();
+    render(<InitiativeTracker />);
+    fireEvent.click(screen.getByRole('button', { name: 'Move Goblin down' }));
+
+    expect(byKey).toEqual([[{ orderedTokenIds: ['ogre', 'goblin', 'troll'] }]]);
+    expect(emitInitiativeReorder.mock.calls).toEqual(byKey);
+    expect(screen.getByRole('status')).toHaveTextContent(saidByKey ?? 'missing');
+  });
+
+  it('move one up, and keep the cursor on the button pressed, in the row where it went', () => {
+    onATouchScreen();
+    render(<InitiativeTracker />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Troll up' }));
+
+    expect(emitInitiativeReorder).toHaveBeenCalledWith({ orderedTokenIds: ['goblin', 'troll', 'ogre'] });
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move Troll up' }));
+  });
+
+  it('go no further than the ends: Up is off on the first row and Down on the last', () => {
+    onATouchScreen();
+    render(<InitiativeTracker />);
+
+    expect(screen.getByRole('button', { name: 'Move Goblin up' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Troll down' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Move Ogre up' })).toBeEnabled();
+  });
+
+  it('are as big as a finger', () => {
+    onATouchScreen();
+    render(<InitiativeTracker />);
+
+    expect(classesOf(screen.getByRole('button', { name: 'Move Ogre down' })))
+      .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+  });
+
+  it('are not there with a mouse, nor for a player', () => {
+    const { unmount } = render(<InitiativeTracker />);
+    expect(screen.queryByRole('button', { name: 'Move Ogre down' })).toBeNull();
+    unmount();
+
+    onATouchScreen();
+    seat.role = 'PLAYER';
+    render(<InitiativeTracker />);
+    expect(screen.queryByRole('button', { name: 'Move Ogre down' })).toBeNull();
   });
 });

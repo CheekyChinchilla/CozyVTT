@@ -29,6 +29,8 @@ import {
   User,
   GripVertical,
   Eye,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -137,6 +139,9 @@ function AddCombatantModal({ open, tokens, combatantIds, onAdd, onClose }: AddCo
 // CombatantRow
 // ---------------------------------------------------------------------------
 
+/** What moved a combatant one place, which keeps the cursor after the move. */
+type MoveControl = 'grip' | 'up' | 'down';
+
 interface CombatantRowProps {
   entry: CombatantEntry;
   isActive: boolean;
@@ -162,8 +167,11 @@ interface CombatantRowProps {
   onDragOver: (e: React.DragEvent, tokenId: string) => void;
   onDrop: (e: React.DragEvent, tokenId: string) => void;
   onDragEnd: () => void;
-  /** Move this combatant one place up (-1) or down (1). */
-  onMove: (tokenId: string, step: -1 | 1) => void;
+  /** Move this combatant one place up (-1) or down (1), from the control named, which keeps the cursor. */
+  onMove: (tokenId: string, step: -1 | 1, from: MoveControl) => void;
+  /** First and last in the order: Up and Down go no further. */
+  isFirst: boolean;
+  isLast: boolean;
   /** Right-clicking the row, or a finger's long-press on it, offers this viewer something: the sheet, rolls, or both. */
   hasMenu: boolean;
   /** Double-clicking the row opens the combatant's character sheet. */
@@ -188,7 +196,7 @@ function menuPoint(e: React.MouseEvent): { x: number; y: number; byKeyboard: boo
 function CombatantRow({
   entry, isActive, isPeeked, isDM, coarsePointer, canRoll, isDragOver, reorderHintId,
   onSetInitiative, onRoll, onRemove,
-  onDragStart, onDragOver, onDrop, onDragEnd, onMove,
+  onDragStart, onDragOver, onDrop, onDragEnd, onMove, isFirst, isLast,
   hasMenu, hasSheet, onOpenMenu, onOpenSheet,
 }: CombatantRowProps) {
   const [editing, setEditing] = useState(false);
@@ -293,7 +301,7 @@ function CombatantRow({
                 // The map nudges selected walls on these keys at the window.
                 e.preventDefault();
                 e.stopPropagation();
-                onMove(entry.tokenId, e.key === 'ArrowUp' ? -1 : 1);
+                onMove(entry.tokenId, e.key === 'ArrowUp' ? -1 : 1, 'grip');
               }
             }}
             className="shrink-0 touch-target inline-flex items-center justify-center rounded-sm cursor-grab active:cursor-grabbing focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50"
@@ -403,6 +411,36 @@ function CombatantRow({
           for their own combatant, but only the DM decides who is in the fight. */}
       {(canRoll || isDM) && (
         <div className="flex items-center gap-1 shrink-0 pointer-coarse:ml-auto">
+          {/* The grip's Up and Down arrow keys, as buttons, where a finger is
+              the pointer: a drag by touch may not work in every browser. */}
+          {isDM && coarsePointer && (
+            <>
+              <button
+                type="button"
+                data-move-token={entry.tokenId}
+                data-move="up"
+                onClick={() => onMove(entry.tokenId, -1, 'up')}
+                disabled={isFirst}
+                aria-label={`Move ${name} up`}
+                title="Move up one place"
+                className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors disabled:opacity-40"
+              >
+                <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                data-move-token={entry.tokenId}
+                data-move="down"
+                onClick={() => onMove(entry.tokenId, 1, 'down')}
+                disabled={isLast}
+                aria-label={`Move ${name} down`}
+                title="Move down one place"
+                className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors disabled:opacity-40"
+              >
+                <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </>
+          )}
           {canRoll && (
             <button
               onClick={() => onRoll(entry.tokenId)}
@@ -453,10 +491,11 @@ export default function InitiativeTracker() {
   // Drag-to-reorder state (DM only)
   const dragTokenId = useRef<string | null>(null);
   const [dragOverTokenId, setDragOverTokenId] = useState<string | null>(null);
-  // Keyboard reorder: what the live region last said, and whose grip takes
-  // the cursor back once the list has re-rendered in its new order.
+  // A move of one place: what the live region last said, and which control
+  // of which row takes the cursor back once the list has re-rendered in its
+  // new order.
   const [moveAnnouncement, setMoveAnnouncement] = useState('');
-  const refocusGripOf = useRef<string | null>(null);
+  const refocusAfterMove = useRef<{ tokenId: string; from: MoveControl } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const reorderHintId = useId();
 
@@ -631,24 +670,28 @@ export default function InitiativeTracker() {
     if (toIndex !== -1) reorderTo(draggedId, toIndex);
   }, [combatState.combatants, reorderTo]);
 
-  /** The grip's Up and Down arrow keys: one place, through the same path a drop takes. */
-  const moveCombatant = useCallback((tokenId: string, step: -1 | 1) => {
+  /** The grip's Up and Down arrow keys, and the Up and Down buttons: one place, through the same path a drop takes. */
+  const moveCombatant = useCallback((tokenId: string, step: -1 | 1, from: MoveControl) => {
     const fromIndex = combatState.combatants.findIndex((c) => c.tokenId === tokenId);
     if (fromIndex === -1) return;
     const result = reorderTo(tokenId, fromIndex + step);
     if (!result) return;
-    refocusGripOf.current = tokenId;
+    refocusAfterMove.current = { tokenId, from };
     setMoveAnnouncement(`${tokenDisplayName(result.moved)} moved to ${result.toIndex + 1} of ${result.total}`);
   }, [combatState.combatants, reorderTo]);
 
   // Moving a focused row in the DOM can drop the cursor; put it back on the
-  // grip of the row that moved.
+  // control that moved the row, or on its grip where that control is now
+  // off, at the top or the bottom.
   useLayoutEffect(() => {
-    const tokenId = refocusGripOf.current;
-    if (!tokenId) return;
-    refocusGripOf.current = null;
-    const grip = listRef.current?.querySelector<HTMLElement>(`[data-grip-token="${CSS.escape(tokenId)}"]`);
-    if (grip && document.activeElement !== grip) grip.focus();
+    const moved = refocusAfterMove.current;
+    if (!moved) return;
+    refocusAfterMove.current = null;
+    const id = CSS.escape(moved.tokenId);
+    const button = moved.from === 'grip' ? null
+      : listRef.current?.querySelector<HTMLButtonElement>(`[data-move-token="${id}"][data-move="${moved.from}"]`);
+    const target = button && !button.disabled ? button : listRef.current?.querySelector<HTMLElement>(`[data-grip-token="${id}"]`);
+    if (target && document.activeElement !== target) target.focus();
   }, [combatState.combatants]);
 
   const handleDragEnd = useCallback(() => {
@@ -717,9 +760,11 @@ export default function InitiativeTracker() {
             {/* Combatant list */}
             {hasCombatants ? (
               <div ref={listRef} className="space-y-1">
-                {combatState.combatants.map((entry) => (
+                {combatState.combatants.map((entry, index) => (
                   <CombatantRow
                     key={entry.tokenId}
+                    isFirst={index === 0}
+                    isLast={index === combatState.combatants.length - 1}
                     entry={entry}
                     isActive={combatState.active && entry.tokenId === combatState.currentTokenId}
                     isPeeked={entry.tokenId === peekTokenId}
