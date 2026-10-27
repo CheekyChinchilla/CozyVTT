@@ -91,7 +91,11 @@ export default function CharacterContextMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl py-2 min-w-[200px]"
+      // Never taller than the screen on a touch screen: with a finger's
+      // 44-pixel items a long menu scrolls inside, where it would run off the
+      // bottom. A mouse's menu fits, and keeps the sides of a keyboard's
+      // focus ring, which a scrolling box would cut off.
+      className="fixed z-50 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl py-2 min-w-[200px] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
       style={{
         left: pos ? pos.x : x,
         top: pos ? pos.y : y,
@@ -107,7 +111,7 @@ export default function CharacterContextMenu({
               item.onClick();
               onClose();
             }}
-            className={`w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-moss-green/10 transition-colors ${
+            className={`w-full flex items-center gap-3 px-4 py-2 pointer-coarse:min-h-11 text-sm hover:bg-moss-green/10 transition-colors ${
               item.className || 'text-stone-gray'
             }`}
           >

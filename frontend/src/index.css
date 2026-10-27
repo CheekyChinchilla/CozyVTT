@@ -271,6 +271,19 @@
   transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 }
 
+@utility touch-target {
+  /* A control a finger can hit: at least 44 by 44 CSS px where the primary
+     pointer is coarse (a phone or a tablet); a mouse keeps the control's own
+     size. It sets no display, so it never undoes `hidden`: a control whose
+     icon must stay centred in the bigger box centres it with its own
+     classes (`inline-flex items-center justify-center`). <Button iconOnly>
+     and <Button size="sm"> carry it already. */
+  @media (pointer: coarse) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
 @utility input-cozy-number {
   /* Compact number input — hides native spinner arrows so values aren't
      clipped by the browser-rendered up/down controls. Arrow keys still

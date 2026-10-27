@@ -171,7 +171,7 @@ export default function NpcRollPicker({
             Roll for {token.name}
           </span>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close" className="p-0.5 rounded-sm hover:bg-moss-green/10 transition-colors">
+        <button type="button" onClick={onClose} aria-label="Close" className="p-0.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 transition-colors">
           <X className="w-4 h-4 text-warm-gray" aria-hidden="true" />
         </button>
       </div>

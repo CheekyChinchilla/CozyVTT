@@ -239,7 +239,10 @@ function CombatantRow({
         if ((e.target as Element).closest('input, button:not([data-combatant-name])')) return;
         onOpenSheet(entry.tokenId);
       } : undefined}
-      className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
+      // On a touch screen the die and bin are 44 pixels each, too wide to
+      // sit beside everything else in a narrow rail: they go to a line of
+      // their own, on the right.
+      className={`flex items-center gap-2 p-2 rounded-lg transition-colors pointer-coarse:flex-wrap ${
         isDragOver
           ? 'border-t-2 border-moss-green'
           : isActive
@@ -295,8 +298,9 @@ function CombatantRow({
         </div>
       )}
 
-      {/* Name + disposition */}
-      <div className="flex-1 min-w-0">
+      {/* Name + disposition. On a touch screen the name keeps 80 pixels
+          before the die and bin go to a line of their own. */}
+      <div className="flex-1 min-w-0 pointer-coarse:basis-20">
         {hasMenu ? (
           // A button so that the menu opens from the keyboard: Enter or Space
           // is a click with no mouse button count. A mouse opens it with the
@@ -368,12 +372,12 @@ function CombatantRow({
       {/* Actions. Rolling and removing are gated separately: a player may roll
           for their own combatant, but only the DM decides who is in the fight. */}
       {(canRoll || isDM) && (
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 pointer-coarse:ml-auto">
           {canRoll && (
             <button
               onClick={() => onRoll(entry.tokenId)}
               title={isDM ? 'Roll initiative for this token' : 'Roll your initiative'}
-              className="p-1 rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
+              className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
             >
               <Dices className="w-3.5 h-3.5" />
             </button>
@@ -382,7 +386,7 @@ function CombatantRow({
             <button
               onClick={() => onRemove(entry.tokenId)}
               title="Remove from initiative"
-              className="p-1 rounded-sm hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
+              className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>

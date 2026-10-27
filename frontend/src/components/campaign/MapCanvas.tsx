@@ -13,6 +13,7 @@ import { useTableRoll } from '@/hooks/useTableRoll';
 import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type {
   Token,
   TokenMoveStartEvent,
@@ -120,6 +121,7 @@ import Button from '@/components/ui/Button';
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
+import { useTopBand, underBand, useMeasuredBottom, BAND_GAP } from './map/toolbarLayout';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -190,6 +192,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const tokenCanvasRef = useRef<HTMLCanvasElement>(null);   // tokens + drag ghost
   const containerRef = useRef<HTMLDivElement>(null);
   const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; carries the vibe filter and the keyboard focus
+  // The band across the top of the map (the toolbar, and the spirit realm
+  // label), measured so the panels under it can start below it.
+  const topBandRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const heldBarRef = useRef<HTMLDivElement>(null);
+  const topBand = useTopBand(topBandRef, toolbarRef, containerRef);
+  // A touch screen's bigger toolbar buttons (`touch-target`).
+  const coarsePointer = useMediaQuery('(pointer: coarse)');
   const mapHintId = useId();
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());
@@ -3195,7 +3205,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return () => window.removeEventListener('click', handleClick);
   }, [doorContextMenu]);
 
-  // After context menu renders, adjust position so it doesn't overflow the viewport
+  // After context menu renders, adjust position so it doesn't overflow the
+  // viewport; again when Move to Map… opens or closes, which changes its
+  // height. On a touch screen its height is capped at the viewport's (the
+  // menu scrolls), so a menu opened upward from the point keeps its top on
+  // the screen.
   useEffect(() => {
     if (!contextMenu || !contextMenuRef.current) {
       setContextMenuPos(null);
@@ -3214,7 +3228,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       adjustedY = Math.max(area.top, Math.min(contextMenu.y, area.bottom - rect.height));
     }
     setContextMenuPos({ x: adjustedX, y: adjustedY });
-  }, [contextMenu]);
+  }, [contextMenu, contextMenuMoveToMapOpen]);
 
   // A menu opened from the keyboard puts the cursor on its first item once
   // it is placed, and so visible: a hidden button cannot take focus.
@@ -3239,6 +3253,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const selectionAnnouncement = selectedToken
     ? `Selected ${tokenDisplayName(selectedToken)}, square ${selectedToken.position.x}, ${selectedToken.position.y}`
     : '';
+
+  // The toolbar buttons that say what they show now: the tooltip and the
+  // name a screen reader hears.
+  const gridColorLabel = `Grid Color: ${gridColor === 'black' ? 'Black' : 'White'}`;
+  const rulerColorLabel = `Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`;
+  const spiritTokensLabel = dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show';
+  // Where the AoE panel and the Put back bar start: null keeps their places
+  // under one row of a mouse's buttons. While both show, the AoE panel starts
+  // under the bar, which would otherwise lie over its shape buttons.
+  const underToolbar = underBand(topBand, coarsePointer);
+  const putBackShown = draggedToken !== null && putBackOffered && !fingerCarrying;
+  const heldBarBottom = useMeasuredBottom(heldBarRef, containerRef, putBackShown, underToolbar);
+  const aoeTop = heldBarBottom !== null ? heldBarBottom + BAND_GAP : underToolbar;
 
   // ============================================
   // Render
@@ -3375,146 +3402,171 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         })()
       )}
 
-      {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
-      {(previewing
-        ? previewedPlane === 'spirit'
-        : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
-        // An opaque backing under the tint, as the zoom panel has, so the
-        // words read over any map.
-        <div className="absolute top-4 right-4 z-10 rounded-cozy bg-parchment animate-pulse-soft">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40">
-            <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
-            <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
-          </div>
-        </div>
-      )}
-
-      {/* Toolbar - Glassmorphism */}
-      <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-xs">
-        {/* Zoom Out */}
-        <Button
-          onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
-          disabled={mapControls.zoom <= mapControls.minZoom}
-          variant="secondary" className="p-2"
-          title="Zoom Out"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </Button>
-
-        {/* Zoom Level Display */}
-        <span className="text-xs text-stone-gray font-mono min-w-16 text-center">
-          {Math.round(mapControls.zoom * 100)}%
-        </span>
-
-        {/* Zoom In */}
-        <Button
-          onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
-          disabled={mapControls.zoom >= mapControls.maxZoom}
-          variant="secondary" className="p-2"
-          title="Zoom In"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </Button>
-
-        {/* Divider */}
-        <div className="w-px h-6 bg-moss-green/20" />
-
-        {/* Reset View — fit and center the map in the canvas */}
-        <Button
-          onClick={() => mapControls.fitToScreen(canvasSize.width, canvasSize.height)}
-          variant="secondary" className="p-2"
-          title="Fit to Screen"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </Button>
-
-        {/* Toggle Grid */}
-        <Button
-          onClick={() => setShowGrid((prev) => !prev)}
-          variant="secondary" className={`p-2 ${showGrid ? 'bg-moss-green/20' : ''}`}
-          title="Toggle Grid"
-        >
-          <Grid3x3 className="w-4 h-4" />
-        </Button>
-
-        {/* Grid Color Toggle (only show if grid is enabled) */}
-        {showGrid && (
-          <Button
-            onClick={() => setGridColor((prev) => (prev === 'black' ? 'white' : 'black'))}
-            variant="secondary" className="p-2"
-            title={`Grid Color: ${gridColor === 'black' ? 'Black' : 'White'}`}
-          >
-            <Palette className="w-4 h-4" />
-          </Button>
-        )}
-
-        {/* Toggle Ruler */}
-        {currentMap && (
-          <>
-            <div className="w-px h-6 bg-moss-green/20" />
+      {/* The band across the top of the map: the toolbar, and the spirit
+          realm label on the right. Where they do not fit one row, the
+          toolbar wraps between its groups and the label goes under it; the
+          panels under the band are placed from its measured bottom edge
+          (map/toolbarLayout.ts). It passes clicks through between the two. */}
+      <div ref={topBandRef} className="absolute top-4 left-4 right-0 flex flex-wrap items-start gap-2 pointer-events-none">
+        {/* Toolbar - Glassmorphism */}
+        <div ref={toolbarRef} className="glass-panel p-2 flex flex-wrap items-center gap-2 bg-parchment/90 backdrop-blur-xs pointer-events-auto">
+          <div className="flex items-center gap-2">
+            {/* Zoom Out */}
             <Button
-              onClick={handleToggleRuler}
-              variant="secondary" className={`p-2 ${showRuler ? 'bg-moss-green/20' : ''}`}
-              title="Ruler — measure distance"
+              onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
+              disabled={mapControls.zoom <= mapControls.minZoom}
+              variant="secondary" iconOnly
+              title="Zoom Out"
+              aria-label="Zoom Out"
             >
-              <Ruler className={`w-4 h-4 ${showRuler ? 'text-brand-ink' : ''}`} />
+              <ZoomOut className="w-4 h-4" />
             </Button>
-            {showRuler && (
+
+            {/* Zoom Level Display */}
+            {/* 48 pixels on a touch screen, room for "300%", so a DM's
+                toolbar of 44-pixel buttons keeps one row on an iPad in
+                landscape with both side panels at their minimums. */}
+            <span className="text-xs text-stone-gray font-mono min-w-16 pointer-coarse:min-w-12 text-center">
+              {Math.round(mapControls.zoom * 100)}%
+            </span>
+
+            {/* Zoom In */}
+            <Button
+              onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
+              disabled={mapControls.zoom >= mapControls.maxZoom}
+              variant="secondary" iconOnly
+              title="Zoom In"
+              aria-label="Zoom In"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Divider */}
+            <div className="w-px h-6 bg-moss-green/20" />
+
+            {/* Reset View — fit and center the map in the canvas */}
+            <Button
+              onClick={() => mapControls.fitToScreen(canvasSize.width, canvasSize.height)}
+              variant="secondary" iconOnly
+              title="Fit to Screen"
+              aria-label="Fit to Screen"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+
+            {/* Toggle Grid */}
+            <Button
+              onClick={() => setShowGrid((prev) => !prev)}
+              variant="secondary" iconOnly className={showGrid ? 'bg-moss-green/20' : undefined}
+              title="Toggle Grid"
+              aria-label="Toggle Grid"
+            >
+              <Grid3x3 className="w-4 h-4" />
+            </Button>
+
+            {/* Grid Color Toggle (only show if grid is enabled) */}
+            {showGrid && (
               <Button
-                onClick={() => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber')}
-                variant="secondary" className="p-2"
-                title={`Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`}
+                onClick={() => setGridColor((prev) => (prev === 'black' ? 'white' : 'black'))}
+                variant="secondary" iconOnly
+                title={gridColorLabel}
+                aria-label={gridColorLabel}
               >
-                <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
+                <Palette className="w-4 h-4" />
               </Button>
             )}
+          </div>
 
-            {/* Toggle AoE tool */}
-            <Button
-              onClick={handleToggleAoE}
-              variant="secondary" className={`p-2 ${showAoE ? 'bg-moss-green/20' : ''}`}
-              title="AoE Shape — area of effect overlay"
-            >
-              <Zap className={`w-4 h-4 ${showAoE ? 'text-brand-ink' : ''}`} />
-            </Button>
+          {/* Toggle Ruler */}
+          {currentMap && (
+            <div className="flex items-center gap-2">
+              <div className="w-px h-6 bg-moss-green/20" />
+              <Button
+                onClick={handleToggleRuler}
+                variant="secondary" iconOnly className={showRuler ? 'bg-moss-green/20' : undefined}
+                title="Ruler — measure distance"
+                aria-label="Ruler — measure distance"
+              >
+                <Ruler className={`w-4 h-4 ${showRuler ? 'text-brand-ink' : ''}`} />
+              </Button>
+              {showRuler && (
+                <Button
+                  onClick={() => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber')}
+                  variant="secondary" iconOnly
+                  title={rulerColorLabel}
+                  aria-label={rulerColorLabel}
+                >
+                  <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
+                </Button>
+              )}
 
-            {/* Ping: Tab's ping without a keyboard, for the next tap or click */}
-            <Button
-              onClick={() => setPingArmed((armed) => !armed)}
-              variant="secondary" className={`p-2 ${pingArmed ? 'bg-moss-green/20' : ''}`}
-              aria-label="Ping"
-              aria-pressed={pingArmed}
-              title="Ping: tap or click the map to show everyone a spot"
-            >
-              <MapPin className={`w-4 h-4 ${pingArmed ? 'text-brand-ink' : ''}`} />
-            </Button>
-          </>
-        )}
+              {/* Toggle AoE tool */}
+              <Button
+                onClick={handleToggleAoE}
+                variant="secondary" iconOnly className={showAoE ? 'bg-moss-green/20' : undefined}
+                title="AoE Shape — area of effect overlay"
+                aria-label="AoE Shape — area of effect overlay"
+              >
+                <Zap className={`w-4 h-4 ${showAoE ? 'text-brand-ink' : ''}`} />
+              </Button>
 
-        {/* DM-only: toggle spirit layer token visibility */}
-        {userRole === 'DM' && (
-          <>
-            <div className="w-px h-6 bg-moss-green/20" />
-            <Button
-              onClick={() => setDmShowSpiritTokens((prev) => !prev)}
-              variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
-              title={dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show'}
-            >
-              <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
-            </Button>
-          </>
+              {/* Ping: Tab's ping without a keyboard, for the next tap or click */}
+              <Button
+                onClick={() => setPingArmed((armed) => !armed)}
+                variant="secondary" iconOnly className={pingArmed ? 'bg-moss-green/20' : undefined}
+                aria-label="Ping"
+                aria-pressed={pingArmed}
+                title="Ping: tap or click the map to show everyone a spot"
+              >
+                <MapPin className={`w-4 h-4 ${pingArmed ? 'text-brand-ink' : ''}`} />
+              </Button>
+            </div>
+          )}
+
+          {/* DM-only: toggle spirit layer token visibility */}
+          {userRole === 'DM' && (
+            <div className="flex items-center gap-2">
+              <div className="w-px h-6 bg-moss-green/20" />
+              <Button
+                onClick={() => setDmShowSpiritTokens((prev) => !prev)}
+                variant="secondary" iconOnly className={dmShowSpiritTokens ? 'bg-spirit-purple/15' : undefined}
+                title={spiritTokensLabel}
+                aria-label={spiritTokensLabel}
+              >
+                <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
+        {(previewing
+          ? previewedPlane === 'spirit'
+          : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
+          // An opaque backing under the tint, as the zoom panel has, so the
+          // words read over any map.
+          <div className="ml-auto mr-4 z-10 rounded-cozy bg-parchment animate-pulse-soft pointer-events-auto">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40">
+              <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
+              <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
+            </div>
+          </div>
         )}
       </div>
 
       {/* Put back, while a finger or a pen holds a token still. In Player
           Preview it names only what the preview draws, as the previewed
           player is sent it; a token the preview leaves out goes unnamed. */}
-      {draggedToken && putBackOffered && !fingerCarrying && (() => {
+      {draggedToken && putBackShown && (() => {
         const shown = drawnTokens.find((t) => t.id === draggedToken.id);
         const name = previewing ? (shown ? tokenDisplayName(shown) : UNKNOWN_CREATURE) : tokenDisplayName(draggedToken);
         return (
           <HeldTokenBar
             name={name}
+            top={underToolbar}
+            ref={heldBarRef}
             onPutBack={() => {
               cancelHold();
               // The button goes with the hold; the keys go back to the map.
@@ -3526,7 +3578,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
       {/* DM Tool Panels — draggable container with stacked panels */}
       {userRole === 'DM' && currentMap && (
-        <DmToolPanelContainer containerRef={containerRef}>
+        <DmToolPanelContainer containerRef={containerRef} band={topBand}>
           <DmFogControls
             fogMode={fogMode}
             fogEnabled={fogEnabled}
@@ -3700,9 +3752,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* AoE panel */}
+      {/* AoE panel, under the toolbar's band once that is taller than one
+          row of a mouse's buttons, and under Put back while that shows.
+          TODO(ui): under one row of a mouse's buttons this panel starts at
+          top-12, 20 px above the toolbar's bottom edge, and covers the lower
+          part of Zoom Out, the zoom readout, Zoom In and Fit to Screen. It
+          belongs under the band with every pointer (underBand without its
+          one-row case), which moves it 28 px down on a desktop. */}
       {showAoE && currentMap && (
-        <div className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-xs">
+        <div
+          className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-xs"
+          // Moved down, it keeps to the map, scrolling inside where it is
+          // taller than the room below it.
+          style={aoeTop !== null
+            ? { top: aoeTop, maxHeight: `calc(100% - ${aoeTop}px - 1rem)`, overflowY: 'auto', overscrollBehavior: 'contain' }
+            : undefined}
+        >
           <p className="text-xs font-semibold text-brand-ink">AoE Shape</p>
 
           {/* Shape selector */}
@@ -3898,7 +3963,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
           style={{
             left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
             top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
@@ -3916,7 +3981,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   keeps its character after the character leaves. */}
               {campaignHasCharacter(contextMenu.token.characterId) && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
                     const characterId = contextMenu.token.characterId!;
                     const tokenId = contextMenu.token.id;
@@ -3935,7 +4000,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               )}
               {canRollForToken(contextMenu.token) && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
                     const token = contextMenu.token;
                     const picker = {
@@ -3961,14 +4026,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {canRotateToken(contextMenu.token) && (
             <>
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 title={`Turn ${ROTATION_STEP} degrees anticlockwise`}
                 onClick={() => { void rotateToken(contextMenu.token.id, -ROTATION_STEP); }}
               >
                 Rotate Left
               </button>
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 title={`Turn ${ROTATION_STEP} degrees clockwise`}
                 onClick={() => { void rotateToken(contextMenu.token.id, ROTATION_STEP); }}
               >
@@ -3990,7 +4055,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   rendered this entry a second time. */}
               {cmType === TokenType.NPC && !cmToken.characterId && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
                     const tokenId = cmToken.id;
                     const x = contextMenu.x;
@@ -4008,7 +4073,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   sections stay hidden. */}
               {(
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
                     closeTokenMenu();
                     onEditToken?.(cmToken);
@@ -4021,7 +4086,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {/* Add to Initiative — DM only */}
               {currentMap && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
                   onClick={() => {
                     const token = contextMenu.token;
                     closeTokenMenu();
@@ -4034,7 +4099,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Duplicate Token — all types, DM only */}
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 onClick={async () => {
                   if (!campaign?.id || !currentMap?.id) return;
                   const token = contextMenu.token;
@@ -4069,7 +4134,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Save as Template — DM only */}
               <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                 onClick={async () => {
                   if (!campaign?.id) return;
                   const token = contextMenu.token;
@@ -4100,7 +4165,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {/* Hide from / Reveal to players — every token; see utils/dmTokenMenu.ts */}
               {controls.hide && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
                     if (!campaign?.id || !currentMap?.id) return;
                     const token = contextMenu.token;
@@ -4119,7 +4184,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {/* Obscure / Reveal identity — every token; see utils/dmTokenMenu.ts */}
               {controls.obscure && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
                   onClick={async () => {
                     if (!campaign?.id || !currentMap?.id) return;
                     const token = contextMenu.token;
@@ -4140,7 +4205,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 contextMenu.token.layer === TokenLayer.TOKEN ? (
                   <button
                     disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
+                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
                     onClick={async () => {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
@@ -4161,7 +4226,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 ) : (
                   <button
                     disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50"
+                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50"
                     onClick={async () => {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
@@ -4188,7 +4253,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {(campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id).length > 0 && (
                 <div>
                   <button
-                    className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
+                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
                     onClick={(e) => {
                       e.stopPropagation();
                       setContextMenuMoveToMapOpen(!contextMenuMoveToMapOpen);
@@ -4207,7 +4272,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                           .map((targetMap) => (
                             <button
                               key={targetMap.id}
-                              className="w-full px-2 py-1.5 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
+                              className="w-full px-2 py-1.5 pointer-coarse:min-h-11 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
                               onClick={async () => {
                                 if (!campaign?.id || !currentMap?.id) return;
                                 const token = contextMenu.token;
@@ -4239,7 +4304,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Asks first, through the same dialog as the Token Roster. */}
               <button
-                className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
+                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
                 onClick={() => {
                   setRemovingToken(contextMenu.token);
                   closeTokenMenu();
@@ -4334,7 +4399,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           Same flex-column sizing as the token menu above; see the note there. */}
       {doorContextMenu && (
         <div
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
           style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -4348,7 +4413,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Open — available when door is closed */}
           {doorContextMenu.door.type === 'door-closed' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-open')}
             >
               Open Door
@@ -4358,7 +4423,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Close — available when door is open */}
           {doorContextMenu.door.type === 'door-open' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
             >
               Close Door
@@ -4368,7 +4433,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Lock — DM only, available when door is open or closed */}
           {isDM && doorContextMenu.door.type !== 'door-locked' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-locked')}
             >
               Lock Door
@@ -4378,7 +4443,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* Unlock — DM only, available when door is locked */}
           {isDM && doorContextMenu.door.type === 'door-locked' && (
             <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
+              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
               onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
             >
               Unlock Door

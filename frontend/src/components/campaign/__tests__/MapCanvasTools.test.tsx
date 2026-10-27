@@ -1387,7 +1387,9 @@ describe('the Spirit Realm badge', () => {
     const words = screen.getByText('Spirit Realm');
     const tint = words.parentElement as HTMLElement;
     const backing = tint.parentElement as HTMLElement;
-    expect(backing.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'bg-parchment']));
+    expect(backing.className.split(/\s+/)).toContain('bg-parchment');
+    // Over the map, in the band it shares with the toolbar.
+    expect((backing.parentElement as HTMLElement).className.split(/\s+/)).toContain('absolute');
     expect(tint.className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-spirit-purple/20', 'border-spirit-purple/40']));
     expect(words.className.split(/\s+/)).toContain('text-spirit-ink');
   });

@@ -869,6 +869,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                           disabled={isTogglingVis}
                           className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
                           title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
+                          aria-label={token.obscured ? 'Reveal identity' : 'Obscure identity'}
                         >
                           <HelpCircle className={`w-3.5 h-3.5 ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`} />
                         </button>
@@ -879,6 +880,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                           disabled={isTogglingVis}
                           className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
                           title={token.visible ? 'Hide from players' : 'Show to players'}
+                          aria-label={token.visible ? 'Hide from players' : 'Show to players'}
                         >
                           {isTogglingVis ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
@@ -898,6 +900,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             disabled={isTogglingLyr}
                             className="p-1.5 rounded-sm hover:bg-spirit-purple/10 transition-colors"
                             title={isSpirit ? 'Return to Material Plane' : 'Send to Spirit Realm'}
+                            aria-label={isSpirit ? 'Return to Material Plane' : 'Send to Spirit Realm'}
                           >
                             {isTogglingLyr ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
@@ -923,6 +926,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                 : 'hover:bg-warm-amber/10 text-stone-gray/30 hover:text-accent-ink'
                             }`}
                             title="Move to another map"
+                            aria-label="Move to another map"
                           >
                             <MapIcon className="w-3.5 h-3.5" />
                           </button>

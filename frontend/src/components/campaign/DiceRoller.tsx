@@ -885,6 +885,7 @@ export default function DiceRoller() {
                 focus:outline-hidden focus:ring-2 focus:ring-brand/50
               "
               title="Clear all fields"
+              aria-label="Clear all fields"
             >
               <RotateCcw className="w-4 h-4" />
             </button>

@@ -228,7 +228,7 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them. If an action fails, a message pops up saying what went wrong. Removing a token, here, in the Token Manager, in the quick editor or with **Remove from Map** in the token's right-click menu, asks first and names the token.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them. On a phone or a tablet they are bigger, at least 44 pixels square, and go on a line under the token's name when the panel is narrow; so do a combatant's die and bin in the initiative tracker (see the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). If an action fails, a message pops up saying what went wrong. Removing a token, here, in the Token Manager, in the quick editor or with **Remove from Map** in the token's right-click menu, asks first and names the token.
 
 ### Placing Tokens on the Map
 
@@ -972,7 +972,7 @@ Maps made before this setting existed have fog on, exactly as they always did.
 
 ### Revealing and Hiding
 
-Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
+Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map, below the toolbar where the toolbar reaches that corner (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map, with a finger too on a tablet; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
 
 - **Reveal** — drag a box over the map to show that area to players
 - **Hide** — drag a box to cover an area back up

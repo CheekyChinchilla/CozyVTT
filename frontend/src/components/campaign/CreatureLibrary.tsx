@@ -807,6 +807,7 @@ function CreatureRow({
           onClick={onToggleFavorite}
           className="absolute top-1/2 right-11 -translate-y-1/2 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`w-3.5 h-3.5 transition-colors ${
             isFavorite
@@ -933,6 +934,7 @@ function NameDescriptionList({
             onClick={() => onChange(items.filter((_, idx) => idx !== i))}
             className="p-1 text-danger-ink hover:text-danger-ink shrink-0 mt-0.5"
             title="Remove"
+            aria-label="Remove"
           >
             <Trash2 className="w-3 h-3" />
           </button>

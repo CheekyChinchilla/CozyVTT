@@ -99,6 +99,12 @@ describe('DiceRoller for a screen reader', () => {
     expect(screen.getByRole('textbox', { name: 'Purpose' })).toBeTruthy();
   });
 
+  // It showed only an icon, with the name in a tooltip.
+  it('names the button that clears the roll boxes as its tooltip does', () => {
+    render(<DiceRoller />);
+    expect(screen.getByTitle('Clear all fields')).toHaveAttribute('aria-label', 'Clear all fields');
+  });
+
   it('shows my own secret roll in a dialog named Secret Roll', async () => {
     seat.role = 'PLAYER';
     render(<DiceRoller />);

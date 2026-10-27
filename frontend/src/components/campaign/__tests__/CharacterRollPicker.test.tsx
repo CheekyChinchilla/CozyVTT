@@ -75,4 +75,12 @@ describe('the close button', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // It was 20 pixels square. The size is set on a touch screen only, which
+  // jsdom cannot show, so the classes are what is checked.
+  it('is big enough for a finger, with its cross in the middle', () => {
+    render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    expect(screen.getByRole('button', { name: 'Close' }).className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+  });
 });

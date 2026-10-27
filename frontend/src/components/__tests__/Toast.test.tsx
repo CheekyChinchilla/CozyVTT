@@ -92,3 +92,13 @@ describe('Toast timing', () => {
     expect(closed).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Toast on a touch screen', () => {
+  // The close button was the 16-pixel cross alone.
+  it('has a close button big enough for a finger, with its cross in the middle', () => {
+    render(<Toast show message="Saved" onClose={noop} />);
+
+    expect(screen.getByRole('button', { name: 'Close notification' }).className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+  });
+});

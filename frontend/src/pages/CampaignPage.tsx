@@ -447,11 +447,15 @@ function CampaignPageContent() {
           absolutely placed inside it too, such as the hidden names of the
           rail's icon tabs, which otherwise widened a narrow page. */}
       <main className={`relative flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
+        {/* The dividers are 6 pixels wide; the library takes a drag over a
+            wider strip than it draws. 44 pixels where the primary pointer
+            is coarse is the size a finger needs; a mouse keeps its 10. */}
         <Group
           orientation="horizontal"
           className="h-full w-full"
           defaultLayout={defaultLayout}
           onLayoutChanged={onLayoutChanged}
+          resizeTargetMinimumSize={{ coarse: 44, fine: 10 }}
         >
           {/* Left Panel — party & campaign info */}
           <Panel

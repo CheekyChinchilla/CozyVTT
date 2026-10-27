@@ -6,16 +6,27 @@
  */
 
 import { useState, useRef, useCallback, useEffect, type ReactNode, type RefObject } from 'react';
+import { stackCornerTop, type TopBand } from './map/toolbarLayout';
 
 interface DmToolPanelContainerProps {
   children: ReactNode;
   /** Ref to the map container element — the stack is placed and kept within it. */
   containerRef: RefObject<HTMLDivElement | null>;
+  /**
+   * The band across the top of the map, measured: the stack's corner moves
+   * under it when the toolbar wraps or its buttons reach the corner.
+   */
+  band?: TopBand | null;
 }
 
-/** Where the stack starts: the map's top right corner, under its toolbar. */
+/**
+ * Where the stack starts: the map's top right corner, beside its toolbar,
+ * or under it where the toolbar reaches the corner.
+ */
 const CORNER_TOP = '3.5rem';
-const CORNER_RIGHT = '0.5rem';
+/** The stack's gap from the map's right edge, and its one width, in pixels: set here and read for the toolbar's reach. */
+const CORNER_RIGHT_PX = 8;
+const STACK_WIDTH_PX = 200;
 /**
  * Room kept below the stack for the Preview Player View button, which sits
  * 5rem above the map's bottom edge: that, its height and a gap. A taller
@@ -26,7 +37,7 @@ const ROOM_BELOW = '8rem';
 /** The stack is never cut shorter than this, wherever it is dropped. */
 const SHORTEST = '6rem';
 
-export default function DmToolPanelContainer({ children, containerRef }: DmToolPanelContainerProps) {
+export default function DmToolPanelContainer({ children, containerRef, band = null }: DmToolPanelContainerProps) {
   // Where the stack was dropped, in pixels from the map container's top left
   // corner; null for its place in the top right corner. It was fixed to the
   // window, so it stayed put when the map moved or shrank and could be left
@@ -90,10 +101,13 @@ export default function DmToolPanelContainer({ children, containerRef }: DmToolP
     };
   }, [moved, onTheMap, containerRef]);
 
-  const top = position ? `${position.y}px` : CORNER_TOP;
+  const underBand = stackCornerTop(band, STACK_WIDTH_PX, CORNER_RIGHT_PX);
+  const corner = underBand !== null ? `${underBand}px` : CORNER_TOP;
+  const top = position ? `${position.y}px` : corner;
   const style: React.CSSProperties = {
     position: 'absolute',
-    ...(position ? { left: position.x, top: position.y } : { top: CORNER_TOP, right: CORNER_RIGHT }),
+    ...(position ? { left: position.x, top: position.y } : { top: corner, right: CORNER_RIGHT_PX }),
+    width: STACK_WIDTH_PX,
     zIndex: 30,
     maxHeight: `max(${SHORTEST}, calc(100% - ${top} - ${ROOM_BELOW}))`,
   };
@@ -101,10 +115,13 @@ export default function DmToolPanelContainer({ children, containerRef }: DmToolP
   // One width for the stack, the one Walls and Lights take, so a section's
   // notes wrap instead of widening every panel when it is opened.
   return (
-    <div ref={panelRef} style={style} className="flex flex-col gap-1.5 w-[200px] overflow-y-auto *:shrink-0">
-      {/* Drag handle, kept in view while the panels below it scroll */}
+    <div ref={panelRef} style={style} className="flex flex-col gap-1.5 overflow-y-auto *:shrink-0">
+      {/* Drag handle, kept in view while the panels below it scroll. Taller
+          for a finger on a touch screen, and it takes the touch itself:
+          left to the browser, a finger's drag scrolled the stack and
+          cancelled the move. */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-center py-0.5 cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors"
+        className="sticky top-0 z-10 flex items-center justify-center py-0.5 pointer-coarse:h-6 touch-none cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

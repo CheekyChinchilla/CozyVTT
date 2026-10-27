@@ -49,7 +49,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
         </div>
         <button
           onClick={() => onDismiss(toast.id)}
-          className="shrink-0 ml-2 hover:opacity-70 transition-opacity focus:outline-hidden focus:ring-2 focus:ring-current rounded-sm"
+          className="shrink-0 ml-2 touch-target inline-flex items-center justify-center hover:opacity-70 transition-opacity focus:outline-hidden focus:ring-2 focus:ring-current rounded-sm"
           aria-label="Dismiss notification"
         >
           <X className="w-4 h-4" aria-hidden="true" />
