@@ -119,9 +119,12 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
       {/* Drag handle, kept in view while the panels below it scroll. Taller
           for a finger on a touch screen, and it takes the touch itself:
           left to the browser, a finger's drag scrolled the stack and
-          cancelled the move. */}
+          cancelled the move. Once moved, it offers Reset position, the
+          double-click's way back, which a finger rarely lands; on a touch
+          screen the bar then grows to hold the button's 44 pixels, which
+          stood out of it, cut off above and over the first panel below. */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-center py-0.5 pointer-coarse:h-6 touch-none cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors"
+        className={`sticky top-0 z-10 flex items-center justify-center py-0.5 ${position ? 'pointer-coarse:min-h-6' : 'pointer-coarse:h-6'} touch-none cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -129,7 +132,7 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
         onDoubleClick={() => setPosition(null)}
         title="Drag to move the panels; double-click to put them back in the corner"
       >
-        <svg width="16" height="6" viewBox="0 0 16 6" className="opacity-40">
+        <svg width="16" height="6" viewBox="0 0 16 6" className="opacity-40 mx-auto">
           <circle cx="4" cy="1.5" r="1.2" fill="currentColor" className="text-stone-400" />
           <circle cx="8" cy="1.5" r="1.2" fill="currentColor" className="text-stone-400" />
           <circle cx="12" cy="1.5" r="1.2" fill="currentColor" className="text-stone-400" />
@@ -137,6 +140,18 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
           <circle cx="8" cy="4.5" r="1.2" fill="currentColor" className="text-stone-400" />
           <circle cx="12" cy="4.5" r="1.2" fill="currentColor" className="text-stone-400" />
         </svg>
+        {position && (
+          <button
+            type="button"
+            // A press here is the button's, not the start of a move.
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setPosition(null)}
+            title="Put the panels back in the corner"
+            className="touch-target shrink-0 px-1.5 py-0.5 rounded-sm text-[10px] leading-none text-stone-300 hover:text-white hover:bg-stone-500/60 transition-colors"
+          >
+            Reset position
+          </button>
+        )}
       </div>
       {children}
     </div>

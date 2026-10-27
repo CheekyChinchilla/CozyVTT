@@ -851,6 +851,7 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 | Lock or unlock a door | Press and hold the door for its menu. A tap opens or closes it, as a click does. |
 | Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
 | Reorder the initiative tracker | Drag a combatant by the grip at the left of its row. |
+| Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
 | Use a wall, fog or light tool | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
 
 A stylus never opens a menu by holding; use a finger.
@@ -974,7 +975,7 @@ Maps made before this setting existed have fog on, exactly as they always did.
 
 ### Revealing and Hiding
 
-Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map, below the toolbar where the toolbar reaches that corner (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map, with a finger too on a tablet; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
+Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map, below the toolbar where the toolbar reaches that corner (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map, with a finger too on a tablet; double-click the bar, or click **Reset position** on it once the stack has moved, to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
 
 - **Reveal** — drag a box over the map to show that area to players
 - **Hide** — drag a box to cover an area back up

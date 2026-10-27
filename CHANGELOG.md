@@ -41,6 +41,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The AoE Shape panel has a Snap to grid box.** Ticked, as it starts, a shape is placed on the grid as before. Unticked, it is placed exactly where you click or tap and turns about that point, as **Alt**+click places it, which a finger or a stylus cannot. On a touch screen, slide a finger from the square a cone or a line comes from towards its target to aim it; it stays aimed when you lift, and a tap moves a shape to the square you tap. The panel's hints say so on a touch screen.
 
+- **Reset position puts the DM's tool panels back in their corner.** Once you have dragged the stack of **Fog of War**, **Walls** and **Lights** panels somewhere else on the map, the bar above it offers **Reset position**, which does what a double-click on the bar does and is easier to hit with a finger.
+
 - **The Walls panel has buttons for what took a key or a double-click.** While you draw a line, **Done** finishes it, as a double-click or **Esc** does. While you draw a polygon, **Done** closes it once it has three corners, as a double-click does, and **Cancel** drops it, as **Esc** does. In **Select** mode, ticking **Add to selection** makes a click or a box add to what is selected, as holding **Shift** does, and **Delete** is offered for any selection, one of mixed types too, saying how many walls it will delete. The panel's **Undo** now does what **Ctrl+Z** does: it takes back the last polygon corner first, then the line being drawn, then the last wall change, and it is offered while you draw.
 
 ### Changed
