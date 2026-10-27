@@ -567,6 +567,34 @@ Your message shows as *sending…* until the server has it. If it doesn't get th
 
 While you are scrolled up reading earlier messages, new ones don't pull you down; a **Jump to newest** button appears at the bottom instead, and takes you to them. The **Dice** panel does the same for new rolls.
 
+#### Whispering to one person
+
+A whisper is a message that only you and one other member of the campaign can see.
+
+1. In the **To** list above the message box, choose the person. The DM has a group of their own at the top, **DM** (or **DM, not in session**). The other members in the session right now come next, under **In session**, and the rest under **Not in session**.
+   You should see "Only you and Mara can see this." under the box (with their name in place of Mara's). When the person is the DM, the DM's shield shows beside it.
+2. Type your message and press **Enter**.
+   It appears in the chat with a lock, **Whisper to Mara** and its own colour. Mara sees it with a lock and **Whisper from** your name.
+3. To talk to the whole table again, choose **Everyone** in the **To** list. The list keeps the person you chose until you change it.
+
+To whisper a single message without changing the list, start it with `/w` (or `/whisper`) and the person's name, such as `/w Mara Meet me by the well`. A name with a space in it works as you would type it (`/w Mara Lee Over here`), and the start of a name is enough when it fits only one person. As you type, the line under the box names who the message will reach, whatever the **To** list says, so check it before you press **Enter**. If the name fits more than one person, or nobody, the line says so, and the message is not sent; choose the person in the **To** list instead.
+
+**Two members with the same name** are never shown alike, since anyone can choose their own name:
+
+| When | What is shown beside the name |
+|---|---|
+| Two members share a name | Their role, and a player's character: **Dana (DM)**, **Mara (Player, Vex)**, **Mara (Player)**, **Ash (Spectator)** |
+| That is still the same for two of them | The day each joined: **Mara (Player, joined 3 Oct)** |
+| They joined on the same day | Their order of joining, the earlier first: **Mara (Player, joined 3 Oct, 1)**, **Mara (Player, joined 3 Oct, 2)** |
+
+A name alone cannot make someone the DM: only the real DM is in the **DM** group and gets the shield under the box.
+
+To reply to a whisper, click **Whisper from** (or **Whisper to**) on it: the **To** list switches to that person.
+
+**Who can read a whisper:** you and the person you chose, and nobody else. The DM sees a whisper only when they are one of the two. Whispers stay in the chat history like other messages, so the two of you see them again after a refresh. They are stored on the server like all chat, so whoever runs the server can read them in its database and its backups.
+
+If the person leaves the campaign, the **To** list keeps them and says they are no longer in the campaign, and a whisper to them is marked **Not sent**. **Retry** on a whisper that was not sent sends it to the same person again.
+
 ### Rolling Dice
 
 The **Dice Roller** has its own **Dice** tab beside Chat. Click one of the dice under **Quick Roll** (d4 to d100) to roll it, or type a custom expression and press **Enter** or **Roll**.
@@ -870,7 +898,7 @@ Email addresses cannot be changed from the app. Contact your platform administra
 
 Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, enter your password, and click **Delete My Account**. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server, a moment after the page says your account is gone.
 
-Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a DM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's DM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner. When only one campaign uses or shares it, and you are in that campaign, it becomes that campaign's own file and the table goes on seeing it. When more than one campaign uses it, or a campaign you are not in, none of them can show it until an administrator moves it, so move it where you want it from your asset library before you delete your account, if your role there allows it.
+Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. A whisper stays readable by the other person in it: one you sent by the person you sent it to, and one sent to you by its sender. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a DM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's DM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner. When only one campaign uses or shares it, and you are in that campaign, it becomes that campaign's own file and the table goes on seeing it. When more than one campaign uses it, or a campaign you are not in, none of them can show it until an administrator moves it, so move it where you want it from your asset library before you delete your account, if your role there allows it.
 
 Every other browser or device signed in to the account is signed out at the same moment.
 

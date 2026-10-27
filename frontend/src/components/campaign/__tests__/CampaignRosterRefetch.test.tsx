@@ -17,8 +17,6 @@ const handlers: Record<string, (data?: unknown) => void> = {};
 const socket = {
   on: (event: string, fn: (data?: unknown) => void) => { handlers[event] = fn; },
   off: vi.fn(),
-  onPresenceState: vi.fn(),
-  requestPresence: vi.fn(),
 };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));

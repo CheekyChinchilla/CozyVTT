@@ -3,8 +3,9 @@
 // Real-time chat with message history and WebSocket integration
 // ============================================
 
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, FormEvent, KeyboardEvent } from 'react';
-import { MessageCircle, Send, Loader, AlertCircle, Eraser, X } from 'lucide-react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react';
+import { MessageCircle, Send, Loader, AlertCircle, Eraser, X, Lock, Shield } from 'lucide-react';
 import { useParams } from 'react-router';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
@@ -18,11 +19,14 @@ import ChatMessage from './ChatMessage';
 import JumpToNewest from './JumpToNewest';
 import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
 import { MessageType } from '@/types';
-import type { Message, ChatMessageBroadcast } from '@/types';
+import type { Message, ChatMessageBroadcast, ChatMessageEvent } from '@/types';
 import Button from '@/components/ui/Button';
 import { errorMessage, errorSummary } from '@/utils/errors';
 import type { ChatSystemBroadcast } from '@/types';
 import { MAX_CHAT_MESSAGE_LENGTH } from '@/constants/chatLimits';
+import { DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
+import { useOnlineUserIds } from '@/stores/gameStore';
+import { whisperTargets, readSlashWhisper, isSlashWhisper, slashWhisperRefusal, byLabel } from '@/utils/chatWhisper';
 
 /** Messages per page. The server caps this at 100. */
 const PAGE_SIZE = 50;
@@ -35,6 +39,12 @@ const MAX_RESYNC_PAGES = 10;
 
 /** Shown under the box once a message is this close to the limit. */
 const LENGTH_WARNING_AT = MAX_CHAT_MESSAGE_LENGTH - 200;
+
+/**
+ * Room in the box for `/whisper <name> ` (or `/w`) ahead of a whisper's
+ * message, since the server counts the message alone.
+ */
+const WHISPER_PREFIX_ROOM = '/whisper '.length + DISPLAY_NAME_MAX_LENGTH + 1;
 
 /**
  * A name for a message being sent, which the server gives back on the
@@ -53,6 +63,28 @@ export default function ChatPanel() {
   const { socket, joinedEpoch } = useWebSocket();
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
+  const onlineUserIds = useOnlineUserIds();
+
+  // Everyone in the campaign, by user id, with the name the chat shows for
+  // them; the To list offers everyone but this user, those in session first.
+  const targets = useMemo(
+    () => whisperTargets(campaign?.memberships ?? [], campaign?.characters ?? []),
+    [campaign?.memberships, campaign?.characters]
+  );
+  const others = useMemo(() => [...targets.values()].filter((t) => t.userId !== user?.id).sort(byLabel), [targets, user?.id]);
+  const dmUserId = campaign?.memberships?.find((m) => m.role === 'DM')?.userId;
+
+  /**
+   * Who the next message goes to, or null for everyone. Kept with the name it
+   * was chosen under: a member who leaves stays chosen, marked as gone, and
+   * is never swapped for everyone.
+   */
+  const [recipient, setRecipient] = useState<{ id: string; name: string } | null>(null);
+  const recipientGone = recipient !== null && !targets.has(recipient.id);
+  const recipientName = recipient ? (targets.get(recipient.id)?.label ?? recipient.name) : null;
+  /** Why the panel itself did not send what is in the box (a `/w` it could not read). */
+  const [boxRefusal, setBoxRefusal] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Older versions wrote a chat message every time someone connected or
   // dropped, which on a flaky connection buried the actual conversation. They
@@ -332,6 +364,8 @@ export default function ChatPanel() {
         campaignId: campaignId!,
         userId: data.userId,
         user: { id: data.userId, displayName: data.userName },
+        recipientId: data.recipientId ?? null,
+        recipient: data.recipientId ? { id: data.recipientId, displayName: data.recipientName ?? '' } : null,
         type: data.type,
         content: data.content,
         metadata: null,
@@ -454,11 +488,11 @@ export default function ChatPanel() {
    * shown takes the stored id; refused or unanswered, it is marked Not sent
    * with the reason, for Retry or Discard.
    */
-  const deliver = async (clientId: string, content: string, type: MessageType) => {
+  const deliver = async (clientId: string, content: string, type: ChatMessageEvent['type'], recipientId?: string) => {
     if (!socket) return;
     const id = pendingId(clientId);
     setNotSent((prev) => withoutKey(prev, id));
-    const answer = await socket.sendChatMessage({ content, type, clientId });
+    const answer = await socket.sendChatMessage({ content, type, clientId, ...(recipientId ? { recipientId } : {}) });
     if (answer.ok) {
       // Usually the message itself has come back first and taken its place.
       setMessages((prev) => {
@@ -473,9 +507,11 @@ export default function ChatPanel() {
     }
   };
 
-  /** Send a message marked Not sent again, under the name it had. */
+  /** Send a message marked Not sent again, under the name it had, to whoever it was for. */
   const retry = (message: Message) => {
-    void deliver(message.id.slice('temp-'.length), message.content, message.type);
+    // A copy still being sent holds the type that was asked for, PLAYER or DM.
+    const asked = message.type === MessageType.DM ? MessageType.DM : MessageType.PLAYER;
+    void deliver(message.id.slice('temp-'.length), message.content, asked, message.recipientId ?? undefined);
   };
 
   /** Drop a message marked Not sent. */
@@ -489,18 +525,35 @@ export default function ChatPanel() {
    * marked Not sent when the server answers.
    */
   const sendMessage = (): void => {
-    if (!messageInput.trim() || !canSend || !socket || !campaignId || !user) return;
+    const text = messageInput.trim();
+    if (!text || !canSend || !socket || !campaignId || !user) return;
 
-    const content = messageInput.trim();
+    // `/w <name> <message>` whispers this one message; anything it cannot
+    // read as that is kept in the box with the reason, and sent to no one.
+    let to = recipient;
+    let content = text;
+    const slash = readSlashWhisper(text, others);
+    if (slash.kind === 'to' && slash.content) {
+      to = { id: slash.userId, name: targets.get(slash.userId)?.label ?? '' };
+      content = slash.content;
+    } else if (slash.kind !== 'none') {
+      setBoxRefusal(slashWhisperRefusal(slash));
+      return;
+    }
+
     const clientId = newClientId();
 
-    const messageType: MessageType = userRole === 'DM' ? MessageType.DM : MessageType.PLAYER;
+    // The type asked for, PLAYER or DM, also on a whisper: the server makes
+    // it a WHISPER, and Retry sends what was asked.
+    const messageType: ChatMessageEvent['type'] = userRole === 'DM' ? MessageType.DM : MessageType.PLAYER;
 
     const optimisticMessage: Message = {
       id: pendingId(clientId),
       campaignId,
       userId: user.id,
       user: { id: user.id, displayName: user.displayName },
+      recipientId: to?.id ?? null,
+      recipient: to ? { id: to.id, displayName: targets.get(to.id)?.displayName ?? to.name } : null,
       type: messageType,
       content,
       metadata: null,
@@ -516,8 +569,55 @@ export default function ChatPanel() {
     // Start rate limit cooldown
     startCooldown();
 
-    void deliver(clientId, content, messageType);
+    void deliver(clientId, content, messageType, to?.id);
   };
+
+  const chooseRecipient = (e: ChangeEvent<HTMLSelectElement>) => {
+    const id = e.target.value;
+    setBoxRefusal(null);
+    const target = targets.get(id);
+    setRecipient(target ? { id, name: target.label } : id && id === recipient?.id ? recipient : null);
+  };
+
+  /** Choosing a whisper's name sets the To list to the other person in it. */
+  const whisperBack = useCallback((message: Message) => {
+    const peerId = message.userId === user?.id ? message.recipientId : message.userId;
+    const target = peerId ? targets.get(peerId) : undefined;
+    if (!target) return;
+    setRecipient({ id: target.userId, name: target.label });
+    setBoxRefusal(null);
+    textareaRef.current?.focus();
+  }, [targets, user?.id]);
+
+  /** How a whisper is labelled in the list, or null for a message to everyone. */
+  const whisperView = (message: Message): { label: string; peer: string; canReply: boolean } | null => {
+    if (message.type !== MessageType.WHISPER && !message.recipientId) return null;
+    const mine = message.userId === user?.id;
+    const peerId = mine ? message.recipientId : message.userId;
+    const fallback = mine ? message.recipient?.displayName : message.user?.displayName;
+    const peer = (peerId ? targets.get(peerId)?.label : undefined) || fallback || 'Unknown User';
+    return { label: mine ? `Whisper to ${peer}` : `Whisper from ${peer}`, peer, canReply: !!peerId && targets.has(peerId) && peerId !== user?.id };
+  };
+
+  // A whisper typed as `/w <name> ` has its message counted alone, as the
+  // server counts it.
+  const slashInBox = isSlashWhisper(messageInput);
+  const typedWhisper = slashInBox ? readSlashWhisper(messageInput.trim(), others) : null;
+  const countedLength = typedWhisper?.kind === 'to' ? typedWhisper.content.length : messageInput.length;
+
+  // The line under the box names who the message will reach: whoever a
+  // typed `/w` names, whatever the To list says, or else the To list's
+  // choice. A `/w` that fits nobody, or several, says so as it is typed, in
+  // a line that is not announced; the same words are announced if it is sent.
+  const typedTarget = typedWhisper?.kind === 'to' ? targets.get(typedWhisper.userId) : undefined;
+  const typingRefusal = typedWhisper && (typedWhisper.kind === 'several' || typedWhisper.kind === 'nobody') ? slashWhisperRefusal(typedWhisper) : null;
+  const goesTo: { id: string; name: string; gone: boolean } | null = typedTarget
+    ? { id: typedTarget.userId, name: typedTarget.label, gone: false }
+    : typingRefusal
+      ? null
+      : recipient && { id: recipient.id, name: recipientName ?? recipient.name, gone: recipientGone };
+  const dmTarget = others.find((t) => t.userId === dmUserId);
+  const players = others.filter((t) => t.userId !== dmUserId);
 
   // ============================================
   // Render
@@ -642,17 +742,24 @@ export default function ChatPanel() {
           </div>
         ) : (
           <>
-            {messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                isCurrentUser={message.userId === user?.id}
-                isPending={message.id.startsWith('temp-') && !(message.id in notSent)}
-                notSentReason={notSent[message.id]}
-                onRetry={retry}
-                onDiscard={discard}
-              />
-            ))}
+            {messages.map((message) => {
+              const whisper = whisperView(message);
+              return (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  isCurrentUser={message.userId === user?.id}
+                  isPending={message.id.startsWith('temp-') && !(message.id in notSent)}
+                  notSentReason={notSent[message.id]}
+                  onRetry={retry}
+                  onDiscard={discard}
+                  whisperLabel={whisper?.label}
+                  whisperPeer={whisper?.peer}
+                  sentByDM={!!dmUserId && message.userId === dmUserId}
+                  onWhisperBack={whisper?.canReply ? whisperBack : undefined}
+                />
+              );
+            })}
             <div ref={messagesEndRef} />
           </>
         )}
@@ -663,17 +770,50 @@ export default function ChatPanel() {
       {/* Input Area */}
       <div className="p-4 border-t border-moss-green/20">
         <form onSubmit={handleSubmit} className="space-y-2">
+          {/* Who the message goes to. Keyed by user id: display names are not unique. */}
+          <div className="flex items-center gap-2">
+            <label htmlFor="chat-recipient" className="text-xs font-medium text-stone-gray">To</label>
+            <select
+              id="chat-recipient"
+              value={recipient?.id ?? ''}
+              onChange={chooseRecipient}
+              className="input-cozy flex-1 min-w-0 text-sm py-1"
+            >
+              <option value="">Everyone</option>
+              {recipientGone && recipient && <option value={recipient.id}>{recipient.name} (no longer in the campaign)</option>}
+              {/* The DM in a group the app names, which nothing a member writes can copy. */}
+              {dmTarget && (
+                <optgroup label={onlineUserIds.has(dmTarget.userId) ? 'DM' : 'DM, not in session'}>
+                  <option value={dmTarget.userId}>{dmTarget.label}</option>
+                </optgroup>
+              )}
+              {players.some((t) => onlineUserIds.has(t.userId)) && (
+                <optgroup label="In session">
+                  {players.filter((t) => onlineUserIds.has(t.userId)).map((t) => <option key={t.userId} value={t.userId}>{t.label}</option>)}
+                </optgroup>
+              )}
+              {players.some((t) => !onlineUserIds.has(t.userId)) && (
+                <optgroup label="Not in session">
+                  {players.filter((t) => !onlineUserIds.has(t.userId)).map((t) => <option key={t.userId} value={t.userId}>{t.label}</option>)}
+                </optgroup>
+              )}
+            </select>
+          </div>
           <div className="flex gap-2">
             <textarea
+              ref={textareaRef}
               value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
+              onChange={(e) => {
+                setMessageInput(e.target.value);
+                setBoxRefusal(null);
+              }}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+              placeholder={recipient ? `Whisper to ${recipientName}... (Enter to send)` : 'Type a message... (Enter to send, Shift+Enter for new line)'}
               aria-label="Chat message"
               aria-describedby="chat-hint"
               className={`input-cozy flex-1 text-sm resize-none min-h-[60px] max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
               rows={2}
-              maxLength={MAX_CHAT_MESSAGE_LENGTH}
+              maxLength={slashInBox ? MAX_CHAT_MESSAGE_LENGTH + WHISPER_PREFIX_ROOM : MAX_CHAT_MESSAGE_LENGTH}
               // Read-only through the cooldown, not disabled: disabling the
               // box threw keyboard focus to the page after every message.
               readOnly={!canSend}
@@ -693,18 +833,33 @@ export default function ChatPanel() {
             </Button>
           </div>
 
+          {goesTo && (
+            <p className={`text-xs text-center flex items-center justify-center gap-1 ${goesTo.gone ? 'text-warning-ink' : 'text-accent-ink'}`}>
+              <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />
+              {/* The shield the log shows beside a DM's message, for the campaign's DM by user id. */}
+              {goesTo.id === dmUserId && <Shield className="w-3 h-3 shrink-0 text-warning-ink" aria-hidden="true" />}
+              <span>{goesTo.gone ? `${goesTo.name} is no longer in the campaign.` : `Only you and ${goesTo.name} can see this.`}</span>
+              {goesTo.id === dmUserId && <span className="sr-only">{goesTo.name} is the DM.</span>}
+            </p>
+          )}
+          {boxRefusal ? (
+            <p role="alert" className="text-xs text-danger-ink text-center">{boxRefusal}</p>
+          ) : (
+            typingRefusal && <p className="text-xs text-warning-ink text-center">{typingRefusal}</p>
+          )}
+
           {/* Rate Limiting Feedback */}
           {!canSend && cooldownSeconds > 0 && (
             <p className="text-xs text-warning-ink text-center">
               Wait {cooldownSeconds}s before sending another message
             </p>
           )}
-          {canSend && messageInput.length >= LENGTH_WARNING_AT && (
+          {canSend && countedLength >= LENGTH_WARNING_AT && (
             <p className="text-xs text-warning-ink text-center" aria-live="polite">
-              {messageInput.length} of {MAX_CHAT_MESSAGE_LENGTH} characters
+              {countedLength} of {MAX_CHAT_MESSAGE_LENGTH} characters
             </p>
           )}
-          {canSend && messageInput.length < LENGTH_WARNING_AT && (
+          {canSend && countedLength < LENGTH_WARNING_AT && (
             <p id="chat-hint" className="text-xs text-stone-gray/70 text-center">
               Press Enter to send, Shift+Enter for new line
             </p>

@@ -639,6 +639,8 @@ Some of those deserve a note:
   when `chat.message` has different fields on the two sides (the handler's
   `ChatMessageBroadcast` against the frontend's), when the kinds of chat
   message differ between `schema.prisma` and the frontend's `MessageType`,
+  when the frontend's `ChatMessageEvent` names other fields or types than
+  `ChatMessageSchema` takes,
   when `tokenCentre.ts` differs between them, when a `SESSION_SECRET=`
   example in an example file or a guide would start a production server,
   when the themes and fonts the server accepts differ from those the app

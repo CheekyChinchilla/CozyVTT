@@ -1003,7 +1003,8 @@ export default function ProfilePage() {
                       <li>Your avatar, and the personal files you uploaded that nothing uses</li>
                     </ul>
                     <p className="text-xs">
-                      Your chat messages and dice rolls stay where they are, and the files you uploaded into a campaign
+                      Your chat messages and dice rolls stay where they are, a whisper still read by the other person in
+                      it, and the files you uploaded into a campaign
                       and documents you shared into one stay there, no longer linked to you. A personal file a campaign
                       still uses stays on the server with no owner, and the campaign cannot show it again until an
                       administrator moves it there.

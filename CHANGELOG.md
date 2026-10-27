@@ -21,7 +21,14 @@ There is a database change, made by itself on the first start: chat messages get
 
 To go back to 1.5.4 after upgrading, restore the backup you took before the upgrade. Without the restore, 1.5.4 cannot read a whisper: the chat of a campaign where one was sent shows an error in place of its history. After going back, reload every open CozyVTT tab, since a page still open from this release would send a message meant as a whisper to the whole table.
 
+#### What you will notice
+
+- **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table as before until someone chooses a person.
+- **Reload any page left open through the upgrade.** Until then it shows a whisper to you as an ordinary message; only you and its sender are sent it.
+
 ### Added
+
+- **Whisper to one person in the chat.** ([#45](https://github.com/CheekyChinchilla/CozyVTT/issues/45)) Choose someone in the new **To** list above the chat box, or start a message with `/w` or `/whisper` and their name, such as `/w Mara Meet me by the well`, and only the two of you see it, marked with a lock and **Whisper to** or **Whisper from** the other person. The DM sees a whisper only when they are one of the two: a whisper between two players is theirs alone, live and in the chat history. The line under the box names who a message will reach before it is sent. The DM has a group of their own at the top of the list, then come the members in the session; two members with the same name are told apart by their role and character, then the day they joined, so a name alone never passes for someone else. Clicking **Whisper from** on a whisper sets the list to that person. Spectators can whisper too. Whispers are stored like the rest of the chat, so whoever runs the server can read them in its database and its backups. See [Whispering to one person](docs/USER_GUIDE.md#whispering-to-one-person).
 
 - **Pinch to zoom and drag to pan the map on a touch screen.** On a tablet, pinching two fingers on the map zooms it about them, from 10% to 300% as the buttons do, and dragging one finger over empty ground moves the view; the page itself no longer zooms or scrolls under the map. A tap works as a click and a double tap finishes a wall line, and with a DM tool up one finger draws a fog box or a wall stroke, or moves a wall or a light. A second finger cancels what the first began. A stylus works as a mouse, and a hand resting beside it does nothing. A mouse works as before. Dragging tokens and opening the menus by touch follow in the same release.
 

@@ -75,7 +75,8 @@
  * The chat message the server sends and the client reads, and the kinds of
  * chat message: the database names them, and the frontend declares its own
  * enum, which has to name the same values. A whisper added a type and two
- * fields to both.
+ * fields to both. And the chat message the client sends, whose fields and
+ * types are the ones ChatMessageSchema takes.
  *
  * The campaign archive format version. The import window reads an archive's
  * manifest in the browser and shows it only for the version the server
@@ -178,6 +179,7 @@ import ts from 'typescript';
 import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
+import { ChatMessageSchema } from '../validators/chat';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { Prisma } from '@prisma/client';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
@@ -403,6 +405,24 @@ describe('chat.message, which the server sends and the client reads', () => {
     expect(interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageBroadcast')).toEqual(
       interfaceFields(read('backend/src/websocket/handlers/chat.ts'), 'ChatMessageBroadcast')
     );
+  });
+});
+
+describe('chat.message, which the client sends and the server checks', () => {
+  const fields = interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageEvent');
+
+  it('names the fields ChatMessageSchema takes, and no others', () => {
+    const declared = fields.map((line) => {
+      const m = /^(\w+)\??:/.exec(line);
+      if (!m) throw new Error(`ChatMessageEvent has a line this test cannot read: ${line}`);
+      return m[1];
+    });
+    expect(declared.sort()).toEqual(Object.keys(ChatMessageSchema.shape).sort());
+  });
+
+  it('asks for the types the schema takes', () => {
+    const line = fields.find((l) => l.startsWith('type:')) ?? '';
+    expect([...line.matchAll(/MessageType\.(\w+)/g)].map((m) => m[1]).sort()).toEqual([...ChatMessageSchema.shape.type.unwrap().options].sort());
   });
 });
 

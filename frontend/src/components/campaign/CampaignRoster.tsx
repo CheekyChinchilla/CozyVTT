@@ -8,7 +8,7 @@ import { HP_HUES, TEMP_HP_FILL, hpTier, hueColour } from '@/utils/tokenColours';
 import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useGameStore, useCharacterHp } from '@/stores/gameStore';
+import { useGameStore, useCharacterHp, useOnlineUserIds } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
@@ -35,8 +35,10 @@ export default function CampaignRoster() {
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
   const [roster, setRoster] = useState<RosterMember[]>([]);
-  // User IDs with at least one live connection to this campaign.
-  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  // Who is connected right now, shown as a dot beside each member. This is
+  // what replaced the "X has joined / has left" chat messages. Kept in the
+  // game store by usePresenceSync, which the campaign page mounts.
+  const onlineUserIds = useOnlineUserIds();
   const [loading, setLoading] = useState(true);
   // The last load failed, so an empty list is not an empty campaign.
   const [loadFailed, setLoadFailed] = useState(false);
@@ -100,31 +102,6 @@ export default function CampaignRoster() {
 
     return () => {
       socket.off('roster.updated', handleRosterUpdate);
-    };
-  }, [socket, campaign?.id]);
-
-  // Who is connected right now, shown as a dot beside each member. This is what
-  // replaced the "X has joined / has left" chat messages.
-  //
-  // The server sends the whole set on every join and leave rather than deltas,
-  // so this cannot drift out of step after a missed event — and a user with two
-  // tabs open appears once and stays online until the last one closes.
-  useEffect(() => {
-    if (!socket || !campaign?.id) return;
-
-    const handlePresence = (data: { campaignId: string; onlineUserIds: string[] }) => {
-      if (data?.campaignId !== campaign.id) return;
-      setOnlineUserIds(new Set(data.onlineUserIds ?? []));
-    };
-
-    socket.onPresenceState(handlePresence);
-    // Ask for the current set: the push that accompanied our own connection may
-    // have happened before this component mounted, which would otherwise leave
-    // every member showing offline until somebody joined or left.
-    socket.requestPresence();
-
-    return () => {
-      socket.off('presence.state', handlePresence);
     };
   }, [socket, campaign?.id]);
 
