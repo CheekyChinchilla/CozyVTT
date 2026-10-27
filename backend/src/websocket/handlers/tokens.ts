@@ -490,12 +490,6 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
-      // Validate coordinates are within map bounds
-      if (dropX < 0 || dropX >= map.width || dropY < 0 || dropY >= map.height) {
-        socket.emit('error', { message: 'Token position out of bounds' });
-        return;
-      }
-
       // Get tokens array
       const tokensArray = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
       const tokenIndex = tokensArray.findIndex((t) => t.id === tokenId);
@@ -506,9 +500,6 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
 
       const token = tokensArray[tokenIndex];
-      // The whole footprint on the map, the rule the client applies before
-      // it sends a drop; everyone, the mover included, is told where it went.
-      const { x, y } = clampTokenPosition({ x: dropX, y: dropY }, token.size ?? { width: 1, height: 1 }, map);
       // The drag is over; the next one is decided afresh. Who its frames
       // went to is kept for a refused drop, below.
       const sawTheDrag = drags.get(tokenId)?.deciding;
@@ -577,15 +568,28 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
 
       // Update token position, in the list as it is under the map's lock: a
       // DM's add or delete landing during the drag used to be written away.
-      token.position = { x, y };
-      const updatedTokens = await withMapsLocked([mapId], async (tx) => {
-        const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+      // The drop is checked against the map's size there, and kept whole on
+      // it by the token's size then, the rule the client applies before it
+      // sends a drop; everyone, the mover included, is told where it went.
+      // Judged by the map read before the lock, a token the DM grew or a map
+      // the DM shrank meanwhile was left hanging off the edge.
+      const dropped = await withMapsLocked([mapId], async (tx): Promise<{ refused: string } | { x: number; y: number; tokens: Token[] }> => {
+        const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true, width: true, height: true } });
+        if (dropX < 0 || dropX >= fresh.width || dropY < 0 || dropY >= fresh.height) return { refused: 'Token position out of bounds' };
         const tokens = readTokens(fresh.tokens);
         const index = tokens.findIndex((t) => t.id === tokenId);
-        if (index !== -1) tokens[index] = { ...tokens[index], position: { x, y } };
+        if (index === -1) return { refused: 'Token not found' };
+        const position = clampTokenPosition({ x: dropX, y: dropY }, tokens[index].size ?? { width: 1, height: 1 }, fresh);
+        tokens[index] = { ...tokens[index], position };
         await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-        return tokens;
+        return { ...position, tokens };
       });
+      if ('refused' in dropped) {
+        socket.emit('error', { message: dropped.refused });
+        return;
+      }
+      const { x, y, tokens: updatedTokens } = dropped;
+      token.position = { x, y };
 
       if (map.lightingEnabled) {
         // Dynamic lighting: per-player visibility filtering. The plane and
@@ -660,6 +664,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         }
       } else {
         // The sender included, as confirmation that the write went through.
+        // TODO(play): who is told is judged by the token read before the lock, so one the DM hid
+        // meanwhile still has its new square sent to players; judge it by the token in updatedTokens.
         await emitMoveToVisibleSockets(
           'token.moved', token, mapId, map.campaign.currentMapId, { tokenId, mapId, x, y }, true
         );

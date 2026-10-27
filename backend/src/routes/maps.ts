@@ -1746,18 +1746,6 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(400).json({ error: 'Validation Error', message: shapes.message });
     }
 
-    const requested = shapes.value.position;
-    if (requested && (requested.x < 0 || requested.x >= map.width || requested.y < 0 || requested.y >= map.height)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: `Position must be within map bounds (0-${map.width-1}, 0-${map.height-1})`,
-      });
-    }
-    // The whole footprint on the map, at the size the token will have.
-    const position = requested
-      ? clampTokenPosition(requested, shapes.value.size ?? existingToken.size ?? { width: 1, height: 1 }, map)
-      : undefined;
-
     // Control can only be handed to a player of this campaign: the DM needs
     // no naming, and a spectator controls nothing.
     if (shapes.value.controlledBy && !(await canHoldTokens(campaignId, shapes.value.controlledBy))) {
@@ -1765,23 +1753,6 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
         error: 'Validation Error',
         message: 'Token controlledBy must name a player of this campaign',
       });
-    }
-
-    // Metadata is merged into what the token already holds, so the size limit
-    // has to be checked against the result. Checking only the incoming patch
-    // bounded each request and not the column: a sequence of small updates
-    // carrying different keys grew the stored object without limit.
-    const mergedMetadata = shapes.value.metadata
-      ? { ...existingToken.metadata, ...shapes.value.metadata }
-      : undefined;
-    if (mergedMetadata) {
-      const merged = TokenMetadataSchema.safeParse(mergedMetadata);
-      if (!merged.success) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `Invalid token metadata: ${merged.error.issues[0]?.message ?? 'invalid'}`,
-        });
-      }
     }
 
     // New art the DM may read; the art already on the token may stay.
@@ -1792,18 +1763,17 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
-    // Build updated token (merge updates with existing)
+    // Build updated token (merge updates with existing). The position and the
+    // metadata are worked out under the lock, below.
     const changes: Partial<Token> = {
       ...(shapes.value.name && { name: shapes.value.name }),
       ...(nextImageUrl !== undefined && { imageUrl: nextImageUrl }),
-      ...(position && { position }),
       ...(shapes.value.size && { size: shapes.value.size }),
       ...(updates.layer && { layer: updates.layer }),
       ...(shapes.value.visible !== undefined && { visible: shapes.value.visible }),
       ...(updates.controlledBy !== undefined && { controlledBy: shapes.value.controlledBy ?? null }),
       ...(shapes.value.rotation !== undefined && { rotation: shapes.value.rotation }),
       ...(shapes.value.conditions && { conditions: shapes.value.conditions }),
-      ...(mergedMetadata && { metadata: mergedMetadata }),
       ...(updates.type !== undefined && { type: updates.type }),
       ...(updates.disposition !== undefined && { disposition: updates.disposition }),
       ...(updates.hp !== undefined && { hp: shapes.value.hp ?? null }),
@@ -1823,21 +1793,51 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
 
     // Merged into the token as it is under the map's lock, so a move that
     // landed since this route read it is kept, and written back to the list
-    // as it is then.
-    const written = await withMapsLocked([mapId], async (tx) => {
-      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    // as it is then. The move is checked and clamped there too, against the
+    // map's size and the token's as they are then, and the metadata merged
+    // into what the token holds then: a resize or a metadata change landing
+    // between this route's read and the lock used to be judged by the old
+    // token, leaving it off the map's edge or its metadata written over.
+    const requested = shapes.value.position;
+    const written = await withMapsLocked([mapId], async (tx): Promise<LockedEdit<{ token: Token; map: MapRow }>> => {
+      const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true, width: true, height: true } });
       const tokens = readTokens(fresh.tokens);
       const index = tokens.findIndex((t) => t.id === tokenId);
-      if (index === -1) return null;
-      const token: Token = { ...tokens[index], ...changes };
+      if (index === -1) return { status: 404, error: 'Not Found', message: 'Token not found on this map' };
+      const current = tokens[index];
+
+      if (requested && (requested.x < 0 || requested.x >= fresh.width || requested.y < 0 || requested.y >= fresh.height)) {
+        return {
+          status: 400,
+          error: 'Validation Error',
+          message: `Position must be within map bounds (0-${fresh.width-1}, 0-${fresh.height-1})`,
+        };
+      }
+      // The whole footprint on the map, at the size the token will have.
+      const position = requested
+        ? clampTokenPosition(requested, shapes.value.size ?? current.size ?? { width: 1, height: 1 }, fresh)
+        : undefined;
+
+      // Metadata is merged into what the token already holds, so the size
+      // limit has to be checked against the result. Checking only the
+      // incoming patch bounded each request and not the column: a sequence
+      // of small updates carrying different keys grew the stored object
+      // without limit.
+      const metadata = shapes.value.metadata ? { ...current.metadata, ...shapes.value.metadata } : undefined;
+      if (metadata) {
+        const merged = TokenMetadataSchema.safeParse(metadata);
+        if (!merged.success) {
+          return { status: 400, error: 'Validation Error', message: `Invalid token metadata: ${merged.error.issues[0]?.message ?? 'invalid'}` };
+        }
+      }
+
+      const token: Token = { ...current, ...changes, ...(position && { position }), ...(metadata && { metadata }) };
       tokens[index] = token;
       const map = await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-      return { token, map };
+      return { done: { token, map } };
     });
-    if (!written) {
-      return res.status(404).json({ error: 'Not Found', message: 'Token not found on this map' });
-    }
-    const { token: updatedToken, map: updatedMap } = written;
+    if (!('done' in written)) return sendRefusal(res, written);
+    const { token: updatedToken, map: updatedMap } = written.done;
     resendSoonIfCurrent(campaignId, mapId);
 
     // A combatant's own change follows the token. A layer, visibility or
