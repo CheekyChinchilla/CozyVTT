@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createGestureRecognizer, type Gesture, type GestureOptions, type PointerSample } from '../gestures';
+import { createGestureRecognizer, LONG_PRESS_MS, TAP_SLOP_PX, type Gesture, type GestureOptions, type PointerSample } from '../gestures';
 
 const touch = (id: number, x: number, y: number, t = 0, button = 0): PointerSample => ({ id, kind: 'touch', x, y, t, button });
 const mouse = (x: number, y: number, button = 0): PointerSample => ({ id: 1, kind: 'mouse', x, y, t: 0, button });
@@ -443,5 +443,29 @@ describe('a press that may not long-press', () => {
 
     expect(asked).toEqual([touch(1, 10, 10), touch(2, 100, 100)]);
     expect(labels()).toEqual(['tap', 'long-press']);
+  });
+});
+
+// The panels' rows long-press by the same numbers (hooks/useLongPress.ts),
+// so they are the recogniser's own, written once.
+describe('the numbers a press is told apart by', () => {
+  it('are half a second held still, within 8 pixels of where it landed', () => {
+    expect(LONG_PRESS_MS).toBe(500);
+    expect(TAP_SLOP_PX).toBe(8);
+  });
+
+  it('are the ones the recogniser uses when it is given none', () => {
+    const { r, labels } = setup();
+    r.down(touch(1, 100, 100, 0));
+    r.move(touch(1, 100 + TAP_SLOP_PX - 1, 100));
+    vi.advanceTimersByTime(LONG_PRESS_MS - 1);
+    expect(labels()).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(labels()).toEqual(['long-press']);
+
+    r.up(touch(1, 100, 100));
+    r.down(touch(2, 100, 100, 0));
+    r.move(touch(2, 100 + TAP_SLOP_PX, 100));
+    expect(labels()).toEqual(['long-press', 'drag start']);
   });
 });

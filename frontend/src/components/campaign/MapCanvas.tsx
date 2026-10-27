@@ -68,6 +68,7 @@ import { useWallTool } from './map/tools/useWallTool';
 import type { MapTool, PointerAt } from './map/tools/types';
 import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
 import { createGestureRecognizer, type Gesture } from './map/gestures';
+import { createClickSwallow } from './map/clickSwallow';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, resolvePreviewSelection, followStepTokens, type PreviewSelection,
@@ -132,12 +133,6 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   if (effect === 'dream') return '#d4a0f0';
   return '#9370DB'; // wispy default = spirit-purple
 }
-
-/**
- * How long after a long-pressing finger lifts the click and the mousedown
- * it may bring are still swallowed (iOS sends them as the finger lifts).
- */
-const LONG_PRESS_CLICK_MS = 1000;
 
 /** The screen's pixel ratio; 1 where there is no window to ask. */
 function readDeviceRatio(): number {
@@ -2583,7 +2578,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const longPress = (pointerId: number, x: number, y: number) => {
     focusMap();
-    swallowAfterLongPressRef.current = { pointerId, until: Infinity, left: new Set(['mousedown', 'click']) };
+    clickSwallow.arm(pointerId);
     if (openMenuAt(x, y)) return;
     // A ping, as the armed Ping would have made: it is used up.
     pingAt(x, y);
@@ -2591,44 +2586,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
 
   /**
-   * iOS can send a click, and the mouse events before it, when a finger
-   * lifts from a long-press, and the menu just opened closes on a click (the
-   * token and door menus) or a mousedown (the roster's). The first of each
-   * after a long-press is swallowed, unless a new press starts first or a
-   * second has passed since the finger lifted.
+   * The mousedown and the click iOS may send as a long-pressing finger
+   * lifts, swallowed once (map/clickSwallow.ts), so the menu just opened
+   * stays open.
    */
-  const swallowAfterLongPressRef = useRef<{ pointerId: number; until: number; left: Set<string> } | null>(null);
-  useEffect(() => {
-    const onPress = () => { swallowAfterLongPressRef.current = null; };
-    const onMouse = (event: MouseEvent) => {
-      const armed = swallowAfterLongPressRef.current;
-      if (!armed || !armed.left.has(event.type)) return;
-      // Enter or Space on a focused control clicks it with no pointer and a
-      // click count of 0: that click is the user's.
-      if (event.type === 'click' && event.detail === 0) return;
-      if (performance.now() > armed.until) {
-        swallowAfterLongPressRef.current = null;
-        return;
-      }
-      armed.left.delete(event.type);
-      if (armed.left.size === 0) swallowAfterLongPressRef.current = null;
-      event.stopImmediatePropagation();
-      event.preventDefault();
-    };
-    window.addEventListener('pointerdown', onPress, true);
-    window.addEventListener('mousedown', onMouse, true);
-    window.addEventListener('click', onMouse, true);
-    return () => {
-      window.removeEventListener('pointerdown', onPress, true);
-      window.removeEventListener('mousedown', onMouse, true);
-      window.removeEventListener('click', onMouse, true);
-    };
-  }, []);
-  /** The finger of a long-press has lifted: what it may bring is swallowed for a second more. */
-  const longPressLifted = (pointerId: number) => {
-    const armed = swallowAfterLongPressRef.current;
-    if (armed?.pointerId === pointerId && armed.until === Infinity) armed.until = performance.now() + LONG_PRESS_CLICK_MS;
-  };
+  const [clickSwallow] = useState(() => createClickSwallow());
+  useEffect(() => () => clickSwallow.clear(), [clickSwallow]);
 
   /** Hand a finger's or a pen's event to the recogniser, which may answer with a gesture. */
   const feedGesture = (step: 'down' | 'move' | 'up' | 'cancel', e: MapPointer, t: number) => {
@@ -2646,7 +2609,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     gestures.reset();
     fingerDownsRef.current.clear();
     penTipsRef.current.clear();
-    swallowAfterLongPressRef.current = null;
+    clickSwallow.clear();
     if (!fingerPressRef.current) return;
     fingerPressRef.current = false;
     cancelPointer();
@@ -2711,7 +2674,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'touch') {
       feedGesture('up', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
-      longPressLifted(e.pointerId);
+      clickSwallow.lifted(e.pointerId);
       return;
     }
     if (e.kind === 'pen') {
@@ -2728,7 +2691,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'touch') {
       feedGesture('cancel', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
-      longPressLifted(e.pointerId);
+      clickSwallow.lifted(e.pointerId);
       return;
     }
     if (e.kind === 'pen') {
