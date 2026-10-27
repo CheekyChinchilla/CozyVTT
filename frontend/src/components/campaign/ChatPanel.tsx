@@ -808,7 +808,7 @@ export default function ChatPanel() {
                 setBoxRefusal(null);
               }}
               onKeyDown={handleKeyDown}
-              placeholder={recipient ? `Whisper to ${recipientName}... (Enter to send)` : 'Type a message... (Enter to send, Shift+Enter for new line)'}
+              placeholder={recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
               aria-label="Chat message"
               aria-describedby="chat-hint"
               className={`input-cozy flex-1 text-sm resize-none min-h-[60px] max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
