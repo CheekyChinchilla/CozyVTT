@@ -98,6 +98,9 @@ export function useWallTool({
   const wallBrushActiveRef = useRef(false);
   const wallBrushPointsRef = useRef<Array<{ x: number; y: number }>>([]);
   const [nearEndpoint, setNearEndpoint] = useState(false);
+  // The panel's Add to selection: Shift held down, for a finger or a pen.
+  // It lasts while the Select tool is up.
+  const [addToSelection, setAddToSelection] = useState(false);
 
   /** Send the whole wall list to everyone, as undo and redo do. */
   const sendWalls = useCallback((segments: WallSegment[]) => {
@@ -271,10 +274,16 @@ export function useWallTool({
     wallBrushPointsRef.current = [];
   }, [currentMap?.id, setSelectedWallIds, setSelectedEndpoint, setWallMarquee, wallMarqueeRef, wallMoveRef, wallDragEndpointRef]);
 
-  // Clear polygon when leaving polygon mode
+  // Clear polygon when leaving polygon mode, and a half-drawn line when
+  // leaving Draw: only its own tool draws it, and kept, it took the next
+  // Escape, Ctrl+Z or Undo in another tool, and Draw chosen again carried on
+  // from its point. Leaving by the light or fog tools comes here too.
   useEffect(() => {
     if (wallMode !== 'wall-polygon') {
       setPolygonPoints([]);
+    }
+    if (wallMode !== 'wall-draw') {
+      setWallInProgress([]);
     }
   }, [wallMode]);
 
@@ -450,7 +459,7 @@ export function useWallTool({
         setSelectedEndpoint(null);
         const hitThreshold = 12 / mapControls.zoom;
         const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
-        const additive = e.shiftKey;
+        const additive = e.shiftKey || addToSelection;
 
         if (hit) {
           if (additive) {
@@ -842,7 +851,7 @@ export function useWallTool({
     wallMode,
     onWallModeChange: (mode) => {
       setWallMode(mode);
-      if (mode !== 'wall-select') { setSelectedWallIds(new Set()); setSelectedEndpoint(null); wallDragEndpointRef.current = null; setNearEndpoint(false); }
+      if (mode !== 'wall-select') { setSelectedWallIds(new Set()); setSelectedEndpoint(null); wallDragEndpointRef.current = null; setNearEndpoint(false); setAddToSelection(false); }
       if (mode !== 'wall-split') setSplitHoverPoint(null);
       if (mode !== 'wall-erase') { wallEraseBrushActiveRef.current = false; wallErasedIdsRef.current = new Set(); }
       if (mode !== 'wall-brush') { wallBrushActiveRef.current = false; wallBrushPointsRef.current = []; }
@@ -850,6 +859,7 @@ export function useWallTool({
     },
     onCollapse: () => {
       setWallMode(null);
+      setAddToSelection(false);
       setSelectedWallIds(new Set());
       setSelectedEndpoint(null);
       wallDragEndpointRef.current = null;
@@ -870,9 +880,10 @@ export function useWallTool({
     onSnapToEndpointChange: setSnapToEndpoint,
     wallCount: wallSegments.length,
     onClearAll: () => commitWalls([]),
-    canUndo: canUndoWalls,
+    // The keyboard's Undo: a corner or a half-drawn line comes first.
+    canUndo: canUndoWalls || polygonPoints.length > 0 || wallInProgress.length > 0,
     canRedo: canRedoWalls,
-    onUndo: undoEdit,
+    onUndo: undoKey,
     onRedo: redoEdit,
     wallColor,
     onWallColorChange: setWallColor,
@@ -885,7 +896,16 @@ export function useWallTool({
         selectedWallIds.has(s.id) ? { ...s, type: newType } : s
       ));
     },
+    selectedCount: selectedWallIds.size,
     onDeleteSelected: deleteSelectedWalls,
+    addToSelection,
+    onAddToSelectionChange: setAddToSelection,
+    lineInProgress: wallInProgress.length > 0,
+    // A double-click's end of the line: its walls are already sent.
+    onFinishLine: () => setWallInProgress([]),
+    polygonCorners: polygonPoints.length,
+    onClosePolygon: closePolygon,
+    onDropPolygon: () => setPolygonPoints([]),
     selectedEndpoint: wallMode === 'wall-select' && selectedEndpoint ? (() => {
       const ep = selectedEndpoint;
       let count = 0;

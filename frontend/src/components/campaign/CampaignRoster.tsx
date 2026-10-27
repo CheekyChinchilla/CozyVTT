@@ -12,10 +12,13 @@ import { useGameStore, useCharacterHp, useOnlineUserIds } from '@/stores/gameSto
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
+import { useCoarsePointer } from '@/hooks/useMediaQuery';
+import { useLongPress, type LongPressPoint } from '@/hooks/useLongPress';
+import { showRowWhileDraggedByGrip } from '@/utils/rowDrag';
 import { api } from '@/services/api';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
-import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
+import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin, GripVertical } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import CharacterSheetViewerModal from '../character/CharacterSheetViewerModal';
@@ -45,7 +48,11 @@ export default function CampaignRoster() {
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [editorCharacter, setEditorCharacter] = useState<Character | null>(null);
   const [_viewerLoading, setViewerLoading] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; characterId: string; characterUserId: string } | null>(null);
+  // `opening` counts the menus opened, so each is a menu of its own, placed
+  // at its point: a long-press on another row brings no mousedown to close
+  // the one open.
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; characterId: string; characterUserId: string; opening: number } | null>(null);
+  const menuOpenings = useRef(0);
   const [rollPicker, setRollPicker] = useState<{ x: number; y: number; characterId: string } | null>(null);
   // The character Remove from Campaign asks about. Kept apart from the menu,
   // which closes as soon as the item is chosen.
@@ -126,16 +133,20 @@ export default function CampaignRoster() {
   // Get user's membership in campaign
   const userMembership = campaign?.memberships?.find(m => m.userId === user?.id);
 
-  // Handle character right-click
-  const handleCharacterRightClick = (e: React.MouseEvent, characterId: string, characterUserId: string) => {
-    e.preventDefault();
+  // A character's menu, opened at a point by a right-click or a long-press
+  const handleCharacterMenu = (at: LongPressPoint, characterId: string, characterUserId: string) => {
+    menuOpenings.current += 1;
     setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
+      x: at.clientX,
+      y: at.clientY,
       characterId,
       characterUserId,
+      opening: menuOpenings.current,
     });
   };
+  // A finger's drags start from a grip on a touch screen, so a long-press
+  // elsewhere on the row is free to open its menu.
+  const coarsePointer = useCoarsePointer();
 
   // Close context menu
   const handleCloseContextMenu = () => {
@@ -327,7 +338,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.DM.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -341,7 +352,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.PLAYER.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -355,7 +366,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.SPECTATOR.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterRightClick={handleCharacterRightClick} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -377,6 +388,7 @@ export default function CampaignRoster() {
       {/* Character Context Menu */}
       {contextMenu && user && userMembership && (
         <CharacterContextMenu
+          key={contextMenu.opening}
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
@@ -452,6 +464,9 @@ export default function CampaignRoster() {
 
       <Toast message={toast.message} type={toast.type} show={toast.show} onClose={hideToast} />
 
+      {/* TODO(ui): the confirmation does not name the character it removes;
+          say "Remove <name> from the campaign?" so a menu opened on the
+          wrong row cannot remove someone unseen. */}
       <ConfirmDialog
         isOpen={confirmRemove !== null}
         title="Remove from Campaign"
@@ -471,7 +486,10 @@ interface MemberCardProps {
   getSystemBadgeColor: (gameSystem: GameSystem | null) => string;
   getSystemShortName: (gameSystem: GameSystem | null) => string;
   onCharacterClick: (characterId: string) => void;
-  onCharacterRightClick: (e: React.MouseEvent, characterId: string, characterUserId: string) => void;
+  /** Open a character's menu at a point: a right-click, or a finger's long-press. */
+  onCharacterMenu: (at: LongPressPoint, characterId: string, characterUserId: string) => void;
+  /** The primary pointer is a finger: a character drags by its grip only. */
+  coarsePointer: boolean;
   isDM: boolean;
   currentUserId: string;
   /** The viewer is a player, so may adjust their own characters' hit points; a spectator may not. */
@@ -482,7 +500,7 @@ interface MemberCardProps {
   isOnline: boolean;
 }
 
-function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortName, onCharacterClick, onCharacterRightClick, isDM, currentUserId, canAdjustOwn, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
+function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortName, onCharacterClick, onCharacterMenu, coarsePointer, isDM, currentUserId, canAdjustOwn, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
   const RoleIcon = getRoleIcon(member.role);
 
   return (
@@ -548,54 +566,15 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
               key={character.id}
               className="rounded-sm bg-paper/50 hover:bg-paper/70 transition-colors"
             >
-              <div
+              <CharacterRow
+                character={character}
+                canDrag={canDrag}
+                coarsePointer={coarsePointer}
                 onClick={() => onCharacterClick(character.id)}
-                onContextMenu={(e) => onCharacterRightClick(e, character.id, character.userId)}
-                draggable={canDrag}
-                onDragStart={canDrag ? (e) => {
-                  e.dataTransfer.effectAllowed = 'copy';
-                  e.dataTransfer.setData('text/plain', JSON.stringify(characterTokenDrag({
-                    id: character.id,
-                    name: character.name,
-                    tokenImageUrl: character.tokenImageUrl,
-                    userId: character.userId,
-                  })));
-                } : undefined}
-                title={canDrag ? `Drag ${character.name} onto the map` : undefined}
-                className={`flex items-center gap-2 p-1.5 cursor-pointer ${canDrag ? 'active:cursor-grabbing' : ''}`}
-              >
-              {/* Character Token — draggable by DM onto map */}
-              {character.tokenImageUrl ? (
-                <img
-                  src={character.tokenImageUrl}
-                  alt={character.name}
-                  className="w-6 h-6 rounded-full object-cover border border-moss-green/20"
-                  title={character.name}
-                />
-              ) : (
-                <div className="w-6 h-6 rounded-full bg-moss-green/10 border border-moss-green/20 flex items-center justify-center">
-                  <span className="text-xs text-brand-ink font-semibold">
-                    {character.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
-
-              {/* Character Name */}
-              <p className="text-xs font-medium text-stone-gray flex-1 truncate">
-                {character.name}
-              </p>
-
-              {/* Game System Badge */}
-              {character.gameSystem && (
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded font-medium ${getSystemBadgeColor(
-                    character.gameSystem
-                  )}`}
-                >
-                  {getSystemShortName(character.gameSystem)}
-                </span>
-              )}
-            </div>
+                onMenu={(at) => onCharacterMenu(at, character.id, character.userId)}
+                badgeColor={getSystemBadgeColor(character.gameSystem)}
+                systemShortName={getSystemShortName(character.gameSystem)}
+              />
 
             {/* HP bar + controls — shown when character has HP data and user can edit */}
             {(() => {
@@ -671,6 +650,105 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
           ); })}
         </div>
       )}
+    </div>
+  );
+}
+
+interface CharacterRowProps {
+  character: RosterMember['characters'][number];
+  /** The viewer is the DM, who may drag the character onto the map. */
+  canDrag: boolean;
+  coarsePointer: boolean;
+  onClick: () => void;
+  onMenu: (at: LongPressPoint) => void;
+  badgeColor: string;
+  systemShortName: string;
+}
+
+/**
+ * A character's line in the roster: a click or a tap opens the sheet, and a
+ * right-click or a finger's long-press the character's menu. The DM drags it
+ * onto the map, with a mouse from anywhere on the line and on a touch screen
+ * from the grip at its start only, which never long-presses: an iPad's own
+ * drag would otherwise lift the line at about the time the menu opens.
+ */
+function CharacterRow({ character, canDrag, coarsePointer, onClick, onMenu, badgeColor, systemShortName }: CharacterRowProps) {
+  const longPress = useLongPress(onMenu);
+  const dragTitle = `Drag ${character.name} onto the map`;
+  const rowDrags = canDrag && !coarsePointer;
+  return (
+    <div
+      onClick={onClick}
+      onPointerDown={longPress.onPointerDown}
+      onPointerMove={longPress.onPointerMove}
+      onPointerUp={longPress.onPointerUp}
+      onPointerCancel={longPress.onPointerCancel}
+      onContextMenu={(e) => {
+        if (longPress.takeContextMenu(e)) return;
+        e.preventDefault();
+        onMenu({ clientX: e.clientX, clientY: e.clientY });
+      }}
+      draggable={rowDrags}
+      onDragStart={canDrag ? (e) => {
+        showRowWhileDraggedByGrip(e);
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('text/plain', JSON.stringify(characterTokenDrag({
+          id: character.id,
+          name: character.name,
+          tokenImageUrl: character.tokenImageUrl,
+          userId: character.userId,
+        })));
+      } : undefined}
+      title={rowDrags ? dragTitle : undefined}
+      className={`flex items-center gap-2 p-1.5 cursor-pointer select-none [-webkit-touch-callout:none] ${rowDrags ? 'active:cursor-grabbing' : ''}`}
+    >
+      {/* 44 pixels square to a finger, but 24 of the row's width: its
+          target reaches 10 pixels into the padding and the gap either side,
+          which leaves the name room in a narrow panel. */}
+      {canDrag && coarsePointer && (
+        <span
+          data-drag-grip
+          draggable
+          title={dragTitle}
+          aria-hidden="true"
+          className="touch-target inline-flex items-center justify-center shrink-0 -my-1.5 -mx-2.5 rounded-sm text-stone-gray/60 cursor-grab active:cursor-grabbing"
+        >
+          <GripVertical className="w-4 h-4" />
+        </span>
+      )}
+
+      {/* Character Token — draggable by DM onto map */}
+      {character.tokenImageUrl ? (
+        <img
+          src={character.tokenImageUrl}
+          alt={character.name}
+          // A picture is a drag of its own to a browser: on a touch screen
+          // only the grip drags.
+          draggable={coarsePointer ? false : undefined}
+          className="w-6 h-6 rounded-full object-cover border border-moss-green/20"
+          title={character.name}
+        />
+      ) : (
+        <div className="w-6 h-6 rounded-full bg-moss-green/10 border border-moss-green/20 flex items-center justify-center">
+          <span className="text-xs text-brand-ink font-semibold">
+            {character.name.charAt(0).toUpperCase()}
+          </span>
+        </div>
+      )}
+
+      {/* Character name and game system badge, side by side; on a touch
+          screen, where the grip and the bigger targets take the room, the
+          badge goes under the name. */}
+      <div className="flex-1 min-w-0 flex items-center gap-2 pointer-coarse:flex-col pointer-coarse:items-start pointer-coarse:gap-0.5">
+        <p className="text-xs font-medium text-stone-gray flex-1 max-w-full truncate">
+          {character.name}
+        </p>
+        {character.gameSystem && (
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${badgeColor}`}>
+            {systemShortName}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

@@ -31,6 +31,14 @@
 export type PointerKind = 'mouse' | 'touch' | 'pen';
 
 /**
+ * How long a press holds still to be a long-press, and how far it may move
+ * from where it landed and still be a press, in pixels. The panels' rows
+ * long-press by the same two (hooks/useLongPress.ts).
+ */
+export const LONG_PRESS_MS = 500;
+export const TAP_SLOP_PX = 8;
+
+/**
  * One pointer at one moment. `x` and `y` are in the same pixels for every
  * sample (MapCanvas gives the page's); `t` in milliseconds. `button` is the
  * pointer event's: 0 primary, 2 secondary, -1 on a move; a gesture's samples
@@ -51,9 +59,9 @@ export type Gesture =
   | { type: 'pinch'; phase: 'start' | 'move' | 'end'; centre: { x: number; y: number }; scale: number; dx: number; dy: number };
 
 export interface GestureOptions {
-  /** 8: movement under it keeps a press a press. */
+  /** TAP_SLOP_PX: movement under it keeps a press a press. */
   slopPx?: number;
-  /** 500. */
+  /** LONG_PRESS_MS. */
   longPressMs?: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
@@ -96,8 +104,8 @@ const distance = (a: PointerSample, b: PointerSample) => Math.hypot(a.x - b.x, a
 const midpoint = (a: PointerSample, b: PointerSample) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
 export function createGestureRecognizer(emit: (g: Gesture) => void, options: GestureOptions = {}): GestureRecognizer {
-  const slopPx = options.slopPx ?? 8;
-  const longPressMs = options.longPressMs ?? 500;
+  const slopPx = options.slopPx ?? TAP_SLOP_PX;
+  const longPressMs = options.longPressMs ?? LONG_PRESS_MS;
   const setTimer = options.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
   const clearTimer = options.clearTimer ?? ((handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   const longPressAt = options.longPressAt ?? (() => true);

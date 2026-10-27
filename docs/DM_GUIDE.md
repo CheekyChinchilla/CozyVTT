@@ -82,9 +82,9 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 **Moving a token to another map.** Switching maps offers to bring tokens along, a token's right-click menu offers **Move to Map…**, and in the Token Manager the map icon (**Move to another map**) opens **Move to which map?**. A token that moves keeps everything about it: its type, who controls it, its darkvision, hit points, conditions, notes and stat block.
 
-**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
+**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. On a touch screen, drag it by the grip at the start of its row, or press and hold the row for the menu. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
 
-**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. The minus buttons are damage: in D&D 5e and Pathfinder 2e they take temporary hit points first, as the rules do, and only what is left comes off the character's hit points. The plus buttons heal and never add temporary hit points. Click a character to read its sheet, or right-click it for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner; you can do it to any player's character, and the player can bring it back with **Assign to Campaign** on their Characters page.
+**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. The minus buttons are damage: in D&D 5e and Pathfinder 2e they take temporary hit points first, as the rules do, and only what is left comes off the character's hit points. The plus buttons heal and never add temporary hit points. Click a character to read its sheet, or right-click it (on a touch screen, press and hold it) for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner; you can do it to any player's character, and the player can bring it back with **Assign to Campaign** on their Characters page.
 
 **Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. Players only know a creature is down if they can see its hit points, so for them this applies to characters, their own tokens and creatures whose **Show HP bar** is on; a creature whose bar you keep off still looks standing to them, and still blocks its square, until you remove it. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
@@ -228,7 +228,7 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them. On a phone or a tablet they are bigger, at least 44 pixels square, and go on a line under the token's name when the panel is narrow; so do a combatant's die and bin in the initiative tracker (see the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). If an action fails, a message pops up saying what went wrong. Removing a token, here, in the Token Manager, in the quick editor or with **Remove from Map** in the token's right-click menu, asks first and names the token.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them. On a phone or a tablet they are bigger, at least 44 pixels square, and go on a line under the token's name when the panel is narrow; so do a combatant's die and bin in the initiative tracker, whose grip and name are as big (see the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). If an action fails, a message pops up saying what went wrong. Removing a token, here, in the Token Manager, in the quick editor or with **Remove from Map** in the token's right-click menu, asks first and names the token.
 
 ### Placing Tokens on the Map
 
@@ -731,13 +731,13 @@ Two tools in the map toolbar help you work out what a spell or a move actually r
 
 **Your players have both tools too**, working the same way on their own screens, so a player can check their own spell's reach without asking you to measure it for them. The one difference is the ruler, below.
 
-**Ruler** (the ruler icon) — click a start point, then move the cursor to measure the distance between two squares in feet, using the map's own scale and its diagonal rule. For a player there's nothing to click: their ruler always measures from their own token.
+**Ruler** (the ruler icon) — click a start point, then move the cursor to measure the distance between two squares in feet, using the map's own scale and its diagonal rule. For a player there's nothing to click: their ruler always measures from their own token. On a touch screen, tap the start, which shows as a dot, and then the end, and the line stays; the third tap starts again. Or put your finger on the start and slide it to the end. While the ruler is up a finger measures and does not move the map; use two fingers for that. While you hold a token you tapped, a tap puts it down, as it would with the ruler away.
 
 **AoE Shape** (the lightning icon) — overlays a spell area on the map. Pick **Circle**, **Cone**, **Line** or **Cube**, set the size in feet (or use a preset), and move the cursor to position it. Click the map to pin the shape in place; with a shape pinned, moving the cursor aims cone and line templates. Press **Esc** to drop the placement, and again to put the tool away.
 
 **Aiming a cone or line.** Click the square the effect comes from — usually the caster's token — and that square becomes the pivot. Moving the cursor then swings the shape around it, and the point it starts from slides around that square's edge to follow: straight out the middle of an edge when you aim along a row or column, out the corner when you aim diagonally. It always leaves on the side you're aiming at, so the shape sweeps *around* the token rather than back through it. The pivot stays put however far you swing, so you can keep turning until you've found what the attack actually catches.
 
-**Placing something away from the caster.** Some effects aren't measured from anyone — a wall of fire is a line you drop wherever you like within range. **Alt+click** places the shape freely: it ignores the grid and pins the origin exactly where you clicked, and the shape then turns about that point.
+**Placing something away from the caster.** Some effects aren't measured from anyone — a wall of fire is a line you drop wherever you like within range. **Alt+click** places the shape freely: it ignores the grid and pins the origin exactly where you clicked, and the shape then turns about that point. Unticking **Snap to grid** in the AoE panel does the same for every click or tap until you tick it again, which is the way on a touch screen.
 
 Otherwise templates snap to your map's grid, so a shape covers whole squares rather than straddling them:
 
@@ -849,6 +849,9 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 |---|---|
 | Open a token's menu, for **Edit Token**, **Hide from Players** and the rest | Press and hold the token for half a second. It is the menu a right-click opens there, item for item. |
 | Lock or unlock a door | Press and hold the door for its menu. A tap opens or closes it, as a click does. |
+| Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
+| Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
+| Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
 | Use a wall, fog or light tool | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
 
 A stylus never opens a menu by holding; use a finger.
@@ -891,7 +894,7 @@ Since values are saved on the token, you can always click a number and correct i
 
 ### Managing Turn Order
 
-Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances.
+Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances; on a touch screen, drag a combatant by the grip at the left of its row, since holding the rest of the row opens its menu, or tap the up and down arrows beside its dice button, which move it one place, as the arrow keys below do. A browser that cannot drag by touch still has the arrows.
 
 To reorder from the keyboard:
 
@@ -924,8 +927,8 @@ This works for players too, and it's read-only — hovering never selects, moves
 
 You can roll for a combatant, or look something up on their sheet, straight from the tracker, without finding their token on the map ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)):
 
-- **Right-click a combatant's row** for the same sheet and roll choices as right-clicking their token on the map: **View Character Sheet** for a player's character, and **Roll...**, which opens the character's rolls or, for a creature, the rolls from its stat block.
-- **Double-click a player character's row** to open their sheet at once. Double-clicking a creature does nothing.
+- **Click or tap a combatant's name, or right-click its row,** for the same sheet and roll choices as right-clicking their token on the map: **View Character Sheet** for a player's character, and **Roll...**, which opens the character's rolls or, for a creature, the rolls from its stat block. On a touch screen you can also press and hold the row. The menu opens under the name.
+- **Double-click a player character's row** to open their sheet at once; on the name, the menu its first click opened closes as the sheet opens. Double-clicking a creature does nothing.
 - **From the keyboard**, press **Tab** until the combatant's name has the focus and press **Enter** to open the same menu.
 
 This works for combatants on the map you are showing. One whose token is on another map offers nothing until you switch to that map. Players get the same menu: any character's sheet, and rolls for their own character.
@@ -972,7 +975,7 @@ Maps made before this setting existed have fog on, exactly as they always did.
 
 ### Revealing and Hiding
 
-Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map, below the toolbar where the toolbar reaches that corner (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map, with a finger too on a tablet; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
+Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map, below the toolbar where the toolbar reaches that corner (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map, with a finger too on a tablet; double-click the bar, or click **Reset position** on it once the stack has moved, to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
 
 - **Reveal** — drag a box over the map to show that area to players
 - **Hide** — drag a box to cover an area back up
@@ -1032,14 +1035,14 @@ Walls define the physical boundaries of your map — they block line of sight an
 
 Open the **Walls** panel, one of the DM tool panels stacked at the top right of the map. While a wall, fog or light tool is up, the right mouse button pans the map and no right-click menu opens; press **Esc** to put the tool away first. The panel has six tool modes:
 
-- **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click to finish. Each pair of consecutive points creates a wall segment.
+- **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click, or click **Done** in the panel, to finish. Each pair of consecutive points creates a wall segment.
 - **Select** — Click a wall segment to select it and change its type or delete it. Click an endpoint to select it; drag an endpoint to move it (all connected segments move together). Click **Merge point** to remove a bend point and join two segments into one.
 - **Split** — Click on a wall segment to add a midpoint, splitting it into two segments.
 - **Erase** — Click and drag to brush-erase wall segments.
-- **Polygon** — Click to place corners of a room; click near the starting point to close the shape and create all wall segments at once.
+- **Polygon** — Click to place corners of a room; click near the starting point, or click **Done** in the panel, to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
 
-On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
+On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. Nothing needs a keyboard: the panel's **Done**, **Cancel**, **Add to selection**, **Delete** and **Undo** do what a double-click, **Esc**, **Shift**, the **Delete** key and **Ctrl+Z** do. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 
@@ -1063,9 +1066,9 @@ The **Polygon** tool lets you draw complex wall shapes by clicking corners:
 
 1. Select **Polygon** mode from the Walls panel
 2. Click to place each corner point — a preview line follows your cursor
-3. To close the shape, click near your starting point (within the snap radius) — all edges are committed as wall segments in one action
-4. Press **Escape** to cancel the polygon without placing any walls
-5. Press **Ctrl+Z** to remove the last point while drawing
+3. To close the shape, click near your starting point (within the snap radius), double-click, or click **Done** in the Walls panel once there are three corners — all edges are committed as wall segments in one action
+4. Press **Escape**, or click **Cancel** in the panel, to cancel the polygon without placing any walls
+5. Press **Ctrl+Z**, or click the panel's **Undo**, to remove the last point while drawing
 
 Polygon mode is great for tracing irregular room shapes without drawing each wall segment individually.
 
@@ -1119,12 +1122,12 @@ a wall set that does not line up with its artwork.
 | To do this | Do that |
 |---|---|
 | Select one wall | Click it |
-| Add or remove one | **Shift**+click |
-| Select an area | Drag a box over empty space; anything it touches comes with it |
+| Add or remove one | **Shift**+click, or tick **Add to selection** in the panel and click |
+| Select an area | Drag a box over empty space; anything it touches comes with it. With **Shift** held, or **Add to selection** ticked, it adds to what is already selected |
 | Select every wall | **Ctrl+A** (**Cmd+A** on a Mac) |
 | Move what is selected | Drag any of it, or nudge with the **arrow keys** |
 | Move by a whole square | **Shift** + an arrow key |
-| Delete what is selected | **Delete** or **Backspace** |
+| Delete what is selected | **Delete** or **Backspace**, or the panel's **Delete** button, which says how many walls it will delete, whatever their types |
 | Let go | **Escape** once clears the selection, again puts the tool away |
 
 These keys, like **Ctrl+Z** and **Ctrl+Y** below, act on the map only while you
@@ -1210,7 +1213,7 @@ A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture
 Wall edits support full undo/redo:
 - **Ctrl+Z** (or Cmd+Z) — Undo last wall change
 - **Ctrl+Y** / **Ctrl+Shift+Z** — Redo
-- The undo/redo buttons are also in the Walls panel
+- The undo/redo buttons are also in the Walls panel. Like **Ctrl+Z**, the panel's **Undo** takes back the last corner of a polygon you are drawing first, then a line you are drawing, and only then the last wall change
 
 Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again. Nor is anything someone else changes: when a player opens a door, your map shows it at once, and undoing your own last edit leaves it open.
 

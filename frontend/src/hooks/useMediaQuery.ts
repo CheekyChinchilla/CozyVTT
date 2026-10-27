@@ -17,3 +17,15 @@ export function useMediaQuery(query: string): boolean {
   }, [list]);
   return useSyncExternalStore(subscribe, () => list?.matches === true, () => false);
 }
+
+/**
+ * The query for a primary pointer that is a finger, as on a phone or a
+ * tablet: what Tailwind's `pointer-coarse:` variant asks, so a control that
+ * changes in code and one that changes in its classes change together.
+ */
+export const COARSE_POINTER = '(pointer: coarse)';
+
+/** Whether the primary pointer is a finger. */
+export function useCoarsePointer(): boolean {
+  return useMediaQuery(COARSE_POINTER);
+}

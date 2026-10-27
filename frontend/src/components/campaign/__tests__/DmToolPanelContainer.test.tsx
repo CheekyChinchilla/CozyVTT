@@ -179,6 +179,47 @@ describe('moving the DM tool panels', () => {
     expect(stack.style.top).toBe('3.5rem');
   });
 
+  // The double-click was the only way back, which a finger rarely lands.
+  it('offers Reset position once moved, which puts it back in its corner as a double-click does', () => {
+    const { stack, drag } = renderInMap();
+    expect(screen.queryByRole('button', { name: 'Reset position' })).toBeNull();
+
+    drag(-300, 100);
+    fireEvent.click(screen.getByRole('button', { name: 'Reset position' }));
+
+    expect(stack.style.left).toBe('');
+    expect(stack.style.right).toBe('8px');
+    expect(stack.style.top).toBe('3.5rem');
+    expect(screen.queryByRole('button', { name: 'Reset position' })).toBeNull();
+  });
+
+  // On a touch screen the 44-pixel button stood out of the 24-pixel bar, its
+  // top cut off by the stack and its foot over the first panel's title.
+  it('lets the bar grow to hold Reset position on a touch screen, and keeps it 24 pixels tall in its corner', () => {
+    const { handle, drag } = renderInMap();
+    expect(handle.className.split(/\s+/)).toContain('pointer-coarse:h-6');
+
+    drag(-300, 100);
+
+    const classes = handle.className.split(/\s+/);
+    expect(classes).toContain('pointer-coarse:min-h-6');
+    expect(classes).not.toContain('pointer-coarse:h-6');
+  });
+
+  it('starts no drag from Reset position, which is as big as a finger', () => {
+    const { stack, drag } = renderInMap();
+    drag(-300, 100);
+    const reset = screen.getByRole('button', { name: 'Reset position' });
+
+    fireEvent.pointerDown(reset, { clientX: 500, clientY: 200, pointerId: 2 });
+    fireEvent.pointerMove(reset, { clientX: 400, clientY: 300, pointerId: 2 });
+    fireEvent.pointerUp(reset, { pointerId: 2 });
+
+    expect(stack.style.left).toBe('292px');
+    expect(stack.style.top).toBe('156px');
+    expect(reset.className.split(/\s+/)).toContain('touch-target');
+  });
+
   // The Preview Player View button sits 5rem above the map's bottom edge; a
   // tall stack ran over it and hid the Lights panel's Place button behind it.
   it('stops above the Preview Player View button', () => {

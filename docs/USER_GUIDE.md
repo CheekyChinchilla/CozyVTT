@@ -192,7 +192,7 @@ You can **drag the dividers** between the columns to resize them, and collapse t
 
 **In a window narrower than 1024 pixels**, such as a laptop with two windows side by side, a tablet or a phone, the page first shows a **Desktop Required** notice. Click **Continue anyway** to open the table there: it keeps the same three-column desktop layout, so the panels are cramped, and the header's buttons wrap onto a second row. Your browser remembers the choice, so the notice does not come back; clearing the site's data for your CozyVTT brings it back. A layout made for phones is planned for a later release.
 
-**On a tablet** in landscape, 1024 pixels wide or more, the table opens as on a computer and works by touch: slide a token with your finger, tap a token for its details, press and hold for a menu, and pinch to zoom (see [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). The page is as tall as the browser shows it, so on a phone or a tablet its bottom stays above the browser's toolbar.
+**On a tablet** in landscape, 1024 pixels wide or more, the table opens as on a computer and works by touch: slide a token with your finger, tap a token for its details, press and hold a token, a character or a combatant for its menu, and pinch to zoom (see [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). The page is as tall as the browser shows it, so on a phone or a tablet its bottom stays above the browser's toolbar.
 
 ---
 

@@ -1876,3 +1876,211 @@ describe('the window losing focus', () => {
     expect(sentOf('walls:replace')).toEqual([]);
   });
 });
+
+describe('the AoE template by touch', () => {
+  const drawing = recordDrawing();
+  const overlay = () => document.querySelectorAll('canvas')[2];
+  /** The overlay's calls of a kind in its last frame. */
+  async function drawn(method: string): Promise<number[][]> {
+    drawing.take(overlay());
+    await nextFrame();
+    return drawing.take(overlay()).filter((c) => c.method === method).map((c) => c.args as number[]);
+  }
+  async function shown() {
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    fireEvent.click(screen.getByTitle('AoE Shape — area of effect overlay'));
+  }
+  /** A 20-foot circle is 4 squares, 200 pixels, across its radius. */
+  const circles = (calls: number[][]) => calls.filter((a) => a[2] === 200).map((a) => [a[0], a[1]]);
+
+  it('snaps a circle to the middle of the square it is placed in', async () => {
+    await shown();
+
+    tap(1, px(110, 110));
+
+    expect(circles(await drawn('arc'))).toEqual([[125, 125]]);
+  });
+
+  it('places it where the finger tapped with Snap to grid off, as Alt+click does with a mouse', async () => {
+    await shown();
+    mouse.down(surface(), px(110, 110), 0, { altKey: true });
+    mouse.up(surface(), px(110, 110));
+    mouse.leave(surface());
+    const byAlt = circles(await drawn('arc'));
+    fireEvent.click(screen.getByText('× Clear placement'));
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Snap to grid' }));
+    tap(1, px(110, 110));
+
+    expect(byAlt).toEqual([[110, 110]]);
+    expect(circles(await drawn('arc'))).toEqual(byAlt);
+  });
+
+  it("tells a finger how to aim and place it, which has no hover and no Alt key", async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(pointer: coarse)', media: query, onchange: null,
+      addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false,
+    }));
+    await shown();
+    fireEvent.click(screen.getByText('Cone'));
+    expect(screen.getByText('Untick Snap to grid to place it freely, off the grid')).toBeInTheDocument();
+
+    tap(1, px(125, 125));
+
+    expect(screen.getByText('Drag from its square to aim it')).toBeInTheDocument();
+  });
+
+  // A finger has no hover to aim with: a drag sets the cone's square where it
+  // lands and aims it at where it lifts, and the aim stays after the lift.
+  it.each([
+    ['east', 325, (x: number) => x > 150],
+    ['west', -75, (x: number) => x < 100],
+  ])('aims a cone by the drag, %s, and keeps the aim after the lift', async (_way, toX, onThatSide) => {
+    await shown();
+    fireEvent.click(screen.getByText('Cone'));
+
+    swipe(1, px(125, 125), px(125 + (toX - 125) / 2, 125), px(toX, 125));
+
+    const corners = await drawn('lineTo');
+    expect(corners.length).toBeGreaterThanOrEqual(2);
+    for (const [x] of corners) expect(onThatSide(x!)).toBe(true);
+  });
+});
+
+describe('the ruler by touch', () => {
+  const drawing = recordDrawing();
+  const overlay = () => document.querySelectorAll('canvas')[2];
+  /** The distance the ruler's label shows in the overlay's last frame, or null for none. */
+  async function measured(): Promise<string | null> {
+    drawing.take(overlay());
+    await nextFrame();
+    const label = drawing.take(overlay()).find((c) => c.method === 'fillText' && /ft {2}\(/.test(String(c.args[0])));
+    return label ? String(label.args[0]) : null;
+  }
+  async function shown() {
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    fireEvent.click(screen.getByTitle('Ruler — measure distance'));
+  }
+
+  /**
+   * What the overlay's last frame drew of the ruler: its label, or null,
+   * and whether its start dot, 5 pixels across at 100%, sits on a square.
+   */
+  async function rulerDrawn(): Promise<{ label: string | null; dotAt: (x: number, y: number) => boolean }> {
+    drawing.take(overlay());
+    await nextFrame();
+    const calls = drawing.take(overlay());
+    const label = calls.find((c) => c.method === 'fillText' && /ft {2}\(/.test(String(c.args[0])));
+    return {
+      label: label ? String(label.args[0]) : null,
+      dotAt: (x, y) => calls.some((c) => c.method === 'arc' && c.args[0] === square(x, y).clientX && c.args[1] === square(x, y).clientY && c.args[2] === 5),
+    };
+  }
+
+  it("gives the DM a start at the first tap, an end at the second that stays after the lift, and a new start at the third", async () => {
+    await shown();
+
+    tap(1, square(0, 19));
+    const first = await rulerDrawn();
+    expect(first.label).toBeNull();
+    expect(first.dotAt(0, 19)).toBe(true);
+    tap(2, square(3, 19));
+    expect(await measured()).toBe('15 ft  (3 sq)');
+    tap(3, square(5, 19));
+    expect(await measured()).toBeNull();
+  });
+
+  it('measures a drag from where it lands to where it lifts, and keeps the line', async () => {
+    await shown();
+
+    swipe(1, square(0, 19), square(2, 19), square(4, 19));
+
+    expect(await measured()).toBe('20 ft  (4 sq)');
+  });
+
+  it("lets a player measure from their token by a tap, and by a one-finger drag that leaves the map where it is", async () => {
+    h.set({ userRole: 'PLAYER' });
+    await shown();
+    show(token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
+
+    tap(1, square(2, 19));
+    expect(await measured()).toBe('10 ft  (2 sq)');
+
+    swipe(2, square(1, 15), square(1, 13), square(1, 11));
+    expect(await measured()).toBe('40 ft  (8 sq)');
+    mouse.move(surface(), px(60, 10), 0);
+    expect(readout()).toBe('(1, 19)');
+    expect(sentOf('token.move.start')).toEqual([]);
+  });
+
+  it("still picks up a player's own token on a tap, and puts the ruler away", async () => {
+    h.set({ userRole: 'PLAYER' });
+    await shown();
+    show(token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
+
+    tap(1, square(0, 19));
+
+    expect(sentOf('token.move.start')).toHaveLength(1);
+    expect(screen.queryByTitle(/^Ruler color:/)).toBeNull();
+  });
+
+  it("draws no start with a mouse once the pointer has left the map, as before", async () => {
+    await shown();
+
+    mouse.down(surface(), square(0, 19));
+    mouse.up(surface(), square(0, 19));
+    mouse.leave(surface());
+
+    expect((await rulerDrawn()).dotAt(0, 19)).toBe(false);
+  });
+
+  // A token held by a tap stays held while the ruler goes up, and the ruler
+  // took every tap, so the token could not be put down.
+  it.each([['the DM', 'DM'], ['a player', 'PLAYER']])("lets %s put a token held by a tap down with a tap while the ruler is up", async (_who, role) => {
+    h.set({ userRole: role });
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    show(token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
+    tap(1, square(0, 19));
+    fireEvent.click(screen.getByTitle('Ruler — measure distance'));
+
+    tap(2, square(3, 19));
+
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-mine', mapId: 'map-a', x: 3, y: 19 }]);
+    expect(await measured()).toBeNull();
+  });
+
+  it('goes back to taking taps once nothing is held', async () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    show(token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
+    tap(1, square(0, 19));
+    fireEvent.click(screen.getByTitle('Ruler — measure distance'));
+    tap(2, square(3, 19));
+
+    tap(3, square(5, 19));
+
+    expect(sentOf('token.move.end')).toHaveLength(1);
+    expect(await measured()).toBe('10 ft  (2 sq)');
+  });
+
+  it('follows the mouse as before, after any number of clicks', async () => {
+    await shown();
+
+    mouse.down(surface(), square(0, 19));
+    mouse.up(surface(), square(0, 19));
+    mouse.move(surface(), square(3, 19), 0);
+    expect(await measured()).toBe('15 ft  (3 sq)');
+    mouse.down(surface(), square(3, 19));
+    mouse.up(surface(), square(3, 19));
+    mouse.move(surface(), square(5, 19), 0);
+    expect(await measured()).toBe('10 ft  (2 sq)');
+  });
+});

@@ -13,7 +13,7 @@ import { useTableRoll } from '@/hooks/useTableRoll';
 import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useCoarsePointer } from '@/hooks/useMediaQuery';
 import type {
   Token,
   TokenMoveStartEvent,
@@ -68,6 +68,7 @@ import { useWallTool } from './map/tools/useWallTool';
 import type { MapTool, PointerAt } from './map/tools/types';
 import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
 import { createGestureRecognizer, type Gesture } from './map/gestures';
+import { createClickSwallow } from './map/clickSwallow';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, resolvePreviewSelection, followStepTokens, type PreviewSelection,
@@ -133,12 +134,6 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   return '#9370DB'; // wispy default = spirit-purple
 }
 
-/**
- * How long after a long-pressing finger lifts the click and the mousedown
- * it may bring are still swallowed (iOS sends them as the finger lifts).
- */
-const LONG_PRESS_CLICK_MS = 1000;
-
 /** The screen's pixel ratio; 1 where there is no window to ask. */
 function readDeviceRatio(): number {
   return typeof window === 'undefined' ? 1 : window.devicePixelRatio;
@@ -199,7 +194,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const heldBarRef = useRef<HTMLDivElement>(null);
   const topBand = useTopBand(topBandRef, toolbarRef, containerRef);
   // A touch screen's bigger toolbar buttons (`touch-target`).
-  const coarsePointer = useMediaQuery('(pointer: coarse)');
+  const coarsePointer = useCoarsePointer();
   const mapHintId = useId();
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());
@@ -338,9 +333,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const {
     tool: measuring, track: trackMeasure,
     showRuler, showAoE, handleToggleRuler, handleToggleAoE, putRulerAway,
-    rulerOrigin, rulerColor, setRulerColor,
-    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef,
-  } = useMeasureTools({ isDM, markDirty });
+    rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, setRulerColor,
+    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef, aoeSnap, setAoESnap,
+  } = useMeasureTools({
+    isDM, markDirty,
+    // Asked at a press, by when all three are known.
+    measuresFromToken: () => myToken !== null,
+    picksUpAt: (square) => getMovableTokenAtPosition(square.x, square.y) !== null,
+    holdsToken: () => draggedToken !== null,
+  });
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
   const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
@@ -1825,10 +1826,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     }
 
     // 10. Measurement overlays
-    if (showRuler && effectiveRulerOrigin && hoverCoords) {
+    // A finger's or a pen's pinned end, else the pointer's square; with
+    // neither, a start a finger has just tapped is drawn alone, as a dot.
+    const rulerTarget = rulerEnd ?? hoverCoords ?? (rulerStartByTouch ? effectiveRulerOrigin : null);
+    if (showRuler && effectiveRulerOrigin && rulerTarget) {
       drawRuler(ctx, {
         origin: effectiveRulerOrigin,
-        target: hoverCoords,
+        target: rulerTarget,
         color: rulerColor,
         feetPerSquare: currentMap.feetPerSquare ?? 5,
         diagonalRule: (currentMap.diagonalRule ?? 'flat') as 'flat' | 'alternating',
@@ -1846,7 +1850,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         // Not bounds-checked: aiming a pinned template at something off the
         // edge of the map is legitimate.
         aimMapPx: aoeAimRef.current,
-        hoverExact: aoeAltHeldRef.current,
+        hoverExact: aoeAltHeldRef.current || !aoeSnap,
         feetPerSquare: currentMap.feetPerSquare ?? 5,
         coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
       }, viewport);
@@ -1898,7 +1902,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1952,7 +1956,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
 
   // ============================================
   // Token Hit Testing
@@ -2583,7 +2587,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const longPress = (pointerId: number, x: number, y: number) => {
     focusMap();
-    swallowAfterLongPressRef.current = { pointerId, until: Infinity, left: new Set(['mousedown', 'click']) };
+    clickSwallow.arm(pointerId);
     if (openMenuAt(x, y)) return;
     // A ping, as the armed Ping would have made: it is used up.
     pingAt(x, y);
@@ -2591,44 +2595,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
 
   /**
-   * iOS can send a click, and the mouse events before it, when a finger
-   * lifts from a long-press, and the menu just opened closes on a click (the
-   * token and door menus) or a mousedown (the roster's). The first of each
-   * after a long-press is swallowed, unless a new press starts first or a
-   * second has passed since the finger lifted.
+   * The mousedown and the click iOS may send as a long-pressing finger
+   * lifts, swallowed once (map/clickSwallow.ts), so the menu just opened
+   * stays open.
    */
-  const swallowAfterLongPressRef = useRef<{ pointerId: number; until: number; left: Set<string> } | null>(null);
-  useEffect(() => {
-    const onPress = () => { swallowAfterLongPressRef.current = null; };
-    const onMouse = (event: MouseEvent) => {
-      const armed = swallowAfterLongPressRef.current;
-      if (!armed || !armed.left.has(event.type)) return;
-      // Enter or Space on a focused control clicks it with no pointer and a
-      // click count of 0: that click is the user's.
-      if (event.type === 'click' && event.detail === 0) return;
-      if (performance.now() > armed.until) {
-        swallowAfterLongPressRef.current = null;
-        return;
-      }
-      armed.left.delete(event.type);
-      if (armed.left.size === 0) swallowAfterLongPressRef.current = null;
-      event.stopImmediatePropagation();
-      event.preventDefault();
-    };
-    window.addEventListener('pointerdown', onPress, true);
-    window.addEventListener('mousedown', onMouse, true);
-    window.addEventListener('click', onMouse, true);
-    return () => {
-      window.removeEventListener('pointerdown', onPress, true);
-      window.removeEventListener('mousedown', onMouse, true);
-      window.removeEventListener('click', onMouse, true);
-    };
-  }, []);
-  /** The finger of a long-press has lifted: what it may bring is swallowed for a second more. */
-  const longPressLifted = (pointerId: number) => {
-    const armed = swallowAfterLongPressRef.current;
-    if (armed?.pointerId === pointerId && armed.until === Infinity) armed.until = performance.now() + LONG_PRESS_CLICK_MS;
-  };
+  const [clickSwallow] = useState(() => createClickSwallow());
+  useEffect(() => () => clickSwallow.clear(), [clickSwallow]);
 
   /** Hand a finger's or a pen's event to the recogniser, which may answer with a gesture. */
   const feedGesture = (step: 'down' | 'move' | 'up' | 'cancel', e: MapPointer, t: number) => {
@@ -2646,7 +2618,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     gestures.reset();
     fingerDownsRef.current.clear();
     penTipsRef.current.clear();
-    swallowAfterLongPressRef.current = null;
+    clickSwallow.clear();
     if (!fingerPressRef.current) return;
     fingerPressRef.current = false;
     cancelPointer();
@@ -2711,7 +2683,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'touch') {
       feedGesture('up', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
-      longPressLifted(e.pointerId);
+      clickSwallow.lifted(e.pointerId);
       return;
     }
     if (e.kind === 'pen') {
@@ -2728,7 +2700,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'touch') {
       feedGesture('cancel', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
-      longPressLifted(e.pointerId);
+      clickSwallow.lifted(e.pointerId);
       return;
     }
     if (e.kind === 'pen') {
@@ -3776,7 +3748,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               <button
                 key={shape}
                 onClick={() => setAoEConfig((prev) => ({ ...prev, shape }))}
-                className={`text-xs px-2 py-1 rounded border transition-colors capitalize ${
+                className={`touch-target text-xs px-2 py-1 rounded border transition-colors capitalize ${
                   aoeConfig.shape === shape
                     ? 'bg-moss-green/15 border-moss-green/60 text-brand-ink font-medium'
                     : 'border-stone-gray/30 text-stone-gray hover:border-moss-green/40 hover:text-brand-ink'
@@ -3827,7 +3799,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 <button
                   key={ft}
                   onClick={() => setAoEConfig((prev) => ({ ...prev, sizeFt: ft }))}
-                  className="text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
+                  className="touch-target text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
                 >
                   {ft} ft
                 </button>
@@ -3835,11 +3807,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             </div>
           </div>
 
+          {/* Alt's free placement, for a finger or a pen. */}
+          <label className="flex items-center gap-2 cursor-pointer touch-target">
+            <input
+              type="checkbox"
+              checked={aoeSnap}
+              onChange={(e) => setAoESnap(e.target.checked)}
+              className="accent-moss-green"
+            />
+            <span className="text-xs font-medium text-stone-gray">Snap to grid</span>
+          </label>
+
           {/* Clear the anchor */}
           {aoeAnchor && (
             <button
               onClick={() => setAoEAnchor(null)}
-              className="text-xs text-stone-gray hover:text-danger-ink transition-colors"
+              className="touch-target text-xs text-stone-gray hover:text-danger-ink transition-colors"
             >
               × Clear placement
             </button>
@@ -3849,13 +3832,16 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             {aoeAnchor ? 'Click map to reposition' : 'Click map to place shape'}
           </p>
           {/* Cone and line pivot about the square you click, so most of the
-              time you want them on your token. Alt is the escape hatch for an
-              effect cast at a distance — a wall of fire, say. */}
+              time you want them on your token. Alt, or Snap to grid off, is
+              the escape hatch for an effect cast at a distance — a wall of
+              fire, say. */}
           {(aoeConfig.shape === 'cone' || aoeConfig.shape === 'line') && (
             <p className="text-xs text-stone-gray/70">
+              {/* A finger has no hover to aim with, nor an Alt key. */}
               {aoeAnchor
-                ? 'Move the cursor to aim it around that square'
-                : 'Alt+click to place it freely, off the grid'}
+                ? (coarsePointer ? 'Drag from its square to aim it' : 'Move the cursor to aim it around that square')
+                : !aoeSnap ? 'Placed freely, off the grid'
+                  : coarsePointer ? 'Untick Snap to grid to place it freely, off the grid' : 'Alt+click to place it freely, off the grid'}
             </p>
           )}
         </div>
