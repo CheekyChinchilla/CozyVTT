@@ -997,6 +997,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                   <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-white" />
                 </div>
               </label>
+              {/* TODO(sheets): from sm up this note and the personal token note below are
+                  both absolute at top-full, so with both showing (a refused picture on a
+                  character in no campaign) one is drawn over the other. Right: one
+                  positioned box under the portrait holding both, one under the other. */}
               {errors.tokenImage && <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>{errors.tokenImage}</div>}
               {!character.campaignId && (
                 <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>

@@ -677,6 +677,10 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             onChange={handleTokenImageChange}
             className="hidden"
           />
+          {/* TODO(sheets): from sm up this note and the personal token note below are
+              both absolute at top-full, so with both showing (a refused picture on a
+              character in no campaign) one is drawn over the other. Right: one
+              positioned box under the portrait holding both, one under the other. */}
           {errors.tokenImage && (
             <div className={`mt-1 text-xs ${ink.soft} sm:absolute sm:top-full sm:whitespace-nowrap`}>
               {errors.tokenImage}
