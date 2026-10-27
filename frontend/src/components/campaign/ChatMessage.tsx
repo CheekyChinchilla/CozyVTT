@@ -113,11 +113,11 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
         {/* Icon for special message types */}
         {isSystem && <Bot className="w-3.5 h-3.5 text-brand-ink" />}
         {isWhisper && (
-          <span title={`Only you and ${whisperPeer} can see this.`} className="inline-flex">
+          <span title={`Only you and ${whisperPeer} can see this.`} className="inline-flex shrink-0">
             <Lock className="w-3.5 h-3.5 text-accent-ink" aria-hidden="true" />
           </span>
         )}
-        {showShield && <Shield className="w-3.5 h-3.5 text-warning-ink" />}
+        {showShield && <Shield className="w-3.5 h-3.5 shrink-0 text-warning-ink" />}
 
         {isWhisper ? (
           <>
@@ -126,12 +126,12 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
                 type="button"
                 onClick={() => onWhisperBack(message)}
                 title={`Whisper to ${whisperPeer}`}
-                className="text-xs font-semibold text-accent-ink underline-offset-2 hover:underline"
+                className="min-w-0 text-left text-xs font-semibold text-accent-ink underline-offset-2 hover:underline"
               >
                 {whisperLabel}
               </button>
             ) : (
-              <span className="text-xs font-semibold text-accent-ink">{whisperLabel}</span>
+              <span className="min-w-0 text-left text-xs font-semibold text-accent-ink">{whisperLabel}</span>
             )}
             <span className="sr-only">Only you and {whisperPeer} can see this.</span>
           </>
@@ -155,9 +155,9 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
 
         {/* Timestamp / pending indicator */}
         {notSentReason ? null : isPending ? (
-          <span className="text-xs text-stone-gray/50 italic">sending…</span>
+          <span className="shrink-0 whitespace-nowrap text-xs text-stone-gray/50 italic">sending…</span>
         ) : (
-          <span className="text-xs text-stone-gray/70" title={message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time'}>
+          <span className="shrink-0 whitespace-nowrap text-xs text-stone-gray/70" title={message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time'}>
             {messageAge(message.createdAt, now)}
           </span>
         )}

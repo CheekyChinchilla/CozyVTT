@@ -270,6 +270,32 @@ it('shows a whisper with the other person\'s name, a lock, and the DM\'s shield 
   expect(container.querySelectorAll('.lucide-lock')).toHaveLength(3);
 });
 
+// A long name in the rail wraps from the left; the lock, the shield and the
+// time keep their size beside it. jsdom lays nothing out, so the classes are
+// what is checked; the browser pass has the pictures.
+it('lets a whisper\'s name wrap from the left beside icons and a time that keep their size', async () => {
+  getMessages.mockResolvedValue(page([
+    stored({ id: 'w-3', content: 'From the DM', userId: 'dm', user: { id: 'dm', displayName: 'Dana' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),
+  ]));
+  await openPanel();
+
+  const name = await screen.findByRole('button', { name: 'Whisper from Dana' });
+  expect(name.className).toMatch(/\btext-left\b/);
+  expect(name.className).toMatch(/\bmin-w-0\b/);
+  const header = name.parentElement!;
+  const others = [...header.children].filter((el) => el !== name && !el.classList.contains('sr-only'));
+  expect(others.map((el) => el.tagName.toLowerCase())).toEqual(['span', 'svg', 'span']);
+  for (const el of others) expect(el.getAttribute('class')).toMatch(/\bshrink-0\b/);
+  expect(others[2].className).toMatch(/\bwhitespace-nowrap\b/);
+});
+
+it('keeps the whisper placeholder short, since the line under the box names the person', async () => {
+  await openPanel();
+  fireEvent.change(picker(), { target: { value: 'maralee' } });
+  expect(box().placeholder).toBe('Type a whisper... (Enter to send)');
+  expect(screen.getByText('Only you and Mara Lee can see this.')).toBeTruthy();
+});
+
 it('sets the To list to the other person when a whisper\'s name is chosen', async () => {
   getMessages.mockResolvedValue(page([
     stored({ id: 'w-1', content: 'From Mara', userId: 'mara', user: { id: 'mara', displayName: 'Mara' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),
