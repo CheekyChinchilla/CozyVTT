@@ -385,6 +385,43 @@
   }
 }
 
+/* ── Form controls on a touch screen ──
+   Safari on an iPhone or an iPad zooms the page when a text box, a dropdown
+   or a text area smaller than 16 px takes focus. Where the primary pointer is
+   coarse, every one is drawn at 16 px or more, and a larger one (a sheet's
+   name in text-3xl) keeps its size; a mouse sees no change. text-xs and
+   text-sm read their size from these variables on the element they are on;
+   a control with no size class takes its parent's, but not under 16 px.
+   styles/__tests__/touchFormControls.test.ts fails when a size below 16 px
+   can reach a control unraised. */
+@layer base {
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      --text-xs: 1rem;
+      --text-xs--line-height: 1.25rem;
+      --text-sm: 1rem;
+      font-size: max(1rem, 1em);
+    }
+  }
+}
+
+/* The sizes below 16 px the components write in pixels, which no variable
+   carries. Outside any layer, so it wins over the class it names; it sets no
+   line height, which would win over a leading-* class on the same box. */
+@media (pointer: coarse) {
+  :is(input, select, textarea):is(
+      [class~='text-[7px]'],
+      [class~='text-[8px]'],
+      [class~='text-[9px]'],
+      [class~='text-[10px]'],
+      [class~='text-[11px]']
+    ) {
+    font-size: 1rem;
+  }
+}
+
 /* Panel resize separator styles (react-resizable-panels v4 renders
    [data-separator] elements; the attribute value tracks interaction
    state: inactive | hover | active | disabled) */

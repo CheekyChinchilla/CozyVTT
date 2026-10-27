@@ -25,7 +25,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table as before until someone chooses a person.
 - **Reload any page left open through the upgrade.** Until then it shows a whisper to you as an ordinary message; only you and its sender are sent it.
-- **On a phone or a tablet, the map's toolbar, the menus and some buttons are bigger.** With a mouse they look as before.
+- **On a phone or a tablet, the map's toolbar, the menus and some buttons are bigger, and the text in boxes and drop-down lists is at least 16 pixels high.** With a mouse they look as before.
 
 ### Added
 
@@ -75,6 +75,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **The map's toolbar fits a narrow map.** Where the map was narrower than the toolbar, as in a window 1,024 pixels wide with both side panels open, the toolbar's last buttons ran off the map's edge; where it was a little wider, the **Spirit Realm** label or the DM's tool panels could cover the toolbar's end. The toolbar now wraps onto a second row, and the **AoE Shape** panel and the tool panels start below that row; wherever the label or the tool panels would cover the toolbar, they start below it too. Everywhere else nothing moves.
 
 - **The dashboard fits a phone narrower than 400 pixels when you are an administrator.** The header's Refresh, Admin, Logout and profile buttons stayed on one line beside the title, so on a Pixel 10 or an iPhone the whole page scrolled sideways. They now move below the title when the line is too narrow for both.
+
+- **Tapping a box on an iPhone or an iPad no longer zooms the page.** Safari zooms in when a text box, a drop-down list or a text area with text smaller than 16 pixels is tapped, and the page stays zoomed after you leave the box. Most boxes on a character sheet were that small, and many on the campaign page too. On a phone or a tablet their text is now 16 pixels, and a box with bigger text, such as a sheet's name, keeps its size. With a mouse nothing changes.
 
 ## [1.5.4] - 2026-10-25
 
