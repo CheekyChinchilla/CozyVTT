@@ -6,7 +6,7 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
+import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE, MAX_WALL_SEGMENTS, TOO_MANY_WALLS_MESSAGE } from '../../validators/walls';
 import type { FogState, WallSegment } from '../../types/walls';
 import { doorBesideRevealed } from '../../utils/doorFog';
 import logger from '../../utils/logger';
@@ -15,7 +15,7 @@ import {
   filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeReachesPlayers, wallChangeSentTo,
   wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
-import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
+import { mapEditLimiter, MAP_EDITS_PER_SECOND, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 import { wallOutsideMap, WALL_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
@@ -94,7 +94,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Only DMs can add wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, segment } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -113,7 +113,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         if (wallOutsideMap([added], map)) return { refused: WALL_OUTSIDE_MAP_MESSAGE };
 
         const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-        if (existing.length >= 5000) return { refused: 'Maximum 5000 wall segments per map' };
+        if (existing.length >= MAX_WALL_SEGMENTS) return { refused: TOO_MANY_WALLS_MESSAGE };
         if (existing.some((w) => w.id === added.id)) return { refused: DUPLICATE_WALL_ID_MESSAGE };
 
         await tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson([...existing, added]) } });
@@ -144,7 +144,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Only DMs can remove wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, segmentId } = data;
       if (!mapId || !segmentId) { socket.emit('error', { message: 'mapId and segmentId required' }); return; }
@@ -186,7 +186,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Spectators cannot open or close doors' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, segment } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -298,7 +298,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Only DMs can replace wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, segments } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
