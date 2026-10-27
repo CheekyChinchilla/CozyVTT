@@ -294,6 +294,10 @@ def collect():
                 'owner': 'character.userId !== socket.userId' in body,
                 'spectator': "socket.role === 'SPECTATOR'" in body,
                 'paused': 'canMoveTokensNow(' in body,
+                # Drawing on a map (utils/drawingRules.ts): adding or
+                # previewing a drawing, and erasing one.
+                'draw': 'canDraw(' in body,
+                'erase': 'canEraseDrawing(' in body,
                 # A player's door toggle: on a lit map only a door their
                 # tokens see, under manual fog only one beside a revealed
                 # square (utils/doorFog.ts).
@@ -440,6 +444,10 @@ def who_may_send(info):
             ('once', 'once each time it joins the order'),
         ) if info[flag]]
         return base + (f": {', '.join(terms)}" if terms else '')
+    if info['draw']:
+        return 'DM, or a player while **Players may draw** is on and the session is live'
+    if info['erase']:
+        return "DM, or the drawing's player"
     if info['owner']:
         return "DM, or the character's owner, never a spectator" if info['spectator'] else "DM, or the character's owner"
     if info['players']:

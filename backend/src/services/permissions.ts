@@ -5,6 +5,7 @@ import { readTokens } from '../utils/prisma-json';
 import { getSpiritVisibility, getSpiritVisibilityAcrossCampaigns } from '../utils/spirit-layer';
 import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
 import { escapeLikePattern } from '../utils/likePattern';
+import { sessionLetsPlayersAct } from '../utils/drawingRules';
 
 /**
  * Permission Verification Helpers
@@ -67,11 +68,19 @@ export async function canHoldTokens(campaignId: string, userId: string): Promise
  */
 export function canMoveTokensNow(role: string | undefined, campaignStatus: string): boolean {
   if (role === 'DM') return true;
-  return campaignStatus !== 'PAUSED' && campaignStatus !== 'INACTIVE';
+  return sessionLetsPlayersAct(campaignStatus);
 }
 
 /** What both channels answer a player who moves during a pause. */
 export const PAUSED_MOVE_REFUSAL = 'Players cannot move tokens while the session is paused or ended';
+
+// Who may draw on a map, erase a drawing and be sent one: a file kept
+// identical in the browser (utils/drawingRules.ts), so the draw tool offers
+// what the handlers take.
+export {
+  canDraw, drawRefusal, canDrawOnLayer, canEraseDrawing, eraseRefusal, drawingSentTo,
+  DRAW_REFUSAL, DRAW_LAYER_REFUSAL,
+} from '../utils/drawingRules';
 
 // The answers to a whisper this refuses, worded beside the schema that also
 // gives one (validators/chat.ts).

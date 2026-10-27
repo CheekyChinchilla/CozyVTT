@@ -236,6 +236,26 @@ class WebsocketEvents(unittest.TestCase):
             'once each time it joins the order')
         self.assertEqual(we.who_may_send(inbound['token.nudge']), "DM, or the token's player")
 
+    def test_says_who_may_draw_and_who_may_erase(self):
+        we = self.events({'handlers/drawings.ts': '''
+            socket.on('drawing:add', async (data) => {
+              if (!canDraw(socket.role, campaign)) return;
+              if (!canDrawOnLayer(socket.role, layer)) return;
+            });
+            socket.on('drawing:remove', async (data) => {
+              if (!canEraseDrawing(socket.role, socket.userId, drawing)) return;
+            });
+            socket.on('drawing:other', async (data) => {
+              if (!canDrawOnLayer(socket.role, layer)) return;
+            });
+        '''})
+        inbound, _ = we.collect()
+        self.assertEqual(
+            we.who_may_send(inbound['drawing:add']),
+            'DM, or a player while **Players may draw** is on and the session is live')
+        self.assertEqual(we.who_may_send(inbound['drawing:remove']), "DM, or the drawing's player")
+        self.assertEqual(we.who_may_send(inbound['drawing:other']), 'Any member')
+
     def test_says_who_each_outbound_event_is_sent_to(self):
         we = self.events({
             'handlers/a.ts': '''
