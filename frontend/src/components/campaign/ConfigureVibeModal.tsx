@@ -425,7 +425,10 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
         closeDisabled={isSaving}
         fitViewport
         footer={
-          <div className="flex w-full items-center justify-between gap-3 border-t border-moss-green/20 pt-4">
+          // Below sm the row may not fit (a phone has about 310 px for it),
+          // so Cancel and Save Periods wrap onto a line of their own, held at
+          // the right. From sm up it stays on one line.
+          <div className="flex flex-wrap sm:flex-nowrap w-full items-center justify-between gap-3 border-t border-moss-green/20 pt-4">
             <button
               onClick={handleRestoreDefaults}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-stone-gray hover:bg-parchment transition-colors"
@@ -434,7 +437,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
               Restore Defaults
             </button>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 ml-auto">
               <Button
                 onClick={onClose}
                 disabled={isSaving}

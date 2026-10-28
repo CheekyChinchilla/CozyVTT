@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router';
 import { createPortal } from 'react-dom';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { COMPACT_LAYOUT_QUERY } from '@/constants/layout';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
@@ -161,7 +162,7 @@ function CampaignPageContent() {
   };
   // The notice is drawn only below lg (1024 px); while it shows it holds the
   // keyboard, over any window or side panel open under it.
-  const narrowScreen = useMediaQuery('(max-width: 1023.98px)');
+  const narrowScreen = useMediaQuery(COMPACT_LAYOUT_QUERY);
   const narrowNoticeRef = useFocusTrap(narrowScreen && !continueOnNarrowScreen);
   const narrowNoticeTitleId = useId();
   const leftPanelRef = usePanelRef();

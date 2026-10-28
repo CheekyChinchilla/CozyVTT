@@ -96,9 +96,11 @@ export default function ToastContainer() {
   const { toasts, dismissToast } = useToastStack();
 
   return (
+    // 16 px inside both edges of a narrow screen, such as a phone's, where a
+    // card's own 384 px would reach the left edge.
     <div
       aria-label="Notifications"
-      className="fixed top-4 right-4 z-9998 flex flex-col gap-2 pointer-events-none"
+      className="fixed top-4 right-4 z-9998 max-w-[calc(100vw-2rem)] flex flex-col gap-2 pointer-events-none"
     >
       <AnimatePresence mode="sync">
         {toasts.map((toast) => (

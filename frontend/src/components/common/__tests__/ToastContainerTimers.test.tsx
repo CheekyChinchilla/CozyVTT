@@ -58,3 +58,14 @@ it('gives a card a close button big enough for a finger, with its cross in the m
   expect(screen.getByRole('button', { name: 'Dismiss notification' }).className.split(/\s+/))
     .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
 });
+
+// Placed 16 px from the right, the stack was as wide as the screen left it, so
+// a long message met a phone's left edge. jsdom does no layout, so the class
+// that keeps it 16 px from both edges is what is checked.
+it('keeps the stack 16 px from both edges of a narrow screen', () => {
+  render(<ToastProvider><Trigger /><ToastContainer /></ToastProvider>);
+  act(() => show('Saved the map', 'success', 5000));
+
+  expect(screen.getByLabelText('Notifications').className.split(/\s+/))
+    .toEqual(expect.arrayContaining(['fixed', 'right-4', 'max-w-[calc(100vw-2rem)]']));
+});

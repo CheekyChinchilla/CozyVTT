@@ -143,11 +143,21 @@ export interface SlideOverCloseProps {
   title?: string;
 }
 
-/** The panel's X button, named "Close". */
+/**
+ * The panel's X button, named "Close". On a touch screen it is at least 44 by
+ * 44 px with its icon centred, as <Button iconOnly> is; with a mouse it keeps
+ * the size the panel's own look gives it.
+ */
 export function SlideOverClose({ className, iconClassName = 'w-5 h-5', title }: SlideOverCloseProps) {
   const { close } = useSlideOver('SlideOverClose');
   return (
-    <button type="button" onClick={close} className={className} title={title} aria-label="Close">
+    <button
+      type="button"
+      onClick={close}
+      className={cn('touch-target pointer-coarse:[&>svg]:mx-auto', className)}
+      title={title}
+      aria-label="Close"
+    >
       <X className={iconClassName} aria-hidden="true" />
     </button>
   );
