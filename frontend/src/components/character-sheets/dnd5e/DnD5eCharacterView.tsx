@@ -48,7 +48,7 @@ import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
 import { SheetTabs, type SheetTab } from '../SheetTabs';
-import { useSheetRolls, type SheetRollHandler } from '../useSheetRolls';
+import { rollTarget, useSheetRolls, type SheetRollHandler } from '../useSheetRolls';
 import type { RollMode } from '@/utils/rollModes';
 
 interface DnD5eCharacterViewProps {
@@ -85,7 +85,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
-  const { roll: handleRoll, rollTest, openMenu: showRollPopup, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem, rollMode);
+  const { roll: handleRoll, rollTest, rootProps: rollRoot, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem, rollMode);
 
   // A hit die is spent once its roll is made: a roll refused (too many rolls,
   // no connection) used to take the die anyway.
@@ -218,7 +218,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                   colorHex={themeColor.hex}
                   customColor={isCustomColor ? customColorHex : undefined}
                   onRoll={onRoll ? () => rollTest(expr, purpose) : undefined}
-                  onRollContext={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
+                  rollAs={rollTarget(expr, purpose, character.gameSystem)}
                 />
               );
             });
@@ -240,10 +240,9 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               return (
                 <div
                   key={key}
-                  className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-accent/10 select-none' : ''}`}
+                  className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-accent/10 select-none [-webkit-touch-callout:none]' : ''}`}
                   onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
-                  onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
-                  title={onRoll ? `Left-click: roll  |  Right-click: Advantage / Disadvantage` : undefined}
+                  {...(onRoll ? rollTarget(expr, purpose, character.gameSystem) : undefined)}
                 >
                   <div className="flex items-center gap-1">
                     {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
@@ -292,7 +291,6 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                 bonus: dnd5eCustomSkillBonus(data, custom),
               }))}
               onRoll={onRoll ? rollTest : undefined}
-              onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
             />
           </div>
         </div>
@@ -488,7 +486,6 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
             attacks={data.attacks}
             onRollAttack={onRoll ? rollTest : undefined}
             onRollDamage={onRoll ? handleRoll : undefined}
-            onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
           />
         </div>
       )}
@@ -751,12 +748,12 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   };
 
   return (
-    <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
+    <div className="bg-paper rounded-lg shadow-lg overflow-hidden" {...rollRoot}>
       {renderHeader()}
       <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
       <div data-sheet-body className="p-3 sm:p-6">{renderTabContent()}</div>
 
-      {/* Advantage / Disadvantage, on a right-click of any d20 test */}
+      {/* Advantage / Disadvantage, on a right-click or a press and hold of any d20 test */}
       {rollMenu}
     </div>
   );

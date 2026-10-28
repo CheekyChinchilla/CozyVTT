@@ -7,6 +7,7 @@
 import React from 'react';
 import { Sword, Zap, Dices } from 'lucide-react';
 import type { DnD5eAttack } from '@/types/game-systems/dnd5e';
+import { rollTarget } from '../../useSheetRolls';
 
 /**
  * The attack shape was declared again here, a copy of `DnD5eAttack` that had to
@@ -24,8 +25,6 @@ interface AttacksListProps {
   onRollAttack?: (expression: string, purpose: string) => void;
   /** Click a damage roll to roll it as written. */
   onRollDamage?: (expression: string, purpose: string) => void;
-  /** Right-click for Advantage / Disadvantage popup. */
-  onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
 }
 
 /**
@@ -35,8 +34,7 @@ const AttackRow: React.FC<{
   attack: Attack;
   onRollAttack?: (expression: string, purpose: string) => void;
   onRollDamage?: (expression: string, purpose: string) => void;
-  onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
-}> = ({ attack, onRollAttack, onRollDamage, onRollContext }) => {
+}> = ({ attack, onRollAttack, onRollDamage }) => {
   const formatBonus = (bonus: number): string => {
     return bonus >= 0 ? `+${bonus}` : `${bonus}`;
   };
@@ -53,10 +51,6 @@ const AttackRow: React.FC<{
     if (onRollAttack) onRollAttack(attackExpr, attackPurpose);
   };
 
-  const handleAttackContext = (e: React.MouseEvent) => {
-    if (onRollContext) { e.preventDefault(); onRollContext(e, attackExpr, attackPurpose); }
-  };
-
   const handleDamageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onRollDamage && attack.damageRoll) onRollDamage(attack.damageRoll, `${attack.name} Damage`);
@@ -65,11 +59,10 @@ const AttackRow: React.FC<{
   return (
     <div
       className={`p-3 bg-ink/5 border border-ink/10 rounded-lg transition-colors group ${
-        isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : 'hover:bg-ink/10'
+        isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none [-webkit-touch-callout:none]' : 'hover:bg-ink/10'
       }`}
       onClick={isClickable ? handleAttackClick : undefined}
-      onContextMenu={isClickable ? handleAttackContext : undefined}
-      title={isClickable ? `Left-click: roll attack  |  Right-click: Advantage / Disadvantage` : undefined}
+      {...(isClickable ? rollTarget(attackExpr, attackPurpose, 'DND_5E') : undefined)}
     >
       {/* Attack Name & Icon */}
       <div className="flex items-center justify-between mb-2">
@@ -191,7 +184,7 @@ const AttackRow: React.FC<{
 /**
  * AttacksList - Displays all attacks
  */
-export const AttacksList: React.FC<AttacksListProps> = ({ attacks, onRollAttack, onRollDamage, onRollContext }) => {
+export const AttacksList: React.FC<AttacksListProps> = ({ attacks, onRollAttack, onRollDamage }) => {
   if (!attacks || attacks.length === 0) {
     return (
       <div className="text-center py-8 text-ink-muted">
@@ -203,7 +196,7 @@ export const AttacksList: React.FC<AttacksListProps> = ({ attacks, onRollAttack,
   return (
     <div className="space-y-3">
       {attacks.map((attack, index) => (
-        <AttackRow key={index} attack={attack} onRollAttack={onRollAttack} onRollDamage={onRollDamage} onRollContext={onRollContext} />
+        <AttackRow key={index} attack={attack} onRollAttack={onRollAttack} onRollDamage={onRollDamage} />
       ))}
     </div>
   );

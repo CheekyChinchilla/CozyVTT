@@ -251,3 +251,70 @@ describe('what the lift may bring', () => {
     expect(clicks).toEqual([1]);
   });
 });
+
+describe('one handler for many rows (`within`)', () => {
+  const openedOn: string[] = [];
+  const listClicks: string[] = [];
+
+  function List() {
+    const press = useLongPress((_at, on) => { openedOn.push(on.textContent ?? ''); }, { within: '[data-row]' });
+    return (
+      <div
+        data-testid="list"
+        onPointerDown={press.onPointerDown}
+        onPointerMove={press.onPointerMove}
+        onPointerUp={press.onPointerUp}
+        onPointerCancel={press.onPointerCancel}
+        onContextMenu={(e) => { press.takeContextMenu(e); }}
+        onClick={(e) => { listClicks.push((e.target as Element).textContent ?? ''); }}
+      >
+        <h3>Heading</h3>
+        <div data-row><span>Goblin</span></div>
+        <div data-row>Orc</div>
+      </div>
+    );
+  }
+
+  beforeEach(() => {
+    openedOn.length = 0;
+    listClicks.length = 0;
+  });
+
+  it('opens for the row the finger landed in, and says which', () => {
+    render(<List />);
+    const finger = contact('touch', 1);
+
+    finger.down(screen.getByText('Goblin'), at(40, 20));
+    wait(500);
+    finger.up(screen.getByText('Goblin'), at(40, 20));
+    contact('touch', 2).down(screen.getByText('Orc'), at(40, 60));
+    wait(500);
+
+    expect(openedOn).toEqual(['Goblin', 'Orc']);
+  });
+
+  it('opens nothing for a press between the rows, and swallows nothing after it', () => {
+    render(<List />);
+    const finger = contact('touch', 1);
+
+    finger.down(screen.getByText('Heading'), at(40, 5));
+    wait(1000);
+    finger.up(screen.getByText('Heading'), at(40, 5));
+    fireEvent.click(screen.getByText('Orc'), { detail: 1 });
+
+    expect(openedOn).toEqual([]);
+    expect(listClicks).toEqual(['Orc']);
+  });
+
+  it("opens for the row on Android's own long-press, before the timer", () => {
+    render(<List />);
+    const finger = contact('touch', 1);
+
+    finger.down(screen.getByText('Orc'), at(40, 60));
+    wait(300);
+    fireEvent.contextMenu(screen.getByText('Orc'), at(40, 60));
+    wait(700);
+
+    expect(openedOn).toEqual(['Orc']);
+  });
+});

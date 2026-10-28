@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Circle, CheckCircle2, CircleDot, Dices } from 'lucide-react';
+import { rollTarget } from '../../useSheetRolls';
 
 interface Skill {
   proficient: boolean;
@@ -40,10 +41,11 @@ interface SkillsListProps {
    * Already carries a derived bonus, so this row draws exactly like the rest.
    */
   customSkills?: { name: string; proficient: boolean; expertise: boolean; bonus: number }[];
-  /** Left-click to roll. Omit outside campaign context. */
+  /**
+   * Click to roll. Omit outside campaign context. Each row is then a d20 test
+   * whose roll menu the sheet's root opens on a right-click or a press and hold.
+   */
   onRoll?: (expression: string, purpose: string) => void;
-  /** Right-click for Advantage / Disadvantage popup. */
-  onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
 }
 
 // Skill display names (camelCase to Title Case)
@@ -75,8 +77,7 @@ const SkillRow: React.FC<{
   name: string;
   skill: Skill;
   onRoll?: (expression: string, purpose: string) => void;
-  onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
-}> = ({ name, skill, onRoll, onRollContext }) => {
+}> = ({ name, skill, onRoll }) => {
   const formatBonus = (bonus: number): string => {
     return bonus >= 0 ? `+${bonus}` : `${bonus}`;
   };
@@ -98,11 +99,10 @@ const SkillRow: React.FC<{
   return (
     <div
       className={`flex items-center justify-between py-1 px-2 rounded group ${
-        isClickable ? 'cursor-pointer hover:bg-accent/10 select-none' : 'hover:bg-ink/5'
+        isClickable ? 'cursor-pointer hover:bg-accent/10 select-none [-webkit-touch-callout:none]' : 'hover:bg-ink/5'
       }`}
       onClick={isClickable ? () => onRoll(expression, purpose) : undefined}
-      onContextMenu={onRollContext ? (e) => { e.preventDefault(); onRollContext(e, expression, purpose); } : undefined}
-      title={isClickable ? `Left-click: roll ${name}  |  Right-click: Advantage / Disadvantage` : undefined}
+      {...(isClickable ? rollTarget(expression, purpose, 'DND_5E') : undefined)}
     >
       <div className="flex items-center space-x-2">
         {getProficiencyIcon()}
@@ -123,13 +123,13 @@ const SkillRow: React.FC<{
 /**
  * SkillsList - Displays all skills with proficiency indicators
  */
-export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerception, customSkills, onRoll, onRollContext }) => {
+export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerception, customSkills, onRoll }) => {
   return (
     <div className="space-y-2">
       {/* Skills Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
         {Object.entries(skills).map(([key, skill]) => (
-          <SkillRow key={key} name={SKILL_NAMES[key]} skill={skill} onRoll={onRoll} onRollContext={onRollContext} />
+          <SkillRow key={key} name={SKILL_NAMES[key]} skill={skill} onRoll={onRoll} />
         ))}
       </div>
 
@@ -147,7 +147,6 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
                 name={custom.name}
                 skill={custom}
                 onRoll={onRoll}
-                onRollContext={onRollContext}
               />
             ))}
           </div>

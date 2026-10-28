@@ -8,6 +8,7 @@
 import React from 'react';
 import { Sword, Target, Zap, Dices } from 'lucide-react';
 import ProficiencyIndicator, { ProficiencyRank } from './ProficiencyIndicator';
+import { rollTarget } from '../../useSheetRolls';
 
 /**
  * A strike, as the schema actually declares it.
@@ -41,7 +42,6 @@ interface StrikesListProps {
   onRollStrike?: (expression: string, purpose: string) => void;
   /** Click a damage roll to roll it as written. */
   onRollDamage?: (expression: string, purpose: string) => void;
-  onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
 }
 
 /**
@@ -60,7 +60,7 @@ const getStrikeIcon = (type: string | undefined, savingThrow?: string) => {
   return type === 'melee' ? Sword : Target;
 };
 
-export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike, onRollDamage, onRollContext }) => {
+export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike, onRollDamage }) => {
   if (!strikes || strikes.length === 0) {
     return (
       <div className="text-center py-8 text-ink-muted italic">
@@ -86,10 +86,9 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
         return (
           <div
             key={`${strike.name}-${index}`}
-            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 hover:shadow-md select-none' : 'hover:shadow-md'}`}
+            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 hover:shadow-md select-none [-webkit-touch-callout:none]' : 'hover:shadow-md'}`}
             onClick={isClickable ? () => onRollStrike?.(attackExpr, attackPurpose) : undefined}
-            onContextMenu={isClickable && onRollContext ? (e) => { e.preventDefault(); onRollContext(e, attackExpr, attackPurpose); } : undefined}
-            title={isClickable ? `Left-click: roll attack  |  Right-click: Fortune / Misfortune` : undefined}
+            {...(isClickable ? rollTarget(attackExpr, attackPurpose, 'PATHFINDER_2E') : undefined)}
           >
             {/* Strike Header */}
             <div className="flex items-start justify-between mb-2">

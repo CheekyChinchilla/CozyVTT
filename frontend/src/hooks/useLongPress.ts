@@ -23,6 +23,11 @@ import { pointerKind } from '@/components/campaign/map/mapPointer';
  *
  * A press that lands on an input, or on a drag grip (`data-drag-grip`), never
  * long-presses: the grip is how a finger drags the row.
+ *
+ * One handler can serve many rows, as a character sheet's root serves every
+ * stat that rolls: with `within`, a press long-presses only where it lands
+ * inside an element that matches it, and `onOpen` is told which. A press
+ * anywhere else is not timed, so it opens nothing and swallows nothing.
  */
 
 /** Where a press may not long-press. */
@@ -35,6 +40,12 @@ export interface LongPressOptions {
   delayMs?: number;
   /** How far it may move and still be a press; the map's TAP_SLOP_PX without one. */
   slopPx?: number;
+  /**
+   * A selector: only a press that lands inside a matching element may
+   * long-press, and `onOpen` is given that element. Without one, a press
+   * anywhere on the element the handlers are on may, and that element is given.
+   */
+  within?: string;
 }
 
 export interface LongPressHandlers {
@@ -56,26 +67,39 @@ const sampleOf = (e: React.PointerEvent<Element>): PointerSample => ({
   id: e.pointerId, kind: pointerKind(e.pointerType), x: e.clientX, y: e.clientY, t: e.timeStamp, button: e.button,
 });
 
-export function useLongPress(onOpen: (at: LongPressPoint) => void, options: LongPressOptions = {}): LongPressHandlers {
+export function useLongPress(onOpen: (at: LongPressPoint, on: Element) => void, options: LongPressOptions = {}): LongPressHandlers {
   const onOpenRef = useRef(onOpen);
   useEffect(() => { onOpenRef.current = onOpen; });
 
   const [press] = useState(() => {
     const swallow = createClickSwallow();
-    /** Each finger down on the row, and whether its press may open the menu. */
-    const fingers = new Map<number, boolean>();
-    let landsWhereItMay = true;
-    const open = (pointerId: number, clientX: number, clientY: number) => {
+    /**
+     * Each finger down on the row, and what its press would open the menu
+     * for: the row, or the element matching `within` it landed in; null
+     * where it may not long-press.
+     */
+    const fingers = new Map<number, Element | null>();
+    let landsOn: Element | null = null;
+    const open = (pointerId: number, on: Element, clientX: number, clientY: number) => {
       swallow.arm(pointerId);
-      onOpenRef.current({ clientX, clientY });
+      onOpenRef.current({ clientX, clientY }, on);
     };
     const recogniser = createGestureRecognizer((g) => {
-      if (g.type === 'long-press' && fingers.get(g.at.id)) open(g.at.id, g.at.x, g.at.y);
+      if (g.type !== 'long-press') return;
+      const on = fingers.get(g.at.id);
+      if (on) open(g.at.id, on, g.at.x, g.at.y);
     }, {
       slopPx: options.slopPx,
       longPressMs: options.delayMs,
-      longPressAt: () => landsWhereItMay,
+      longPressAt: () => landsOn !== null,
     });
+    /** What a press landing here would open the menu for, if anything. */
+    const pressedOn = (e: React.PointerEvent<Element>): Element | null => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest(NO_LONG_PRESS)) return null;
+      if (options.within === undefined) return e.currentTarget;
+      return target?.closest(options.within) ?? null;
+    };
     const lifted = (e: React.PointerEvent<Element>, step: 'up' | 'cancel') => {
       const kind = pointerKind(e.pointerType);
       if (kind === 'mouse') return;
@@ -89,8 +113,8 @@ export function useLongPress(onOpen: (at: LongPressPoint) => void, options: Long
         const kind = pointerKind(e.pointerType);
         if (kind === 'mouse') return;
         if (kind === 'touch') {
-          landsWhereItMay = !(e.target instanceof Element && e.target.closest(NO_LONG_PRESS));
-          fingers.set(e.pointerId, landsWhereItMay);
+          landsOn = pressedOn(e);
+          fingers.set(e.pointerId, landsOn);
         }
         recogniser.down(sampleOf(e));
       },
@@ -102,9 +126,9 @@ export function useLongPress(onOpen: (at: LongPressPoint) => void, options: Long
       takeContextMenu(e) {
         if (fingers.size === 0) return false;
         e.preventDefault();
-        for (const [pointerId, may] of fingers) {
-          if (may && recogniser.hold(pointerId)) {
-            open(pointerId, e.clientX, e.clientY);
+        for (const [pointerId, on] of fingers) {
+          if (on && recogniser.hold(pointerId)) {
+            open(pointerId, on, e.clientX, e.clientY);
             break;
           }
         }
