@@ -1351,7 +1351,11 @@ value={formData.wealth?.cash}
           </ul>
         </div>
       )}
-      <div data-sheet-body className="p-3 sm:p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
+      {/* From sm up a tab scrolls in a box of its own, under the header and
+          the tabs. On a phone the sheet scrolls as one, in the shell's own
+          scroller, with no second scroller inside it sized from a 100vh that
+          is taller than the part of the screen the browser shows. */}
+      <div data-sheet-body className="p-3 sm:p-6 bg-paper sm:max-h-[calc(100vh-200px)] sm:overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}
