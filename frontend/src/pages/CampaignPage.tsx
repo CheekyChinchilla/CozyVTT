@@ -96,9 +96,10 @@ function CampaignPageContent() {
   // sent while the read is in flight is missed.
   useOnRejoin(joinedEpoch, catchUpAfterReconnect);
 
-  // Removed from the campaign, the campaign deleted, or the sign-in ended
-  // elsewhere: say why and leave the table.
-  useAccessRevoked();
+  // Removed from the campaign, left it, the campaign deleted, or the sign-in
+  // ended elsewhere: say why and leave the table. Leave Campaign, in the
+  // Campaign Info panel, is told the same way.
+  const endTable = useAccessRevoked();
 
   // A player changing their character's token image rewrites the image on every
   // token bound to that character, server-side — tokens hold their own copy. The
@@ -266,7 +267,7 @@ function CampaignPageContent() {
     session: <SessionPanels />,
     party: (
       <div className="space-y-4">
-        <CampaignInfo />
+        <CampaignInfo onLeft={endTable} />
         <CampaignRoster />
         {/* Token Roster — DM only */}
         {userRole === 'DM' && (

@@ -140,6 +140,10 @@ describe('canRemoveCharacterFromCampaign', () => {
     expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.DM))).toBe(true);
   });
 
+  it('offers it to an owner who is a spectator there', () => {
+    expect(canRemoveCharacterFromCampaign(user(OWNER), character(OWNER), membership(CampaignRole.SPECTATOR))).toBe(true);
+  });
+
   it('does not offer it to another player or a spectator', () => {
     expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.PLAYER))).toBe(false);
     expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.SPECTATOR))).toBe(false);

@@ -1,13 +1,17 @@
 /**
- * A token carried by someone whose connection drops goes back where it
- * stands on every other screen.
+ * A token carried by someone whose connection drops, or who is taken out of
+ * the campaign, goes back where it stands on every other screen.
  *
  * Other screens draw a carried token at the last drag frame until the
  * carrier puts it down or lets it go, and both of those come from the
  * carrier. A carrier whose tab closed or whose connection dropped mid-hold
  * sent neither, so everyone else saw the token where it was not until it
  * next moved or the map was reloaded, while sight and the ruler used where
- * it stands. Their disconnect now sends it back.
+ * it stands. Their disconnect now sends it back. A carrier removed from the
+ * campaign, or whose connection joined another campaign, keeps the
+ * connection, which no longer names the campaign: neither the disconnect nor
+ * the carrier's own put-down reached the table, so leaving the campaign
+ * sends it back too.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -15,6 +19,7 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { tellTableMemberLeft } from '../../services/campaignMembers';
 
 jest.setTimeout(20000);
 
@@ -25,6 +30,7 @@ let dmId: string;
 let playerId: string;
 let watcherId: string;
 let campaignId: string;
+let otherCampaignId: string;
 let mapId: string;
 let dmCookie: string;
 let playerCookie: string;
@@ -39,11 +45,13 @@ beforeAll(async () => {
   playerId = player.id;
   watcherId = watcher.id;
   campaignId = (await prisma.campaign.create({ data: { name: `Carrier gone ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
+  otherCampaignId = (await prisma.campaign.create({ data: { name: `Carrier elsewhere ${runId}`, ownerId: playerId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
       { userId: dmId, campaignId, role: 'DM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: watcherId, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: playerId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
     ],
   });
   mapId = (await prisma.map.create({
@@ -62,7 +70,7 @@ afterAll(async () => {
   await server?.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
-  await prisma.campaign.deleteMany({ where: { id: campaignId } });
+  await prisma.campaign.deleteMany({ where: { id: { in: [campaignId, otherCampaignId] } } });
   await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, watcherId] } } });
   await prisma.$disconnect();
 });
@@ -91,6 +99,48 @@ it('sends the token back where it stands when its carrier disconnects', async ()
   const moved = await back;
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
   expect(moved.dragging).toBeFalsy();
+});
+
+// Removed by the DM, or leaving, mid-hold: the connection stays open but
+// is no longer in the campaign, so its disconnect later sends nothing.
+it('sends the token back where it stands when its carrier is taken out of the campaign', async () => {
+  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const player = await server.connectAndAuth(playerCookie, campaignId);
+
+  const frame = waitForEvent<Moved>(dm, 'token.moved');
+  player.emit('token.move.start', { tokenId: 'hero', mapId });
+  player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
+  expect(await frame).toMatchObject({ tokenId: 'hero', x: 9, y: 9, dragging: true });
+
+  const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  await tellTableMemberLeft(playerId, campaignId, 'removed');
+
+  const moved = await back;
+  expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
+  expect(moved.dragging).toBeFalsy();
+  player.disconnect();
+  dm.disconnect();
+});
+
+it('sends the token back where it stands when its carrier joins another campaign', async () => {
+  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const player = await server.connectAndAuth(playerCookie, campaignId);
+
+  const frame = waitForEvent<Moved>(dm, 'token.moved');
+  player.emit('token.move.start', { tokenId: 'hero', mapId });
+  player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
+  await frame;
+
+  const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  const joined = waitForEvent(player, 'authenticated');
+  player.emit('authenticate', { campaignId: otherCampaignId });
+  await joined;
+
+  const moved = await back;
+  expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
+  expect(moved.dragging).toBeFalsy();
+  player.disconnect();
+  dm.disconnect();
 });
 
 // The carrier let go without putting it down (Esc), so its drag was never

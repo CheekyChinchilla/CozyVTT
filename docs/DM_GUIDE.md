@@ -123,6 +123,13 @@ CozyVTT does yet.
 > game over can never lock you out of your own campaign. If you are *not* the owner,
 > ask the new DM, or your instance's administrator can move it for you.
 
+**Leaving a campaign you run.** The DM cannot leave a campaign, so hand the seat
+to another member first; **Leave Campaign** then appears for you in the
+**Campaign Info** panel, as it does for every player. Whoever owns the campaign
+cannot leave it at all, since only the DM could let them back in: if it is
+yours and you no longer want it, delete it from the **Danger Zone** tab of
+**Campaign Settings** (**Owner Settings** once someone else is the DM).
+
 ---
 
 ## Preparing Your Maps
@@ -682,7 +689,23 @@ dashboard. Deleting a campaign does the same for everyone at its table, with
 the campaign: it stays theirs, but you and the other players can no longer open
 or edit its sheet, and nothing they change on it reaches your table except its
 picture. A token on the map that was bound to one of those characters stays
-where it is, still shows the character's picture, and follows it if they change it.
+where it is, and follows the character's picture if they change it. Whether
+someone at your table can see that picture depends on which campaign the
+character was in when the picture was saved:
+
+- **Your campaign:** the picture is in your campaign's library, and everyone at
+  your table goes on seeing it.
+- **No campaign:** it is the player's own file, which someone at your table can
+  see only while they share a campaign with the player.
+- **Another campaign:** it is that campaign's file, which someone at your table
+  can see only while they share a campaign with the player, or are in that
+  other campaign themselves.
+
+So once the player is out, the token shows its placeholder on every screen that
+can no longer see its picture. A picture they choose after they are out is
+saved the same way, as their own file while the character is in no campaign or
+as the other campaign's file while it is in one, so your table cannot see it
+either, apart from the cases above.
 
 **Their personal notes and saved rolls stay theirs.** Nothing they wrote in the
 **Notes** tab or saved under **Saved** is deleted. They can still read it, and
@@ -690,9 +713,18 @@ download it, from their dashboard, and it is back in the campaign if you invite
 them again. You still cannot see any of it. If you delete the campaign, their
 notes and saved rolls for it are deleted with it, along with everyone else's.
 
+**Players and spectators can also leave on their own**, with **Leave
+Campaign** in their **Campaign Info** panel; you are not asked. Leaving does
+what removing does: their characters leave with them, their notes and saved
+rolls stay theirs, their page says "You left this campaign.", and the rest of
+the table sees them go as after a removal. Their tokens stay where they are on
+the map, and their entries in the initiative order stay, for you to keep or
+remove. To have them back, invite them again.
+
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
-a player and you cannot remove them. Hand the seat back if you want to step away
+a player and you cannot remove them, so the remove button is not shown beside
+them. Hand the seat back if you want to step away
 (see [Handing the game to someone else](#handing-the-game-to-someone-else)).
 
 ### Call of Cthulhu: Keeper's Notes

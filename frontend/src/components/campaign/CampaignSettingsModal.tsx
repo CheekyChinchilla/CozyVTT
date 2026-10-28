@@ -248,6 +248,9 @@ export default function CampaignSettingsModal({
     }
   };
 
+  // TODO(ui): the server also sends this tab campaign.access.revoked with reason campaign-deleted before it
+  // answers, and useAccessRevoked toasts "This campaign was deleted." and goes to the dashboard as well, so
+  // the owner is told twice. Hand this answer to the page's useAccessRevoked handler, as Leave Campaign does.
   const handleDeleteCampaign = async () => {
     setShowDeleteConfirm(false);
     setDeletingCampaign(true);
@@ -278,8 +281,10 @@ export default function CampaignSettingsModal({
     }
   };
 
-  const isDmSelf = (membership: CampaignMembership) =>
-    membership.userId === user?.id || membership.role === 'DM';
+  // Nobody the server refuses to remove: yourself, the DM, and the
+  // campaign's owner, who keeps their place at the table whoever runs it.
+  const mayRemove = (membership: CampaignMembership) =>
+    membership.userId !== user?.id && membership.role !== 'DM' && membership.userId !== campaign.ownerId;
 
   const deleteNameMatches = deleteConfirmName.trim() === campaign.name;
 
@@ -667,8 +672,8 @@ export default function CampaignSettingsModal({
                           </button>
                         )}
 
-                        {/* Remove button — DM and self cannot be removed */}
-                        {isDmViewer && !isDmSelf(membership) && (
+                        {/* Remove button: not for yourself, the DM or the owner */}
+                        {isDmViewer && mayRemove(membership) && (
                           <button
                             type="button"
                             onClick={() => handleRemoveMemberClick(membership)}

@@ -115,6 +115,10 @@ export function registerEventHandlers(io: Server): void {
 
         const result = await authenticateCampaign(socket, data.campaignId);
 
+        // TODO(play): a tab that reconnects after its member left or was removed (a laptop that slept
+        // through it) is refused here with a plain `error`, "You are not a member of this campaign", and
+        // its page stays on the campaign. A socket whose user is no longer a member should be sent
+        // campaign.access.revoked instead, so the page says so and goes to the dashboard.
         if (!result.success) {
           socket.emit('error', { message: result.error });
           return;
@@ -138,11 +142,15 @@ export function registerEventHandlers(io: Server): void {
           (room) => room !== socket.id && room !== socket.userId && room !== data.campaignId
         );
         const leaving = oldRooms.map((room) => socket.leave(room));
+        const previous = socket.campaignId;
         // The role is refreshed even when the campaign is the same, since a
         // client re-authenticates after a reconnect.
         socket.join(data.campaignId);
         socket.campaignId = data.campaignId;
         socket.role = result.role;
+        // A token carried in the campaign this socket has left goes back
+        // where it stands there: its put-down would go to this campaign now.
+        if (previous && previous !== data.campaignId) socket.releaseHeldTokens?.(previous);
         await Promise.all(leaving);
 
         for (const room of oldRooms) {
@@ -220,6 +228,9 @@ export function registerEventHandlers(io: Server): void {
       }
       if (socket.campaignId !== campaignId) return;
       if (!membership) {
+        // TODO(play): this says "removed" whatever took the member out, so a leaver's tab re-joining at the
+        // moment of the leave is told "You were removed from this campaign.". It should be told the reason
+        // the leave gave, `left`.
         await clearCampaignFromLiveSockets(userId, campaignId);
         await broadcastPresence(campaignId);
       } else if (membership.role !== socket.role) {

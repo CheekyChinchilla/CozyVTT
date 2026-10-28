@@ -1575,7 +1575,7 @@ export interface CharacterHpUpdatedBroadcast {
  * and does not move with it.
  */
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
-export type AccessRevokedReason = 'removed' | 'campaign-deleted' | 'signed-out';
+export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
 
 /**
  * `campaign.access.revoked`: this connection may no longer use its campaign.

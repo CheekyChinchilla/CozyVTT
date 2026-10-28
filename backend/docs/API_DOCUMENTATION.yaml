@@ -2983,9 +2983,10 @@ paths:
         its owner has left is readable and editable by its owner alone. The
         removed member's open connections leave the campaign and receive
         `campaign.access.revoked` (`{ campaignId, reason: 'removed', message:
-        'You were removed from this campaign.' }`), and the campaign
-        receives `roster.updated` (`{ action: 'member.left', userId,
-        campaignId }`).
+        'You were removed from this campaign.' }`), a token one of them is
+        carrying is sent back to its square, and the campaign receives
+        `presence.state` (who is online now) and `roster.updated` (`{ action:
+        'member.left', userId, campaignId }`).
       operationId: removeMember
       security:
         - cookieAuth: []
@@ -3013,6 +3014,64 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           description: The user is not a member of this campaign
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/campaigns/{campaignId}/leave:
+    post:
+      tags:
+        - Campaigns
+      summary: Leave the campaign
+      description: >-
+        Leave the campaign, as a player or a spectator: what the DM's
+        Remove does, asked by the member. No body. The caller's characters
+        are taken out of the campaign in the same step (their `campaignId`
+        becomes null); their tokens, combatants, drawings, notes and dice
+        macros stay with the campaign, and the notes and macros are listed
+        under `GET /api/campaigns/left`. The caller's open connections leave
+        the campaign and receive `campaign.access.revoked` (`{ campaignId,
+        reason: 'left', message: 'You left this campaign.' }`), a token one
+        of them is carrying is sent back to its square, and the campaign
+        receives `presence.state` and `roster.updated` (`{ action:
+        'member.left', userId, campaignId }`). The campaign's owner and its
+        DM are refused with 409, the owner first, so an owner sitting as DM
+        is told they own it; the role is read in the same serializable
+        transaction as the change, so a hand-over at the same moment is
+        caught. Only the DM can invite the caller back.
+      operationId: leaveCampaign
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: The caller has left the campaign
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: You left this campaign.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            `You are not a member of this campaign`, also when the DM removed
+            the caller just before this request was handled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            The owner: `You own this campaign, so you cannot leave it. If you
+            no longer want it, delete it in the campaign's settings.` The DM:
+            `You run this campaign. Hand the DM seat to someone else in the
+            campaign's settings, then leave it.`
           content:
             application/json:
               schema:

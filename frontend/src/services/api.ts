@@ -598,6 +598,15 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Leave a campaign as a player or a spectator. Refused (409) for its owner
+   * and its DM; `message` is the sentence the leaver's socket is told too.
+   */
+  async leaveCampaign(campaignId: string): Promise<{ message: string }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/leave`);
+    return response.data;
+  }
+
   async changeCampaignMemberRole(campaignId: string, userId: string, role: string): Promise<{ message: string }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/members/${userId}/role`, { role });
     return response.data;
