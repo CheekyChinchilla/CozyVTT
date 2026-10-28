@@ -3289,6 +3289,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (token && tokenMenuHasItems(token, tokenMenuView(token))) {
       rememberMenuPoint(clientX, clientY);
       if (drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
+      // TODO(ui): a right-click on another token while Move to Map… is open opens its menu with the
+      // maps already listed; a new menu opens with its submenu shut, as Enter's does (openTokenMenuAt).
       setContextMenu({ token, x: clientX, y: clientY });
       return true;
     }
