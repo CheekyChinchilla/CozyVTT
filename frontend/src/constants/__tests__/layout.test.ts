@@ -5,12 +5,15 @@
  * The campaign page asks it of the browser, and whatever else changes with the
  * page must ask the same. Written in each of them it would drift, and a phone
  * would get the narrow page with a panel laid out for a wide one. The campaign
- * page's classes ask it of Tailwind too (`lg:`), so the query must end where
- * `lg` begins.
+ * page's classes ask it of Tailwind too (`lg:`, which Tailwind writes as
+ * `(width >= <--breakpoint-lg>)`), so the query must be the exact complement
+ * of `lg`, in its unit. A rem in a media query is the browser's default text
+ * size, which its user sets, so a width in px agreed with `lg` only at 16 px:
+ * at 12 px the Desktop Required notice was hidden while its focus trap held
+ * the keyboard, and at 20 px it was shown with no trap.
  */
 import { describe, it, expect } from 'vitest';
-import defaultTheme from 'tailwindcss/defaultTheme';
-import indexCss from '../../index.css?raw';
+import tailwindTheme from 'tailwindcss/theme.css?raw';
 import { COMPACT_LAYOUT_QUERY } from '../layout';
 
 // Every source and stylesheet of the app, tests aside.
@@ -73,12 +76,15 @@ describe('the compact layout query', () => {
     );
   });
 
-  it("ends where Tailwind's lg begins", () => {
-    // index.css keeps Tailwind's breakpoints; one set there would move lg.
-    expect(indexCss).not.toMatch(/--breakpoint-lg\s*:/);
-    const lg = /^(\d+(?:\.\d+)?)rem$/.exec(defaultTheme.screens.lg);
-    expect(lg).not.toBeNull();
-    const lgPx = Number(lg?.[1]) * 16;
-    expect(COMPACT_LAYOUT_QUERY).toBe(`(max-width: ${lgPx - 0.02}px)`);
+  it("is the exact complement of Tailwind's lg, in lg's own unit", () => {
+    const breakpointLg = (css: string) => [...css.matchAll(/--breakpoint-lg\s*:\s*([^;}]+)/g)].map((m) => m[1].trim());
+    const [tailwinds] = breakpointLg(tailwindTheme);
+    expect(tailwinds).toBeDefined();
+    // An app stylesheet that sets it moves lg, and the query must follow.
+    const overrides = Object.entries(SOURCES)
+      .filter(([file]) => file.endsWith('.css'))
+      .flatMap(([, css]) => breakpointLg(css));
+    const lg = overrides.length > 0 ? overrides[overrides.length - 1] : tailwinds;
+    expect(COMPACT_LAYOUT_QUERY).toBe(`(width < ${lg})`);
   });
 });

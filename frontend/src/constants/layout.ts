@@ -1,8 +1,10 @@
 /**
- * The screens that get the campaign page's narrow layout: less than 1,024 CSS
- * pixels wide, where Tailwind's `lg` begins. Ask it through
+ * The screens that get the campaign page's narrow layout: narrower than
+ * Tailwind's `lg`, 64rem, which is 1,024 CSS pixels at the browser's usual
+ * 16 px text. It is written in rem, as `lg` is, so the page and its `lg:`
+ * classes agree whatever text size the browser is set to. Ask it through
  * `useMediaQuery(COMPACT_LAYOUT_QUERY)`; never write the width again, since a
  * second copy drifts (`constants/__tests__/layout.test.ts` fails on one, and
- * when this stops ending where `lg` begins).
+ * when this is not the exact complement of `lg`).
  */
-export const COMPACT_LAYOUT_QUERY = '(max-width: 1023.98px)';
+export const COMPACT_LAYOUT_QUERY = '(width < 64rem)';

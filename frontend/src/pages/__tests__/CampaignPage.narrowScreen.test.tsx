@@ -71,6 +71,7 @@ vi.mock('@/components/campaign/TokenRoster', nothing);
 vi.mock('@/components/campaign/NpcQuickEditor', nothing);
 
 import CampaignPage from '../CampaignPage';
+import { COMPACT_LAYOUT_QUERY } from '@/constants/layout';
 import Modal from '@/components/ui/Modal';
 import SlideOver, { SlideOverTitle } from '@/components/ui/SlideOver';
 
@@ -139,7 +140,7 @@ it('covers every side panel and window, from the top of the page', () => {
 // the window's focus trap kept Tab, and Escape closed the window under it.
 it('takes the keyboard while the window is narrow', async () => {
   const narrow = (query: string): MediaQueryList => ({
-    matches: query.includes('max-width'), media: query, onchange: null,
+    matches: query === COMPACT_LAYOUT_QUERY, media: query, onchange: null,
     addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
   });
   vi.stubGlobal('matchMedia', narrow);
