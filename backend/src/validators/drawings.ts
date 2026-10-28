@@ -15,10 +15,10 @@
 
 import { z } from 'zod';
 import { geometryRegion, GEOMETRY_MARGIN_SQUARES, MAX_COORDINATE, type MapExtent } from './maps';
-import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LIMITS, type DrawingKind } from './drawingLimits';
+import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LIMITS, MARKUP_SHARES, type DrawingKind, type MarkupShare } from './drawingLimits';
 
-export { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS, DRAWING_LIMITS } from './drawingLimits';
-export type { DrawingAudience, DrawingKind, DrawingLayer } from './drawingLimits';
+export { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS, DRAWING_LIMITS, MARKUP_SHARES } from './drawingLimits';
+export type { DrawingAudience, DrawingKind, DrawingLayer, MarkupShare } from './drawingLimits';
 
 const KIND_NAMES: Record<DrawingKind, string> = {
   pen: 'pen stroke', line: 'line', arrow: 'arrow', rect: 'rectangle', ellipse: 'ellipse', polygon: 'polygon', text: 'text label',
@@ -205,45 +205,77 @@ export type DrawingPreview = z.infer<typeof DrawingPreviewSchema>;
 // ── What a map's markup layer holds ─────────────────────────────────────────
 
 /**
- * What an add answers when the map's markup layer holds as many drawings, or
- * as many points, as it may (DRAWING_LIMITS). Neither says how many: the
- * count takes in drawings a player is not sent.
+ * The share of a map's markup layer a drawing counts to. Every drawing for
+ * the DM alone is the DM's, whoever wrote it, so the players' share holds
+ * only drawings a player is sent. One for everyone is the DM's when its
+ * author is the campaign's DM (`dmId`) as an add is counted, and the
+ * players' otherwise: a former DM's, a removed member's and one whose
+ * author's account is gone are the players'.
  */
-export const MARKUP_FULL_MESSAGE = 'This map holds as many drawings as it can. Erase some first.';
-export const MARKUP_POINTS_FULL_MESSAGE = 'This map holds as much drawing as it can. Erase some first.';
+export function drawingShare(drawing: { authorId: string | null; audience: 'ALL' | 'DM' }, dmId: string | null): MarkupShare {
+  if (drawing.audience === 'DM') return 'DM';
+  return drawing.authorId !== null && drawing.authorId === dmId ? 'DM' : 'PLAYERS';
+}
 
 /**
- * What a map's markup layer holds: its drawings, and the points they have
- * between them, or null where they were not counted because they cannot
- * matter (pointsCanMatter).
+ * What an add answers when its share of the map's markup layer holds as
+ * many drawings, or as many points, as it may (DRAWING_LIMITS.markupShares).
+ * Neither names a count, and a player's names only the players' share, so
+ * it tells them nothing of what the DM holds.
+ */
+export const MARKUP_SHARE_FULL: Record<MarkupShare, string> = {
+  DM: "Your share of this map's drawing is full. Erase some first.",
+  PLAYERS: "The players' share of this map's drawing is full. Erase some first.",
+};
+
+/**
+ * What one share of a map's markup layer holds: its drawings, and the points
+ * they have between them, or null where they were not counted because they
+ * cannot matter (pointsCanMatter).
  */
 export interface MarkupHeld {
+  share: MarkupShare;
   drawings: number;
   points: number | null;
 }
 
 /**
- * Which of the markup layer's limits one more drawing of `adding` points
- * would pass, or null when it fits. The one place the limits are applied,
- * by an add and by an import alike: a share of them by member, if it
- * comes, is a change here and in the counts handed to it.
+ * Which of its share's limits one more drawing of `adding` points would
+ * pass, or null when it fits. The one place the limits are applied, by an
+ * add and by an import alike.
  */
 export function markupLimitReached(held: MarkupHeld, adding: number): 'drawings' | 'points' | null {
-  if (held.drawings >= DRAWING_LIMITS.maxMarkupPerMap) return 'drawings';
-  if (held.points !== null && held.points + adding > DRAWING_LIMITS.maxMarkupPointsPerMap) return 'points';
+  const room = DRAWING_LIMITS.markupShares[held.share];
+  if (held.drawings >= room.drawings) return 'drawings';
+  if (held.points !== null && held.points + adding > room.points) return 'points';
   return null;
 }
 
 /**
- * Whether the points on a layer holding `drawings` drawings could decide an
- * add of `adding` more: not when the layer holds as many drawings as it
- * may, which refuses the add whatever the points, and not while every
- * drawing holding the most points one may still leaves room. Counting
- * them reads every drawing's points whole.
+ * Whether the points in a share holding `drawings` drawings could decide an
+ * add of `adding` more: not when the share holds as many drawings as it may,
+ * which refuses the add whatever the points, and not while every drawing
+ * holding the most points one may still leaves room. Counting them reads
+ * every drawing's points whole.
  */
-export function pointsCanMatter(drawings: number, adding: number): boolean {
-  if (drawings >= DRAWING_LIMITS.maxMarkupPerMap) return false;
-  return drawings * DRAWING_LIMITS.maxPoints + adding > DRAWING_LIMITS.maxMarkupPointsPerMap;
+export function pointsCanMatter(share: MarkupShare, drawings: number, adding: number): boolean {
+  const room = DRAWING_LIMITS.markupShares[share];
+  if (drawings >= room.drawings) return false;
+  return drawings * DRAWING_LIMITS.maxPoints + adding > room.points;
+}
+
+/** A share an archive names for a drawing; anything else is decided by the drawing (archiveShare). */
+const ShareSchema = z.enum(MARKUP_SHARES);
+
+/**
+ * The share an archive's drawing goes back to: the DM's for a drawing for
+ * the DM alone, whatever the archive names, as drawingShare has it; for one
+ * for everyone, the share it names, or the players' when it names none.
+ */
+export function archiveShare(entry: unknown, audience: 'ALL' | 'DM'): MarkupShare {
+  if (audience === 'DM') return 'DM';
+  const named = ShareSchema.safeParse(typeof entry === 'object' && entry !== null ? (entry as { share?: unknown }).share : undefined);
+  return named.success ? named.data : 'PLAYERS';
 }
 
 // ── The live table's drawing events ─────────────────────────────────────────

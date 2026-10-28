@@ -6,9 +6,10 @@
  * stored with its author taken from the connection, and a player's is for
  * everyone whatever they ask. One for the DM alone never reaches anyone
  * else: not when it is added, erased or cleared, not in the list a page
- * asks for, and not as a preview. A map's markup layer holds 2,000
- * drawings and 200,000 points, counted under the map's lock, so drawings
- * sent together cannot pass either. A player erases only their own
+ * asks for, and not as a preview. A map's markup layer has two shares, the
+ * DM's and the players' together, each holding 1,000 drawings and 100,000
+ * points, counted under the map's lock, so drawings sent together cannot
+ * pass either, and a player filling theirs never stops the DM drawing. A player erases only their own
  * drawings, at any time; a drawing they were never sent is answered as one
  * that does not exist. A prepared map's drawings are the DM's.
  *
@@ -21,7 +22,7 @@ import { prisma } from '../../config/database';
 import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import type { AckAnswer } from '../ack';
 import { applyRoleToLiveSockets } from '../utils';
-import { DRAWING_LIMITS, DRAWING_OUTSIDE_MAP_MESSAGE, DRAWING_LAYER_REFUSAL, MARKUP_FULL_MESSAGE, MARKUP_POINTS_FULL_MESSAGE } from '../../validators/drawings';
+import { DRAWING_LIMITS, DRAWING_OUTSIDE_MAP_MESSAGE, DRAWING_LAYER_REFUSAL, MARKUP_SHARE_FULL } from '../../validators/drawings';
 import {
   DRAW_PAUSED_REFUSAL, DRAW_SETTING_REFUSAL, DRAW_SPECTATOR_REFUSAL, ERASE_OTHERS_REFUSAL, ERASE_SPECTATOR_REFUSAL,
 } from '../../utils/drawingRules';
@@ -256,71 +257,150 @@ describe('drawing:add', () => {
     dm.disconnect();
   });
 
+  // Each map's markup layer has two shares with room of their own: the
+  // DM's, and the players' together, so one player filling theirs never
+  // stops the DM drawing. A drawing is in the DM's share when its author is
+  // the campaign's DM as an add is counted, and in the players' otherwise.
   describe('what a map\'s markup layer holds', () => {
-    const many = (n: number, extra: Record<string, unknown> = {}) =>
+    const { DM: dmShare, PLAYERS: playersShare } = DRAWING_LIMITS.markupShares;
+    const many = (n: number, authorId: string | null, extra: Record<string, unknown> = {}) =>
       prisma.mapDrawing.createMany({
-        data: Array.from({ length: n }, () => ({ mapId: shownId, authorId: ids.dm, kind: 'line', color: '#1a1a1a', width: 1, points: [[0, 0], [1, 1]], ...extra })),
+        data: Array.from({ length: n }, () => ({ mapId: shownId, authorId, kind: 'line', color: '#1a1a1a', width: 1, points: [[0, 0], [1, 1]], ...extra })),
       });
+    const stroke = (n: number) => Array.from({ length: n }, (_, i) => [i % 400, Math.floor(i / 400)]);
 
-    it('refuses a drawing past the most drawings, and counts no other layer', async () => {
-      await many(DRAWING_LIMITS.maxMarkupPerMap - 1);
-      await many(5, { layer: 'GROUND' });
+    it('refuses a player past the players\' share, counting every player\'s and neither the DM\'s nor another layer', async () => {
+      await many(playersShare.drawings - 2, ids.p2);
+      await many(1, null);
+      await many(10, ids.dm);
+      await many(5, ids.p2, { layer: 'GROUND' });
       const p1 = await server.connectAndAuth(cookies.p1, campaignId);
       expect((await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })).ok).toBe(true);
-      expect(await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })).toEqual({ ok: false, error: MARKUP_FULL_MESSAGE });
-      expect(await prisma.mapDrawing.count({ where: { mapId: shownId, layer: 'MARKUP' } })).toBe(DRAWING_LIMITS.maxMarkupPerMap);
+      expect(await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })).toEqual({ ok: false, error: MARKUP_SHARE_FULL.PLAYERS });
       p1.disconnect();
     });
 
-    it('takes one drawing of several sent at once into the last place', async () => {
-      await many(DRAWING_LIMITS.maxMarkupPerMap - 1);
+    it('lets the DM draw while the players\' share is full, and a player while the DM\'s is', async () => {
+      await many(playersShare.drawings, ids.p1);
+      const dm = await server.connectAndAuth(cookies.dm, campaignId);
+      expect((await ask(dm, 'drawing:add', { mapId: shownId, drawing: line() })).ok).toBe(true);
+      await many(dmShare.drawings, ids.dm);
+      expect(await ask(dm, 'drawing:add', { mapId: shownId, drawing: line() })).toEqual({ ok: false, error: MARKUP_SHARE_FULL.DM });
+      dm.disconnect();
+
+      await prisma.mapDrawing.deleteMany({ where: { mapId: shownId, authorId: ids.p1 } });
+      const p1 = await server.connectAndAuth(cookies.p1, campaignId);
+      expect((await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })).ok).toBe(true);
+      p1.disconnect();
+    });
+
+    // A player filling theirs to learn what the DM holds is told the same
+    // whatever the DM's share holds.
+    it('tells a player nothing of the DM\'s drawings when the players\' share is full', async () => {
+      await many(playersShare.drawings, ids.p2);
+      const p1 = await server.connectAndAuth(cookies.p1, campaignId);
+      const withNone = await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() });
+      await many(dmShare.drawings, ids.dm, { audience: 'DM' });
+      const withAll = await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() });
+      expect(withAll).toEqual(withNone);
+      expect(errorOf(withAll)).not.toMatch(/\d|DM/);
+      p1.disconnect();
+    });
+
+    it('takes one drawing of several sent at once into the last place of a share', async () => {
+      await many(dmShare.drawings - 1, ids.dm);
       const dm = await server.connectAndAuth(cookies.dm, campaignId);
       const answers = await Promise.all(Array.from({ length: 6 }, () => ask(dm, 'drawing:add', { mapId: shownId, drawing: line() })));
       expect(answers.filter((a) => a.ok)).toHaveLength(1);
-      expect(answers.filter((a) => !a.ok).map(errorOf)).toEqual(Array(5).fill(MARKUP_FULL_MESSAGE));
-      expect(await prisma.mapDrawing.count({ where: { mapId: shownId } })).toBe(DRAWING_LIMITS.maxMarkupPerMap);
+      expect(answers.filter((a) => !a.ok).map(errorOf)).toEqual(Array(5).fill(MARKUP_SHARE_FULL.DM));
+      expect(await prisma.mapDrawing.count({ where: { mapId: shownId, authorId: ids.dm } })).toBe(dmShare.drawings);
       dm.disconnect();
     });
 
-    it('refuses a drawing past the most points, and counts no other layer', async () => {
-      const stroke = (n: number) => Array.from({ length: n }, (_, i) => [i % 400, Math.floor(i / 400)]);
-      // 99 strokes of 2,000 points and one of 1,998: two points short of the budget.
+    it('refuses a drawing past a share\'s points, counting no other share or layer', async () => {
+      const strokes = dmShare.points / DRAWING_LIMITS.maxPoints;
+      // Every stroke of the DM's share but one of 2,000 points, and one of
+      // 1,998: two points short of its budget.
       await prisma.mapDrawing.createMany({
         data: [
-          ...Array.from({ length: 99 }, () => ({ mapId: shownId, authorId: ids.dm, kind: 'pen', color: '#1a1a1a', width: 1, points: stroke(2000) })),
+          ...Array.from({ length: strokes - 1 }, () => ({ mapId: shownId, authorId: ids.dm, kind: 'pen', color: '#1a1a1a', width: 1, points: stroke(2000) })),
           { mapId: shownId, authorId: ids.dm, kind: 'pen', color: '#1a1a1a', width: 1, points: stroke(1998) },
           { mapId: shownId, authorId: ids.dm, kind: 'pen', color: '#1a1a1a', width: 1, points: stroke(2000), layer: 'GROUND' },
+          ...Array.from({ length: strokes }, () => ({ mapId: shownId, authorId: ids.p2, kind: 'pen', color: '#1a1a1a', width: 1, points: stroke(2000) })),
         ],
       });
       const dm = await server.connectAndAuth(cookies.dm, campaignId);
       expect(await ask(dm, 'drawing:add', { mapId: shownId, drawing: { ...line(), kind: 'pen', points: [[1, 1], [2, 2], [3, 3]] } }))
-        .toEqual({ ok: false, error: MARKUP_POINTS_FULL_MESSAGE });
+        .toEqual({ ok: false, error: MARKUP_SHARE_FULL.DM });
       expect((await ask(dm, 'drawing:add', { mapId: shownId, drawing: line() })).ok).toBe(true);
       expect(await ask(dm, 'drawing:add', { mapId: shownId, drawing: { kind: 'text', color: '#1a1a1a', width: 4, points: [[5, 5]], text: 'x' } }))
-        .toEqual({ ok: false, error: MARKUP_POINTS_FULL_MESSAGE });
+        .toEqual({ ok: false, error: MARKUP_SHARE_FULL.DM });
       dm.disconnect();
+      const p1 = await server.connectAndAuth(cookies.p1, campaignId);
+      expect(await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })).toEqual({ ok: false, error: MARKUP_SHARE_FULL.PLAYERS });
+      p1.disconnect();
     });
 
     // Counting the points reads every drawing's points whole, and the map's
-    // lock is held meanwhile. Below a hundred drawings they cannot reach the
-    // budget, and are not counted; at the budget they are.
-    it('answers an add at the budget well inside the time other writes to the map can wait', async () => {
-      const stroke = Array.from({ length: DRAWING_LIMITS.maxPoints }, (_, i) => [i % 400, Math.floor(i / 400)]);
+    // lock is held meanwhile. Below the fewest drawings that could reach a
+    // share's budget they are not counted; at the budget they are.
+    it('answers an add at a share\'s budget well inside the time other writes to the map can wait', async () => {
       await prisma.mapDrawing.createMany({
-        data: Array.from({ length: DRAWING_LIMITS.maxMarkupPointsPerMap / DRAWING_LIMITS.maxPoints }, () => (
-          { mapId: shownId, authorId: ids.dm, kind: 'pen', color: '#1a1a1a', width: 1, points: stroke }
+        data: Array.from({ length: dmShare.points / DRAWING_LIMITS.maxPoints }, () => (
+          { mapId: shownId, authorId: ids.dm, kind: 'pen', color: '#1a1a1a', width: 1, points: stroke(DRAWING_LIMITS.maxPoints) }
         )),
       });
       const dm = await server.connectAndAuth(cookies.dm, campaignId);
       const started = Date.now();
-      expect(await ask(dm, 'drawing:add', { mapId: shownId, drawing: line() })).toEqual({ ok: false, error: MARKUP_POINTS_FULL_MESSAGE });
+      expect(await ask(dm, 'drawing:add', { mapId: shownId, drawing: line() })).toEqual({ ok: false, error: MARKUP_SHARE_FULL.DM });
       expect(Date.now() - started).toBeLessThan(1000);
       dm.disconnect();
     });
 
-    it('says nothing of how many drawings a map holds', () => {
-      expect(MARKUP_FULL_MESSAGE).not.toMatch(/\d/);
-      expect(MARKUP_POINTS_FULL_MESSAGE).not.toMatch(/\d/);
+    // The players' share holds only drawings a player is sent: every note
+    // for the DM alone is the DM's, a former DM's and an authorless one too,
+    // so a hand-over changes nothing a player can count.
+    it('counts every drawing for the DM alone to the DM\'s share, whoever wrote it, before a hand-over and after', async () => {
+      const seatTo = (userId: string, role: 'DM' | 'PLAYER') =>
+        prisma.campaignMembership.update({ where: { userId_campaignId: { userId, campaignId } }, data: { role } });
+      await many(playersShare.drawings - 10, ids.p1);
+      await many(10, ids.dm, { audience: 'DM' });
+      await many(5, null, { audience: 'DM' });
+      const p1 = await server.connectAndAuth(cookies.p1, campaignId);
+      await prisma.mapDrawing.delete({ where: { id: idOf(await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })) } });
+
+      // The seat goes to p2, as PUT /api/campaigns/:id/dm hands it over.
+      await seatTo(ids.dm, 'PLAYER');
+      await seatTo(ids.p2, 'DM');
+      try {
+        expect((await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })).ok).toBe(true);
+      } finally {
+        await seatTo(ids.p2, 'PLAYER');
+        await seatTo(ids.dm, 'DM');
+        p1.disconnect();
+      }
+    });
+
+    // An older version could leave a campaign with two DM rows: the shares
+    // count by the one seated first, the same from one add to the next.
+    it('counts by the DM seated first when a campaign has two DM rows', async () => {
+      const where = { userId_campaignId: { userId: ids.p2, campaignId } };
+      const { joinedAt } = await prisma.campaignMembership.findUniqueOrThrow({ where, select: { joinedAt: true } });
+      await prisma.campaignMembership.update({ where, data: { role: 'DM', joinedAt: new Date('2020-01-01T00:00:00.000Z') } });
+      try {
+        await many(playersShare.drawings - 1, ids.p1);
+        // The later DM's drawing for everyone: the players' share.
+        await many(1, ids.dm);
+        const p1 = await server.connectAndAuth(cookies.p1, campaignId);
+        expect(await ask(p1, 'drawing:add', { mapId: shownId, drawing: line() })).toEqual({ ok: false, error: MARKUP_SHARE_FULL.PLAYERS });
+        p1.disconnect();
+      } finally {
+        await prisma.campaignMembership.update({ where, data: { role: 'PLAYER', joinedAt } });
+      }
+    });
+
+    it('says nothing of how many drawings a share holds', () => {
+      for (const message of Object.values(MARKUP_SHARE_FULL)) expect(message).not.toMatch(/\d/);
     });
   });
 });

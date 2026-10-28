@@ -27,7 +27,7 @@ import {
 } from '../validators/campaignImport';
 import { MAP_LIMITS, GEOMETRY_MARGIN_SQUARES, wallWithinMap, lightWithinMap } from '../validators/maps';
 import { WallSegmentSchema, LightSourceSchema, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES } from '../validators/walls';
-import { NewDrawingSchema, drawingOutsideMap, markupLimitReached, DRAWING_LIMITS } from '../validators/drawings';
+import { NewDrawingSchema, drawingOutsideMap, markupLimitReached, archiveShare, DRAWING_LIMITS, MARKUP_SHARES, type MarkupShare } from '../validators/drawings';
 import { clampTokenPosition } from '../utils/mapTokens';
 import { cutText } from '../utils/cutText';
 
@@ -354,8 +354,17 @@ function prepareWalls(raw: unknown, map: MapGeometry, say: (what: string) => voi
   return kept;
 }
 
-/** A drawing ready to be written, without its map, id, author and time. */
-export type PreparedDrawing = Omit<Prisma.MapDrawingCreateManyInput, 'id' | 'mapId' | 'authorId' | 'createdAt' | 'pattern' | 'stamp'>;
+/**
+ * A drawing ready to be written, without its map, id, author and time, and
+ * the share of the markup layer it goes back to: the DM's is written as the
+ * importing DM's, the players' with no author.
+ */
+export type PreparedDrawing = Omit<Prisma.MapDrawingCreateManyInput, 'id' | 'mapId' | 'authorId' | 'createdAt' | 'pattern' | 'stamp'> & {
+  share: MarkupShare;
+};
+
+/** A share by the name an import's warnings give it. */
+const SHARE_NAMES: Record<MarkupShare, string> = { DM: "the DM's share", PLAYERS: "the players' share" };
 
 /**
  * A map's drawings, from its file's `drawings`, where an export writes
@@ -363,7 +372,8 @@ export type PreparedDrawing = Omit<Prisma.MapDrawingCreateManyInput, 'id' | 'map
  * to 1.5.4 store an archive's annotations and send them to every member,
  * so a drawing for the DM alone must never be there. Each entry of either
  * is held to what `drawing:add` stores and to the region the map's walls
- * may reach, and the map to what its markup layer holds (markupLimitReached).
+ * may reach, and goes back to the share of the markup layer it names
+ * (archiveShare), each share held to its room (markupLimitReached).
  * Archives from before drawings existed carry `[]` in `annotations`, and
  * some carried records of another shape, which nothing drew; what is not a
  * drawing is left out and counted.
@@ -376,8 +386,11 @@ function prepareDrawings(sources: Array<[unknown, string]>, map: MapGeometry, sa
     else say(`left out its ${what}, which could not be read.`);
   }
   const drawings: PreparedDrawing[] = [];
-  const left = { invalid: 0, outside: 0, overCount: 0, overPoints: 0 };
-  let points = 0;
+  const left = { invalid: 0, outside: 0 };
+  const shares = {
+    DM: { drawings: 0, points: 0, overCount: 0, overPoints: 0 },
+    PLAYERS: { drawings: 0, points: 0, overCount: 0, overPoints: 0 },
+  };
   for (const entry of entries) {
     const parsed = NewDrawingSchema.safeParse(entry);
     if (!parsed.success) {
@@ -388,21 +401,28 @@ function prepareDrawings(sources: Array<[unknown, string]>, map: MapGeometry, sa
       left.outside++;
       continue;
     }
-    const limit = markupLimitReached({ drawings: drawings.length, points }, parsed.data.points.length);
-    if (limit === 'drawings') left.overCount++;
-    else if (limit === 'points') left.overPoints++;
+    const share = archiveShare(entry, parsed.data.audience);
+    const held = shares[share];
+    const limit = markupLimitReached({ share, drawings: held.drawings, points: held.points }, parsed.data.points.length);
+    if (limit === 'drawings') held.overCount++;
+    else if (limit === 'points') held.overPoints++;
     else {
-      points += parsed.data.points.length;
-      drawings.push(parsed.data);
+      held.drawings++;
+      held.points += parsed.data.points.length;
+      drawings.push({ ...parsed.data, share });
     }
   }
   if (left.invalid) say(`left out ${count(left.invalid, 'drawing')} the app cannot store.`);
   if (left.outside) say(`left out ${count(left.outside, 'drawing')} more than ${GEOMETRY_MARGIN_SQUARES} squares outside the map.`);
-  if (left.overCount) {
-    say(`left out the last ${count(left.overCount, 'drawing')}: a map holds ${DRAWING_LIMITS.maxMarkupPerMap.toLocaleString('en-US')} on its markup layer.`);
-  }
-  if (left.overPoints) {
-    say(`left out ${count(left.overPoints, 'drawing')} past the ${DRAWING_LIMITS.maxMarkupPointsPerMap.toLocaleString('en-US')} points a map holds on its markup layer.`);
+  for (const share of [...MARKUP_SHARES].reverse()) {
+    const { overCount, overPoints } = shares[share];
+    const room = DRAWING_LIMITS.markupShares[share];
+    if (overCount) {
+      say(`left out the last ${count(overCount, 'drawing')} of ${SHARE_NAMES[share]}: each share of a map's markup layer holds ${room.drawings.toLocaleString('en-US')}.`);
+    }
+    if (overPoints) {
+      say(`left out ${count(overPoints, 'drawing')} of ${SHARE_NAMES[share]} past the ${room.points.toLocaleString('en-US')} points each share of a map's markup layer holds.`);
+    }
   }
   return drawings;
 }

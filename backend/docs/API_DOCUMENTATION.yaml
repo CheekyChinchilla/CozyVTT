@@ -9392,7 +9392,9 @@ paths:
         without a picture. Each map file (`maps/map-<n>.json`, written without
         indentation) carries the map's drawings in `drawings`, in drawing
         order, each with the `Drawing` fields but `id`, `authorId` and
-        `createdAt`; a drawing for the DM alone keeps `audience: DM`. Its
+        `createdAt`, and `share`, `DM` for every drawing for the DM alone
+        and the campaign's DM's own, and `PLAYERS` for every other, the share
+        of the map's markup layer it counts to; a drawing for the DM alone keeps `audience: DM`. Its
         `annotations` is written as `[]`: releases up to 1.5.4 store an
         archive's `annotations` and send them to every member, and leave out
         a key they do not know, such as `drawings`. A map file over 10 MB is
@@ -9673,11 +9675,16 @@ paths:
         tokens, 5,000 walls and 200 lights. A map's drawings come from its
         file's `drawings`, and from `annotations`, which an older archive may
         hold: each entry is held to what `drawing:add` takes and to the map's
-        region, imported with a new id and no author, and one that is not, a
+        region, imported with a new id, as the importing DM's when its `share`
+        is `DM` and with no author when it is `PLAYERS` (a drawing for the DM
+        alone goes to the DM's share whatever it names, and one for everyone
+        without `share` to the players'), and one that is not, a
         drawing on the ground layer or a record of another shape included, is
         left out and counted in `warnings` (`Map "<name>": left out 1 drawing
-        the app cannot store.`); so are those past the 2,000 drawings and
-        200,000 points a map's markup layer holds, and a `drawings` or
+        the app cannot store.`); so are those past the 1,000 drawings and
+        100,000 points each share of a map's markup layer holds (`Map
+        "<name>": left out the last 3 drawings of the players' share: each
+        share of a map's markup layer holds 1,000.`), and a `drawings` or
         `annotations` that is not a list (`Map "<name>": left out its
         annotations, which could not be read.`). Fog whose grid does not match its
         map is dropped, as the server would rebuild it anyway. A map is

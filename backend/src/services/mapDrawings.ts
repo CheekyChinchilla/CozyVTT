@@ -8,8 +8,8 @@
  * the server for anyone else, whichever path it takes.
  */
 
-import type { MapDrawing, Prisma } from '@prisma/client';
-import { pointsCanMatter, type MarkupHeld, type DrawingPreview } from '../validators/drawings';
+import { Prisma, type MapDrawing } from '@prisma/client';
+import { pointsCanMatter, drawingShare, type MarkupHeld, type MarkupShare, type DrawingPreview } from '../validators/drawings';
 import { prisma } from '../config/database';
 import { getSocketInstance, emitToMapReadersAs } from '../websocket/utils';
 import { drawingSentTo } from '../utils/drawingRules';
@@ -107,11 +107,14 @@ export function drawingSent(row: MapDrawing): DrawingSent {
 
 /**
  * A drawing as a campaign archive carries it, in its map file's
- * `annotations`: the fields `drawing:add` takes, without its id, its author
- * or its time, which the importing server sets.
+ * `drawings`: the fields `drawing:add` takes, without its id, its author or
+ * its time, which the importing server sets, and the share of the map's
+ * markup layer it counts to (drawingShare, by the campaign's DM, `dmId`),
+ * which the import gives back to it.
  */
-export function drawingForArchive(row: MapDrawing) {
+export function drawingForArchive(row: MapDrawing, dmId: string | null) {
   return {
+    share: drawingShare(row, dmId),
     audience: row.audience,
     layer: row.layer,
     kind: row.kind,
@@ -136,6 +139,22 @@ export const DRAWING_ORDER = [
 
 type Reader = Pick<typeof prisma, 'mapDrawing'> | Prisma.TransactionClient;
 
+/**
+ * The campaign's DM the shares of its maps' markup layers count by: the
+ * one seated first, so a campaign an older version left with two DM rows
+ * counts by the same one from one add to the next.
+ */
+export async function campaignDmId(
+  db: Pick<typeof prisma, 'campaignMembership'> | Prisma.TransactionClient, campaignId: string,
+): Promise<string | null> {
+  const dm = await db.campaignMembership.findFirst({
+    where: { campaignId, role: 'DM' },
+    orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
+    select: { userId: true },
+  });
+  return dm?.userId ?? null;
+}
+
 /** A map's drawings as a member of this role is sent them, in drawing order. */
 export async function drawingsFor(mapId: string, role: string | undefined, db: Reader = prisma): Promise<DrawingSent[]> {
   const rows = await db.mapDrawing.findMany({
@@ -146,22 +165,29 @@ export async function drawingsFor(mapId: string, role: string | undefined, db: R
 }
 
 /**
- * What a map's markup layer holds, for an add of `adding` points: read
- * under the map's lock, so drawings sent together are counted one after
- * another. The drawings are counted first, which reads no point. Their
- * points are added up only when they could decide the add
- * (pointsCanMatter), since adding them up reads every drawing's points
- * whole while the lock is held.
+ * What one share of a map's markup layer holds, for an add of `adding`
+ * points (drawingShare): the DM's, every drawing for the DM alone and the
+ * campaign's DM's (`dmId`) for everyone, or the players', every other
+ * drawing for everyone. Read under the map's lock, so
+ * drawings sent together are counted one after another. The drawings are
+ * counted first, which reads no point. Their points are added up only when
+ * they could decide the add (pointsCanMatter), since adding them up reads
+ * every drawing's points whole while the lock is held.
  */
-export async function markupHeld(tx: Prisma.TransactionClient, mapId: string, adding: number): Promise<MarkupHeld> {
+export async function markupHeld(
+  tx: Prisma.TransactionClient, mapId: string, adding: number, share: MarkupShare, dmId: string | null,
+): Promise<MarkupHeld> {
+  const inShare = share === 'DM'
+    ? dmId === null ? Prisma.sql`audience = 'DM'` : Prisma.sql`(audience = 'DM' OR "authorId" = ${dmId})`
+    : dmId === null ? Prisma.sql`audience = 'ALL'` : Prisma.sql`(audience = 'ALL' AND ("authorId" IS NULL OR "authorId" <> ${dmId}))`;
   const [counted] = await tx.$queryRaw<Array<{ drawings: number }>>`
-    SELECT COUNT(*)::int AS drawings FROM "MapDrawing" WHERE "mapId" = ${mapId} AND layer = 'MARKUP'`;
+    SELECT COUNT(*)::int AS drawings FROM "MapDrawing" WHERE "mapId" = ${mapId} AND layer = 'MARKUP' AND ${inShare}`;
   const drawings = counted?.drawings ?? 0;
-  if (!pointsCanMatter(drawings, adding)) return { drawings, points: null };
+  if (!pointsCanMatter(share, drawings, adding)) return { share, drawings, points: null };
   const [summed] = await tx.$queryRaw<Array<{ points: number }>>`
     SELECT COALESCE(SUM(jsonb_array_length(points)), 0)::int AS points
-    FROM "MapDrawing" WHERE "mapId" = ${mapId} AND layer = 'MARKUP'`;
-  return { drawings, points: summed?.points ?? 0 };
+    FROM "MapDrawing" WHERE "mapId" = ${mapId} AND layer = 'MARKUP' AND ${inShare}`;
+  return { share, drawings, points: summed?.points ?? 0 };
 }
 
 

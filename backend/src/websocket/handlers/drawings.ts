@@ -28,11 +28,11 @@ import {
 } from '../../services/permissions';
 import {
   DrawingAddEventSchema, DrawingRemoveEventSchema, DrawingClearMineEventSchema, DrawingClearEventSchema,
-  DrawingPreviewEventSchema, DrawingsRequestEventSchema, drawingOutsideMap, markupLimitReached,
-  DRAWING_OUTSIDE_MAP_MESSAGE, MARKUP_FULL_MESSAGE, MARKUP_POINTS_FULL_MESSAGE,
+  DrawingPreviewEventSchema, DrawingsRequestEventSchema, drawingOutsideMap, markupLimitReached, drawingShare,
+  DRAWING_OUTSIDE_MAP_MESSAGE, MARKUP_SHARE_FULL,
 } from '../../validators/drawings';
 import {
-  drawingSent, drawingsFor, markupHeld,
+  campaignDmId, drawingSent, drawingsFor, markupHeld,
   type DrawingAddedBroadcast, type DrawingRemovedBroadcast, type DrawingsClearedBroadcast, type DrawingPreviewedBroadcast,
   type DrawingsStateBroadcast,
 } from '../../services/mapDrawings';
@@ -91,10 +91,10 @@ async function clearWhere(tx: Prisma.TransactionClient, where: Prisma.MapDrawing
 export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * drawing:add — Draw on a map: the DM, or a player while Players may draw is on and the session is live.
-   * The drawing is stored as the sender's, a player's for everyone; a map's
-   * markup layer holds DRAWING_LIMITS.maxMarkupPerMap drawings and
-   * maxMarkupPointsPerMap points, counted under the lock (markupHeld,
-   * markupLimitReached). Answered
+   * The drawing is stored as the sender's, a player's for everyone; each
+   * share of a map's markup layer, the DM's and the players', holds what
+   * DRAWING_LIMITS.markupShares gives it, counted under the lock
+   * (markupHeld, markupLimitReached). Answered
    * `{ ok: true, id, opId }`; `drawing:added` goes to each reader the
    * drawing may be sent to, the sender included, with the `opId` and the
    * `previewId` it ends.
@@ -124,17 +124,23 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
         if (!canDraw(role, map.campaign)) return { refused: drawRefusal(role, map.campaign) };
         if (!canDrawOnLayer(role, drawing.layer)) return { refused: DRAW_LAYER_REFUSAL };
         if (drawingOutsideMap(drawing.points, map)) return { refused: DRAWING_OUTSIDE_MAP_MESSAGE };
-        const limit = markupLimitReached(await markupHeld(tx, mapId, drawing.points.length), drawing.points.length);
-        if (limit) return { refused: limit === 'drawings' ? MARKUP_FULL_MESSAGE : MARKUP_POINTS_FULL_MESSAGE };
+        // A player's drawing is for everyone. The share it counts to: the
+        // DM's for one for the DM alone, or by its author, the campaign's DM
+        // as the membership says now.
+        const audience = role === 'DM' ? drawing.audience : 'ALL';
+        const dmId = await campaignDmId(tx, campaignId);
+        const share = drawingShare({ authorId: userId, audience }, dmId);
+        const limit = markupLimitReached(await markupHeld(tx, mapId, drawing.points.length, share, dmId), drawing.points.length);
+        if (limit) return { refused: MARKUP_SHARE_FULL[share] };
         // The id is the server's, so no client's id ever meets a row of
-        // another campaign's; a player's drawing is for everyone.
+        // another campaign's.
         const row = await tx.mapDrawing.create({
           data: {
             mapId,
             authorId: userId,
             kind: drawing.kind,
             layer: drawing.layer,
-            audience: role === 'DM' ? drawing.audience : 'ALL',
+            audience,
             color: drawing.color,
             fillColor: drawing.fillColor,
             width: drawing.width,

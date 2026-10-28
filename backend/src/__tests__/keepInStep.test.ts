@@ -597,8 +597,10 @@ describe('a drawing as a campaign archive carries it', () => {
     createdAt: new Date(0),
   };
 
-  it('has the fields the import takes, and no others', () => {
-    expect(Object.keys(drawingForArchive(row)).sort()).toEqual(Object.keys(NewDrawingSchema.shape).sort());
+  // And the share of the map's markup layer it counts to, which the
+  // import reads beside the schema, to give it back to its share.
+  it('has the fields the import takes, and its share, and no others', () => {
+    expect(Object.keys(drawingForArchive(row, null)).sort()).toEqual([...Object.keys(NewDrawingSchema.shape), 'share'].sort());
   });
 
   it('is stored by the import in columns of MapDrawing, every field of it', () => {

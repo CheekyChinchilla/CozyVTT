@@ -27,15 +27,28 @@ export type DrawingAudience = (typeof DRAWING_AUDIENCES)[number];
 export const DRAWING_LAYERS = ['MARKUP', 'GROUND'] as const;
 export type DrawingLayer = (typeof DRAWING_LAYERS)[number];
 
+/**
+ * The shares of one map's markup layer, each with room of its own: the
+ * DM's, every drawing for the DM alone, whoever wrote it, and those for
+ * everyone whose author is the campaign's DM as an add is counted, and the
+ * players', every other drawing for everyone (a player's, a former DM's, a
+ * removed member's, one whose author's account is gone). One player can
+ * fill the players' share, and never the DM's, and it holds only drawings
+ * a player is sent.
+ */
+export const MARKUP_SHARES = ['DM', 'PLAYERS'] as const;
+export type MarkupShare = (typeof MARKUP_SHARES)[number];
+
 export const DRAWING_LIMITS = {
-  /** Drawings on one map's markup layer. */
-  maxMarkupPerMap: 2000,
   /**
-   * Points in all the drawings on one map's markup layer together, so that
-   * a map holding all of them, a full fog and 5,000 walls fits in one file
-   * of a campaign archive, with room for tokens beside them.
+   * What each share of one map's markup layer holds: drawings, and points
+   * in all of them together. Both shares full, a full fog and 5,000 walls
+   * fit in one file of a campaign archive, with room for tokens beside them.
    */
-  maxMarkupPointsPerMap: 200000,
+  markupShares: {
+    DM: { drawings: 1000, points: 100000 },
+    PLAYERS: { drawings: 1000, points: 100000 },
+  },
   /** Points in one drawing, after the draw tool simplifies a stroke. */
   maxPoints: 2000,
   /** Points one preview frame adds to the stroke it shows. */

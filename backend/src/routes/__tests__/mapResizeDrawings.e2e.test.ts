@@ -183,7 +183,8 @@ it('makes an erase sent during a resize wait for it', async () => {
 
 it('resizes a map holding all the drawing its markup layer can, inside the transaction\'s time', async () => {
   const perDrawing = DRAWING_LIMITS.maxPoints;
-  const count = DRAWING_LIMITS.maxMarkupPointsPerMap / perDrawing;
+  // Both shares at their budget of points: the most the layer holds.
+  const count = (DRAWING_LIMITS.markupShares.DM.points + DRAWING_LIMITS.markupShares.PLAYERS.points) / perDrawing;
   const points = Array.from({ length: perDrawing }, (_, i) => [i % 500, Math.floor(i / 500)]);
   await prisma.mapDrawing.createMany({
     data: Array.from({ length: count }, () => ({ mapId, authorId: dmId, kind: 'pen', color: '#1a1a1a', width: 2, points })),
