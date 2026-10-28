@@ -3,9 +3,15 @@
  * Draggable container that stacks DM tool panels (Fog, Walls, Lights)
  * vertically with no overlap. DM can drag the container header to
  * reposition it anywhere on the map canvas.
+ *
+ * On the compact layout the stack is shown and hidden behind Tools: it stays
+ * mounted while hidden, so the panels keep what is folded and where the
+ * stack was dropped; its handle offers Hide tools, and a drag keeps it under
+ * the map's band.
  */
 
 import { useState, useRef, useCallback, useEffect, type ReactNode, type RefObject } from 'react';
+import { X } from 'lucide-react';
 import { stackCornerTop, type TopBand } from './map/toolbarLayout';
 
 interface DmToolPanelContainerProps {
@@ -17,6 +23,17 @@ interface DmToolPanelContainerProps {
    * under it when the toolbar wraps or its buttons reach the corner.
    */
   band?: TopBand | null;
+  /** Hidden, still mounted: the compact layout's Tools is off. */
+  hidden?: boolean;
+  /** Given, the handle offers Hide tools, which calls it. */
+  onHide?: () => void;
+  /** The least top a drag leaves the stack at, in pixels from the map's: under the compact layout's band. */
+  topLimit?: number;
+  /**
+   * The room to keep below the stack, in pixels, in place of ROOM_BELOW:
+   * the compact layout's dock at the map's foot, as tall as it is.
+   */
+  roomBelow?: number;
 }
 
 /**
@@ -31,13 +48,15 @@ const STACK_WIDTH_PX = 200;
  * Room kept below the stack for the Preview Player View button, which sits
  * 5rem above the map's bottom edge: that, its height and a gap. A taller
  * stack scrolls inside itself; it ran over the button and hid the Lights
- * panel's Place button behind it.
+ * panel's Place button behind it. On the compact layout the button is in
+ * the dock at the map's foot, over the details card, and the map gives the
+ * dock's height (`roomBelow`).
  */
 const ROOM_BELOW = '8rem';
 /** The stack is never cut shorter than this, wherever it is dropped. */
 const SHORTEST = '6rem';
 
-export default function DmToolPanelContainer({ children, containerRef, band = null }: DmToolPanelContainerProps) {
+export default function DmToolPanelContainer({ children, containerRef, band = null, hidden = false, onHide, topLimit = 0, roomBelow }: DmToolPanelContainerProps) {
   // Where the stack was dropped, in pixels from the map container's top left
   // corner; null for its place in the top right corner. It was fixed to the
   // window, so it stayed put when the map moved or shrank and could be left
@@ -59,9 +78,9 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
     const stack = panel.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(x, map.width - stack.width)),
-      y: Math.max(0, Math.min(y, map.height - stack.height)),
+      y: Math.max(topLimit, Math.min(y, map.height - stack.height)),
     };
-  }, [containerRef]);
+  }, [containerRef, topLimit]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -86,10 +105,12 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
   }, []);
 
   // The map changes size with the window and the side panels; a stack
-  // dropped near its far edge is brought back onto it.
+  // dropped near its far edge is brought back onto it. A hidden stack has
+  // no size and is left alone; the observer's first report, as it starts
+  // observing, brings it back onto the map as it shows.
   const moved = position !== null;
   useEffect(() => {
-    if (!moved) return undefined;
+    if (!moved || hidden) return undefined;
     const keepOnTheMap = () => setPosition((at) => {
       if (!at) return at;
       const next = onTheMap(at.x, at.y);
@@ -103,7 +124,7 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
       window.removeEventListener('resize', keepOnTheMap);
       observer?.disconnect();
     };
-  }, [moved, onTheMap, containerRef]);
+  }, [moved, hidden, onTheMap, containerRef]);
 
   const underBand = stackCornerTop(band, STACK_WIDTH_PX, CORNER_RIGHT_PX);
   const corner = underBand !== null ? `${underBand}px` : CORNER_TOP;
@@ -113,13 +134,13 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
     ...(position ? { left: position.x, top: position.y } : { top: corner, right: CORNER_RIGHT_PX }),
     width: STACK_WIDTH_PX,
     zIndex: 30,
-    maxHeight: `max(${SHORTEST}, calc(100% - ${top} - ${ROOM_BELOW}))`,
+    maxHeight: `max(${SHORTEST}, calc(100% - ${top} - ${roomBelow !== undefined ? `${roomBelow}px` : ROOM_BELOW}))`,
   };
 
   // One width for the stack, the one Walls and Lights take, so a section's
   // notes wrap instead of widening every panel when it is opened.
   return (
-    <div ref={panelRef} style={style} className="flex flex-col gap-1.5 overflow-y-auto *:shrink-0">
+    <div ref={panelRef} style={style} hidden={hidden || undefined} className="flex flex-col gap-1.5 overflow-y-auto *:shrink-0">
       {/* Drag handle, kept in view while the panels below it scroll. Taller
           for a finger on a touch screen, and it takes the touch itself:
           left to the browser, a finger's drag scrolled the stack and
@@ -128,7 +149,7 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
           screen the bar then grows to hold the button's 44 pixels, which
           stood out of it, cut off above and over the first panel below. */}
       <div
-        className={`sticky top-0 z-10 flex items-center justify-center py-0.5 ${position ? 'pointer-coarse:min-h-6' : 'pointer-coarse:h-6'} touch-none cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors`}
+        className={`sticky top-0 z-10 flex items-center justify-center py-0.5 ${onHide ? 'min-h-11' : position ? 'pointer-coarse:min-h-6' : 'pointer-coarse:h-6'} touch-none cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700 border border-stone-600/30 hover:bg-stone-600 transition-colors`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -154,6 +175,20 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
             className="touch-target shrink-0 px-1.5 py-0.5 rounded-sm text-[10px] leading-none text-stone-300 hover:text-white hover:bg-stone-500/60 transition-colors"
           >
             Reset position
+          </button>
+        )}
+        {/* The compact layout's way to put the stack away, beside Map
+            controls' Hide tools: the handle is 44 pixels tall to hold it. */}
+        {onHide && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={onHide}
+            aria-label="Hide tools"
+            title="Hide tools"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm text-stone-300 hover:text-white hover:bg-stone-500/60 transition-colors"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         )}
       </div>

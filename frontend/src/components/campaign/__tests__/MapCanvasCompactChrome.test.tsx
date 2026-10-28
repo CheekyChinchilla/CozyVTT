@@ -1,6 +1,7 @@
 /**
  * The map's chrome on the compact layout: the band's one row and Map
- * controls, and the dock at the map's foot. jsdom evaluates no media query and lays nothing out, so a size
+ * controls, the dock at the map's foot, the Draw strip, and the DM's tool
+ * stack behind Tools. jsdom evaluates no media query and lays nothing out, so a size
  * is checked as the classes that set it, and a place as the one given from
  * the boxes a browser would measure.
  *
@@ -279,7 +280,7 @@ describe('Map controls', () => {
     render(<MapCanvas />);
     fireEvent.click(mapControlsButton());
     expect(sheetRows()).toEqual([
-      'Fit to Screen', 'Hide grid', 'Grid Color: Black', '---', 'Ruler', 'AoE Shape', '---', 'Hide spirit tokens',
+      'Fit to Screen', 'Hide grid', 'Grid Color: Black', '---', 'Ruler', 'AoE Shape', '---', 'Show tools', 'Hide spirit tokens',
     ]);
   });
 
@@ -425,6 +426,21 @@ describe('what sits under the band', () => {
 
   // Under one row of a mouse's buttons the AoE panel keeps its place on the
   // desktop, which on the compact layout is over the band's left end.
+  // Preview's row and the details card in the dock lay over the stack's
+  // last panels, where Lights' Place and Walls' Done and Cancel land.
+  it('stops the DM’s tool stack above the dock, however tall the dock is', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    pressRow('Show tools');
+    const content = document.querySelector<HTMLElement>('[data-map-dock]')!.firstElementChild as HTMLElement;
+    content.getBoundingClientRect = () => box(0, 350, 360, 210);
+    layOut();
+
+    // The map less the stack's top under the band (62) and the dock's 210
+    // with a gap (218), which the style engine folds into one length.
+    expect(screen.getByTitle(/Drag to move the panels/).parentElement!.style.maxHeight.replace(/\s+/g, '')).toBe('max(6rem,100%-280px)');
+  });
+
   it('starts the AoE panel under the band with a mouse too', () => {
     render(<MapCanvas />);
     pressRow('AoE Shape');
@@ -475,7 +491,7 @@ describe('the dock at the map’s foot', () => {
 
   it('keeps the dock clear of a notch on either side', () => {
     render(<MapCanvas />);
-    expect(classesOf(dock().firstElementChild!)).toEqual(expect.arrayContaining([
+    expect(classesOf(dock().firstElementChild!.firstElementChild!)).toEqual(expect.arrayContaining([
       'pl-[max(0.5rem,env(safe-area-inset-left))]', 'pr-[max(0.5rem,env(safe-area-inset-right))]',
     ]));
   });
@@ -541,7 +557,7 @@ describe('the Draw strip', () => {
     render(<MapCanvas />);
     fireEvent.click(drawButton());
 
-    expect(dock().lastElementChild).toBe(drawingTools());
+    expect(dock().firstElementChild!.lastElementChild).toBe(drawingTools());
     expect(screen.getByTitle(/Drag to move the panels/).parentElement).not.toContainElement(drawingTools());
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -646,5 +662,110 @@ describe('the Draw strip', () => {
     render(<MapCanvasOnly />);
     fireEvent.click(screen.getByRole('button', { name: 'Draw' }));
     expect(screen.getByTitle(/Drag to move the panels/).parentElement).toContainElement(drawingTools());
+  });
+});
+
+describe('the DM’s tool stack behind Tools', () => {
+  const stack = () => screen.getByTitle(/Drag to move the panels/).parentElement!;
+  const wallDrawMode = () => screen.getByRole('button', { name: 'Wall draw mode' });
+
+  /** Show the stack, open its Walls panel and arm the wall line. */
+  function armWalls() {
+    pressRow('Show tools');
+    fireEvent.click(within(stack()).getByRole('button', { name: /^Walls/ }));
+    fireEvent.click(wallDrawMode());
+  }
+
+  it('starts hidden, mounted, and shows on Show tools in Map controls', () => {
+    render(<MapCanvas />);
+    expect(stack()).toHaveAttribute('hidden');
+    expect(stack()).not.toBeVisible();
+
+    pressRow('Show tools');
+
+    expect(stack()).not.toHaveAttribute('hidden');
+    expect(within(stack()).getByRole('button', { name: /^Fog of War/ })).toBeInTheDocument();
+    fireEvent.click(mapControlsButton());
+    expect(sheetRows()).toContain('Hide tools');
+  });
+
+  it('hides on Hide tools in Map controls, and on the stack’s own Hide tools, which gives the focus to Map controls', () => {
+    render(<MapCanvas />);
+    pressRow('Show tools');
+    pressRow('Hide tools');
+    expect(stack()).toHaveAttribute('hidden');
+
+    pressRow('Show tools');
+    const hide = within(stack()).getByRole('button', { name: 'Hide tools' });
+    expect(classesOf(hide)).toContain('size-11');
+    hide.focus();
+    fireEvent.click(hide);
+
+    expect(stack()).toHaveAttribute('hidden');
+    expect(mapControlsButton()).toHaveFocus();
+  });
+
+  it('keeps a panel’s folding while hidden', () => {
+    render(<MapCanvas />);
+    pressRow('Show tools');
+    fireEvent.click(within(stack()).getByRole('button', { name: /^Walls/ }));
+    pressRow('Hide tools');
+    pressRow('Show tools');
+
+    expect(within(stack()).getByRole('button', { name: /^Walls/ })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  // A stack hidden with a tool armed hid its Done and Cancel, and the map
+  // went on taking the presses for walls.
+  it('puts an armed tool away as it hides', () => {
+    render(<MapCanvas />);
+    armWalls();
+    expect(classesOf(surface())).toContain('cursor-crosshair');
+
+    pressRow('Hide tools');
+
+    expect(classesOf(surface())).toContain('cursor-move');
+    expect(stack()).toHaveAttribute('hidden');
+    pressRow('Show tools');
+    expect(classesOf(wallDrawMode())).not.toContain('bg-orange-600/30');
+  });
+
+  it('takes turns with the Draw strip', () => {
+    render(<MapCanvas />);
+    armWalls();
+    fireEvent.click(within(toolbar()).getByRole('button', { name: 'Draw' }));
+
+    expect(stack()).toHaveAttribute('hidden');
+    expect(screen.getByRole('region', { name: 'Drawing tools' })).toBeInTheDocument();
+
+    pressRow('Show tools');
+    expect(stack()).not.toHaveAttribute('hidden');
+    expect(screen.queryByRole('region', { name: 'Drawing tools' })).toBeNull();
+    expect(within(toolbar()).getByRole('button', { name: 'Draw' })).toHaveAttribute('aria-pressed', 'false');
+    // Draw had put the wall tool away.
+    expect(classesOf(wallDrawMode())).not.toContain('bg-orange-600/30');
+    expect(classesOf(surface())).toContain('cursor-move');
+  });
+
+  it('is not offered with no map open, where there is no stack to show', () => {
+    h.set({ currentMap: null });
+    render(<MapCanvas />);
+    fireEvent.click(mapControlsButton());
+    expect(sheetRows()).not.toContain('Show tools');
+    expect(screen.queryByTitle(/Drag to move the panels/)).toBeNull();
+  });
+
+  it('is offered to the DM only', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    fireEvent.click(mapControlsButton());
+    expect(sheetRows()).not.toContain('Show tools');
+    expect(screen.queryByTitle(/Drag to move the panels/)).toBeNull();
+  });
+
+  it('is always shown on the desktop, with no Hide tools', () => {
+    render(<MapCanvasOnly />);
+    expect(stack()).not.toHaveAttribute('hidden');
+    expect(within(stack()).queryByRole('button', { name: 'Hide tools' })).toBeNull();
   });
 });

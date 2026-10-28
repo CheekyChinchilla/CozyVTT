@@ -4,13 +4,13 @@ import { gridColorLabel, mapControlItems, rulerColorLabel, type MapControlsActio
 
 const VIEW: MapControlsView = {
   isDM: false, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
-  spiritTokensShown: true,
+  spiritTokensShown: true, toolsShown: false,
 };
 
 function actions(): MapControlsActions {
   return {
     fit: vi.fn(), toggleGrid: vi.fn(), nextGridColor: vi.fn(), toggleRuler: vi.fn(), nextRulerColor: vi.fn(),
-    toggleAoE: vi.fn(), toggleSpiritTokens: vi.fn(),
+    toggleAoE: vi.fn(), toggleSpiritTokens: vi.fn(), toggleTools: vi.fn(),
   };
 }
 
@@ -24,8 +24,10 @@ describe('the Map controls rows', () => {
     ]);
   });
 
-  it('adds the spirit tokens for the DM', () => {
-    expect(labels(mapControlItems({ ...VIEW, isDM: true }, actions())).slice(-2)).toEqual(['---', 'Hide spirit tokens']);
+  it('adds Tools and the spirit tokens for the DM', () => {
+    expect(labels(mapControlItems({ ...VIEW, isDM: true }, actions())).slice(-3)).toEqual(['---', 'Show tools', 'Hide spirit tokens']);
+    expect(labels(mapControlItems({ ...VIEW, isDM: true, toolsShown: true }, actions()))).toContain('Hide tools');
+    expect(row(mapControlItems({ ...VIEW, isDM: true }, actions()), 'tools').title).toBe('Fog, Walls and Lights');
     expect(labels(mapControlItems({ ...VIEW, isDM: true, spiritTokensShown: false }, actions())).slice(-1)).toEqual(['Show spirit tokens']);
     expect(row(mapControlItems({ ...VIEW, isDM: true }, actions()), 'spirit-tokens').tone).toBe('spirit');
   });
@@ -35,6 +37,13 @@ describe('the Map controls rows', () => {
     expect(labels(items)).toEqual([
       'Fit to Screen', 'Show grid', '---', 'Put the ruler away', 'Ruler color: Purple', 'Put the AoE shape away',
     ]);
+  });
+
+  // The stack is drawn only on a map: with none, Show tools did nothing
+  // but turn itself into Hide tools.
+  it('leaves out Tools with no map, keeping the spirit tokens', () => {
+    expect(labels(mapControlItems({ ...VIEW, isDM: true, hasMap: false }, actions())))
+      .toEqual(['Fit to Screen', 'Hide grid', 'Grid Color: Black', '---', 'Hide spirit tokens']);
   });
 
   it('leaves out the ruler and the AoE shape with no map to measure on', () => {
@@ -52,7 +61,7 @@ describe('the Map controls rows', () => {
     const items = mapControlItems({ ...VIEW, isDM: true, showRuler: true }, run);
     for (const [id, action] of [
       ['fit', run.fit], ['grid', run.toggleGrid], ['grid-color', run.nextGridColor], ['ruler', run.toggleRuler],
-      ['ruler-color', run.nextRulerColor], ['aoe', run.toggleAoE], ['spirit-tokens', run.toggleSpiritTokens],
+      ['ruler-color', run.nextRulerColor], ['aoe', run.toggleAoE], ['tools', run.toggleTools], ['spirit-tokens', run.toggleSpiritTokens],
     ] as const) {
       row(items, id).run();
       expect(action).toHaveBeenCalledTimes(1);

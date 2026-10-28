@@ -141,7 +141,7 @@ import { anyMenuShown, menuShown, whenMenuOpens } from '@/components/ui/openMenu
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
-import { useTopBand, underBand, useMeasuredBottom, BAND_GAP } from './map/toolbarLayout';
+import { useTopBand, underBand, useMeasuredBottom, useMeasuredHeight, BAND_GAP } from './map/toolbarLayout';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -299,8 +299,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const [pingArmed, setPingArmed] = useState(false);
   /** On the compact layout: the Map controls sheet is open. */
   const [mapControlsOpen, setMapControlsOpen] = useState(false);
+  /** On the compact layout: Tools is on, and the DM's tool stack shows. */
+  const [toolsShown, setToolsShown] = useState(false);
   const mapControlsButtonRef = useRef<HTMLButtonElement>(null);
   const drawButtonRef = useRef<HTMLButtonElement>(null);
+  // The compact layout's dock at the map's foot, and its height.
+  const dockContentRef = useRef<HTMLDivElement>(null);
+  const dockHeight = useMeasuredHeight(dockContentRef, compact);
   // A sheet left open as the layout turns to the desktop's does not come
   // back with the compact layout.
   useEffect(() => {
@@ -3658,6 +3663,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     nextRulerColor: () => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber'),
     toggleAoE: () => { setDrawKind(null); handleToggleAoE(); },
     toggleSpiritTokens: () => setDmShowSpiritTokens((prev) => !prev),
+    toggleTools: () => (stackShown ? hideTools() : showTools()),
   };
   // Where the AoE panel and the Put back bar start: null keeps their places
   // under one row of a mouse's buttons. While both show, the AoE panel starts
@@ -3681,7 +3687,33 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     setSelectedLightId(null);
     putRulerAway();
     if (draggedToken) cancelHold();
+    // On the compact layout the strip and the stack take turns.
+    if (compact) setToolsShown(false);
     setDrawKind(eraseOnly ? 'eraser' : 'pen');
+  };
+  /**
+   * On the compact layout the DM's tool stack shows while Tools is on, and
+   * while a tool from it is armed, so a tool armed as the layout turns
+   * compact keeps its panel, with its Done and Cancel, in sight.
+   */
+  const stackShown = toolsShown || dmTool !== null;
+  /** Put the DM's armed tool away, with what it had begun: a wall line or polygon, a fog box, the chosen light. */
+  const putDmToolAway = () => {
+    wallPanel.onCollapse?.();
+    setFogMode(null);
+    cancelFogDrag();
+    setLightMode(null);
+    setSelectedLightId(null);
+  };
+  /** Tools on: the stack shows, and Draw is put away, as a DM tool puts it away. */
+  const showTools = () => {
+    setDrawKind(null);
+    setToolsShown(true);
+  };
+  /** Tools off: the stack hides, and takes its armed tool with it. */
+  const hideTools = () => {
+    putDmToolAway();
+    setToolsShown(false);
   };
   /** How many drawings Clear mine, or for the DM Clear drawings, would erase. */
   const clearableDrawings = mapDrawings.drawings.filter((d) => d.layer === 'MARKUP' && !d.id.startsWith('pending:')
@@ -4191,6 +4223,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             rulerColor,
             showAoE,
             spiritTokensShown: dmShowSpiritTokens,
+            toolsShown: stackShown,
           }, mapControlActions)}
           onClose={() => setMapControlsOpen(false)}
         />
@@ -4221,7 +4254,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           the compact layout the drawing tools are a strip in the dock at
           the map's foot instead. */}
       {(userRole === 'DM' || (drawPanel && !compact)) && currentMap && (
-        <DmToolPanelContainer containerRef={containerRef} band={topBand}>
+        <DmToolPanelContainer
+          containerRef={containerRef}
+          band={topBand}
+          // On the compact layout it hides behind Tools, in Map controls,
+          // and a drag keeps it under the band, where Map controls is.
+          hidden={compact && !stackShown}
+          onHide={compact ? () => {
+            hideTools();
+            mapControlsButtonRef.current?.focus({ preventScroll: true });
+          } : undefined}
+          topLimit={compact ? underToolbar ?? 0 : undefined}
+          // Above the dock, Preview and the details card in it, however tall.
+          roomBelow={compact && dockHeight !== null ? dockHeight + BAND_GAP : undefined}
+        >
           {drawPanel && !compact && <DrawControls {...drawPanel} />}
           {userRole === 'DM' && (<>
           <DmFogControls
@@ -4541,26 +4587,29 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           through to the map, except on its controls. */}
       {compact && (
         <div data-map-dock="" className="absolute inset-0 z-30 flex flex-col justify-end pointer-events-none [container-type:size]">
-          <div className={`${DOCK_ROW} flex flex-col gap-2 pb-2`}>
-            {rulerNeedsToken && (
-              <div className="self-center bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
-                {RULER_NEEDS_TOKEN}
-              </div>
-            )}
-            {previewOffered && (
-              <div className="self-end flex items-center gap-1 pointer-events-auto *:min-h-11">
-                {playerPreviewControls}
-              </div>
-            )}
-            {hoverCoordsShown && (
-              <div className="self-start glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
-                {hoverCoordsText}
-              </div>
-            )}
-            {/* Not while the strip is up: the two left a phone little map to draw on. */}
-            {!drawPanel && tokenDetails(true)}
+          {/* What the dock holds, measured: the DM's stack stops above it. */}
+          <div ref={dockContentRef} className="flex min-h-0 flex-col">
+            <div className={`${DOCK_ROW} flex flex-col gap-2 pb-2`}>
+              {rulerNeedsToken && (
+                <div className="self-center bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
+                  {RULER_NEEDS_TOKEN}
+                </div>
+              )}
+              {previewOffered && (
+                <div className="self-end flex items-center gap-1 pointer-events-auto *:min-h-11">
+                  {playerPreviewControls}
+                </div>
+              )}
+              {hoverCoordsShown && (
+                <div className="self-start glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
+                  {hoverCoordsText}
+                </div>
+              )}
+              {/* Not while the strip is up: the two left a phone little map to draw on. */}
+              {!drawPanel && tokenDetails(true)}
+            </div>
+            {drawPanel && currentMap && <DrawStrip {...drawPanel} />}
           </div>
-          {drawPanel && currentMap && <DrawStrip {...drawPanel} />}
         </div>
       )}
 
