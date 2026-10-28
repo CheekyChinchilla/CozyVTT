@@ -3,8 +3,10 @@
  * The drawing tools' panel: the tool, its colour, width, fill and snap,
  * whether the DM's drawing is for the DM alone, a polygon's Done and Cancel,
  * and clearing. It sets no place of its own, so whatever holds it places it:
- * the DM's tool stack, the corner a player's panel opens in, or a sheet on a
- * phone.
+ * the DM's tool stack, or the corner a player's panel opens in. On the
+ * compact layout the same controls are DrawStrip's, a strip across the
+ * map's foot; the two share the tools, the colours, the hints and the
+ * questions before a clear, written once here.
  */
 
 import { useState, type ComponentType } from 'react';
@@ -14,7 +16,7 @@ import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { DRAW_TOOL_KINDS, type DrawSettings, type DrawToolKind } from './map/tools/useDrawTool';
 
 /** Each tool's name, as its button is called, and its icon. */
-const TOOLS: Record<DrawToolKind, { label: string; icon: ComponentType<{ className?: string }> }> = {
+export const TOOLS: Record<DrawToolKind, { label: string; icon: ComponentType<{ className?: string }> }> = {
   pen: { label: 'Pen', icon: Pencil },
   line: { label: 'Line', icon: Minus },
   arrow: { label: 'Arrow', icon: ArrowUpRight },
@@ -27,10 +29,10 @@ const TOOLS: Record<DrawToolKind, { label: string; icon: ComponentType<{ classNa
 };
 
 /** The named colours, by DRAWING_LIMITS.namedColors' order. */
-const COLOUR_NAMES = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'White', 'Black'] as const;
+export const COLOUR_NAMES = ['Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'White', 'Black'] as const;
 
 /** What each tool does, in a line under the tools. */
-const HINTS: Record<DrawToolKind, string> = {
+export const HINTS: Record<DrawToolKind, string> = {
   pen: 'Drag to draw.',
   line: 'Drag from one end to the other.',
   arrow: 'Drag from the tail to the point.',
@@ -42,8 +44,9 @@ const HINTS: Record<DrawToolKind, string> = {
   laser: 'Drag to point. Everyone sees it fade; nothing is kept.',
 };
 
-const SHAPES = new Set<DrawToolKind>(['line', 'arrow', 'rect', 'ellipse', 'polygon']);
-const FILLABLE = new Set<DrawToolKind>(['rect', 'ellipse', 'polygon']);
+/** The tools Snap to grid applies to, and of those the ones Fill shapes does. */
+export const SHAPES = new Set<DrawToolKind>(['line', 'arrow', 'rect', 'ellipse', 'polygon']);
+export const FILLABLE = new Set<DrawToolKind>(['rect', 'ellipse', 'polygon']);
 
 /** A member with drawings on the map the DM may clear, and how many. */
 export interface MemberDrawings {
@@ -78,8 +81,57 @@ export interface DrawControlsProps {
   onClose: () => void;
 }
 
-const drawingsOf = (member: MemberDrawings) => (member.name === null ? 'the drawings of someone who has left' : `${member.name}'s drawings`);
+/** "Mara's drawings", or for someone who has left, saying so. */
+export const drawingsOf = (member: MemberDrawings) => (member.name === null ? 'the drawings of someone who has left' : `${member.name}'s drawings`);
 const howMany = (count: number) => (count === 1 ? '1 drawing' : `${count} drawings`);
+
+/** Whether the colour is one of the named eight, or another one picked. */
+export const isNamedColour = (colour: string) => (DRAWING_LIMITS.namedColors as readonly string[]).includes(colour);
+
+/** What the DM is asked before a clear: about every drawing on the map, or one member's. */
+export type ClearAsking = 'all' | MemberDrawings | null;
+
+interface ClearDrawingsDialogsProps {
+  asking: ClearAsking;
+  /** The question is answered either way, or put aside. */
+  onAnswered: () => void;
+  clearable: number;
+  onClear: () => void;
+  onClearMember: (authorId: string) => void;
+}
+
+/** The DM's questions before a clear, which cannot be undone: how many, and whose. */
+export function ClearDrawingsDialogs({ asking, onAnswered, clearable, onClear, onClearMember }: ClearDrawingsDialogsProps) {
+  const member = asking !== null && asking !== 'all' ? asking : null;
+  return (
+    <>
+      <ConfirmDialog
+        isOpen={asking === 'all'}
+        title="Clear every drawing on this map?"
+        message={`This erases all ${clearable === 1 ? '1 drawing' : `${clearable} drawings`} on this map, yours and the players', for everyone. It cannot be undone.`}
+        confirmLabel="Clear drawings"
+        onConfirm={() => {
+          onAnswered();
+          onClear();
+        }}
+        onCancel={onAnswered}
+      />
+      <ConfirmDialog
+        isOpen={member !== null}
+        title={member ? `Clear ${drawingsOf(member)}?` : ''}
+        message={member
+          ? `This erases ${member.name === null ? 'the' : `${member.name}'s`} ${howMany(member.count)}${member.name === null ? ' of someone who has left' : ''} on this map, for everyone. Nobody else's are touched. It cannot be undone.`
+          : ''}
+        confirmLabel={member ? `Clear ${member.name === null ? 'their drawings' : drawingsOf(member)}` : ''}
+        onConfirm={() => {
+          if (member) onClearMember(member.authorId);
+          onAnswered();
+        }}
+        onCancel={onAnswered}
+      />
+    </>
+  );
+}
 
 const toolButton = (on: boolean) =>
   `touch-target inline-flex items-center justify-center w-8 h-8 rounded border transition-colors ${
@@ -89,9 +141,8 @@ const toolButton = (on: boolean) =>
 export default function DrawControls({
   kind, onKindChange, settings, onSettingsChange, isDM, onlyErase = false, polygonCorners, onPolygonDone, onPolygonCancel, clearable, onClear, members, onClearMember, onClose,
 }: DrawControlsProps) {
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [confirmMember, setConfirmMember] = useState<MemberDrawings | null>(null);
-  const custom = !(DRAWING_LIMITS.namedColors as readonly string[]).includes(settings.color);
+  const [asking, setAsking] = useState<ClearAsking>(null);
+  const custom = !isNamedColour(settings.color);
 
   return (
     <section
@@ -238,7 +289,7 @@ export default function DrawControls({
 
       <button
         type="button"
-        onClick={() => (isDM ? setConfirmClear(true) : onClear())}
+        onClick={() => (isDM ? setAsking('all') : onClear())}
         disabled={clearable === 0}
         className="touch-target text-[11px] py-1 rounded border bg-red-900/30 text-red-300 border-red-700/40 hover:bg-red-900/50 disabled:opacity-40"
       >
@@ -251,7 +302,7 @@ export default function DrawControls({
             <button
               key={member.authorId}
               type="button"
-              onClick={() => setConfirmMember(member)}
+              onClick={() => setAsking(member)}
               className="touch-target text-[11px] text-left px-2 py-1 rounded border bg-red-900/20 text-red-300 border-red-700/30 hover:bg-red-900/40"
             >
               {`Clear ${drawingsOf(member)} (${member.count})`}
@@ -260,30 +311,7 @@ export default function DrawControls({
         </div>
       )}
 
-      <ConfirmDialog
-        isOpen={confirmClear}
-        title="Clear every drawing on this map?"
-        message={`This erases all ${clearable === 1 ? '1 drawing' : `${clearable} drawings`} on this map, yours and the players', for everyone. It cannot be undone.`}
-        confirmLabel="Clear drawings"
-        onConfirm={() => {
-          setConfirmClear(false);
-          onClear();
-        }}
-        onCancel={() => setConfirmClear(false)}
-      />
-      <ConfirmDialog
-        isOpen={confirmMember !== null}
-        title={confirmMember ? `Clear ${drawingsOf(confirmMember)}?` : ''}
-        message={confirmMember
-          ? `This erases ${confirmMember.name === null ? 'the' : `${confirmMember.name}'s`} ${howMany(confirmMember.count)}${confirmMember.name === null ? ' of someone who has left' : ''} on this map, for everyone. Nobody else's are touched. It cannot be undone.`
-          : ''}
-        confirmLabel={confirmMember ? `Clear ${confirmMember.name === null ? 'their drawings' : drawingsOf(confirmMember)}` : ''}
-        onConfirm={() => {
-          if (confirmMember) onClearMember(confirmMember.authorId);
-          setConfirmMember(null);
-        }}
-        onCancel={() => setConfirmMember(null)}
-      />
+      <ClearDrawingsDialogs asking={asking} onAnswered={() => setAsking(null)} clearable={clearable} onClear={onClear} onClearMember={onClearMember} />
     </section>
   );
 }

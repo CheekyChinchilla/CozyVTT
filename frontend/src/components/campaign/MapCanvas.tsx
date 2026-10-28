@@ -124,7 +124,8 @@ import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogCont
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
 import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
-import DrawControls, { type MemberDrawings } from '@/components/campaign/DrawControls';
+import DrawControls, { type DrawControlsProps, type MemberDrawings } from '@/components/campaign/DrawControls';
+import DrawStrip from '@/components/campaign/DrawStrip';
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
 import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
@@ -299,6 +300,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   /** On the compact layout: the Map controls sheet is open. */
   const [mapControlsOpen, setMapControlsOpen] = useState(false);
   const mapControlsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawButtonRef = useRef<HTMLButtonElement>(null);
   // A sheet left open as the layout turns to the desktop's does not come
   // back with the compact layout.
   useEffect(() => {
@@ -3755,6 +3757,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // draw is on and the session is live.
   const drawButton = drawOffered && (
     <Button
+      ref={drawButtonRef}
       onClick={toggleDraw}
       variant="secondary" iconOnly className={drawKind ? 'bg-moss-green/20' : undefined}
       aria-label="Draw"
@@ -3811,6 +3814,28 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       </button>
     </>
   );
+  // The drawing tools, while Draw is open: the stack's panel, or on the
+  // compact layout the strip at the map's foot.
+  const drawPanel: DrawControlsProps | null = drawKind && {
+    kind: drawKind,
+    onKindChange: setDrawKind,
+    settings: drawSettings,
+    onSettingsChange: (patch) => setDrawSettings((prev) => ({ ...prev, ...patch })),
+    isDM,
+    onlyErase: eraseOnly,
+    polygonCorners: drawTool.polygonCorners,
+    onPolygonDone: drawTool.finishPolygon,
+    onPolygonCancel: drawTool.cancelPolygon,
+    clearable: clearableDrawings,
+    onClear: isDM ? mapDrawings.clearAll : mapDrawings.clearMine,
+    members: membersWithDrawings,
+    onClearMember: mapDrawings.clearMember,
+    onClose: () => {
+      setDrawKind(null);
+      // The strip's Done goes with the strip: the keys go to Draw, which opened it.
+      if (compact) drawButtonRef.current?.focus({ preventScroll: true });
+    },
+  };
   // A player with no token of theirs on the map measures from nothing.
   const rulerNeedsToken = showRuler && !isDM && !myToken;
 
@@ -4192,27 +4217,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       })()}
 
       {/* The tool panels, in a stack that can be dragged: the drawing tools
-          for whoever has Draw open, then the DM's Fog, Walls and Lights. */}
-      {(userRole === 'DM' || drawKind) && currentMap && (
+          for whoever has Draw open, then the DM's Fog, Walls and Lights. On
+          the compact layout the drawing tools are a strip in the dock at
+          the map's foot instead. */}
+      {(userRole === 'DM' || (drawPanel && !compact)) && currentMap && (
         <DmToolPanelContainer containerRef={containerRef} band={topBand}>
-          {drawKind && (
-            <DrawControls
-              kind={drawKind}
-              onKindChange={setDrawKind}
-              settings={drawSettings}
-              onSettingsChange={(patch) => setDrawSettings((prev) => ({ ...prev, ...patch }))}
-              isDM={isDM}
-              onlyErase={eraseOnly}
-              polygonCorners={drawTool.polygonCorners}
-              onPolygonDone={drawTool.finishPolygon}
-              onPolygonCancel={drawTool.cancelPolygon}
-              clearable={clearableDrawings}
-              onClear={isDM ? mapDrawings.clearAll : mapDrawings.clearMine}
-              members={membersWithDrawings}
-              onClearMember={mapDrawings.clearMember}
-              onClose={() => setDrawKind(null)}
-            />
-          )}
+          {drawPanel && !compact && <DrawControls {...drawPanel} />}
           {userRole === 'DM' && (<>
           <DmFogControls
             fogMode={fogMode}
@@ -4526,10 +4536,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           ruler's hint, the DM's Player Preview controls at the right, and the
           token's details or the square under the pointer. Laid out as a
           column from the foot, so each stands clear of the one below it
-          whatever its height. It lets presses through to the map, except on
-          its controls. */}
+          whatever its height. It is the map's size, a size container, so the
+          Draw strip's height is a share of the map's (cqh). It lets presses
+          through to the map, except on its controls. */}
       {compact && (
-        <div data-map-dock="" className="absolute inset-x-0 bottom-0 z-30 flex flex-col pointer-events-none">
+        <div data-map-dock="" className="absolute inset-0 z-30 flex flex-col justify-end pointer-events-none [container-type:size]">
           <div className={`${DOCK_ROW} flex flex-col gap-2 pb-2`}>
             {rulerNeedsToken && (
               <div className="self-center bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
@@ -4546,8 +4557,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 {hoverCoordsText}
               </div>
             )}
-            {tokenDetails(true)}
+            {/* Not while the strip is up: the two left a phone little map to draw on. */}
+            {!drawPanel && tokenDetails(true)}
           </div>
+          {drawPanel && currentMap && <DrawStrip {...drawPanel} />}
         </div>
       )}
 

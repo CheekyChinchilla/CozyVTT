@@ -75,7 +75,15 @@ vi.mock('@/contexts/CampaignContext', async () => {
 
 vi.mock('@/contexts/WebSocketContext', async () => {
   const { useSyncExternalStore } = await import('react');
-  const client = new Proxy({ getSocket: () => h.raw } as Record<string, unknown>, {
+  const client = new Proxy({
+    getSocket: () => h.raw,
+    sendDrawingPreview: (payload: unknown) => { h.sent.push(['drawing:preview', payload]); },
+    // Sent, and never answered: the drawing stays on its way.
+    addDrawing: (payload: unknown) => {
+      h.sent.push(['drawing:add', payload]);
+      return new Promise(() => undefined);
+    },
+  } as Record<string, unknown>, {
     get(target, prop: string) {
       if (prop in target) return target[prop];
       return () => () => undefined;
@@ -151,6 +159,8 @@ function surface(): HTMLCanvasElement {
   if (!input) throw new Error('no input canvas');
   return input;
 }
+
+const sentOf = (event: string) => h.sent.filter(([e]) => e === event).map(([, p]) => p);
 
 /** A finger's tap at `at`. */
 function tap(id: number, at: { clientX: number; clientY: number }) {
@@ -457,7 +467,7 @@ describe('the dock at the map’s foot', () => {
     expect(dock()).toContainElement(card());
     expect(classesOf(card())).toEqual(expect.arrayContaining(['relative', 'w-full', 'sm:w-88']));
     expect(classesOf(card())).not.toContain('absolute');
-    expect(classesOf(dock())).toEqual(expect.arrayContaining(['absolute', 'inset-x-0', 'bottom-0', 'pointer-events-none']));
+    expect(classesOf(dock())).toEqual(expect.arrayContaining(['absolute', 'inset-0', 'justify-end', 'pointer-events-none']));
     // Still closed by its own button, which takes the press.
     fireEvent.click(screen.getByRole('button', { name: 'Close details' }));
     expect(screen.queryByText('Goblin')).toBeNull();
@@ -512,5 +522,129 @@ describe('the dock at the map’s foot', () => {
     render(<MapCanvasOnly />);
     expect(document.querySelector('[data-map-dock]')).toBeNull();
     expect(classesOf(previewButton().parentElement!)).toEqual(expect.arrayContaining(['absolute', 'bottom-20', 'right-2', 'z-30']));
+  });
+});
+
+describe('the Draw strip', () => {
+  const dock = () => document.querySelector<HTMLElement>('[data-map-dock]')!;
+  const drawingTools = () => screen.getByRole('region', { name: 'Drawing tools' });
+  const drawButton = () => within(toolbar()).getByRole('button', { name: 'Draw' });
+
+  /** A mouse pressed at `from`, moved to `to` with the button held, and let go there. */
+  function stroke(from: { clientX: number; clientY: number }, to: { clientX: number; clientY: number }) {
+    mouse.down(surface(), from);
+    mouse.move(surface(), to, 1);
+    mouse.up(surface(), to);
+  }
+
+  it('opens across the map’s foot, last in the dock, and not in the DM’s tool stack', () => {
+    render(<MapCanvas />);
+    fireEvent.click(drawButton());
+
+    expect(dock().lastElementChild).toBe(drawingTools());
+    expect(screen.getByTitle(/Drag to move the panels/).parentElement).not.toContainElement(drawingTools());
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  // The strip's height is a share of the map's, so the dock is the map's
+  // size and the box the share is reckoned from.
+  it('caps its height against the map’s, the dock filling the map', () => {
+    render(<MapCanvas />);
+    fireEvent.click(drawButton());
+    expect(classesOf(dock())).toEqual(expect.arrayContaining(['inset-0', 'flex-col', 'justify-end', '[container-type:size]']));
+    expect(classesOf(drawingTools())).toContain('max-h-[50cqh]');
+  });
+
+  it('opens for a player, who has no tool stack', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    fireEvent.click(drawButton());
+
+    expect(dock()).toContainElement(drawingTools());
+    expect(screen.queryByTitle(/Drag to move the panels/)).toBeNull();
+  });
+
+  it('draws on the map above it with what it sets', () => {
+    render(<MapCanvas />);
+    fireEvent.click(drawButton());
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Rectangle' }));
+    fireEvent.click(within(drawingTools()).getByRole('checkbox', { name: 'Fill shapes' }));
+    fireEvent.click(within(drawingTools()).getByRole('checkbox', { name: 'Snap to grid' }));
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Colour: Red' }));
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Blue' }));
+    fireEvent.click(within(drawingTools()).getByRole('checkbox', { name: 'Only I can see this' }));
+
+    stroke({ clientX: 104, clientY: 96 }, { clientX: 212, clientY: 162 });
+
+    expect(sentOf('drawing:add')).toEqual([expect.objectContaining({
+      mapId: 'map-a',
+      drawing: { kind: 'rect', color: '#3d8bd9', width: 4, audience: 'DM', points: [[100, 100], [200, 150]], fillColor: '#3d8bd9' },
+    })]);
+  });
+
+  it('closes a polygon with its Done, and drops one with its Cancel', () => {
+    render(<MapCanvas />);
+    fireEvent.click(drawButton());
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Polygon' }));
+    for (const [x, y] of [[100, 100], [200, 100], [200, 200]]) {
+      mouse.down(surface(), { clientX: x, clientY: y });
+      mouse.up(surface(), { clientX: x, clientY: y });
+    }
+
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Done' }));
+    expect(sentOf('drawing:add')).toEqual([expect.objectContaining({ drawing: expect.objectContaining({ kind: 'polygon' }) })]);
+    // The tools stay out for the next shape.
+    expect(drawButton()).toHaveAttribute('aria-pressed', 'true');
+
+    mouse.down(surface(), { clientX: 300, clientY: 300 });
+    mouse.up(surface(), { clientX: 300, clientY: 300 });
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Cancel' }));
+    expect(within(drawingTools()).queryByRole('button', { name: 'Cancel' })).toBeNull();
+    expect(sentOf('drawing:add')).toHaveLength(1);
+  });
+
+  it('is put away by its Done, as by Draw', () => {
+    render(<MapCanvas />);
+    fireEvent.click(drawButton());
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Done' }));
+
+    expect(screen.queryByRole('region', { name: 'Drawing tools' })).toBeNull();
+    expect(drawButton()).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(drawButton());
+    fireEvent.click(drawButton());
+    expect(screen.queryByRole('region', { name: 'Drawing tools' })).toBeNull();
+  });
+
+  // The focused Done went with the strip, and the keys with it.
+  it('gives the focus to Draw in the band as its Done puts it away', () => {
+    render(<MapCanvas />);
+    fireEvent.click(drawButton());
+    const done = within(drawingTools()).getByRole('button', { name: 'Done' });
+    done.focus();
+    fireEvent.click(done);
+
+    expect(drawButton()).toHaveFocus();
+  });
+
+  // Card and strip together left a phone in portrait little map to draw on.
+  it('leaves the details card out of the dock while it is up, and brings it back after', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    act(() => { useGameStore.getState().setTokens([token('tok-goblin', 'Goblin', 4, 15)]); });
+    tap(1, square(4, 15));
+    expect(screen.getByText('Goblin')).toBeInTheDocument();
+
+    fireEvent.click(drawButton());
+    expect(screen.queryByText('Goblin')).toBeNull();
+
+    fireEvent.click(within(drawingTools()).getByRole('button', { name: 'Done' }));
+    expect(screen.getByText('Goblin')).toBeInTheDocument();
+  });
+
+  it('stays in the DM’s tool stack on the desktop', () => {
+    render(<MapCanvasOnly />);
+    fireEvent.click(screen.getByRole('button', { name: 'Draw' }));
+    expect(screen.getByTitle(/Drag to move the panels/).parentElement).toContainElement(drawingTools());
   });
 });
