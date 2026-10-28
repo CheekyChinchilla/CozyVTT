@@ -162,6 +162,22 @@ describe('moving the DM tool panels', () => {
     expect(stack.style.top).toBe('100px');
   });
 
+  // A map moved between two arrangements of the page waits in a box of no
+  // size for a frame (tableHosts.tsx). The stack was brought "onto" it, to
+  // 0,0, and stayed in the map's top left corner once the map had its size.
+  it('keeps a dragged stack where it was dropped while the map has no size', () => {
+    const { stack, drag, resize } = renderInMap();
+    drag(-300, 100);
+
+    resize(0, 0);
+    expect(stack.style.left).toBe('292px');
+    expect(stack.style.top).toBe('156px');
+
+    resize(800, 600);
+    expect(stack.style.left).toBe('292px');
+    expect(stack.style.top).toBe('156px');
+  });
+
   // Where the DM dropped it is theirs, whatever the toolbar does.
   it('keeps a dragged stack where it was dropped when the toolbar wraps', () => {
     const { stack, drag, setBand } = renderInMap();

@@ -52,6 +52,10 @@ export default function DmToolPanelContainer({ children, containerRef, band = nu
     const panel = panelRef.current;
     if (!container || !panel) return { x, y };
     const map = container.getBoundingClientRect();
+    // A map with no size is between two arrangements of the page, waiting
+    // a frame in a box of none (tableHosts.tsx): the stack keeps its place
+    // for the map's next size.
+    if (map.width === 0 || map.height === 0) return { x, y };
     const stack = panel.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(x, map.width - stack.width)),
