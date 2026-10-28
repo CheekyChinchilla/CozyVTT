@@ -51,7 +51,7 @@ Once inside the campaign, click the **Campaign Settings** button (gear icon in t
 
 *Screenshot pending — Campaign settings panel.*
 
-Campaign Settings and the other side panels, the Map Library, Token Manager, Spirit Layer, Atmosphere, the Creature Library, Token Templates and the token editor, close the same way: press **Escape**, click **Close** (the **×** at the top of the panel) or click outside the panel. While one is open, Tab moves only among its controls. A window a panel opens, such as **Invite Player**, closes alone on Escape and leaves the panel open.
+Campaign Settings and the other side panels, the Map Library, Token Manager, Spirit Layer, Atmosphere, the Creature Library, Token Templates and the token editor, close the same way: press **Escape**, click **Close** (the **×** at the top of the panel, at least 44 pixels square on a phone or a tablet) or click outside the panel. While one is open, Tab moves only among its controls. A window a panel opens, such as **Invite Player**, closes alone on Escape and leaves the panel open.
 
 ### Inviting Players
 

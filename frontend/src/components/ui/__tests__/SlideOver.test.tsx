@@ -89,6 +89,25 @@ describe('SlideOver', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // Every panel's X was its own size, the Creature Library's and Token
+  // Templates' about 28 px. On a touch screen it is at least 44 px, its icon
+  // centred in it, whatever look the panel gives it; with a mouse it keeps
+  // that look's size. jsdom evaluates no media query, so the classes are
+  // what is checked.
+  it("gives its Close button 44 px on a touch screen, keeping the panel's own look", () => {
+    render(
+      <SlideOver open onClose={() => {}}>
+        <SlideOverTitle>Creature Library</SlideOverTitle>
+        <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" />
+      </SlideOver>
+    );
+    const close = screen.getByRole('button', { name: 'Close' });
+    const classes = (close.getAttribute('class') ?? '').split(/\s+/);
+    expect(classes).toEqual(
+      expect.arrayContaining(['touch-target', 'pointer-coarse:[&>svg]:mx-auto', 'btn-secondary', 'p-1.5', 'shrink-0'])
+    );
+  });
+
   it('closes when the backdrop is clicked', () => {
     const onClose = vi.fn();
     render(<Panel onClose={onClose} />);
