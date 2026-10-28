@@ -923,6 +923,7 @@ export default function InitiativeTracker() {
             autoFocus={menu.byKeyboard}
             items={combatantMenuItems(token)}
             onClose={closeMenu}
+            title={tokenDisplayName(token)}
           />
         );
       })()}

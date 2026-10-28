@@ -8,7 +8,9 @@
  * (labelled Fortune / Misfortune for Pathfinder 2e).
  *
  * Drawn on the body (components/ui/FloatingLayer.tsx), where the panel
- * dividers cannot take the presses on it.
+ * dividers cannot take the presses on it. On the compact layout it is a
+ * full-height sheet (compact/BottomSheet.tsx) with rows a finger can press,
+ * which closes itself: the popover's placing and closers are off there.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -25,6 +27,8 @@ import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type
 import CustomRollFooter from './CustomRollFooter';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { menuShown } from '@/components/ui/openMenus';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import { BottomSheet } from '@/components/campaign/compact/BottomSheet';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,9 +87,15 @@ interface SectionProps {
   rolls: RollOption[];
   mode: RollMode;
   onRoll: (option: RollOption) => void;
+  /** Rows a finger can press, in the compact layout's sheet. */
+  compact?: boolean;
 }
 
-const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll }) => {
+/** A roll's row; in the compact layout's sheet, 44 px tall or more. */
+const ROLL_ROW = 'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left';
+const rollRow = (compact: boolean) => `${ROLL_ROW}${compact ? ' min-h-11' : ''}`;
+
+const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll, compact = false }) => {
   if (rolls.length === 0) return null;
 
   return (
@@ -97,7 +107,7 @@ const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll }) 
         <button
           key={i}
           onClick={() => onRoll(opt)}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
+          className={rollRow(compact)}
         >
           <Dices className="w-3 h-3 text-brand-ink shrink-0" />
           <span className="flex-1">{opt.label}</span>
@@ -122,6 +132,7 @@ export default function CharacterRollPicker({
   anchorX,
   anchorY,
 }: CharacterRollPickerProps) {
+  const compact = useCompactLayout();
   const pickerRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -153,14 +164,14 @@ export default function CharacterRollPicker({
 
   // Position picker, flipping if needed
   useEffect(() => {
-    if (!pickerRef.current) return;
+    if (compact || !pickerRef.current) return;
     const rect = pickerRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const x = anchorX + rect.width > vw ? Math.max(0, anchorX - rect.width) : anchorX;
     const y = anchorY + rect.height > vh ? Math.max(0, anchorY - rect.height) : anchorY;
     setPos({ x, y });
-  }, [rolls, anchorX, anchorY]);
+  }, [rolls, anchorX, anchorY, compact]);
 
   // A menu on the screen while it is open, so the tap on the map that
   // closes it is not the first of a double tap to ping.
@@ -168,16 +179,18 @@ export default function CharacterRollPicker({
 
   // Close on click outside
   useEffect(() => {
+    if (compact) return;
     const handler = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  }, [onClose, compact]);
 
   // Close on Escape, which is used up: the map hears keys after this and
   // would otherwise also put its tool away on the same press.
   useEffect(() => {
+    if (compact) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -185,7 +198,7 @@ export default function CharacterRollPicker({
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [onClose, compact]);
 
   const handleRollOption = (opt: RollOption) => {
     const { expression, purpose } = opt.supportsAdvantage
@@ -222,6 +235,127 @@ export default function CharacterRollPicker({
     rolls.combat.length > 0
   );
 
+  // Everything below the popover's header: the sheet on the compact layout
+  // draws the same under its own.
+  const body = (
+    <>
+      {/* Roll Mode Selector (d20 systems only) */}
+      {hasAdvantage && !loading && hasAnyRolls && (
+        <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
+          <div className="text-xs text-warm-gray mb-1">Roll mode</div>
+          <div className="relative">
+            <button
+              onClick={() => setModeOpen((o) => !o)}
+              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors${compact ? ' min-h-11' : ''}`}
+            >
+              <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
+                {modeLabels[mode]}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-warm-gray" />
+            </button>
+            {modeOpen && (
+              <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
+                {ROLL_MODES.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => { setMode(m); setModeOpen(false); }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg${compact ? ' min-h-11' : ''} ${
+                      mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
+                    }`}
+                  >
+                    {modeLabels[m]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className={`flex-1 min-h-0 overflow-y-auto${compact ? ' overscroll-contain' : ''}`}>
+        {loading && (
+          <div className="flex items-center justify-center py-8 text-warm-gray text-sm">
+            Loading rolls…
+          </div>
+        )}
+
+        {error && (
+          <div className="px-3 py-4 text-sm text-danger-ink text-center">{error}</div>
+        )}
+
+        {/* Initiative — offered only while this token is in the initiative
+            order, and only to someone allowed to roll for it. Kept outside the
+            block below so it still shows for a character whose sheet has
+            nothing else rollable on it: being in a fight does not depend on
+            having filled the sheet in. */}
+        {!loading && !error && onRollInitiative && (
+          <div className="border-b border-moss-green/10">
+            <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-warm-gray bg-parchment/40">
+              Initiative
+            </div>
+            <button
+              onClick={() => { onRollInitiative(); onClose(); }}
+              className={rollRow(compact)}
+            >
+              <Dices className="w-3 h-3 text-brand-ink shrink-0" />
+              {/* The wording follows the system. Call of Cthulhu ranks
+                  combatants by Dexterity with no die involved, so offering to
+                  "roll" would promise something that does not happen. */}
+              <span className="flex-1">
+                {initiative?.kind === 'fixed' ? 'Set Initiative' : 'Roll Initiative'}
+              </span>
+              {initiative && (
+                <span className="text-xs text-warm-gray shrink-0">{initiative.label}</span>
+              )}
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && !hasAnyRolls && (
+          <div className="px-3 py-6 text-sm text-warm-gray text-center">
+            No rollable stats found for this character.
+            <br />
+            <span className="text-xs">Make sure the character sheet is filled in.</span>
+          </div>
+        )}
+
+        {!loading && !error && rolls && (
+          <div className="divide-y divide-moss-green/10">
+            <Section title="Abilities" rolls={rolls.abilities} mode={mode} onRoll={handleRollOption} compact={compact} />
+            <Section title="Skills" rolls={rolls.skills} mode={mode} onRoll={handleRollOption} compact={compact} />
+            {rolls.savingThrows.length > 0 && (
+              <Section title="Saving Throws" rolls={rolls.savingThrows} mode={mode} onRoll={handleRollOption} compact={compact} />
+            )}
+            <Section title="Combat" rolls={rolls.combat} mode={mode} onRoll={handleRollOption} compact={compact} />
+            <Section title="Hit Dice" rolls={rolls.hitDice} mode={mode} onRoll={handleRollOption} compact={compact} />
+          </div>
+        )}
+      </div>
+
+      {/* Not everything a character rolls comes off the sheet. Pinned below the
+          list rather than inside it, so it is reachable without scrolling past
+          a long skill list — the same place the creature picker keeps it.
+
+          Only shown once the character has loaded: the roll is filed under
+          their name, and there is nothing to file it under until then. */}
+      {!loading && !error && character && (
+        <CustomRollFooter
+          compact={compact}
+          onRoll={(expression, purpose) => { onRoll(expression, purpose, publicName ?? character.name); onClose(); }}
+        />
+      )}
+    </>
+  );
+
+  if (compact) {
+    return (
+      <BottomSheet open title={`Roll for ${characterName}`} height="full" onClose={onClose}>
+        <div className="flex h-full min-h-0 flex-col">{body}</div>
+      </BottomSheet>
+    );
+  }
+
   return (
     <FloatingLayer>
       <div
@@ -249,111 +383,7 @@ export default function CharacterRollPicker({
           </button>
         </div>
 
-        {/* Roll Mode Selector (d20 systems only) */}
-        {hasAdvantage && !loading && hasAnyRolls && (
-          <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
-            <div className="text-xs text-warm-gray mb-1">Roll mode</div>
-            <div className="relative">
-              <button
-                onClick={() => setModeOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
-              >
-                <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
-                  {modeLabels[mode]}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-warm-gray" />
-              </button>
-              {modeOpen && (
-                <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
-                  {ROLL_MODES.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => { setMode(m); setModeOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                        mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
-                      }`}
-                    >
-                      {modeLabels[m]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {loading && (
-            <div className="flex items-center justify-center py-8 text-warm-gray text-sm">
-              Loading rolls…
-            </div>
-          )}
-
-          {error && (
-            <div className="px-3 py-4 text-sm text-danger-ink text-center">{error}</div>
-          )}
-
-          {/* Initiative — offered only while this token is in the initiative
-              order, and only to someone allowed to roll for it. Kept outside the
-              block below so it still shows for a character whose sheet has
-              nothing else rollable on it: being in a fight does not depend on
-              having filled the sheet in. */}
-          {!loading && !error && onRollInitiative && (
-            <div className="border-b border-moss-green/10">
-              <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-warm-gray bg-parchment/40">
-                Initiative
-              </div>
-              <button
-                onClick={() => { onRollInitiative(); onClose(); }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
-              >
-                <Dices className="w-3 h-3 text-brand-ink shrink-0" />
-                {/* The wording follows the system. Call of Cthulhu ranks
-                    combatants by Dexterity with no die involved, so offering to
-                    "roll" would promise something that does not happen. */}
-                <span className="flex-1">
-                  {initiative?.kind === 'fixed' ? 'Set Initiative' : 'Roll Initiative'}
-                </span>
-                {initiative && (
-                  <span className="text-xs text-warm-gray shrink-0">{initiative.label}</span>
-                )}
-              </button>
-            </div>
-          )}
-
-          {!loading && !error && !hasAnyRolls && (
-            <div className="px-3 py-6 text-sm text-warm-gray text-center">
-              No rollable stats found for this character.
-              <br />
-              <span className="text-xs">Make sure the character sheet is filled in.</span>
-            </div>
-          )}
-
-          {!loading && !error && rolls && (
-            <div className="divide-y divide-moss-green/10">
-              <Section title="Abilities" rolls={rolls.abilities} mode={mode} onRoll={handleRollOption} />
-              <Section title="Skills" rolls={rolls.skills} mode={mode} onRoll={handleRollOption} />
-              {rolls.savingThrows.length > 0 && (
-                <Section title="Saving Throws" rolls={rolls.savingThrows} mode={mode} onRoll={handleRollOption} />
-              )}
-              <Section title="Combat" rolls={rolls.combat} mode={mode} onRoll={handleRollOption} />
-              <Section title="Hit Dice" rolls={rolls.hitDice} mode={mode} onRoll={handleRollOption} />
-            </div>
-          )}
-        </div>
-
-        {/* Not everything a character rolls comes off the sheet. Pinned below the
-            list rather than inside it, so it is reachable without scrolling past
-            a long skill list — the same place the creature picker keeps it.
-
-            Only shown once the character has loaded: the roll is filed under
-            their name, and there is nothing to file it under until then. */}
-        {!loading && !error && character && (
-          <CustomRollFooter
-            onRoll={(expression, purpose) => { onRoll(expression, purpose, publicName ?? character.name); onClose(); }}
-          />
-        )}
+        {body}
       </div>
     </FloatingLayer>
   );

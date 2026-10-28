@@ -11,9 +11,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { contact } from '@/test/pointer';
 import InitiativeTracker from '../InitiativeTracker';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
@@ -322,6 +323,17 @@ describe("a combatant's menu, as each viewer is shown it", () => {
 
     fireEvent.contextMenu(screen.getByText('Alice'), { clientX: 40, clientY: 60 });
     fireEvent.mouseDown(document.body);
+    expect(openCharacterMenu()).toBeNull();
+  });
+});
+
+describe("a combatant's menu on the compact layout", () => {
+  it('is an action sheet named by the combatant, with the same items', () => {
+    render(<LayoutProvider compact><InitiativeTracker /></LayoutProvider>);
+    fireEvent.contextMenu(screen.getByText('Alice'));
+
+    const sheet = screen.getByRole('dialog', { name: 'Alice' });
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['View Character Sheet', 'Roll...', 'Cancel']);
     expect(openCharacterMenu()).toBeNull();
   });
 });

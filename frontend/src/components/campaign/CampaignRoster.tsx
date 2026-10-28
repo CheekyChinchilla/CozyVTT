@@ -430,6 +430,7 @@ export default function CampaignRoster() {
           y={contextMenu.y}
           items={characterMenuItems(contextMenu, user, userMembership)}
           onClose={handleCloseContextMenu}
+          title={roster.flatMap((member) => member.characters).find((c) => c.id === contextMenu.characterId)?.name}
         />
       )}
 

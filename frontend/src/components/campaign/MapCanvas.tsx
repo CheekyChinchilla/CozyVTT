@@ -132,6 +132,9 @@ import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import FloatingLayer from '@/components/ui/FloatingLayer';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import ActionSheet, { headedMenu } from '@/components/campaign/compact/ActionSheet';
+import { TokenSheetPicture, tokenSheetLine } from '@/components/campaign/compact/tokenSheetHeader';
 import { anyMenuShown, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
@@ -190,6 +193,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
   const isDM = userRole === 'DM';
+  // On the compact layout the token and door menus are action sheets.
+  const compact = useCompactLayout();
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
   // receives all pointer input and holds the overlay draw layer; terrain and
   // tokens sit beneath it. All three are the same size and share one world
@@ -3124,14 +3129,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    * Pan just enough to bring a token's centre a square inside the view, and
    * say how far it panned, in canvas pixels.
    */
-  const keepInView = (token: Token): { dx: number; dy: number } => {
+  const keepInView = (token: Token, area: { width: number; height: number } = canvasSize): { dx: number; dy: number } => {
     if (!currentMap) return { dx: 0, dy: 0 };
     const centre = tokenCentre(token, currentMap.gridSize, currentMap.height);
     const onScreen = {
       x: centre.x * mapControls.zoom + mapControls.panOffset.x,
       y: centre.y * mapControls.zoom + mapControls.panOffset.y,
     };
-    const pan = panToKeepInView(onScreen, canvasSize, currentMap.gridSize * mapControls.zoom);
+    const pan = panToKeepInView(onScreen, area, currentMap.gridSize * mapControls.zoom);
     if (pan.dx !== 0 || pan.dy !== 0) mapControls.panBy(pan.dx, pan.dy);
     return pan;
   };
@@ -3176,6 +3181,18 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!putDown(token, square, { start: !held })) return;
     arrowSentRef.current.set(token.id, [...sent, square]);
     keepInView({ ...token, position: square });
+  };
+
+  /**
+   * Pan `token` into the part of the map above `top`, a page y: on the
+   * compact layout its action sheet covers the foot of the screen, and a
+   * turn pressed in the sheet must be seen. A sheet that covers the whole
+   * map leaves nothing to pan into.
+   */
+  const keepInViewAbove = (token: Token, top: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    keepInView(token, { width: canvasSize.width, height: Math.min(canvasSize.height, top - rect.top) });
   };
 
   /** Whether the next token menu to open puts the cursor on its first item. */
@@ -3514,20 +3531,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   /**
    * Close context menu when clicking elsewhere
    */
+  // The popover's: an action sheet closes itself, and a click on one of its
+  // rows that keeps the menu open would close it.
   useEffect(() => {
     const handleClick = () => closeTokenMenu();
-    if (!contextMenu) return;
+    if (!contextMenu || compact) return;
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
-  }, [contextMenu, closeTokenMenu]);
+  }, [contextMenu, closeTokenMenu, compact]);
 
   // Close door context menu on any left-click outside it
   useEffect(() => {
-    if (!doorContextMenu) return;
+    if (!doorContextMenu || compact) return;
     const handleClick = () => setDoorContextMenu(null);
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
-  }, [doorContextMenu]);
+  }, [doorContextMenu, compact]);
 
   // A menu opened elsewhere, the roster's or the tracker's, closes these: the
   // right-click or long-press that opened it sent no click.
@@ -3551,6 +3570,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // the screen.
   useEffect(() => {
     if (!contextMenu || !contextMenuRef.current) {
+      // An action sheet, which the compact layout draws, puts the focus on
+      // its first item itself.
+      if (contextMenu) focusMenuOnOpenRef.current = false;
       setContextMenuPos(null);
       return;
     }
@@ -3567,7 +3589,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       adjustedY = Math.max(area.top, Math.min(contextMenu.y, area.bottom - rect.height));
     }
     setContextMenuPos({ x: adjustedX, y: adjustedY });
-  }, [contextMenu, tokenMenuSubmenu]);
+    // `compact`: a menu open as the layout turns from the compact one, which
+    // drew it as an action sheet, is placed as the popover and shown.
+  }, [contextMenu, tokenMenuSubmenu, compact]);
 
   // A menu opened from the keyboard puts the cursor on its first item once
   // it is placed, and so visible: a hidden button cannot take focus.
@@ -4437,7 +4461,25 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
           Drawn on the body (FloatingLayer), where the panel divider beside
           the map cannot take a press on an item that lies over it. */}
-      {contextMenu && (
+      {contextMenu && compact && (
+        <ActionSheet
+          // A new token's menu opens on its first page.
+          key={contextMenu.token.id}
+          open
+          title={tokenDisplayName(contextMenu.token)}
+          subtitle={tokenSheetLine(
+            contextMenu.token,
+            user?.id,
+            campaign?.memberships,
+            visibleTokenHp(contextMenu.token, characterHpCache, isDM && !previewing)
+          )}
+          leading={<TokenSheetPicture token={contextMenu.token} imageSrc={cachedTokenImage(contextMenu.token, tokenImages)?.src} />}
+          items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
+          onClose={closeTokenMenu}
+          onPlaced={(top) => keepInViewAbove(contextMenu.token, top)}
+        />
+      )}
+      {contextMenu && !compact && (
         <FloatingLayer>
           <div
             ref={contextMenuRef}
@@ -4543,7 +4585,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           above, and drawn on the body as it is; see the note there.
           TODO(play): placed at the pointer and never moved, so near the right or bottom edge of the
           screen it runs off it; place it as the token menu is placed, flipped to stay on screen. */}
-      {doorContextMenu && (
+      {doorContextMenu && compact && (() => {
+        const menu = headedMenu(doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } }), 'Door');
+        return (
+          <ActionSheet
+            open
+            title={menu.title}
+            leading={menu.mark ? <span aria-hidden="true" className="text-2xl leading-none">{menu.mark}</span> : undefined}
+            items={menu.items}
+            onClose={() => setDoorContextMenu(null)}
+          />
+        );
+      })()}
+      {doorContextMenu && !compact && (
         <FloatingLayer>
           <div
             className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"

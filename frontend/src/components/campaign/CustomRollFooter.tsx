@@ -10,6 +10,8 @@ interface CustomRollFooterProps {
    * so this stays the same control in both pickers.
    */
   onRoll: (expression: string, purpose: string) => void;
+  /** Boxes and Roll a finger can press, 44 px tall, in the compact layout's picker sheets. */
+  compact?: boolean;
 }
 
 /**
@@ -21,7 +23,8 @@ interface CustomRollFooterProps {
  * dice panel on another tab — which files the roll under their own name
  * rather than their character's.
  */
-export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
+export default function CustomRollFooter({ onRoll, compact = false }: CustomRollFooterProps) {
+  const tall = compact ? ' min-h-11' : '';
   const [expression, setExpression] = useState('');
   const [label, setLabel] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -50,11 +53,11 @@ export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
           onChange={(e) => { setExpression(e.target.value); setError(null); }}
           onKeyDown={onEnter}
           placeholder="e.g. 2d6+3"
-          className="input-cozy flex-1 text-xs py-1"
+          className={`input-cozy flex-1 text-xs py-1${tall}`}
         />
         <button
           onClick={submit}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/15 transition-colors"
+          className={`flex items-center gap-1 px-2 py-1 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/15 transition-colors${tall}`}
           title="Roll"
         >
           <Plus className="w-3 h-3" /> Roll
@@ -66,7 +69,7 @@ export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
         onChange={(e) => setLabel(e.target.value)}
         onKeyDown={onEnter}
         placeholder="Label (optional, e.g. Fireball Damage)"
-        className="input-cozy w-full text-xs py-1"
+        className={`input-cozy w-full text-xs py-1${tall}`}
       />
       {error && <div className="text-[10px] text-danger-ink">{error}</div>}
     </div>

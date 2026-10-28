@@ -21,7 +21,7 @@
 // close it.
 // ============================================
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronLeft } from 'lucide-react';
 import FloatingLayer from '@/components/ui/FloatingLayer';
@@ -41,10 +41,39 @@ export interface ActionSheetProps {
   subtitle?: string;
   /** Drawn before the title, such as the token's picture. */
   leading?: ReactNode;
+  /**
+   * Told, as the sheet opens, how far down the page its top stands, so the
+   * caller can keep what the menu is on in sight above it.
+   */
+  onPlaced?: (top: number) => void;
 }
 
-export default function ActionSheet({ open, title, items, onClose, subtitle, leading }: ActionSheetProps) {
+/** A pictograph and the space after it, at the start of a label (the door menu's 🚪). */
+const LEADING_PICTOGRAPH = /^(\p{Extended_Pictographic}\uFE0F?)\s*/u;
+
+/**
+ * A menu whose first row is its heading, such as the door menu's state, as
+ * an action sheet takes it: the heading as the sheet's title and the rest as
+ * its rows, with a pictograph the heading starts with apart (`mark`), to be
+ * shown and not read as part of the sheet's name. A menu with no heading
+ * keeps its rows and takes `fallback`.
+ */
+export function headedMenu(items: MenuItem[], fallback: string): { title: string; mark?: string; items: MenuItem[] } {
+  const [first, ...rest] = items;
+  if (first?.kind !== 'heading') return { title: fallback, items };
+  const pictograph = LEADING_PICTOGRAPH.exec(first.label);
+  return pictograph
+    ? { title: first.label.slice(pictograph[0].length), mark: pictograph[1], items: rest }
+    : { title: first.label, items: rest };
+}
+
+export default function ActionSheet({ open, title, items, onClose, subtitle, leading, onPlaced }: ActionSheetProps) {
   const rootRef = useSheet(open, true, onClose);
+  // Its root is laid out where the sheet ends up; only the card inside slides.
+  const placed = useEffectEvent((top: number) => onPlaced?.(top));
+  useLayoutEffect(() => {
+    if (open && rootRef.current) placed(rootRef.current.getBoundingClientRect().top);
+  }, [open, rootRef]);
   const motionProps = useSheetMotion(open, 'bottom');
   const titleId = useId();
   const pageRef = useRef<HTMLDivElement>(null);
