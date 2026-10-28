@@ -86,6 +86,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **On a phone or a tablet, a swipe on a Flexible sheet's editor scrolls the page.** Each section and list entry could be dragged from anywhere on it, so a swipe that began on one moved it and the page did not scroll. A finger now drags a section or an entry by its grip, the six dots at its left, and a swipe anywhere else scrolls. A mouse drags them from anywhere but a text box, as before.
 
+- **The Call of Cthulhu skills list puts its headings over its columns.** The **Base**, **Value** and **½ / ⅕** headings sat just after **Skill Name**, at the left of the list, while each skill's numbers sat at the right, and a skill's value box sat further left or right with the width of its half and fifth. The headings now sit over their columns and the value boxes line up. In the editor the skills you added, such as another language, no longer have their numbers out of line with the rest.
+
 - **Every tab of a character sheet can be reached on a phone.** The row of tabs on the D&D 5e and Call of Cthulhu sheets and on the D&D 5e, Pathfinder 2e and Call of Cthulhu editors never wrapped, so where it was wider than the sheet its last tabs, such as **Biography** and **Backstory**, were cut off and could not be reached: on a phone, and for the D&D 5e and Pathfinder 2e rows on an iPad held upright too. The tabs now go onto a second row, or a third, where they do not fit on one.
 
 - **The My Characters page and the page a character is edited on no longer scroll sideways on a phone.** The buttons in their headers, and **Import** and **Create Character** on **My Characters**, stayed on one line beside the title. They now go under it where the line is too narrow for both.
