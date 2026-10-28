@@ -1452,14 +1452,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // so it is claimed only while the map's focus stop has the keyboard (a
     // click on the map gives it) and the pointer is over the map. With focus
     // anywhere else, a panel divider or the page itself included, Tab keeps
-    // navigating as normal.
+    // navigating as normal. Beside the map's picture it pings nothing, like
+    // the Ping button and a long-press.
     if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       const at = hoverMapPxRef.current;
       if (!at || !currentMap) return;
       if (document.activeElement !== layersRef.current) return;
 
       e.preventDefault();
-      socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
+      pingMapPx(at);
       return;
     }
 

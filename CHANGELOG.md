@@ -136,6 +136,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A token's or a door's menu, and a Roll... picker opened from a token's menu, close when the map changes.** One left open while the DM switched maps stayed open over the new map and still acted on the old map's token or door, **Roll Initiative** included. They now close as the map changes.
 
+- **Tab no longer pings beside the map's picture.** With the pointer over the map area but off its picture, as on the space around a map zoomed out to fit, **Tab** sent the table a ping out there. It now pings only on the picture, as the **Ping** button and a press and hold do.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3

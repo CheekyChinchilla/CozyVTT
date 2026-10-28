@@ -520,7 +520,7 @@ Saying "no, the *other* door" never works. Instead, click the map, put your mous
 
 A few things worth knowing:
 
-- **Your mouse has to be over the map.** Tab does nothing if the cursor is over the chat panel or the sidebar.
+- **Your mouse has to be over the map's picture.** Tab does nothing if the cursor is over the chat panel, the sidebar or the empty space around the map.
 - **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
 - **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
 - **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
