@@ -83,8 +83,10 @@ export default function Toast({
           exit={toastExit}
           transition={{ duration: 0.2 }}
           // Above dialogs and side panels, which render at the end of <body>,
-          // as ToastContainer's notifications are
-          className="fixed top-4 right-4 z-9998 max-w-md"
+          // as ToastContainer's notifications are. At most 448 px wide, and
+          // 16 px inside both edges of a screen too narrow for that, such as
+          // a phone's.
+          className="fixed top-4 right-4 z-9998 max-w-[min(28rem,calc(100vw-2rem))]"
         >
           <div
             role="alert"

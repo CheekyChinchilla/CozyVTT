@@ -102,3 +102,15 @@ describe('Toast on a touch screen', () => {
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
 });
+
+// Placed 16 px from the right, a long message was as wide as the screen left
+// it and met a phone's left edge. It now keeps 16 px from both edges, and is
+// at most 448 px wide wherever that fits, as before.
+describe('Toast on a phone', () => {
+  it('keeps 16 px from both edges of a narrow screen', () => {
+    render(<Toast show message="Placed" onClose={noop} />);
+    const classes = screen.getByRole('alert').parentElement?.className.split(/\s+/) ?? [];
+    expect(classes).toContain('max-w-[min(28rem,calc(100vw-2rem))]');
+    expect(classes).not.toContain('max-w-md');
+  });
+});
