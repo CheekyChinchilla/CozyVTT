@@ -7,7 +7,7 @@
  */
 
 import { DISPOSITION_PICKED, tokenPlaceholder } from '@/utils/tokenColours';
-import { useState, useEffect, useEffectEvent, useCallback, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useCallback, useRef, type RefObject } from 'react';
 import {
   X,
   Search,
@@ -45,6 +45,8 @@ import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/Slide
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { extractAssetId } from '@/utils/assetUrl';
+import { cn } from '@/utils/cn';
+import { BackToList, useLibraryFormStep } from './libraryFormStep';
 
 // ============================================
 // Constants
@@ -138,6 +140,15 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const [editingCreature, setEditingCreature] = useState<CreatureTemplate | null>(null);
   // The creature whose Delete button was clicked, until it is confirmed or cancelled.
   const [creatureToDelete, setCreatureToDelete] = useState<CreatureTemplate | null>(null);
+  // On a narrow screen the form is a step of its own, in place of the list.
+  const {
+    asStep: formAsStep,
+    compact,
+    headingRef: formHeadingRef,
+    createButtonRef: formCreateButtonRef,
+    opened: formOpened,
+    closed: formClosed,
+  } = useLibraryFormStep(showCreateForm);
 
   // ── Favorites state ──
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
@@ -333,19 +344,28 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   }, [campaign, expandedId]);
 
   // ── Edit creature (opens form with pre-filled data) ──
-  const handleEdit = useCallback((creature: CreatureTemplate) => {
+  // A wide screen folds the row away to make room for the form under the
+  // list. On a narrow one the list is out of sight while the form is open,
+  // and the row stays open so its Edit button can take focus back.
+  const handleEdit = useCallback((creature: CreatureTemplate, opener: HTMLElement) => {
     setEditingCreature(creature);
     setShowCreateForm(true);
-    setExpandedId(null);
-  }, []);
+    if (!compact) setExpandedId(null);
+    formOpened(opener);
+  }, [compact, formOpened]);
+
+  const closeForm = useCallback(() => {
+    setShowCreateForm(false);
+    setEditingCreature(null);
+    formClosed();
+  }, [formClosed]);
 
   // ── Handle edit completion ──
   const handleEdited = useCallback((updated: CreatureTemplate) => {
     setCreatures((prev) => prev.map((c) => c.id === updated.id ? updated : c));
     setFavoriteCreatures((prev) => prev.map((c) => c.id === updated.id ? updated : c));
-    setEditingCreature(null);
-    setShowCreateForm(false);
-  }, []);
+    closeForm();
+  }, [closeForm]);
 
   // ── Toggle favorite ──
   const handleToggleFavorite = useCallback(async (creatureId: string) => {
@@ -415,6 +435,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" title="Close" />
       </div>
 
+      {/* ── The list, with its search and filters: out of sight while the
+          form is a step of its own, and kept mounted, so the control that
+          opened the form is there to take focus back. Hidden by its class,
+          which needs no help from the base styles' [hidden] rule against
+          `contents`, and by the attribute, for assistive technology ── */}
+      <div hidden={formAsStep} className={formAsStep ? 'hidden' : 'contents'}>
       {/* ── Search & Filters ── */}
       <div className="px-4 py-3 border-b border-moss-green/10 space-y-2">
         {/* Search bar */}
@@ -481,8 +507,13 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
         {/* Action buttons */}
         <div className="flex gap-2">
+          {/* TODO(ui): while a creature's edit form is open on a wide screen,
+              Create Custom leaves it open as Edit Creature, since
+              editingCreature is not cleared. It should open an empty form,
+              as New Template does in Token Templates. */}
           <button
-            onClick={() => setShowCreateForm(true)}
+            ref={formCreateButtonRef}
+            onClick={(e) => { setShowCreateForm(true); formOpened(e.currentTarget); }}
             className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
           >
             <Plus className="w-3 h-3" /> Create Custom
@@ -559,7 +590,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                     onDuplicate={() => handleDuplicate(creature.id)}
                     onDelete={() => setCreatureToDelete(creature)}
                     onToggleFavorite={() => handleToggleFavorite(creature.id)}
-                    onEdit={() => handleEdit(creature)}
+                    onEdit={(opener) => handleEdit(creature, opener)}
                   />
                 ))
               )}
@@ -646,7 +677,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 onDuplicate={() => handleDuplicate(creature.id)}
                 onDelete={() => setCreatureToDelete(creature)}
                 onToggleFavorite={() => handleToggleFavorite(creature.id)}
-                onEdit={() => handleEdit(creature)}
+                onEdit={(opener) => handleEdit(creature, opener)}
               />
             ))}
 
@@ -675,8 +706,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       {creatures.some((c) => c.source === 'srd') && (
         <SrdCredit className="px-4 py-2 border-t border-moss-green/10" />
       )}
+      </div>{/* the list */}
 
-      {/* ── Create / Edit Custom Form (inline) ── */}
+      {formAsStep && <BackToList onClick={closeForm} />}
+
+      {/* ── Create / Edit Custom Form: under the list, or in its place on a
+          narrow screen ── */}
       {showCreateForm && (
         // Keyed on the creature being edited so switching directly from
         // one creature to another remounts the form. handleEdit leaves
@@ -688,14 +723,15 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           campaignId={campaign?.id || ''}
           gameSystem={campaign?.gameSystem ?? null}
           editingCreature={editingCreature}
+          asStep={formAsStep}
+          headingRef={formHeadingRef}
           onCreated={(creature) => {
             setCreatures((prev) => [creature, ...prev]);
             setTotal((prev) => prev + 1);
-            setShowCreateForm(false);
-            setEditingCreature(null);
+            closeForm();
           }}
           onEdited={handleEdited}
-          onCancel={() => { setShowCreateForm(false); setEditingCreature(null); }}
+          onCancel={closeForm}
         />
       )}
     </SlideOver>
@@ -727,7 +763,8 @@ interface CreatureRowProps {
   onDuplicate: () => void;
   onDelete: () => void;
   onToggleFavorite: () => void;
-  onEdit: () => void;
+  /** Called with the Edit button, which takes focus back when the form's step closes. */
+  onEdit: (opener: HTMLElement) => void;
 }
 
 function CreatureRow({
@@ -836,7 +873,7 @@ function CreatureRow({
             </button>
             {creature.source !== 'srd' && (
               <button
-                onClick={onEdit}
+                onClick={(e) => onEdit(e.currentTarget)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-moss-green/20 text-brand-ink hover:bg-moss-green/10 transition-colors"
                 title="Edit creature"
               >
@@ -952,12 +989,16 @@ interface CreatureFormProps {
   campaignId: string;
   gameSystem: GameSystem | null;
   editingCreature: CreatureTemplate | null;
+  /** The form is a step of its own, in the list's place: it fills the panel. */
+  asStep: boolean;
+  /** For the heading, which takes focus as the step opens. */
+  headingRef: RefObject<HTMLHeadingElement | null>;
   onCreated: (creature: CreatureTemplate) => void;
   onEdited: (creature: CreatureTemplate) => void;
   onCancel: () => void;
 }
 
-function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEdited, onCancel }: CreatureFormProps) {
+function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, headingRef, onCreated, onEdited, onCancel }: CreatureFormProps) {
   const isEdit = !!editingCreature;
   const sb = editingCreature?.statBlock;
 
@@ -1110,14 +1151,24 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
   };
 
   return (
-    <div className="border-t border-moss-green/20 bg-parchment/40 p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+    <div
+      className={cn(
+        'bg-parchment/40 p-4 space-y-3 overflow-y-auto',
+        asStep ? 'flex-1 min-h-0' : 'border-t border-moss-green/20 max-h-[70vh]'
+      )}
+    >
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-brand-ink uppercase tracking-wide">
+        <h3 ref={headingRef} tabIndex={-1} className="text-xs font-semibold text-brand-ink uppercase tracking-wide">
           {isEdit ? 'Edit Creature' : 'Create Custom Creature'}
         </h3>
-        <button onClick={onCancel} className="text-stone-gray hover:text-stone-gray/80 p-0.5">
-          <X className="w-4 h-4" />
-        </button>
+        {/* As a step, Back to the list above the form does this. */}
+        {!asStep && (
+          // TODO(ui): this X has no accessible name, so a screen reader
+          // announces a bare "button". It should be named, as "Close form".
+          <button onClick={onCancel} className="text-stone-gray hover:text-stone-gray/80 p-0.5">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {formError && (

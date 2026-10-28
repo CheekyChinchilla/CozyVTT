@@ -426,7 +426,7 @@ Click any creature in the library to expand its details, then click **Place on M
 
 ### Creating Custom Creatures
 
-Click **Create Custom** at the top of the Creature Library to create a custom creature template. Fill in:
+Click **Create Custom** at the top of the Creature Library to create a custom creature template. On a screen narrower than 1,024 pixels, such as a phone or most tablets held upright, the form opens in place of the list, and **Back to the list** at its top, **Cancel** or saving takes you back to the list; on a wider screen it opens under the list. **Edit** on a custom creature opens the same form. Fill in:
 
 - **Name** — Required
 - **Stat Block** — The creature's combat stats (AC, speed, ability scores, attacks, etc.)
@@ -553,7 +553,7 @@ Click **Token Templates** (the stamp icon) in the campaign header. The panel sli
 
 There are two ways to create a template:
 
-1. **From the library** — Click **New Template** and fill in the form: name, image, type (NPC/player/object), disposition, display mode, size, HP, notes, and optional stat block.
+1. **From the library** — Click **New Template** and fill in the form: name, image, type (NPC/player/object), disposition, display mode, size, HP, notes, and optional stat block. On a screen less than 1,024 pixels wide the form, and the one **Edit template** opens, take the list's place, as in the Creature Library: **Back to the list**, **Cancel** or saving takes you back.
 2. **From the map** — Right-click any token on the map and select **Save as Template**. This captures the token's current image, type, disposition, display mode, size, HP, notes, and stat block.
 
 **Max HP** is the template's hit points. **Show HP Bar** only decides whether players see them, so a monster can have hit points with its bar hidden. Leave Max HP empty for something that has no hit points, such as a chest.
