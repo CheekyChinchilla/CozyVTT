@@ -1206,6 +1206,31 @@ describe('Clear mine and Clear drawings', () => {
     expect(screen.queryByRole('button', { name: 'Clear drawings' })).not.toBeInTheDocument();
   });
 
+  it('lets the DM clear one player’s drawings, by name, and nobody else’s', () => {
+    h.set({ memberships: [{ userId: 'p1', role: 'PLAYER', user: { displayName: 'Mara' } }, { userId: 'p2', role: 'PLAYER', user: { displayName: 'Tom' } }] });
+    render(<MapCanvas />);
+    fire('drawings:state', {
+      mapId: 'map-a',
+      drawings: [drawing({ id: 'm1', authorId: 'p1' }), drawing({ id: 'm2', authorId: 'p1' }), drawing({ id: 't1', authorId: 'p2' }), drawing({ id: 'mine', authorId: 'me' })],
+    });
+    draw('Pen');
+
+    expect(screen.queryByRole('button', { name: /Clear Me's/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: "Clear Mara's drawings (2)" }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: "Clear Mara's drawings" }));
+
+    expect(sentOf('drawing:clear')).toEqual([{ mapId: 'map-a', layer: 'MARKUP', authorId: 'p1' }]);
+    expect(useGameStore.getState().drawings.map((d) => d.id)).toEqual(['t1', 'mine']);
+  });
+
+  it('names a member who has left by what they were', () => {
+    render(<MapCanvas />);
+    fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ authorId: 'gone' })] });
+    draw('Pen');
+
+    expect(screen.getByRole('button', { name: 'Clear the drawings of someone who has left (1)' })).toBeInTheDocument();
+  });
+
   it('asks the DM before clearing every drawing on the map', () => {
     render(<MapCanvas />);
     fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'a' })] });

@@ -77,6 +77,8 @@ export interface MapDrawings {
   clearMine(): void;
   /** Every drawing on the map on screen (the DM's). */
   clearAll(): void;
+  /** One member's drawings on the map on screen, as their Clear mine would (the DM's). */
+  clearMember(authorId: string): void;
   /** One frame of this page's own stroke, for the other screens. */
   sendPreview(mapId: string, preview: DrawingPreview): void;
   /** Show one of this page's own previews among the others' (its laser's trail). */
@@ -257,6 +259,18 @@ export function useMapDrawings({ socket, mapId, joinedEpoch, role, userId, markD
     });
   }, [socket, askAgain]);
 
+  const clearMember = useCallback((authorId: string) => {
+    const { mapId: forMap, role: viewer, userId: me } = latest.current;
+    if (!socket || !forMap) return;
+    const event = { mapId: forMap, layer: 'MARKUP', authorId } as const;
+    useGameStore.getState().removeDrawings(clearedBy(event, { role: viewer, userId: me }));
+    void socket.clearDrawings(event).then((answer) => {
+      if (answer.ok) return;
+      askAgain(forMap);
+      latest.current.onRefused(answer.error);
+    });
+  }, [socket, askAgain]);
+
   const sendPreview = useCallback((forMap: string, preview: DrawingPreview) => {
     socket?.sendDrawingPreview({ mapId: forMap, preview });
   }, [socket]);
@@ -272,7 +286,7 @@ export function useMapDrawings({ socket, mapId, joinedEpoch, role, userId, markD
   }, [markDirty]);
 
   return useMemo(
-    () => ({ drawings, previews, add, erase, clearMine, clearAll, sendPreview, showPreview, dropPreview }),
-    [drawings, add, erase, clearMine, clearAll, sendPreview, showPreview, dropPreview],
+    () => ({ drawings, previews, add, erase, clearMine, clearAll, clearMember, sendPreview, showPreview, dropPreview }),
+    [drawings, add, erase, clearMine, clearAll, clearMember, sendPreview, showPreview, dropPreview],
   );
 }

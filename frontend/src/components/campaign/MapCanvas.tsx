@@ -122,7 +122,7 @@ import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogCont
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
 import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
-import DrawControls from '@/components/campaign/DrawControls';
+import DrawControls, { type MemberDrawings } from '@/components/campaign/DrawControls';
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
 import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
@@ -3347,6 +3347,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   /** How many drawings Clear mine, or for the DM Clear drawings, would erase. */
   const clearableDrawings = mapDrawings.drawings.filter((d) => d.layer === 'MARKUP' && !d.id.startsWith('pending:')
     && (isDM || (d.authorId === user?.id && canEraseDrawing(userRole ?? undefined, user?.id, d)))).length;
+  /** For the DM: each other member with drawings Clear one member's would erase, and how many. */
+  const membersWithDrawings = useMemo((): MemberDrawings[] => {
+    if (!isDM) return [];
+    const counts = new Map<string, number>();
+    for (const d of mapDrawings.drawings) {
+      if (d.layer !== 'MARKUP' || d.audience !== 'ALL' || !d.authorId || d.authorId === user?.id || d.id.startsWith('pending:')) continue;
+      counts.set(d.authorId, (counts.get(d.authorId) ?? 0) + 1);
+    }
+    const named = [...counts].map(([authorId, count]) => ({
+      authorId,
+      name: campaign?.memberships?.find((m) => m.userId === authorId)?.user?.displayName ?? null,
+      count,
+    }));
+    // By name, and anyone who has left after the members.
+    return named.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? '').localeCompare(b.name ?? ''));
+  }, [isDM, mapDrawings.drawings, user?.id, campaign?.memberships]);
   // A label's box takes the keys as it opens, after the press that opened it.
   const labelBoxRef = useRef<HTMLInputElement>(null);
   const labelAt = drawTool.textBox?.at;
@@ -3700,6 +3716,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               onPolygonCancel={drawTool.cancelPolygon}
               clearable={clearableDrawings}
               onClear={isDM ? mapDrawings.clearAll : mapDrawings.clearMine}
+              members={membersWithDrawings}
+              onClearMember={mapDrawings.clearMember}
               onClose={() => setDrawKind(null)}
             />
           )}

@@ -279,6 +279,25 @@ describe('this page’s own erase and clears', () => {
     expect(view.onRefused).toHaveBeenCalledWith('Too many clears');
   });
 
+  it('clears one player’s drawings for everyone for the DM, at once, and asks for the list again if refused', async () => {
+    const fake = fakeSocket();
+    const view = mount(fake, { role: 'DM', userId: 'dm' });
+    fake.fire('drawings:state', {
+      mapId: 'map-a',
+      drawings: [drawing({ id: 'mara1', authorId: 'mara' }), drawing({ id: 'mara-seat', authorId: 'mara', audience: 'DM' }), drawing({ id: 'tom1', authorId: 'tom' })],
+    });
+
+    act(() => { view.result.current.clearMember('mara'); });
+    expect(ids()).toEqual(['mara-seat', 'tom1']);
+    expect(fake.of('drawing:clear')).toEqual([{ mapId: 'map-a', layer: 'MARKUP', authorId: 'mara' }]);
+
+    fake.answers.done = async () => ({ ok: false, error: 'Too many clears' });
+    act(() => { view.result.current.clearMember('tom'); });
+    await settle();
+    expect(fake.of('drawings:request').slice(-1)).toEqual([{ mapId: 'map-a' }]);
+    expect(view.onRefused).toHaveBeenCalledWith('Too many clears');
+  });
+
   it('clears every drawing for the DM', () => {
     const fake = fakeSocket();
     const view = mount(fake, { role: 'DM', userId: 'dm' });

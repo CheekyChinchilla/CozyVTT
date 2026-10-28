@@ -45,6 +45,14 @@ const HINTS: Record<DrawToolKind, string> = {
 const SHAPES = new Set<DrawToolKind>(['line', 'arrow', 'rect', 'ellipse', 'polygon']);
 const FILLABLE = new Set<DrawToolKind>(['rect', 'ellipse', 'polygon']);
 
+/** A member with drawings on the map the DM may clear, and how many. */
+export interface MemberDrawings {
+  authorId: string;
+  /** Null for someone no longer in the campaign. */
+  name: string | null;
+  count: number;
+}
+
 export interface DrawControlsProps {
   kind: DrawToolKind;
   onKindChange: (kind: DrawToolKind) => void;
@@ -64,8 +72,14 @@ export interface DrawControlsProps {
   /** How many drawings on the map this member may clear: their own, or for the DM every one. */
   clearable: number;
   onClear: () => void;
+  /** For the DM: the other members with drawings on the map, each to clear alone. */
+  members: MemberDrawings[];
+  onClearMember: (authorId: string) => void;
   onClose: () => void;
 }
+
+const drawingsOf = (member: MemberDrawings) => (member.name === null ? 'the drawings of someone who has left' : `${member.name}'s drawings`);
+const howMany = (count: number) => (count === 1 ? '1 drawing' : `${count} drawings`);
 
 const toolButton = (on: boolean) =>
   `touch-target inline-flex items-center justify-center w-8 h-8 rounded border transition-colors ${
@@ -73,9 +87,10 @@ const toolButton = (on: boolean) =>
   }`;
 
 export default function DrawControls({
-  kind, onKindChange, settings, onSettingsChange, isDM, onlyErase = false, polygonCorners, onPolygonDone, onPolygonCancel, clearable, onClear, onClose,
+  kind, onKindChange, settings, onSettingsChange, isDM, onlyErase = false, polygonCorners, onPolygonDone, onPolygonCancel, clearable, onClear, members, onClearMember, onClose,
 }: DrawControlsProps) {
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmMember, setConfirmMember] = useState<MemberDrawings | null>(null);
   const custom = !(DRAWING_LIMITS.namedColors as readonly string[]).includes(settings.color);
 
   return (
@@ -229,6 +244,21 @@ export default function DrawControls({
       >
         {isDM ? 'Clear drawings' : 'Clear mine'}
       </button>
+      {isDM && members.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] text-stone-400">Or one member's:</p>
+          {members.map((member) => (
+            <button
+              key={member.authorId}
+              type="button"
+              onClick={() => setConfirmMember(member)}
+              className="touch-target text-[11px] text-left px-2 py-1 rounded border bg-red-900/20 text-red-300 border-red-700/30 hover:bg-red-900/40"
+            >
+              {`Clear ${drawingsOf(member)} (${member.count})`}
+            </button>
+          ))}
+        </div>
+      )}
 
       <ConfirmDialog
         isOpen={confirmClear}
@@ -240,6 +270,19 @@ export default function DrawControls({
           onClear();
         }}
         onCancel={() => setConfirmClear(false)}
+      />
+      <ConfirmDialog
+        isOpen={confirmMember !== null}
+        title={confirmMember ? `Clear ${drawingsOf(confirmMember)}?` : ''}
+        message={confirmMember
+          ? `This erases ${confirmMember.name === null ? 'the' : `${confirmMember.name}'s`} ${howMany(confirmMember.count)}${confirmMember.name === null ? ' of someone who has left' : ''} on this map, for everyone. Nobody else's are touched. It cannot be undone.`
+          : ''}
+        confirmLabel={confirmMember ? `Clear ${confirmMember.name === null ? 'their drawings' : drawingsOf(confirmMember)}` : ''}
+        onConfirm={() => {
+          if (confirmMember) onClearMember(confirmMember.authorId);
+          setConfirmMember(null);
+        }}
+        onCancel={() => setConfirmMember(null)}
       />
     </section>
   );

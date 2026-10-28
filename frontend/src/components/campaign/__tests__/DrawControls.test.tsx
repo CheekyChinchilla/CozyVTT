@@ -14,6 +14,7 @@ function panel(extra: Partial<DrawControlsProps> = {}) {
   const props: DrawControlsProps = {
     kind: 'pen', onKindChange: vi.fn(), settings: DEFAULT_DRAW_SETTINGS, onSettingsChange: vi.fn(), isDM: false,
     polygonCorners: 0, onPolygonDone: vi.fn(), onPolygonCancel: vi.fn(), clearable: 2, onClear: vi.fn(), onClose: vi.fn(),
+    members: [], onClearMember: vi.fn(),
     ...extra,
   };
   render(<DrawControls {...props} />);
@@ -96,6 +97,38 @@ describe('who is offered what', () => {
     expect(dialog).toHaveTextContent('3 drawings');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Clear drawings' }));
     expect(props.onClear).toHaveBeenCalled();
+  });
+});
+
+// The DM tidies up after one player without losing anyone else's work.
+describe('clearing one player’s drawings', () => {
+  const members = [{ authorId: 'mara', name: 'Mara', count: 3 }, { authorId: 'tom', name: 'Tom', count: 1 }];
+
+  it('lists each player with drawings on the map and how many, for the DM', () => {
+    panel({ isDM: true, members });
+
+    expect(screen.getByRole('button', { name: "Clear Mara's drawings (3)" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "Clear Tom's drawings (1)" })).toBeInTheDocument();
+  });
+
+  it('asks first, naming the player and how many, and clears only theirs', () => {
+    const props = panel({ isDM: true, members });
+
+    fireEvent.click(screen.getByRole('button', { name: "Clear Mara's drawings (3)" }));
+    expect(props.onClearMember).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Mara');
+    expect(dialog).toHaveTextContent('3 drawings');
+    fireEvent.click(within(dialog).getByRole('button', { name: "Clear Mara's drawings" }));
+
+    expect(props.onClearMember).toHaveBeenCalledWith('mara');
+    expect(props.onClear).not.toHaveBeenCalled();
+  });
+
+  it('is not offered to a player', () => {
+    panel({ isDM: false, members });
+
+    expect(screen.queryByRole('button', { name: /Clear Mara/ })).not.toBeInTheDocument();
   });
 });
 
