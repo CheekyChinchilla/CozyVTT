@@ -94,7 +94,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       where: { id: mapId },
       include: { campaign: { select: { currentMapId: true } } },
     });
-    if (!map) return audience;
+    // The frame's own check of the map was against the campaign the socket
+    // was in then; one that waited while the socket joined another is sent
+    // to nobody there.
+    if (!map || map.campaignId !== campaignId) return audience;
     const tokens = (Array.isArray(map.tokens) ? map.tokens : []) as unknown as Token[];
     const token = tokens.find((t) => t.id === tokenId);
     if (!token) return audience;
