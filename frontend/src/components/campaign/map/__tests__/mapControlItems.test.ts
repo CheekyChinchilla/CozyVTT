@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { MenuAction, MenuItem } from '@/components/ui/menu';
-import { gridColorLabel, mapControlItems, rulerColorLabel, type MapControlsActions, type MapControlsView } from '../mapControlItems';
+import { gridColorLabel, mapControlItems, mapControlsTitle, rulerColorLabel, type MapControlsActions, type MapControlsView } from '../mapControlItems';
 
 const VIEW: MapControlsView = {
   isDM: false, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
@@ -72,5 +72,21 @@ describe('the Map controls rows', () => {
     expect([gridColorLabel('black'), gridColorLabel('white')]).toEqual(['Grid Color: Black', 'Grid Color: White']);
     expect([rulerColorLabel('amber'), rulerColorLabel('purple'), rulerColorLabel('black')])
       .toEqual(['Ruler color: Amber', 'Ruler color: Purple', 'Ruler color: Black']);
+  });
+
+  // Map controls' tooltip names what its rows are about, from the rows, so
+  // a row added or left out changes it.
+  it('gives Map controls a tooltip naming what its rows are about', () => {
+    expect(mapControlsTitle(mapControlItems({ ...VIEW, isDM: true }, actions())))
+      .toBe('Map controls: fit, grid, ruler, AoE shape, tools and spirit tokens');
+    expect(mapControlsTitle(mapControlItems(VIEW, actions()))).toBe('Map controls: fit, grid, ruler and AoE shape');
+    expect(mapControlsTitle(mapControlItems({ ...VIEW, hasMap: false }, actions()))).toBe('Map controls: fit and grid');
+  });
+
+  it('names every row but the colours in the tooltip', () => {
+    const items = mapControlItems({ ...VIEW, isDM: true, showRuler: true }, actions());
+    const title = mapControlsTitle(items);
+    const named = items.filter((item) => item.kind === 'command' && !item.id.endsWith('-color'));
+    expect(title.split(/, | and /).length).toBe(named.length);
   });
 });

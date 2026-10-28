@@ -107,7 +107,7 @@ import { controlsToken } from '@/utils/tokenOwnership';
 import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
 import { tokenMenuHasItems, tokenMenuItems, type TokenMenuActions, type TokenMenuView } from './map/tokenMenuItems';
 import { doorMenuItems } from './map/doorMenuItems';
-import { mapControlItems, gridColorLabel, rulerColorLabel, type MapControlsActions } from './map/mapControlItems';
+import { mapControlItems, mapControlsTitle, gridColorLabel, rulerColorLabel, type MapControlsActions } from './map/mapControlItems';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
@@ -3741,6 +3741,18 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (labelAt) labelBoxRef.current?.focus({ preventScroll: true });
   }, [labelAt]);
 
+  // The rows of Map controls on the compact layout, which its tooltip names.
+  const mapControlRows = mapControlItems({
+    isDM,
+    hasMap: !!currentMap,
+    showGrid,
+    gridColor,
+    showRuler,
+    rulerColor,
+    showAoE,
+    spiritTokensShown: dmShowSpiritTokens,
+    toolsShown: stackShown,
+  }, mapControlActions);
   // The buttons both layouts' toolbars hold: the zoom buttons and their
   // readout, Ping and Draw.
   const zoomOutButton = (
@@ -4088,7 +4100,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               aria-label="More map controls"
               aria-haspopup="dialog"
               aria-expanded={mapControlsOpen}
-              title="Map controls: fit, grid, ruler and AoE shape"
+              title={mapControlsTitle(mapControlRows)}
             >
               <SlidersHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span className="ml-1.5 max-[24rem]:sr-only">More</span>
@@ -4216,17 +4228,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         <ActionSheet
           open
           title="Map controls"
-          items={mapControlItems({
-            isDM,
-            hasMap: !!currentMap,
-            showGrid,
-            gridColor,
-            showRuler,
-            rulerColor,
-            showAoE,
-            spiritTokensShown: dmShowSpiritTokens,
-            toolsShown: stackShown,
-          }, mapControlActions)}
+          items={mapControlRows}
           onClose={() => setMapControlsOpen(false)}
         />
       )}

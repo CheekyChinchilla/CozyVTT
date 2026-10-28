@@ -113,6 +113,7 @@ vi.mock('@/services/api', () => {
 
 import MapCanvasOnly from '../MapCanvas';
 import { LayoutProvider } from '@/contexts/LayoutContext';
+import { mapControlItems, mapControlsTitle, type MapControlsActions, type MapControlsView } from '../map/mapControlItems';
 import { useGameStore } from '@/stores/gameStore';
 
 function mapWith(extra: Partial<CampaignMap> = {}): CampaignMap {
@@ -270,6 +271,32 @@ describe("the band's one row", () => {
 });
 
 describe('Map controls', () => {
+  // From the rows the sheet holds for the viewer, as the builder makes them.
+  it('says in its tooltip what it holds for the viewer', () => {
+    const noop = () => undefined;
+    const run: MapControlsActions = {
+      fit: noop, toggleGrid: noop, nextGridColor: noop, toggleRuler: noop, nextRulerColor: noop, toggleAoE: noop, toggleSpiritTokens: noop, toggleTools: noop,
+    };
+    const view: MapControlsView = {
+      isDM: true, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
+      spiritTokensShown: true, toolsShown: false,
+    };
+    const titleFor = (extra: Partial<MapControlsView>) => mapControlsTitle(mapControlItems({ ...view, ...extra }, run));
+
+    const { unmount } = render(<MapCanvas />);
+    expect(mapControlsButton()).toHaveAttribute('title', titleFor({}));
+    unmount();
+
+    h.set({ currentMap: null });
+    const second = render(<MapCanvas />);
+    expect(mapControlsButton()).toHaveAttribute('title', titleFor({ hasMap: false }));
+    second.unmount();
+
+    h.set({ userRole: 'PLAYER', currentMap: mapWith() });
+    render(<MapCanvas />);
+    expect(mapControlsButton()).toHaveAttribute('title', titleFor({ isDM: false }));
+  });
+
   it('opens a sheet named Map controls, and says so', () => {
     render(<MapCanvas />);
     expect(mapControlsButton()).toHaveAttribute('aria-haspopup', 'dialog');

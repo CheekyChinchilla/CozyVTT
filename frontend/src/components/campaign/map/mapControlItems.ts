@@ -11,7 +11,9 @@
 // pressed state to show. A colour's row keeps the sheet open, so presses go
 // round the colours; the others close it.
 //
-// The colours' names are the desktop toolbar's too, written once here.
+// The colours' names are the desktop toolbar's too, written once here. Map
+// controls' tooltip is made from the rows (mapControlsTitle), so it names
+// what the sheet holds for the viewer and no more.
 //
 // Pure: no React, no DOM.
 // ============================================
@@ -83,4 +85,16 @@ export function mapControlItems(view: MapControlsView, actions: MapControlsActio
     items.push(row('spirit-tokens', view.spiritTokensShown ? 'Hide spirit tokens' : 'Show spirit tokens', Ghost, actions.toggleSpiritTokens, { tone: 'spirit' }));
   }
   return items;
+}
+
+/** What each row is about, as Map controls' tooltip names it; the colours' rows go with theirs. */
+const TOPICS: Record<string, string> = {
+  fit: 'fit', grid: 'grid', ruler: 'ruler', aoe: 'AoE shape', tools: 'tools', 'spirit-tokens': 'spirit tokens',
+};
+
+/** Map controls' tooltip: what its rows are about, in their order. */
+export function mapControlsTitle(items: MenuItem[]): string {
+  const topics = items.flatMap((item) => (item.kind === 'command' && TOPICS[item.id] ? [TOPICS[item.id]] : []));
+  const list = topics.length > 1 ? `${topics.slice(0, -1).join(', ')} and ${topics[topics.length - 1]}` : topics.join('');
+  return `Map controls: ${list}`;
 }
