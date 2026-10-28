@@ -126,6 +126,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Tapping a box on an iPhone or an iPad no longer zooms the page.** Safari zooms in when a text box, a drop-down list or a text area with text smaller than 16 pixels is tapped, and the page stays zoomed after you leave the box. Most boxes on a character sheet were that small, and many on the campaign page too. On a phone or a tablet their text is now 16 pixels, and a box with bigger text, such as a sheet's name, keeps its size. With a mouse nothing changes.
 
+- **Dialogs fit a phone.** A dialog kept 16 pixels from the screen's edge and 24 pixels of padding inside it at every size, so on a phone 360 pixels wide about 280 were left for what it holds. Its height was worked out from the screen with the browser's toolbar hidden, so on a phone the foot of a tall dialog could be under the toolbar. On a screen less than 640 pixels wide a dialog now keeps 8 pixels from the edge and pads 16. Where its buttons sit in a row along its foot, as in a confirmation, **Invite Player** or **Configure Vibe Periods**, they go onto a second line when they do not fit on one; they used to be squeezed onto it. Its height now follows the part of the screen the browser shows, on a phone or a tablet whose toolbar comes and goes. On a phone or a tablet its close button is 44 by 44 pixels. On a screen 640 pixels or wider a dialog keeps its margin and padding, and with a mouse its close button keeps its size, so on a computer dialogs look as before.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3
