@@ -105,6 +105,7 @@ vi.mock('@/contexts/WebSocketContext', async () => {
     emitTokenMove: record('token.move'),
     emitTokenMoveEnd: record('token.move.end'),
     emitInitiativeAdd: record('initiative.add'),
+    emitInitiativeRoll: record('initiative.roll'),
     emitMapPing: record('map.ping'),
   } as Record<string, unknown>, {
     get(target, prop: string) {
@@ -970,5 +971,71 @@ describe('when a menu opens beside the map', () => {
 
     expect(openCharacterMenu()).not.toBeNull();
     expect(openMenu()).toBeNull();
+  });
+});
+
+// The menu holds the token or the door it was opened on, and its items act
+// on the map on screen: after a switch they would send the old map's token
+// with the new map's id.
+describe('when the map on screen changes', () => {
+  it('closes the token menu', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    rightClick(0, 19);
+    expect(openMenu()).not.toBeNull();
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+
+    expect(openMenu()).toBeNull();
+  });
+
+  it('closes the door menu', () => {
+    h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'd1', x1: 100, y1: 100, x2: 200, y2: 100, type: 'door-closed' }] }) });
+    render(<MapCanvas />);
+    fireEvent.contextMenu(surface(), { clientX: 150, clientY: 104 });
+    expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+
+    expect(openMenu()).toBeNull();
+  });
+
+  // Its Roll Initiative would send the old map's token with the new map's id.
+  it("closes a character's Roll... picker opened from the token menu, and nothing is sent", async () => {
+    h.api.getCharacter.mockReset().mockResolvedValue({ character: { id: 'char-alice', name: 'Brannoc', gameSystem: 'DND_5E', data: {} } });
+    render(<MapCanvas />);
+    show(hero('char-alice', 'alice'));
+    act(() => {
+      useGameStore.getState().setCombatState({
+        active: false, round: 0, currentTokenId: null,
+        combatants: [{ tokenId: 'tok-hero', mapId: 'map-a', name: 'Hero', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null }],
+      });
+    });
+    rightClick(2, 19);
+    await choose('Roll...');
+    expect(await screen.findByRole('button', { name: /Roll Initiative/ })).toBeInTheDocument();
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+
+    expect(screen.queryByRole('button', { name: /Roll Initiative/ })).toBeNull();
+    expect(screen.queryByText(/^Roll for /)).toBeNull();
+    expect(sentOf('initiative.roll')).toEqual([]);
+  });
+
+  // It draws nothing while its token is off the map on screen, and came back
+  // with the token on a return to the map.
+  it("closes a creature's Roll... picker opened from the token menu, so a return to the map does not bring it back", async () => {
+    render(<MapCanvas />);
+    show(goblin());
+    rightClick(0, 19);
+    await choose('Roll...');
+    expect(screen.getByText('Roll for Goblin Scout')).toBeInTheDocument();
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+    show();
+    act(() => { h.set({ currentMap: mapNamed('map-a') }); });
+    show(goblin());
+
+    expect(screen.queryByText('Roll for Goblin Scout')).toBeNull();
   });
 });

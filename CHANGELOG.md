@@ -128,6 +128,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A token's or a door's menu closes when a character's menu opens.** A right-click on a character in the **Campaign Roster** or on a combatant in the initiative tracker, or a press and hold on one, opened its menu and left the map's token or door menu open beside it. Opening a character's menu now closes the map's.
 
+- **A token's or a door's menu, and a Roll... picker opened from a token's menu, close when the map changes.** One left open while the DM switched maps stayed open over the new map and still acted on the old map's token or door, **Roll Initiative** included. They now close as the map changes.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3

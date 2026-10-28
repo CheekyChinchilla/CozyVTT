@@ -659,6 +659,16 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     setFollowedTokenId(null);
     setPingArmed(false);
   }, [currentMap?.id]);
+  // The token and door menus, and the Roll... pickers the token menu opens,
+  // close when the map changes. Each holds the token or the door it was
+  // opened on and acts on the map on screen, so it would send the old map's
+  // token or door with the new map's id.
+  useEffect(() => {
+    closeTokenMenu();
+    setDoorContextMenu(null);
+    setRollPicker(null);
+    setNpcRollPicker(null);
+  }, [currentMap?.id, closeTokenMenu]);
   /**
    * Let go of a held token this page has been told is gone from the map it
    * was picked up on, sending nothing, since there is nothing left to put
