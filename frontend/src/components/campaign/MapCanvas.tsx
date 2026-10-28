@@ -4,7 +4,7 @@
 // ============================================
 
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap, MapPin, Pencil } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap, MapPin, Pencil, SlidersHorizontal } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -107,6 +107,7 @@ import { controlsToken } from '@/utils/tokenOwnership';
 import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
 import { tokenMenuHasItems, tokenMenuItems, type TokenMenuActions, type TokenMenuView } from './map/tokenMenuItems';
 import { doorMenuItems } from './map/doorMenuItems';
+import { mapControlItems, gridColorLabel, rulerColorLabel, type MapControlsActions } from './map/mapControlItems';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
@@ -150,6 +151,12 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   if (effect === 'dream') return '#d4a0f0';
   return '#9370DB'; // wispy default = spirit-purple
 }
+
+/**
+ * The band on the compact layout: across the map, 8 pixels in from each
+ * side, or clear of a phone's notch on a side where it has one.
+ */
+const COMPACT_BAND = 'absolute top-2 left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] flex flex-wrap items-start gap-2 pointer-events-none';
 
 /** The screen's pixel ratio; 1 where there is no window to ask. */
 function readDeviceRatio(): number {
@@ -280,6 +287,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const [fingerCarrying, setFingerCarrying] = useState(false);
   /** The Ping button has been pressed: the next tap or click on the map pings it. */
   const [pingArmed, setPingArmed] = useState(false);
+  /** On the compact layout: the Map controls sheet is open. */
+  const [mapControlsOpen, setMapControlsOpen] = useState(false);
+  const mapControlsButtonRef = useRef<HTMLButtonElement>(null);
+  // A sheet left open as the layout turns to the desktop's does not come
+  // back with the compact layout.
+  useEffect(() => {
+    if (!compact) setMapControlsOpen(false);
+  }, [compact]);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
   /**
    * What made the last press on the map. A finger or a pen leaves no hover
@@ -3619,13 +3634,25 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   // The toolbar buttons that say what they show now: the tooltip and the
   // name a screen reader hears.
-  const gridColorLabel = `Grid Color: ${gridColor === 'black' ? 'Black' : 'White'}`;
-  const rulerColorLabel = `Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`;
+  const gridColorName = gridColorLabel(gridColor);
+  const rulerColorName = rulerColorLabel(rulerColor);
   const spiritTokensLabel = dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show';
+  // What the toolbar's buttons do, and on the compact layout the rows of
+  // Map controls, which hold the buttons its one row leaves out.
+  const mapControlActions: MapControlsActions = {
+    fit: () => mapControls.fitToScreen(canvasSize.width, canvasSize.height),
+    toggleGrid: () => setShowGrid((prev) => !prev),
+    nextGridColor: () => setGridColor((prev) => (prev === 'black' ? 'white' : 'black')),
+    toggleRuler: () => { setDrawKind(null); handleToggleRuler(); },
+    nextRulerColor: () => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber'),
+    toggleAoE: () => { setDrawKind(null); handleToggleAoE(); },
+    toggleSpiritTokens: () => setDmShowSpiritTokens((prev) => !prev),
+  };
   // Where the AoE panel and the Put back bar start: null keeps their places
   // under one row of a mouse's buttons. While both show, the AoE panel starts
-  // under the bar, which would otherwise lie over its shape buttons.
-  const underToolbar = underBand(topBand, coarsePointer);
+  // under the bar, which would otherwise lie over its shape buttons. The
+  // compact layout's band spans the map, so they start under it there.
+  const underToolbar = underBand(topBand, coarsePointer || compact);
   const putBackShown = draggedToken !== null && putBackOffered && !fingerCarrying;
   const heldBarBottom = useMeasuredBottom(heldBarRef, containerRef, putBackShown, underToolbar);
   const aoeTop = heldBarBottom !== null ? heldBarBottom + BAND_GAP : underToolbar;
@@ -3670,6 +3697,64 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   useLayoutEffect(() => {
     if (labelAt) labelBoxRef.current?.focus({ preventScroll: true });
   }, [labelAt]);
+
+  // The buttons both layouts' toolbars hold: the zoom buttons and their
+  // readout, Ping and Draw.
+  const zoomOutButton = (
+    <Button
+      onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
+      disabled={mapControls.zoom <= mapControls.minZoom}
+      variant="secondary" iconOnly
+      title="Zoom Out"
+      aria-label="Zoom Out"
+    >
+      <ZoomOut className="w-4 h-4" />
+    </Button>
+  );
+  // 48 pixels on a touch screen, room for "300%", so a DM's toolbar of
+  // 44-pixel buttons keeps one row on an iPad in landscape with both side
+  // panels at their minimums.
+  const zoomReadout = (
+    <span className="text-xs text-stone-gray font-mono min-w-16 pointer-coarse:min-w-12 text-center">
+      {Math.round(mapControls.zoom * 100)}%
+    </span>
+  );
+  const zoomInButton = (
+    <Button
+      onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
+      disabled={mapControls.zoom >= mapControls.maxZoom}
+      variant="secondary" iconOnly
+      title="Zoom In"
+      aria-label="Zoom In"
+    >
+      <ZoomIn className="w-4 h-4" />
+    </Button>
+  );
+  // Ping: Tab's ping without a keyboard, for the next tap or click.
+  const pingButton = (
+    <Button
+      onClick={() => setPingArmed((armed) => !armed)}
+      variant="secondary" iconOnly className={pingArmed ? 'bg-moss-green/20' : undefined}
+      aria-label="Ping"
+      aria-pressed={pingArmed}
+      title="Ping: tap or click the map to show everyone a spot"
+    >
+      <MapPin className={`w-4 h-4 ${pingArmed ? 'text-brand-ink' : ''}`} />
+    </Button>
+  );
+  // Draw, for whoever may draw now: the DM, or a player while Players may
+  // draw is on and the session is live.
+  const drawButton = drawOffered && (
+    <Button
+      onClick={toggleDraw}
+      variant="secondary" iconOnly className={drawKind ? 'bg-moss-green/20' : undefined}
+      aria-label="Draw"
+      aria-pressed={drawKind !== null}
+      title={eraseOnly ? 'Draw: drawing is off for now; erase your own drawings' : 'Draw: a pen, shapes, labels and the laser pointer'}
+    >
+      <Pencil className={`w-4 h-4 ${drawKind ? 'text-brand-ink' : ''}`} />
+    </Button>
+  );
 
   // ============================================
   // Render
@@ -3816,40 +3901,42 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           realm label on the right. Where they do not fit one row, the
           toolbar wraps between its groups and the label goes under it; the
           panels under the band are placed from its measured bottom edge
-          (map/toolbarLayout.ts). It passes clicks through between the two. */}
-      <div ref={topBandRef} className="absolute top-4 left-4 right-0 flex flex-wrap items-start gap-2 pointer-events-none">
-        {/* Toolbar - Glassmorphism */}
+          (map/toolbarLayout.ts). It passes clicks through between the two.
+          On the compact layout the toolbar is one row across the map, and
+          Map controls opens what that row leaves out. */}
+      <div ref={topBandRef} className={compact ? COMPACT_BAND : 'absolute top-4 left-4 right-0 flex flex-wrap items-start gap-2 pointer-events-none'}>
+        {compact ? (
+          <div ref={toolbarRef} role="group" aria-label="Map tools" className="glass-panel w-full p-1.5 flex items-center gap-1.5 bg-parchment/90 backdrop-blur-xs pointer-events-auto">
+            {zoomOutButton}
+            {zoomReadout}
+            {zoomInButton}
+            <div className="w-px h-6 shrink-0 bg-moss-green/20" />
+            {currentMap && pingButton}
+            {currentMap && drawButton}
+            {/* "More", and named for what it holds, its name starting with
+                the word it shows. The word goes on a screen under 384
+                pixels wide, where the row has room for the icon alone. */}
+            <Button
+              ref={mapControlsButtonRef}
+              onClick={() => setMapControlsOpen(true)}
+              variant="secondary" size="sm"
+              className="ml-auto shrink-0 inline-flex items-center justify-center"
+              aria-label="More map controls"
+              aria-haspopup="dialog"
+              aria-expanded={mapControlsOpen}
+              title="Map controls: fit, grid, ruler and AoE shape"
+            >
+              <SlidersHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="ml-1.5 max-[24rem]:sr-only">More</span>
+            </Button>
+          </div>
+        ) : (
+        /* Toolbar - Glassmorphism */
         <div ref={toolbarRef} className="glass-panel p-2 flex flex-wrap items-center gap-2 bg-parchment/90 backdrop-blur-xs pointer-events-auto">
           <div className="flex items-center gap-2">
-            {/* Zoom Out */}
-            <Button
-              onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
-              disabled={mapControls.zoom <= mapControls.minZoom}
-              variant="secondary" iconOnly
-              title="Zoom Out"
-              aria-label="Zoom Out"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-
-            {/* Zoom Level Display */}
-            {/* 48 pixels on a touch screen, room for "300%", so a DM's
-                toolbar of 44-pixel buttons keeps one row on an iPad in
-                landscape with both side panels at their minimums. */}
-            <span className="text-xs text-stone-gray font-mono min-w-16 pointer-coarse:min-w-12 text-center">
-              {Math.round(mapControls.zoom * 100)}%
-            </span>
-
-            {/* Zoom In */}
-            <Button
-              onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
-              disabled={mapControls.zoom >= mapControls.maxZoom}
-              variant="secondary" iconOnly
-              title="Zoom In"
-              aria-label="Zoom In"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </Button>
+            {zoomOutButton}
+            {zoomReadout}
+            {zoomInButton}
           </div>
 
           <div className="flex items-center gap-2">
@@ -3858,7 +3945,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
             {/* Reset View — fit and center the map in the canvas */}
             <Button
-              onClick={() => mapControls.fitToScreen(canvasSize.width, canvasSize.height)}
+              onClick={mapControlActions.fit}
               variant="secondary" iconOnly
               title="Fit to Screen"
               aria-label="Fit to Screen"
@@ -3868,7 +3955,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
             {/* Toggle Grid */}
             <Button
-              onClick={() => setShowGrid((prev) => !prev)}
+              onClick={mapControlActions.toggleGrid}
               variant="secondary" iconOnly className={showGrid ? 'bg-moss-green/20' : undefined}
               title="Toggle Grid"
               aria-label="Toggle Grid"
@@ -3879,10 +3966,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             {/* Grid Color Toggle (only show if grid is enabled) */}
             {showGrid && (
               <Button
-                onClick={() => setGridColor((prev) => (prev === 'black' ? 'white' : 'black'))}
+                onClick={mapControlActions.nextGridColor}
                 variant="secondary" iconOnly
-                title={gridColorLabel}
-                aria-label={gridColorLabel}
+                title={gridColorName}
+                aria-label={gridColorName}
               >
                 <Palette className="w-4 h-4" />
               </Button>
@@ -3894,7 +3981,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <div className="flex items-center gap-2">
               <div className="w-px h-6 bg-moss-green/20" />
               <Button
-                onClick={() => { setDrawKind(null); handleToggleRuler(); }}
+                onClick={mapControlActions.toggleRuler}
                 variant="secondary" iconOnly className={showRuler ? 'bg-moss-green/20' : undefined}
                 title="Ruler — measure distance"
                 aria-label="Ruler — measure distance"
@@ -3903,10 +3990,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               </Button>
               {showRuler && (
                 <Button
-                  onClick={() => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber')}
+                  onClick={mapControlActions.nextRulerColor}
                   variant="secondary" iconOnly
-                  title={rulerColorLabel}
-                  aria-label={rulerColorLabel}
+                  title={rulerColorName}
+                  aria-label={rulerColorName}
                 >
                   <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
                 </Button>
@@ -3914,7 +4001,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Toggle AoE tool */}
               <Button
-                onClick={() => { setDrawKind(null); handleToggleAoE(); }}
+                onClick={mapControlActions.toggleAoE}
                 variant="secondary" iconOnly className={showAoE ? 'bg-moss-green/20' : undefined}
                 title="AoE Shape — area of effect overlay"
                 aria-label="AoE Shape — area of effect overlay"
@@ -3922,30 +4009,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 <Zap className={`w-4 h-4 ${showAoE ? 'text-brand-ink' : ''}`} />
               </Button>
 
-              {/* Ping: Tab's ping without a keyboard, for the next tap or click */}
-              <Button
-                onClick={() => setPingArmed((armed) => !armed)}
-                variant="secondary" iconOnly className={pingArmed ? 'bg-moss-green/20' : undefined}
-                aria-label="Ping"
-                aria-pressed={pingArmed}
-                title="Ping: tap or click the map to show everyone a spot"
-              >
-                <MapPin className={`w-4 h-4 ${pingArmed ? 'text-brand-ink' : ''}`} />
-              </Button>
-
-              {/* Draw, for whoever may draw now: the DM, or a player while
-                  Players may draw is on and the session is live. */}
-              {drawOffered && (
-                <Button
-                  onClick={toggleDraw}
-                  variant="secondary" iconOnly className={drawKind ? 'bg-moss-green/20' : undefined}
-                  aria-label="Draw"
-                  aria-pressed={drawKind !== null}
-                  title={eraseOnly ? 'Draw: drawing is off for now; erase your own drawings' : 'Draw: a pen, shapes, labels and the laser pointer'}
-                >
-                  <Pencil className={`w-4 h-4 ${drawKind ? 'text-brand-ink' : ''}`} />
-                </Button>
-              )}
+              {pingButton}
+              {drawButton}
             </div>
           )}
 
@@ -3954,7 +4019,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <div className="flex items-center gap-2">
               <div className="w-px h-6 bg-moss-green/20" />
               <Button
-                onClick={() => setDmShowSpiritTokens((prev) => !prev)}
+                onClick={mapControlActions.toggleSpiritTokens}
                 variant="secondary" iconOnly className={dmShowSpiritTokens ? 'bg-spirit-purple/15' : undefined}
                 title={spiritTokensLabel}
                 aria-label={spiritTokensLabel}
@@ -3964,6 +4029,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             </div>
           )}
         </div>
+        )}
 
         {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
         {(previewing
@@ -3979,6 +4045,26 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           </div>
         )}
       </div>
+
+      {/* Map controls, on the compact layout: what the toolbar's one row
+          leaves out, as an action sheet. */}
+      {compact && mapControlsOpen && (
+        <ActionSheet
+          open
+          title="Map controls"
+          items={mapControlItems({
+            isDM,
+            hasMap: !!currentMap,
+            showGrid,
+            gridColor,
+            showRuler,
+            rulerColor,
+            showAoE,
+            spiritTokensShown: dmShowSpiritTokens,
+          }, mapControlActions)}
+          onClose={() => setMapControlsOpen(false)}
+        />
+      )}
 
       {/* Put back, while a finger or a pen holds a token still. In Player
           Preview it names only what the preview draws, as the previewed
