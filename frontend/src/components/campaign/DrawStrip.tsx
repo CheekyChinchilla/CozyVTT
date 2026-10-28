@@ -20,12 +20,14 @@
  * header fixed and the rest scrolling under it, so the map keeps room to
  * draw on and the header's buttons stay in reach, the colours open or not.
  *
- * It sets no place of its own: the map's dock places it. It shares the
+ * The map's dock places it, across the map's foot; on a tablet it is at
+ * most the sheets' 672 pixels wide, centred, as they are. It shares the
  * panel's tools, colours, hints and questions, so the two cannot drift.
  */
 
 import { useId, useState } from 'react';
 import ActionSheet from '@/components/campaign/compact/ActionSheet';
+import { SHEET_WIDTH } from '@/components/campaign/compact/BottomSheet';
 import type { MenuItem } from '@/components/ui/menu';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { cn } from '@/utils/cn';
@@ -102,6 +104,7 @@ export default function DrawStrip({
     <section
       aria-label="Drawing tools"
       className={cn(
+        SHEET_WIDTH,
         'pointer-events-auto flex flex-col gap-2 rounded-t-cozy-lg border border-b-0 border-brand/20 bg-surface-light pt-2 pb-3 text-ink shadow-2xl pl-[max(1rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))]',
         // At most half the map's height (the dock is its size), less on a
         // short screen, so the map keeps room to draw on.

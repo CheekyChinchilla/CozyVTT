@@ -229,6 +229,13 @@ describe("the band's one row", () => {
     expect(classesOf(toolbar())).not.toContain('flex-wrap');
   });
 
+  // As the tablet's mock-up has it: as wide as its buttons, More beside Draw.
+  it('is as wide as its buttons from a small tablet up, Map controls beside Draw', () => {
+    render(<MapCanvas />);
+    expect(classesOf(toolbar())).toContain('sm:w-auto');
+    expect(classesOf(mapControlsButton())).toEqual(expect.arrayContaining(['ml-auto', 'sm:ml-0']));
+  });
+
   it('sizes every button for a finger', () => {
     render(<MapCanvas />);
     for (const button of within(toolbar()).getAllByRole('button')) expect(classesOf(button)).toContain('touch-target');

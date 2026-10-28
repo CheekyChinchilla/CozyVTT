@@ -4068,7 +4068,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           Map controls opens what that row leaves out. */}
       <div ref={topBandRef} className={compact ? COMPACT_BAND : 'absolute top-4 left-4 right-0 flex flex-wrap items-start gap-2 pointer-events-none'}>
         {compact ? (
-          <div ref={toolbarRef} role="group" aria-label="Map tools" className="glass-panel w-full p-1.5 flex items-center gap-1.5 bg-parchment/90 backdrop-blur-xs pointer-events-auto">
+          // Across the map on a phone, with More at its far end; from a
+          // small tablet up as wide as its buttons, More beside Draw.
+          <div ref={toolbarRef} role="group" aria-label="Map tools" className="glass-panel w-full sm:w-auto p-1.5 flex items-center gap-1.5 bg-parchment/90 backdrop-blur-xs pointer-events-auto">
             {zoomOutButton}
             {zoomReadout}
             {zoomInButton}
@@ -4082,7 +4084,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               ref={mapControlsButtonRef}
               onClick={() => setMapControlsOpen(true)}
               variant="secondary" size="sm"
-              className="ml-auto shrink-0 inline-flex items-center justify-center"
+              className="ml-auto sm:ml-0 shrink-0 inline-flex items-center justify-center"
               aria-label="More map controls"
               aria-haspopup="dialog"
               aria-expanded={mapControlsOpen}

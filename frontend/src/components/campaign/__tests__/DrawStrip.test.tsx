@@ -70,6 +70,11 @@ describe('the strip', () => {
     ]));
   });
 
+  it('is at most as wide as a sheet on a tablet, centred', () => {
+    strip();
+    expect(classes(region())).toEqual(expect.arrayContaining(['mx-auto', 'w-full', 'max-w-2xl']));
+  });
+
   it('puts the tools away on Done', () => {
     const { props } = strip();
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
