@@ -253,6 +253,7 @@ src/
 │   ├── AuthContext.tsx    User auth state, login/logout/register actions
 │   ├── WebSocketContext.tsx  Socket.io connection lifecycle and event subscriptions
 │   ├── CampaignContext.tsx   Per-campaign metadata (campaign, current map, vibe, session status, roster)
+│   ├── LayoutContext.tsx     Which arrangement the campaign page draws (useCompactLayout)
 │   ├── ThemeContext.tsx      The theme and font in force, and the instance's default
 │   ├── ThemeSyncBridge.tsx   Applies the signed-in user's saved theme over the default, and clears it at sign-out
 │   └── ToastContext.tsx      The small notices the app shows
@@ -263,7 +264,7 @@ src/
 ├── pages/             One file per route (thin; delegates to components, contexts, and query hooks)
 ├── components/
 │   ├── ui/            Shared UI primitives (Button, Modal, SlideOver, FloatingLayer, Input, Field, Tooltip), and the shape of a menu's items (menu.ts)
-│   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
+│   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.), the page's desktop arrangement (DesktopTable) and the hosts that draw its parts once (tableHosts.tsx)
 │   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held token (where it is drawn, the square a pointer carries it to, its release: tokenHold.ts), animation/render-loop hooks, the canvases' size and transform at the screen's pixel ratio (layerCanvas.ts), the one pointer shape the tools read (mapPointer.ts), the touch gesture recogniser (gestures.ts), the click a long-press's lift may bring (clickSwallow.ts), the token and door menus as data (tokenMenuItems.ts, doorMenuItems.ts), and the drawings on the page (useMapDrawings.ts, drawingPreviews.ts, drawingGeometry.ts, drawingHitTest.ts)
 │   │       └── tools/ Each map tool's pointer and key handling: walls, lights, doors, fog boxes, the ruler and AoE template
 │   ├── character-sheets/  Game system sheet renderers
@@ -309,7 +310,7 @@ CozyVTT uses three complementary state layers, each with a clear boundary. The r
 | Layer | Owns | Examples |
 |-------|------|----------|
 | **React Query** (`@tanstack/react-query`) | Server resources fetched over REST | Campaign lists/detail, characters, assets, map metadata |
-| **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions and list, combat/initiative, characters' hit points, who is online (`presence.state`, for the roster and the chat's To list); and two things of the page's own, fed by no socket: the hover cross-highlight, which the map and the tracker share, and the selected token (`selectedTokenId`, kept across a new token list while the list holds it, cleared when the map changes). The session rail's open tab (`sessionTab`, remembered in the browser under `cozyvtt-session-tab`) and the Chat tab's unread count (`unreadChat`) are here too, so the tab bar and the panels read one value wherever the page draws them; `clearGameState` empties the count as a page opens a campaign or leaves it. The current map's drawings are here too (`drawings`, replaced whole on a map switch); the previews of strokes on their way are not, since they change every frame, and live in a ref the overlay reads. Walls, fog and lights are still MapCanvas-local; walls additionally keep their own undo/redo history |
+| **Zustand** (`stores/gameStore.ts`) | Live, high-frequency state fed by WebSocket events | Token positions and list, combat/initiative, characters' hit points, who is online (`presence.state`, for the roster and the chat's To list); and two things of the page's own, fed by no socket: the hover cross-highlight, which the map and the tracker share, and the selected token (`selectedTokenId`, kept across a new token list while the list holds it, cleared when the map changes). The session rail's open tab (`sessionTab`, remembered in the browser under `cozyvtt-session-tab`) and the Chat tab's unread count (`unreadChat`) are here too, so the tab bar and the panels read one value wherever the page draws them; `clearGameState` empties the count as a page opens a campaign or leaves it. Nothing else of the table's own state is lifted into the store: the map, the session panels and the Party content are drawn once for the page (see [The campaign page's arrangements](#the-campaign-pages-arrangements)), so what they hold stays in them. The current map's drawings are here too (`drawings`, replaced whole on a map switch); the previews of strokes on their way are not, since they change every frame, and live in a ref the overlay reads. Walls, fog and lights are still MapCanvas-local; walls additionally keep their own undo/redo history |
 | **React Context** | App/session wiring and metadata | Auth state, socket connection, campaign metadata + vibe/session status |
 
 A page that changes a server resource away from the page that lists it updates that list's cache itself. The characters list, for instance, is served from cache for 30 seconds, so the full-page character editor and the templates page write what they saved or created into it with `storeCharacterInList` (`hooks/queries`); otherwise the Characters page would show a new character late, or an old name. The characters list and the character template list hold no sheets (the server lists them without `data`), so a page that opens, exports, copies or edits one fetches it by id first.
@@ -380,6 +381,22 @@ graph LR
     CC --> Roster
     GS -. "token subscribers only" .-> Roster
 ```
+
+### The campaign page's arrangements
+
+The campaign page (`pages/CampaignPage.tsx`) arranges the same parts in one of two ways, and exactly one arrangement is mounted at a time: the desktop's header and three resizable columns, `components/campaign/DesktopTable.tsx`, and a compact arrangement for narrow screens, which is not drawn yet. `contexts/LayoutContext.tsx` says which. The page's `LayoutProvider` gives `compact`, fixed at false for now, so every screen gets the desktop arrangement, with the Desktop Required notice over it below 1024 px; a component that changes with the arrangement asks `useCompactLayout()`, which is false outside the provider, as on every other page. The width is `COMPACT_LAYOUT_QUERY` (`constants/layout.ts`), written once; the Creature Library and Token Templates ask it themselves.
+
+The parts that hold the table's state are drawn once for the page and moved between arrangements, so a change of arrangement, such as a tablet turned across that width, remounts none of them:
+
+| Part | What a remount would lose |
+|---|---|
+| The map (`MapCanvas`) | A held token, a stroke or wall line in progress, wall undo, Player Preview and the view; and every request for the map's state would be sent again, which the server answers at most five times a second |
+| The session panels (`SessionPanels`) | The chat's whisper recipient and unsent messages, what the dice panel was set to roll, the open note; the chat and dice history read again |
+| The Party content (`CampaignInfo`, `CampaignRoster` and, for the DM, `TokenRoster`) | The roster's listeners; it also seeds the hit points the map's bars read |
+
+`components/campaign/tableHosts.tsx` does the moving. `TableHosts` renders each part through a portal into a host element of its own, made once and styled `display: contents`, so it adds no box. An arrangement marks the element each part fills with `useTableSlot(part)`; the host is moved into that slot as the slot mounts, and into a parking box (laid out, clipped to nothing) as it unmounts, to wait for the next arrangement's slot. The portal's container never changes, so React never remounts the part, and a part is first drawn once its host is in a slot, so it is measured in place. A move keeps the keyboard focus (the browser's `moveBefore` keeps it where the browser has one; elsewhere the same element is focused again after the move), and a `ResizeObserver` goes on observing its element and reports the new size. React events from a part bubble through `TableHosts`, not through the slot, so a slot takes no React handlers meant for what is in it; DOM listeners, the panel library's among them, see the part where it is drawn. A slot with no `TableHosts` above it says so (`hosted: false`), and its component draws the part itself, as the session rail does when a test draws it alone.
+
+What else an arrangement change must keep stays above both arrangements, in the page: its socket listeners, every window and slide-over and whether it is open, and the token quick editor. The open session tab and the Chat tab's unread count are in the game store, since an arrangement's tab bar sets and shows them. Nothing else of the parts' state is lifted: they are never remounted, so the chat's draft, the map's zoom and pan and the rest stay in the components that hold them.
 
 ---
 

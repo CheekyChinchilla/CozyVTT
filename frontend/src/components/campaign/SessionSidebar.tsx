@@ -5,7 +5,9 @@
 //
 // The rail is its tab bar and the panels below it (SessionPanels),
 // which stay mounted while their tab is not open. The open tab is the
-// game store's `sessionTab`.
+// game store's `sessionTab`. On the campaign page the panels are the
+// page's, moved into the rail (tableHosts.tsx); drawn on its own, the
+// rail draws them itself.
 // ============================================
 
 import { MessageCircle, Dices, ListOrdered, PlayCircle, NotebookPen, type LucideIcon } from 'lucide-react';
@@ -13,6 +15,7 @@ import { useGameStore } from '@/stores/gameStore';
 import { cn } from '@/utils/cn';
 import SessionPanels from './SessionPanels';
 import { SESSION_TABS, type SessionTab } from './sessionTabs';
+import { useTableSlot } from './tableHosts';
 
 const TAB_LOOKS: Record<SessionTab, { label: string; icon: LucideIcon }> = {
   chat: { label: 'Chat', icon: MessageCircle },
@@ -30,6 +33,7 @@ export default function SessionSidebar() {
   const activeTab = useGameStore((s) => s.sessionTab);
   const setActiveTab = useGameStore((s) => s.setSessionTab);
   const unreadChat = useGameStore((s) => s.unreadChat);
+  const panelsSlot = useTableSlot('session');
 
   // Roving-tabindex keyboard support: Left/Right arrows move between tabs.
   const handleTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -91,8 +95,8 @@ export default function SessionSidebar() {
       </div>
 
       {/* Tab panels — stacked, all mounted, inactive ones invisible */}
-      <div className="relative flex-1 min-h-0">
-        <SessionPanels />
+      <div ref={panelsSlot.ref} className="relative flex-1 min-h-0">
+        {!panelsSlot.hosted && <SessionPanels />}
       </div>
     </aside>
   );
