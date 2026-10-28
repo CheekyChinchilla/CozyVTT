@@ -264,7 +264,7 @@ Four places, all plain conditionals:
 | `npc-stat-blocks/StatBlockEditor.tsx` | CR vs Level, scores vs modifiers, which proficiency editor |
 | `npc-stat-blocks/StatBlockViewer.tsx` | Which read-only stat block renderer |
 | `utils/npcRolls.ts` (`buildNpcRolls`) | What can be rolled — **returns nothing for systems without a model** |
-| `campaign/NpcRollPicker.tsx` | Advantage-equivalent labels |
+| `utils/rollModes.ts` | Advantage-equivalent labels, and whether the system has one (the roll pickers and a character sheet's **Roll mode** and roll menu) |
 
 ### Adding creature support for a new system
 
@@ -751,9 +751,10 @@ does not derive fabricates numbers that look authoritative.
 4. **Proficiency editor** — if saves and skills are derived, model it on
    `ProficiencyEditor.tsx`. If they are printed, model it on
    `Pf2eProficiencyEditor.tsx`, which deliberately computes nothing.
-5. **Roll picker labels** — add an entry to `MODE_LABELS` in
-   `NpcRollPicker.tsx` if your system names its advantage equivalent something
-   else, and to `systemSupportsAdvantage` if it has one at all.
+5. **Roll mode labels** — add an entry to `MODE_LABELS` in
+   `utils/rollModes.ts` if your system names its advantage equivalent something
+   else, and to `systemSupportsAdvantage` if it has one at all. The roll
+   pickers, a character sheet's **Roll mode** and its roll menu all read them.
 
 Bounds live in `backend/src/validators/statBlock.ts`. `MIN_STORED_BONUS` /
 `MAX_STORED_BONUS` are deliberately wide (±50) because they cover every system
@@ -822,7 +823,7 @@ The exhaustive `switch`/`Record` types mean a missed backend registration point 
 - [ ] `StatBlockViewer.tsx` — `case`, or left on `GenericStatBlock`
 - [ ] `StatBlockEditor.tsx` — branches for any system-specific fields
 - [ ] New `NpcStatBlock` fields added as **optional**, mirrored in `validators/statBlock.ts`
-- [ ] `NpcRollPicker.tsx` — `MODE_LABELS` / `systemSupportsAdvantage` entries
+- [ ] `utils/rollModes.ts` — `MODE_LABELS` / `systemSupportsAdvantage` entries
 
 **Docs**
 - [ ] Game system added to the systems table in `README.md`

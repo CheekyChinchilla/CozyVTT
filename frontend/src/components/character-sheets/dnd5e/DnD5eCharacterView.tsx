@@ -5,7 +5,7 @@
  * Organized in tabs for easy navigation.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Heart,
   Shield,
@@ -31,7 +31,6 @@ import { SkillsList } from './components/SkillsList';
 import { AttacksList } from './components/AttacksList';
 import { InventoryList } from './components/InventoryList';
 import { SpellcastingBlock } from './components/SpellcastingBlock';
-import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
 import {
   passiveScore,
   hasSpellcasting,
@@ -49,25 +48,21 @@ import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
 import { SheetTabs, type SheetTab } from '../SheetTabs';
+import { rollTarget, useSheetRolls, type SheetRollHandler } from '../useSheetRolls';
+import type { RollMode } from '@/utils/rollModes';
 
 interface DnD5eCharacterViewProps {
   character: Character;
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
-  /** Roll at the table; resolves whether the roll was made, when the host can tell. */
-  onRoll?: (expression: string, purpose: string) => void | Promise<boolean>;
+  onRoll?: SheetRollHandler;
+  /** The sheet's Roll mode, for every d20 test a click rolls. Normal without one. */
+  rollMode?: RollMode;
   /**
    * Called when a hit die is spent, with the position of the pool. Omit and
    * the dice still roll but nothing is decremented.
    */
   onSpendHitDie?: (index: number) => void;
-}
-
-interface RollPopupState {
-  anchorX: number;
-  anchorY: number;
-  expression: string;
-  purpose: string;
 }
 
 type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'features' | 'bio';
@@ -84,32 +79,13 @@ const TABS: SheetTab<TabId>[] = [
 /**
  * DnD5eCharacterView - Read-only D&D 5e character sheet
  */
-export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll, onSpendHitDie }) => {
+export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll, rollMode, onSpendHitDie }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const data = character.data as DnD5eCharacterData;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
-  const [rollPopup, setRollPopup] = useState<RollPopupState | null>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-
-  // Close popup on outside click
-  useEffect(() => {
-    if (!rollPopup) return;
-    const handler = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        setRollPopup(null);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [rollPopup]);
-
-  const handleRoll = (expression: string, purpose: string) => {
-    const made = onRoll?.(expression, purpose);
-    setRollPopup(null);
-    return made;
-  };
+  const { roll: handleRoll, rollTest, rootProps: rollRoot, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem, rollMode);
 
   // A hit die is spent once its roll is made: a roll refused (too many rolls,
   // no connection) used to take the die anyway.
@@ -117,11 +93,6 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     void Promise.resolve(handleRoll(expression, purpose)).then((made) => {
       if (made !== false) onSpendHitDie?.(index);
     });
-  };
-
-  const showRollPopup = (e: React.MouseEvent, expression: string, purpose: string) => {
-    e.preventDefault();
-    setRollPopup({ anchorX: e.clientX, anchorY: e.clientY, expression, purpose });
   };
 
   // Load saved color preference from character metadata
@@ -246,8 +217,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                   colorTo={themeColor.to}
                   colorHex={themeColor.hex}
                   customColor={isCustomColor ? customColorHex : undefined}
-                  onRoll={onRoll ? () => handleRoll(expr, purpose) : undefined}
-                  onRollContext={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
+                  onRoll={onRoll ? () => rollTest(expr, purpose) : undefined}
+                  rollAs={rollTarget(expr, purpose, character.gameSystem)}
                 />
               );
             });
@@ -269,10 +240,9 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               return (
                 <div
                   key={key}
-                  className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-accent/10 select-none' : ''}`}
-                  onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
-                  onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
-                  title={onRoll ? `Left-click: roll  |  Right-click: Advantage / Disadvantage` : undefined}
+                  className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-accent/10 select-none [-webkit-touch-callout:none]' : ''}`}
+                  onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
+                  {...(onRoll ? rollTarget(expr, purpose, character.gameSystem) : undefined)}
                 >
                   <div className="flex items-center gap-1">
                     {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
@@ -320,8 +290,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                 expertise: custom.expertise === true,
                 bonus: dnd5eCustomSkillBonus(data, custom),
               }))}
-              onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
-              onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
+              onRoll={onRoll ? rollTest : undefined}
             />
           </div>
         </div>
@@ -515,8 +484,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           <h3 className="text-lg font-semibold text-ink mb-3">Attacks & Weapons</h3>
           <AttacksList
             attacks={data.attacks}
-            onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
-            onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
+            onRollAttack={onRoll ? rollTest : undefined}
+            onRollDamage={onRoll ? handleRoll : undefined}
           />
         </div>
       )}
@@ -779,37 +748,13 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   };
 
   return (
-    <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
+    <div className="bg-paper rounded-lg shadow-lg overflow-hidden" {...rollRoot}>
       {renderHeader()}
       <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
       <div data-sheet-body className="p-3 sm:p-6">{renderTabContent()}</div>
 
-      {/* Advantage / Disadvantage popup (shown on right-click of any rollable stat) */}
-      {rollPopup && (
-        <div
-          ref={popupRef}
-          className="fixed z-50 bg-paper border border-ink/10 rounded-lg shadow-xl overflow-hidden"
-          style={{ left: rollPopup.anchorX, top: rollPopup.anchorY, minWidth: 180 }}
-        >
-          <div className="px-3 py-2 bg-accent text-accent-text text-xs font-semibold truncate">
-            {rollPopup.purpose}
-          </div>
-          {[
-            { label: 'Normal', expr: rollPopup.expression, suffix: '' },
-            { label: 'Advantage', expr: withAdvantage(rollPopup.expression), suffix: ' (Advantage)' },
-            { label: 'Disadvantage', expr: withDisadvantage(rollPopup.expression), suffix: ' (Disadvantage)' },
-          ].map(({ label, expr, suffix }) => (
-            <button
-              key={label}
-              onClick={() => handleRoll(expr, rollPopup.purpose + suffix)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-secondary hover:bg-accent/10 transition-colors text-left"
-            >
-              <Dices className="w-3.5 h-3.5 text-accent-ink shrink-0" />
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Advantage / Disadvantage, on a right-click or a press and hold of any d20 test */}
+      {rollMenu}
     </div>
   );
 };

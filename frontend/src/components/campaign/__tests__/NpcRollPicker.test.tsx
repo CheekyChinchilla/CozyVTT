@@ -104,3 +104,24 @@ describe('the close button', () => {
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
 });
+
+describe('the roll mode', () => {
+  function rollWithDisadvantage(option: RegExp) {
+    const onRoll = vi.fn();
+    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disadvantage' }));
+    fireEvent.click(screen.getByRole('button', { name: option }));
+    return onRoll.mock.calls[0] as [string, string, string | undefined];
+  }
+
+  it('rolls an attack twice with Disadvantage, keeping the lower, and the log says so', () => {
+    expect(rollWithDisadvantage(/^Scimitar \(Attack/).slice(0, 2)).toEqual(['2d20kl1+4', 'Scimitar Attack (Disadvantage)']);
+  });
+
+  it('leaves the damage as it is', () => {
+    const [expression, purpose] = rollWithDisadvantage(/^Scimitar \(Damage/);
+    expect(expression).not.toMatch(/2d20/);
+    expect(purpose).not.toMatch(/Disadvantage/);
+  });
+});

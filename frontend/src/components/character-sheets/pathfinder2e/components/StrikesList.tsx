@@ -8,6 +8,7 @@
 import React from 'react';
 import { Sword, Target, Zap, Dices } from 'lucide-react';
 import ProficiencyIndicator, { ProficiencyRank } from './ProficiencyIndicator';
+import { rollTarget } from '../../useSheetRolls';
 
 /**
  * A strike, as the schema actually declares it.
@@ -37,8 +38,10 @@ export interface Strike {
 
 interface StrikesListProps {
   strikes: Strike[];
-  onRoll?: (expression: string, purpose: string) => void;
-  onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
+  /** Click a strike to roll its attack, a d20 test the sheet's Roll mode applies to. */
+  onRollStrike?: (expression: string, purpose: string) => void;
+  /** Click a damage roll to roll it as written. */
+  onRollDamage?: (expression: string, purpose: string) => void;
 }
 
 /**
@@ -57,7 +60,7 @@ const getStrikeIcon = (type: string | undefined, savingThrow?: string) => {
   return type === 'melee' ? Sword : Target;
 };
 
-export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRollContext }) => {
+export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike, onRollDamage }) => {
   if (!strikes || strikes.length === 0) {
     return (
       <div className="text-center py-8 text-ink-muted italic">
@@ -74,7 +77,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
         // A strike is only rollable once it has a bonus recorded — absent is as
         // unrollable as null, and used to slip through to produce "1d20+undefined".
         const bonus = typeof strike.attackBonus === 'number' ? strike.attackBonus : null;
-        const isClickable = !!onRoll && bonus !== null && !strike.savingThrow;
+        const isClickable = !!onRollStrike && bonus !== null && !strike.savingThrow;
         const attackExpr = bonus !== null
           ? (bonus >= 0 ? `1d20+${bonus}` : `1d20${bonus}`)
           : '';
@@ -83,10 +86,9 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
         return (
           <div
             key={`${strike.name}-${index}`}
-            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 hover:shadow-md select-none' : 'hover:shadow-md'}`}
-            onClick={isClickable ? () => onRoll!(attackExpr, attackPurpose) : undefined}
-            onContextMenu={isClickable && onRollContext ? (e) => { e.preventDefault(); onRollContext(e, attackExpr, attackPurpose); } : undefined}
-            title={isClickable ? `Left-click: roll attack  |  Right-click: Fortune / Misfortune` : undefined}
+            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 hover:shadow-md select-none [-webkit-touch-callout:none]' : 'hover:shadow-md'}`}
+            onClick={isClickable ? () => onRollStrike?.(attackExpr, attackPurpose) : undefined}
+            {...(isClickable ? rollTarget(attackExpr, attackPurpose, 'PATHFINDER_2E') : undefined)}
           >
             {/* Strike Header */}
             <div className="flex items-start justify-between mb-2">
@@ -126,9 +128,9 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
 
               {/* Damage — click separately */}
               <div
-                className={onRoll && strike.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
-                onClick={onRoll && strike.damageRoll ? (e) => { e.stopPropagation(); onRoll(strike.damageRoll!, `${strike.name} Damage`); } : undefined}
-                title={onRoll && strike.damageRoll ? `Click to roll damage: ${strike.damageRoll}` : undefined}
+                className={onRollDamage && strike.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
+                onClick={onRollDamage && strike.damageRoll ? (e) => { e.stopPropagation(); onRollDamage(strike.damageRoll!, `${strike.name} Damage`); } : undefined}
+                title={onRollDamage && strike.damageRoll ? `Click to roll damage: ${strike.damageRoll}` : undefined}
               >
                 <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                   Damage

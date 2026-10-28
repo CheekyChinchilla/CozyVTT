@@ -8,16 +8,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dices, X, ChevronDown } from 'lucide-react';
 import type { Token } from '@/types';
-import {
-  withAdvantage,
-  withDisadvantage,
-  type RollOption,
-  type CharacterRolls,
-} from '@/utils/characterRolls';
+import type { RollOption, CharacterRolls } from '@/utils/characterRolls';
 import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
 import { tokenPublicName } from '@/utils/tokenDisplayName';
-import { getModeLabels, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
+import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -139,13 +134,10 @@ export default function NpcRollPicker({
   }, [onClose]);
 
   const handleRollOption = (opt: RollOption) => {
-    let expr = opt.expression;
-    let purpose = opt.purpose;
-    if (opt.supportsAdvantage && mode !== 'normal') {
-      expr = mode === 'advantage' ? withAdvantage(expr) : withDisadvantage(expr);
-      purpose = `${purpose} (${modeLabels[mode]})`;
-    }
-    onRoll(expr, purpose, tokenPublicName(token));
+    const { expression, purpose } = opt.supportsAdvantage
+      ? applyRollMode(opt.expression, opt.purpose, mode, gameSystem ?? null)
+      : opt;
+    onRoll(expression, purpose, tokenPublicName(token));
     onClose();
   };
 
@@ -192,7 +184,7 @@ export default function NpcRollPicker({
             </button>
             {modeOpen && (
               <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
-                {(['normal', 'advantage', 'disadvantage'] as RollMode[]).map((m) => (
+                {ROLL_MODES.map((m) => (
                   <button
                     key={m}
                     onClick={() => { setMode(m); setModeOpen(false); }}

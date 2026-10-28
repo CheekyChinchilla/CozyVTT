@@ -265,6 +265,22 @@ Nobody else's secret rolls ever reach you. Not hidden in the page — never sent
 
 One thing to know: if the DM has **paused** the session, your rolls from the **Dice** tab are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh. A roll from your sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
+### Rolling from your sheet
+
+Your character's sheet rolls at the table when you open it on the campaign page, from the **Campaign Roster** for instance. Click an ability, a saving throw, a skill or an attack to roll it, or a weapon's damage to roll that. The roll lands in the **Dice** panel named for what it was, such as "Dexterity Save". A small dice icon beside a stat says it rolls. A sheet opened from the **Characters** page doesn't roll, since there's no table there.
+
+**Advantage and Disadvantage.** Right-click an ability, a saving throw, a skill or an attack for a small menu of **Normal**, **Advantage** and **Disadvantage**, and choose one to roll. On a phone or a tablet, press and hold the stat for half a second instead: the menu opens where your finger is, and you lift your finger and tap a choice. The stat doesn't also roll as you lift, and a finger that slides scrolls the sheet as usual and opens nothing.
+
+| Choice | What is rolled | The Dice panel says |
+|---|---|---|
+| **Normal** | One d20, as a click rolls it | Dexterity Save |
+| **Advantage** | Two d20s, keeping the higher (`2d20kh1`) | Dexterity Save (Advantage) |
+| **Disadvantage** | Two d20s, keeping the lower (`2d20kl1`) | Dexterity Save (Disadvantage) |
+
+On a Pathfinder 2e sheet the menu reads **Normal**, **Fortune** and **Misfortune**, which roll the same way. Click or tap anywhere else, or press **Esc**, to close the menu; the sheet stays open. Damage and hit dice have no menu, since the rules give advantage to ability checks, saving throws and attack rolls only. A Call of Cthulhu sheet rolls `1d100` and has no menu: its bonus and penalty dice aren't offered yet.
+
+**Roll mode, for a run of rolls.** When several rolls in a row have advantage, set **Roll mode** in the sheet's header to **Advantage** (or **Disadvantage**). Every ability, saving throw, skill and attack you click or tap after that rolls that way, and the **Dice** panel says so on each one. It stays set until you change it back to **Normal** or close the sheet, starts at **Normal** each time you open the sheet, and is highlighted while it's set to anything else, so you can see it's on. Damage and hit dice still roll as written, and a choice in the menu goes for that one roll whatever **Roll mode** says. On a Pathfinder 2e sheet it reads **Normal**, **Fortune** and **Misfortune**. A Call of Cthulhu sheet has no **Roll mode**, and neither has a sheet you can't roll from, such as another player's character or a sheet opened from the **Characters** page.
+
 ---
 
 ## Moving Your Token
@@ -304,6 +320,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 | Read a token's details | Tap it. It is selected, and its card shows at the bottom left of the map, as hovering it with a mouse would (see [Pointing at a token](#pointing-at-a-token)). The card lets taps through to the map under it, except on its **✕**, which closes it until you next tap a token, the same one included. |
 | Open a token's menu | Press and hold the token for half a second: the menu a right-click opens there opens, with the same items, and the token is selected. Lift your finger and tap an item. |
 | Open a character's or a combatant's menu | Press and hold its row in the **Campaign Roster** or the initiative tracker for half a second: the menu a right-click opens there opens. A tap on a character still opens its sheet, and sliding your finger scrolls the panel. |
+| Roll from your sheet with advantage | Tap a stat to roll it. Press and hold it for half a second for **Normal**, **Advantage** and **Disadvantage** (**Fortune** and **Misfortune** in Pathfinder 2e), or set **Roll mode** in the sheet's header for a run of rolls. See [Rolling from your sheet](#rolling-from-your-sheet). |
 | Open or close a door | Tap it, as you would click it. Press and hold it for its menu. |
 | Measure a distance | With the **Ruler** up, tap the square, or slide one finger to it; the line stays after you lift (see [Measuring and Spell Areas](#measuring-and-spell-areas)). |
 | Aim a spell area | With **AoE Shape** up, slide your finger from the square it comes from towards the target (see [Measuring and Spell Areas](#measuring-and-spell-areas)). Untick **Snap to grid** to place it off the grid, as **Alt** does with a mouse. |
@@ -312,7 +329,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
-On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus, the close buttons of messages and of the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−1** beside the hit points and **+1** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
+On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus and of a character sheet's roll menu, the buttons of a sheet's **Roll mode**, the close buttons of messages and of the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−1** beside the hit points and **+1** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
 
 ### Two creatures can't stand in the same square
 

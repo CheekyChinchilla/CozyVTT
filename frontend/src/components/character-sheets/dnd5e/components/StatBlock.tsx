@@ -2,13 +2,16 @@
  * StatBlock Component
  *
  * Displays a single ability score with its modifier in a D&D-themed format.
- * When onRoll / onRollContext are provided the block becomes interactive.
+ * When onRoll and rollAs are provided the block becomes interactive: a click
+ * rolls, and the sheet's root opens the roll menu for a right-click or a
+ * press and hold, from the attributes rollAs puts on it.
  */
 
 import React from 'react';
 import { Dices } from 'lucide-react';
 import { shouldUseWhiteText } from '@/utils/themeColor';
 import { COLOR_PRESETS } from '../colorPresets';
+import type { RollTargetProps } from '../../useSheetRolls';
 
 interface StatBlockProps {
   label: string;
@@ -21,7 +24,8 @@ interface StatBlockProps {
   customColor?: string;
   // Click-to-roll (optional — omit outside campaign context)
   onRoll?: () => void;
-  onRollContext?: (e: React.MouseEvent) => void;
+  /** The check as a d20 test, from `rollTarget`. */
+  rollAs?: RollTargetProps;
 }
 
 /**
@@ -37,7 +41,7 @@ export const StatBlock: React.FC<StatBlockProps> = ({
   colorHex = COLOR_PRESETS[0].hex,
   customColor,
   onRoll,
-  onRollContext,
+  rollAs,
 }) => {
   const formatModifier = (mod: number): string => {
     return mod >= 0 ? `+${mod}` : `${mod}`;
@@ -64,11 +68,10 @@ export const StatBlock: React.FC<StatBlockProps> = ({
   return (
     <div
       className={`flex flex-col items-center space-y-1 rounded-lg p-1 transition-colors group ${
-        isClickable ? 'cursor-pointer hover:bg-ink/10 select-none' : ''
+        isClickable ? 'cursor-pointer hover:bg-ink/10 select-none [-webkit-touch-callout:none]' : ''
       }`}
       onClick={isClickable ? onRoll : undefined}
-      onContextMenu={onRollContext}
-      title={isClickable ? `Left-click: roll ${label} check  |  Right-click: Advantage / Disadvantage` : undefined}
+      {...(isClickable ? rollAs : undefined)}
     >
       {/* Stat Label */}
       <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide">
