@@ -403,6 +403,15 @@ You'll see:
 
 When it's your turn, your name is highlighted. Describe your actions in chat and move your token on the map.
 
+The DM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
+
+*Screenshot pending — Your name highlighted in the initiative order.*
+
+**During combat tips:**
+- Have your actions planned before your turn — it keeps things moving
+- Check HP totals to gauge how the fight is going
+- Use chat for action narration and out-of-character dice commentary
+
 **Sheets and rolls from the tracker.** Click or tap a character's name in the tracker, or right-click it, and choose **View Character Sheet** to read their sheet, or, on your own character, **Roll...** for the same rolls as right-clicking your token on the map. Double-clicking a character's name opens their sheet straight away. From the keyboard, press **Tab** until the name has the focus and press **Enter** for the menu. Creatures have nothing to open here, and neither does a character whose token is on a map the DM hasn't switched to.
 
 ### Rolling Your Own Initiative
@@ -525,15 +534,6 @@ While the tools are up, a click draws, so it does not pick up your token. Put th
 You can draw while your DM lets players draw (**Players may draw**, on unless they turn it off), except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
 
 Drawings are the topmost layer of the map: they show over the tokens, the fog and the dark, so you can plan over ground you have not seen yet ("we'll head this way"). The laser pointer shows over everything too, as a ping does.
-
-The DM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
-
-*Screenshot pending — Your name highlighted in the initiative order.*
-
-**During combat tips:**
-- Have your actions planned before your turn — it keeps things moving
-- Check HP totals to gauge how the fight is going
-- Use chat for action narration and out-of-character dice commentary
 
 ---
 
