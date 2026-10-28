@@ -546,84 +546,6 @@ export default function EditMapModal({
                   </div>
                 </div>
 
-                {/* Dynamic Lighting */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={lightingEnabled}
-                      onChange={(e) => setLightingEnabled(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Enable dynamic lighting"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Enable Dynamic Lighting
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Raycasting visibility — players only see what their tokens can see through walls</p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Fog of War */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={fogEnabled}
-                      onChange={(e) => setFogEnabled(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Fog of war on this map"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Fog of War
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Cover the map and reveal it by hand from the Fog panel. Off, players see the whole map (dynamic lighting still applies)</p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Global Illumination */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
-                    <input
-                      type="checkbox"
-                      checked={globalIllumination}
-                      disabled={!lightingEnabled}
-                      onChange={(e) => setGlobalIllumination(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Global illumination"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Global Illumination
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Everything in line of sight is lit. Untick to make lights and darkvision matter</p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Explored memory */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
-                    <input
-                      type="checkbox"
-                      checked={explorationEnabled}
-                      disabled={!lightingEnabled}
-                      onChange={(e) => setExplorationEnabled(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Remember explored areas"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Remember Explored Areas
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Places a player has seen stay on their map, greyed, until they see them again</p>
-                    </div>
-                  </label>
-                </div>
-
                 {/* ── Right: Grid Preview + Zoom ── */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -699,6 +621,92 @@ export default function EditMapModal({
                   <p className="text-xs text-stone-gray/50 text-center leading-relaxed">
                     Zoom in to verify the grid aligns<br />with the lines on your map image.
                   </p>
+                </div>
+              </div>
+
+              {/* Lighting and fog: their own section under the grid and its
+                  preview, so the preview stays beside the grid's settings. */}
+              <div role="group" aria-labelledby="edit-map-lighting-fog" className="border-t border-stone-gray/20 pt-4 space-y-1">
+                <h3 id="edit-map-lighting-fog" className="text-sm font-medium text-brand-ink">Lighting and Fog</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                  <div>
+                    {/* Dynamic Lighting */}
+                    <div className="py-2">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={lightingEnabled}
+                          onChange={(e) => setLightingEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Enable dynamic lighting"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Enable Dynamic Lighting
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Raycasting visibility — players only see what their tokens can see through walls</p>
+                        </div>
+                      </label>
+                    </div>
+                    {/* Global Illumination */}
+                    <div className="py-2">
+                      <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                        <input
+                          type="checkbox"
+                          checked={globalIllumination}
+                          disabled={!lightingEnabled}
+                          onChange={(e) => setGlobalIllumination(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Global illumination"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Global Illumination
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Everything in line of sight is lit. Untick to make lights and darkvision matter</p>
+                        </div>
+                      </label>
+                    </div>
+                    {/* Explored memory */}
+                    <div className="py-2">
+                      <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                        <input
+                          type="checkbox"
+                          checked={explorationEnabled}
+                          disabled={!lightingEnabled}
+                          onChange={(e) => setExplorationEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Remember explored areas"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Remember Explored Areas
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Places a player has seen stay on their map, greyed, until they see them again</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    {/* Fog of War */}
+                    <div className="py-2">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={fogEnabled}
+                          onChange={(e) => setFogEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Fog of war on this map"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Fog of War
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Cover the map and reveal it by hand from the Fog panel. Off, players see the whole map (dynamic lighting still applies)</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
