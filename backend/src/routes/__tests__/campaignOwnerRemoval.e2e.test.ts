@@ -16,6 +16,7 @@
  */
 
 import request from 'supertest';
+import { randomUUID } from 'crypto';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
   prisma,
@@ -80,6 +81,7 @@ describe('a DM who does not own the campaign', () => {
   it('cannot remove the owner', async () => {
     const res = await coHost.delete(`/api/campaigns/${campaignId}/members/${ownerId}`);
     expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Bad Request', message: 'Cannot remove the campaign owner from their own campaign' });
 
     const still = await prisma.campaignMembership.findUnique({
       where: { userId_campaignId: { userId: ownerId, campaignId } },
@@ -96,8 +98,25 @@ describe('a DM who does not own the campaign', () => {
     });
     expect(membership?.role).toBe('DM');
 
+    // An owner in the DM seat is refused for the seat, which is checked first.
+    const self = await owner.delete(`/api/campaigns/${campaignId}/members/${ownerId}`);
+    expect(self.status).toBe(400);
+    expect(self.body).toEqual({ error: 'Bad Request', message: 'Cannot remove the Dungeon Master from the campaign' });
+
     // Put the co-host back in the seat for the test that follows.
     await owner.put(`/api/campaigns/${campaignId}/dm`).send({ userId: coHostId });
+  });
+
+  it('cannot remove themselves, the DM', async () => {
+    const res = await coHost.delete(`/api/campaigns/${campaignId}/members/${coHostId}`);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Bad Request', message: 'Cannot remove the Dungeon Master from the campaign' });
+  });
+
+  it('answers 404 for someone who is not a member', async () => {
+    const res = await coHost.delete(`/api/campaigns/${campaignId}/members/${randomUUID()}`);
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Not Found', message: 'User is not a member of this campaign' });
   });
 
   it('can still remove an ordinary player', async () => {
