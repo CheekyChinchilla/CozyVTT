@@ -707,7 +707,8 @@ remove. To have them back, invite them again.
 
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
-a player and you cannot remove them. Hand the seat back if you want to step away
+a player and you cannot remove them, so the remove button is not shown beside
+them. Hand the seat back if you want to step away
 (see [Handing the game to someone else](#handing-the-game-to-someone-else)).
 
 ### Call of Cthulhu: Keeper's Notes

@@ -208,3 +208,24 @@ describe('Players may draw', () => {
     expect(showToast).toHaveBeenCalledWith(expect.any(String), 'error');
   });
 });
+
+// A DM the game was handed to was offered Remove beside the owner, who sits
+// at the table as a player, and the server then refused it.
+describe('Remove under Members', () => {
+  it('is not offered beside the owner, and is beside another player', () => {
+    current = {
+      ...campaign(),
+      ownerId: 'owner-1',
+      memberships: [
+        { userId: 'owner-1', role: 'PLAYER', user: { displayName: 'Olwen' } },
+        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'player-1', role: 'PLAYER', user: { displayName: 'Pip' } },
+      ],
+    } as unknown as Campaign;
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    expect(screen.getByRole('button', { name: 'Remove Pip from campaign' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove Olwen from campaign' })).toBeNull();
+  });
+});

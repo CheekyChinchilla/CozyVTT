@@ -128,6 +128,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A token someone is carrying goes back to its square when they are removed from the campaign.** If the DM removed a player while the player was carrying a token, everyone else went on seeing the token where the player's pointer had last taken it, until the map was opened again or the DM moved it. It now goes back to its square on every screen, as it already did when the carrier's tab closed.
 
+- **The remove button is no longer shown beside the campaign's owner.** A DM who had been handed the seat saw it beside the owner, who sits at the table as a player, on the **Members** tab of **Campaign Settings**, and pressing it ended in "Cannot remove the campaign owner from their own campaign". The owner's row now has no remove button.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3
