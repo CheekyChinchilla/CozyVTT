@@ -462,7 +462,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Resistances, Immunities, Weaknesses */}
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
         {data.hp?.resistances && data.hp.resistances.length > 0 && (
           <div>
             <span className="font-semibold text-success-ink">Resistances:</span>{' '}
@@ -488,7 +488,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         (data.deathAndDying?.wounded ?? 0) > 0 ||
         (data.deathAndDying?.doomed ?? 0) > 0) && (
         <div className="mt-3 pt-3 border-t border-danger/30">
-          <div className="flex items-center space-x-4 text-sm">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 text-sm">
             <div className="flex items-center space-x-1">
               <Skull className="w-4 h-4 text-danger-ink" />
               <span className="font-semibold text-danger-ink">Dying:</span>
@@ -607,12 +607,12 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
       {/* Currency */}
       <div className="bg-paper border border-ink/10 rounded-lg p-3 mb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center space-x-2">
             <Coins className="w-5 h-5 text-ink-secondary" />
             <span className="font-semibold text-ink">Currency</span>
           </div>
-          <div className="flex items-center space-x-4 text-sm">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 text-sm">
             <span><strong>{data.currency?.pp || 0}</strong> pp</span>
             <span><strong>{data.currency?.gp || 0}</strong> gp</span>
             <span><strong>{data.currency?.sp || 0}</strong> sp</span>
@@ -753,7 +753,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         </h3>
 
         {/* Spellcasting Info */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-paper border border-spirit/30 rounded-lg p-3">
             <div className="text-xs font-semibold text-spirit-ink mb-1">Tradition</div>
             <div className="font-bold text-spirit-ink capitalize">{spellcasting.tradition}</div>
@@ -769,7 +769,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         </div>
 
         {/* Spell Attack & DC */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div className="bg-paper border border-spirit/30 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <ProficiencyIndicator
@@ -819,7 +819,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {/* Spell Slots */}
         <div className="mb-4">
           <h4 className="font-semibold text-spirit-ink mb-2">Spell Slots</h4>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
               // Read as the editor reads them: an older sheet's count under
               // `used`, and never more used than the total.
@@ -999,7 +999,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {data.appearance && (
         <div className="bg-paper border border-ink/10 rounded-lg p-3 mb-4">
           <h4 className="text-sm font-semibold text-ink-secondary mb-2">Appearance</h4>
-          <div className="grid grid-cols-3 gap-2 text-xs text-ink-secondary">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-ink-secondary">
             {data.appearance.age && <div><strong>Age:</strong> {data.appearance.age}</div>}
             {data.appearance.height && <div><strong>Height:</strong> {data.appearance.height}</div>}
             {data.appearance.weight && <div><strong>Weight:</strong> {data.appearance.weight}</div>}

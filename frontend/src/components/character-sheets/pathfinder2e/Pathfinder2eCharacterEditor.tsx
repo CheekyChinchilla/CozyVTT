@@ -1078,8 +1078,12 @@ aria-label={`${ability.charAt(0).toUpperCase()}${ability.slice(1)} score`} min={
           {(['fortitude', 'reflex', 'will'] as const).map((save) => {
             const saveData = formData.savingThrows?.[save] || { proficiencyRank: 'untrained', bonus: 0, itemBonus: 0 };
             return (
-              <div key={save} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-3">
-                <div className="flex items-center space-x-3">
+              // Below sm a grid of two columns: the name and the total on the
+              // first line, the rank and the item bonus under them. The middle
+              // box is `contents` there, so its three children are the grid's.
+              // From sm up the row is the one line it was.
+              <div key={save} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 sm:flex sm:justify-between bg-paper border border-ink/10 rounded-lg p-3">
+                <div className="contents sm:flex sm:items-center sm:space-x-3">
                   <span className="font-semibold text-ink capitalize w-24">{save}</span>
                   {renderProficiencySelector(`savingThrows.${save}.proficiencyRank`, saveData.proficiencyRank as ProficiencyRank, `Proficiency in ${save.charAt(0).toUpperCase()}${save.slice(1)} saves`)}
                   <div className="flex items-center space-x-2">
@@ -1088,7 +1092,7 @@ aria-label={`${ability.charAt(0).toUpperCase()}${ability.slice(1)} score`} min={
 aria-label={`Item bonus to ${save.charAt(0).toUpperCase()}${save.slice(1)} saves`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${save}.itemBonus`, v)} className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
                   </div>
                 </div>
-                <span className="text-2xl font-bold text-accent-ink">{formatModifier(saveData.bonus)}</span>
+                <span className="col-start-2 row-start-1 justify-self-end text-2xl font-bold text-accent-ink">{formatModifier(saveData.bonus)}</span>
               </div>
             );
           })}
@@ -1098,8 +1102,8 @@ aria-label={`Item bonus to ${save.charAt(0).toUpperCase()}${save.slice(1)} saves
       {/* Perception */}
       <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
         <h3 className="text-lg font-bold text-ink mb-3">Perception</h3>
-        <div className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-3 mb-3">
-          <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-3 gap-y-2 bg-paper border border-ink/10 rounded-lg p-3 mb-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2 min-w-0">
             {renderProficiencySelector('perception.proficiencyRank', formData.perception?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in Perception')}
             <div className="flex items-center space-x-2">
               <label className="text-xs text-ink-secondary">Item:</label>
@@ -1128,7 +1132,7 @@ aria-label="Item bonus to Perception" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_B
                   <span className="text-sm font-semibold text-ink">{displayName}</span>
                   <span className="text-lg font-bold text-accent-ink">{formatModifier(skillData.bonus)}</span>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                   {renderProficiencySelector(`skills.${skillName}.proficiencyRank`, skillData.proficiencyRank as ProficiencyRank, `Proficiency in ${displayName}`)}
                   <NumberField
 aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
@@ -1153,7 +1157,7 @@ aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_
 
       {/* Lore Skills */}
       <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
           <h3 className="text-lg font-bold text-ink">Lore Skills</h3>
           <Button variant="primary" size="sm" onClick={() => { const newLore = [...(formData.loreSkills || []), { name: 'New Lore', attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }]; updateField('loreSkills', newLore); }} disabled={listIsFull(formData.loreSkills)} className="flex items-center space-x-1">
             <Plus className="w-4 h-4" />
@@ -1164,13 +1168,17 @@ aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_
         <div className="space-y-2">
           {(formData.loreSkills || []).map((lore, index) => (
             <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
+              {/* TODO(sheets): this delete button and the ones on strikes, cantrips,
+                  spells, focus spells, innate spells, rituals, items and feats show
+                  only a bin icon and have no accessible name. Each wants an
+                  aria-label naming its row, as Class Features' "Remove <name>" does. */}
               <div className="flex items-center justify-between mb-2">
-                <input type="text" aria-label={`Name of lore skill ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10 font-bold">
+                <input type="text" aria-label={`Name of lore skill ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10 font-bold">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                 {renderProficiencySelector(`loreSkills.${index}.proficiencyRank`, lore.proficiencyRank as ProficiencyRank, `Proficiency in lore skill ${index + 1}`)}
                 <NumberField
 aria-label={`Item bonus to lore skill ${index + 1}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
@@ -1195,13 +1203,13 @@ aria-label={`Item bonus to lore skill ${index + 1}`} min={PF2E_ITEM_BONUS_MIN} m
           <div className="space-y-2">
             {renderProficiencySelector('armorClass.proficiencyRank', formData.armorClass?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in armor')}
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-ink-secondary w-24">DEX Cap:</label>
-              <input type="number" aria-label="DEX Cap" min="-1" value={formData.armorClass?.capDex === null ? '' : formData.armorClass?.capDex} onChange={(e) => updateField('armorClass.capDex', e.target.value === '' ? null : parseInt(e.target.value))} placeholder="null" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" />
+              <label className="text-sm text-ink-secondary sm:w-24">DEX Cap:</label>
+              <input type="number" aria-label="DEX Cap" min="-1" value={formData.armorClass?.capDex === null ? '' : formData.armorClass?.capDex} onChange={(e) => updateField('armorClass.capDex', e.target.value === '' ? null : parseInt(e.target.value))} placeholder="null" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" />
             </div>
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-ink-secondary w-24">Item Bonus:</label>
+              <label className="text-sm text-ink-secondary sm:w-24">Item Bonus:</label>
               <NumberField
-aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
+aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
             </div>
             <div className="text-center pt-2 border-t border-ink/20">
               <div className="text-xs text-ink-secondary mb-1">Total AC</div>
@@ -1214,8 +1222,8 @@ aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX
           <h3 className="text-lg font-bold text-ink mb-3">Class DC</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-ink-secondary w-32">Key Attribute:</label>
-              <select aria-label="Key Attribute" value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
+              <label className="text-sm text-ink-secondary sm:w-32">Key Attribute:</label>
+              <select aria-label="Key Attribute" value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                 {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
                 ))}
@@ -1233,8 +1241,8 @@ aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX
           <h3 className="text-lg font-bold text-ink mb-3">Initiative</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-ink-secondary w-24">Uses:</label>
-              <select aria-label="Initiative uses" value={formData.initiative?.usedStat || 'perception'} onChange={(e) => updateField('initiative.usedStat', e.target.value)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
+              <label className="text-sm text-ink-secondary sm:w-24">Uses:</label>
+              <select aria-label="Initiative uses" value={formData.initiative?.usedStat || 'perception'} onChange={(e) => updateField('initiative.usedStat', e.target.value)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                 <option value="perception">Perception</option>
                 <option value="stealth">Stealth</option>
               </select>
@@ -1250,9 +1258,9 @@ aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX
           <h3 className="text-lg font-bold text-ink mb-3">Speed</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-ink-secondary w-24">Land (ft):</label>
+              <label className="text-sm text-ink-secondary sm:w-24">Land (ft):</label>
               <NumberField
-min={0} aria-label="Land speed (ft)" value={formData.speed?.land} onChange={(v: number) => updateField('speed.land', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={30} />
+min={0} aria-label="Land speed (ft)" value={formData.speed?.land} onChange={(v: number) => updateField('speed.land', v)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={30} />
             </div>
             <div>
               <label className="text-sm text-ink-secondary mb-1 block">Other (comma-separated):</label>
@@ -1291,7 +1299,7 @@ min={0} aria-label="Current HP" value={formData.hp?.current} onChange={(v: numbe
 min={0} aria-label="Temporary HP" value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.temporary', v)} className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center text-info-ink font-bold focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div>
             <label className="text-xs font-semibold text-ink-secondary mb-1 block">Resistances (comma-sep)</label>
             <ListField max={SHEET_LIST_MAX} aria-label="Resistances" value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-ink/20 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-brand" />
@@ -1364,7 +1372,7 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
 
       {/* Strikes */}
       <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
           <h3 className="text-lg font-bold text-ink">Strikes & Attacks</h3>
           <Button variant="primary" size="sm" onClick={() => { const newStrikes = [...(formData.strikes || []), { name: 'New Attack', type: 'melee', attackBonus: 0, damageRoll: '1d6', damageType: 'bludgeoning', attributeModifier: 'strength', proficiencyRank: 'trained', itemBonus: 0, traits: [], range: null, notes: '' }]; updateField('strikes', newStrikes); }} disabled={listIsFull(formData.strikes)} className="flex items-center space-x-1">
             <Plus className="w-4 h-4" />
@@ -1376,8 +1384,8 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
           {(formData.strikes || []).map((strike, index) => (
             <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" aria-label={`Name of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <input type="text" aria-label={`Name of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1477,14 +1485,14 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
         </div>
 
         {/* Spell Attack & DC */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
             <h3 className="text-lg font-bold text-ink mb-3">Spell Attack</h3>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-ink-secondary">Item Bonus:</label>
                 <NumberField
-aria-label="Spell attack item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
+aria-label="Spell attack item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-ink/20">
                 <div className="text-xs text-ink-secondary mb-1">Total Attack</div>
@@ -1499,7 +1507,7 @@ aria-label="Spell attack item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BO
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-ink-secondary">Item Bonus:</label>
                 <NumberField
-aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
+aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-ink/20">
                 <div className="text-xs text-ink-secondary mb-1">Total DC</div>
@@ -1511,7 +1519,7 @@ aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_
 
         {/* Cantrips */}
         <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
             <h3 className="text-lg font-bold text-ink">Cantrips</h3>
             <Button variant="primary" size="sm" onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), newPf2eCantrip()]; updateField('spellcasting.cantrips', newCantrips); }} disabled={listIsFull(formData.spellcasting!.cantrips)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
@@ -1522,8 +1530,8 @@ aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_
           <div className="space-y-2">
             {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
               <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
-                <input type="text" aria-label={`Name of cantrip ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <input type="text" aria-label={`Name of cantrip ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1537,7 +1545,7 @@ aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_
         {/* Spell Slots */}
         <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
           <h3 className="text-lg font-bold text-ink mb-3">Spell Slots (Rank 1-10)</h3>
-          <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-10 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
               const slots = formData.spellcasting!.slots?.[String(rank) as keyof PF2eSpellSlots] ?? { total: 0, expended: 0 };
               return (
@@ -1557,7 +1565,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
 
         {/* Spells Known/Prepared */}
         <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
             <h3 className="text-lg font-bold text-ink">Spells {formData.spellcasting!.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
             <Button variant="primary" size="sm" onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), newPf2eSpell(formData.spellcasting!.type === 'prepared')]; updateField('spellcasting.spells', newSpells); }} disabled={listIsFull(formData.spellcasting!.spells)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
@@ -1569,8 +1577,8 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
             {(formData.spellcasting!.spells || []).map((spell, index) => (
               <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <input type="text" aria-label={`Name of spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                  <input type="text" aria-label={`Name of spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1597,9 +1605,9 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
 
         {/* Focus Spells */}
         <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
             <h3 className="text-lg font-bold text-ink">Focus Spells</h3>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-2">
               {/* Points left, out of the pool. The pool is 1 with the first
                   focus spell and at most 3 (Core Rulebook, "Focus Spells");
                   feats that add a spell typically add a point, which the
@@ -1642,8 +1650,8 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
           <div className="space-y-2">
             {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
               <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
-                <input type="text" aria-label={`Name of focus spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <input type="text" aria-label={`Name of focus spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1656,7 +1664,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
 
         {/* Innate Spells */}
         <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
             <h3 className="text-lg font-bold text-ink">Innate Spells</h3>
             <Button variant="primary" size="sm" onClick={() => { const newInnateSpells = [...(formData.spellcasting!.innateSpells || []), { name: 'New Innate Spell', tradition: formData.spellcasting!.tradition, frequency: 'at will' }]; updateField('spellcasting.innateSpells', newInnateSpells); }} disabled={listIsFull(formData.spellcasting!.innateSpells)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
@@ -1668,8 +1676,8 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
             {(formData.spellcasting!.innateSpells || []).map((spell, index) => (
               <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <input type="text" aria-label={`Name of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                  <input type="text" aria-label={`Name of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1685,7 +1693,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
 
         {/* Rituals */}
         <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
             <h3 className="text-lg font-bold text-ink">Rituals</h3>
             <Button variant="primary" size="sm" onClick={() => { const newRituals = [...(formData.spellcasting!.rituals || []), { name: 'New Ritual', rank: 1 }]; updateField('spellcasting.rituals', newRituals); }} disabled={listIsFull(formData.spellcasting!.rituals)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
@@ -1696,13 +1704,13 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
           <div className="space-y-2">
             {(formData.spellcasting!.rituals || []).map((ritual, index) => (
               <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
-                <input type="text" aria-label={`Name of ritual ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={ritual.name} onChange={(e) => updateField(`spellcasting.rituals.${index}.name`, e.target.value)} placeholder="Ritual Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <input type="text" aria-label={`Name of ritual ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={ritual.name} onChange={(e) => updateField(`spellcasting.rituals.${index}.name`, e.target.value)} placeholder="Ritual Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
                 <select aria-label={`Rank of ritual ${index + 1}`} value={ritual.rank} onChange={(e) => updateField(`spellcasting.rituals.${index}.rank`, parseInt(e.target.value))} className="ml-2 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
                     <option key={r} value={r}>Rank {r}</option>
                   ))}
                 </select>
-                <button onClick={() => { const newRituals = formData.spellcasting!.rituals!.filter((_, i) => i !== index); updateField('spellcasting.rituals', newRituals); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <button onClick={() => { const newRituals = formData.spellcasting!.rituals!.filter((_, i) => i !== index); updateField('spellcasting.rituals', newRituals); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1721,7 +1729,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
       {/* Currency */}
       <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
         <h3 className="text-lg font-bold text-ink mb-3">Currency</h3>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {([{ key: 'pp', label: 'Platinum' }, { key: 'gp', label: 'Gold' }, { key: 'sp', label: 'Silver' }, { key: 'cp', label: 'Copper' }] as const).map((currency) => (
             <div key={currency.key}>
               <label className="text-sm font-semibold text-ink-secondary mb-1 block">{currency.label}</label>
@@ -1744,7 +1752,7 @@ min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} on
 
       {/* Inventory Items */}
       <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
           <h3 className="text-lg font-bold text-ink">Inventory Items</h3>
           <Button variant="primary" size="sm" onClick={() => { const newInventory = [...(formData.inventory || []), { name: 'New Item', quantity: 1, bulk: 'L', equippable: false, equipped: false, requiresAttunement: false, attuned: false, invested: false, value: 0, notes: '' }]; updateField('inventory', newInventory); }} disabled={listIsFull(formData.inventory)} className="flex items-center space-x-1">
             <Plus className="w-4 h-4" />
@@ -1756,12 +1764,12 @@ min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} on
           {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" aria-label={`Name of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <input type="text" aria-label={`Name of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <NumberField
 min={0} aria-label={`Quantity of item ${index + 1}`} value={item.quantity} onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)} placeholder="Qty" className="px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={1} />
                 <input type="text" aria-label={`Bulk of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.bulk} onChange={(e) => updateField(`inventory.${index}.bulk`, e.target.value)} placeholder="Bulk" className="px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" />
@@ -1803,7 +1811,7 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
       <div className="space-y-6">
         {/* Class Features */}
         <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
             <h3 className="text-lg font-bold text-ink">Class Features</h3>
             <Button variant="primary" size="sm" onClick={() => updateField('classFeatures', [...classFeatureRows, { name: '', description: '' }])} disabled={listIsFull(classFeatureRows)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
@@ -1825,9 +1833,9 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
                     maxLength={SHEET_SHORT_TEXT_MAX}
                      placeholder="Class Feature Name"
                     aria-label={`Class feature ${index + 1} name`}
-                    className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+                    className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
-                  <button onClick={() => updateField('classFeatures', classFeatureRows.filter((_, i) => i !== index))} aria-label={`Remove ${feature.name || 'class feature'}`} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                  <button onClick={() => updateField('classFeatures', classFeatureRows.filter((_, i) => i !== index))} aria-label={`Remove ${feature.name || 'class feature'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1851,7 +1859,7 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
         {/* Feats by Category */}
         {featCategories.map(({ key, word, label }) => (
           <div key={key} className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-3">
               <h3 className="text-lg font-bold text-ink">{label}</h3>
               <Button variant="primary" size="sm" onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className="flex items-center space-x-1">
                 <Plus className="w-4 h-4" />
@@ -1862,14 +1870,14 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
             <div className="space-y-3">
               {(formData.feats?.[key] || []).map((feat, index) => (
                 <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <input type="text" aria-label={`Name of ${word} feat ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={feat.name} onChange={(e) => updateField(`feats.${key}.${index}.name`, e.target.value)} placeholder="Feat Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                    <div className="flex items-center space-x-2 ml-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2 sm:flex-nowrap sm:gap-0">
+                    <input type="text" aria-label={`Name of ${word} feat ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={feat.name} onChange={(e) => updateField(`feats.${key}.${index}.name`, e.target.value)} placeholder="Feat Name" className="min-w-0 flex-1 basis-full sm:basis-0 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                    <div className="flex items-center space-x-2 sm:ml-2">
                       <label className="text-xs text-ink-secondary">Level:</label>
                       <NumberField
 aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.${key}.${index}.level`, v)} className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={1} />
                     </div>
-                    <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                    <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
