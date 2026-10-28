@@ -137,3 +137,32 @@ describe('Edit Map and the spirit layer', () => {
     expect(sent()).toEqual({ fogEnabled: false, feetPerSquare: 10 });
   });
 });
+
+// The dialog's two columns are the grid's settings and the preview of that
+// grid. The lighting and fog switches were cells of the same grid, so they
+// pushed the preview down to the bottom of the right column, far from the
+// settings it shows.
+describe('Edit Map layout', () => {
+  it('puts the grid preview beside the grid settings, in a two-column row of its own', async () => {
+    open();
+    const preview = await screen.findByText('Grid Preview');
+    const dimensions = screen.getByText('Map Dimensions');
+    const row = preview.closest('.grid');
+    expect(row).not.toBeNull();
+    expect(dimensions.closest('.grid')).toBe(row);
+    expect(row?.children).toHaveLength(2);
+  });
+
+  it('puts the lighting and fog switches in a section of their own after it', async () => {
+    open();
+    const preview = await screen.findByText('Grid Preview');
+    const row = preview.closest('.grid');
+    const section = screen.getByRole('group', { name: 'Lighting and Fog' });
+    for (const name of ['Enable dynamic lighting', 'Fog of war on this map', 'Global illumination', 'Remember explored areas']) {
+      const box = screen.getByRole('checkbox', { name });
+      expect(section.contains(box)).toBe(true);
+      expect(row?.contains(box)).toBe(false);
+    }
+    expect(row !== null && Boolean(row.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+});
