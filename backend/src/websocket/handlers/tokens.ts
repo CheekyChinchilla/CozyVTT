@@ -235,24 +235,24 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
   }
 
   /**
-   * The carrier's connection is gone: every token it was carrying goes back
-   * where it stands on the screens its frames reached. Putting it down or
-   * letting it go is the carrier's to send, so a tab that closed or a
-   * connection that dropped mid-hold left the token drawn at the last frame
-   * on everyone else's screen.
+   * The carrier is gone from `campaignId`: every token it was carrying there
+   * goes back where it stands on the screens its frames reached. Putting it
+   * down or letting it go is the carrier's to send, so a tab that closed, a
+   * connection that dropped mid-hold, a carrier taken out of the campaign
+   * (whose connection stays open, refused everything there) and one whose
+   * connection joined another campaign each left the token drawn at the
+   * last frame on everyone else's screen.
    *
    * A drag let go without a drop stays recorded until now, and the DM may
    * since have hidden the token and moved it somewhere secret, so who is
    * told is decided again from the map as it is, as for a refused drop: a
    * screen the map would not give the token to now is told it has gone.
    */
-  socket.on('disconnect', () => {
-    const campaignId = socket.campaignId;
+  function releaseHeldTokens(campaignId: string): void {
     const held = [...drags.entries()];
     drags.clear();
-    if (!campaignId) return;
     for (const [tokenId, drag] of held) {
-      void bestEffort('token drag release on disconnect', async () => {
+      void bestEffort('token drag release', async () => {
         const audience = await drag.deciding;
         const map = await prisma.map.findUnique({
           where: { id: drag.mapId },
@@ -284,6 +284,14 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         }
       });
     }
+  }
+  // For the helpers that take the socket out of its campaign
+  // (clearCampaignFromLiveSockets, and `authenticate` into another one).
+  socket.releaseHeldTokens = releaseHeldTokens;
+
+  socket.on('disconnect', () => {
+    if (socket.campaignId) releaseHeldTokens(socket.campaignId);
+    else drags.clear();
   });
 
   /**

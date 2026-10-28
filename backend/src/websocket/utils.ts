@@ -440,7 +440,9 @@ export async function applyRoleToLiveSockets(
  * Clearing `campaignId` is what stops them acting: every handler refuses a
  * socket that is not authenticated to a campaign. Leaving the room is what
  * stops them listening. A socket authenticates to one campaign, so a person
- * playing elsewhere in another tab is left alone.
+ * playing elsewhere in another tab is left alone. A token they are holding
+ * goes back where it stands on everyone else's screen, since their own
+ * put-down would now be refused.
  *
  * @returns number of connections closed off
  */
@@ -457,6 +459,7 @@ export async function clearCampaignFromLiveSockets(
     if (authed.campaignId === campaignId || socket.rooms.has(campaignId)) {
       socket.leave(campaignId);
       if (authed.campaignId === campaignId) {
+        authed.releaseHeldTokens?.(campaignId);
         authed.campaignId = undefined;
         authed.role = undefined;
       }

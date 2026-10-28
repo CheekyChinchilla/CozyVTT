@@ -138,11 +138,15 @@ export function registerEventHandlers(io: Server): void {
           (room) => room !== socket.id && room !== socket.userId && room !== data.campaignId
         );
         const leaving = oldRooms.map((room) => socket.leave(room));
+        const previous = socket.campaignId;
         // The role is refreshed even when the campaign is the same, since a
         // client re-authenticates after a reconnect.
         socket.join(data.campaignId);
         socket.campaignId = data.campaignId;
         socket.role = result.role;
+        // A token carried in the campaign this socket has left goes back
+        // where it stands there: its put-down would go to this campaign now.
+        if (previous && previous !== data.campaignId) socket.releaseHeldTokens?.(previous);
         await Promise.all(leaving);
 
         for (const room of oldRooms) {
