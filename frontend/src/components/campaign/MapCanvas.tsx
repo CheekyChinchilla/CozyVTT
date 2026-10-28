@@ -3852,6 +3852,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
         }`}
         title={dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it'}
+        // TODO(ui): this name does not hold the words the button shows ("Preview Player View",
+        // "DM View"), so a voice command for them finds nothing; name it by what it shows,
+        // with aria-pressed for the preview being on.
         aria-label="Toggle DM player view preview"
       >
         {dmPreviewPlayerView ? '👁 DM View' : '🎭 Preview Player View'}
