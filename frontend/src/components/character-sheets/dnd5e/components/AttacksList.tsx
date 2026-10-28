@@ -17,8 +17,13 @@ type Attack = DnD5eAttack;
 
 interface AttacksListProps {
   attacks: Attack[];
-  /** Left-click attack row to roll attack. Omit outside campaign context. */
-  onRoll?: (expression: string, purpose: string) => void;
+  /**
+   * Left-click an attack row to roll the attack, a d20 test the sheet's Roll
+   * mode applies to. Omit outside campaign context.
+   */
+  onRollAttack?: (expression: string, purpose: string) => void;
+  /** Click a damage roll to roll it as written. */
+  onRollDamage?: (expression: string, purpose: string) => void;
   /** Right-click for Advantage / Disadvantage popup. */
   onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
 }
@@ -28,9 +33,10 @@ interface AttacksListProps {
  */
 const AttackRow: React.FC<{
   attack: Attack;
-  onRoll?: (expression: string, purpose: string) => void;
+  onRollAttack?: (expression: string, purpose: string) => void;
+  onRollDamage?: (expression: string, purpose: string) => void;
   onRollContext?: (e: React.MouseEvent, expression: string, purpose: string) => void;
-}> = ({ attack, onRoll, onRollContext }) => {
+}> = ({ attack, onRollAttack, onRollDamage, onRollContext }) => {
   const formatBonus = (bonus: number): string => {
     return bonus >= 0 ? `+${bonus}` : `${bonus}`;
   };
@@ -41,10 +47,10 @@ const AttackRow: React.FC<{
 
   const attackExpr = `1d20${formatBonus(attack.attackBonus)}`;
   const attackPurpose = `${attack.name} Attack`;
-  const isClickable = !!onRoll;
+  const isClickable = !!onRollAttack;
 
   const handleAttackClick = () => {
-    if (onRoll) onRoll(attackExpr, attackPurpose);
+    if (onRollAttack) onRollAttack(attackExpr, attackPurpose);
   };
 
   const handleAttackContext = (e: React.MouseEvent) => {
@@ -53,7 +59,7 @@ const AttackRow: React.FC<{
 
   const handleDamageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onRoll && attack.damageRoll) onRoll(attack.damageRoll, `${attack.name} Damage`);
+    if (onRollDamage && attack.damageRoll) onRollDamage(attack.damageRoll, `${attack.name} Damage`);
   };
 
   return (
@@ -92,9 +98,9 @@ const AttackRow: React.FC<{
 
         {/* Damage — click separately to roll damage only */}
         <div
-          className={isClickable && attack.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
-          onClick={isClickable && attack.damageRoll ? handleDamageClick : undefined}
-          title={isClickable && attack.damageRoll ? `Click to roll damage: ${attack.damageRoll}` : undefined}
+          className={onRollDamage && attack.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
+          onClick={onRollDamage && attack.damageRoll ? handleDamageClick : undefined}
+          title={onRollDamage && attack.damageRoll ? `Click to roll damage: ${attack.damageRoll}` : undefined}
         >
           <span className="text-xs text-ink-muted">Damage</span>
           <div className="font-semibold text-ink-secondary">
@@ -128,7 +134,7 @@ const AttackRow: React.FC<{
             .map((entry, idx) => {
               const roll = (entry.damageRoll ?? '').trim();
               const label = entry.label?.trim() || 'Alternate';
-              const rollable = isClickable;
+              const rollable = !!onRollDamage;
               return (
                 <div
                   key={idx}
@@ -139,7 +145,7 @@ const AttackRow: React.FC<{
                     rollable
                       ? (e) => {
                           e.stopPropagation();
-                          onRoll?.(roll, `${attack.name} — ${label}`);
+                          onRollDamage?.(roll, `${attack.name} — ${label}`);
                         }
                       : undefined
                   }
@@ -185,7 +191,7 @@ const AttackRow: React.FC<{
 /**
  * AttacksList - Displays all attacks
  */
-export const AttacksList: React.FC<AttacksListProps> = ({ attacks, onRoll, onRollContext }) => {
+export const AttacksList: React.FC<AttacksListProps> = ({ attacks, onRollAttack, onRollDamage, onRollContext }) => {
   if (!attacks || attacks.length === 0) {
     return (
       <div className="text-center py-8 text-ink-muted">
@@ -197,7 +203,7 @@ export const AttacksList: React.FC<AttacksListProps> = ({ attacks, onRoll, onRol
   return (
     <div className="space-y-3">
       {attacks.map((attack, index) => (
-        <AttackRow key={index} attack={attack} onRoll={onRoll} onRollContext={onRollContext} />
+        <AttackRow key={index} attack={attack} onRollAttack={onRollAttack} onRollDamage={onRollDamage} onRollContext={onRollContext} />
       ))}
     </div>
   );

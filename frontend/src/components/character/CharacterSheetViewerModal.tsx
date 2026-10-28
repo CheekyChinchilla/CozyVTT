@@ -21,6 +21,8 @@ import Shadowrun6eCharacterSheet from '../character-sheets/shadowrun6e/Shadowrun
 import CallOfCthulhu7eCharacterView from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
 import { FlexibleCharacterSheetView } from '../character-sheets/flexible/FlexibleCharacterSheetView';
 import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
+import { RollModeControl } from '../character-sheets/RollModeControl';
+import { systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 
 // Import editor modal
 import CharacterSheetEditorModal from './CharacterSheetEditorModal';
@@ -72,6 +74,9 @@ export default function CharacterSheetViewerModal({
   const tableRoll = useTableRoll(socket);
   const [character, setCharacter] = useState(initialCharacter);
   const [showEditor, setShowEditor] = useState(false);
+  // Roll mode, for every test a click or a tap rolls on this sheet: held
+  // while it is open, Normal each time it opens, and never stored.
+  const [rollMode, setRollMode] = useState<RollMode>('normal');
 
   // The owner's name comes with the character: GET /api/characters/:id names
   // its owner to anyone who may read it. Asking GET /api/users/:id instead was
@@ -164,6 +169,10 @@ export default function CharacterSheetViewerModal({
   // Characters page has no socket, so its sheets offer no rolls.
   const rollHandler = canRoll && socket ? handleRoll : undefined;
 
+  // Offered wherever the sheet rolls and its system rolls a d20 twice for
+  // advantage: D&D 5e, and Pathfinder 2e's fortune and misfortune.
+  const offersRollMode = !!rollHandler && systemSupportsAdvantage(character.gameSystem);
+
   // Spending follows the same rule as rolling. The server checks it again
   // (owner or DM), so this only decides whether the control is offered.
   const spendHitDie = canRoll && socket
@@ -174,9 +183,9 @@ export default function CharacterSheetViewerModal({
   const renderCharacterSheet = () => {
     switch (character.gameSystem) {
       case 'DND_5E':
-        return <DnD5eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} onSpendHitDie={spendHitDie} />;
+        return <DnD5eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} onSpendHitDie={spendHitDie} />;
       case 'PATHFINDER_2E':
-        return <Pathfinder2eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} />;
+        return <Pathfinder2eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} />;
       case 'SHADOWRUN_6E':
         return <Shadowrun6eCharacterSheet character={character} mode="view" />;
       case 'CALL_OF_CTHULHU_7E':
@@ -202,9 +211,13 @@ export default function CharacterSheetViewerModal({
         aria-labelledby="character-sheet-viewer-title"
         className={SHEET_SHELL_DIALOG}
       >
-        {/* Header */}
-        <div data-sheet-shell="header" className="flex items-start justify-between p-3 sm:p-6 short:p-3 border-b border-moss-green/20 bg-parchment/30">
-          <div className="flex-1 min-w-0">
+        {/* Header. Below sm, Roll mode takes a line of its own under the name
+            and the close button; from sm up it sits in the right column under
+            the close button. Either way it is drawn after the close button,
+            and comes after it in the document, so Tab reaches them in the
+            order they are seen. */}
+        <div data-sheet-shell="header" className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3 p-3 sm:p-6 short:p-3 border-b border-moss-green/20 bg-parchment/30">
+          <div className={`min-w-0 ${offersRollMode ? 'sm:row-span-2' : ''}`}>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 rounded-full bg-moss-green/10">
                 <UserIcon className="w-5 h-5 text-brand-ink" />
@@ -235,7 +248,7 @@ export default function CharacterSheetViewerModal({
           {/* Actions — close only. Edit lives on the sheet itself, which
               receives handleEdit as onEdit below; rendering it here as well
               produced two working Edit buttons on every character. */}
-          <div className="flex items-center gap-2 ml-4">
+          <div className="flex items-center gap-2 justify-self-end">
             <button
               onClick={onClose}
               aria-label="Close dialog"
@@ -244,6 +257,15 @@ export default function CharacterSheetViewerModal({
               <X className="w-5 h-5 text-stone-gray" />
             </button>
           </div>
+
+          {offersRollMode && (
+            <RollModeControl
+              mode={rollMode}
+              onChange={setRollMode}
+              gameSystem={character.gameSystem}
+              className="col-span-2 sm:col-span-1 sm:col-start-2 sm:justify-self-end"
+            />
+          )}
         </div>
 
         {/* Character Sheet Content. A sheet that cannot be drawn fails here,

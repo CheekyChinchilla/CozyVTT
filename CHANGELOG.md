@@ -26,6 +26,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table as before until someone chooses a person.
 - **Reload any page left open through the upgrade.** Until then it shows a whisper to you as an ordinary message; only you and its sender are sent it.
 - **On a phone or a tablet, the map's toolbar, the menus and some buttons are bigger, and the text in boxes and drop-down lists is at least 16 pixels high.** With a mouse they look as before.
+- **A D&D 5e or Pathfinder 2e sheet you can roll from has Roll mode in its header.** It starts at **Normal** each time the sheet opens, so a click rolls as before until you change it.
 
 ### Added
 
@@ -46,6 +47,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **Reset position puts the DM's tool panels back in their corner.** Once you have dragged the stack of **Fog of War**, **Walls** and **Lights** panels somewhere else on the map, the bar above it offers **Reset position**, which does what a double-click on the bar does and is easier to hit with a finger.
 
 - **The Walls panel has buttons for what took a key or a double-click.** While you draw a line, **Done** finishes it, as a double-click or **Esc** does. While you draw a polygon, **Done** closes it once it has three corners, as a double-click does, and **Cancel** drops it, as **Esc** does. In **Select** mode, ticking **Add to selection** makes a click or a box add to what is selected, as holding **Shift** does, and **Delete** is offered for any selection, one of mixed types too, saying how many walls it will delete. The panel's **Undo** now does what **Ctrl+Z** does: it takes back the last polygon corner first, then the line being drawn, then the last wall change, and it is offered while you draw.
+
+- **Roll mode on a character sheet, for a run of rolls with advantage.** A D&D 5e or Pathfinder 2e sheet you can roll from on the campaign page has **Roll mode** in its header: **Normal**, **Advantage** or **Disadvantage**, named **Fortune** and **Misfortune** on a Pathfinder 2e sheet. Set to anything but **Normal**, every ability check, saving throw, skill and attack you click or tap on that sheet rolls two d20s and keeps the higher or the lower, and the **Dice** panel adds "(Advantage)" or "(Disadvantage)" to the roll. It is highlighted while it is on, stays set until you change it or close the sheet, starts at **Normal** each time a sheet opens, and is not saved. Damage and hit dice roll as before, and a choice in a stat's right-click menu goes for that one roll. Until now advantage from a sheet took a right-click, which Safari on an iPhone or an iPad cannot make. A Call of Cthulhu sheet has no **Roll mode**: its bonus and penalty dice are not offered yet. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
 
 ### Changed
 

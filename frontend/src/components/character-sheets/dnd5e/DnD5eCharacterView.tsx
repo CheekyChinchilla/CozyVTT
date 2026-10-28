@@ -49,12 +49,15 @@ import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
 import { SheetTabs, type SheetTab } from '../SheetTabs';
 import { useSheetRolls, type SheetRollHandler } from '../useSheetRolls';
+import type { RollMode } from '@/utils/rollModes';
 
 interface DnD5eCharacterViewProps {
   character: Character;
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
   onRoll?: SheetRollHandler;
+  /** The sheet's Roll mode, for every d20 test a click rolls. Normal without one. */
+  rollMode?: RollMode;
   /**
    * Called when a hit die is spent, with the position of the pool. Omit and
    * the dice still roll but nothing is decremented.
@@ -76,13 +79,13 @@ const TABS: SheetTab<TabId>[] = [
 /**
  * DnD5eCharacterView - Read-only D&D 5e character sheet
  */
-export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll, onSpendHitDie }) => {
+export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll, rollMode, onSpendHitDie }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const data = character.data as DnD5eCharacterData;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
-  const { roll: handleRoll, openMenu: showRollPopup, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem);
+  const { roll: handleRoll, rollTest, openMenu: showRollPopup, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem, rollMode);
 
   // A hit die is spent once its roll is made: a roll refused (too many rolls,
   // no connection) used to take the die anyway.
@@ -214,7 +217,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                   colorTo={themeColor.to}
                   colorHex={themeColor.hex}
                   customColor={isCustomColor ? customColorHex : undefined}
-                  onRoll={onRoll ? () => handleRoll(expr, purpose) : undefined}
+                  onRoll={onRoll ? () => rollTest(expr, purpose) : undefined}
                   onRollContext={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                 />
               );
@@ -238,7 +241,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                 <div
                   key={key}
                   className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-accent/10 select-none' : ''}`}
-                  onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
+                  onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
                   onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                   title={onRoll ? `Left-click: roll  |  Right-click: Advantage / Disadvantage` : undefined}
                 >
@@ -288,7 +291,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                 expertise: custom.expertise === true,
                 bonus: dnd5eCustomSkillBonus(data, custom),
               }))}
-              onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
+              onRoll={onRoll ? rollTest : undefined}
               onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
             />
           </div>
@@ -483,7 +486,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           <h3 className="text-lg font-semibold text-ink mb-3">Attacks & Weapons</h3>
           <AttacksList
             attacks={data.attacks}
-            onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
+            onRollAttack={onRoll ? rollTest : undefined}
+            onRollDamage={onRoll ? handleRoll : undefined}
             onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
           />
         </div>

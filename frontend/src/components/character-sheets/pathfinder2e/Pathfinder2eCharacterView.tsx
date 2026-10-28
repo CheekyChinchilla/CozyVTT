@@ -50,12 +50,15 @@ import { COLOR_PRESETS } from './colorPresets';
 import { readPf2eSpellSlots } from './spellcastingEntries';
 import { headerInk } from '@/utils/themeColor';
 import { useSheetRolls } from '../useSheetRolls';
+import type { RollMode } from '@/utils/rollModes';
 
 interface Pathfinder2eCharacterViewProps {
   character: Character;
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
+  /** The sheet's Roll mode, for every d20 test a click rolls. Normal without one. */
+  rollMode?: RollMode;
 }
 
 /**
@@ -79,12 +82,13 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   character,
   onEdit,
   onRoll,
+  rollMode,
 }) => {
   const data = character.data as PF2eCharacterData;
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
-  const { roll: handleRoll, openMenu: showRollPopup, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem);
+  const { roll: handleRoll, rollTest, openMenu: showRollPopup, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem, rollMode);
 
   // Load saved color preference from character data
   useEffect(() => {
@@ -209,7 +213,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <div
               key={ability}
               className={`flex flex-col items-center rounded-lg p-1 transition-colors group ${onRoll ? 'cursor-pointer hover:bg-ink/10 select-none' : ''}`}
-              onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
+              onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
               onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
               title={onRoll ? `Left-click: roll ${ability} check  |  Right-click: Fortune / Misfortune` : undefined}
             >
@@ -260,7 +264,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <div
               key={save}
               className={`bg-paper border border-ink/10 rounded-lg p-3 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-              onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
+              onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
               onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
               title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
             >
@@ -299,7 +303,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           return (
             <div
               className={`bg-paper border border-ink/10 rounded-lg p-4 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-              onClick={onRoll ? () => handleRoll(expr, 'Perception') : undefined}
+              onClick={onRoll ? () => rollTest(expr, 'Perception') : undefined}
               onContextMenu={onRoll ? (e) => showRollPopup(e, expr, 'Perception') : undefined}
               title={onRoll ? `Left-click: roll Perception  |  Right-click: Fortune / Misfortune` : undefined}
             >
@@ -501,7 +505,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <div
                 key={skillName}
                 className={`bg-paper border border-ink/10 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-                onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
+                onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
                 onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                 title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
               >
@@ -534,7 +538,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                   <div
                     key={index}
                     className={`bg-warning/10 border border-warning/30 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-                    onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
+                    onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
                     onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                     title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
                   >
@@ -562,7 +566,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       <h3 className="text-lg font-bold text-ink mb-3">Strikes & Attacks</h3>
       <StrikesList
         strikes={data.strikes || []}
-        onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
+        onRollStrike={onRoll ? rollTest : undefined}
+        onRollDamage={onRoll ? handleRoll : undefined}
         onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
       />
     </div>
