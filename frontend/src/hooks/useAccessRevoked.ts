@@ -46,7 +46,9 @@ export function useAccessRevoked(): (revoked: AccessRevoked) => void {
     const notice = `${revoked.campaignId ?? ''}|${revoked.reason}`;
     if (actedOn.current === notice) return;
     actedOn.current = notice;
-    if (revoked.reason === 'left') refreshAfterLeavingCampaign(queryClient);
+    // The dashboard's lists are kept for 30 seconds: without this one fetched
+    // just before would still show the campaign's card.
+    refreshAfterLeavingCampaign(queryClient);
     if (hasUnsavedWork()) {
       showToast(`${revoked.message} Your unsaved changes are still open: save them before you leave this page.`, 'warning', NOTICE_MS);
       return;

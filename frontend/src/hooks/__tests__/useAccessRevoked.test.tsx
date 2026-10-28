@@ -89,6 +89,17 @@ describe('a member removed from the campaign', () => {
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
   });
 
+  // The dashboard's lists are kept for 30 seconds, so one fetched just
+  // before still showed the campaign's card, and not its notes.
+  it("has the dashboard's lists fetched again", () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    renderCampaign();
+
+    revoke({ campaignId: 'c1', reason: 'removed', message: 'You were removed from this campaign.' });
+
+    expect(refetched(invalidate)).toEqual([['campaigns'], ['characters'], ['left-campaigns']]);
+  });
+
   it('with unsaved changes in an editor stays, and is told to save them first', () => {
     const release = holdUnsavedWork();
     try {
@@ -146,6 +157,15 @@ describe('a deleted campaign', () => {
 
     expect(showToast).toHaveBeenCalledWith('This campaign was deleted.', 'warning', 10000);
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
+  });
+
+  it("has the dashboard's lists fetched again", () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    renderCampaign();
+
+    revoke({ campaignId: 'c1', reason: 'campaign-deleted', message: 'This campaign was deleted.' });
+
+    expect(refetched(invalidate)).toEqual([['campaigns'], ['characters'], ['left-campaigns']]);
   });
 });
 
