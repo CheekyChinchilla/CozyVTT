@@ -3,84 +3,37 @@
 // Chat / Dice / Initiative / Session share one full-height panel
 // instead of stacking in a scrolling column with fixed heights.
 //
-// All tab panels stay mounted — inactive ones are hidden with
-// `invisible` (visibility: hidden) rather than unmounted or
-// display: none. This preserves chat history, dice results, and
-// socket listeners across tab switches, and keeps hidden panels'
-// layout measurable so ChatPanel's autoscroll-to-bottom keeps
-// working while the tab is inactive.
+// The rail is its tab bar and the panels below it (SessionPanels),
+// which stay mounted while their tab is not open. The open tab is the
+// game store's `sessionTab`. On the campaign page the panels are the
+// page's, moved into the rail (tableHosts.tsx); drawn on its own, the
+// rail draws them itself.
 // ============================================
 
-import { useEffect, useRef, useState } from 'react';
 import { MessageCircle, Dices, ListOrdered, PlayCircle, NotebookPen, type LucideIcon } from 'lucide-react';
-import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useGameStore } from '@/stores/gameStore';
 import { cn } from '@/utils/cn';
-import ChatPanel from './ChatPanel';
-import DiceRoller from './DiceRoller';
-import VibeTracker from './VibeTracker';
-import InitiativeTracker from './InitiativeTracker';
-import SessionControls from './SessionControls';
-import SessionHistory from './SessionHistory';
-import PersonalNotes from './PersonalNotes';
-import type { ChatMessageBroadcast } from '@/types';
-import { optionalStorage } from '@/utils/optionalStorage';
+import SessionPanels from './SessionPanels';
+import { SESSION_TABS, type SessionTab } from './sessionTabs';
+import { useTableSlot } from './tableHosts';
 
-type RailTab = 'chat' | 'dice' | 'initiative' | 'notes' | 'session';
-
-const TAB_STORAGE_KEY = 'cozyvtt-session-tab';
-
-const TABS: { key: RailTab; label: string; icon: LucideIcon }[] = [
-  { key: 'chat', label: 'Chat', icon: MessageCircle },
-  { key: 'dice', label: 'Dice', icon: Dices },
-  { key: 'initiative', label: 'Initiative', icon: ListOrdered },
+const TAB_LOOKS: Record<SessionTab, { label: string; icon: LucideIcon }> = {
+  chat: { label: 'Chat', icon: MessageCircle },
+  dice: { label: 'Dice', icon: Dices },
+  initiative: { label: 'Initiative', icon: ListOrdered },
   // Its own tab rather than a widget under Session: long-form writing needs the
   // full height of the rail, and people come back to it constantly during play.
-  { key: 'notes', label: 'Notes', icon: NotebookPen },
-  { key: 'session', label: 'Session', icon: PlayCircle },
-];
+  notes: { label: 'Notes', icon: NotebookPen },
+  session: { label: 'Session', icon: PlayCircle },
+};
 
-function loadInitialTab(): RailTab {
-  const stored = optionalStorage.getItem(TAB_STORAGE_KEY);
-  return TABS.some((t) => t.key === stored) ? (stored as RailTab) : 'chat';
-}
+const TABS = SESSION_TABS.map((key) => ({ key, ...TAB_LOOKS[key] }));
 
 export default function SessionSidebar() {
-  const { socket } = useWebSocket();
-  const { user } = useAuth();
-
-  const [activeTab, setActiveTab] = useState<RailTab>(loadInitialTab);
-  const [unreadChat, setUnreadChat] = useState(0);
-
-  // Ref mirror so the socket listener sees the current tab without
-  // re-subscribing on every tab switch.
-  const activeTabRef = useRef(activeTab);
-
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-    optionalStorage.setItem(TAB_STORAGE_KEY, activeTab);
-    if (activeTab === 'chat') {
-      setUnreadChat(0);
-    }
-  }, [activeTab]);
-
-  // Count chat messages that arrive while the Chat tab is inactive.
-  // ChatPanel stays mounted and handles the messages themselves; this
-  // listener only maintains the badge.
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleChatMessage = (data: ChatMessageBroadcast) => {
-      if (activeTabRef.current === 'chat') return;
-      if (user && data.userId === user.id) return; // own messages aren't "unread"
-      setUnreadChat((count) => count + 1);
-    };
-
-    socket.onChatMessage(handleChatMessage);
-    return () => {
-      socket.off('chat.message', handleChatMessage);
-    };
-  }, [socket, user]);
+  const activeTab = useGameStore((s) => s.sessionTab);
+  const setActiveTab = useGameStore((s) => s.setSessionTab);
+  const unreadChat = useGameStore((s) => s.unreadChat);
+  const panelsSlot = useTableSlot('session');
 
   // Roving-tabindex keyboard support: Left/Right arrows move between tabs.
   const handleTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -142,64 +95,8 @@ export default function SessionSidebar() {
       </div>
 
       {/* Tab panels — stacked, all mounted, inactive ones invisible */}
-      <div className="relative flex-1 min-h-0">
-        <div
-          id="session-tabpanel-chat"
-          role="tabpanel"
-          aria-labelledby="session-tab-chat"
-          className={cn('absolute inset-0 p-3', activeTab === 'chat' ? 'animate-fade-in' : 'invisible')}
-        >
-          <ChatPanel />
-        </div>
-
-        <div
-          id="session-tabpanel-dice"
-          role="tabpanel"
-          aria-labelledby="session-tab-dice"
-          className={cn('absolute inset-0 p-3', activeTab === 'dice' ? 'animate-fade-in' : 'invisible')}
-        >
-          <DiceRoller />
-        </div>
-
-        <div
-          id="session-tabpanel-initiative"
-          role="tabpanel"
-          aria-labelledby="session-tab-initiative"
-          className={cn(
-            'absolute inset-0 p-3 overflow-y-auto',
-            activeTab === 'initiative' ? 'animate-fade-in' : 'invisible'
-          )}
-        >
-          <InitiativeTracker />
-        </div>
-
-        <div
-          id="session-tabpanel-notes"
-          role="tabpanel"
-          aria-labelledby="session-tab-notes"
-          className={cn(
-            'absolute inset-0 p-3',
-            activeTab === 'notes' ? 'animate-fade-in' : 'invisible'
-          )}
-        >
-          <PersonalNotes />
-        </div>
-
-        <div
-          id="session-tabpanel-session"
-          role="tabpanel"
-          aria-labelledby="session-tab-session"
-          className={cn(
-            'absolute inset-0 p-3 overflow-y-auto space-y-4',
-            activeTab === 'session' ? 'animate-fade-in' : 'invisible'
-          )}
-        >
-          <VibeTracker />
-          {/* SessionControls renders nothing for players */}
-          <SessionControls />
-          {/* Everyone: the notes the DM wrote when each session ended */}
-          <SessionHistory />
-        </div>
+      <div ref={panelsSlot.ref} className="relative flex-1 min-h-0">
+        {!panelsSlot.hosted && <SessionPanels />}
       </div>
     </aside>
   );

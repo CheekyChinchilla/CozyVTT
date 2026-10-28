@@ -648,17 +648,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // The map a held token was picked up on, which is where it goes back to if
   // the map changes while it is held.
   const heldOnMapRef = useRef<string | null>(null);
-  const releaseHoldOnMapSwitch = useEffectEvent(() => {
+  const putBackHeldToken = useEffectEvent(() => {
     if (draggedToken) cancelHold();
   });
   // A held token goes back, and the selection goes, when the map changes:
   // the next map starts with nothing selected.
   useEffect(() => {
-    releaseHoldOnMapSwitch();
+    putBackHeldToken();
     useGameStore.getState().selectToken(null);
     setFollowedTokenId(null);
     setPingArmed(false);
   }, [currentMap?.id]);
+  // And when the map leaves the page. The server lets go of a carry only when
+  // the connection drops, so a map taken away while it stays open would leave
+  // the token where it was last carried on every other screen.
+  useEffect(() => () => putBackHeldToken(), []);
   // The token and door menus, and the Roll... pickers the token menu opens,
   // close when the map changes. Each holds the token or the door it was
   // opened on and acts on the map on screen, so it would send the old map's

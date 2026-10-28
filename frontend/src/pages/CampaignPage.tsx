@@ -1,12 +1,14 @@
 // ============================================
 // Campaign Page
-// Main campaign view with three-panel layout
-// Left: Campaign info, character, party
-// Center: Map canvas
-// Right: Chat, dice roller, controls
+// The game table: the map, the session panels and the Party content, drawn
+// once (components/campaign/tableHosts.tsx) and arranged by one of the
+// page's arrangements, today the desktop's three columns
+// (components/campaign/DesktopTable.tsx). Everything an arrangement change
+// must keep stays here: the page's listeners, every window and slide-over
+// and whether it is open, and the token quick editor.
 // ============================================
 
-import { useState, useEffect, useId, lazy, Suspense } from 'react';
+import { useState, useEffect, useId, lazy, Suspense, type ReactNode } from 'react';
 import { isCampaignOwner } from '@/utils/campaignRoles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router';
@@ -16,26 +18,11 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { COMPACT_LAYOUT_QUERY } from '@/constants/layout';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
+import { LayoutProvider, useCompactLayout } from '@/contexts/LayoutContext';
 import { useGameStore } from '@/stores/gameStore';
 import { useInitiativeSync } from '@/hooks/useInitiativeSync';
 import { usePresenceSync } from '@/hooks/usePresenceSync';
-import {
-  ArrowLeft,
-  Loader2,
-  Sun,
-  PauseCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen, Settings, BookOpen, Keyboard } from 'lucide-react';
-import {
-  Group,
-  Panel,
-  Separator,
-  useDefaultLayout,
-  usePanelRef,
-  type PanelImperativeHandle,
-} from 'react-resizable-panels';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 
 // Campaign components
 import CampaignInfo from '@/components/campaign/CampaignInfo';
@@ -57,13 +44,13 @@ import TokenRoster from '@/components/campaign/TokenRoster';
 import CampaignSettingsModal from '@/components/campaign/CampaignSettingsModal';
 import CampaignDocumentsModal from '@/components/documents/CampaignDocumentsModal';
 import ShortcutsPanel from '@/components/campaign/ShortcutsPanel';
-import SessionSidebar from '@/components/campaign/SessionSidebar';
-import SessionToolbar, { type SessionToolKey } from '@/components/campaign/SessionToolbar';
-import ConnectionStatus from '@/components/ConnectionStatus';
+import SessionPanels from '@/components/campaign/SessionPanels';
+import DesktopTable from '@/components/campaign/DesktopTable';
+import { TableHosts, type TablePart } from '@/components/campaign/tableHosts';
+import { type SessionToolKey } from '@/components/campaign/SessionToolbar';
 import { CampaignStatus } from '@/types';
 import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
-import Tooltip from '@/components/ui/Tooltip';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
 import { optionalStorage } from '@/utils/optionalStorage';
 import { useAccessRevoked } from '@/hooks/useAccessRevoked';
@@ -144,13 +131,8 @@ function CampaignPageContent() {
   const [isCreatureLibraryOpen, setIsCreatureLibraryOpen] = useState(false);
   const [isTokenTemplateLibraryOpen, setIsTokenTemplateLibraryOpen] = useState(false);
   const [quickEditToken, setQuickEditToken] = useState<Token | null>(null);
+  const compact = useCompactLayout();
 
-  // Resizable panel layout — persisted to localStorage so each user's
-  // column sizes survive reloads.
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: 'cozyvtt-session-layout',
-    storage: optionalStorage,
-  });
   // Below 1024 px the page covers itself with a "Desktop Required" notice
   // until **Continue anyway**, which this browser then remembers.
   const [continueOnNarrowScreen, setContinueOnNarrowScreen] = useState(
@@ -165,28 +147,6 @@ function CampaignPageContent() {
   const narrowScreen = useMediaQuery(COMPACT_LAYOUT_QUERY);
   const narrowNoticeRef = useFocusTrap(narrowScreen && !continueOnNarrowScreen);
   const narrowNoticeTitleId = useId();
-  const leftPanelRef = usePanelRef();
-  const rightPanelRef = usePanelRef();
-  const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, setRightCollapsed] = useState(false);
-
-  const togglePanel = (
-    panelRef: React.RefObject<PanelImperativeHandle | null>,
-    fallbackSize: string
-  ) => {
-    const panel = panelRef.current;
-    if (!panel) return;
-    if (panel.isCollapsed()) {
-      panel.expand();
-      // A panel restored from a collapsed saved layout has no previous
-      // size to expand back to — fall back to its default share.
-      if (panel.getSize().asPercentage === 0) {
-        panel.resize(fallbackSize);
-      }
-    } else {
-      panel.collapse();
-    }
-  };
 
   // SessionToolbar reports which tool was clicked; the open/close state
   // for each slide-over stays here.
@@ -288,234 +248,62 @@ function CampaignPageContent() {
     );
   }
 
+  // The map, the session panels and the Party content, each drawn once here
+  // and moved into the slots of the arrangement on screen, so a change of
+  // arrangement remounts none of them.
+  const tableParts: Record<TablePart, ReactNode> = {
+    map: (
+      <Suspense
+        fallback={
+          <div className="w-full h-full flex items-center justify-center" aria-live="polite" aria-label="Loading map">
+            <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-hidden="true" />
+          </div>
+        }
+      >
+        <MapCanvas onEditToken={setQuickEditToken} onShowShortcuts={() => setIsShortcutsOpen(true)} />
+      </Suspense>
+    ),
+    session: <SessionPanels />,
+    party: (
+      <div className="space-y-4">
+        <CampaignInfo />
+        <CampaignRoster />
+        {/* Token Roster — DM only */}
+        {userRole === 'DM' && (
+          <TokenRoster onEditToken={setQuickEditToken} />
+        )}
+      </div>
+    ),
+  };
+
   return (
     // The dynamic viewport height: on a phone or a tablet the browser's
     // toolbar comes and goes, and h-screen (100vh) is the height without it,
     // which put the bottom of the page under the toolbar.
     <div className="h-dvh flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
-      {/* Header Bar */}
-      {/* Wraps onto a second row in a narrow window instead of running off its edge. */}
-      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            onClick={() => navigate('/dashboard')}
-            variant="secondary" className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Dashboard</span>
-          </Button>
-
-          <div className="h-6 w-px bg-moss-green/20" />
-
-          <h1 className="min-w-0 break-words text-xl font-bold text-brand-ink">
-            {campaign.name}
-          </h1>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Connection Status */}
-          <ConnectionStatus />
-
-          {/* Session status indicator (visible to all) */}
-          {campaign.status === CampaignStatus.ACTIVE && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-success/10 border border-success/20">
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-              <span className="text-xs font-medium text-success-ink hidden sm:inline">Live</span>
-            </div>
-          )}
-          {campaign.status === CampaignStatus.PAUSED && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-warm-amber/10 border border-warm-amber/20">
-              <PauseCircle className="w-3.5 h-3.5 text-accent-ink" />
-              <span className="text-xs font-medium text-accent-ink hidden sm:inline">Paused</span>
-            </div>
-          )}
-          {campaign.status === CampaignStatus.INACTIVE && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-gray/10 border border-stone-gray/20">
-              <div className="w-2 h-2 rounded-full bg-stone-gray/50" />
-              <span className="text-xs font-medium text-stone-gray hidden sm:inline">Inactive</span>
-            </div>
-          )}
-
-          {/* Vibe indicator (visible to all) */}
-          {campaign?.currentVibe && (
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-warm-amber/10 border border-warm-amber/20">
-              <Sun className="w-3.5 h-3.5 text-accent-ink" />
-              <span className="text-xs font-medium text-accent-ink capitalize hidden sm:inline">
-                {campaign.currentVibe}
-              </span>
-            </div>
-          )}
-
-          {/* DM tools — grouped icon toolbar */}
-          {userRole === 'DM' && (
-            <>
-              <div className="h-6 w-px bg-moss-green/20" />
-              <SessionToolbar
-                openPanels={{
-                  maps: isMapManagerOpen,
-                  tokens: isTokenManagerOpen,
-                  creatures: isCreatureLibraryOpen,
-                  templates: isTokenTemplateLibraryOpen,
-                  spirit: isSpiritLayerOpen,
-                  atmosphere: isAtmospherePanelOpen,
-                  settings: isSettingsOpen,
-                }}
-                onOpen={(key) => sessionPanelOpeners[key]()}
-                spiritLayerEnabled={campaign?.spiritLayerEnabled}
-              />
-            </>
-          )}
-
-          {/* An owner who has handed the game over keeps two powers — deleting
-              the campaign and taking the seat back — and this is their way to
-              them. It sits here, beside where the DM's own settings gear would
-              be, because that is where somebody goes looking for it; tucked in
-              the sidebar it read as missing. */}
-          {isOwner && userRole !== 'DM' && (
-            <>
-              <div className="h-6 w-px bg-moss-green/20" />
-              <Tooltip content="Owner settings — delete, or take back the DM role" side="bottom">
-                <Button
-                  variant="ghost"
-                  iconOnly
-                  icon={Settings}
-                  aria-label="Owner Settings"
-                  onClick={() => setIsSettingsOpen(true)}
-                />
-              </Tooltip>
-            </>
-          )}
-
-          {/* Documents shared with the campaign. Every member, not just the
-              DM: a rulebook the table is meant to read has to be reachable by
-              the people reading it. */}
-          <div className="h-6 w-px bg-moss-green/20" />
-          <Tooltip content="Campaign documents" side="bottom">
-            <Button
-              variant="ghost"
-              iconOnly
-              icon={BookOpen}
-              aria-label="Campaign documents"
-              onClick={() => setIsDocumentsOpen(true)}
-            />
-          </Tooltip>
-          <Tooltip content="Keyboard shortcuts" side="bottom">
-            <Button
-              variant="ghost"
-              iconOnly
-              icon={Keyboard}
-              aria-label="Keyboard shortcuts"
-              onClick={() => setIsShortcutsOpen(true)}
-            />
-          </Tooltip>
-
-          {/* Sidebar collapse toggles (all roles) */}
-          <div className="h-6 w-px bg-moss-green/20" />
-          <div className="flex items-center gap-1">
-            <Tooltip content={leftCollapsed ? 'Show party panel' : 'Hide party panel'} side="bottom">
-              <Button
-                variant="ghost"
-                iconOnly
-                icon={leftCollapsed ? PanelLeftOpen : PanelLeftClose}
-                aria-label={leftCollapsed ? 'Show party panel' : 'Hide party panel'}
-                onClick={() => togglePanel(leftPanelRef, '20%')}
-              />
-            </Tooltip>
-            <Tooltip content={rightCollapsed ? 'Show session panel' : 'Hide session panel'} side="bottom">
-              <Button
-                variant="ghost"
-                iconOnly
-                icon={rightCollapsed ? PanelRightOpen : PanelRightClose}
-                aria-label={rightCollapsed ? 'Show session panel' : 'Hide session panel'}
-                onClick={() => togglePanel(rightPanelRef, '25%')}
-              />
-            </Tooltip>
-          </div>
-        </div>
-      </header>
-
-      {/* Session Paused Banner — visible to players when session is paused */}
-      {campaign.status === CampaignStatus.PAUSED && userRole !== 'DM' && (
-        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-warm-amber/10 border-b border-warm-amber/20">
-          <PauseCircle className="w-4 h-4 text-accent-ink shrink-0" />
-          <p className="text-xs font-medium text-accent-ink">
-            Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.
-          </p>
-        </div>
-      )}
-
-      {/* Main Content - Three Resizable Panels. Relative, so it clips what is
-          absolutely placed inside it too, such as the hidden names of the
-          rail's icon tabs, which otherwise widened a narrow page. */}
-      <main className={`relative flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
-        {/* The dividers are 6 pixels wide; the library takes a drag over a
-            wider strip than it draws. 44 pixels where the primary pointer
-            is coarse is the size a finger needs; a mouse keeps its 10. It
-            takes a press in the strip on anything inside the group, whatever
-            is drawn over the divider, so the menus and pickers opened in
-            these columns are drawn on the body (components/ui/FloatingLayer.tsx),
-            where being in front keeps their presses. A z-index on <main> or
-            the page's root at or above theirs would undo that. */}
-        <Group
-          orientation="horizontal"
-          className="h-full w-full"
-          defaultLayout={defaultLayout}
-          onLayoutChanged={onLayoutChanged}
-          resizeTargetMinimumSize={{ coarse: 44, fine: 10 }}
-        >
-          {/* Left Panel — party & campaign info */}
-          <Panel
-            id="party"
-            defaultSize={20}
-            minSize="260px"
-            collapsible
-            panelRef={leftPanelRef}
-            onResize={(size) => setLeftCollapsed(size.asPercentage === 0)}
-            className="h-full"
-          >
-            <aside className="h-full overflow-y-auto p-4 space-y-4 bg-parchment/30 border-r border-moss-green/20">
-              <CampaignInfo />
-              <CampaignRoster />
-              {/* Token Roster — DM only */}
-              {userRole === 'DM' && (
-                <TokenRoster onEditToken={setQuickEditToken} />
-              )}
-            </aside>
-          </Panel>
-
-          <Separator className="w-1.5 bg-moss-green/10 transition-colors data-[separator=hover]:bg-brand/30 data-[separator=active]:bg-brand/50" />
-
-          {/* Center Panel — map canvas */}
-          <Panel id="map" defaultSize={55} minSize={30} className="h-full">
-            <section className="h-full min-w-0 p-4">
-              <Suspense
-                fallback={
-                  <div className="w-full h-full flex items-center justify-center" aria-live="polite" aria-label="Loading map">
-                    <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-hidden="true" />
-                  </div>
-                }
-              >
-                <MapCanvas onEditToken={setQuickEditToken} onShowShortcuts={() => setIsShortcutsOpen(true)} />
-              </Suspense>
-            </section>
-          </Panel>
-
-          <Separator className="w-1.5 bg-moss-green/10 transition-colors data-[separator=hover]:bg-brand/30 data-[separator=active]:bg-brand/50" />
-
-          {/* Right Panel — tabbed session rail (Chat / Dice / Initiative / Session) */}
-          <Panel
-            id="rail"
-            defaultSize={25}
-            minSize="300px"
-            collapsible
-            panelRef={rightPanelRef}
-            onResize={(size) => setRightCollapsed(size.asPercentage === 0)}
-            className="h-full"
-          >
-            <SessionSidebar />
-          </Panel>
-        </Group>
-      </main>
+      <TableHosts parts={tableParts}>
+        {/* No compact arrangement is drawn yet; LayoutProvider below says
+            false on every screen. */}
+        {!compact && (
+          <DesktopTable
+            campaign={campaign}
+            isOwner={isOwner}
+            openTools={{
+              maps: isMapManagerOpen,
+              tokens: isTokenManagerOpen,
+              creatures: isCreatureLibraryOpen,
+              templates: isTokenTemplateLibraryOpen,
+              spirit: isSpiritLayerOpen,
+              atmosphere: isAtmospherePanelOpen,
+              settings: isSettingsOpen,
+            }}
+            onOpenTool={(key) => sessionPanelOpeners[key]()}
+            onOpenDocuments={() => setIsDocumentsOpen(true)}
+            onOpenShortcuts={() => setIsShortcutsOpen(true)}
+            continueOnNarrowScreen={continueOnNarrowScreen}
+          />
+        )}
+      </TableHosts>
 
       {/* Map Manager slide-over panel (DM only) */}
       {userRole === 'DM' && (
@@ -654,7 +442,11 @@ export default function CampaignPage() {
   return (
     <CampaignProvider>
       <WebSocketProvider>
-        <CampaignPageContent />
+        {/* The compact arrangement is not drawn yet: every screen gets the
+            desktop's, and below 1024 px the Desktop Required notice over it. */}
+        <LayoutProvider compact={false}>
+          <CampaignPageContent />
+        </LayoutProvider>
       </WebSocketProvider>
     </CampaignProvider>
   );
