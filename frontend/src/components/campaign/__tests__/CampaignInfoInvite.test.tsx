@@ -15,6 +15,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
     userRole: 'DM',
   }),
 }));
+vi.mock('../LeaveCampaign', () => ({ default: () => null }));
 vi.mock('../InvitePlayerModal', () => ({
   default: ({ open, onSuccess }: { open: boolean; onSuccess: () => void }) =>
     open ? <button onClick={onSuccess}>Send invitation</button> : null,
@@ -31,7 +32,7 @@ afterEach(() => {
 it('closes the invite dialog without reloading the page', () => {
   const reload = vi.fn();
   Object.defineProperty(window, 'location', { configurable: true, value: { ...realLocation, reload } });
-  render(<CampaignInfo />);
+  render(<CampaignInfo onLeft={vi.fn()} />);
 
   fireEvent.click(screen.getByRole('button', { name: /Invite Player/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));

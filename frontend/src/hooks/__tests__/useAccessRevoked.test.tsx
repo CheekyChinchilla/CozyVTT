@@ -14,6 +14,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { AccessRevoked } from '@/types';
 
 type Handler = (data: AccessRevoked) => void;
@@ -33,20 +34,31 @@ import { useAccessRevoked } from '../useAccessRevoked';
 import { holdUnsavedWork, isSignedOut } from '@/services/unsavedWork';
 import { readSignInNotice, forgetSignInNotice } from '@/services/signInNotice';
 
+let endTable: ((revoked: AccessRevoked) => void) | null = null;
+
 function CampaignPage() {
-  useAccessRevoked();
+  endTable = useAccessRevoked();
   return <p>Campaign page</p>;
 }
 
+let queryClient: QueryClient;
+
 function renderCampaign() {
   return render(
-    <MemoryRouter initialEntries={['/campaigns/c1']}>
-      <Routes>
-        <Route path="/campaigns/:id" element={<CampaignPage />} />
-        <Route path="/dashboard" element={<p>Dashboard</p>} />
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/campaigns/c1']}>
+        <Routes>
+          <Route path="/campaigns/:id" element={<CampaignPage />} />
+          <Route path="/dashboard" element={<p>Dashboard</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
+}
+
+/** The query keys marked for a refetch so far. */
+function refetched(spy: ReturnType<typeof vi.spyOn>): unknown[] {
+  return spy.mock.calls.map((call: unknown[]) => (call[0] as { queryKey: unknown }).queryKey);
 }
 
 function revoke(revoked: AccessRevoked) {
@@ -54,6 +66,8 @@ function revoke(revoked: AccessRevoked) {
 }
 
 beforeEach(() => {
+  queryClient = new QueryClient();
+  endTable = null;
   handlers.clear();
   showToast.mockReset();
   loadPage.mockReset();
@@ -87,6 +101,36 @@ describe('a member removed from the campaign', () => {
         'warning',
         10000
       );
+      expect(screen.getByText('Campaign page')).toBeInTheDocument();
+    } finally {
+      release();
+    }
+  });
+});
+
+describe('a member who left the campaign', () => {
+  it('is told, its lists on the dashboard are refetched, and it goes there', () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    renderCampaign();
+
+    revoke({ campaignId: 'c1', reason: 'left', message: 'You left this campaign.' });
+
+    expect(showToast).toHaveBeenCalledWith('You left this campaign.', 'success', 10000);
+    expect(refetched(invalidate)).toEqual([['campaigns'], ['characters'], ['left-campaigns']]);
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+  });
+
+  // The tab that pressed Leave Campaign is told by the server's answer and
+  // by its socket; an editor's unsaved changes keep it on the page for both.
+  it('is told once when the same notice comes twice', () => {
+    const release = holdUnsavedWork();
+    try {
+      renderCampaign();
+
+      act(() => endTable?.({ campaignId: 'c1', reason: 'left', message: 'You left this campaign.' }));
+      revoke({ campaignId: 'c1', reason: 'left', message: 'You left this campaign.' });
+
+      expect(showToast).toHaveBeenCalledTimes(1);
       expect(screen.getByText('Campaign page')).toBeInTheDocument();
     } finally {
       release();

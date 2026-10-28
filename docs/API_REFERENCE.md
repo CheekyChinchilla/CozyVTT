@@ -558,6 +558,31 @@ Note the generic role endpoint still refuses to change a DM's role or create a
 second one — this is the only supported way to move the seat, so that there is
 one atomic path rather than two.
 
+### `POST /api/campaigns/:campaignId/leave`
+
+Leave the campaign as a player or a spectator: what the DM's removal of a
+member does, asked by the member. **Requires membership of the campaign, any
+role.** No body.
+
+**Response `200`:** `{ message: "You left this campaign." }`
+
+The caller's characters in the campaign go back to their own list (their
+`campaignId` becomes null); their tokens, initiative entries, drawings, notes
+and saved rolls stay with the campaign, and the notes and saved rolls are
+listed under `GET /api/campaigns/left`. Each of the caller's live connections
+to the campaign is sent `campaign.access.revoked` with reason `left` and the
+same message, and leaves it; the campaign is sent `presence.state` and
+`roster.updated` (`member.left`). Only the DM can invite them back.
+
+Rejected with `409` for the campaign's owner, whatever their role ("You own
+this campaign, so you cannot leave it. If you no longer want it, delete it in
+the campaign's settings."), and for the DM ("You run this campaign. Hand the DM
+seat to someone else in the campaign's settings, then leave it."); `403` for
+anyone who is not a member ("You are not a member of this campaign"), also when
+the DM removed them a moment before; `401` when not signed in. The role is read
+in the same transaction as the change, so a hand-over of the seat to the caller
+at the same moment is refused as for any DM.
+
 ### `DELETE /api/campaigns/:campaignId/messages/join-leave`
 
 Remove the legacy "X has joined / has left the campaign" system messages from a campaign's chat. **Requires DM role.**

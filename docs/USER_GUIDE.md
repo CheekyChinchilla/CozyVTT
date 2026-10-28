@@ -134,8 +134,8 @@ Within a campaign you have one of three roles. Whoever creates a campaign is its
 | Role | What they can do |
 |------|-----------------|
 | **DM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
-| **Player** | Move the tokens they control, roll dice, chat, keep notes, and read and edit their own characters |
-| **Spectator** | Watch the map, follow and write in the chat, and ping the map; they keep private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or edit a character sheet, even their own, while they are a spectator. They can still add one of their characters to the campaign's roster, take one out of it, or delete one of their own characters. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
+| **Player** | Move the tokens they control, roll dice, chat, keep notes, and read and edit their own characters. They can leave the campaign with **Leave Campaign**, in the **Campaign Info** panel ([Leaving a campaign](PLAYER_GUIDE.md#leaving-a-campaign)) |
+| **Spectator** | Watch the map, follow and write in the chat, and ping the map; they keep private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or edit a character sheet, even their own, while they are a spectator. They can still add one of their characters to the campaign's roster, take one out of it, or delete one of their own characters, and leave the campaign as a player can. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
 
 ---
 
@@ -157,7 +157,7 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 
 *Screenshot pending — Campaign card grid with status indicators.*
 
-**Notes From Campaigns You Have Left** — Shown only if a DM has removed you from a campaign in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** in the window it opens saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
+**Notes From Campaigns You Have Left** — Shown only if you left a campaign, or a DM removed you from one, in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** in the window it opens saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
 
 **Your Characters**, **Asset Library**, **Documents** and **Character Templates** — each section has a button that takes you to that page in one click.
 
@@ -890,7 +890,7 @@ If a character sheet window says **Error Loading Character Sheet**, that sheet h
 
 CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, the map the table moved to, the vibe, the weather and ambient track, the spirit layer, and a dice history the DM cleared are all brought up to date once you're back. A chat message you send while disconnected is marked **Not sent**; click **Retry** once you are back. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
 
-If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard.
+If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard. It says "You left this campaign." when you have left it, from this tab or another.
 
 ### Someone else is editing my character
 

@@ -123,6 +123,13 @@ CozyVTT does yet.
 > game over can never lock you out of your own campaign. If you are *not* the owner,
 > ask the new DM, or your instance's administrator can move it for you.
 
+**Leaving a campaign you run.** The DM cannot leave a campaign, so hand the seat
+to another member first; **Leave Campaign** then appears for you in the
+**Campaign Info** panel, as it does for every player. Whoever owns the campaign
+cannot leave it at all, since only the DM could let them back in: if it is
+yours and you no longer want it, delete it from the **Danger Zone** tab of
+**Campaign Settings** (**Owner Settings** once someone else is the DM).
+
 ---
 
 ## Preparing Your Maps
@@ -689,6 +696,14 @@ where it is, still shows the character's picture, and follows it if they change 
 download it, from their dashboard, and it is back in the campaign if you invite
 them again. You still cannot see any of it. If you delete the campaign, their
 notes and saved rolls for it are deleted with it, along with everyone else's.
+
+**Players and spectators can also leave on their own**, with **Leave
+Campaign** in their **Campaign Info** panel; you are not asked. Leaving does
+what removing does: their characters leave with them, their notes and saved
+rolls stay theirs, their page says "You left this campaign.", and the rest of
+the table sees them go as after a removal. Their tokens stay where they are on
+the map, and their entries in the initiative order stay, for you to keep or
+remove. To have them back, invite them again.
 
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as

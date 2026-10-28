@@ -12,6 +12,7 @@ No technical knowledge required. Let's go.
 2. [Accepting a Campaign Invitation](#accepting-a-campaign-invitation)
 3. [Creating Your Character](#creating-your-character)
 4. [The Campaign Page](#the-campaign-page)
+   - [Leaving a campaign](#leaving-a-campaign)
 5. [Chat and Dice](#chat-and-dice)
 6. [Moving Your Token](#moving-your-token)
 7. [Measuring and Spell Areas](#measuring-and-spell-areas)
@@ -135,6 +136,7 @@ The page has three main areas:
 - A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character. The minus buttons are damage, so in D&D 5e and Pathfinder 2e your temporary hit points go first
 - Click a character to read its sheet. Right-click one for a menu (on a touch screen, press and hold it): **View Character Sheet** for anyone's character, and for your own **Roll...**, **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
 - If you're curious about your fellow adventurers, it's all here
+- **Your role** at the bottom of the **Campaign Info** panel, and under it **Leave Campaign**, which takes you out of the campaign after asking (see [Leaving a campaign](#leaving-a-campaign))
 
 ### Center — The Map
 This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)).
@@ -189,6 +191,37 @@ theirs they can also take it back themselves, so nobody is ever stranded.
 
 If this happens unexpectedly, it is worth asking your DM — it is a deliberate
 action somebody took, not something that happens on its own.
+
+### Leaving a campaign
+
+If you no longer want to play or watch, you can leave a campaign yourself; you
+do not need to ask the DM.
+
+1. Open the campaign and find **Your role** at the bottom of the **Campaign
+   Info** panel, in the left sidebar.
+2. Click **Leave Campaign** under it. A window asks whether you are sure and
+   says what happens.
+3. Click **Leave Campaign** in that window. You see "You left this campaign."
+   and land on your dashboard, where the campaign's card is gone.
+
+| What | After you leave |
+|---|---|
+| The campaign | You stop seeing it and playing in it straight away, in every tab you have it open in |
+| Your characters in it | On **My Characters**, yours as before, in no campaign |
+| Your tokens on its maps | They stay where they are; only the DM can move or remove them |
+| Your place in the initiative order | It stays until the DM removes it |
+| Your notes and saved rolls | Kept, and readable from your dashboard under **Notes From Campaigns You Have Left** (see [Your Own Notes](#your-own-notes)) |
+
+To come back, ask the DM to invite you again. Your notes and saved rolls are
+then in the campaign again; your characters you assign again yourself.
+
+**If you see no Leave Campaign button,** the panel says why. The DM cannot
+leave until they hand the DM seat to another member (**Campaign Settings →
+Members**, then the crown beside that person, see [If your DM hands you the
+game](#if-your-dm-hands-you-the-game)). Whoever owns the campaign cannot leave
+it at all, since only the DM could let them back in; they can delete it
+instead, on the **Danger Zone** tab of **Owner Settings** (of **Campaign
+Settings** while they are the DM).
 
 ---
 
@@ -351,7 +384,7 @@ Notes save themselves a moment after you stop typing — there's no Save button 
 
 A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
 
-**If you are removed from the campaign,** an open campaign page says "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
+**If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
 
 ### Catching up on last time
 
@@ -704,6 +737,8 @@ In the chat box:
 **I lost connection.** CozyVTT reconnects by itself; **Retry** beside the connection indicator in the header tries at once. Your session state is saved on the server.
 
 **Someone edited my character.** Only you and your campaign's DM can edit your characters. If you have concerns, speak with your platform administrator.
+
+**I want to stop playing in a campaign.** Click **Leave Campaign** in the **Campaign Info** panel: see [Leaving a campaign](#leaving-a-campaign).
 
 **I need to switch characters.** From the Characters page, unassign your current character from the campaign and assign the new one. Let your DM know so they can update the token.
 
