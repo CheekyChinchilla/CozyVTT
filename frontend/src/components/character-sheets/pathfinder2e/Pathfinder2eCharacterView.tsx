@@ -250,7 +250,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                   {formatModifier(abilityData.modifier)}
                 </span>
                 {onRoll && (
-                  <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity pointer-events-none">
                     <div className="w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
                       <Dices className="w-2.5 h-2.5 text-accent-text" />
                     </div>
@@ -296,7 +296,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <div className="flex items-center space-x-2">
                 <ProficiencyIndicator rank={saveData.proficiencyRank as ProficiencyRank} />
                 <span className="font-semibold text-ink capitalize">{save}</span>
-                {onRoll && <Dices className="w-3.5 h-3.5 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                {onRoll && <Dices className="w-3.5 h-3.5 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
               </div>
               <span className="text-2xl font-bold text-accent-ink">
                 {formatModifier(saveBonus)}
@@ -337,7 +337,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                 <div>
                   <div className="flex items-center gap-1 text-xs text-ink-secondary uppercase tracking-wide">
                     Perception
-                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                   </div>
                   {perception.senses && perception.senses.length > 0 && (
                     <div className="text-xs text-ink-muted mt-1">
@@ -540,7 +540,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                   <span className="text-xs text-ink-muted">
                     ({skillData.attribute?.slice(0, 3).toUpperCase()})
                   </span>
-                  {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                  {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                 </div>
                 <span className="text-lg font-bold text-accent-ink">
                   {formatModifier(skillBonus)}
@@ -570,7 +570,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                     <div className="flex items-center space-x-2">
                       <ProficiencyIndicator rank={lore.proficiencyRank as ProficiencyRank} size="sm" />
                       <span className="text-sm font-medium text-ink">{lore.name}</span>
-                      {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                      {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                     </div>
                     <span className="text-lg font-bold text-accent-ink">
                       {formatModifier(loreBonus)}

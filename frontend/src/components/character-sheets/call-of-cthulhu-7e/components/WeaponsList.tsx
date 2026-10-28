@@ -160,7 +160,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     ) : (
                       <div className="flex items-center gap-1">
                         <span className="font-medium text-ink">{weapon.name}</span>
-                        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 transition-opacity" />}
+                        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                       </div>
                     )}
                   </td>

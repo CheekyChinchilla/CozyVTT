@@ -278,7 +278,7 @@ const SkillRow: React.FC<{
             className="min-w-0 w-28 text-xs text-ink bg-paper border border-ink/20 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         )}
-        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />}
+        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity shrink-0" />}
         {/* Beside the name only where the name does not already carry it,
             as "Science (Physics)" and "Language (Latin)" do. */}
         {!(editable && detailBox) && skill.specialization && !displayName.includes(`(${skill.specialization})`) && (

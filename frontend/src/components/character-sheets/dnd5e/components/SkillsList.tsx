@@ -110,7 +110,7 @@ const SkillRow: React.FC<{
       </div>
       <div className="flex items-center gap-1">
         {isClickable && (
-          <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />
+          <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />
         )}
         <span className="text-sm font-semibold text-ink min-w-12 text-right">
           {formatBonus(skill.bonus)}
