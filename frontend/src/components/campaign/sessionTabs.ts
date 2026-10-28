@@ -23,6 +23,15 @@ export const SESSION_TAB_LOOKS: Record<SessionTab, { label: string; icon: Lucide
   session: { label: 'Session', icon: PlayCircle },
 };
 
+/**
+ * The Chat tab's badge for `count` unread messages: what it shows, at most
+ * "9+", and what it is called. The rail's tab and the compact layout's bar
+ * both show it.
+ */
+export function unreadBadge(count: number): { text: string; label: string } {
+  return { text: count > 9 ? '9+' : String(count), label: `${count} unread messages` };
+}
+
 /** Whether a stored value names a session panel. */
 export function isSessionTab(value: unknown): value is SessionTab {
   return SESSION_TABS.some((tab) => tab === value);

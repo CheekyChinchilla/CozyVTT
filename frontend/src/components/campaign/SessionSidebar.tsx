@@ -13,7 +13,7 @@
 import { useGameStore } from '@/stores/gameStore';
 import { cn } from '@/utils/cn';
 import SessionPanels from './SessionPanels';
-import { SESSION_TABS, SESSION_TAB_LOOKS } from './sessionTabs';
+import { SESSION_TABS, SESSION_TAB_LOOKS, unreadBadge } from './sessionTabs';
 import { useTableSlot } from './tableHosts';
 
 const TABS = SESSION_TABS.map((key) => ({ key, ...SESSION_TAB_LOOKS[key] }));
@@ -73,9 +73,9 @@ export default function SessionSidebar() {
               {key === 'chat' && unreadChat > 0 && (
                 <span
                   className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand text-brand-text text-[10px] font-bold flex items-center justify-center"
-                  aria-label={`${unreadChat} unread messages`}
+                  aria-label={unreadBadge(unreadChat).label}
                 >
-                  {unreadChat > 9 ? '9+' : unreadChat}
+                  {unreadBadge(unreadChat).text}
                 </span>
               )}
             </button>

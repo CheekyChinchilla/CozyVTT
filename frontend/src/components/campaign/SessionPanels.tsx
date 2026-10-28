@@ -11,13 +11,20 @@
 // Which one is open is the game store's `sessionTab`, which the rail's
 // tab bar (SessionSidebar) sets. Each panel fills the box it is drawn
 // in, so that box is `position: relative` with a height of its own.
+//
+// On the desktop each panel is a tab panel named by its tab in the rail.
+// The compact layout's bar has buttons, not tabs, and none for Notes and
+// Session, which More opens, so there each panel is a group with its own
+// name.
 // ============================================
 
 import { useEffect } from 'react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 import { cn } from '@/utils/cn';
+import { SESSION_TAB_LOOKS, type SessionTab } from './sessionTabs';
 import ChatPanel from './ChatPanel';
 import DiceRoller from './DiceRoller';
 import VibeTracker from './VibeTracker';
@@ -53,14 +60,20 @@ function useUnreadChatCount() {
 
 export default function SessionPanels() {
   const activeTab = useGameStore((s) => s.sessionTab);
+  const compact = useCompactLayout();
   useUnreadChatCount();
+
+  /** What a panel is: a tab panel named by its tab in the rail, or on the compact layout a group with its own name. */
+  const panel = (tab: SessionTab) =>
+    compact
+      ? { role: 'group', 'aria-label': SESSION_TAB_LOOKS[tab].label }
+      : { role: 'tabpanel', 'aria-labelledby': `session-tab-${tab}` };
 
   return (
     <>
       <div
         id="session-tabpanel-chat"
-        role="tabpanel"
-        aria-labelledby="session-tab-chat"
+        {...panel('chat')}
         className={cn('absolute inset-0 p-3', activeTab === 'chat' ? 'animate-fade-in' : 'invisible')}
       >
         <ChatPanel />
@@ -68,8 +81,7 @@ export default function SessionPanels() {
 
       <div
         id="session-tabpanel-dice"
-        role="tabpanel"
-        aria-labelledby="session-tab-dice"
+        {...panel('dice')}
         className={cn('absolute inset-0 p-3', activeTab === 'dice' ? 'animate-fade-in' : 'invisible')}
       >
         <DiceRoller />
@@ -77,8 +89,7 @@ export default function SessionPanels() {
 
       <div
         id="session-tabpanel-initiative"
-        role="tabpanel"
-        aria-labelledby="session-tab-initiative"
+        {...panel('initiative')}
         className={cn(
           'absolute inset-0 p-3 overflow-y-auto',
           activeTab === 'initiative' ? 'animate-fade-in' : 'invisible'
@@ -89,8 +100,7 @@ export default function SessionPanels() {
 
       <div
         id="session-tabpanel-notes"
-        role="tabpanel"
-        aria-labelledby="session-tab-notes"
+        {...panel('notes')}
         className={cn(
           'absolute inset-0 p-3',
           activeTab === 'notes' ? 'animate-fade-in' : 'invisible'
@@ -101,8 +111,7 @@ export default function SessionPanels() {
 
       <div
         id="session-tabpanel-session"
-        role="tabpanel"
-        aria-labelledby="session-tab-session"
+        {...panel('session')}
         className={cn(
           'absolute inset-0 p-3 overflow-y-auto space-y-4',
           activeTab === 'session' ? 'animate-fade-in' : 'invisible'
