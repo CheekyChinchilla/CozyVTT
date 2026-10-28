@@ -786,7 +786,9 @@ describe('the keyboard shortcuts the guides list', () => {
   });
 
   // The map's screen-reader hint names the token keys in words. Every key a
-  // player can use on the map, but Tab and the clicks, is named there.
+  // player can use on the map, but Tab, the clicks and the taps, is named
+  // there. A screen reader takes a double tap for its own, so the hint does
+  // not offer one.
   const spoken: Record<string, string> = {
     'Arrow keys': 'arrow keys',
     'Shift + arrow keys': 'with shift',
@@ -806,7 +808,7 @@ describe('the keyboard shortcuts the guides list', () => {
     const named = shortcuts
       .filter((s) => s.who !== 'dm')
       .flatMap((s) => s.keys)
-      .filter((k) => k !== 'Tab' && !k.includes('click'));
+      .filter((k) => k !== 'Tab' && !k.includes('click') && !k.includes('tap'));
     for (const k of named) {
       const word = spoken[k];
       if (word === undefined) throw new Error(`no spoken name for the key ${k}: add it here and to MAP_KEYS_HINT`);

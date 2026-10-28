@@ -882,7 +882,7 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 | Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
 | Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
 | Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
-| Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag. Put the tool away to open a menu by holding. |
+| Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag, and a double tap pings nothing either; with the wall tool it finishes a line. Put the tool away to open a menu by holding, or to ping by a double tap. |
 
 A stylus never opens a menu by holding; use a finger.
 
@@ -967,13 +967,13 @@ This works for combatants on the map you are showing. One whose token is on anot
 
 Click the map, put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
 
-- The cursor has to be over the map; Tab does nothing over the sidebar or chat.
+- The cursor has to be over the map's picture; Tab does nothing over the sidebar, the chat or the empty space around the map.
 - Tab pings only once you have clicked the map. While you type, or with a button or a panel divider focused, Tab moves between controls as usual, and **Shift+Tab** leaves the map.
 - Everyone can ping, and each person's colour is assigned automatically and stays consistent.
 - Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
 - Rapid repeat pings are rate-limited server-side and quietly dropped.
 
-Without a keyboard, click or tap **Ping** in the map's toolbar, then the spot. On a touch screen you can also press and hold an empty part of the map for half a second; on a token or a door that opens its menu instead (see [On a touch screen](#on-a-touch-screen)).
+Without a keyboard, click or tap **Ping** in the map's toolbar, then the spot. On a touch screen you can also tap an empty part of the map twice, quickly, while no tool is up, or press and hold it for half a second; a press and hold on a token or a door opens its menu instead (see [On a touch screen](#on-a-touch-screen)). Two taps on a token pick it up and put it back, as they always have, and ping nothing, so to point at a token use **Ping** or **Tab**. The player guide's [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map) has the double tap in full.
 
 ### Updating HP
 

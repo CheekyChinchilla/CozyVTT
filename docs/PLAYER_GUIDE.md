@@ -324,7 +324,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 | Open or close a door | Tap it, as you would click it. Press and hold it for its menu. |
 | Measure a distance | With the **Ruler** up, tap the square, or slide one finger to it; the line stays after you lift (see [Measuring and Spell Areas](#measuring-and-spell-areas)). |
 | Aim a spell area | With **AoE Shape** up, slide your finger from the square it comes from towards the target (see [Measuring and Spell Areas](#measuring-and-spell-areas)). Untick **Snap to grid** to place it off the grid, as **Alt** does with a mouse. |
-| Point at the map | Press and hold the spot for half a second, on empty ground or on a token that has no menu for you: everyone sees your ping there, as with **Tab**. Or tap **Ping** in the map's toolbar, then tap the spot; you can move the map first. Tap **Ping** again to put it away. |
+| Point at the map | Tap the spot twice, quickly, on empty ground: everyone sees your ping where the second tap lands, as with **Tab**. It works while no tool is up; two taps on a token do what they always do, and ping nothing. Or press and hold the spot for half a second, on empty ground or on a token that has no menu for you. Or tap **Ping** in the map's toolbar, then tap the spot; you can move the map first. Tap **Ping** again to put it away. |
 | Draw on the map | With **Draw** up, one finger draws and two fingers move and pinch the map; with the eraser, the text label or the polygon, one finger moves the map too, and a tap acts. Holding a finger still opens no menu (see [Drawing and pointing](#drawing-and-pointing)). |
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
@@ -520,7 +520,7 @@ Saying "no, the *other* door" never works. Instead, click the map, put your mous
 
 A few things worth knowing:
 
-- **Your mouse has to be over the map.** Tab does nothing if the cursor is over the chat panel or the sidebar.
+- **Your mouse has to be over the map's picture.** Tab does nothing if the cursor is over the chat panel, the sidebar or the empty space around the map.
 - **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
 - **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
 - **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
@@ -529,6 +529,8 @@ A few things worth knowing:
 If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
 
 **Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
+
+**Double tap to ping.** On a touch screen, two quick taps on empty ground ping the spot where the second lands. The taps must come within half a second of each other and land within 20 pixels of each other. The first tap still does what a tap does, such as clearing the selection, so there is no wait. A third quick tap starts again: three taps ping once, four twice. It works only while no tool is up: with **Ping**, **Draw**, the **Ruler** or **AoE Shape** up, a tap is that tool's. Two taps on a token, or on a door, do what they always do and ping nothing; to point at a creature, use **Ping**, or press and hold it if it has no menu for you. A stylus double taps the same way; a mouse's double-click pings nothing.
 
 ### Drawing and pointing
 
@@ -681,6 +683,7 @@ On the map, once you've clicked it. Press `?` on the map, or click **Keyboard sh
 | Open the selected token's menu | `Enter` |
 | Let go of one thing: the menu, the armed **Ping**, a held token, the tool, then the selection | `Esc` |
 | Ping the map | `Tab` (cursor over the map) |
+| Ping the map, on a touch screen, where there is no token or door and no tool is up | `Double tap` |
 | Place a spell area off the grid | `Alt + click` (AoE tool) |
 | Show these shortcuts | `?` |
 

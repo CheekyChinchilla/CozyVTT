@@ -150,6 +150,7 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['Enter'], does: "Open the selected token's menu", who: 'everyone' },
   { keys: ['Esc'], does: 'Let go of one thing: the menu, the armed Ping, a held token, the tool, then the selection', who: 'everyone' },
   { keys: ['Tab'], does: 'Ping the map where the pointer is', who: 'everyone' },
+  { keys: ['Double tap'], does: 'Ping the map, on a touch screen, where there is no token or door and no tool is up', who: 'everyone' },
   { keys: ['Alt + click'], does: 'Place a spell area off the grid, with the AoE tool', who: 'everyone' },
   { keys: ['?'], does: 'Show these shortcuts', who: 'everyone' },
   { keys: ['Arrow keys'], does: 'Nudge the selected walls one pixel', who: 'dm' },

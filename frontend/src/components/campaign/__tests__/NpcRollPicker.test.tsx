@@ -9,6 +9,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import NpcRollPicker from '../NpcRollPicker';
+import { anyMenuShown } from '@/components/ui/openMenus';
 import type { NpcStatBlock, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 
@@ -141,5 +142,16 @@ describe('where it is drawn', () => {
     expect(picker).not.toBeNull();
     expect(picker?.closest('[data-group]')).toBeNull();
     expect(picker?.parentElement).toBe(document.body);
+  });
+});
+
+// The map asks, so a tap on it that closes the picker is not the first of a
+// double tap to ping.
+describe('while it is open', () => {
+  it('is a menu on the screen, until it closes', () => {
+    const { unmount } = render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    expect(anyMenuShown()).toBe(true);
+    unmount();
+    expect(anyMenuShown()).toBe(false);
   });
 });

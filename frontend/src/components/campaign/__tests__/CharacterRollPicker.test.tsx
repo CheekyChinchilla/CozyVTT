@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CharacterRollPicker from '../CharacterRollPicker';
+import { anyMenuShown } from '@/components/ui/openMenus';
 import type { Character, CharacterData, GameSystem } from '@/types';
 
 const seelah: Character = {
@@ -113,5 +114,16 @@ describe('where it is drawn', () => {
     expect(picker).not.toBeNull();
     expect(picker?.closest('[data-group]')).toBeNull();
     expect(picker?.parentElement).toBe(document.body);
+  });
+});
+
+// The map asks, so a tap on it that closes the picker is not the first of a
+// double tap to ping.
+describe('while it is open', () => {
+  it('is a menu on the screen, until it closes', () => {
+    const { unmount } = render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    expect(anyMenuShown()).toBe(true);
+    unmount();
+    expect(anyMenuShown()).toBe(false);
   });
 });

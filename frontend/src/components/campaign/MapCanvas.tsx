@@ -71,7 +71,7 @@ import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
 import { useDrawTool, DEFAULT_DRAW_SETTINGS, type DrawSettings, type DrawToolKind } from './map/tools/useDrawTool';
 import type { MapTool, PointerAt } from './map/tools/types';
-import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
+import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, DOUBLE_TAP_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
 import { createGestureRecognizer, type Gesture } from './map/gestures';
 import { createClickSwallow } from './map/clickSwallow';
 import {
@@ -132,7 +132,7 @@ import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import FloatingLayer from '@/components/ui/FloatingLayer';
-import { whenMenuOpens } from '@/components/ui/openMenus';
+import { anyMenuShown, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
@@ -1452,14 +1452,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // so it is claimed only while the map's focus stop has the keyboard (a
     // click on the map gives it) and the pointer is over the map. With focus
     // anywhere else, a panel divider or the page itself included, Tab keeps
-    // navigating as normal.
+    // navigating as normal. Beside the map's picture it pings nothing, like
+    // the Ping button and a long-press.
     if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       const at = hoverMapPxRef.current;
       if (!at || !currentMap) return;
       if (document.activeElement !== layersRef.current) return;
 
       e.preventDefault();
-      socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
+      pingMapPx(at);
       return;
     }
 
@@ -2528,9 +2529,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return { ...e, detail: Math.max(e.detail, clicks.count(e.kind, t, e.clientX, e.clientY)) };
   };
 
-  /** A button pressed: the right one pans under a DM tool or Draw, the left one goes to the tools. */
-  const pressButton = (e: MapPointer, via: PointerAt['via']) => {
-    if (!canvasRef.current || !currentMap) return;
+  /**
+   * A button pressed: the right one pans under a DM tool or Draw, the left
+   * one goes to the tools. Returns the tool that took it, if one did.
+   */
+  const pressButton = (e: MapPointer, via: PointerAt['via']): MapTool | undefined => {
+    if (!canvasRef.current || !currentMap) return undefined;
 
     // Right-button while a tool is active: start panning (left-click is reserved for tools).
     // In normal pan mode, right-click is the context menu — handled by handleContextMenu.
@@ -2538,16 +2542,85 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       cancelFogDrag(); // Panning away mid-drag must not reveal anything
       rightPanActiveRef.current = true;
       mapControls.startDrag(e);
-      return;
+      return undefined;
     }
 
-    if (e.button !== 0) return; // Only left click for everything else
+    if (e.button !== 0) return undefined; // Only left click for everything else
 
     const at = pointerAt(e, via);
-    if (!at) return;
+    if (!at) return undefined;
     for (const tool of pointerTools) {
-      if (tool.down?.(at)) return;
+      if (tool.down?.(at)) return tool;
     }
+    return undefined;
+  };
+
+  // ============================================
+  // A double tap to ping. Two taps of a finger, or of a pen, on the same
+  // spot of empty ground ping it, as the Ping button and a tap there do,
+  // while no tool is up. Each tap is counted as it lifts, after the tools
+  // have had it, so the first does what a tap does with no wait. A tap on a
+  // token, or one that puts a held token down, toggles a door or closes a
+  // menu, starts the count again, as does any press that is no tap: a drag,
+  // a pinch, a long-press, a mouse's press, and a map switch. A mouse's
+  // double-click pings nothing.
+  // ============================================
+  /** The taps toward a double tap to ping, with a finger's room between them. */
+  const doubleTapRef = useRef(createClickCounter(DOUBLE_TAP_PX));
+  // Switching maps starts the count again.
+  useEffect(() => {
+    doubleTapRef.current.reset();
+  }, [currentMap?.id]);
+
+  /**
+   * No tool is up that a tap is for: the armed Ping, Draw, a wall, fog or
+   * light tool, the ruler or the AoE template. The tool that took a tap
+   * cannot say this alone: the ruler of a player with no token, and a fog
+   * tool before the fog arrives, pass the tap on to the token tool.
+   */
+  const noToolUp = () => !pingArmed && drawKind === null && dmTool === null && !showRuler && !showAoE;
+
+  /**
+   * Whether a menu was on the screen as the latest press on the page landed,
+   * read on the window in the capture phase, before anything on the page
+   * hears the press: a menu that closes on the press itself, as a sheet's
+   * roll menu does, can be gone by the time the map hears it.
+   */
+  const pressMenuRef = useRef<{ pointerId: number; menu: boolean } | null>(null);
+  useEffect(() => {
+    const onPress = (event: PointerEvent) => {
+      pressMenuRef.current = { pointerId: event.pointerId, menu: anyMenuShown() };
+    };
+    window.addEventListener('pointerdown', onPress, true);
+    return () => window.removeEventListener('pointerdown', onPress, true);
+  }, []);
+  /** Whether a menu was on the screen as this pointer's press landed. */
+  const menuAtPress = (pointerId: number) => {
+    const press = pressMenuRef.current;
+    return press?.pointerId === pointerId ? press.menu : anyMenuShown();
+  };
+
+  /** Whether a tap may be one of a double tap to ping: no tool up, no menu on the screen as it landed (`menuUp`), no token held. */
+  const tapMayPing = (menuUp: boolean) => noToolUp() && !menuUp && heldIdRef.current === null;
+
+  /** Whether the tool that took a press, `took`, took it on empty ground: the token tool, finding no token there. */
+  const pressedGround = (took: MapTool | undefined) => took === tokenTool && groundPressRef.current?.clears === true;
+
+  /**
+   * A finger's or a pen's tap that has lifted, at the page point and time it
+   * landed: one more toward a double tap to ping, which pings the map at the
+   * second; null for one that may not ping, which starts the count again. A
+   * third tap counts from 1.
+   */
+  const countTap = (tap: { kind: PointerKind; t: number; x: number; y: number } | null) => {
+    const taps = doubleTapRef.current;
+    if (!tap) {
+      taps.reset();
+      return;
+    }
+    if (taps.count(tap.kind, tap.t, tap.x, tap.y) < 2) return;
+    taps.reset();
+    pingAt(tap.x, tap.y);
   };
 
   /**
@@ -2623,8 +2696,16 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   /** The press each finger began with, which its tap or drag reaches the tools as. */
   const fingerDownsRef = useRef(new Map<number, MapPointer>());
+  /** The fingers that landed while a menu was on the screen: a tap of one closes it, and is no double tap's. */
+  const fingerMenusRef = useRef(new Set<number>());
   /** The pens whose tip, not a barrel button, is on the glass. */
   const penTipsRef = useRef(new Set<number>());
+  /**
+   * A pen's press on empty ground that may be one of a double tap to ping,
+   * where and when it landed, until it lifts. The recogniser makes no tap of
+   * a pen's, so its lift decides: a tap if the press has not moved the map.
+   */
+  const penTapRef = useRef<{ pointerId: number; t: number; x: number; y: number } | null>(null);
   /** The pointer event being handled, which a gesture it ends in is made from. */
   const gestureEventRef = useRef<MapPointer | null>(null);
   /** Set from a finger's drag reaching the tools until it ends. */
@@ -2645,8 +2726,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       focusMap();
       // Built from the press, after the event: preventDefault has nothing to cancel.
       const press: MapPointer = { ...down, clientX: g.at.x, clientY: g.at.y, button: 0, buttons: 1, preventDefault: () => undefined };
-      pressButton(withClickCount(press, g.at.t), 'tap');
+      // Asked before the tools have it, since the tap may put a token down.
+      const mayPing = tapMayPing(fingerMenusRef.current.has(g.at.id));
+      const took = pressButton(withClickCount(press, g.at.t), 'tap');
+      const onGround = pressedGround(took);
       releaseButton(0, at('tap'));
+      countTap(mayPing && onGround ? { kind: down.kind, t: g.at.t, x: g.at.x, y: g.at.y } : null);
     } else if (g.type === 'long-press') {
       if (!fingerDownsRef.current.has(g.at.id)) return;
       longPress(g.at.id, g.at.x, g.at.y);
@@ -2656,6 +2741,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         if (!down) return;
         focusMap();
         clickCounterRef.current.reset();
+        doubleTapRef.current.reset();
         fingerPressRef.current = true;
         // The down and the first move arrive in one event, so React state
         // the down sets is seen from the next move on.
@@ -2674,6 +2760,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       }
     } else if (g.type === 'pinch') {
       if (g.phase === 'start') {
+        doubleTapRef.current.reset();
         mapControls.pinchStart();
       } else if (g.phase === 'move' && canvasRef.current) {
         // The fingers are in page pixels; the zoom is about a canvas point.
@@ -2696,6 +2783,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const longPress = (pointerId: number, x: number, y: number) => {
     focusMap();
+    doubleTapRef.current.reset();
     clickSwallow.arm(pointerId);
     if (openMenuAt(x, y)) return;
     // A ping, as the armed Ping would have made: it is used up.
@@ -2726,8 +2814,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const dropGestures = useEffectEvent(() => {
     gestures.reset();
     fingerDownsRef.current.clear();
+    fingerMenusRef.current.clear();
     penTipsRef.current.clear();
     clickSwallow.clear();
+    doubleTapRef.current.reset();
+    penTapRef.current = null;
     if (!fingerPressRef.current) return;
     fingerPressRef.current = false;
     cancelPointer();
@@ -2755,6 +2846,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind !== 'mouse') capturePointer(event);
     if (e.kind === 'touch') {
       fingerDownsRef.current.set(e.pointerId, e);
+      if (menuAtPress(e.pointerId)) fingerMenusRef.current.add(e.pointerId);
+      else fingerMenusRef.current.delete(e.pointerId);
       feedGesture('down', e, event.timeStamp);
       return;
     }
@@ -2764,7 +2857,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       feedGesture('down', e, event.timeStamp);
       if (e.button === PEN_ERASER_BUTTON) return;
     }
-    pressButton(withClickCount(e, event.timeStamp), 'mouse');
+    const mayPing = e.kind === 'pen' && tapMayPing(menuAtPress(e.pointerId));
+    const took = pressButton(withClickCount(e, event.timeStamp), 'mouse');
+    if (e.kind === 'mouse') doubleTapRef.current.reset();
+    else penTapRef.current = mayPing && pressedGround(took) ? { pointerId: e.pointerId, t: event.timeStamp, x: e.clientX, y: e.clientY } : null;
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -2792,6 +2888,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (e.kind === 'touch') {
       feedGesture('up', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
+      fingerMenusRef.current.delete(e.pointerId);
       clickSwallow.lifted(e.pointerId);
       return;
     }
@@ -2800,15 +2897,30 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       feedGesture('up', e, event.timeStamp);
       if (e.button === PEN_ERASER_BUTTON) return;
     }
+    // A pen's press on empty ground was a tap if it has not moved the map,
+    // as the token tool judged it (CLICK_COUNT_PX), read before the tools
+    // let go of the press.
+    const penPress = e.kind === 'pen' && penTapRef.current?.pointerId === e.pointerId ? penTapRef.current : null;
+    const penTap = penPress && groundPressRef.current && !groundPressRef.current.panned ? penPress : null;
     releaseButton(e.button, pointerAt(e, 'mouse'));
+    if (e.kind === 'pen') {
+      penTapRef.current = null;
+      countTap(penTap ? { kind: 'pen', t: penTap.t, x: penTap.x, y: penTap.y } : null);
+    }
   };
 
   const handlePointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const e = fromPointerEvent(event);
+    // A press the browser took was no tap: a pen's, or a finger's while no
+    // pen is on the glass. A palm resting beside a pen, which the browser may
+    // cancel, leaves the pen's taps alone.
+    if (penTapRef.current?.pointerId === e.pointerId) penTapRef.current = null;
+    if (e.kind === 'pen' || (e.kind === 'touch' && penTipsRef.current.size === 0)) doubleTapRef.current.reset();
     if (e.kind !== 'mouse') releasePointer(event);
     if (e.kind === 'touch') {
       feedGesture('cancel', e, event.timeStamp);
       fingerDownsRef.current.delete(e.pointerId);
+      fingerMenusRef.current.delete(e.pointerId);
       clickSwallow.lifted(e.pointerId);
       return;
     }
@@ -3423,6 +3535,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       setDoorContextMenu(null);
     });
   }, [mapMenuOpen, closeTokenMenu]);
+  // While one is open it is a menu on the screen, as the roll pickers and the
+  // roster's menu are, so the tap that closes it is not the first of a double
+  // tap to ping.
+  useEffect(() => (mapMenuOpen ? menuShown() : undefined), [mapMenuOpen]);
 
   // After context menu renders, adjust position so it doesn't overflow the
   // viewport; again when Move to Map… opens or closes, which changes its

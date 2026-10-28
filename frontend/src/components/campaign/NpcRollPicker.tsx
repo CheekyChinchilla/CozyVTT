@@ -14,6 +14,7 @@ import type { RollOption, CharacterRolls } from '@/utils/characterRolls';
 import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
 import FloatingLayer from '@/components/ui/FloatingLayer';
+import { menuShown } from '@/components/ui/openMenus';
 import { tokenPublicName } from '@/utils/tokenDisplayName';
 import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 
@@ -114,6 +115,10 @@ export default function NpcRollPicker({
     const y = anchorY + rect.height > vh ? Math.max(0, anchorY - rect.height) : anchorY;
     setPos({ x, y });
   }, [anchorX, anchorY, hasAnyRolls]);
+
+  // A menu on the screen while it is open, so the tap on the map that
+  // closes it is not the first of a double tap to ping.
+  useEffect(() => menuShown(), []);
 
   // Close on click outside
   useEffect(() => {

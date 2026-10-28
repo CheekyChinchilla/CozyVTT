@@ -1213,6 +1213,21 @@ describe("the map's focus stop", () => {
     expect(sentOf('map.ping')).toHaveLength(1);
   });
 
+  // The map is 1,000 pixels wide. The Ping button and a long-press ping
+  // only on its picture.
+  it('pings nothing with Tab while the pointer is over the canvas beside the map', () => {
+    render(<MapCanvas />);
+    click(at(10, 10));
+    mouse.move(surface(), { clientX: 1010, clientY: 400 });
+
+    press('Tab');
+    expect(sentOf('map.ping')).toEqual([]);
+
+    mouse.move(surface(), { clientX: 990, clientY: 400 });
+    press('Tab');
+    expect(sentOf('map.ping')).toEqual([{ mapId: 'map-a', x: 990, y: 400 }]);
+  });
+
   // A panel divider takes focus but is no form control; Tab pressed on one
   // while the pointer rested on the map pinged, and focus never moved on.
   it.each([

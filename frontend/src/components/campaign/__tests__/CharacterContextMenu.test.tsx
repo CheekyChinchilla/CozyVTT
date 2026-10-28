@@ -11,7 +11,7 @@ import { it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { FileText, Trash2 } from 'lucide-react';
 import CharacterContextMenu from '../CharacterContextMenu';
-import { whenMenuOpens } from '@/components/ui/openMenus';
+import { anyMenuShown, whenMenuOpens } from '@/components/ui/openMenus';
 
 it('makes every item tall enough for a finger on a touch screen', () => {
   render(
@@ -90,4 +90,24 @@ it('says it has opened when it is drawn, and not when it has no items to draw', 
   } finally {
     stop();
   }
+});
+
+// The map asks, so a tap on it that closes this menu is not the first of a
+// double tap to ping.
+it('is a menu on the screen while it is drawn, and not with no items to draw', () => {
+  const empty = render(<CharacterContextMenu x={10} y={10} onClose={vi.fn()} items={[]} />);
+  expect(anyMenuShown()).toBe(false);
+  empty.unmount();
+
+  const drawn = render(
+    <CharacterContextMenu
+      x={10}
+      y={10}
+      onClose={vi.fn()}
+      items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
+    />,
+  );
+  expect(anyMenuShown()).toBe(true);
+  drawn.unmount();
+  expect(anyMenuShown()).toBe(false);
 });

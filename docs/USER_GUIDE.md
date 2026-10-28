@@ -674,7 +674,7 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 | **Fit to Screen** | Shows the whole map in the space available |
 | **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
-| **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging |
+| **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging. On a touch screen, two quick taps on empty ground ping too, while no tool is up |
 | **Draw** | Opens the drawing tools: a pen, lines, arrows, rectangles, ellipses, polygons, text labels, an eraser and a laser pointer, in a colour and width you choose. The table sees what you draw as you draw it. The DM always has it; a player has it while the DM lets players draw, except while the session is paused or has ended; while they may not draw, it offers only the **Eraser** and **Clear mine**, and only while the map holds drawings of theirs; a spectator does not have it (see [Drawing and pointing](PLAYER_GUIDE.md#drawing-and-pointing) and, for the DM, [Drawing on the map](DM_GUIDE.md#drawing-on-the-map)) |
 
 To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.

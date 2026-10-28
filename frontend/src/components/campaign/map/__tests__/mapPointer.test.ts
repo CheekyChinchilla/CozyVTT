@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { render, fireEvent } from '@testing-library/react';
-import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, pointerKind, type MapPointer } from '../mapPointer';
+import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, pointerKind, DOUBLE_TAP_PX, type MapPointer } from '../mapPointer';
 
 /** A canvas that records what each handler made of its event. */
 function canvas(options: { preventDown?: boolean; preventMove?: boolean } = {}) {
@@ -98,6 +98,26 @@ describe('the click count', () => {
     expect(clicks.count('touch', 700, 105, 100)).toBe(1);
     clicks.reset();
     expect(clicks.count('touch', 800, 105, 100)).toBe(1);
+  });
+
+  // A double tap to ping allows a finger's two taps more room than a
+  // mouse's double-click, in the same time.
+  it('counts within a distance of its own when given one, in the same 500 ms', () => {
+    const taps = createClickCounter(DOUBLE_TAP_PX);
+    taps.count('touch', 0, 100, 100);
+    expect(taps.count('touch', 200, 112, 116)).toBe(2);
+    taps.reset();
+    taps.count('touch', 0, 100, 100);
+    expect(taps.count('touch', 200, 121, 100)).toBe(1);
+    expect(taps.count('touch', 701, 121, 100)).toBe(1);
+    expect(DOUBLE_TAP_PX).toBe(20);
+  });
+
+  it('keeps 4 pixels without one', () => {
+    const clicks = createClickCounter();
+    clicks.count('touch', 0, 100, 100);
+    expect(clicks.count('touch', 200, 104, 100)).toBe(2);
+    expect(clicks.count('touch', 400, 109, 100)).toBe(1);
   });
 });
 
