@@ -300,9 +300,20 @@ export const DrawingRemoveEventSchema = z.object(
 /** `drawing:clear_mine`: the sender's drawings on a map's markup layer. */
 export const DrawingClearMineEventSchema = z.object({ mapId: MapIdSchema }, { error: 'Map not found' });
 
-/** `drawing:clear`: every drawing on one layer of a map, MARKUP so far. */
+/** What `drawing:clear` answers an `authorId` that is not a member's id. */
+export const CLEAR_MEMBER_REFUSAL = 'authorId must be a member\'s id';
+
+/**
+ * `drawing:clear`: every drawing on one layer of a map, MARKUP so far, or
+ * with `authorId` one member's: their drawings for everyone, and every one
+ * of the DM's own when it names the DM, as their Clear mine would.
+ */
 export const DrawingClearEventSchema = z.object(
-  { mapId: MapIdSchema, layer: z.enum(['MARKUP'], { error: DRAWING_LAYER_REFUSAL }).default('MARKUP') },
+  {
+    mapId: MapIdSchema,
+    layer: z.enum(['MARKUP'], { error: DRAWING_LAYER_REFUSAL }).default('MARKUP'),
+    authorId: z.uuid({ error: CLEAR_MEMBER_REFUSAL }).optional(),
+  },
   { error: 'Map not found' }
 );
 

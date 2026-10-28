@@ -57,7 +57,10 @@ export interface DrawingRemovedBroadcast {
   opId?: string;
 }
 
-/** `drawings:cleared`: to the readers who had any of them; `authorId` for a Clear mine. */
+/**
+ * `drawings:cleared`: to the readers who had any of them; `authorId` for one
+ * member's, by their Clear mine or the DM's clear naming them.
+ */
 export interface DrawingsClearedBroadcast {
   mapId: string;
   layer: 'MARKUP' | 'GROUND';

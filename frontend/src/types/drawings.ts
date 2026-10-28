@@ -91,10 +91,12 @@ export interface DrawingClearMineEvent {
   opId?: string;
 }
 
-/** `drawing:clear`: every drawing on a map's markup layer (the DM's). */
+/** `drawing:clear`: every drawing on a map's markup layer, or with `authorId` one member's (the DM's). */
 export interface DrawingClearEvent {
   mapId: string;
   layer?: 'MARKUP';
+  /** A member's user id: only their drawings for everyone, or all of the DM's own. */
+  authorId?: string;
   opId?: string;
 }
 
@@ -126,7 +128,8 @@ export interface DrawingRemovedBroadcast {
 
 /**
  * `drawings:cleared`, to the readers who had any of them: every drawing on
- * the layer, or, with `authorId`, that member's (a Clear mine).
+ * the layer, or, with `authorId`, that member's, by their Clear mine or the
+ * DM's clear naming them.
  */
 export interface DrawingsClearedBroadcast {
   mapId: string;

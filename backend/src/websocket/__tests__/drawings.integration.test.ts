@@ -22,7 +22,7 @@ import { prisma } from '../../config/database';
 import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import type { AckAnswer } from '../ack';
 import { applyRoleToLiveSockets } from '../utils';
-import { DRAWING_LIMITS, DRAWING_OUTSIDE_MAP_MESSAGE, DRAWING_LAYER_REFUSAL, MARKUP_SHARE_FULL } from '../../validators/drawings';
+import { DRAWING_LIMITS, DRAWING_OUTSIDE_MAP_MESSAGE, DRAWING_LAYER_REFUSAL, MARKUP_SHARE_FULL, CLEAR_MEMBER_REFUSAL } from '../../validators/drawings';
 import {
   DRAW_PAUSED_REFUSAL, DRAW_SETTING_REFUSAL, DRAW_SPECTATOR_REFUSAL, ERASE_OTHERS_REFUSAL, ERASE_SPECTATOR_REFUSAL,
 } from '../../utils/drawingRules';
@@ -588,6 +588,60 @@ describe('drawing:clear', () => {
     expect(await prisma.mapDrawing.count({ where: { mapId: shownId } })).toBe(1);
     leave(table);
   });
+});
+
+// The DM tidies up after one player without losing anyone else's work. A
+// drawing for the DM alone that player wrote in the DM's seat stays, as it
+// does from their own Clear mine: it goes with the seat.
+describe('drawing:clear naming one member', () => {
+  // Five clears every ten seconds from one user: this describe starts with
+  // the DM's whole allowance, and uses four.
+  beforeAll(() => sleep(10100));
+
+  it('erases one member\'s drawings for everyone when it names them, and nobody else\'s', async () => {
+    const theirs = [await stored(shownId, ids.p1), await stored(shownId, ids.p1)];
+    const fromTheSeat = await stored(shownId, ids.p1, { audience: 'DM' });
+    const others = [await stored(shownId, ids.p2), await stored(shownId, ids.dm), await stored(shownId, null)];
+    const table = await seat();
+    const heard = (['dm', 'p1', 'p2', 'spectator'] as const).map((who) => waitForEvent(table[who], 'drawings:cleared'));
+    expect(await ask(table.dm, 'drawing:clear', { mapId: shownId, layer: 'MARKUP', authorId: ids.p1, opId: 'clear-p1' }))
+      .toEqual({ ok: true, opId: 'clear-p1' });
+    for (const event of await Promise.all(heard)) expect(event).toEqual({ mapId: shownId, layer: 'MARKUP', authorId: ids.p1, opId: 'clear-p1' });
+    const left = (await prisma.mapDrawing.findMany({ where: { mapId: shownId } })).map((d) => d.id);
+    expect(left.sort()).toEqual([fromTheSeat.id, ...others.map((d) => d.id)].sort());
+    expect(left).not.toContain(theirs[0].id);
+    leave(table);
+  });
+
+  it('erases every drawing of the DM\'s own when it names the DM, those for the DM alone too', async () => {
+    await stored(shownId, ids.dm);
+    await stored(shownId, ids.dm, { audience: 'DM' });
+    const mara = await stored(shownId, ids.p1);
+    const table = await seat();
+    expect((await ask(table.dm, 'drawing:clear', { mapId: shownId, layer: 'MARKUP', authorId: ids.dm })).ok).toBe(true);
+    expect((await prisma.mapDrawing.findMany({ where: { mapId: shownId } })).map((d) => d.id)).toEqual([mara.id]);
+    leave(table);
+  });
+
+  it('erases nothing, and tells nobody, for someone with no drawing on the map, and refuses what is not an id', async () => {
+    await stored(shownId, ids.p1);
+    const table = await seat();
+    const quiet = expectNoEvent(table.p1, 'drawings:cleared', 600);
+    expect(await ask(table.dm, 'drawing:clear', { mapId: shownId, layer: 'MARKUP', authorId: randomUUID() })).toEqual({ ok: true });
+    expect(await ask(table.dm, 'drawing:clear', { mapId: shownId, layer: 'MARKUP', authorId: 'mara' })).toEqual({ ok: false, error: CLEAR_MEMBER_REFUSAL });
+    await quiet;
+    expect(await prisma.mapDrawing.count({ where: { mapId: shownId } })).toBe(1);
+    leave(table);
+  });
+
+  it('refuses a player who names a member, as any clear', async () => {
+    await stored(shownId, ids.p2);
+    const table = await seat();
+    expect(await ask(table.p1, 'drawing:clear', { mapId: shownId, layer: 'MARKUP', authorId: ids.p2 })).toEqual({ ok: false, error: 'Only the DM can clear the drawings' });
+    expect(await prisma.mapDrawing.count({ where: { mapId: shownId } })).toBe(1);
+    leave(table);
+  });
+
 });
 
 describe('drawings:request', () => {

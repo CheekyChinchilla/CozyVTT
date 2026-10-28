@@ -209,7 +209,8 @@ what the server takes; `services/permissions.ts` re-exports them, and
   the seat: a DM who hands it over, or has it taken by the owner or an
   administrator, keeps no way to erase the ones they wrote in it, and
   `drawing:clear_mine` leaves them as `drawing:remove` does. `drawing:clear`,
-  every drawing on a layer, is the DM's alone.
+  every drawing on a layer or, with `authorId`, one member's, is the DM's
+  alone.
 - `drawingSentTo(role, drawing)` decides every send: the DM every drawing,
   anyone else those whose `audience` is `ALL`. A player's drawing is stored
   with `audience` `ALL` whatever they send, and their preview frames go to

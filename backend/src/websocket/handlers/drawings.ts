@@ -269,8 +269,12 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
   });
 
   /**
-   * drawing:clear — DM erases every drawing on one layer of a map, the markup layer so far.
-   * `drawings:cleared` goes to the readers who had any of them.
+   * drawing:clear — DM erases every drawing on one layer of a map, the markup layer so far, or one member's.
+   * With `authorId`, that member's drawings for everyone, as their own
+   * Clear mine erases them: one for the DM alone they wrote in the DM's
+   * seat goes with the seat and stays; naming the DM, every one of the
+   * DM's own. `drawings:cleared` goes to the readers who had any of them,
+   * with the `authorId`.
    */
   socket.on('drawing:clear', async (data: unknown, ackArg?: unknown) => {
     const ack = ackFrom(ackArg);
@@ -290,12 +294,15 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
         refuse(parsed.error.issues[0]?.message ?? MAP_NOT_FOUND);
         return;
       }
-      const { mapId, layer } = parsed.data;
+      const { mapId, layer, authorId } = parsed.data;
       const campaignId = socket.campaignId;
+      const whose: Prisma.MapDrawingWhereInput = authorId === undefined
+        ? {}
+        : { authorId, ...(authorId === socket.userId ? {} : { audience: 'ALL' as const }) };
 
       const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<{ all: number; forEveryone: number }>> => {
         if (!(await readableMap(tx, mapId, campaignId, 'DM'))) return { refused: MAP_NOT_FOUND };
-        return { done: await clearWhere(tx, { mapId, layer }) };
+        return { done: await clearWhere(tx, { mapId, layer, ...whose }) };
       });
       if ('refused' in outcome) {
         refuse(outcome.refused);
@@ -303,7 +310,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       }
 
       const { all, forEveryone } = outcome.done;
-      const cleared = { mapId, layer, ...echoedOpId(data) } satisfies DrawingsClearedBroadcast;
+      const cleared = { mapId, layer, ...(authorId === undefined ? {} : { authorId }), ...echoedOpId(data) } satisfies DrawingsClearedBroadcast;
       await emitToMapReadersAs(io, campaignId, mapId, 'drawings:cleared', (reader) =>
         (reader === 'DM' ? all : forEveryone) > 0 ? { event: 'drawings:cleared', data: cleared } : null
       );
