@@ -13,13 +13,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { getMessages } from '@/services/message.service';
 import { mergeMessages } from '@/utils/messageMerge';
+import { cursorBefore } from '@/utils/messageHistory';
 import { api } from '@/services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatMessage from './ChatMessage';
 import JumpToNewest from './JumpToNewest';
 import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
 import { MessageType } from '@/types';
-import type { Message, ChatMessageBroadcast, ChatMessageEvent } from '@/types';
+import type { Message, ChatMessageBroadcast, ChatMessageEvent, MessageHistoryPage } from '@/types';
 import Button from '@/components/ui/Button';
 import { errorMessage, errorSummary } from '@/utils/errors';
 import type { ChatSystemBroadcast } from '@/types';
@@ -28,8 +29,15 @@ import { DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 import { useOnlineUserIds } from '@/stores/gameStore';
 import { whisperTargets, readSlashWhisper, isSlashWhisper, slashWhisperRefusal, byLabel } from '@/utils/chatWhisper';
 
-/** Messages per page. The server caps this at 100. */
+/** Messages per page. The server caps this at MAX_CHAT_HISTORY_PAGE (constants/chatLimits.ts). */
 const PAGE_SIZE = 50;
+
+/**
+ * The most messages the panel holds, in memory and on screen, in every
+ * layout. While the reader is at the newest message, the oldest leave as new
+ * ones arrive, and Load More brings them back from the server.
+ */
+export const MAX_HELD_MESSAGES = 400;
 
 /**
  * How many pages a rejoin reads back looking for a message already shown.
@@ -57,6 +65,45 @@ function newClientId(): string {
 
 /** The id a message being sent is shown under until the server names it. */
 const pendingId = (clientId: string) => `temp-${clientId}`;
+
+/** A message still being sent, or not sent: the server has not named it. */
+const isPending = (message: Message) => message.id.startsWith('temp-');
+
+/**
+ * What comes before the oldest message held, and how Load More reaches it:
+ * the server's cursor from the last page read; `find`, when older messages
+ * may exist but no cursor starts where the list does (the oldest were let go,
+ * or no page has been read), so Load More first finds one; or `none`, when
+ * the oldest held is the campaign's first.
+ */
+type Earlier = { kind: 'cursor'; cursor: string } | { kind: 'find' } | { kind: 'none' };
+
+/** The messages held, oldest first, and what comes before them. */
+interface Held {
+  messages: Message[];
+  earlier: Earlier;
+}
+
+/** What comes before a page just read. */
+const earlierThan = (page: MessageHistoryPage): Earlier =>
+  page.pagination.hasMore && page.pagination.nextCursor ? { kind: 'cursor', cursor: page.pagination.nextCursor } : { kind: 'none' };
+
+/**
+ * `held` with its oldest messages let go until MAX_HELD_MESSAGES remain, while
+ * the reader is at the newest message: a reader scrolled up keeps what they
+ * are reading until they are back down. A message still being sent, or not
+ * sent, stays, since it holds what someone typed.
+ */
+function withinCap(held: Held, atNewest: boolean): Held {
+  let excess = held.messages.length - MAX_HELD_MESSAGES;
+  if (!atNewest || excess <= 0) return held;
+  const kept = held.messages.filter((message) => {
+    if (excess === 0 || isPending(message)) return true;
+    excess -= 1;
+    return false;
+  });
+  return kept.length === held.messages.length ? held : { messages: kept, earlier: { kind: 'find' } };
+}
 
 export default function ChatPanel() {
   const { id: campaignId } = useParams<{ id: string }>();
@@ -116,7 +163,8 @@ export default function ChatPanel() {
   };
 
   // State
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [held, setHeld] = useState<Held>({ messages: [], earlier: { kind: 'find' } });
+  const { messages, earlier } = held;
   /** Why a message was not sent, by its pending id, for those that were not. */
   const [notSent, setNotSent] = useState<Record<string, string>>({});
   // The messages as last shown, for a send's answer that arrives later.
@@ -125,9 +173,6 @@ export default function ChatPanel() {
   const [messageInput, setMessageInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  /** Where the last page stopped. Minted by the server; passed back untouched. */
-  const [cursor, setCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   // History read while the log is on screen (Load More, a rejoin) arrives a
   // page at a time, which the live region would read out in full; it is
@@ -149,11 +194,30 @@ export default function ChatPanel() {
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  /** Distance from the bottom to restore once an older page has been added. */
-  const restoreScrollRef = useRef<number | null>(null);
+  /**
+   * Distance from the bottom to restore once an older page has been added,
+   * with the page's oldest message, which names the page it belongs to.
+   */
+  const restoreScrollRef = useRef<{ offsetFromBottom: number; pageOldestId: string } | null>(null);
   const wasAtBottomRef = useRef(true);
   /** Something arrived below while the reader was scrolled up. */
   const [newBelow, setNewBelow] = useState(false);
+
+  /** Change the messages held, adding none newer, and keep what comes before them. */
+  const setMessages = useCallback((update: (prev: Message[]) => Message[]) => {
+    setHeld((h) => {
+      const next = update(h.messages);
+      return next === h.messages ? h : { ...h, messages: next };
+    });
+  }, []);
+
+  /** Add messages at the newest end, then hold the list within MAX_HELD_MESSAGES. */
+  const addMessages = useCallback((update: (prev: Message[]) => Message[]) => {
+    setHeld((h) => {
+      const next = update(h.messages);
+      return next === h.messages ? h : withinCap({ ...h, messages: next }, wasAtBottomRef.current);
+    });
+  }, []);
 
   // ============================================
   // Scroll Management
@@ -185,13 +249,15 @@ export default function ChatPanel() {
    * not change.
    */
   useLayoutEffect(() => {
-    const offsetFromBottom = restoreScrollRef.current;
-    if (offsetFromBottom === null) return;
+    const restore = restoreScrollRef.current;
+    if (restore === null) return;
     restoreScrollRef.current = null;
+    // A page the list did not take (see Load More) moved nothing.
+    if (messages.find((m) => !isPending(m))?.id !== restore.pageOldestId) return;
 
     const container = messagesContainerRef.current;
     if (container) {
-      container.scrollTop = container.scrollHeight - offsetFromBottom;
+      container.scrollTop = container.scrollHeight - restore.offsetFromBottom;
     }
   }, [messages]);
 
@@ -238,9 +304,7 @@ export default function ChatPanel() {
         // The server sends newest first; the panel reads oldest first.
         // Merged with what is already shown: a message can arrive live
         // before the history does.
-        setMessages((prev) => mergeMessages(prev, page.messages));
-        setHasMore(page.pagination.hasMore);
-        setCursor(page.pagination.nextCursor);
+        setHeld((h) => withinCap({ messages: mergeMessages(h.messages, page.messages), earlier: earlierThan(page) }, wasAtBottomRef.current));
 
         // Scroll to bottom after initial load (without smooth)
         setTimeout(() => scrollToBottom(false), 100);
@@ -277,7 +341,7 @@ export default function ChatPanel() {
 
     const resync = async () => {
       try {
-        const shown = new Set(messagesRef.current.filter((m) => !m.id.startsWith('temp-')).map((m) => m.id));
+        const shown = new Set(messagesRef.current.filter((m) => !isPending(m)).map((m) => m.id));
         const joinsUp = (page: Message[]) => shown.size === 0 || page.some((m) => shown.has(m.id));
         let page = await getMessages(campaignId, PAGE_SIZE);
         const fresh = [...page.messages];
@@ -291,13 +355,11 @@ export default function ChatPanel() {
         // mergeMessages already orders and dedupes; sorting again here on the
         // timestamp alone would undo the id tiebreak it applies.
         if (joined || !page.pagination.hasMore) {
-          setMessages((prev) => mergeMessages(prev, fresh));
+          setHeld((h) => withinCap({ ...h, messages: mergeMessages(h.messages, fresh) }, wasAtBottomRef.current));
         } else {
           // Too much was missed to join up: keep only messages still being
           // sent, and page back from what was read.
-          setMessages((prev) => mergeMessages(prev.filter((m) => m.id.startsWith('temp-')), fresh));
-          setHasMore(page.pagination.hasMore);
-          setCursor(page.pagination.nextCursor);
+          setHeld((h) => withinCap({ messages: mergeMessages(h.messages.filter(isPending), fresh), earlier: earlierThan(page) }, wasAtBottomRef.current));
         }
       } catch (err) {
         console.error('[ChatPanel] Failed to resync messages after reconnect:', errorSummary(err));
@@ -312,14 +374,34 @@ export default function ChatPanel() {
    * Load more messages (pagination)
    */
   const loadMoreMessages = () => quietly(async () => {
-    if (!campaignId || isLoadingMore || !hasMore) return;
+    if (!campaignId || isLoadingMore || earlier.kind === 'none') return;
+    // What is read goes above the oldest message held.
+    const oldest = messagesRef.current.find((m) => !isPending(m));
 
     try {
       setIsLoadingMore(true);
 
       // Hand back exactly what the server gave us. It decides what a position
-      // in the history is; the panel does not construct one.
-      const page = await getMessages(campaignId, PAGE_SIZE, cursor ?? undefined);
+      // in the history is; the panel does not construct one. When no cursor
+      // it gave starts where the list does, one is found first.
+      const from = earlier.kind === 'cursor'
+        ? { cursor: earlier.cursor }
+        : oldest
+          ? await cursorBefore((limit, cursor) => getMessages(campaignId, limit, cursor), oldest)
+          : {};
+      const page = from && (await getMessages(campaignId, PAGE_SIZE, from.cursor));
+      setError(null);
+
+      // What was read joins up with the list only while its oldest message is
+      // the one it was read for. Let go meanwhile, or replaced by a rejoin's
+      // fresh start, the page is dropped, and another Load More reads from the
+      // list as it is. Checked in the update itself, which sees every change
+      // made before it, drawn yet or not.
+      const readFor = (h: Held) => h.messages.find((m) => !isPending(m))?.id === oldest?.id;
+      if (!page) {
+        setHeld((h) => (readFor(h) ? { ...h, earlier: { kind: 'none' } } : h));
+        return;
+      }
 
       // Older messages are added above what is on screen, which would otherwise
       // push the reader's place down by the height of the new page and make a
@@ -327,16 +409,15 @@ export default function ChatPanel() {
       // now that the page is here: taken before the request, a failed one left
       // it set for whatever message came next, which then jumped the list.
       const container = messagesContainerRef.current;
-      restoreScrollRef.current = container
-        ? container.scrollHeight - container.scrollTop
+      const pageOldest = page.messages[page.messages.length - 1];
+      restoreScrollRef.current = container && pageOldest
+        ? { offsetFromBottom: container.scrollHeight - container.scrollTop, pageOldestId: pageOldest.id }
         : null;
-      setError(null);
 
       // Merged rather than prepended: a page that overlaps what is on screen
-      // would otherwise show its messages twice, duplicate keys and all.
-      setMessages((prev) => mergeMessages(prev, page.messages));
-      setHasMore(page.pagination.hasMore);
-      setCursor(page.pagination.nextCursor);
+      // would otherwise show its messages twice, duplicate keys and all. Not
+      // held within MAX_HELD_MESSAGES: the reader asked for these.
+      setHeld((h) => (readFor(h) ? { messages: mergeMessages(h.messages, page.messages), earlier: earlierThan(page) } : h));
     } catch (err) {
       console.error('[ChatPanel] Failed to load more messages:', errorSummary(err));
       setError(errorMessage(err) || 'Failed to load more messages');
@@ -377,7 +458,7 @@ export default function ChatPanel() {
       // Not sent, when the answer was lost but the message went through).
       // Anything already shown under its id is not added again.
       const ownPendingId = data.clientId ? pendingId(data.clientId) : null;
-      setMessages((prev) => {
+      addMessages((prev) => {
         const pendingIndex = ownPendingId ? prev.findIndex((msg) => msg.id === ownPendingId) : -1;
         if (pendingIndex !== -1) {
           const updated = [...prev];
@@ -411,7 +492,7 @@ export default function ChatPanel() {
         createdAt: data.timestamp,
       };
 
-      setMessages((prev) => mergeMessages(prev, [systemMessage]));
+      addMessages((prev) => mergeMessages(prev, [systemMessage]));
 
       if (wasAtBottomRef.current) {
         setTimeout(() => scrollToBottom(true), 50);
@@ -427,7 +508,7 @@ export default function ChatPanel() {
       socket.off('chat.message', handleChatMessage);
       socket.off('chat.system', handleSystemMessage);
     };
-  }, [socket, campaignId]);
+  }, [socket, campaignId, addMessages]);
 
   // ============================================
   // Rate Limiting
@@ -560,7 +641,7 @@ export default function ChatPanel() {
       createdAt: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, optimisticMessage]);
+    addMessages((prev) => [...prev, optimisticMessage]);
 
     // Clear input and scroll
     setMessageInput('');
@@ -653,9 +734,10 @@ export default function ChatPanel() {
       <div className="flex items-center gap-2 p-4 border-b border-moss-green/20">
         <MessageCircle className="w-5 h-5 text-brand-ink" />
         <h3 className="text-lg font-semibold text-brand-ink">Chat</h3>
+        {/* What the panel holds, which in a long session is not all there is. */}
         {messages.length > 0 && (
           <span className="text-xs text-stone-gray/70 ml-auto">
-            {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+            {messages.length} shown
           </span>
         )}
         {userRole === 'DM' && (
@@ -712,7 +794,7 @@ export default function ChatPanel() {
         className="flex-1 overflow-y-auto p-4 space-y-3"
       >
         {/* Load More Button */}
-        {hasMore && messages.length > 0 && (
+        {earlier.kind !== 'none' && messages.length > 0 && (
           <div className="text-center pb-2">
             <Button
               onClick={loadMoreMessages}
@@ -749,7 +831,7 @@ export default function ChatPanel() {
                   key={message.id}
                   message={message}
                   isCurrentUser={message.userId === user?.id}
-                  isPending={message.id.startsWith('temp-') && !(message.id in notSent)}
+                  isPending={isPending(message) && !(message.id in notSent)}
                   notSentReason={notSent[message.id]}
                   onRetry={retry}
                   onDiscard={discard}

@@ -573,6 +573,8 @@ Your message shows as *sending…* until the server has it. If it doesn't get th
 
 While you are scrolled up reading earlier messages, new ones don't pull you down; a **Jump to newest** button appears at the bottom instead, and takes you to them. The **Dice** panel does the same for new rolls.
 
+The chat holds the newest 400 messages. While you are at the newest message, the oldest leave the panel as new ones arrive, and **Load More**, at the top of the chat, brings back older messages 50 at a time. Nothing is deleted: the whole history stays on the server. The count beside the **Chat** heading says how many are shown. While you are scrolled up, nothing leaves until you are back at the newest, and a message marked **Not sent** stays until you retry or discard it.
+
 #### Whispering to one person
 
 A whisper is a message that only you and one other member of the campaign can see.
