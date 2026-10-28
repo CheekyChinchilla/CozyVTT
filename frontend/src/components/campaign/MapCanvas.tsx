@@ -29,7 +29,7 @@ import type {
   MapPingedBroadcast,
 } from '@/types';
 import { GameSystem, TokenLayer } from '@/types';
-import type { WallSegment, FogState, WallType, LightSource } from '@/types/walls';
+import type { WallSegment, FogState, LightSource } from '@/types/walls';
 import {
   drawMapImage,
   drawSpiritLayer,
@@ -106,6 +106,7 @@ import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/character
 import { controlsToken } from '@/utils/tokenOwnership';
 import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
 import { tokenMenuHasItems, tokenMenuItems, type TokenMenuActions, type TokenMenuView } from './map/tokenMenuItems';
+import { doorMenuItems } from './map/doorMenuItems';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
@@ -1579,12 +1580,6 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     tokenTakesClick: ({ gridCoords }) => draggedToken !== null || getMovableTokenAtPosition(gridCoords.x, gridCoords.y) !== null,
     carryWallHistory, socket, ownEdits, showToast, markDirty,
   });
-
-  // A choice from the door menu: the door changed, the menu closed.
-  const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
-    setDoorType(door, newType);
-    setDoorContextMenu(null);
-  }, [setDoorType]);
 
   /**
    * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
@@ -4393,67 +4388,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         );
       })()}
 
-      {/* Door Context Menu — right-click on a door segment.
-          Same flex-column sizing as the token menu above; see the note there. */}
+      {/* Door Context Menu — right-click on a door segment, its items from
+          map/doorMenuItems.ts. Same flex-column sizing as the token menu
+          above; see the note there.
+          TODO(play): placed at the pointer and never moved, so near the right or bottom edge of the
+          screen it runs off it; place it as the token menu is placed, flipped to stay on screen. */}
       {doorContextMenu && (
         <div
           className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
           style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header — door type label */}
-          <p className="px-4 py-1.5 text-xs font-semibold text-stone-gray/70 border-b border-moss-green/10 select-none">
-            {doorContextMenu.door.type === 'door-closed' ? '🚪 Closed Door' :
-             doorContextMenu.door.type === 'door-open'   ? '🚪 Open Door'   :
-                                                            '🔒 Locked Door'}
-          </p>
-
-          {/* Open — available when door is closed */}
-          {doorContextMenu.door.type === 'door-closed' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-open')}
-            >
-              Open Door
-            </button>
-          )}
-
-          {/* Close — available when door is open */}
-          {doorContextMenu.door.type === 'door-open' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
-            >
-              Close Door
-            </button>
-          )}
-
-          {/* Lock — DM only, available when door is open or closed */}
-          {isDM && doorContextMenu.door.type !== 'door-locked' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-locked')}
-            >
-              Lock Door
-            </button>
-          )}
-
-          {/* Unlock — DM only, available when door is locked */}
-          {isDM && doorContextMenu.door.type === 'door-locked' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
-            >
-              Unlock Door
-            </button>
-          )}
-
-          {/* Players see informational text when a door is locked */}
-          {!isDM && doorContextMenu.door.type === 'door-locked' && (
-            <p className="px-4 py-2 text-sm text-stone-gray/70 italic select-none">
-              This door is locked.
-            </p>
-          )}
+          <MapMenuRows
+            items={doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } })}
+            onClose={() => setDoorContextMenu(null)}
+          />
         </div>
       )}
 
