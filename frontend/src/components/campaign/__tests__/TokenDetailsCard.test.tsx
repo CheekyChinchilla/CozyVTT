@@ -40,4 +40,15 @@ describe('TokenDetailsCard', () => {
     expect(screen.getByRole('button', { name: 'Close details' }).className.split(/\s+/))
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
+
+  // The compact layout's dock places it; elsewhere it keeps its corner.
+  it('keeps the map’s bottom left corner unless docked, and the dock’s width when docked', () => {
+    const { rerender } = render(<TokenDetailsCard token={wolf} square={wolf.position} hp={null} mayMove />);
+    const card = () => screen.getByText('Dire Wolf').closest('.glass-panel')!.className.split(/\s+/);
+    expect(card()).toEqual(expect.arrayContaining(['absolute', 'bottom-4', 'left-4', 'w-88', 'max-w-[calc(100%-2rem)]']));
+
+    rerender(<TokenDetailsCard token={wolf} square={wolf.position} hp={null} mayMove docked />);
+    expect(card()).toEqual(expect.arrayContaining(['relative', 'w-full', 'sm:w-88']));
+    expect(card()).not.toEqual(expect.arrayContaining(['absolute']));
+  });
 });

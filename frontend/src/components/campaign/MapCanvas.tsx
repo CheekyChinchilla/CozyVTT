@@ -158,6 +158,15 @@ function getSpiritAccentColor(style: string | null | undefined): string {
  */
 const COMPACT_BAND = 'absolute top-2 left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] flex flex-wrap items-start gap-2 pointer-events-none';
 
+/** What the ruler says to a player with no token of theirs on the map. */
+const RULER_NEEDS_TOKEN = 'Place your character token on the map to use the ruler';
+
+/**
+ * The compact layout's dock at the foot of the map: its floating rows keep
+ * 8 pixels from either side, or clear of a phone's notch.
+ */
+const DOCK_ROW = 'pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))]';
+
 /** The screen's pixel ratio; 1 where there is no window to ask. */
 function readDeviceRatio(): number {
   return typeof window === 'undefined' ? 1 : window.devicePixelRatio;
@@ -3756,6 +3765,102 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     </Button>
   );
 
+  // The DM's Player Preview controls, offered while dynamic lighting or
+  // fog is on, and kept while a preview is on.
+  const previewOffered = userRole === 'DM' && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled);
+  const playerPreviewControls = (
+    <>
+      {dmPreviewPlayerView && (
+        <select
+          value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
+          onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
+          aria-label="Player or token to preview as"
+          className="px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
+        >
+          {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
+          {/* Looks through whichever token is selected, as , and . step. */}
+          <option value={encodePreviewSelection({ kind: 'selected' })}>Follow my selection</option>
+          {(['players', 'tokens'] as const).map((group) => {
+            const entries = previewChoices.filter((o) => o.group === group);
+            if (entries.length === 0) return null;
+            return (
+              <optgroup key={group} label={group === 'players' ? 'Players' : 'Tokens'}>
+                {entries.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            );
+          })}
+        </select>
+      )}
+      <button
+        onClick={() => {
+          const next = !dmPreviewPlayerView;
+          if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
+          setDmPreviewPlayerView(next);
+        }}
+        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
+          dmPreviewPlayerView
+            ? 'bg-info/30 text-info-ink border-info/50'
+            // ink/paper invert together, so this stays a legible contrast
+            // chip over the map on both light and dark themes
+            : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
+        }`}
+        title={dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it'}
+        aria-label="Toggle DM player view preview"
+      >
+        {dmPreviewPlayerView ? '👁 DM View' : '🎭 Preview Player View'}
+      </button>
+    </>
+  );
+  // A player with no token of theirs on the map measures from nothing.
+  const rulerNeedsToken = showRuler && !isDM && !myToken;
+
+  // The square under the pointer, shown where the details card goes while
+  // no card shows.
+  const hoverCoordsShown = hoverCoords !== null && !hoverToken && !selectionDetails;
+  const hoverCoordsText = hoverCoords && (
+    <span className="text-xs text-stone-gray font-mono font-semibold">
+      ({hoverCoords.x}, {hoverCoords.y})
+    </span>
+  );
+  /**
+   * The token's details: in the map's bottom left corner, or `docked` in
+   * the compact layout's dock, across the map's foot.
+   */
+  const tokenDetails = (docked: boolean) => (
+    <>
+      {/* The hovered token's details (TokenDetailsCard), with only what this
+          viewer may see. A player token follows its character sheet, which
+          every campaign member can already read; an NPC's own hit points are
+          the DM's to reveal, so they appear only once the HP bar is turned
+          on, the rule the bar on the token itself draws by. */}
+      {hoverToken && hoverCoords && (
+        <TokenDetailsCard
+          token={hoverToken}
+          square={hoverCoords}
+          hp={visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing)}
+          imageSrc={cachedTokenImage(hoverToken, tokenImages)?.src}
+          mayMove={canMoveToken(hoverToken)}
+          docked={docked}
+        />
+      )}
+
+      {/* The selected token's details, in the same place, after a tap: a
+          finger has no hover. Closed, they stay closed until the selection
+          changes; the selection itself stays, for the keys. */}
+      {selectionDetails && (
+        <TokenDetailsCard
+          token={selectionDetails}
+          square={selectionDetails.position}
+          hp={visibleTokenHp(selectionDetails, characterHpCache, isDM && !previewing)}
+          imageSrc={cachedTokenImage(selectionDetails, tokenImages)?.src}
+          mayMove={canMoveToken(selectionDetails)}
+          onClose={() => setSelectionDetailsClosedFor(selectionDetails.id)}
+          docked={docked}
+        />
+      )}
+    </>
+  );
+
   // ============================================
   // Render
   // ============================================
@@ -4270,55 +4375,18 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
       {/* DM Preview Player View — offered while dynamic lighting or fog is
          on, and kept while a preview is on, so turning both off mid-preview
-         still leaves the way back to the DM's view. */}
-      {userRole === 'DM' && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled) && (
+         still leaves the way back to the DM's view. On the compact layout
+         it is in the dock at the foot of the map, over the details card. */}
+      {previewOffered && !compact && (
         <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
-          {dmPreviewPlayerView && (
-            <select
-              value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
-              onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
-              aria-label="Player or token to preview as"
-              className="px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
-            >
-              {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
-              {/* Looks through whichever token is selected, as , and . step. */}
-              <option value={encodePreviewSelection({ kind: 'selected' })}>Follow my selection</option>
-              {(['players', 'tokens'] as const).map((group) => {
-                const entries = previewChoices.filter((o) => o.group === group);
-                if (entries.length === 0) return null;
-                return (
-                  <optgroup key={group} label={group === 'players' ? 'Players' : 'Tokens'}>
-                    {entries.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </optgroup>
-                );
-              })}
-            </select>
-          )}
-          <button
-            onClick={() => {
-              const next = !dmPreviewPlayerView;
-              if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
-              setDmPreviewPlayerView(next);
-            }}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
-              dmPreviewPlayerView
-                ? 'bg-info/30 text-info-ink border-info/50'
-                // ink/paper invert together, so this stays a legible contrast
-                // chip over the map on both light and dark themes
-                : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
-            }`}
-            title={dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it'}
-            aria-label="Toggle DM player view preview"
-          >
-            {dmPreviewPlayerView ? '👁 DM View' : '🎭 Preview Player View'}
-          </button>
+          {playerPreviewControls}
         </div>
       )}
 
       {/* Ruler hint for players with no token */}
-      {showRuler && !isDM && !myToken && (
+      {rulerNeedsToken && !compact && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full pointer-events-none">
-          Place your character token on the map to use the ruler
+          {RULER_NEEDS_TOKEN}
         </div>
       )}
 
@@ -4446,41 +4514,41 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       )}
 
       {/* Hover Coordinates, unless the selection's details sit there */}
-      {hoverCoords && !hoverToken && !selectionDetails && (
+      {hoverCoordsShown && !compact && (
         <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
-          <span className="text-xs text-stone-gray font-mono font-semibold">
-            ({hoverCoords.x}, {hoverCoords.y})
-          </span>
+          {hoverCoordsText}
         </div>
       )}
 
-      {/* The hovered token's details (TokenDetailsCard), with only what this
-          viewer may see. A player token follows its character sheet, which
-          every campaign member can already read; an NPC's own hit points are
-          the DM's to reveal, so they appear only once the HP bar is turned
-          on, the rule the bar on the token itself draws by. */}
-      {hoverToken && hoverCoords && (
-        <TokenDetailsCard
-          token={hoverToken}
-          square={hoverCoords}
-          hp={visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing)}
-          imageSrc={cachedTokenImage(hoverToken, tokenImages)?.src}
-          mayMove={canMoveToken(hoverToken)}
-        />
-      )}
+      {!compact && tokenDetails(false)}
 
-      {/* The selected token's details, in the same place, after a tap: a
-          finger has no hover. Closed, they stay closed until the selection
-          changes; the selection itself stays, for the keys. */}
-      {selectionDetails && (
-        <TokenDetailsCard
-          token={selectionDetails}
-          square={selectionDetails.position}
-          hp={visibleTokenHp(selectionDetails, characterHpCache, isDM && !previewing)}
-          imageSrc={cachedTokenImage(selectionDetails, tokenImages)?.src}
-          mayMove={canMoveToken(selectionDetails)}
-          onClose={() => setSelectionDetailsClosedFor(selectionDetails.id)}
-        />
+      {/* The compact layout's dock at the foot of the map, from the top: the
+          ruler's hint, the DM's Player Preview controls at the right, and the
+          token's details or the square under the pointer. Laid out as a
+          column from the foot, so each stands clear of the one below it
+          whatever its height. It lets presses through to the map, except on
+          its controls. */}
+      {compact && (
+        <div data-map-dock="" className="absolute inset-x-0 bottom-0 z-30 flex flex-col pointer-events-none">
+          <div className={`${DOCK_ROW} flex flex-col gap-2 pb-2`}>
+            {rulerNeedsToken && (
+              <div className="self-center bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
+                {RULER_NEEDS_TOKEN}
+              </div>
+            )}
+            {previewOffered && (
+              <div className="self-end flex items-center gap-1 pointer-events-auto *:min-h-11">
+                {playerPreviewControls}
+              </div>
+            )}
+            {hoverCoordsShown && (
+              <div className="self-start glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
+                {hoverCoordsText}
+              </div>
+            )}
+            {tokenDetails(true)}
+          </div>
+        </div>
       )}
 
       {/* Image Loading State */}
