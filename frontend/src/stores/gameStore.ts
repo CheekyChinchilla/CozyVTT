@@ -20,9 +20,11 @@
 //   - CampaignContext owns campaign-level metadata and low-frequency
 //     UI state (vibe, atmosphere, session).
 //   Never represent the same datum in two of these places.
-//   Two things here are the page's own and fed by no socket: the
-//   cross-highlight peek and the selected token. They sit beside the
-//   tokens because the map, the tracker and the keyboard all read them.
+//   Some things here are the page's own and fed by no socket: the
+//   cross-highlight peek and the selected token, which sit beside the
+//   tokens because the map, the tracker and the keyboard all read them;
+//   and the open session tab and the chat's unread count, which the
+//   rail's tab bar and its panels both read.
 //
 // Write access: components and socket handlers mutate ONLY through the
 // targeted actions below (patch/add/remove by id). Never rebuild the
@@ -37,6 +39,8 @@ import type { CombatState, Position, Token } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import type { Drawing } from '@/types/drawings';
 import { drawingOrder } from '@/components/campaign/map/drawingGeometry';
+import { isSessionTab, type SessionTab } from '@/components/campaign/sessionTabs';
+import { optionalStorage } from '@/utils/optionalStorage';
 
 /** Combat is inactive until the DM starts it; matches the server's default. */
 /** The same record without `key`, or the same record when it has none. */
@@ -53,6 +57,20 @@ const EMPTY_COMBAT: CombatState = {
   currentTokenId: null,
   combatants: [],
 };
+
+/** Where this browser remembers the open session tab; the key the rail has always used. */
+export const SESSION_TAB_KEY = 'cozyvtt-session-tab';
+
+/** The session tab this browser last had open, or the chat. */
+function storedSessionTab(): SessionTab {
+  const stored = optionalStorage.getItem(SESSION_TAB_KEY);
+  return isSessionTab(stored) ? stored : 'chat';
+}
+
+/** Whether the chat is on screen, so a message arriving is read as it comes. */
+function chatOnScreen(s: { sessionTab: SessionTab }): boolean {
+  return s.sessionTab === 'chat';
+}
 
 interface GameState {
   /**
@@ -110,6 +128,16 @@ interface GameState {
   drawings: Drawing[];
   /** The map `drawings` are for. */
   drawingsMapId: string | null;
+  /**
+   * The session panel open in the rail (Chat, Dice, Initiative, Notes or
+   * Session), remembered in this browser under `SESSION_TAB_KEY`.
+   */
+  sessionTab: SessionTab;
+  /**
+   * How many chat messages from someone else arrived while the chat was not
+   * on screen: the Chat tab's badge. Back to none when the chat is opened.
+   */
+  unreadChat: number;
 
   // ---- Actions (named after the events that drive them) ----
   /** Wholesale replace — map load, map change, reconnect resync. */
@@ -152,7 +180,15 @@ interface GameState {
   removeDrawing: (drawingId: string) => void;
   /** `drawings:cleared`, or a role that may not have some of them. */
   removeDrawings: (match: (drawing: Drawing) => boolean) => void;
-  /** Session teardown. */
+  /** Open a session panel. Opening the chat reads what arrived meanwhile. */
+  setSessionTab: (tab: SessionTab) => void;
+  /** `chat.message` from someone else: one more unread, unless the chat is on screen. */
+  countUnreadChat: () => void;
+  /**
+   * Session teardown, and a page's start: what a page that opens a campaign
+   * begins with. The open tab is read again from this browser's storage, as
+   * the rail did when it was drawn.
+   */
   clearGameState: () => void;
 }
 
@@ -168,6 +204,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   onlineUserIds: new Set(),
   drawings: [],
   drawingsMapId: null,
+  sessionTab: storedSessionTab(),
+  unreadChat: 0,
 
   setTokens: (list) =>
     set((s) => ({
@@ -281,8 +319,19 @@ export const useGameStore = create<GameState>((set, get) => ({
   removeDrawings: (match) =>
     set((s) => (s.drawings.some(match) ? { drawings: s.drawings.filter((d) => !match(d)) } : s)),
 
+  setSessionTab: (tab) => {
+    optionalStorage.setItem(SESSION_TAB_KEY, tab);
+    set((s) => ({ sessionTab: tab, unreadChat: chatOnScreen({ sessionTab: tab }) ? 0 : s.unreadChat }));
+  },
+
+  countUnreadChat: () => set((s) => (chatOnScreen(s) ? s : { unreadChat: s.unreadChat + 1 })),
+
   clearGameState: () =>
-    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null, characterHp: {}, onlineUserIds: new Set(), drawings: [], drawingsMapId: null }),
+    set({
+      tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null,
+      characterHp: {}, onlineUserIds: new Set(), drawings: [], drawingsMapId: null,
+      sessionTab: storedSessionTab(), unreadChat: 0,
+    }),
 }));
 
 // ============================================
