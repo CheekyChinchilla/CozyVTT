@@ -84,7 +84,7 @@ export const StatBlock: React.FC<StatBlockProps> = ({
         </div>
         {/* Dice badge shown on hover when clickable */}
         {isClickable && (
-          <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity pointer-events-none">
             <div className="w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
               <Dices className="w-2.5 h-2.5 text-accent-text" />
             </div>

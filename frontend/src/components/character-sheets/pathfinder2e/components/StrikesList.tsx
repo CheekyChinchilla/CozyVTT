@@ -94,7 +94,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
                 <Icon className={`w-5 h-5 ${isMelee ? 'text-danger-ink' : 'text-accent-ink'}`} />
                 <h4 className="font-bold text-ink text-lg">{strike.name}</h4>
                 <ProficiencyIndicator rank={strike.proficiencyRank} size="sm" />
-                {isClickable && <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                {isClickable && <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
               </div>
               <div className="text-right">
                 <div className="text-xs text-ink-muted uppercase tracking-wide">

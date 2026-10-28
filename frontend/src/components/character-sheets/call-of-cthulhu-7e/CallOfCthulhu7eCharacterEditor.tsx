@@ -787,7 +787,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       {/* Characteristics */}
       <div>
         <h3 className="text-lg font-bold text-ink mb-4">Characteristics</h3>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-8 gap-4">
           {orderedCharacteristics(formData.characteristics as unknown as Record<string, unknown>).map((charKey) => (
             <CharacteristicBlock
               key={charKey}
@@ -898,7 +898,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       {/* Current HP, MP, Luck (editable) */}
       <div>
         <h3 className="text-lg font-bold text-ink mb-4">Current Status</h3>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="bg-paper border border-ink/20 rounded-md p-3">
             <label htmlFor="coc-current-hp" className="text-xs text-ink-secondary uppercase block mb-1">Current HP</label>
             <NumberField
@@ -938,7 +938,8 @@ value={formData.derivedStats?.magicPoints?.current}
             fallback={0}
             />
           </div>
-          <div className="bg-paper border border-ink/20 rounded-md p-3">
+          {/* Under hit points and magic points on a phone, across both. */}
+          <div className="col-span-2 sm:col-span-1 bg-paper border border-ink/20 rounded-md p-3">
             <label htmlFor="coc-luck" className="text-xs text-ink-secondary uppercase block mb-1">Luck Score</label>
             <NumberField
 id="coc-luck"
@@ -1139,7 +1140,7 @@ value={formData.wealth?.cash}
 
       {/* Contacts, which the read-only sheet lists on this tab. */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-4">
           <h3 className="text-lg font-bold text-ink">Contacts</h3>
           <button
             type="button"
@@ -1161,7 +1162,9 @@ value={formData.wealth?.cash}
               }));
             return (
               <div key={index} className="bg-paper border border-ink/20 rounded-md p-3 space-y-2">
-                <div className="flex items-center gap-2">
+                {/* Below sm the role takes a line of its own under the name
+                    and the remove button. */}
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                   <input
                     type="text"
                     value={contact.name}
@@ -1169,7 +1172,7 @@ value={formData.wealth?.cash}
                     aria-label={`Name of contact ${index + 1}`}
                     placeholder="Name"
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
+                    className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <input
                     type="text"
@@ -1178,13 +1181,13 @@ value={formData.wealth?.cash}
                     aria-label={`Role of contact ${index + 1}`}
                     placeholder="Role"
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="w-40 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+                    className="order-last w-full sm:order-none sm:w-40 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <button
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, contacts: (prev.contacts ?? []).filter((_, i) => i !== index) }))}
                     aria-label={`Remove ${contact.name || `contact ${index + 1}`}`}
-                    className="p-1 rounded-sm text-danger-ink hover:bg-danger/10"
+                    className="touch-target inline-flex items-center justify-center p-1 rounded-sm text-danger-ink hover:bg-danger/10"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1348,7 +1351,11 @@ value={formData.wealth?.cash}
           </ul>
         </div>
       )}
-      <div data-sheet-body className="p-3 sm:p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
+      {/* From sm up a tab scrolls in a box of its own, under the header and
+          the tabs. On a phone the sheet scrolls as one, in the shell's own
+          scroller, with no second scroller inside it sized from a 100vh that
+          is taller than the part of the screen the browser shows. */}
+      <div data-sheet-body className="p-3 sm:p-6 bg-paper sm:max-h-[calc(100vh-200px)] sm:overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}

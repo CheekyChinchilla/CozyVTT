@@ -62,7 +62,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
   return (
     <div className="bg-spirit/10 border-2 border-spirit/30 rounded-lg p-4 space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
         <div className="flex items-center space-x-2">
           <Brain className="w-5 h-5 text-spirit-ink" />
           <h3 className="text-lg font-bold text-spirit-ink">Sanity Points</h3>

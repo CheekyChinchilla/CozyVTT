@@ -259,7 +259,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {data.savingThrows && (
         <div>
           <h3 className="text-lg font-semibold text-ink mb-3">Saving Throws</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-ink/5 border border-ink/10 rounded-lg p-4">
             {(Object.entries(data.savingThrows ?? {}) as [string, DnD5eSavingThrow][]).map(([key, save]) => {
               // Worked out from the scores plus the other bonus, as the dice
               // roll it, so a stored total that has gone stale is not shown.
@@ -275,7 +275,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                   title={onRoll ? `Left-click: roll  |  Right-click: Advantage / Disadvantage` : undefined}
                 >
                   <div className="flex items-center gap-1">
-                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                     <span className="text-sm capitalize">{key}</span>
                   </div>
                   <span className={`text-sm font-semibold ${save.proficient ? 'text-accent-ink' : 'text-ink-secondary'}`}>
@@ -420,7 +420,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                   <div className="font-semibold text-ink flex items-center gap-1">
                     {hd.remaining}{max === null ? '' : `/${max}`}
                     {die && <span className="ml-1 font-normal text-ink-muted">{die}</span>}
-                    {spendable && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                    {spendable && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                   </div>
                 </div>
               );

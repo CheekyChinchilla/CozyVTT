@@ -149,6 +149,30 @@ const SKILL_NAMES: Record<string, string> = {
 };
 
 /**
+ * How wide each column of a skill row is: the tick, the name, the base value,
+ * the value, the half and fifth, and in the editor the remove button. The
+ * header over the rows draws its labels with the same widths, so each sits
+ * over its column; the half and fifth have a width of their own, so a row's
+ * value box does not move with the width of its digits.
+ *
+ * Below `sm` a row takes two lines: the tick and the name fill the first
+ * (the name's basis is the row less the tick and the gap, 1.75 rem), and the
+ * numbers go under the name (`ml-7`). From `sm` up it is one line. The remove
+ * button is 44 px on a touch screen, and so is the column kept for it.
+ */
+const COLUMN = {
+  tick: 'w-5 shrink-0',
+  name: 'flex-1 min-w-0 basis-[calc(100%-1.75rem)] sm:basis-0',
+  base: 'w-10 ml-7 sm:ml-0',
+  value: 'w-14',
+  reference: 'w-12',
+  remove: 'w-5 pointer-coarse:w-11 shrink-0',
+} as const;
+
+/** A skill row and the header over the rows. */
+const ROW = 'flex flex-wrap items-center gap-x-2 gap-y-1 px-2 sm:flex-nowrap';
+
+/**
  * SkillRow - Single skill display with improvement checkbox
  */
 const SkillRow: React.FC<{
@@ -188,7 +212,7 @@ const SkillRow: React.FC<{
 
   return (
     <div
-      className={`flex items-center space-x-2 py-1.5 px-2 rounded-sm group ${isClickable ? 'cursor-pointer hover:bg-ink/5 select-none' : 'hover:bg-ink/5'}`}
+      className={`${ROW} py-1.5 rounded-sm group ${isClickable ? 'cursor-pointer hover:bg-ink/5 select-none' : 'hover:bg-ink/5'}`}
       onClick={isClickable ? () => onRoll!('1d100', purpose) : undefined}
       title={isClickable ? `Click to roll ${displayName} (target: ${skill.currentValue}%)` : undefined}
     >
@@ -201,7 +225,7 @@ const SkillRow: React.FC<{
           aria-checked={skill.improvementChecked}
           aria-label={`Improvement check for ${controlName}`}
           onClick={() => onChange?.('improvementChecked', !skill.improvementChecked)}
-          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-brand ${getCheckboxClasses()}`}
+          className={`${COLUMN.tick} h-5 rounded border-2 flex items-center justify-center transition-all cursor-pointer hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-brand ${getCheckboxClasses()}`}
           style={
             skill.improvementChecked && tickColour
               ? { backgroundColor: tickColour, borderColor: tickColour }
@@ -212,7 +236,7 @@ const SkillRow: React.FC<{
         </button>
       ) : (
         <div
-          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-default ${getCheckboxClasses()}`}
+          className={`${COLUMN.tick} h-5 rounded border-2 flex items-center justify-center transition-all cursor-default ${getCheckboxClasses()}`}
           style={
             skill.improvementChecked && tickColour
               ? { backgroundColor: tickColour, borderColor: tickColour }
@@ -226,7 +250,7 @@ const SkillRow: React.FC<{
       )}
 
       {/* Skill Name */}
-      <div className="flex-1 min-w-0 flex items-center gap-1">
+      <div className={`${COLUMN.name} flex items-center gap-1`}>
         {editable && nameBox ? (
           <>
             <span className="text-sm text-ink shrink-0">{nameBox.prefix}</span>
@@ -254,7 +278,7 @@ const SkillRow: React.FC<{
             className="min-w-0 w-28 text-xs text-ink bg-paper border border-ink/20 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         )}
-        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />}
+        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity shrink-0" />}
         {/* Beside the name only where the name does not already carry it,
             as "Science (Physics)" and "Language (Latin)" do. */}
         {!(editable && detailBox) && skill.specialization && !displayName.includes(`(${skill.specialization})`) && (
@@ -266,12 +290,12 @@ const SkillRow: React.FC<{
       </div>
 
       {/* Base Value */}
-      <div className="w-10 text-center text-xs text-ink-secondary">
+      <div className={`${COLUMN.base} text-center text-xs text-ink-secondary`}>
         {skill.baseValue}%
       </div>
 
       {/* Current Value */}
-      <div className="w-14">
+      <div className={COLUMN.value}>
         {editable && name !== 'cthulhuMythos' ? (
           <NumberField
             aria-label={`Value of ${controlName}`}
@@ -290,23 +314,27 @@ const SkillRow: React.FC<{
       </div>
 
       {/* Half & Fifth (for reference) */}
-      <div className="flex items-center space-x-1 text-xs text-ink-secondary">
+      <div className={`${COLUMN.reference} flex items-center justify-center space-x-1 text-xs text-ink-secondary`}>
         <span>{Math.floor(skill.currentValue / 2)}</span>
         <span className="text-ink-muted">/</span>
         <span>{Math.floor(skill.currentValue / 5)}</span>
       </div>
 
-      {editable && onRemove && (
+      {editable && (onRemove ? (
         <button
           type="button"
           onClick={onRemove}
           aria-label={`Remove ${controlName}`}
           title="Remove"
-          className="p-0.5 rounded-sm text-danger-ink hover:bg-danger/10 shrink-0"
+          className={`${COLUMN.remove} touch-target inline-flex items-center justify-center p-0.5 rounded-sm text-danger-ink hover:bg-danger/10`}
         >
           <X className="w-4 h-4" />
         </button>
-      )}
+      ) : (
+        // The remove button's column, kept on a row that has none, so every
+        // row's columns line up with the header.
+        <span aria-hidden="true" className={COLUMN.remove} />
+      ))}
     </div>
   );
 };
@@ -327,7 +355,7 @@ const AddSkillControl: React.FC<{
   const full = listIsFull({ length: count } as unknown[]);
   return (
     <div className="px-2 py-1">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
         {options && (
           <select
             value={choice}
@@ -447,14 +475,13 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, tickColour, edit
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between px-2 pb-2 border-b-2 border-ink/20">
-        <div className="flex items-center space-x-4 text-xs text-ink-secondary font-semibold uppercase">
-          <span className="w-4">✓</span>
-          <span className="flex-1">Skill Name</span>
-          <span className="w-10">Base</span>
-          <span className="w-14">Value</span>
-          <span>½ / ⅕</span>
-        </div>
+      <div className={`${ROW} pb-2 border-b-2 border-ink/20 text-xs text-ink-secondary font-semibold uppercase`}>
+        <span className={`${COLUMN.tick} text-center`}>✓</span>
+        <span className={COLUMN.name}>Skill Name</span>
+        <span className={`${COLUMN.base} text-center`}>Base</span>
+        <span className={`${COLUMN.value} text-center`}>Value</span>
+        <span className={`${COLUMN.reference} text-center`}>½ / ⅕</span>
+        {editable && <span aria-hidden="true" className={COLUMN.remove} />}
       </div>
 
       {/* Skills by Category */}

@@ -416,6 +416,8 @@ Running a homebrew game or a system that doesn't have a dedicated sheet? The **F
 
 A Flexible sheet can hold up to 100 sections. A stats section holds up to 200 stats, a list or a table up to 1,000 rows, a table up to 50 columns, and a text section up to 100,000 characters.
 
+To put the sections, or the entries of a list, in another order, drag them up or down. With a mouse you can take hold of one anywhere but in a text box; on a phone or a tablet, take hold of the grip, the six dots at its left, so that a swipe anywhere else scrolls the sheet.
+
 *Screenshot pending — Flexible character sheet.*
 
 ---

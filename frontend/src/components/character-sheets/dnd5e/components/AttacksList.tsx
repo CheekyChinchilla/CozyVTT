@@ -76,7 +76,7 @@ const AttackRow: React.FC<{
           <span className="font-semibold text-ink">{attack.name}</span>
         </div>
         {isClickable && (
-          <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />
+          <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />
         )}
       </div>
 

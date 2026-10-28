@@ -128,6 +128,17 @@ function tabOfError(key: string): TabId | null {
  */
 const NOT_IN_SUMMARY = new Set(['submit', 'tokenImage', 'themeColor']);
 
+/**
+ * The columns of the hit dice rows and the labels over them, written once so
+ * the two line up at every width. From `sm` up a row is one line: class, die,
+ * left, a slash, at full and remove. Below it the class takes a line of its
+ * own (`col-span-5 sm:col-span-1`) and the rest share the next, since the
+ * fixed columns alone are about 280 px. The last column holds the remove
+ * button, 44 px on a touch screen.
+ */
+const HIT_DICE_COLUMNS =
+  'grid grid-cols-[minmax(0,1fr)_3.5rem_0.75rem_3.5rem_2.75rem] sm:grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] sm:pointer-coarse:grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_2.75rem] gap-2 items-center';
+
 const TABS: SheetTab<TabId>[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
@@ -1548,7 +1559,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           Worked out from your ability scores and proficiency. Use the box beside each one for
           anything else that adds to it, such as Aura of Protection or a Ring of Protection.
         </p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const saveData = formData.savingThrows?.[ability] || { proficient: false, bonus: 0 };
             return (
@@ -1635,6 +1646,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     className="text-sm font-medium text-ink cursor-pointer"
                   >
                     {skillLabel}
+                    {/* Where the row is narrow the ability goes under the
+                        name; with nothing between them the two never broke
+                        apart and pushed the bonus box out of line. */}
+                    <wbr />
                     <span className="text-xs text-ink-muted ml-1">({abilityAbbr})</span>
                   </label>
                 </div>
@@ -1671,7 +1686,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           (Basic Rules p. 51). Same arithmetic as a skill, so the bonus is
           derived here too rather than typed in. */}
       <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap mb-1">
           <h3 className="text-lg font-semibold text-ink">Your Own Skills</h3>
           <Button
             variant="primary"
@@ -1787,7 +1802,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     )
                   }
                   aria-label={`Remove ${custom.name || 'skill'}`}
-                  className="px-2 text-danger-ink hover:bg-danger/10 font-bold"
+                  className="touch-target inline-flex items-center justify-center px-2 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×
                 </button>
@@ -1895,7 +1910,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           toggles because the sources are open-ended — the Alert feat's +5, Jack
           of All Trades and Remarkable Athlete's share of the proficiency bonus,
           subclasses that swap in Wisdom or Intelligence. */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label htmlFor="initiative-other-bonus" className="block text-sm font-semibold text-ink-secondary mb-1">
             Initiative — other bonus
@@ -1962,7 +1977,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
       {/* Hit Dice */}
       <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap mb-3">
           <h3 className="text-lg font-semibold text-ink">Hit Dice</h3>
           <Button
             variant="primary"
@@ -1980,8 +1995,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.hitDice)} />
-        <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center mb-1">
-          <span aria-hidden="true" className="text-xs font-semibold text-ink-secondary">Class</span>
+        <div className={`${HIT_DICE_COLUMNS} mb-1`}>
+          <span aria-hidden="true" className="col-span-5 sm:col-span-1 text-xs font-semibold text-ink-secondary">Class</span>
           <span aria-hidden="true" className="text-xs font-semibold text-ink-secondary text-center">Die</span>
           <span aria-hidden="true" className="text-xs font-semibold text-ink-secondary text-center">Left</span>
           <span aria-hidden="true" />
@@ -1990,7 +2005,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         </div>
         <div className="space-y-2">
           {(formData.hitDice || []).map((die, index) => (
-            <div key={index} className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center">
+            <div key={index} className={HIT_DICE_COLUMNS}>
               <input
                 type="text"
                 value={die.class || ''}
@@ -1999,7 +2014,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label={`Class of hit dice ${index + 1}`}
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors[`hitDice.${index}.class`]}
-                className="min-w-0 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+                className="col-span-5 sm:col-span-1 min-w-0 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
               />
               <input
                 type="text"
@@ -2040,12 +2055,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 }}
                 aria-label={`Remove ${die.class || 'this'} hit dice`}
                 title="Remove"
-                className="text-danger-ink hover:bg-danger/10 font-bold leading-none"
+                className="touch-target inline-flex items-center justify-center text-danger-ink hover:bg-danger/10 font-bold leading-none"
               >
                 ×
               </button>
               {errors[`hitDice.${index}.class`] && (
-                <p className="col-span-6 text-xs text-danger-ink">{errors[`hitDice.${index}.class`]}</p>
+                <p className="col-span-5 sm:col-span-6 text-xs text-danger-ink">{errors[`hitDice.${index}.class`]}</p>
               )}
             </div>
           ))}
@@ -2114,7 +2129,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Conditions */}
       <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-ink mb-3">Conditions</h3>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {conditions.map((condition) => (
             <label key={condition} className="flex items-center space-x-2 cursor-pointer hover:bg-ink/10 p-1 rounded-sm">
               <input
@@ -2186,7 +2201,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
       {/* Attacks */}
       <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap mb-3">
           <h3 className="text-lg font-semibold text-ink">Attacks & Spellcasting</h3>
           <Button
             variant="primary"
@@ -2216,7 +2231,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   aria-label={`Name of attack ${index + 1}`}
                   maxLength={SHEET_SHORT_TEXT_MAX}
                   aria-invalid={!!errors[`attacks.${index}.name`]}
-                  className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
+                  className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
                 <button
                   onClick={() => {
@@ -2224,7 +2239,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     updateField('attacks', newAttacks);
                     removeCustomPropertyDraft(index);
                   }}
-                  className="ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
+                  // TODO(sheets): this button has no accessible name, so a screen
+                  // reader announces "times"; it wants aria-label "Remove <attack>",
+                  // as the hit dice and feature rows have.
+                  className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×
                 </button>
@@ -2326,7 +2344,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                           )
                         }
                         title={`Remove "${property}"`}
-                        className="px-2 py-0.5 text-xs rounded-full border border-warning/30 bg-warning/10 text-warning-ink hover:bg-warning/15"
+                        className="touch-target inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full border border-warning/30 bg-warning/10 text-warning-ink hover:bg-warning/15"
                       >
                         {property} ×
                       </button>
@@ -2352,7 +2370,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     maxLength={MAX_WEAPON_PROPERTY_LENGTH}
                     placeholder="Add your own property"
                     aria-label="Add a custom weapon property"
-                    className="flex-1 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+                    className="min-w-0 flex-1 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <button
                     type="button"
@@ -2370,7 +2388,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   cannot say that, so the two-handed die used to be typed into
                   the note where nothing could roll it. */}
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap mb-1">
                   <label className="block text-xs font-semibold text-ink-secondary">
                     Other Damage Rolls
                   </label>
@@ -2393,7 +2411,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   max={DND5E_ATTACK_DAMAGE_ROLLS_MAX}
                 />
                 {(attack.additionalDamage || []).map((entry, dmgIndex) => (
-                  <div key={dmgIndex} className="flex gap-2 mb-1">
+                  <div key={dmgIndex} className="flex flex-wrap gap-2 mb-1 sm:flex-nowrap">
                     <input
                       type="text"
                       value={entry.label || ''}
@@ -2406,7 +2424,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       placeholder="When (e.g. Two-handed)"
                       aria-label={`When damage roll ${dmgIndex + 1} applies`}
                       maxLength={60}
-                      className="flex-1 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+                      className="min-w-0 flex-1 basis-full sm:basis-0 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <input
                       type="text"
@@ -2420,7 +2438,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       placeholder="1d10+3"
                       aria-label={`Damage roll ${dmgIndex + 1}`}
                       maxLength={60}
-                      className="w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
+                      className="min-w-0 flex-1 sm:flex-initial w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <input
                       type="text"
@@ -2434,7 +2452,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       placeholder="slashing"
                       aria-label={`Damage type of roll ${dmgIndex + 1}`}
                       maxLength={40}
-                      className="w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+                      className="min-w-0 flex-1 sm:flex-initial w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <button
                       type="button"
@@ -2445,7 +2463,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         )
                       }
                       aria-label={`Remove damage roll ${dmgIndex + 1}`}
-                      className="px-2 text-danger-ink hover:bg-danger/10 font-bold"
+                      className="touch-target inline-flex items-center justify-center px-2 text-danger-ink hover:bg-danger/10 font-bold"
                     >
                       ×
                     </button>
@@ -2484,7 +2502,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const renderSpellsTab = () => (
     <div className="space-y-6">
       {/* Spellcasting class and ability */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-semibold text-ink-secondary mb-1">Spellcasting Class</label>
           <input
@@ -2595,7 +2613,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Spell Slots */}
       <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-ink mb-3">Spell Slots</h3>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((level) => {
             const slotData = formData.spellcasting?.slots?.[level] || { total: 0, expended: 0 };
             return (
@@ -2638,7 +2656,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
       {/* Spells List */}
       <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap mb-3">
           <h3 className="text-lg font-semibold text-ink">Spells</h3>
           <Button
             variant="primary"
@@ -2659,7 +2677,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         <div className="space-y-2">
           {(formData.spellcasting?.spells || []).map((spell, index) => (
             <React.Fragment key={index}>
-            <div className="bg-paper border border-ink/20 rounded-lg p-3 flex items-center space-x-3">
+            <div className="bg-paper border border-ink/20 rounded-lg p-3 flex flex-wrap items-center gap-3 sm:flex-nowrap">
               <NumberField
                 min={0}
                 max={9}
@@ -2678,7 +2696,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label={`Name of spell ${index + 1}`}
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors[`spellcasting.spells.${index}.name`]}
-                className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-brand"
+                // Below sm the name fills the line beside the level box
+                // (3.5 rem and the 0.75 rem gap), so the tick boxes go under.
+                className="min-w-0 flex-1 basis-[calc(100%-4.25rem)] sm:basis-0 px-2 py-1 border border-ink/20 rounded-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-brand"
               />
               <label className="flex items-center space-x-1 cursor-pointer" title="Prepared">
                 <input
@@ -2712,7 +2732,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index);
                   updateField('spellcasting.spells', newSpells);
                 }}
-                className="px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
+                // TODO(sheets): no accessible name here either; it wants
+                // aria-label "Remove <spell>".
+                className="touch-target inline-flex items-center justify-center px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
               >
                 ×
               </button>
@@ -2734,7 +2756,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Currency */}
       <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-ink mb-3">Currency</h3>
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           {([
             { key: 'cp', label: 'Copper (CP)' },
             { key: 'sp', label: 'Silver (SP)' },
@@ -2761,7 +2783,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
       {/* Inventory Items */}
       <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap mb-3">
           <h3 className="text-lg font-semibold text-ink">Inventory</h3>
           <Button
             variant="primary"
@@ -2800,14 +2822,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   aria-label={`Name of item ${index + 1}`}
                   maxLength={SHEET_SHORT_TEXT_MAX}
                   aria-invalid={!!errors[`inventory.${index}.name`]}
-                  className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
+                  className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
                 <button
                   onClick={() => {
                     const newInventory = formData.inventory!.filter((_, i) => i !== index);
                     updateField('inventory', newInventory);
                   }}
-                  className="ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
+                  // TODO(sheets): no accessible name here either; it wants
+                  // aria-label "Remove <item>".
+                  className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×
                 </button>
@@ -2866,7 +2890,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
               </div>
-              <div className="flex items-center space-x-4 text-sm">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:flex-nowrap">
                 <label className="flex items-center space-x-1 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2996,7 +3020,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
         {/* Features & Traits */}
         <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 sm:flex-nowrap mb-3">
             <h3 className="text-lg font-semibold text-ink">Features &amp; Traits</h3>
             <Button
               variant="primary"
@@ -3034,7 +3058,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       }
                       placeholder="Feature name, e.g. Darkvision"
                       aria-label={`Feature ${index + 1} name`}
-                      className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
+                      className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <button
                       onClick={() =>
@@ -3044,7 +3068,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         )
                       }
                       aria-label={`Remove ${feature.name || 'feature'}`}
-                      className="ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
+                      className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                     >
                       ×
                     </button>

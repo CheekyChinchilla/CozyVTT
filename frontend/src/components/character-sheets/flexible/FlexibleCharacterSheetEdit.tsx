@@ -9,6 +9,7 @@ import type { Character } from '../../../types';
 import type { FlexibleSection, SectionTemplate } from '../../../types/flexible-character-sheet';
 import { initializeFlexibleData } from './utils/section-helpers';
 import { SectionEditor } from './components/SectionEditor';
+import { DragEntry, type DragGrip } from './components/DragEntry';
 import { AddSectionMenu } from './components/AddSectionMenu';
 import { StatsEditor } from './components/sections/StatsEditor';
 import { ListEditor } from './components/sections/ListEditor';
@@ -170,7 +171,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
     );
   };
 
-  const renderSectionEditor = (section: FlexibleSection) => {
+  const renderSectionEditor = (section: FlexibleSection, grip: DragGrip) => {
     let editor: React.ReactNode;
 
     switch (section.type) {
@@ -194,6 +195,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
         section={section}
         onUpdate={(updates) => updateSection(section.id, updates)}
         onRemove={() => removeSection(section.id)}
+        grip={grip}
       >
         {editor}
       </SectionEditor>
@@ -280,9 +282,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       {sections.length > 0 ? (
         <Reorder.Group axis="y" values={sections} onReorder={setSections} className="space-y-4 mb-4">
           {sections.map((section) => (
-            <Reorder.Item key={section.id} value={section}>
-              {renderSectionEditor(section)}
-            </Reorder.Item>
+            <DragEntry key={section.id} value={section}>
+              {(grip) => renderSectionEditor(section, grip)}
+            </DragEntry>
           ))}
         </Reorder.Group>
       ) : (
