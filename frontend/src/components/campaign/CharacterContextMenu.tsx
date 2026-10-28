@@ -4,12 +4,17 @@
  * is given (components/ui/menu.ts), each with its icon. It is drawn on the
  * body (components/ui/FloatingLayer.tsx), where the panel dividers beside
  * the party column and the rail cannot take the presses on its items.
+ * On the compact layout the same items are an action sheet
+ * (compact/ActionSheet.tsx), which closes itself: the popover's closers, a
+ * press anywhere else and its own Escape, are off there.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { MENU_ROW_CLASSES, commandLook, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { menuOpened, menuShown } from '@/components/ui/openMenus';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import ActionSheet from '@/components/campaign/compact/ActionSheet';
 
 interface CharacterContextMenuProps {
   x: number;
@@ -19,6 +24,8 @@ interface CharacterContextMenuProps {
   onClose: () => void;
   /** Put the cursor on the first item: the menu was opened from the keyboard. */
   autoFocus?: boolean;
+  /** What the menu is on, the character or the combatant, which names it as an action sheet. */
+  title?: string;
 }
 
 export default function CharacterContextMenu({
@@ -27,12 +34,16 @@ export default function CharacterContextMenu({
   items,
   onClose,
   autoFocus = false,
+  title = 'Character',
 }: CharacterContextMenuProps) {
+  const compact = useCompactLayout();
   const menuRef = useRef<HTMLDivElement>(null);
   // Start invisible; adjusted position set after measuring
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
-  // On mount: measure menu and flip if it would overflow viewport
+  // On mount: measure menu and flip if it would overflow viewport. Again
+  // when the layout turns from the compact one, which drew the menu as an
+  // action sheet, so the popover drawn in its place is placed and shown.
   useEffect(() => {
     if (!menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
@@ -41,8 +52,8 @@ export default function CharacterContextMenu({
     const adjustedX = x + rect.width > vw ? Math.max(0, x - rect.width) : x;
     const adjustedY = y + rect.height > vh ? Math.max(0, y - rect.height) : y;
     setPos({ x: adjustedX, y: adjustedY });
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- measured once, as the menu opens at its point
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- measured as the menu opens at its point, and on a change of layout
+  }, [compact]);
 
   // Its opening closes the map's token or door menu, which a right-click or a
   // long-press here, sending no click, would leave open beside it. A menu
@@ -68,6 +79,7 @@ export default function CharacterContextMenu({
   // its lift brings no mousedown here (map/clickSwallow.ts swallows iOS's, Android sends none). Close this menu when
   // another opens, as the map's menus do through whenMenuOpens, with each menu passing over its own opening.
   useEffect(() => {
+    if (compact) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         onClose();
@@ -78,11 +90,12 @@ export default function CharacterContextMenu({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [onClose]);
+  }, [onClose, compact]);
 
   // Close on Escape, which is used up: the map hears keys after this and
   // would otherwise also put its tool away on the same press.
   useEffect(() => {
+    if (compact) return;
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -94,11 +107,13 @@ export default function CharacterContextMenu({
     return () => {
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [onClose]);
+  }, [onClose, compact]);
 
   if (items.length === 0) {
     return null;
   }
+
+  if (compact) return <ActionSheet open title={title} items={items} onClose={onClose} />;
 
   /** A command's colour: its look, less the hover its own classes already hold for the plain tone. */
   const toneClass = (item: MenuAction): string => {

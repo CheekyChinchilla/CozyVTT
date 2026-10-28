@@ -26,8 +26,32 @@ const FOCUSABLE_SELECTORS = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+/** An open trap: when it opened, and what Escape calls in it. */
+interface OpenTrap {
+  opened: number;
+  /** Calls the dialog's close, as Escape does; false when it has none. */
+  close: () => boolean;
+}
+
 /** The open traps, oldest first; only the last acts on a key. */
-const openTraps: symbol[] = [];
+const openTraps: OpenTrap[] = [];
+
+let openings = 0;
+
+/**
+ * A number that grows with each opening: of a trap, and of whatever else
+ * stacks with the dialogs and needs to know what opened after it (the
+ * compact layout's sheets, components/campaign/compact/sheetHistory.ts).
+ */
+export function nextOpening(): number {
+  openings += 1;
+  return openings;
+}
+
+/** The dialog on top, if one is open: when it opened, and its close, as Escape calls it. */
+export function topTrap(): Readonly<OpenTrap> | undefined {
+  return openTraps[openTraps.length - 1];
+}
 
 /**
  * Whether any dialog's focus trap is open. The map's keys stand aside while
@@ -38,6 +62,15 @@ export function isAnyTrapOpen(): boolean {
   return openTraps.length > 0;
 }
 
+export interface FocusTrapOptions {
+  /**
+   * Leave the focus where it is as the trap begins when it is already inside
+   * the container: a panel that becomes a dialog while open, such as a sheet
+   * made full height, keeps the control in use.
+   */
+  keepFocusInside?: boolean;
+}
+
 /**
  * Traps keyboard focus inside a dialog container.
  *
@@ -45,7 +78,7 @@ export function isAnyTrapOpen(): boolean {
  * @param onClose Called when the user presses Escape
  * @returns A ref to attach to the modal's root element
  */
-export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
+export function useFocusTrap(isOpen: boolean, onClose?: () => void, options: FocusTrapOptions = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -54,11 +87,20 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
   // (which would steal focus from inputs on every keystroke).
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const keepFocusInsideRef = useRef(options.keepFocusInside === true);
+  keepFocusInsideRef.current = options.keepFocusInside === true;
 
   useEffect(() => {
     if (!isOpen) return;
 
-    const trap = Symbol('focus trap');
+    const trap: OpenTrap = {
+      opened: nextOpening(),
+      close: () => {
+        if (!onCloseRef.current) return false;
+        onCloseRef.current();
+        return true;
+      },
+    };
     openTraps.push(trap);
 
     // Remember the element that had focus before the modal opened
@@ -69,6 +111,7 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
     const frame = requestAnimationFrame(() => {
       const container = containerRef.current;
       if (!container) return;
+      if (keepFocusInsideRef.current && container.contains(document.activeElement)) return;
 
       const first =
         container.querySelector<HTMLElement>('[data-autofocus]') ??

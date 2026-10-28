@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { CampaignRole, type RosterMember } from '@/types';
 import { useGameStore } from '@/stores/gameStore';
 import { characterMenuRows, openCharacterMenu } from '@/test/characterMenuRows';
@@ -45,6 +45,7 @@ vi.mock('../CharacterRollPicker', () => ({
 }));
 
 import CampaignRoster from '../CampaignRoster';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 
 const member = (userId: string, userName: string, role: CampaignRole): RosterMember => ({
   userId, userName, userAvatar: null, role, joinedAt: '2026-10-01T00:00:00.000Z',
@@ -155,5 +156,18 @@ describe("what a roster character's menu items do", () => {
     expect(await choose('Remove from Campaign')).toBe(true);
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
     expect(h.api.assignCharacterToCampaign).not.toHaveBeenCalled();
+  });
+});
+
+describe("a roster character's menu on the compact layout", () => {
+  it('is an action sheet named by the character, with the same items', async () => {
+    render(<LayoutProvider compact><CampaignRoster /></LayoutProvider>);
+    await rightClick("Ash's hero");
+
+    const sheet = screen.getByRole('dialog', { name: "Ash's hero" });
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'View Character Sheet', 'Roll...', 'Edit Character Sheet', 'Add to Map', 'Remove from Campaign', 'Cancel',
+    ]);
+    expect(openCharacterMenu()).toBeNull();
   });
 });

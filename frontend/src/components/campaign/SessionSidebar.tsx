@@ -10,24 +10,13 @@
 // rail draws them itself.
 // ============================================
 
-import { MessageCircle, Dices, ListOrdered, PlayCircle, NotebookPen, type LucideIcon } from 'lucide-react';
 import { useGameStore } from '@/stores/gameStore';
 import { cn } from '@/utils/cn';
 import SessionPanels from './SessionPanels';
-import { SESSION_TABS, type SessionTab } from './sessionTabs';
+import { SESSION_TABS, SESSION_TAB_LOOKS, unreadBadge } from './sessionTabs';
 import { useTableSlot } from './tableHosts';
 
-const TAB_LOOKS: Record<SessionTab, { label: string; icon: LucideIcon }> = {
-  chat: { label: 'Chat', icon: MessageCircle },
-  dice: { label: 'Dice', icon: Dices },
-  initiative: { label: 'Initiative', icon: ListOrdered },
-  // Its own tab rather than a widget under Session: long-form writing needs the
-  // full height of the rail, and people come back to it constantly during play.
-  notes: { label: 'Notes', icon: NotebookPen },
-  session: { label: 'Session', icon: PlayCircle },
-};
-
-const TABS = SESSION_TABS.map((key) => ({ key, ...TAB_LOOKS[key] }));
+const TABS = SESSION_TABS.map((key) => ({ key, ...SESSION_TAB_LOOKS[key] }));
 
 export default function SessionSidebar() {
   const activeTab = useGameStore((s) => s.sessionTab);
@@ -84,9 +73,9 @@ export default function SessionSidebar() {
               {key === 'chat' && unreadChat > 0 && (
                 <span
                   className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand text-brand-text text-[10px] font-bold flex items-center justify-center"
-                  aria-label={`${unreadChat} unread messages`}
+                  aria-label={unreadBadge(unreadChat).label}
                 >
-                  {unreadChat > 9 ? '9+' : unreadChat}
+                  {unreadBadge(unreadChat).text}
                 </span>
               )}
             </button>

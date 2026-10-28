@@ -4,7 +4,9 @@
  * (ability checks, saves, skills, attacks, damage) plus a free-form custom
  * roll input. Mirrors CharacterRollPicker for player-controlled tokens.
  * Drawn on the body (components/ui/FloatingLayer.tsx), where the panel
- * dividers cannot take the presses on it.
+ * dividers cannot take the presses on it. On the compact layout it is a
+ * full-height sheet (compact/BottomSheet.tsx) with rows a finger can press,
+ * which closes itself: the popover's placing and closers are off there.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -15,6 +17,8 @@ import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { menuShown } from '@/components/ui/openMenus';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import { BottomSheet } from '@/components/campaign/compact/BottomSheet';
 import { tokenPublicName } from '@/utils/tokenDisplayName';
 import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 
@@ -46,9 +50,15 @@ interface SectionProps {
   title: string;
   rolls: RollOption[];
   onRoll: (option: RollOption) => void;
+  /** Rows a finger can press, in the compact layout's sheet. */
+  compact?: boolean;
 }
 
-const Section: React.FC<SectionProps> = ({ title, rolls, onRoll }) => {
+/** A roll's row; in the compact layout's sheet, 44 px tall or more. */
+const ROLL_ROW = 'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left';
+const rollRow = (compact: boolean) => `${ROLL_ROW}${compact ? ' min-h-11' : ''}`;
+
+const Section: React.FC<SectionProps> = ({ title, rolls, onRoll, compact = false }) => {
   if (rolls.length === 0) return null;
   return (
     <div>
@@ -59,7 +69,7 @@ const Section: React.FC<SectionProps> = ({ title, rolls, onRoll }) => {
         <button
           key={i}
           onClick={() => onRoll(opt)}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
+          className={rollRow(compact)}
         >
           <Dices className="w-3 h-3 text-brand-ink shrink-0" />
           <span className="flex-1">{opt.label}</span>
@@ -81,6 +91,7 @@ export default function NpcRollPicker({
   anchorX,
   anchorY,
 }: NpcRollPickerProps) {
+  const compact = useCompactLayout();
   const pickerRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -107,14 +118,14 @@ export default function NpcRollPicker({
 
   // Position picker, flipping if needed
   useEffect(() => {
-    if (!pickerRef.current) return;
+    if (compact || !pickerRef.current) return;
     const rect = pickerRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const x = anchorX + rect.width  > vw ? Math.max(0, anchorX - rect.width)  : anchorX;
     const y = anchorY + rect.height > vh ? Math.max(0, anchorY - rect.height) : anchorY;
     setPos({ x, y });
-  }, [anchorX, anchorY, hasAnyRolls]);
+  }, [anchorX, anchorY, hasAnyRolls, compact]);
 
   // A menu on the screen while it is open, so the tap on the map that
   // closes it is not the first of a double tap to ping.
@@ -122,16 +133,18 @@ export default function NpcRollPicker({
 
   // Close on click outside
   useEffect(() => {
+    if (compact) return;
     const handler = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  }, [onClose, compact]);
 
   // Close on Escape, which is used up: the map hears keys after this and
   // would otherwise also put its tool away on the same press.
   useEffect(() => {
+    if (compact) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -139,7 +152,7 @@ export default function NpcRollPicker({
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [onClose, compact]);
 
   const handleRollOption = (opt: RollOption) => {
     const { expression, purpose } = opt.supportsAdvantage
@@ -149,6 +162,81 @@ export default function NpcRollPicker({
     onClose();
   };
 
+
+  // Everything below the popover's header: the sheet on the compact layout
+  // draws the same under its own.
+  const body = (
+    <>
+      {/* Roll Mode Selector (d20 systems only) */}
+      {hasAdvantage && hasAnyRolls && (
+        <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
+          <div className="text-xs text-warm-gray mb-1">Roll mode</div>
+          <div className="relative">
+            <button
+              onClick={() => setModeOpen((o) => !o)}
+              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors${compact ? ' min-h-11' : ''}`}
+            >
+              <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
+                {modeLabels[mode]}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-warm-gray" />
+            </button>
+            {modeOpen && (
+              <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
+                {ROLL_MODES.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => { setMode(m); setModeOpen(false); }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg${compact ? ' min-h-11' : ''} ${
+                      mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
+                    }`}
+                  >
+                    {modeLabels[m]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className={`flex-1 min-h-0 overflow-y-auto${compact ? ' overscroll-contain' : ''}`}>
+        {!hasAnyRolls && (
+          <div className="px-3 py-4 text-sm text-warm-gray text-center">
+            No stat block on this token.
+            <br />
+            <span className="text-xs">Add one via Edit Token, or use a custom roll below.</span>
+          </div>
+        )}
+
+        {hasAnyRolls && (
+          <div className="divide-y divide-moss-green/10">
+            <Section title="Abilities"     rolls={rolls.abilities}    onRoll={handleRollOption} compact={compact} />
+            <Section title="Saving Throws" rolls={rolls.savingThrows} onRoll={handleRollOption} compact={compact} />
+            <Section title="Skills"        rolls={rolls.skills}       onRoll={handleRollOption} compact={compact} />
+            <Section title="Combat"        rolls={rolls.combat}       onRoll={handleRollOption} compact={compact} />
+            {/* Always empty for a creature — a stat block has no pool to spend —
+                but listed so the two pickers show the same categories. */}
+            <Section title="Hit Dice"      rolls={rolls.hitDice}      onRoll={handleRollOption} compact={compact} />
+          </div>
+        )}
+      </div>
+
+      <CustomRollFooter
+        compact={compact}
+        onRoll={(expression, purpose) => { onRoll(expression, purpose, tokenPublicName(token)); onClose(); }}
+      />
+    </>
+  );
+
+  if (compact) {
+    return (
+      <BottomSheet open title={`Roll for ${token.name}`} height="full" onClose={onClose}>
+        <div className="flex h-full min-h-0 flex-col">{body}</div>
+      </BottomSheet>
+    );
+  }
 
   return (
     <FloatingLayer>
@@ -177,65 +265,7 @@ export default function NpcRollPicker({
           </button>
         </div>
 
-        {/* Roll Mode Selector (d20 systems only) */}
-        {hasAdvantage && hasAnyRolls && (
-          <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
-            <div className="text-xs text-warm-gray mb-1">Roll mode</div>
-            <div className="relative">
-              <button
-                onClick={() => setModeOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
-              >
-                <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
-                  {modeLabels[mode]}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-warm-gray" />
-              </button>
-              {modeOpen && (
-                <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
-                  {ROLL_MODES.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => { setMode(m); setModeOpen(false); }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                        mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
-                      }`}
-                    >
-                      {modeLabels[m]}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {!hasAnyRolls && (
-            <div className="px-3 py-4 text-sm text-warm-gray text-center">
-              No stat block on this token.
-              <br />
-              <span className="text-xs">Add one via Edit Token, or use a custom roll below.</span>
-            </div>
-          )}
-
-          {hasAnyRolls && (
-            <div className="divide-y divide-moss-green/10">
-              <Section title="Abilities"     rolls={rolls.abilities}    onRoll={handleRollOption} />
-              <Section title="Saving Throws" rolls={rolls.savingThrows} onRoll={handleRollOption} />
-              <Section title="Skills"        rolls={rolls.skills}       onRoll={handleRollOption} />
-              <Section title="Combat"        rolls={rolls.combat}       onRoll={handleRollOption} />
-              {/* Always empty for a creature — a stat block has no pool to spend —
-                  but listed so the two pickers show the same categories. */}
-              <Section title="Hit Dice"      rolls={rolls.hitDice}      onRoll={handleRollOption} />
-            </div>
-          )}
-        </div>
-
-        <CustomRollFooter
-          onRoll={(expression, purpose) => { onRoll(expression, purpose, tokenPublicName(token)); onClose(); }}
-        />
+        {body}
       </div>
     </FloatingLayer>
   );
