@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MENU_ROW_CLASSES, commandLook, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
 import FloatingLayer from '@/components/ui/FloatingLayer';
-import { menuOpened } from '@/components/ui/openMenus';
+import { menuOpened, menuShown } from '@/components/ui/openMenus';
 
 interface CharacterContextMenuProps {
   x: number;
@@ -47,10 +47,14 @@ export default function CharacterContextMenu({
   // Its opening closes the map's token or door menu, which a right-click or a
   // long-press here, sending no click, would leave open beside it. A menu
   // with no items is not drawn and closes nothing. Each opening mounts a new
-  // menu: the roster and the tracker key it by opening.
+  // menu: the roster and the tracker key it by opening. While it is drawn it
+  // is a menu on the screen, so the tap on the map that closes it is not the
+  // first of a double tap to ping.
   const drawn = items.length > 0;
   useEffect(() => {
-    if (drawn) menuOpened();
+    if (!drawn) return;
+    menuOpened();
+    return menuShown();
   }, [drawn]);
 
   // Once placed, and so visible: a hidden button cannot take the cursor.

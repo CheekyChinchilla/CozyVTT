@@ -10,10 +10,13 @@
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { useEffect, useState } from 'react';
 import { render, screen, fireEvent, act, createEvent, within } from '@testing-library/react';
+import { FileText } from 'lucide-react';
 import { TokenLayer, TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
+import { menuShown } from '@/components/ui/openMenus';
 import { recordDrawing, nextFrame, pictures } from '@/test/recordingCanvas';
 
 const h = vi.hoisted(() => {
@@ -100,6 +103,9 @@ vi.mock('@/contexts/WebSocketContext', async () => {
     emitTokenMove: record('token.move'),
     emitTokenMoveEnd: record('token.move.end'),
     emitMapPing: record('map.ping'),
+    // Drawings are sent with an acknowledgement, which these give at once.
+    addDrawing: (payload: unknown) => { h.sent.push(['drawing:add', payload]); return Promise.resolve({ ok: true, id: 'drawing-1' }); },
+    removeDrawing: (payload: unknown) => { h.sent.push(['drawing:remove', payload]); return Promise.resolve({ ok: true }); },
   } as Record<string, unknown>, {
     get(target, prop: string) {
       if (prop in target) return target[prop];
@@ -128,6 +134,7 @@ vi.mock('@/services/api', () => {
 });
 
 import MapCanvas from '../MapCanvas';
+import CharacterContextMenu from '../CharacterContextMenu';
 import { useGameStore } from '@/stores/gameStore';
 
 const seg = (id: string, x1: number, y1: number, x2: number, y2: number, type: WallSegment['type'] = 'wall'): WallSegment =>
@@ -1239,6 +1246,463 @@ describe('the Ping button', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
     expect(sentOf('map.ping')).toEqual([]);
+  });
+});
+
+// Two quick taps on one spot of empty ground ping it, as the Ping button and
+// a tap do, while no tool is up. The first tap still does what a tap does,
+// and a tap that did something else starts the count again.
+describe('a double tap', () => {
+  const goblin = () => token('tok-goblin', 'Goblin', 0, 19);
+  const pings = () => sentOf('map.ping');
+  /** Open Draw from the toolbar and choose a tool from its panel. */
+  function draw(tool: string) {
+    if (!screen.queryByRole('region', { name: 'Drawing tools' })) fireEvent.click(screen.getByRole('button', { name: 'Draw' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Drawing tools' })).getByRole('button', { name: tool }));
+  }
+  const fogState = { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) };
+
+  it('on empty ground pings once, at the map pixel of the second tap, and clears the selection as a tap does', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    act(() => { useGameStore.getState().selectToken('tok-goblin'); });
+
+    tap(1, px(500, 500));
+    expect(pings()).toEqual([]);
+    tap(2, px(506, 508));
+
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 506, y: 508 }]);
+    expect(useGameStore.getState().selectedTokenId).toBeNull();
+  });
+
+  it('pings for a second tap up to 500 ms after the first, and none for one 501 ms after', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      render(<MapCanvas />);
+      const start = Date.now();
+      const tapAt = (id: number, ms: number) => {
+        vi.setSystemTime(start + ms);
+        tap(id, px(500, 500));
+      };
+
+      tapAt(1, 0);
+      tapAt(2, 499);
+      expect(pings()).toHaveLength(1);
+      tapAt(3, 2000);
+      tapAt(4, 2501);
+      expect(pings()).toHaveLength(1);
+      tapAt(5, 4000);
+      tapAt(6, 4500);
+      expect(pings()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('pings for a second tap up to 20 pixels from the first, and none for one 21 pixels away', () => {
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    tap(2, px(520, 500));
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 520, y: 500 }]);
+    tap(3, px(300, 300));
+    tap(4, px(321, 300));
+    expect(pings()).toHaveLength(1);
+  });
+
+  it('pings once for three taps, and twice for four', () => {
+    render(<MapCanvas />);
+
+    for (const id of [1, 2, 3]) tap(id, px(500, 500));
+    expect(pings()).toHaveLength(1);
+    tap(4, px(500, 500));
+    expect(pings()).toHaveLength(2);
+  });
+
+  it('pings for a spectator', () => {
+    h.set({ userRole: 'SPECTATOR' });
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    tap(2, px(500, 500));
+
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
+  });
+
+  it("pings nothing beside the map's picture", () => {
+    render(<MapCanvas />);
+
+    tap(1, px(1010, 400));
+    tap(2, px(1010, 400));
+
+    expect(pings()).toEqual([]);
+  });
+
+  // The tool takes the tap, or passes it to the map while it has nothing to
+  // do there: the ruler of a player with no token, the fog box before the
+  // fog has arrived, the light tool's Select on empty ground.
+  it.each<[string, () => void, Partial<CampaignMap>?]>([
+    ['the wall tool', () => wallTool('Wall draw mode')],
+    ['a fog box', () => {
+      fire('fog:updated', { mapId: 'map-a', fogState });
+      fireEvent.click(screen.getByText('Fog of War'));
+      fireEvent.click(screen.getByLabelText('Fog reveal box'));
+    }, { fogEnabled: true }],
+    ['a fog box chosen before the fog has arrived', () => {
+      fireEvent.click(screen.getByText('Fog of War'));
+      fireEvent.click(screen.getByLabelText('Fog reveal box'));
+    }, { fogEnabled: true }],
+    ["the light tool's Select", () => {
+      fireEvent.click(screen.getByText('Lights'));
+      fireEvent.click(screen.getByText('Select'));
+    }],
+    ['the pen', () => draw('Pen')],
+    ['the eraser', () => draw('Eraser')],
+    ['the laser pointer', () => draw('Laser pointer')],
+    ["the DM's ruler", () => fireEvent.click(screen.getByTitle('Ruler — measure distance'))],
+    ['the AoE template', () => fireEvent.click(screen.getByTitle('AoE Shape — area of effect overlay'))],
+  ])('pings nothing with %s up', (_tool, choose, map = {}) => {
+    h.set({ currentMap: mapWith(map) });
+    render(<MapCanvas />);
+    choose();
+
+    tap(1, px(500, 500));
+    tap(2, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it('pings nothing with the ruler of a player who has no token on the map', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    fireEvent.click(screen.getByTitle('Ruler — measure distance'));
+
+    tap(1, px(500, 500));
+    tap(2, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it('with the Ping armed, pings once for two taps on empty ground: the armed ping', () => {
+    render(<MapCanvas />);
+    fireEvent.click(screen.getByRole('button', { name: /^Ping/ }));
+
+    tap(1, px(500, 500));
+    tap(2, px(500, 500));
+
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
+  });
+
+  it("pings nothing for a mouse's double-click", () => {
+    render(<MapCanvas />);
+
+    for (let i = 0; i < 2; i++) {
+      mouse.down(surface(), px(500, 500));
+      mouse.up(surface(), px(500, 500));
+    }
+
+    expect(pings()).toEqual([]);
+  });
+
+  it("pings once for a pen's two taps", () => {
+    render(<MapCanvas />);
+    const pen = contact('pen', 5);
+
+    for (let i = 0; i < 2; i++) {
+      pen.down(surface(), px(500, 500));
+      pen.up(surface(), px(500, 500));
+    }
+
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
+  });
+
+  it("pings nothing for a pen's tap and then its drag", () => {
+    render(<MapCanvas />);
+    const pen = contact('pen', 5);
+
+    pen.down(surface(), px(500, 500));
+    pen.up(surface(), px(500, 500));
+    pen.down(surface(), px(500, 500));
+    pen.move(surface(), px(515, 500));
+    pen.move(surface(), px(530, 500));
+    pen.up(surface(), px(530, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it('pings nothing on a creature a player may not move, which stays selected', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(goblin());
+
+    tap(1, square(0, 19));
+    tap(2, square(0, 19));
+
+    expect(pings()).toEqual([]);
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-goblin');
+  });
+
+  it.each([
+    ['a player, on their own token', 'PLAYER', () => token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' })],
+    ['the DM, on a creature', 'DM', () => token('tok-goblin', 'Goblin', 0, 19)],
+  ] as const)('picks the token up and puts it back for %s, and pings nothing', (_who, userRole, which) => {
+    h.set({ userRole });
+    render(<MapCanvas />);
+    show(which());
+
+    tap(1, square(0, 19));
+    tap(2, square(0, 19));
+
+    const sent = h.sent.map(([event]) => event).filter((event) => event.startsWith('token.move') || event === 'map.ping');
+    expect(sent).toEqual(['token.move.start', 'token.move.end']);
+  });
+
+  it('pings nothing for a door opened and closed by two taps', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [seg('d1', 100, 100, 200, 100, 'door-closed')] }) });
+    render(<MapCanvas />);
+
+    tap(1, px(150, 104));
+    tap(2, px(150, 104));
+
+    expect(sentOf('wall:update')).toEqual([
+      expect.objectContaining({ segment: expect.objectContaining({ id: 'd1', type: 'door-open' }) }),
+      expect.objectContaining({ segment: expect.objectContaining({ id: 'd1', type: 'door-closed' }) }),
+    ]);
+    expect(pings()).toEqual([]);
+  });
+
+  // The token goes down on square 10 of its row; the next tap, 4 pixels on,
+  // lands on square 11, which is empty.
+  it('does not count the tap that puts a held token down', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+
+    tap(2, px(548, 500));
+    tap(3, px(552, 500));
+
+    expect(sentOf('token.move.end')).toEqual([expect.objectContaining({ tokenId: 'tok-goblin', x: 10, y: 9 })]);
+    expect(pings()).toEqual([]);
+  });
+
+  it('pings nothing for two taps with a drag of one finger between them', () => {
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    swipe(2, px(500, 500), px(530, 500), px(560, 500));
+    tap(3, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it('pings nothing for two taps with a pinch between them', () => {
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    const a = contact('touch', 2);
+    const b = contact('touch', 3, false);
+    a.down(surface(), px(450, 500));
+    b.down(surface(), px(550, 500));
+    a.move(surface(), px(440, 500));
+    b.move(surface(), px(560, 500));
+    a.up(surface(), px(440, 500));
+    b.up(surface(), px(560, 500));
+    tap(4, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it("pings only by the long-press made between two taps", () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      render(<MapCanvas />);
+
+      tap(1, px(500, 500));
+      const finger = contact('touch', 2);
+      finger.down(surface(), px(500, 500));
+      act(() => { vi.advanceTimersByTime(500); });
+      finger.up(surface(), px(500, 500));
+      finger.leave(surface());
+      tap(3, px(500, 500));
+
+      expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('pings nothing for two taps with the map changed between them', () => {
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    act(() => { h.set({ currentMap: { ...mapWith(), id: 'map-b', name: 'Map B' } as unknown as CampaignMap }); });
+    tap(2, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it('pings nothing for two taps with the window losing focus between them', () => {
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    act(() => { window.dispatchEvent(new Event('blur')); });
+    tap(2, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  // The browser follows a tap with a mousedown and a click, which close the
+  // menus; the long-press swallowed the ones its own lift brought.
+  it('does not count the tap that closes the menu a long-press opened', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      render(<MapCanvas />);
+      show(goblin());
+      const finger = contact('touch', 1);
+      finger.down(surface(), square(0, 19));
+      act(() => { vi.advanceTimersByTime(500); });
+      finger.up(surface(), square(0, 19));
+      finger.leave(surface());
+      expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+
+      tap(2, px(500, 500));
+      fireEvent.mouseDown(surface(), { detail: 1 });
+      fireEvent.click(surface(), { detail: 1 });
+      expect(screen.queryByText('Remove from Map')).toBeNull();
+      tap(3, px(500, 500));
+      expect(pings()).toEqual([]);
+      tap(4, px(500, 500));
+      expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A tap that may not ping starts the count again, so the tap after it is a
+  // first tap however close it lands.
+  it('starts the count again at a tap on a creature between two taps on the ground', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(goblin());
+
+    tap(1, px(55, 25));
+    tap(2, px(45, 25));
+    expect(useGameStore.getState().selectedTokenId).toBe('tok-goblin');
+    tap(3, px(55, 25));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it('starts the count again at a mouse click between two taps', () => {
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    mouse.down(surface(), px(500, 500));
+    mouse.up(surface(), px(500, 500));
+    tap(2, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it('starts the count again when the browser takes a finger between two taps', () => {
+    render(<MapCanvas />);
+
+    tap(1, px(500, 500));
+    const finger = contact('touch', 2);
+    finger.down(surface(), px(500, 500));
+    finger.cancel(surface());
+    tap(3, px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  it("starts the count again when the browser takes a pen's press between two of its taps", () => {
+    render(<MapCanvas />);
+    const pen = contact('pen', 5);
+
+    pen.down(surface(), px(500, 500));
+    pen.up(surface(), px(500, 500));
+    pen.down(surface(), px(500, 500));
+    pen.cancel(surface());
+    pen.down(surface(), px(500, 500));
+    pen.up(surface(), px(500, 500));
+
+    expect(pings()).toEqual([]);
+  });
+
+  // The browser may cancel a hand resting beside a stylus, as it rejects a
+  // palm; the stylus's taps are its own. Here a palm is cancelled during
+  // each of the pen's two taps.
+  it("keeps a pen's double tap when the browser cancels a palm resting beside it", () => {
+    render(<MapCanvas />);
+    const pen = contact('pen', 5);
+    const penTapWithPalm = (palmId: number) => {
+      const palm = contact('touch', palmId, false);
+      palm.down(surface(), px(800, 800));
+      pen.down(surface(), px(500, 500));
+      palm.cancel(surface());
+      pen.up(surface(), px(500, 500));
+    };
+
+    penTapWithPalm(9);
+    penTapWithPalm(10);
+
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
+  });
+
+  // A menu may close on the press itself, in the capture phase, as a sheet's
+  // roll menu does; in a browser it can be gone before the map hears the
+  // press. This one says it has gone within the press, the earliest it could.
+  it('does not count the tap that closes a menu on its pointerdown', () => {
+    function PressClosedMenu() {
+      const [open, setOpen] = useState(true);
+      useEffect(() => {
+        if (!open) return;
+        const gone = menuShown();
+        const close = () => {
+          gone();
+          setOpen(false);
+        };
+        document.addEventListener('pointerdown', close, true);
+        return () => {
+          document.removeEventListener('pointerdown', close, true);
+          gone();
+        };
+      }, [open]);
+      return open ? <div>Closed by a press</div> : null;
+    }
+    render(<><MapCanvas /><PressClosedMenu /></>);
+
+    tap(1, px(500, 500));
+    expect(screen.queryByText('Closed by a press')).toBeNull();
+    tap(2, px(500, 500));
+    expect(pings()).toEqual([]);
+    tap(3, px(500, 500));
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
+  });
+
+  it("does not count the tap that closes the roster's menu", () => {
+    function RosterMenu() {
+      const [open, setOpen] = useState(true);
+      if (!open) return null;
+      return (
+        <CharacterContextMenu
+          x={10}
+          y={10}
+          onClose={() => setOpen(false)}
+          items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: () => undefined }]}
+        />
+      );
+    }
+    render(<><MapCanvas /><RosterMenu /></>);
+
+    tap(1, px(500, 500));
+    fireEvent.mouseDown(surface(), { detail: 1 });
+    expect(screen.queryByText('View Character Sheet')).toBeNull();
+    tap(2, px(500, 500));
+    expect(pings()).toEqual([]);
+    tap(3, px(500, 500));
+    expect(pings()).toEqual([{ mapId: 'map-a', x: 500, y: 500 }]);
   });
 });
 

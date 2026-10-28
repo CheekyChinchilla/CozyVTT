@@ -24,6 +24,7 @@ import { resolveCharacterInitiative } from '@/utils/rules/initiative';
 import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 import CustomRollFooter from './CustomRollFooter';
 import FloatingLayer from '@/components/ui/FloatingLayer';
+import { menuShown } from '@/components/ui/openMenus';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,6 +161,10 @@ export default function CharacterRollPicker({
     const y = anchorY + rect.height > vh ? Math.max(0, anchorY - rect.height) : anchorY;
     setPos({ x, y });
   }, [rolls, anchorX, anchorY]);
+
+  // A menu on the screen while it is open, so the tap on the map that
+  // closes it is not the first of a double tap to ping.
+  useEffect(() => menuShown(), []);
 
   // Close on click outside
   useEffect(() => {
