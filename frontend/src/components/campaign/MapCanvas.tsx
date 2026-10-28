@@ -131,6 +131,8 @@ import MapMenuRows from '@/components/campaign/MapMenuRows';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
+import FloatingLayer from '@/components/ui/FloatingLayer';
+import { whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
@@ -657,6 +659,16 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     setFollowedTokenId(null);
     setPingArmed(false);
   }, [currentMap?.id]);
+  // The token and door menus, and the Roll... pickers the token menu opens,
+  // close when the map changes. Each holds the token or the door it was
+  // opened on and acts on the map on screen, so it would send the old map's
+  // token or door with the new map's id.
+  useEffect(() => {
+    closeTokenMenu();
+    setDoorContextMenu(null);
+    setRollPicker(null);
+    setNpcRollPicker(null);
+  }, [currentMap?.id, closeTokenMenu]);
   /**
    * Let go of a held token this page has been told is gone from the map it
    * was picked up on, sending nothing, since there is nothing left to put
@@ -3401,6 +3413,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return () => window.removeEventListener('click', handleClick);
   }, [doorContextMenu]);
 
+  // A menu opened elsewhere, the roster's or the tracker's, closes these: the
+  // right-click or long-press that opened it sent no click.
+  const mapMenuOpen = contextMenu !== null || doorContextMenu !== null;
+  useEffect(() => {
+    if (!mapMenuOpen) return;
+    return whenMenuOpens(() => {
+      closeTokenMenu();
+      setDoorContextMenu(null);
+    });
+  }, [mapMenuOpen, closeTokenMenu]);
+
   // After context menu renders, adjust position so it doesn't overflow the
   // viewport; again when Move to Map… opens or closes, which changes its
   // height. On a touch screen its height is capped at the viewport's (the
@@ -4290,27 +4313,32 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           max-content is the *widest* label instead of the total.
 
           `max-w` is now only a guard against one very long label (a map name
-          in the Move to Map submenu), not the thing doing the sizing. */}
+          in the Move to Map submenu), not the thing doing the sizing.
+
+          Drawn on the body (FloatingLayer), where the panel divider beside
+          the map cannot take a press on an item that lies over it. */}
       {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
-          style={{
-            left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
-            top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
-            visibility: contextMenuPos ? 'visible' : 'hidden',
-          }}
-          onClick={(e) => e.stopPropagation()}
-          // A held Enter that opened the menu must not press its first item.
-          onKeyDown={(e) => { if (e.key === 'Enter' && e.repeat) e.preventDefault(); }}
-        >
-          <MapMenuRows
-            items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
-            onClose={closeTokenMenu}
-            openSubmenu={tokenMenuSubmenu}
-            onToggleSubmenu={(id) => setTokenMenuSubmenu((open) => (open === id ? null : id))}
-          />
-        </div>
+        <FloatingLayer>
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
+            style={{
+              left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
+              top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
+              visibility: contextMenuPos ? 'visible' : 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+            // A held Enter that opened the menu must not press its first item.
+            onKeyDown={(e) => { if (e.key === 'Enter' && e.repeat) e.preventDefault(); }}
+          >
+            <MapMenuRows
+              items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
+              onClose={closeTokenMenu}
+              openSubmenu={tokenMenuSubmenu}
+              onToggleSubmenu={(id) => setTokenMenuSubmenu((open) => (open === id ? null : id))}
+            />
+          </div>
+        </FloatingLayer>
       )}
 
       <RemoveTokenDialog
@@ -4392,20 +4420,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
       {/* Door Context Menu — right-click on a door segment, its items from
           map/doorMenuItems.ts. Same flex-column sizing as the token menu
-          above; see the note there.
+          above, and drawn on the body as it is; see the note there.
           TODO(play): placed at the pointer and never moved, so near the right or bottom edge of the
           screen it runs off it; place it as the token menu is placed, flipped to stay on screen. */}
       {doorContextMenu && (
-        <div
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
-          style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MapMenuRows
-            items={doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } })}
-            onClose={() => setDoorContextMenu(null)}
-          />
-        </div>
+        <FloatingLayer>
+          <div
+            className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
+            style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MapMenuRows
+              items={doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } })}
+              onClose={() => setDoorContextMenu(null)}
+            />
+          </div>
+        </FloatingLayer>
       )}
 
       {/* Toast notifications (locked door, a square already occupied).

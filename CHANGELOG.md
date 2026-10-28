@@ -130,6 +130,12 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **On a screen narrower than 1,024 pixels, the Creature Library's and Token Templates' forms open in place of the list.** **Create Custom**, **New Template** and **Edit** opened their form under the list, which on a phone left the list next to no room and the form scrolling in a box of its own. On a phone, most tablets held upright and a window narrower than 1,024 pixels, the form now takes the list's place, with **Back to the list** at its top; **Back to the list**, **Cancel** or saving returns to the list. On a wider screen the form opens under the list as before. See [Creating Custom Creatures](docs/DM_GUIDE.md#creating-custom-creatures).
 
+- **A tap on a menu over a divider between the page's columns works.** On a phone or a tablet, a tap on an item of a token's, a door's or a character's menu, or of a **Roll...** picker, did nothing where the item lay over the strip around a divider that takes a finger's drag: the strip took the tap as the start of a drag. The strip was 20 pixels wide in 1.5.4 and is 44 in this release. A menu or a picker now takes every tap on it.
+
+- **A token's or a door's menu closes when a character's menu opens.** A right-click on a character in the **Campaign Roster** or on a combatant in the initiative tracker, or a press and hold on one, opened its menu and left the map's token or door menu open beside it. Opening a character's menu now closes the map's.
+
+- **A token's or a door's menu, and a Roll... picker opened from a token's menu, close when the map changes.** One left open while the DM switched maps stayed open over the new map and still acted on the old map's token or door, **Roll Initiative** included. They now close as the map changes.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3

@@ -14,10 +14,12 @@
  * square is 50 pixels.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { TokenLayer, TokenType, type CampaignMap, type Token } from '@/types';
+import { CampaignRole, TokenLayer, TokenType, type CampaignMap, type RosterMember, type Token } from '@/types';
 import type { WallSegment } from '@/types/walls';
+import { contact, mouse } from '@/test/pointer';
+import { openCharacterMenu } from '@/test/characterMenuRows';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -50,6 +52,7 @@ const h = vi.hoisted(() => {
       saveTokenAsTemplate: vi.fn(),
       moveTokens: vi.fn(),
       deleteToken: vi.fn(),
+      getCampaignCharacters: vi.fn(),
     } as Record<string, ReturnType<typeof vi.fn>>,
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => version,
@@ -102,6 +105,7 @@ vi.mock('@/contexts/WebSocketContext', async () => {
     emitTokenMove: record('token.move'),
     emitTokenMoveEnd: record('token.move.end'),
     emitInitiativeAdd: record('initiative.add'),
+    emitInitiativeRoll: record('initiative.roll'),
     emitMapPing: record('map.ping'),
   } as Record<string, unknown>, {
     get(target, prop: string) {
@@ -133,6 +137,7 @@ vi.mock('@/services/api', () => {
 });
 
 import MapCanvas from '../MapCanvas';
+import CampaignRoster from '../CampaignRoster';
 import { useGameStore } from '@/stores/gameStore';
 
 function mapNamed(id: string, extra: Partial<CampaignMap> = {}): CampaignMap {
@@ -891,5 +896,146 @@ describe('the door menu', () => {
     fireEvent.click(document.body);
 
     expect(openMenu()).toBeNull();
+  });
+});
+
+// The page draws the map in a column of its panel group, and the panel
+// library takes a press in a divider's strip whenever the pressed element is
+// inside the group ([data-group]), whatever is drawn over the divider. A menu
+// that ran over the divider beside the map lost the presses on its items.
+describe('where the menus are drawn', () => {
+  it('draws the token menu on the body, outside the panel group', () => {
+    render(<div data-group><MapCanvas /></div>);
+    show(goblin());
+    rightClick(0, 19);
+
+    expect(theMenu().closest('[data-group]')).toBeNull();
+    expect(theMenu().parentElement).toBe(document.body);
+  });
+
+  it('draws the door menu on the body, outside the panel group', () => {
+    h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'd1', x1: 100, y1: 100, x2: 200, y2: 100, type: 'door-closed' }] }) });
+    render(<div data-group><MapCanvas /></div>);
+    fireEvent.contextMenu(surface(), { clientX: 150, clientY: 104 });
+
+    expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
+    expect(theMenu().closest('[data-group]')).toBeNull();
+    expect(theMenu().parentElement).toBe(document.body);
+  });
+});
+
+// A right-click or a long-press sends no click, so the click in the window
+// that closes the map's menus never came when one opened a menu elsewhere.
+describe('when a menu opens beside the map', () => {
+  const alice: RosterMember = {
+    userId: 'alice', userName: 'Alice', userAvatar: null, role: CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z',
+    characters: [{ id: 'char-alice', name: 'Brannoc', tokenImageUrl: null, gameSystem: null, userId: 'alice', hp: { current: 7, max: 10, temp: 0 } }],
+  };
+  const point = { clientX: 40, clientY: 60 };
+
+  beforeEach(() => {
+    h.api.getCampaignCharacters.mockReset().mockResolvedValue({ roster: [alice] });
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("closes the token menu as a right-click opens a roster character's menu", async () => {
+    render(<><MapCanvas /><CampaignRoster /></>);
+    show(goblin());
+    const row = await screen.findByText('Brannoc');
+    rightClick(0, 19);
+    expect(openMenu()).not.toBeNull();
+
+    // A right-click as a browser sends it: the press, its release and the context menu.
+    mouse.down(row, point, 2);
+    fireEvent.mouseDown(row, { ...point, button: 2 });
+    mouse.up(row, point, 2);
+    fireEvent.mouseUp(row, { ...point, button: 2 });
+    fireEvent.contextMenu(row, point);
+
+    expect(openCharacterMenu()).not.toBeNull();
+    expect(openMenu()).toBeNull();
+  });
+
+  it("closes the door menu as a long-press opens a roster character's menu", async () => {
+    h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'd1', x1: 100, y1: 100, x2: 200, y2: 100, type: 'door-closed' }] }) });
+    render(<><MapCanvas /><CampaignRoster /></>);
+    const row = await screen.findByText('Brannoc');
+    fireEvent.contextMenu(surface(), { clientX: 150, clientY: 104 });
+    expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finger = contact('touch', 1);
+    finger.down(row, point);
+    act(() => { vi.advanceTimersByTime(500); });
+    finger.up(row, point);
+
+    expect(openCharacterMenu()).not.toBeNull();
+    expect(openMenu()).toBeNull();
+  });
+});
+
+// The menu holds the token or the door it was opened on, and its items act
+// on the map on screen: after a switch they would send the old map's token
+// with the new map's id.
+describe('when the map on screen changes', () => {
+  it('closes the token menu', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    rightClick(0, 19);
+    expect(openMenu()).not.toBeNull();
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+
+    expect(openMenu()).toBeNull();
+  });
+
+  it('closes the door menu', () => {
+    h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'd1', x1: 100, y1: 100, x2: 200, y2: 100, type: 'door-closed' }] }) });
+    render(<MapCanvas />);
+    fireEvent.contextMenu(surface(), { clientX: 150, clientY: 104 });
+    expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+
+    expect(openMenu()).toBeNull();
+  });
+
+  // Its Roll Initiative would send the old map's token with the new map's id.
+  it("closes a character's Roll... picker opened from the token menu, and nothing is sent", async () => {
+    h.api.getCharacter.mockReset().mockResolvedValue({ character: { id: 'char-alice', name: 'Brannoc', gameSystem: 'DND_5E', data: {} } });
+    render(<MapCanvas />);
+    show(hero('char-alice', 'alice'));
+    act(() => {
+      useGameStore.getState().setCombatState({
+        active: false, round: 0, currentTokenId: null,
+        combatants: [{ tokenId: 'tok-hero', mapId: 'map-a', name: 'Hero', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null }],
+      });
+    });
+    rightClick(2, 19);
+    await choose('Roll...');
+    expect(await screen.findByRole('button', { name: /Roll Initiative/ })).toBeInTheDocument();
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+
+    expect(screen.queryByRole('button', { name: /Roll Initiative/ })).toBeNull();
+    expect(screen.queryByText(/^Roll for /)).toBeNull();
+    expect(sentOf('initiative.roll')).toEqual([]);
+  });
+
+  // It draws nothing while its token is off the map on screen, and came back
+  // with the token on a return to the map.
+  it("closes a creature's Roll... picker opened from the token menu, so a return to the map does not bring it back", async () => {
+    render(<MapCanvas />);
+    show(goblin());
+    rightClick(0, 19);
+    await choose('Roll...');
+    expect(screen.getByText('Roll for Goblin Scout')).toBeInTheDocument();
+
+    act(() => { h.set({ currentMap: mapNamed('map-b') }); });
+    show();
+    act(() => { h.set({ currentMap: mapNamed('map-a') }); });
+    show(goblin());
+
+    expect(screen.queryByText('Roll for Goblin Scout')).toBeNull();
   });
 });

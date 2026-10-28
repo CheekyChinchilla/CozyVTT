@@ -14,7 +14,7 @@ import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
 import { Pathfinder2eCharacterView } from '../pathfinder2e/Pathfinder2eCharacterView';
 import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
 import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { placeRollPopup } from '../SheetRollPopup';
+import { placeRollPopup, SheetRollPopup } from '../SheetRollPopup';
 import CharacterSheetViewerModal from '../../character/CharacterSheetViewerModal';
 
 const rollDice = vi.fn().mockResolvedValue({ ok: true, id: 'r' });
@@ -191,5 +191,22 @@ describe('where it opens', () => {
     fireEvent.contextMenu(screen.getByText('dexterity'), at(40, 40));
 
     for (const item of screen.getAllByRole('menuitem')) expect(item.className.split(/\s+/)).toContain('pointer-coarse:min-h-11');
+  });
+});
+
+// The panel library takes a press in a divider's strip whenever the pressed
+// element is inside its group ([data-group]), so this menu is drawn on the
+// body, as the map's, the roster's and the tracker's are.
+describe('where it is drawn', () => {
+  it('is on the body, outside the panel group it is opened from', () => {
+    render(
+      <div data-group>
+        <SheetRollPopup at={at(40, 40)} expression="1d20+2" purpose="Stealth Check" gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} />
+      </div>,
+    );
+
+    const popup = screen.getByRole('menu', { name: 'Stealth Check' });
+    expect(popup.closest('[data-group]')).toBeNull();
+    expect(popup.parentElement).toBe(document.body);
   });
 });

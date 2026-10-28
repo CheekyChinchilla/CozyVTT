@@ -450,7 +450,12 @@ function CampaignPageContent() {
       <main className={`relative flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
         {/* The dividers are 6 pixels wide; the library takes a drag over a
             wider strip than it draws. 44 pixels where the primary pointer
-            is coarse is the size a finger needs; a mouse keeps its 10. */}
+            is coarse is the size a finger needs; a mouse keeps its 10. It
+            takes a press in the strip on anything inside the group, whatever
+            is drawn over the divider, so the menus and pickers opened in
+            these columns are drawn on the body (components/ui/FloatingLayer.tsx),
+            where being in front keeps their presses. A z-index on <main> or
+            the page's root at or above theirs would undo that. */}
         <Group
           orientation="horizontal"
           className="h-full w-full"
