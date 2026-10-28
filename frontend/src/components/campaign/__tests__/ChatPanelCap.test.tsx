@@ -315,6 +315,8 @@ it('drops a page that lands as a rejoin starts the list again', async () => {
   expect(shown()).toEqual(range('New', 51, 600));
 });
 
+// This one draws over 1,300 messages, which takes about 3.5 s with coverage
+// here and about 2.7 times as long on CI's runner, past the default 5 s.
 it('keeps what a reader scrolled up brought back while people chat, until they are back at the newest', async () => {
   stored = range('Old', 1, 1000).map(said);
   await openPanel();
@@ -346,4 +348,4 @@ it('keeps what a reader scrolled up brought back while people chat, until they a
   scrollLog('top');
   arrive(range('Live', 404, 804));
   expect(shown()).toEqual(range('Live', 5, 804));
-});
+}, 30_000);
