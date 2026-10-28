@@ -265,6 +265,20 @@ Nobody else's secret rolls ever reach you. Not hidden in the page — never sent
 
 One thing to know: if the DM has **paused** the session, your rolls from the **Dice** tab are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh. A roll from your sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
+### Rolling from your sheet
+
+Your character's sheet rolls at the table when you open it on the campaign page, from the **Campaign Roster** for instance. Click an ability, a saving throw, a skill or an attack to roll it, or a weapon's damage to roll that. The roll lands in the **Dice** panel named for what it was, such as "Dexterity Save". A small dice icon beside a stat says it rolls. A sheet opened from the **Characters** page doesn't roll, since there's no table there.
+
+**Advantage and Disadvantage.** Right-click an ability, a saving throw, a skill or an attack for a small menu of **Normal**, **Advantage** and **Disadvantage**, and choose one to roll:
+
+| Choice | What is rolled | The Dice panel says |
+|---|---|---|
+| **Normal** | One d20, as a click rolls it | Dexterity Save |
+| **Advantage** | Two d20s, keeping the higher (`2d20kh1`) | Dexterity Save (Advantage) |
+| **Disadvantage** | Two d20s, keeping the lower (`2d20kl1`) | Dexterity Save (Disadvantage) |
+
+On a Pathfinder 2e sheet the menu reads **Normal**, **Fortune** and **Misfortune**, which roll the same way. Click anywhere else, or press **Esc**, to close the menu; the sheet stays open. Damage and hit dice have no menu, since the rules give advantage to ability checks, saving throws and attack rolls only. A Call of Cthulhu sheet rolls `1d100` and has no menu: its bonus and penalty dice aren't offered yet.
+
 ---
 
 ## Moving Your Token
@@ -311,7 +325,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
-On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus, the close buttons of messages and of the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−1** beside the hit points and **+1** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
+On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus and of a character sheet's roll menu, the close buttons of messages and of the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−1** beside the hit points and **+1** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
 
 ### Two creatures can't stand in the same square
 

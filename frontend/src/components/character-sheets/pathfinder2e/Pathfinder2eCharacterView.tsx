@@ -5,7 +5,7 @@
  * Implements the 5-tier proficiency system, bulk inventory, and PF2e mechanics.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Heart,
   Shield,
@@ -27,7 +27,7 @@ import ProficiencyIndicator, {
 import FeatsList from './components/FeatsList';
 import StrikesList from './components/StrikesList';
 import BulkTracker from './components/BulkTracker';
-import { withAdvantage, withDisadvantage, pf2eLoreName } from '../../../utils/characterRolls';
+import { pf2eLoreName } from '../../../utils/characterRolls';
 import { readFeatureEntries } from '../../../utils/featureEntries';
 import { pf2eInitiativeBonus } from '../../../utils/rules/initiative';
 import {
@@ -49,19 +49,13 @@ import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { readPf2eSpellSlots } from './spellcastingEntries';
 import { headerInk } from '@/utils/themeColor';
+import { useSheetRolls } from '../useSheetRolls';
 
 interface Pathfinder2eCharacterViewProps {
   character: Character;
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
-}
-
-interface RollPopupState {
-  anchorX: number;
-  anchorY: number;
-  expression: string;
-  purpose: string;
 }
 
 /**
@@ -90,30 +84,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
-  const [rollPopup, setRollPopup] = useState<RollPopupState | null>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-
-  // Close popup on outside click
-  useEffect(() => {
-    if (!rollPopup) return;
-    const handler = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        setRollPopup(null);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [rollPopup]);
-
-  const handleRoll = (expression: string, purpose: string) => {
-    if (onRoll) onRoll(expression, purpose);
-    setRollPopup(null);
-  };
-
-  const showRollPopup = (e: React.MouseEvent, expression: string, purpose: string) => {
-    e.preventDefault();
-    setRollPopup({ anchorX: e.clientX, anchorY: e.clientY, expression, purpose });
-  };
+  const { roll: handleRoll, openMenu: showRollPopup, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem);
 
   // Load saved color preference from character data
   useEffect(() => {
@@ -1067,32 +1038,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {renderBio()}
       </div>
 
-      {/* Fortune / Misfortune popup (shown on right-click of any rollable stat) */}
-      {rollPopup && (
-        <div
-          ref={popupRef}
-          className="fixed z-50 bg-paper border border-ink/10 rounded-lg shadow-xl overflow-hidden"
-          style={{ left: rollPopup.anchorX, top: rollPopup.anchorY, minWidth: 180 }}
-        >
-          <div className="px-3 py-2 bg-accent text-accent-text text-xs font-semibold truncate">
-            {rollPopup.purpose}
-          </div>
-          {[
-            { label: 'Normal', expr: rollPopup.expression, suffix: '' },
-            { label: 'Fortune', expr: withAdvantage(rollPopup.expression), suffix: ' (Fortune)' },
-            { label: 'Misfortune', expr: withDisadvantage(rollPopup.expression), suffix: ' (Misfortune)' },
-          ].map(({ label, expr, suffix }) => (
-            <button
-              key={label}
-              onClick={() => handleRoll(expr, rollPopup.purpose + suffix)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-secondary hover:bg-accent/10 transition-colors text-left"
-            >
-              <Dices className="w-3.5 h-3.5 text-accent-ink shrink-0" />
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Fortune / Misfortune, on a right-click of any d20 test */}
+      {rollMenu}
     </div>
   );
 };
