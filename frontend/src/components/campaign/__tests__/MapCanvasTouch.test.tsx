@@ -375,6 +375,33 @@ describe('a held token that leaves the map', () => {
     expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 5, y: 10 }]);
     expect(sentOf('token.move.end')).toEqual([]);
   });
+
+  // The server lets go of a carry only when the connection drops, so a map
+  // taken off the page while the connection stays would leave the token
+  // drawn where it was last carried, on every other screen.
+  it('goes back where it was picked up when the map is taken off the page, and nothing is put down', () => {
+    const { unmount } = render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    const pen = contact('pen', 5);
+    pen.down(surface(), square(0, 19));
+    pen.up(surface(), square(0, 19));
+    pen.move(surface(), square(3, 19), { buttons: 0 });
+    expect(sentOf('token.move.start')).toHaveLength(1);
+
+    unmount();
+
+    expect(sentOf('token.move').slice(-1)).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+
+  it('sends nothing when the map is taken off the page with nothing held', () => {
+    const { unmount } = render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+
+    unmount();
+
+    expect(sentOf('token.move')).toEqual([]);
+  });
 });
 
 describe('a finger carrying a token', () => {
