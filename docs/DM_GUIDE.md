@@ -689,7 +689,23 @@ dashboard. Deleting a campaign does the same for everyone at its table, with
 the campaign: it stays theirs, but you and the other players can no longer open
 or edit its sheet, and nothing they change on it reaches your table except its
 picture. A token on the map that was bound to one of those characters stays
-where it is, still shows the character's picture, and follows it if they change it.
+where it is, and follows the character's picture if they change it. Whether
+someone at your table can see that picture depends on which campaign the
+character was in when the picture was saved:
+
+- **Your campaign:** the picture is in your campaign's library, and everyone at
+  your table goes on seeing it.
+- **No campaign:** it is the player's own file, which someone at your table can
+  see only while they share a campaign with the player.
+- **Another campaign:** it is that campaign's file, which someone at your table
+  can see only while they share a campaign with the player, or are in that
+  other campaign themselves.
+
+So once the player is out, the token shows its placeholder on every screen that
+can no longer see its picture. A picture they choose after they are out is
+saved the same way, as their own file while the character is in no campaign or
+as the other campaign's file while it is in one, so your table cannot see it
+either, apart from the cases above.
 
 **Their personal notes and saved rolls stay theirs.** Nothing they wrote in the
 **Notes** tab or saved under **Saved** is deleted. They can still read it, and
