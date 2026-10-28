@@ -95,6 +95,18 @@ const SOURCES = import.meta.glob(['/src/**/*.tsx', '/src/**/*.ts', '!/src/**/__t
   eager: true,
 }) as Record<string, string>;
 
+// The inline font sizes in a source that nothing keeps at 16 px or more on a
+// coarse pointer. A size that has to follow something a class cannot, such as
+// the drawing label box following the map's zoom, passes when its expression
+// starts `Math.max(coarsePointer ? 16 :`.
+const INLINE_SIZE = /\bfontSize\s*:|\bfont-size\s*:/g;
+const FLOOR_ON_COARSE = /^\s*Math\.max\(\s*coarsePointer\s*\?\s*16\s*:/;
+function refusedInlineSizes(source: string): string[] {
+  return [...source.matchAll(INLINE_SIZE)]
+    .filter((match) => !FLOOR_ON_COARSE.test(source.slice(match.index + match[0].length)))
+    .map((match) => match[0]);
+}
+
 const all = rules(parse(indexCss));
 const coarse = all.filter(({ within }) => within.includes('@media (pointer: coarse)'));
 
@@ -168,11 +180,19 @@ describe('form controls on a coarse pointer', () => {
     expect(unreadable, 'write a text size in px or rem, so the touch rule can raise one under 16 px').toEqual([]);
   });
 
+  it('refuse an inline size unless it keeps 16 px on a coarse pointer', () => {
+    expect(refusedInlineSizes('style={{ fontSize: 12 }}')).toEqual(['fontSize:']);
+    expect(refusedInlineSizes('style={{ fontSize: Math.max(8, size) }}')).toEqual(['fontSize:']);
+    expect(refusedInlineSizes('style={{ fontSize: Math.max(coarsePointer ? 16 : 8, size) }}')).toEqual([]);
+    expect(refusedInlineSizes("el.style.cssText = 'font-size: 12px'")).toEqual(['font-size:']);
+  });
+
   // An inline style beats every stylesheet rule, so nothing can raise it. The
-  // source cannot say which element a style object reaches, so any is refused.
+  // source cannot say which element a style object reaches, so any is refused
+  // unless the same expression keeps 16 px on a coarse pointer itself.
   it('are given no font size in a style object', () => {
     const inline = Object.entries(SOURCES).flatMap(([file, source]) =>
-      [...source.matchAll(/\bfontSize\s*:|\bfont-size\s*:/g)].map((match) => `${file}: ${match[0]}`)
+      refusedInlineSizes(source).map((size) => `${file}: ${size}`)
     );
     expect(inline, 'size text with a class, which the touch rule can raise').toEqual([]);
   });
