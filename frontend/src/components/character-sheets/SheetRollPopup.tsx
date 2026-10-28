@@ -12,13 +12,15 @@
  *   the menu that long-press opened.
  * - Escape closes it, and the sheet under it stays open: it is a dialog of
  *   its own to the focus trap, which gives a key to the top one only.
- * - It is portaled to the body, so no ancestor's transform can hold it.
+ * - It is drawn on the body (components/ui/FloatingLayer.tsx), as the map's,
+ *   the roster's and the tracker's menus are, so no ancestor's transform can
+ *   hold it and no panel divider can take a press on it.
  */
 
 import { useEffect, useLayoutEffect, useState, type KeyboardEvent } from 'react';
-import { createPortal } from 'react-dom';
 import { Dices } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import FloatingLayer from '@/components/ui/FloatingLayer';
 import { applyRollMode, getModeLabels, ROLL_MODES } from '@/utils/rollModes';
 
 export interface RollPoint { clientX: number; clientY: number }
@@ -90,37 +92,38 @@ export function SheetRollPopup({ at, expression, purpose, gameSystem, onRoll, on
     items[next]?.focus();
   };
 
-  return createPortal(
-    <div
-      ref={ref}
-      role="menu"
-      aria-label={purpose}
-      onKeyDown={moveFocus}
-      className="fixed z-60 min-w-45 max-w-[calc(100vw-1rem)] bg-paper border border-ink/10 rounded-lg shadow-xl overflow-hidden"
-      style={{ left: place?.left ?? at.clientX, top: place?.top ?? at.clientY, visibility: place ? 'visible' : 'hidden' }}
-    >
-      <div aria-hidden="true" className="px-3 py-2 bg-accent text-accent-text text-xs font-semibold truncate">
-        {purpose}
+  return (
+    <FloatingLayer>
+      <div
+        ref={ref}
+        role="menu"
+        aria-label={purpose}
+        onKeyDown={moveFocus}
+        className="fixed z-60 min-w-45 max-w-[calc(100vw-1rem)] bg-paper border border-ink/10 rounded-lg shadow-xl overflow-hidden"
+        style={{ left: place?.left ?? at.clientX, top: place?.top ?? at.clientY, visibility: place ? 'visible' : 'hidden' }}
+      >
+        <div aria-hidden="true" className="px-3 py-2 bg-accent text-accent-text text-xs font-semibold truncate">
+          {purpose}
+        </div>
+        {ROLL_MODES.map((mode) => {
+          const roll = applyRollMode(expression, purpose, mode, gameSystem);
+          return (
+            <button
+              key={mode}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onRoll(roll.expression, roll.purpose);
+                onClose();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 pointer-coarse:min-h-11 text-sm text-ink-secondary hover:bg-accent/10 focus-visible:bg-accent/10 transition-colors text-left"
+            >
+              <Dices className="w-3.5 h-3.5 text-accent-ink shrink-0" aria-hidden="true" />
+              {labels[mode]}
+            </button>
+          );
+        })}
       </div>
-      {ROLL_MODES.map((mode) => {
-        const roll = applyRollMode(expression, purpose, mode, gameSystem);
-        return (
-          <button
-            key={mode}
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              onRoll(roll.expression, roll.purpose);
-              onClose();
-            }}
-            className="w-full flex items-center gap-2 px-3 py-2 pointer-coarse:min-h-11 text-sm text-ink-secondary hover:bg-accent/10 focus-visible:bg-accent/10 transition-colors text-left"
-          >
-            <Dices className="w-3.5 h-3.5 text-accent-ink shrink-0" aria-hidden="true" />
-            {labels[mode]}
-          </button>
-        );
-      })}
-    </div>,
-    document.body
+    </FloatingLayer>
   );
 }

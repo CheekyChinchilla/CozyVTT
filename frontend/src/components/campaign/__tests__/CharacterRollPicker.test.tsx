@@ -97,3 +97,21 @@ describe('the roll mode', () => {
     expect(onRoll).toHaveBeenCalledWith('2d20kh1+4', 'Strength Check (Fortune)', 'Seelah');
   });
 });
+
+// The panel library takes a press in a divider's strip whenever the pressed
+// element is inside its group ([data-group]); the picker is opened from the
+// roster, the tracker and the map, all inside it.
+describe('where it is drawn', () => {
+  it('is on the body, outside the panel group it is opened from', () => {
+    render(
+      <div data-group>
+        <CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
+      </div>,
+    );
+
+    const picker = screen.getByText('Roll for Seelah').closest('.fixed');
+    expect(picker).not.toBeNull();
+    expect(picker?.closest('[data-group]')).toBeNull();
+    expect(picker?.parentElement).toBe(document.body);
+  });
+});

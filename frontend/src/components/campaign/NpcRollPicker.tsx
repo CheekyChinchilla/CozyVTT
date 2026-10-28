@@ -3,6 +3,8 @@
  * DM-only floating modal that surfaces an NPC token's rollable options
  * (ability checks, saves, skills, attacks, damage) plus a free-form custom
  * roll input. Mirrors CharacterRollPicker for player-controlled tokens.
+ * Drawn on the body (components/ui/FloatingLayer.tsx), where the panel
+ * dividers cannot take the presses on it.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -11,6 +13,7 @@ import type { Token } from '@/types';
 import type { RollOption, CharacterRolls } from '@/utils/characterRolls';
 import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
+import FloatingLayer from '@/components/ui/FloatingLayer';
 import { tokenPublicName } from '@/utils/tokenDisplayName';
 import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 
@@ -143,90 +146,92 @@ export default function NpcRollPicker({
 
 
   return (
-    <div
-      ref={pickerRef}
-      className="fixed z-60 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden flex flex-col"
-      style={{
-        left:       pos ? pos.x : anchorX,
-        top:        pos ? pos.y : anchorY,
-        visibility: pos ? 'visible' : 'hidden',
-        minWidth:   260,
-        maxWidth:   320,
-        maxHeight:  560,
-      }}
-    >
-      {/* Header */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
-        <div className="flex items-center gap-2">
-          <Dices className="w-4 h-4 text-brand-ink" />
-          <span className="text-sm font-semibold text-stone-gray truncate">
-            Roll for {token.name}
-          </span>
-        </div>
-        <button type="button" onClick={onClose} aria-label="Close" className="p-0.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 transition-colors">
-          <X className="w-4 h-4 text-warm-gray" aria-hidden="true" />
-        </button>
-      </div>
-
-      {/* Roll Mode Selector (d20 systems only) */}
-      {hasAdvantage && hasAnyRolls && (
-        <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
-          <div className="text-xs text-warm-gray mb-1">Roll mode</div>
-          <div className="relative">
-            <button
-              onClick={() => setModeOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
-            >
-              <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
-                {modeLabels[mode]}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-warm-gray" />
-            </button>
-            {modeOpen && (
-              <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
-                {ROLL_MODES.map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => { setMode(m); setModeOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                      mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
-                    }`}
-                  >
-                    {modeLabels[m]}
-                  </button>
-                ))}
-              </div>
-            )}
+    <FloatingLayer>
+      <div
+        ref={pickerRef}
+        className="fixed z-60 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden flex flex-col"
+        style={{
+          left:       pos ? pos.x : anchorX,
+          top:        pos ? pos.y : anchorY,
+          visibility: pos ? 'visible' : 'hidden',
+          minWidth:   260,
+          maxWidth:   320,
+          maxHeight:  560,
+        }}
+      >
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
+          <div className="flex items-center gap-2">
+            <Dices className="w-4 h-4 text-brand-ink" />
+            <span className="text-sm font-semibold text-stone-gray truncate">
+              Roll for {token.name}
+            </span>
           </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="p-0.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 transition-colors">
+            <X className="w-4 h-4 text-warm-gray" aria-hidden="true" />
+          </button>
         </div>
-      )}
 
-      {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {!hasAnyRolls && (
-          <div className="px-3 py-4 text-sm text-warm-gray text-center">
-            No stat block on this token.
-            <br />
-            <span className="text-xs">Add one via Edit Token, or use a custom roll below.</span>
+        {/* Roll Mode Selector (d20 systems only) */}
+        {hasAdvantage && hasAnyRolls && (
+          <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
+            <div className="text-xs text-warm-gray mb-1">Roll mode</div>
+            <div className="relative">
+              <button
+                onClick={() => setModeOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
+              >
+                <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
+                  {modeLabels[mode]}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-warm-gray" />
+              </button>
+              {modeOpen && (
+                <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
+                  {ROLL_MODES.map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => { setMode(m); setModeOpen(false); }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
+                      }`}
+                    >
+                      {modeLabels[m]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {hasAnyRolls && (
-          <div className="divide-y divide-moss-green/10">
-            <Section title="Abilities"     rolls={rolls.abilities}    onRoll={handleRollOption} />
-            <Section title="Saving Throws" rolls={rolls.savingThrows} onRoll={handleRollOption} />
-            <Section title="Skills"        rolls={rolls.skills}       onRoll={handleRollOption} />
-            <Section title="Combat"        rolls={rolls.combat}       onRoll={handleRollOption} />
-            {/* Always empty for a creature — a stat block has no pool to spend —
-                but listed so the two pickers show the same categories. */}
-            <Section title="Hit Dice"      rolls={rolls.hitDice}      onRoll={handleRollOption} />
-          </div>
-        )}
-      </div>
+        {/* Content */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {!hasAnyRolls && (
+            <div className="px-3 py-4 text-sm text-warm-gray text-center">
+              No stat block on this token.
+              <br />
+              <span className="text-xs">Add one via Edit Token, or use a custom roll below.</span>
+            </div>
+          )}
 
-      <CustomRollFooter
-        onRoll={(expression, purpose) => { onRoll(expression, purpose, tokenPublicName(token)); onClose(); }}
-      />
-    </div>
+          {hasAnyRolls && (
+            <div className="divide-y divide-moss-green/10">
+              <Section title="Abilities"     rolls={rolls.abilities}    onRoll={handleRollOption} />
+              <Section title="Saving Throws" rolls={rolls.savingThrows} onRoll={handleRollOption} />
+              <Section title="Skills"        rolls={rolls.skills}       onRoll={handleRollOption} />
+              <Section title="Combat"        rolls={rolls.combat}       onRoll={handleRollOption} />
+              {/* Always empty for a creature — a stat block has no pool to spend —
+                  but listed so the two pickers show the same categories. */}
+              <Section title="Hit Dice"      rolls={rolls.hitDice}      onRoll={handleRollOption} />
+            </div>
+          )}
+        </div>
+
+        <CustomRollFooter
+          onRoll={(expression, purpose) => { onRoll(expression, purpose, tokenPublicName(token)); onClose(); }}
+        />
+      </div>
+    </FloatingLayer>
   );
 }

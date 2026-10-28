@@ -125,3 +125,21 @@ describe('the roll mode', () => {
     expect(purpose).not.toMatch(/Disadvantage/);
   });
 });
+
+// The panel library takes a press in a divider's strip whenever the pressed
+// element is inside its group ([data-group]); the picker is opened from the
+// map and the tracker, both inside it.
+describe('where it is drawn', () => {
+  it('is on the body, outside the panel group it is opened from', () => {
+    render(
+      <div data-group>
+        <NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
+      </div>,
+    );
+
+    const picker = screen.getByText('Roll for Goblin Boss').closest('.fixed');
+    expect(picker).not.toBeNull();
+    expect(picker?.closest('[data-group]')).toBeNull();
+    expect(picker?.parentElement).toBe(document.body);
+  });
+});

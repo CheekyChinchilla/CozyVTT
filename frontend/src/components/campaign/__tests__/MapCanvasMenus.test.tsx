@@ -893,3 +893,28 @@ describe('the door menu', () => {
     expect(openMenu()).toBeNull();
   });
 });
+
+// The page draws the map in a column of its panel group, and the panel
+// library takes a press in a divider's strip whenever the pressed element is
+// inside the group ([data-group]), whatever is drawn over the divider. A menu
+// that ran over the divider beside the map lost the presses on its items.
+describe('where the menus are drawn', () => {
+  it('draws the token menu on the body, outside the panel group', () => {
+    render(<div data-group><MapCanvas /></div>);
+    show(goblin());
+    rightClick(0, 19);
+
+    expect(theMenu().closest('[data-group]')).toBeNull();
+    expect(theMenu().parentElement).toBe(document.body);
+  });
+
+  it('draws the door menu on the body, outside the panel group', () => {
+    h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'd1', x1: 100, y1: 100, x2: 200, y2: 100, type: 'door-closed' }] }) });
+    render(<div data-group><MapCanvas /></div>);
+    fireEvent.contextMenu(surface(), { clientX: 150, clientY: 104 });
+
+    expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
+    expect(theMenu().closest('[data-group]')).toBeNull();
+    expect(theMenu().parentElement).toBe(document.body);
+  });
+});

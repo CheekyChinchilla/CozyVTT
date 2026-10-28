@@ -1,11 +1,14 @@
 /**
  * Character Context Menu: the roster's and the initiative tracker's menu on
  * a character or a combatant, a popover at the pointer drawing the items it
- * is given (components/ui/menu.ts), each with its icon.
+ * is given (components/ui/menu.ts), each with its icon. It is drawn on the
+ * body (components/ui/FloatingLayer.tsx), where the panel dividers beside
+ * the party column and the rail cannot take the presses on its items.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { MENU_ROW_CLASSES, commandLook, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
+import FloatingLayer from '@/components/ui/FloatingLayer';
 
 interface CharacterContextMenuProps {
   x: number;
@@ -88,47 +91,49 @@ export default function CharacterContextMenu({
   };
 
   return (
-    <div
-      ref={menuRef}
-      // Never taller than the screen on a touch screen: with a finger's
-      // 44-pixel items a long menu scrolls inside, where it would run off the
-      // bottom. A mouse's menu fits, and keeps the sides of a keyboard's
-      // focus ring, which a scrolling box would cut off.
-      className="fixed z-50 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl py-2 min-w-[200px] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
-      style={{
-        left: pos ? pos.x : x,
-        top: pos ? pos.y : y,
-        visibility: pos ? 'visible' : 'hidden',
-      }}
-    >
-      {items.map((item) => {
-        switch (item.kind) {
-          case 'separator':
-            return <div key={item.id} className={MENU_ROW_CLASSES.separator} />;
-          case 'heading':
-            return <p key={item.id} className={MENU_ROW_CLASSES.heading}>{item.label}</p>;
-          case 'text':
-            return <p key={item.id} className={MENU_ROW_CLASSES.text}>{item.label}</p>;
-          case 'command': {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                title={item.title}
-                disabled={item.busy?.active}
-                onClick={() => {
-                  item.run();
-                  if (!item.keepsOpen) onClose();
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-2 pointer-coarse:min-h-11 text-sm hover:bg-moss-green/10 transition-colors ${toneClass(item)}`}
-              >
-                {Icon && <Icon className="w-4 h-4" />}
-                <span>{item.busy?.active ? item.busy.label : item.label}</span>
-              </button>
-            );
+    <FloatingLayer>
+      <div
+        ref={menuRef}
+        // Never taller than the screen on a touch screen: with a finger's
+        // 44-pixel items a long menu scrolls inside, where it would run off the
+        // bottom. A mouse's menu fits, and keeps the sides of a keyboard's
+        // focus ring, which a scrolling box would cut off.
+        className="fixed z-50 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl py-2 min-w-[200px] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
+        style={{
+          left: pos ? pos.x : x,
+          top: pos ? pos.y : y,
+          visibility: pos ? 'visible' : 'hidden',
+        }}
+      >
+        {items.map((item) => {
+          switch (item.kind) {
+            case 'separator':
+              return <div key={item.id} className={MENU_ROW_CLASSES.separator} />;
+            case 'heading':
+              return <p key={item.id} className={MENU_ROW_CLASSES.heading}>{item.label}</p>;
+            case 'text':
+              return <p key={item.id} className={MENU_ROW_CLASSES.text}>{item.label}</p>;
+            case 'command': {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  title={item.title}
+                  disabled={item.busy?.active}
+                  onClick={() => {
+                    item.run();
+                    if (!item.keepsOpen) onClose();
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-2 pointer-coarse:min-h-11 text-sm hover:bg-moss-green/10 transition-colors ${toneClass(item)}`}
+                >
+                  {Icon && <Icon className="w-4 h-4" />}
+                  <span>{item.busy?.active ? item.busy.label : item.label}</span>
+                </button>
+              );
+            }
           }
-        }
-      })}
-    </div>
+        })}
+      </div>
+    </FloatingLayer>
   );
 }

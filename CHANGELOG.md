@@ -124,6 +124,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Tapping a box on an iPhone or an iPad no longer zooms the page.** Safari zooms in when a text box, a drop-down list or a text area with text smaller than 16 pixels is tapped, and the page stays zoomed after you leave the box. Most boxes on a character sheet were that small, and many on the campaign page too. On a phone or a tablet their text is now 16 pixels, and a box with bigger text, such as a sheet's name, keeps its size. With a mouse nothing changes.
 
+- **A tap on a menu over a divider between the page's columns works.** On a phone or a tablet, a tap on an item of a token's, a door's or a character's menu, or of a **Roll...** picker, did nothing where the item lay over the strip around a divider that takes a finger's drag: the strip took the tap as the start of a drag. The strip was 20 pixels wide in 1.5.4 and is 44 in this release. A menu or a picker now takes every tap on it.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3

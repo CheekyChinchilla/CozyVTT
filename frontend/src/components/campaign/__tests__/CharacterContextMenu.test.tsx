@@ -3,7 +3,8 @@
  * screen: each item was 36 pixels tall, under the 44 a finger needs. The
  * height is set only where the primary pointer is coarse, which jsdom cannot
  * show, so the class is what is checked. A menu taller than the screen stays
- * within it and scrolls.
+ * within it and scrolls. It is drawn outside the page's panel group, whose
+ * dividers took a press on an item that lay over one.
  */
 
 import { it, expect, vi } from 'vitest';
@@ -44,4 +45,24 @@ it('stays within the screen on a touch screen, scrolling inside, however tall it
   const menu = screen.getByRole('button', { name: 'View Character Sheet' }).parentElement!;
   expect(menu.className.split(/\s+/))
     .toEqual(expect.arrayContaining(['pointer-coarse:max-h-[calc(100dvh-1rem)]', 'pointer-coarse:overflow-y-auto', 'pointer-coarse:overscroll-contain']));
+});
+
+// The panel library takes a press in a divider's strip whenever the pressed
+// element is inside its group ([data-group]), whatever is drawn over the
+// divider; a menu outside the group keeps its presses.
+it('is drawn on the body, outside the panel group it is opened from', () => {
+  render(
+    <div data-group>
+      <CharacterContextMenu
+        x={10}
+        y={10}
+        onClose={vi.fn()}
+        items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
+      />
+    </div>,
+  );
+
+  const menu = screen.getByRole('button', { name: 'View Character Sheet' }).parentElement;
+  expect(menu?.closest('[data-group]')).toBeNull();
+  expect(menu?.parentElement).toBe(document.body);
 });
