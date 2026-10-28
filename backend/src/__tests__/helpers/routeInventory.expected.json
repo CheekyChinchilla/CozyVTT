@@ -535,6 +535,16 @@
       ]
     },
     {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/leave",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
       "method": "PUT",
       "path": "/api/campaigns/:campaignId/members/:userId/role",
       "handlers": [

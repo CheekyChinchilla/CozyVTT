@@ -113,7 +113,7 @@ it('sends the token back where it stands when its carrier is taken out of the ca
   expect(await frame).toMatchObject({ tokenId: 'hero', x: 9, y: 9, dragging: true });
 
   const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
-  await tellTableMemberLeft(playerId, campaignId);
+  await tellTableMemberLeft(playerId, campaignId, 'removed');
 
   const moved = await back;
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });

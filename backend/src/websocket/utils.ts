@@ -45,7 +45,8 @@ export function broadcastToCampaign(campaignId: string, event: string, data: unk
 
 /**
  * Tell each campaign's open pages that its roster changed for `userId`: they
- * left it (removed, or their account deleted) or their role changed. Every
+ * left it (removed, of their own accord, or their account deleted) or their
+ * role changed. Every
  * page keeps the member list and the roster panel it loaded, and refreshes
  * both on this. Never throws: the change is already saved.
  */
@@ -242,7 +243,10 @@ export async function broadcastPresence(campaignId: string): Promise<void> {
 }
 
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
-export type AccessRevokedReason = 'removed' | 'campaign-deleted' | 'signed-out';
+export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
+
+/** Why a member's connections lost the campaign while the campaign stays: the DM removed them, or they left. */
+export type MemberLeftReason = Extract<AccessRevokedReason, 'removed' | 'left'>;
 
 /** What `campaign.access.revoked` carries. */
 export interface AccessRevoked {
@@ -254,11 +258,12 @@ export interface AccessRevoked {
 }
 
 export const REMOVED_MESSAGE = 'You were removed from this campaign.';
+export const LEFT_MESSAGE = 'You left this campaign.';
 export const CAMPAIGN_DELETED_MESSAGE = 'This campaign was deleted.';
 
 /**
  * campaign.access.revoked — the connection may no longer use its campaign,
- * and why: removed from it, the campaign deleted, or the sign-in ended. A
+ * and why: removed from it, left it, the campaign deleted, or the sign-in ended. A
  * typed event, so the page can tell the person and stop, where a plain
  * `error` was only logged.
  */
@@ -432,8 +437,8 @@ export async function applyRoleToLiveSockets(
 /**
  * Cut a user's live connections to one campaign.
  *
- * Removing someone from a campaign, like changing their role, leaves any socket
- * they already have authenticated for it. The handlers read the campaign and
+ * Removing someone from a campaign, or their leaving it, like changing their
+ * role, leaves any socket they already have authenticated for it. The handlers read the campaign and
  * the role from the socket, so without this they keep sending and keep
  * receiving every broadcast until they close the tab.
  *
@@ -442,13 +447,15 @@ export async function applyRoleToLiveSockets(
  * stops them listening. A socket authenticates to one campaign, so a person
  * playing elsewhere in another tab is left alone. A token they are holding
  * goes back where it stands on everyone else's screen, since their own
- * put-down would now be refused.
+ * put-down would now be refused. `reason` is what each connection is told:
+ * the DM removed them, or they left.
  *
  * @returns number of connections closed off
  */
 export async function clearCampaignFromLiveSockets(
   userId: string,
-  campaignId: string
+  campaignId: string,
+  reason: MemberLeftReason = 'removed'
 ): Promise<number> {
   const io = getSocketInstance();
   const sockets = await io.in(userId).fetchSockets();
@@ -463,7 +470,7 @@ export async function clearCampaignFromLiveSockets(
         authed.campaignId = undefined;
         authed.role = undefined;
       }
-      tellAccessRevoked(socket, { campaignId, reason: 'removed', message: REMOVED_MESSAGE });
+      tellAccessRevoked(socket, { campaignId, reason, message: reason === 'left' ? LEFT_MESSAGE : REMOVED_MESSAGE });
       cleared += 1;
     }
   }

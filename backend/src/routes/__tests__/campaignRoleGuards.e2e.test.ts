@@ -89,6 +89,7 @@ const ANY_MEMBER = [
   'PUT /api/campaigns/:campaignId/notes/:noteId',
   'DELETE /api/campaigns/:campaignId/notes/:noteId',
   'GET /api/campaigns/:campaignId/sessions',
+  'POST /api/campaigns/:campaignId/leave',
   'GET /api/campaigns/:campaignId/macros',
   'POST /api/campaigns/:campaignId/macros',
   'GET /api/campaigns/:campaignId/macros/:macroId',

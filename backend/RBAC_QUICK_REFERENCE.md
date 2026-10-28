@@ -66,8 +66,8 @@ that.
 Any member may read a character assigned to the campaign, and the DM may edit
 it, only while its owner is still a member (`mayReadCharacter` and
 `ownerStillIn` in `utils/characterCampaign.ts`); anyone else is answered 404.
-Removing a member takes their characters out of the campaign in the same
-transaction; a character left naming a campaign by a
+Removing a member, or their leaving, takes their characters out of the
+campaign in the same transaction; a character left naming a campaign by a
 removal from before that is its owner's alone, and its saves are not sent to
 that campaign. The socket's hit point and hit dice events ask the same
 (`characterInCampaign` in `utils/characterCampaign.ts`).
@@ -341,7 +341,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 | 403 | Forbidden | User logged in but lacks permission, for a record they may read |
 | 404 | Not Found | Resource doesn't exist, or the caller may not read it (see below) |
 | 400 | Bad Request | Invalid input data |
-| 409 | Conflict | The request conflicts with what is stored now: the last admin, a DM seat that stops an account deletion, an asset still in use, a character changed since it was loaded, an email address already taken, a backup, restore or SRD import already running, a fog operation while fog is off |
+| 409 | Conflict | The request conflicts with what is stored now: the last admin, a DM seat that stops an account deletion, the owner or the DM asking to leave their campaign, an asset still in use, a character changed since it was loaded, an email address already taken, a backup, restore or SRD import already running, a fog operation while fog is off |
 | 429 | Too Many Requests | A rate limit: the general `/api` limiter or a route's own |
 | 500 | Internal Server Error | Unexpected error |
 | 503 | Service Unavailable | A restore is replacing the database (the restore gate), email is needed and SMTP is not set up, or a Universal VTT import could not start or finish in time |
@@ -796,8 +796,9 @@ or the `campaignDM` middleware.
 campaign (`canDeleteCampaign`), which is deliberate: the destructive power
 stays with whoever created it. The owner may always hand the DM seat on
 (`canTransferDM`). And the owner cannot be removed from the campaign
-(`DELETE /api/campaigns/:campaignId/members/:userId` answers `400`), since
-only the DM can add a membership and the owner could not get back in.
+(`DELETE /api/campaigns/:campaignId/members/:userId` answers `400`) or leave
+it (`POST /api/campaigns/:campaignId/leave` answers `409`), since only the DM
+can add a membership and the owner could not get back in.
 
 ### Transferring the DM role
 
@@ -814,6 +815,21 @@ The generic role route still refuses to touch a DM or mint a second one. That is
 intentional: transferring is the only supported way to move the seat, so there is
 one atomic path rather than two.
 
+### Leaving a campaign
+
+`POST /api/campaigns/:campaignId/leave`, behind `campaignMember`, lets a player
+or a spectator take themselves out of a campaign. It is the DM's removal asked
+by the member: the same serializable transaction (`takeMemberOut` in
+`services/campaignMembers.ts`) and the same notices after it
+(`tellTableMemberLeft`), with reason `left` on their open connections. The
+handler reads the role inside the transaction and answers `409` to the owner,
+asked first ("You own this campaign, so you cannot leave it. ..."), and then to
+the DM ("You run this campaign. Hand the DM seat to someone else in the
+campaign's settings, then leave it."), so the campaign keeps one DM and its
+owner a way back in. A caller who is no longer a member when the transaction
+runs, a removal having won the race, is answered `403` "You are not a member
+of this campaign", as the guard answers anyone not in the campaign.
+
 ### Membership changes under open sockets
 
 `socket.role` and `socket.campaignId` are read once, when the socket
@@ -827,7 +843,8 @@ written:
 |---|---|
 | `PUT /api/campaigns/:id/dm` | `applyRoleToLiveSockets(userId, campaignId, role)` for both seats |
 | `PUT /api/campaigns/:id/members/:userId/role` | `applyRoleToLiveSockets(userId, campaignId, role)`, then `campaign.role.changed` to the campaign so every open page, the member's own included, updates its controls |
-| `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
+| `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId, 'removed')`, then `presence.state` to the campaign (`tellTableMemberLeft` in `services/campaignMembers.ts`) |
+| `POST /api/campaigns/:id/leave` | The same, with reason `left` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
 The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`; a restore ends every socket on the instance through `endEveryLiveSocket`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
@@ -862,7 +879,7 @@ per request. Platform role is a different matter, see above.
 
 ### A removed member's own notes and macros
 
-Removing a member deletes none of their `PersonalNote` or `DiceMacro` rows, and
+Removing a member, or their leaving, deletes none of their `PersonalNote` or `DiceMacro` rows, and
 every notes and macros route asks for membership. Four read-only routes,
 guarded by `authenticated` alone, let the author still read their own
 (`routes/leftCampaigns.ts`): `GET /api/campaigns/left` lists the campaigns the

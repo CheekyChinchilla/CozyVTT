@@ -355,12 +355,12 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `campaign.access.revoked`
 **Direction:** Server → Client
-**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that reaches its 30 days is told so within a minute ("Your sign-in has reached its 30-day limit. Sign in again.", or at once when a request of that sign-in is refused for it); one that expires, or is removed to keep the account at 20 sign-ins, within five minutes ("Your sign-in has ended. Sign in again."). Either way the server then closes the connection
+**When:** This connection may no longer use its campaign: the DM removed the member, the member left the campaign (`POST /api/campaigns/:campaignId/leave`, every one of their connections to it, the one that asked included), the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that reaches its 30 days is told so within a minute ("Your sign-in has reached its 30-day limit. Sign in again.", or at once when a request of that sign-in is refused for it); one that expires, or is removed to keep the account at 20 sign-ins, within five minutes ("Your sign-in has ended. Sign in again."). Either way the server then closes the connection
 **Payload:**
 ```typescript
 {
   campaignId: string | null;  // the campaign the connection was in; null if it had not joined one
-  reason: 'removed' | 'campaign-deleted' | 'signed-out';
+  reason: 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
   message: string;            // a sentence for the person, e.g. "You were removed from this campaign."
 }
 ```
@@ -370,6 +370,7 @@ What follows depends on the reason:
 | `reason` | The connection afterwards | What a client should do |
 | --- | --- | --- |
 | `removed` | Stays open, but has left the campaign's room and is no longer authenticated to any campaign: it hears nothing from the table, and every campaign event it sends is refused | Stop, show `message`, leave the campaign |
+| `left` | The same as `removed`; `message` is "You left this campaign." The HTTP answer to the leave carries the same sentence, so the tab that asked may show whichever arrives first, once | The same |
 | `campaign-deleted` | The same, for every connection that was in the campaign | The same |
 | `signed-out` | The server closes it straight after (`disconnect` with reason `io server disconnect`) | Do not reconnect: a new connection would be refused. Sign in again |
 
@@ -404,7 +405,7 @@ Before this event existed the server sent an `error` with the reason instead ("Y
 
 #### `presence.state`
 **Direction:** Server → All Campaign Members
-**When:** Anyone joins or leaves, and in reply to `presence.request`
+**When:** Anyone joins or leaves, a member is removed or leaves the campaign, and in reply to `presence.request`
 **Payload:**
 ```typescript
 {
@@ -924,7 +925,7 @@ socket.on('error', (data) => {
 ### Disconnection Handling
 
 ```javascript
-// Removed, the campaign deleted, or the sign-in ended: told why first.
+// Removed, left, the campaign deleted, or the sign-in ended: told why first.
 let accessRevoked = false;
 socket.on('campaign.access.revoked', ({ reason, message }) => {
   accessRevoked = true;

@@ -58,6 +58,7 @@ const TESTED: Record<string, string> = {
   'GET /api/assets/avatars/:userId': 'routes/__tests__/avatarReplace.e2e.test.ts',
   'POST /api/campaigns/:campaignId/creatures/seed': 'routes/__tests__/srdSeedRoute.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/members/:userId': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
+  'POST /api/campaigns/:campaignId/leave': 'routes/__tests__/leaveCampaign.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/members/:userId/role': 'websocket/__tests__/initiativeResend.integration.test.ts',
   'PUT /api/campaigns/:campaignId/dm': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
   'GET /api/campaigns/:campaignId/messages': 'routes/__tests__/campaignMessages.e2e.test.ts',

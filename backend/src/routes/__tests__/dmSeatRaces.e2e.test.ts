@@ -176,6 +176,55 @@ describe('a removal racing a hand-over', () => {
   });
 });
 
+describe('a leave racing a hand-over', () => {
+  it('cannot take out the member just handed the seat', async () => {
+    const t = await table();
+    const asBob = request.agent(app);
+    expect((await asBob.post('/api/auth/login').send({ email: t.bob.email, password: TEST_PASSWORD })).status).toBe(200);
+    let handover: request.Response | undefined;
+    // Bob leaves; while his leave has read that he is a player, Alice (the
+    // owner) hands him the seat. The read held is the leave's own, which
+    // selects the role; the guard's before it does not.
+    hold = {
+      model: 'CampaignMembership',
+      operations: ['findUnique'],
+      matches: (args) => mentions(args, t.bob.id) && mentions(args, '"select"'),
+      meanwhile: async () => { handover = await t.asAlice.put(`/api/campaigns/${t.campaignId}/dm`).send({ userId: t.bob.id }); },
+    };
+
+    const leave = await asBob.post(`/api/campaigns/${t.campaignId}/leave`);
+
+    expect(handover?.status).toBe(200);
+    expect(leave.status).toBe(409);
+    expect(leave.body.message).toMatch(/Hand the DM seat/);
+    expect(await dms(t.campaignId)).toEqual([{ userId: t.bob.id }]);
+  });
+});
+
+describe('a leave racing a removal', () => {
+  it('answers as for someone who is not a member', async () => {
+    const t = await table();
+    const asBob = request.agent(app);
+    expect((await asBob.post('/api/auth/login').send({ email: t.bob.email, password: TEST_PASSWORD })).status).toBe(200);
+    let removal: request.Response | undefined;
+    // The guard has let Bob through as a member; Dan removes him before the
+    // leave's own read.
+    hold = {
+      model: 'CampaignMembership',
+      operations: ['findUnique'],
+      matches: (args) => mentions(args, t.bob.id),
+      meanwhile: async () => { removal = await t.asDan.delete(`/api/campaigns/${t.campaignId}/members/${t.bob.id}`); },
+    };
+
+    const leave = await asBob.post(`/api/campaigns/${t.campaignId}/leave`);
+
+    expect(removal?.status).toBe(200);
+    expect(leave.status).toBe(403);
+    expect(leave.body.message).toBe('You are not a member of this campaign');
+    expect(await dms(t.campaignId)).toEqual([{ userId: t.dan.id }]);
+  });
+});
+
 describe('deleting an account', () => {
   it('is refused for a DM who does not own the campaign, naming it', async () => {
     const t = await table();

@@ -7,7 +7,7 @@ import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permis
 import { getSpiritVisibility, MAP_SELECT_SENT_TO_EVERYONE } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, withSessionsHeld, openSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
-import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance } from '../websocket/utils';
+import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance, LEFT_MESSAGE } from '../websocket/utils';
 import { takeMemberOut, tellTableMemberLeft, type TakeOutRefusal } from '../services/campaignMembers';
 import { broadcastMapData } from '../websocket/shared';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
@@ -987,7 +987,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
       const refused = REMOVAL_REFUSED[refusal];
       return res.status(refused.status).json({ error: refused.error, message: refused.message });
     }
-    await tellTableMemberLeft(userId, campaignId);
+    await tellTableMemberLeft(userId, campaignId, 'removed');
 
     return res.status(200).json({
       message: 'Member removed successfully',
@@ -997,6 +997,56 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
     return res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to remove member',
+    });
+  }
+});
+
+/**
+ * What a member is told when their leave is refused. Not a member any more
+ * (the DM's removal won the race with this request) is answered as the
+ * `campaignMember` guard answers it. The wording of the DM's refusal follows
+ * account deletion's (services/accountDeletion.ts).
+ */
+const LEAVE_REFUSED: Record<TakeOutRefusal, { status: number; error: string; message: string }> = {
+  'not-member': { status: 403, error: 'Forbidden', message: 'You are not a member of this campaign' },
+  owner: {
+    status: 409,
+    error: 'Conflict',
+    message: "You own this campaign, so you cannot leave it. If you no longer want it, delete it in the campaign's settings.",
+  },
+  dm: {
+    status: 409,
+    error: 'Conflict',
+    message: "You run this campaign. Hand the DM seat to someone else in the campaign's settings, then leave it.",
+  },
+};
+
+/**
+ * POST /api/campaigns/:campaignId/leave
+ * Leave the campaign, as a player or a spectator: the same as the DM's
+ * Remove, asked by the member. Their characters go back to their own list;
+ * their tokens, combatants, drawings, notes and macros stay with the campaign.
+ * Requires: Campaign membership, any role. The owner (asked first) and the
+ * DM are refused in the transaction, which reads the role as it stands.
+ */
+router.post('/:campaignId/leave', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId } = req.params;
+    const userId = req.session.userId!;
+
+    const refusal = await takeMemberOut(campaignId, userId, 'owner');
+    if (refusal) {
+      const refused = LEAVE_REFUSED[refusal];
+      return res.status(refused.status).json({ error: refused.error, message: refused.message });
+    }
+    await tellTableMemberLeft(userId, campaignId, 'left');
+
+    return res.status(200).json({ message: LEFT_MESSAGE });
+  } catch (error) {
+    logger.error('Error leaving campaign', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to leave the campaign',
     });
   }
 });
