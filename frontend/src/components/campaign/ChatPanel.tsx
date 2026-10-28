@@ -40,6 +40,14 @@ const PAGE_SIZE = 50;
 export const MAX_HELD_MESSAGES = 400;
 
 /**
+ * The most the panel holds while the reader is scrolled up, unless their own
+ * Load More took it further (see withinCap). What they are reading stays put
+ * until then; past it the oldest leave even so, since a chat left scrolled up
+ * all evening would otherwise hold every message.
+ */
+const MAX_HELD_SCROLLED_UP = 2 * MAX_HELD_MESSAGES;
+
+/**
  * How many pages a rejoin reads back looking for a message already shown.
  * Past it, the list starts again from the newest pages.
  */
@@ -82,6 +90,11 @@ type Earlier = { kind: 'cursor'; cursor: string } | { kind: 'find' } | { kind: '
 interface Held {
   messages: Message[];
   earlier: Earlier;
+  /**
+   * How many the reader's last Load More left the list holding, or 0 once
+   * they are back at the newest message; see withinCap.
+   */
+  afterLoadMore: number;
 }
 
 /** What comes before a page just read. */
@@ -89,20 +102,24 @@ const earlierThan = (page: MessageHistoryPage): Earlier =>
   page.pagination.hasMore && page.pagination.nextCursor ? { kind: 'cursor', cursor: page.pagination.nextCursor } : { kind: 'none' };
 
 /**
- * `held` with its oldest messages let go until MAX_HELD_MESSAGES remain, while
- * the reader is at the newest message: a reader scrolled up keeps what they
- * are reading until they are back down. A message still being sent, or not
- * sent, stays, since it holds what someone typed.
+ * `held` with its oldest messages let go until MAX_HELD_MESSAGES remain. While
+ * the reader is scrolled up the most is MAX_HELD_SCROLLED_UP, or what their
+ * last Load More left plus MAX_HELD_MESSAGES when that is more, so what they
+ * are reading, or brought back to read, stays while the table talks. Back at
+ * the newest, that is forgotten. A message still being sent, or not sent,
+ * stays too, since it holds what someone typed.
  */
 function withinCap(held: Held, atNewest: boolean): Held {
-  let excess = held.messages.length - MAX_HELD_MESSAGES;
-  if (!atNewest || excess <= 0) return held;
-  const kept = held.messages.filter((message) => {
+  const most = atNewest ? MAX_HELD_MESSAGES : Math.max(MAX_HELD_SCROLLED_UP, held.afterLoadMore + MAX_HELD_MESSAGES);
+  const now = atNewest && held.afterLoadMore !== 0 ? { ...held, afterLoadMore: 0 } : held;
+  let excess = now.messages.length - most;
+  if (excess <= 0) return now;
+  const kept = now.messages.filter((message) => {
     if (excess === 0 || isPending(message)) return true;
     excess -= 1;
     return false;
   });
-  return kept.length === held.messages.length ? held : { messages: kept, earlier: { kind: 'find' } };
+  return kept.length === now.messages.length ? now : { ...now, messages: kept, earlier: { kind: 'find' } };
 }
 
 export default function ChatPanel() {
@@ -163,7 +180,7 @@ export default function ChatPanel() {
   };
 
   // State
-  const [held, setHeld] = useState<Held>({ messages: [], earlier: { kind: 'find' } });
+  const [held, setHeld] = useState<Held>({ messages: [], earlier: { kind: 'find' }, afterLoadMore: 0 });
   const { messages, earlier } = held;
   /** Why a message was not sent, by its pending id, for those that were not. */
   const [notSent, setNotSent] = useState<Record<string, string>>({});
@@ -304,7 +321,7 @@ export default function ChatPanel() {
         // The server sends newest first; the panel reads oldest first.
         // Merged with what is already shown: a message can arrive live
         // before the history does.
-        setHeld((h) => withinCap({ messages: mergeMessages(h.messages, page.messages), earlier: earlierThan(page) }, wasAtBottomRef.current));
+        setHeld((h) => withinCap({ ...h, messages: mergeMessages(h.messages, page.messages), earlier: earlierThan(page) }, wasAtBottomRef.current));
 
         // Scroll to bottom after initial load (without smooth)
         setTimeout(() => scrollToBottom(false), 100);
@@ -359,7 +376,7 @@ export default function ChatPanel() {
         } else {
           // Too much was missed to join up: keep only messages still being
           // sent, and page back from what was read.
-          setHeld((h) => withinCap({ messages: mergeMessages(h.messages.filter(isPending), fresh), earlier: earlierThan(page) }, wasAtBottomRef.current));
+          setHeld((h) => withinCap({ messages: mergeMessages(h.messages.filter(isPending), fresh), earlier: earlierThan(page), afterLoadMore: 0 }, wasAtBottomRef.current));
         }
       } catch (err) {
         console.error('[ChatPanel] Failed to resync messages after reconnect:', errorSummary(err));
@@ -417,7 +434,11 @@ export default function ChatPanel() {
       // Merged rather than prepended: a page that overlaps what is on screen
       // would otherwise show its messages twice, duplicate keys and all. Not
       // held within MAX_HELD_MESSAGES: the reader asked for these.
-      setHeld((h) => (readFor(h) ? { messages: mergeMessages(h.messages, page.messages), earlier: earlierThan(page) } : h));
+      setHeld((h) => {
+        if (!readFor(h)) return h;
+        const messages = mergeMessages(h.messages, page.messages);
+        return { messages, earlier: earlierThan(page), afterLoadMore: messages.length };
+      });
     } catch (err) {
       console.error('[ChatPanel] Failed to load more messages:', errorSummary(err));
       setError(errorMessage(err) || 'Failed to load more messages');

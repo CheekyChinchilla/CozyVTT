@@ -7,7 +7,9 @@
  * is at the newest message, the oldest leave as new ones arrive, and Load More
  * brings them back from the server in order, none twice, then older ones. A
  * reader scrolled up, or reading what Load More brought back, keeps it until
- * they are back at the newest. A message that has not been sent never leaves.
+ * they are back at the newest, up to twice as many messages: a chat left
+ * scrolled up does not grow without end. A message that has not been sent
+ * never leaves.
  *
  * The server here pages as the real one does, newest first by time and id
  * from an opaque cursor, so the panel can only reach a message it let go of
@@ -180,6 +182,18 @@ it('lets go once the reader is back at the newest, and Load More then reaches ba
   expect(loadMore()).toBeNull();
 });
 
+it('holds at most twice as many while the reader stays scrolled up', async () => {
+  await openPanel();
+  arrive(range('Live', 1, 400));
+  scrollLog('top');
+  arrive(range('Live', 401, 900));
+  expect(shown()).toEqual(range('Live', 101, 900));
+
+  scrollLog('bottom');
+  arrive(['Live 901']);
+  expect(shown()).toEqual(range('Live', 502, 901));
+});
+
 it('never lets go of a message that was not sent', async () => {
   sendChatMessage.mockResolvedValue({ ok: false, error: 'Not connected' });
   await openPanel();
@@ -299,4 +313,37 @@ it('drops a page that lands as a rejoin starts the list again', async () => {
 
   await pressLoadMore();
   expect(shown()).toEqual(range('New', 51, 600));
+});
+
+it('keeps what a reader scrolled up brought back while people chat, until they are back at the newest', async () => {
+  stored = range('Old', 1, 1000).map(said);
+  await openPanel();
+  scrollLog('top');
+  for (let i = 0; i < 16; i++) await pressLoadMore();
+  expect(shown()[0]).toBe('Old 151');
+  expect(shown()).toHaveLength(850);
+
+  arrive(['Live 1']);
+  expect(shown()).toHaveLength(851);
+  expect(shown()[0]).toBe('Old 151');
+
+  // Further back, with the cursor it holds: one read.
+  getMessages.mockClear();
+  await pressLoadMore();
+  expect(getMessages).toHaveBeenCalledTimes(1);
+  expect(shown()[0]).toBe('Old 101');
+
+  // 400 more may arrive before what the reader brought back starts to leave.
+  arrive(range('Live', 2, 401));
+  expect(shown()[0]).toBe('Old 101');
+  arrive(['Live 402']);
+  expect(shown()[0]).toBe('Old 102');
+
+  // Back at the newest the chat holds 400, and scrolled up again, 800.
+  scrollLog('bottom');
+  arrive(['Live 403']);
+  expect(shown()).toEqual(range('Live', 4, 403));
+  scrollLog('top');
+  arrive(range('Live', 404, 804));
+  expect(shown()).toEqual(range('Live', 5, 804));
 });
