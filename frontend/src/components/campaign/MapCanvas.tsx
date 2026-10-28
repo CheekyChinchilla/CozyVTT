@@ -28,8 +28,8 @@ import type {
   Character,
   MapPingedBroadcast,
 } from '@/types';
-import { GameSystem, TokenLayer, TokenType } from '@/types';
-import type { WallSegment, FogState, WallType, LightSource } from '@/types/walls';
+import { GameSystem, TokenLayer } from '@/types';
+import type { WallSegment, FogState, LightSource } from '@/types/walls';
 import {
   drawMapImage,
   drawSpiritLayer,
@@ -105,7 +105,8 @@ import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { controlsToken } from '@/utils/tokenOwnership';
 import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
-import { dmTokenControls } from '@/utils/dmTokenMenu';
+import { tokenMenuHasItems, tokenMenuItems, type TokenMenuActions, type TokenMenuView } from './map/tokenMenuItems';
+import { doorMenuItems } from './map/doorMenuItems';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
@@ -126,6 +127,7 @@ import DrawControls, { type MemberDrawings } from '@/components/campaign/DrawCon
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
 import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
+import MapMenuRows from '@/components/campaign/MapMenuRows';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
@@ -302,7 +304,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isMovingTokenLayer, setIsMovingTokenLayer] = useState(false);
-  const [contextMenuMoveToMapOpen, setContextMenuMoveToMapOpen] = useState(false);
+  /** The token menu's submenu that is open, by its item's id (Move to Map…). */
+  const [tokenMenuSubmenu, setTokenMenuSubmenu] = useState<string | null>(null);
   /**
    * Close the token menu. Focus that was in it goes back to the map, so the
    * keys keep working after a choice from the menu; focus a click has taken
@@ -311,7 +314,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const closeTokenMenu = useCallback(() => {
     const hadFocus = contextMenuRef.current?.contains(document.activeElement) ?? false;
     setContextMenu(null);
-    setContextMenuMoveToMapOpen(false);
+    setTokenMenuSubmenu(null);
     if (hadFocus) layersRef.current?.focus({ preventScroll: true });
   }, []);
   // The token whose Remove from Map is waiting for confirmation.
@@ -325,10 +328,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Roll picker (right-click token → Roll...). Carries the token as well as the
   // character because initiative belongs to the token on the map, not to the
   // sheet — the same character could be represented by more than one token.
+  // Each picker keeps the point it opens at, so it stays there while the
+  // token menu is used again.
   const [rollPicker, setRollPicker] = useState<
-    { characterId: string; tokenId: string; canRollInitiative: boolean; x: number; y: number } | null
+    { characterId: string; tokenId: string; canRollInitiative: boolean; at: { x: number; y: number } } | null
   >(null);
-  const [npcRollPicker, setNpcRollPicker] = useState<{ tokenId: string; x: number; y: number } | null>(null);
+  const [npcRollPicker, setNpcRollPicker] = useState<{ tokenId: string; at: { x: number; y: number } } | null>(null);
+  /**
+   * Where the token menu was last opened. A roll picker its Roll... opens
+   * stands there; the items themselves carry no position.
+   */
+  const menuPointRef = useRef({ x: 0, y: 0 });
+  // Through a callback: a ref written in openMenuAt itself made the React
+  // Compiler's purity rule take the handlers that reach it for render code.
+  const rememberMenuPoint = useCallback((x: number, y: number) => { menuPointRef.current = { x, y }; }, []);
 
   // DM-only: toggle whether spirit-layer tokens are drawn on canvas
   const [dmShowSpiritTokens, setDmShowSpiritTokens] = useState(true);
@@ -1567,12 +1580,6 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     tokenTakesClick: ({ gridCoords }) => draggedToken !== null || getMovableTokenAtPosition(gridCoords.x, gridCoords.y) !== null,
     carryWallHistory, socket, ownEdits, showToast, markDirty,
   });
-
-  // A choice from the door menu: the door changed, the menu closed.
-  const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
-    setDoorType(door, newType);
-    setDoorContextMenu(null);
-  }, [setDoorType]);
 
   /**
    * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
@@ -2915,7 +2922,6 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   // The sheet and roll entries, by the same rules as the initiative tracker's
   // menu (utils/tokenCharacter).
-  const campaignHasCharacter = (characterId: string): boolean => campaignHasTokenCharacter(campaign, characterId);
   const canRollForToken = (token: Token): boolean => canRollTokenCharacter(user, campaign, token);
 
   /**
@@ -2926,13 +2932,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const canRotateToken = canMoveToken;
 
   /**
-   * Whether the token menu offers this viewer anything. The DM always has the
-   * token actions; anyone else has the character's sheet and rolls, and
-   * turning a token they control, so a creature or an object they do not
-   * control would open an empty box.
+   * This viewer, what they may do with `token`, and the table, as the token
+   * menu reads them (map/tokenMenuItems.ts). The DM always has the token
+   * actions; anyone else has the character's sheet and rolls, and turning a
+   * token they control, so a creature or an object they do not control
+   * opens no menu.
    */
-  const tokenMenuHasItems = (token: Token): boolean =>
-    canRotateToken(token) || (!!token.characterId && (campaignHasCharacter(token.characterId) || canRollForToken(token)));
+  const tokenMenuView = (token: Token): TokenMenuView => ({
+    role: userRole,
+    mayViewSheet: campaignHasTokenCharacter(campaign, token.characterId),
+    mayRoll: canRollForToken(token),
+    mayRotate: canRotateToken(token),
+    mapId: currentMap?.id ?? null,
+    maps: campaign?.maps ?? [],
+    busy: { crossing: isMovingTokenLayer, moving: isMoveToMapLoading },
+  });
 
   /**
    * Turn a token one step, shown at once and put back if the server refuses.
@@ -3051,13 +3065,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     const centre = tokenCentre(token, currentMap.gridSize, currentMap.height);
     focusMenuOnOpenRef.current = true;
     setDoorContextMenu(null);
-    setContextMenuMoveToMapOpen(false);
-    setContextMenu({
-      token,
-      x: rect.left + centre.x * mapControls.zoom + mapControls.panOffset.x + dx,
-      y: rect.top + centre.y * mapControls.zoom + mapControls.panOffset.y + dy,
-      fromKeyboard: true,
-    });
+    setTokenMenuSubmenu(null);
+    const x = rect.left + centre.x * mapControls.zoom + mapControls.panOffset.x + dx;
+    const y = rect.top + centre.y * mapControls.zoom + mapControls.panOffset.y + dy;
+    rememberMenuPoint(x, y);
+    setContextMenu({ token, x, y, fromKeyboard: true });
   };
 
   /**
@@ -3084,7 +3096,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         if (!stepSelection(action.direction, e.repeat)) return false;
         break;
       case 'menu':
-        if (!selected || !tokenMenuHasItems(selected)) return false;
+        if (!selected || !tokenMenuHasItems(selected, tokenMenuView(selected))) return false;
         if (!e.repeat) openTokenMenuAt(selected);
         break;
       case 'shortcuts':
@@ -3127,6 +3139,125 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
 
   /**
+   * What the token menu's items do (map/tokenMenuItems.ts). The menu closes
+   * before each runs, but for the turns, which keep it open.
+   */
+  const tokenMenuActions: TokenMenuActions = {
+    viewSheet: async (token) => {
+      if (!token.characterId) return;
+      try {
+        const { character } = await api.getCharacter(token.characterId);
+        setViewingSheet({ character, tokenId: token.id });
+      } catch (err) {
+        console.error('Failed to load character sheet:', errorSummary(err));
+        showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
+      }
+    },
+    rollCharacter: (token) => {
+      if (!token.characterId) return;
+      setRollPicker({
+        characterId: token.characterId, tokenId: token.id, canRollInitiative: canRollInitiativeFor(token), at: menuPointRef.current,
+      });
+    },
+    rotate: (token, step) => { void rotateToken(token.id, step); },
+    rollCreature: (token) => setNpcRollPicker({ tokenId: token.id, at: menuPointRef.current }),
+    edit: (token) => onEditToken?.(token),
+    addToInitiative: (token, mapId) => socket?.emitInitiativeAdd({ tokenId: token.id, mapId }),
+    duplicate: async (token) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      try {
+        // Place the copy one cell along, clamped to the map
+        const position = clampTokenPosition(
+          { x: token.position.x + 1, y: token.position.y + 1 },
+          token.size,
+          currentMap
+        );
+        const result = await api.addToken(campaign.id, currentMap.id, {
+          ...tokenCopyRequest(token, position),
+          // A copy starts fresh and belongs to nobody's character:
+          // two tokens on one sheet would follow the same hit
+          // points and both count as that player's own.
+          characterId: null,
+          controlledBy: copyController(token.controlledBy, campaign?.memberships),
+          hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
+          conditions: [],
+        });
+        useGameStore.getState().addToken(result.token);
+      } catch (err) {
+        // A copy is a new token, so an older one whose fields predate
+        // validation is refused: say which, so the DM can fix it in Edit Token.
+        showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
+      }
+    },
+    saveAsTemplate: async (token) => {
+      if (!campaign?.id) return;
+      try {
+        await api.saveTokenAsTemplate(campaign.id, {
+          name: token.name,
+          imageUrl: token.imageUrl || null,
+          type: token.type,
+          disposition: token.disposition,
+          displayMode: token.displayMode || 'pog',
+          size: token.size,
+          notes: token.notes || null,
+          hp: token.hp || null,
+          showHpBar: token.showHpBar,
+          statBlock: token.statBlock || null,
+          sightRadius: token.sightRadius ?? null,
+        });
+        showToast(`Saved ${tokenDisplayName(token)} as a template`, 'success');
+      } catch (err) {
+        showToast(apiErrorMessage(err) || 'Could not save the token as a template', 'error');
+      }
+    },
+    setVisible: async (token, visible) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      try {
+        await setTokenFlag(campaign.id, currentMap.id, token, 'visible', visible);
+      } catch (err) {
+        showToast(apiErrorMessage(err) || (visible ? 'Could not show the token to players' : 'Could not hide the token from players'), 'error');
+      }
+    },
+    setObscured: async (token, obscured) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      try {
+        await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', obscured);
+      } catch (err) {
+        showToast(apiErrorMessage(err) || (obscured ? "Could not obscure the token's identity" : "Could not reveal the token's identity"), 'error');
+      }
+    },
+    setLayer: async (token, layer) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      setIsMovingTokenLayer(true);
+      try {
+        await api.updateToken(campaign.id, currentMap.id, token.id, { layer });
+        useGameStore.getState().patchToken(token.id, { layer });
+      } catch (err) {
+        showToast(apiErrorMessage(err) || (layer === TokenLayer.SPIRIT
+          ? 'Could not send the token to the spirit realm'
+          : 'Could not return the token to the material plane'), 'error');
+      } finally {
+        setIsMovingTokenLayer(false);
+      }
+    },
+    moveToMap: async (token, mapId) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      setIsMoveToMapLoading(true);
+      try {
+        // One request: the server moves the token as it is and
+        // tells everyone on this map itself.
+        await api.moveTokens(campaign.id, currentMap.id, [token.id], mapId);
+        useGameStore.getState().removeToken(token.id);
+      } catch (err) {
+        showToast(apiErrorMessage(err) || 'Failed to move the token to that map', 'error');
+      } finally {
+        setIsMoveToMapLoading(false);
+      }
+    },
+    remove: (token) => setRemovingToken(token),
+  };
+
+  /**
    * Open the menu a right-click or a long-press opens at page point
    * (clientX, clientY), and say whether one opened: the token menu on a
    * token whose menu has something for this viewer, selecting it, else the
@@ -3155,8 +3286,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // included, and opens the DM's menu at it on the shared screen; look it up through the preview's
     // drawn list (getHoverTokenAt) while previewing, as the click's pick-up does.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
-    if (token && tokenMenuHasItems(token)) {
+    if (token && tokenMenuHasItems(token, tokenMenuView(token))) {
+      rememberMenuPoint(clientX, clientY);
       if (drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
+      // TODO(ui): a right-click on another token while Move to Map… is open opens its menu with the
+      // maps already listed; a new menu opens with its submenu shut, as Enter's does (openTokenMenuAt).
       setContextMenu({ token, x: clientX, y: clientY });
       return true;
     }
@@ -3290,7 +3424,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       adjustedY = Math.max(area.top, Math.min(contextMenu.y, area.bottom - rect.height));
     }
     setContextMenuPos({ x: adjustedX, y: adjustedY });
-  }, [contextMenu, contextMenuMoveToMapOpen]);
+  }, [contextMenu, tokenMenuSubmenu]);
 
   // A menu opened from the keyboard puts the cursor on its first item once
   // it is placed, and so visible: a hidden button cannot take focus.
@@ -4170,348 +4304,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           // A held Enter that opened the menu must not press its first item.
           onKeyDown={(e) => { if (e.key === 'Enter' && e.repeat) e.preventDefault(); }}
         >
-          {contextMenu.token.characterId && (
-            <>
-              {/* Only for a character of this campaign, which every member
-                  may read, and whose campaign is the one the sheet is opened
-                  in, so it is shown Edit by this campaign's role. A token
-                  keeps its character after the character leaves. */}
-              {campaignHasCharacter(contextMenu.token.characterId) && (
-                <button
-                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={async () => {
-                    const characterId = contextMenu.token.characterId!;
-                    const tokenId = contextMenu.token.id;
-                    closeTokenMenu();
-                    try {
-                      const { character } = await api.getCharacter(characterId);
-                      setViewingSheet({ character, tokenId });
-                    } catch (err) {
-                      console.error('Failed to load character sheet:', errorSummary(err));
-                      showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
-                    }
-                  }}
-                >
-                  View Character Sheet
-                </button>
-              )}
-              {canRollForToken(contextMenu.token) && (
-                <button
-                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={() => {
-                    const token = contextMenu.token;
-                    const picker = {
-                      characterId: token.characterId!,
-                      tokenId: token.id,
-                      canRollInitiative: canRollInitiativeFor(token),
-                      x: contextMenu.x,
-                      y: contextMenu.y,
-                    };
-                    closeTokenMenu();
-                    setRollPicker(picker);
-                  }}
-                >
-                  Roll...
-                </button>
-              )}
-            </>
-          )}
-
-          {/* Rotate Left / Right: the DM on any token, a player on a token
-              they control while the session is live. The menu stays open so
-              presses add up. */}
-          {canRotateToken(contextMenu.token) && (
-            <>
-              <button
-                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                title={`Turn ${ROTATION_STEP} degrees anticlockwise`}
-                onClick={() => { void rotateToken(contextMenu.token.id, -ROTATION_STEP); }}
-              >
-                Rotate Left
-              </button>
-              <button
-                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                title={`Turn ${ROTATION_STEP} degrees clockwise`}
-                onClick={() => { void rotateToken(contextMenu.token.id, ROTATION_STEP); }}
-              >
-                Rotate Right
-              </button>
-            </>
-          )}
-
-          {userRole === 'DM' && (() => {
-            const cmToken = contextMenu.token;
-            const cmType = cmToken.type ?? (cmToken.characterId ? TokenType.PLAYER : TokenType.NPC);
-            const controls = dmTokenControls(cmType);
-            return (
-            <>
-              {/* Roll... — NPC tokens only. The `characterId` check is what
-                  actually enforces "player tokens have their own Roll above":
-                  a token can be typed NPC *and* still be bound to a character
-                  (a companion, or a PC the DM re-typed), and that combination
-                  rendered this entry a second time. */}
-              {cmType === TokenType.NPC && !cmToken.characterId && (
-                <button
-                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={() => {
-                    const tokenId = cmToken.id;
-                    const x = contextMenu.x;
-                    const y = contextMenu.y;
-                    closeTokenMenu();
-                    setNpcRollPicker({ tokenId, x, y });
-                  }}
-                >
-                  Roll...
-                </button>
-              )}
-
-              {/* Edit Token — every token type. The editor shows a player token
-                  its name, image, darkvision and controller; the NPC-only
-                  sections stay hidden. */}
-              {(
-                <button
-                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
-                  onClick={() => {
-                    closeTokenMenu();
-                    onEditToken?.(cmToken);
-                  }}
-                >
-                  Edit Token
-                </button>
-              )}
-
-              {/* Add to Initiative — DM only */}
-              {currentMap && (
-                <button
-                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
-                  onClick={() => {
-                    const token = contextMenu.token;
-                    closeTokenMenu();
-                    socket?.emitInitiativeAdd({ tokenId: token.id, mapId: currentMap.id });
-                  }}
-                >
-                  Add to Initiative
-                </button>
-              )}
-
-              {/* Duplicate Token — all types, DM only */}
-              <button
-                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                onClick={async () => {
-                  if (!campaign?.id || !currentMap?.id) return;
-                  const token = contextMenu.token;
-                  closeTokenMenu();
-                  try {
-                    // Place the copy one cell along, clamped to the map
-                    const position = clampTokenPosition(
-                      { x: token.position.x + 1, y: token.position.y + 1 },
-                      token.size,
-                      currentMap
-                    );
-                    const result = await api.addToken(campaign.id, currentMap.id, {
-                      ...tokenCopyRequest(token, position),
-                      // A copy starts fresh and belongs to nobody's character:
-                      // two tokens on one sheet would follow the same hit
-                      // points and both count as that player's own.
-                      characterId: null,
-                      controlledBy: copyController(token.controlledBy, campaign?.memberships),
-                      hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
-                      conditions: [],
-                    });
-                    useGameStore.getState().addToken(result.token);
-                  } catch (err) {
-                    // A copy is a new token, so an older one whose fields predate
-                    // validation is refused: say which, so the DM can fix it in Edit Token.
-                    showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
-                  }
-                }}
-              >
-                Duplicate Token
-              </button>
-
-              {/* Save as Template — DM only */}
-              <button
-                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                onClick={async () => {
-                  if (!campaign?.id) return;
-                  const token = contextMenu.token;
-                  closeTokenMenu();
-                  try {
-                    await api.saveTokenAsTemplate(campaign.id, {
-                      name: token.name,
-                      imageUrl: token.imageUrl || null,
-                      type: token.type,
-                      disposition: token.disposition,
-                      displayMode: token.displayMode || 'pog',
-                      size: token.size,
-                      notes: token.notes || null,
-                      hp: token.hp || null,
-                      showHpBar: token.showHpBar,
-                      statBlock: token.statBlock || null,
-                      sightRadius: token.sightRadius ?? null,
-                    });
-                    showToast(`Saved ${tokenDisplayName(token)} as a template`, 'success');
-                  } catch (err) {
-                    showToast(apiErrorMessage(err) || 'Could not save the token as a template', 'error');
-                  }
-                }}
-              >
-                Save as Template
-              </button>
-
-              {/* Hide from / Reveal to players — every token; see utils/dmTokenMenu.ts */}
-              {controls.hide && (
-                <button
-                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={async () => {
-                    if (!campaign?.id || !currentMap?.id) return;
-                    const token = contextMenu.token;
-                    closeTokenMenu();
-                    try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
-                    } catch (err) {
-                      showToast(apiErrorMessage(err) || (token.visible ? 'Could not hide the token from players' : 'Could not show the token to players'), 'error');
-                    }
-                  }}
-                >
-                  {cmToken.visible ? 'Hide from Players' : 'Reveal to Players'}
-                </button>
-              )}
-
-              {/* Obscure / Reveal identity — every token; see utils/dmTokenMenu.ts */}
-              {controls.obscure && (
-                <button
-                  className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={async () => {
-                    if (!campaign?.id || !currentMap?.id) return;
-                    const token = contextMenu.token;
-                    closeTokenMenu();
-                    try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
-                    } catch (err) {
-                      showToast(apiErrorMessage(err) || (token.obscured ? "Could not reveal the token's identity" : "Could not obscure the token's identity"), 'error');
-                    }
-                  }}
-                >
-                  {cmToken.obscured ? 'Reveal Identity' : 'Obscure Identity'}
-                </button>
-              )}
-
-              {/* Spirit Realm toggle — creatures cross planes, scenery does not */}
-              {controls.crossPlanes && (
-                contextMenu.token.layer === TokenLayer.TOKEN ? (
-                  <button
-                    disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
-                    onClick={async () => {
-                      if (!campaign?.id || !currentMap?.id) return;
-                      setIsMovingTokenLayer(true);
-                      const token = contextMenu.token;
-                      closeTokenMenu();
-                      try {
-                        await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.SPIRIT });
-                        useGameStore.getState().patchToken(token.id, { layer: TokenLayer.SPIRIT });
-                      } catch (err) {
-                        showToast(apiErrorMessage(err) || 'Could not send the token to the spirit realm', 'error');
-                      } finally {
-                        setIsMovingTokenLayer(false);
-                      }
-                    }}
-                  >
-                    {isMovingTokenLayer ? 'Moving…' : 'Send to Spirit Realm'}
-                  </button>
-                ) : (
-                  <button
-                    disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50"
-                    onClick={async () => {
-                      if (!campaign?.id || !currentMap?.id) return;
-                      setIsMovingTokenLayer(true);
-                      const token = contextMenu.token;
-                      closeTokenMenu();
-                      try {
-                        await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.TOKEN });
-                        useGameStore.getState().patchToken(token.id, { layer: TokenLayer.TOKEN });
-                      } catch (err) {
-                        showToast(apiErrorMessage(err) || 'Could not return the token to the material plane', 'error');
-                      } finally {
-                        setIsMovingTokenLayer(false);
-                      }
-                    }}
-                  >
-                    {isMovingTokenLayer ? 'Moving…' : 'Return to Material Plane'}
-                  </button>
-                )
-              )}
-
-              <div className="h-px bg-moss-green/20 my-1" />
-
-              {/* Move to another map */}
-              {(campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id).length > 0 && (
-                <div>
-                  <button
-                    className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setContextMenuMoveToMapOpen(!contextMenuMoveToMapOpen);
-                    }}
-                  >
-                    <span>Move to Map…</span>
-                    <span className="text-xs opacity-60">▶</span>
-                  </button>
-                  {contextMenuMoveToMapOpen && (
-                    <div className="bg-parchment/80 border-t border-moss-green/10 px-2 py-1 space-y-0.5">
-                      {isMoveToMapLoading ? (
-                        <p className="text-xs text-stone-gray px-2 py-1">Moving…</p>
-                      ) : (
-                        (campaign?.maps ?? [])
-                          .filter((m) => m.id !== currentMap?.id)
-                          .map((targetMap) => (
-                            <button
-                              key={targetMap.id}
-                              className="w-full px-2 py-1.5 pointer-coarse:min-h-11 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
-                              onClick={async () => {
-                                if (!campaign?.id || !currentMap?.id) return;
-                                const token = contextMenu.token;
-                                closeTokenMenu();
-                                setContextMenuMoveToMapOpen(false);
-                                setIsMoveToMapLoading(true);
-                                try {
-                                  // One request: the server moves the token as it is and
-                                  // tells everyone on this map itself.
-                                  await api.moveTokens(campaign.id, currentMap.id, [token.id], targetMap.id);
-                                  useGameStore.getState().removeToken(token.id);
-                                } catch (err) {
-                                  showToast(apiErrorMessage(err) || 'Failed to move the token to that map', 'error');
-                                } finally {
-                                  setIsMoveToMapLoading(false);
-                                }
-                              }}
-                            >
-                              {targetMap.name}
-                            </button>
-                          ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="h-px bg-moss-green/20 my-1" />
-
-              {/* Asks first, through the same dialog as the Token Roster. */}
-              <button
-                className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
-                onClick={() => {
-                  setRemovingToken(contextMenu.token);
-                  closeTokenMenu();
-                }}
-              >
-                Remove from Map
-              </button>
-            </>
-            );
-          })()}
+          <MapMenuRows
+            items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
+            onClose={closeTokenMenu}
+            openSubmenu={tokenMenuSubmenu}
+            onToggleSubmenu={(id) => setTokenMenuSubmenu((open) => (open === id ? null : id))}
+          />
         </div>
       )}
 
@@ -4554,8 +4352,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           onSpendHitDie={(index) =>
             socket?.emitHitDiceSpend({ characterId: rollPicker.characterId, index })
           }
-          anchorX={rollPicker.x}
-          anchorY={rollPicker.y}
+          anchorX={rollPicker.at.x}
+          anchorY={rollPicker.at.y}
           // The dice log goes to the whole table, so an obscured token's
           // rolls are filed under the name everyone may see.
           publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
@@ -4582,8 +4380,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           <NpcRollPicker
             token={npcToken}
             gameSystem={campaign?.gameSystem ?? 'DND_5E'}
-            anchorX={npcRollPicker.x}
-            anchorY={npcRollPicker.y}
+            anchorX={npcRollPicker.at.x}
+            anchorY={npcRollPicker.at.y}
             onRoll={(expression, purpose, characterName) =>
             tableRoll({ expression, purpose, characterName })
           }
@@ -4592,67 +4390,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         );
       })()}
 
-      {/* Door Context Menu — right-click on a door segment.
-          Same flex-column sizing as the token menu above; see the note there. */}
+      {/* Door Context Menu — right-click on a door segment, its items from
+          map/doorMenuItems.ts. Same flex-column sizing as the token menu
+          above; see the note there.
+          TODO(play): placed at the pointer and never moved, so near the right or bottom edge of the
+          screen it runs off it; place it as the token menu is placed, flipped to stay on screen. */}
       {doorContextMenu && (
         <div
           className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
           style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header — door type label */}
-          <p className="px-4 py-1.5 text-xs font-semibold text-stone-gray/70 border-b border-moss-green/10 select-none">
-            {doorContextMenu.door.type === 'door-closed' ? '🚪 Closed Door' :
-             doorContextMenu.door.type === 'door-open'   ? '🚪 Open Door'   :
-                                                            '🔒 Locked Door'}
-          </p>
-
-          {/* Open — available when door is closed */}
-          {doorContextMenu.door.type === 'door-closed' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-open')}
-            >
-              Open Door
-            </button>
-          )}
-
-          {/* Close — available when door is open */}
-          {doorContextMenu.door.type === 'door-open' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
-            >
-              Close Door
-            </button>
-          )}
-
-          {/* Lock — DM only, available when door is open or closed */}
-          {isDM && doorContextMenu.door.type !== 'door-locked' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-locked')}
-            >
-              Lock Door
-            </button>
-          )}
-
-          {/* Unlock — DM only, available when door is locked */}
-          {isDM && doorContextMenu.door.type === 'door-locked' && (
-            <button
-              className="w-full px-4 py-2 pointer-coarse:min-h-11 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
-            >
-              Unlock Door
-            </button>
-          )}
-
-          {/* Players see informational text when a door is locked */}
-          {!isDM && doorContextMenu.door.type === 'door-locked' && (
-            <p className="px-4 py-2 text-sm text-stone-gray/70 italic select-none">
-              This door is locked.
-            </p>
-          )}
+          <MapMenuRows
+            items={doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } })}
+            onClose={() => setDoorContextMenu(null)}
+          />
         </div>
       )}
 

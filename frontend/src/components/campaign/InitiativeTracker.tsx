@@ -46,6 +46,7 @@ import { apiErrorMessage } from '@/utils/errors';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
 import CharacterContextMenu from '@/components/campaign/CharacterContextMenu';
+import type { FlatMenuItem } from '@/components/ui/menu';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -527,6 +528,33 @@ export default function InitiativeTracker() {
   const offersCreatureRolls = (token: Token | undefined): boolean =>
     !!token && isDM && !token.characterId && (token.type ?? TokenType.NPC) === TokenType.NPC;
 
+  /**
+   * What a combatant's menu offers this viewer, in order. A row has a menu
+   * when this holds anything, so its right-click, long-press and name open
+   * exactly the menus there are. A roll picker opens where the menu is open.
+   */
+  const combatantMenuItems = (token: Token): FlatMenuItem[] => {
+    const items: FlatMenuItem[] = [];
+    if (offersSheet(token)) {
+      items.push({ kind: 'command', id: 'view-sheet', icon: Eye, label: 'View Character Sheet', run: () => { void openSheet(token.id); } });
+    }
+    if (offersCharacterRolls(token) || offersCreatureRolls(token)) {
+      items.push({
+        kind: 'command', id: 'roll', icon: Dices, label: 'Roll...',
+        run: () => {
+          if (!menu) return;
+          const { x, y } = menu;
+          if (offersCharacterRolls(token) && token.characterId) {
+            setCharacterRolls({ tokenId: token.id, characterId: token.characterId, x, y });
+          } else {
+            setCreatureRolls({ tokenId: token.id, x, y });
+          }
+        },
+      });
+    }
+    return items;
+  };
+
   const openSheet = async (tokenId: string) => {
     const characterId = tokenOf(tokenId)?.characterId;
     if (!characterId) return;
@@ -784,7 +812,7 @@ export default function InitiativeTracker() {
                     onMove={moveCombatant}
                     hasMenu={(() => {
                       const token = tokenOf(entry.tokenId);
-                      return offersSheet(token) || offersCharacterRolls(token) || offersCreatureRolls(token);
+                      return !!token && combatantMenuItems(token).length > 0;
                     })()}
                     hasSheet={offersSheet(tokenOf(entry.tokenId))}
                     onOpenMenu={(tokenId, x, y, byKeyboard) => {
@@ -887,33 +915,13 @@ export default function InitiativeTracker() {
       {menu && (() => {
         const token = tokenOf(menu.tokenId);
         if (!token) return null;
-        const { tokenId, x, y } = menu;
         return (
           <CharacterContextMenu
             key={menu.opening}
-            x={x}
-            y={y}
+            x={menu.x}
+            y={menu.y}
             autoFocus={menu.byKeyboard}
-            items={[
-              {
-                icon: Eye,
-                label: 'View Character Sheet',
-                onClick: () => { void openSheet(tokenId); },
-                visible: offersSheet(token),
-              },
-              {
-                icon: Dices,
-                label: 'Roll...',
-                onClick: () => {
-                  if (offersCharacterRolls(token) && token.characterId) {
-                    setCharacterRolls({ tokenId, characterId: token.characterId, x, y });
-                  } else {
-                    setCreatureRolls({ tokenId, x, y });
-                  }
-                },
-                visible: offersCharacterRolls(token) || offersCreatureRolls(token),
-              },
-            ]}
+            items={combatantMenuItems(token)}
             onClose={closeMenu}
           />
         );

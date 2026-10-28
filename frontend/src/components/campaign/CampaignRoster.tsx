@@ -27,8 +27,12 @@ import CharacterContextMenu from './CharacterContextMenu';
 import CharacterRollPicker from './CharacterRollPicker';
 import Toast, { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import type { CampaignRole, GameSystem, Character, RosterMember } from '@/types';
+import type { CampaignRole, GameSystem, Character, RosterMember, User, CampaignMembership } from '@/types';
+import type { FlatMenuItem } from '@/components/ui/menu';
 import { TokenLayer } from '@/types';
+
+/** A character's menu, open at a point. */
+interface CharacterMenu { x: number; y: number; characterId: string; characterUserId: string; opening: number }
 
 export default function CampaignRoster() {
   const { campaign, currentMap, userRole } = useCampaign();
@@ -51,7 +55,7 @@ export default function CampaignRoster() {
   // `opening` counts the menus opened, so each is a menu of its own, placed
   // at its point: a long-press on another row brings no mousedown to close
   // the one open.
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; characterId: string; characterUserId: string; opening: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<CharacterMenu | null>(null);
   const menuOpenings = useRef(0);
   const [rollPicker, setRollPicker] = useState<{ x: number; y: number; characterId: string } | null>(null);
   // The character Remove from Campaign asks about. Kept apart from the menu,
@@ -229,6 +233,39 @@ export default function CampaignRoster() {
     }
   };
 
+  /** What a character's menu offers this viewer, in order. */
+  const characterMenuItems = (menu: CharacterMenu, viewer: User, membership: CampaignMembership): FlatMenuItem[] => {
+    const owner = { userId: menu.characterUserId };
+    const items: FlatMenuItem[] = [{ kind: 'command', id: 'view-sheet', icon: Eye, label: 'View Character Sheet', run: handleViewCharacterSheet }];
+    // Rolling uses the sheet's modifiers, so it follows character
+    // ownership, like Edit and Remove below — not `true`, which let
+    // any member roll anyone's character.
+    if (canRollAsCharacter(viewer, owner, membership)) {
+      items.push({
+        kind: 'command', id: 'roll', icon: Dices, label: 'Roll...',
+        run: () => {
+          setRollPicker({ x: menu.x, y: menu.y, characterId: menu.characterId });
+          handleCloseContextMenu();
+        },
+      });
+    }
+    if (canEditCharacter(viewer, owner, membership)) {
+      items.push({ kind: 'command', id: 'edit-sheet', icon: Edit, label: 'Edit Character Sheet', run: handleEditCharacterSheet });
+    }
+    if (membership.role === 'DM' && currentMap) {
+      items.push({ kind: 'command', id: 'add-to-map', icon: MapPin, label: 'Add to Map', run: handleAddTokenToMap });
+    }
+    // "Reassign to Player" used to sit here. It never did anything —
+    // it popped "not yet available" — and there is no endpoint behind
+    // it either: /characters/:id/assign moves a character between
+    // *campaigns*, not between owners. Better absent than advertised.
+    // It comes back when the endpoint does.
+    if (canRemoveCharacterFromCampaign(viewer, owner, membership)) {
+      items.push({ kind: 'command', id: 'remove', icon: X, label: 'Remove from Campaign', tone: 'danger', run: handleRemoveFromCampaign });
+    }
+    return items;
+  };
+
   const handleRemoveFromCampaign = () => {
     if (!contextMenu || !campaign) return;
     setConfirmRemove(contextMenu.characterId);
@@ -391,50 +428,7 @@ export default function CampaignRoster() {
           key={contextMenu.opening}
           x={contextMenu.x}
           y={contextMenu.y}
-          items={[
-            {
-              icon: Eye,
-              label: 'View Character Sheet',
-              onClick: handleViewCharacterSheet,
-              visible: true,
-            },
-            {
-              icon: Dices,
-              label: 'Roll...',
-              onClick: () => {
-                setRollPicker({ x: contextMenu.x, y: contextMenu.y, characterId: contextMenu.characterId });
-                handleCloseContextMenu();
-              },
-              // Rolling uses the sheet's modifiers, so it follows character
-              // ownership, like Edit and Remove below — not `true`, which let
-              // any member roll anyone's character.
-              visible: canRollAsCharacter(user, { userId: contextMenu.characterUserId }, userMembership),
-            },
-            {
-              icon: Edit,
-              label: 'Edit Character Sheet',
-              onClick: handleEditCharacterSheet,
-              visible: canEditCharacter(user, { userId: contextMenu.characterUserId }, userMembership),
-            },
-            {
-              icon: MapPin,
-              label: 'Add to Map',
-              onClick: handleAddTokenToMap,
-              visible: userMembership.role === 'DM' && !!currentMap,
-            },
-            // "Reassign to Player" used to sit here. It never did anything —
-            // it popped "not yet available" — and there is no endpoint behind
-            // it either: /characters/:id/assign moves a character between
-            // *campaigns*, not between owners. Better absent than advertised.
-            // It comes back when the endpoint does.
-            {
-              icon: X,
-              label: 'Remove from Campaign',
-              onClick: handleRemoveFromCampaign,
-              visible: canRemoveCharacterFromCampaign(user, { userId: contextMenu.characterUserId }, userMembership),
-              className: 'text-danger-ink hover:bg-danger/10',
-            },
-          ]}
+          items={characterMenuItems(contextMenu, user, userMembership)}
           onClose={handleCloseContextMenu}
         />
       )}
