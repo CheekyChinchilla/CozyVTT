@@ -37,7 +37,12 @@ export interface MenuCommandBase {
 /** A command that does something when pressed. */
 export interface MenuAction extends MenuCommandBase {
   run: () => void;
-  /** Pressing it leaves the menu open, so presses add up. Every other action closes it. */
+  /**
+   * Pressing it leaves the menu open, so presses add up. Every other action
+   * closes it: the container closes the menu around `run`, the map's popovers
+   * before it and `CharacterContextMenu` after it, and no action may rely on
+   * either order.
+   */
   keepsOpen?: boolean;
   children?: never;
 }
@@ -79,6 +84,16 @@ export interface MenuText {
   id: string;
   label: string;
 }
+
+/** A menu's rows with no submenu, for a menu that draws none (the character menu). */
+export type FlatMenuItem = Exclude<MenuItem, MenuSubmenu>;
+
+/** The classes a popover draws a rule, a heading and a line of text with. */
+export const MENU_ROW_CLASSES = {
+  separator: 'h-px bg-moss-green/20 my-1',
+  heading: 'px-4 py-1.5 text-xs font-semibold text-stone-gray/70 border-b border-moss-green/10 select-none',
+  text: 'px-4 py-2 text-sm text-stone-gray/70 italic select-none',
+};
 
 /** Each tone's text colour, and the background it takes under the pointer. */
 export const MENU_TONES: Record<MenuTone, { text: string; hover: string }> = {

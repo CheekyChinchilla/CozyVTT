@@ -1,4 +1,4 @@
-import { commandLook, type MenuAction, type MenuCommand, type MenuItem, type SubmenuChoice } from '@/components/ui/menu';
+import { MENU_ROW_CLASSES, commandLook, type MenuAction, type MenuCommand, type MenuItem, type SubmenuChoice } from '@/components/ui/menu';
 
 /**
  * The rows of a menu opened on the map, the token menu and the door menu, as
@@ -38,15 +38,11 @@ export default function MapMenuRows({ items, onClose, openSubmenu = null, onTogg
       {items.map((item) => {
         switch (item.kind) {
           case 'separator':
-            return <div key={item.id} className="h-px bg-moss-green/20 my-1" />;
+            return <div key={item.id} className={MENU_ROW_CLASSES.separator} />;
           case 'heading':
-            return (
-              <p key={item.id} className="px-4 py-1.5 text-xs font-semibold text-stone-gray/70 border-b border-moss-green/10 select-none">
-                {item.label}
-              </p>
-            );
+            return <p key={item.id} className={MENU_ROW_CLASSES.heading}>{item.label}</p>;
           case 'text':
-            return <p key={item.id} className="px-4 py-2 text-sm text-stone-gray/70 italic select-none">{item.label}</p>;
+            return <p key={item.id} className={MENU_ROW_CLASSES.text}>{item.label}</p>;
           case 'command': {
             if (!item.children) {
               return (

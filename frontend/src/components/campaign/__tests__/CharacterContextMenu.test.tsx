@@ -18,8 +18,8 @@ it('makes every item tall enough for a finger on a touch screen', () => {
       y={10}
       onClose={vi.fn()}
       items={[
-        { icon: FileText, label: 'View Character Sheet', onClick: vi.fn(), visible: true },
-        { icon: Trash2, label: 'Remove from Campaign', onClick: vi.fn(), visible: true, className: 'text-danger-ink' },
+        { kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() },
+        { kind: 'command', id: 'remove', icon: Trash2, label: 'Remove from Campaign', run: vi.fn(), tone: 'danger' },
       ]}
     />,
   );
@@ -37,7 +37,7 @@ it('stays within the screen on a touch screen, scrolling inside, however tall it
       x={10}
       y={10}
       onClose={vi.fn()}
-      items={[{ icon: FileText, label: 'View Character Sheet', onClick: vi.fn(), visible: true }]}
+      items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
     />,
   );
 

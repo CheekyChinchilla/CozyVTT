@@ -55,7 +55,7 @@ describe('Escape in a picker or a menu', () => {
         x={0}
         y={0}
         onClose={onClose}
-        items={[{ icon: Eye, label: 'View Character Sheet', onClick: () => undefined, visible: true }]}
+        items={[{ kind: 'command', id: 'view', icon: Eye, label: 'View Character Sheet', run: () => undefined }]}
       />
     );
 

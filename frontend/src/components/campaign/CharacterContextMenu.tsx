@@ -1,22 +1,17 @@
 /**
- * Character Context Menu
+ * Character Context Menu: the roster's and the initiative tracker's menu on
+ * a character or a combatant, a popover at the pointer drawing the items it
+ * is given (components/ui/menu.ts), each with its icon.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-
-
-interface ContextMenuItem {
-  icon: React.ElementType;
-  label: string;
-  onClick: () => void;
-  visible: boolean;
-  className?: string;
-}
+import { useEffect, useRef, useState } from 'react';
+import { MENU_ROW_CLASSES, commandLook, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
 
 interface CharacterContextMenuProps {
   x: number;
   y: number;
-  items: ContextMenuItem[];
+  /** What the menu offers, in order. With none, no menu is drawn. */
+  items: FlatMenuItem[];
   onClose: () => void;
   /** Put the cursor on the first item: the menu was opened from the keyboard. */
   autoFocus?: boolean;
@@ -81,12 +76,16 @@ export default function CharacterContextMenu({
     };
   }, [onClose]);
 
-  // Filter visible items
-  const visibleItems = items.filter((item) => item.visible);
-
-  if (visibleItems.length === 0) {
+  if (items.length === 0) {
     return null;
   }
+
+  /** A command's colour: its look, less the hover its own classes already hold for the plain tone. */
+  const toneClass = (item: MenuAction): string => {
+    const { text, hover, dims } = commandLook(item);
+    const plain = (item.tone ?? 'plain') === 'plain';
+    return `${plain ? text : `${text} ${hover}`}${dims ? ` ${dims}` : ''}`;
+  };
 
   return (
     <div
@@ -102,23 +101,33 @@ export default function CharacterContextMenu({
         visibility: pos ? 'visible' : 'hidden',
       }}
     >
-      {visibleItems.map((item, index) => {
-        const Icon = item.icon;
-        return (
-          <button
-            key={index}
-            onClick={() => {
-              item.onClick();
-              onClose();
-            }}
-            className={`w-full flex items-center gap-3 px-4 py-2 pointer-coarse:min-h-11 text-sm hover:bg-moss-green/10 transition-colors ${
-              item.className || 'text-stone-gray'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{item.label}</span>
-          </button>
-        );
+      {items.map((item) => {
+        switch (item.kind) {
+          case 'separator':
+            return <div key={item.id} className={MENU_ROW_CLASSES.separator} />;
+          case 'heading':
+            return <p key={item.id} className={MENU_ROW_CLASSES.heading}>{item.label}</p>;
+          case 'text':
+            return <p key={item.id} className={MENU_ROW_CLASSES.text}>{item.label}</p>;
+          case 'command': {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                title={item.title}
+                disabled={item.busy?.active}
+                onClick={() => {
+                  item.run();
+                  if (!item.keepsOpen) onClose();
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-2 pointer-coarse:min-h-11 text-sm hover:bg-moss-green/10 transition-colors ${toneClass(item)}`}
+              >
+                {Icon && <Icon className="w-4 h-4" />}
+                <span>{item.busy?.active ? item.busy.label : item.label}</span>
+              </button>
+            );
+          }
+        }
       })}
     </div>
   );
