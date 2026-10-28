@@ -79,8 +79,8 @@ build; nothing checks the second, so it falls to you and the review:
   `-ink` version is derived per theme to stay above WCAG AA against that theme's backgrounds.
 
 Two areas are deliberately exempt and listed in `utils/__tests__/themeTokens.test.ts`: the character
-sheets (styled as light "paper" cards, matching the physical sheets) and the dark DM overlays that
-float over the map. If you add UI there, check its contrast by hand — exempt from theming is not
+sheets (styled as light "paper" cards, matching the physical sheets) and the dark tool panels that
+float over the map, the DM's and the drawing tools. If you add UI there, check its contrast by hand — exempt from theming is not
 exempt from being readable.
 
 See [ARCHITECTURE.md → Theming](ARCHITECTURE.md#theming) for the full token list.

@@ -15,7 +15,7 @@ import {
   DRAWING_KIND_REFUSAL, DRAWING_LAYER_REFUSAL, DRAWING_AUDIENCE_REFUSAL, DRAWING_COLOR_REFUSAL, DRAWING_WIDTH_REFUSAL,
   DRAWING_ROTATION_REFUSAL, DRAWING_SORT_KEY_REFUSAL, DRAWING_POINT_REFUSAL, DRAWING_POINT_COUNT_REFUSAL,
   DRAWING_TEXT_REFUSAL, DRAWING_TEXT_ON_SHAPE_REFUSAL, DRAWING_FILL_REFUSAL, DRAWING_PREVIEW_ID_REFUSAL,
-  DRAWING_PREVIEW_POINTS_REFUSAL, markupLimitReached, pointsCanMatter,
+  DRAWING_PREVIEW_POINTS_REFUSAL, markupLimitReached, pointsCanMatter, drawingShare, archiveShare, MARKUP_SHARES, MARKUP_SHARE_FULL,
 } from '../drawings';
 
 const line = { kind: 'line', color: '#3d8bd9', width: 4, points: [[0, 0], [100, 50]] };
@@ -228,41 +228,89 @@ describe('DrawingPreviewSchema', () => {
   });
 });
 
-// One decision for what a map's markup layer has room for, which the add
-// and the import both ask, so a share of the limits by member, if it comes,
-// is a change here and in the counts handed to it.
-describe('markupLimitReached', () => {
-  const { maxMarkupPerMap: most, maxMarkupPointsPerMap: budget } = DRAWING_LIMITS;
-
-  it('has room below both limits, and at the budget exactly', () => {
-    expect(markupLimitReached({ drawings: most - 1, points: budget - 2 }, 2)).toBeNull();
-    expect(markupLimitReached({ drawings: 0, points: null }, 2000)).toBeNull();
+// A map's markup layer has two shares, each with room of its own: the
+// DM's, and the players' together. One decision for what a share has room
+// for, which the add and the import both ask.
+describe('drawingShare', () => {
+  it('puts a drawing for everyone in the DM\'s share when its author is the campaign\'s DM, and in the players\' otherwise', () => {
+    expect(drawingShare({ authorId: 'dm', audience: 'ALL' }, 'dm')).toBe('DM');
+    expect(drawingShare({ authorId: 'mara', audience: 'ALL' }, 'dm')).toBe('PLAYERS');
+    // A former DM's, a removed member's, one whose author's account is gone.
+    expect(drawingShare({ authorId: 'former-dm', audience: 'ALL' }, 'dm')).toBe('PLAYERS');
+    expect(drawingShare({ authorId: null, audience: 'ALL' }, 'dm')).toBe('PLAYERS');
+    expect(drawingShare({ authorId: null, audience: 'ALL' }, null)).toBe('PLAYERS');
   });
 
-  it('names the limit an add would pass', () => {
-    expect(markupLimitReached({ drawings: most, points: 0 }, 1)).toBe('drawings');
-    expect(markupLimitReached({ drawings: 1, points: budget - 1 }, 2)).toBe('points');
+  // The players' share holds only drawings a player is sent, so its refusal
+  // tells a player nothing they cannot count.
+  it('puts every drawing for the DM alone in the DM\'s share, whoever wrote it', () => {
+    expect(drawingShare({ authorId: 'dm', audience: 'DM' }, 'dm')).toBe('DM');
+    expect(drawingShare({ authorId: 'former-dm', audience: 'DM' }, 'dm')).toBe('DM');
+    expect(drawingShare({ authorId: null, audience: 'DM' }, 'dm')).toBe('DM');
+    expect(drawingShare({ authorId: null, audience: 'DM' }, null)).toBe('DM');
+  });
+});
+
+describe('archiveShare', () => {
+  it('is the share an archive names, or by the drawing for one that names none', () => {
+    expect(archiveShare({ share: 'DM' }, 'ALL')).toBe('DM');
+    expect(archiveShare({ share: 'PLAYERS' }, 'ALL')).toBe('PLAYERS');
+    expect(archiveShare({}, 'ALL')).toBe('PLAYERS');
+    expect(archiveShare({ share: 'nobody' }, 'DM')).toBe('DM');
+  });
+
+  it('is the DM\'s for a drawing for the DM alone, whatever share the archive names', () => {
+    expect(archiveShare({ share: 'PLAYERS' }, 'DM')).toBe('DM');
+  });
+});
+
+describe('markupLimitReached', () => {
+  it.each(MARKUP_SHARES)('has room in the %s share below both its limits, and at its budget exactly', (share) => {
+    const { drawings: most, points: budget } = DRAWING_LIMITS.markupShares[share];
+    expect(markupLimitReached({ share, drawings: most - 1, points: budget - 2 }, 2)).toBeNull();
+    expect(markupLimitReached({ share, drawings: 0, points: null }, 2000)).toBeNull();
+  });
+
+  it.each(MARKUP_SHARES)('names the limit of the %s share an add would pass', (share) => {
+    const { drawings: most, points: budget } = DRAWING_LIMITS.markupShares[share];
+    expect(markupLimitReached({ share, drawings: most, points: 0 }, 1)).toBe('drawings');
+    expect(markupLimitReached({ share, drawings: 1, points: budget - 1 }, 2)).toBe('points');
+  });
+
+  it('gives each share 1,000 drawings and 100,000 points, the old map\'s room between them', () => {
+    expect(DRAWING_LIMITS.markupShares).toEqual({ DM: { drawings: 1000, points: 100000 }, PLAYERS: { drawings: 1000, points: 100000 } });
+  });
+});
+
+describe('the refusal for a full share', () => {
+  // A player learns nothing of the DM's drawings from it: it names their
+  // share, and no count.
+  it('names the share and gives no count', () => {
+    expect(MARKUP_SHARE_FULL.PLAYERS).toBe("The players' share of this map's drawing is full. Erase some first.");
+    expect(MARKUP_SHARE_FULL.DM).toBe("Your share of this map's drawing is full. Erase some first.");
+    for (const message of Object.values(MARKUP_SHARE_FULL)) expect(message).not.toMatch(/\d/);
   });
 });
 
 // Adding up the points reads every drawing's points whole, under the map's
-// lock. While a map holds too few drawings for any number of points to reach
-// the budget, they need not be read.
+// lock. While a share holds too few drawings for any number of points to
+// reach its budget, they need not be read.
 describe('pointsCanMatter', () => {
-  const { maxPoints, maxMarkupPointsPerMap: budget } = DRAWING_LIMITS;
+  const { maxPoints } = DRAWING_LIMITS;
+  const { drawings: most, points: budget } = DRAWING_LIMITS.markupShares.PLAYERS;
   const fewest = budget / maxPoints;
 
   it('is false while even drawings of the most points each leave room for the add', () => {
-    expect(pointsCanMatter(0, maxPoints)).toBe(false);
-    expect(pointsCanMatter(fewest - 1, maxPoints)).toBe(false);
+    expect(pointsCanMatter('PLAYERS', 0, maxPoints)).toBe(false);
+    expect(pointsCanMatter('PLAYERS', fewest - 1, maxPoints)).toBe(false);
   });
 
   it('is true once they might not', () => {
-    expect(pointsCanMatter(fewest - 1, maxPoints + 1)).toBe(true);
-    expect(pointsCanMatter(fewest, 1)).toBe(true);
+    expect(pointsCanMatter('PLAYERS', fewest - 1, maxPoints + 1)).toBe(true);
+    expect(pointsCanMatter('PLAYERS', fewest, 1)).toBe(true);
   });
 
-  it('is false on a layer that holds as many drawings as it may, which refuses whatever the points', () => {
-    expect(pointsCanMatter(DRAWING_LIMITS.maxMarkupPerMap, 1)).toBe(false);
+  it('is false on a share that holds as many drawings as it may, which refuses whatever the points', () => {
+    expect(pointsCanMatter('PLAYERS', most, 1)).toBe(false);
   });
 });

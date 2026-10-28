@@ -874,7 +874,10 @@ export async function importCampaign(
             // keep the archive's order.
             if (prepared.drawings.length > 0) {
               await tx.mapDrawing.createMany({
-                data: prepared.drawings.map((drawing, n) => ({ ...drawing, mapId, authorId: null, createdAt: new Date(importedAt + n) })),
+                // The DM's share goes back to the importing DM, the players' with no author.
+                data: prepared.drawings.map(({ share, ...drawing }, n) => ({
+                  ...drawing, mapId, authorId: share === 'DM' ? importingUserId : null, createdAt: new Date(importedAt + n),
+                })),
               });
             }
             firstMapId ??= mapId;

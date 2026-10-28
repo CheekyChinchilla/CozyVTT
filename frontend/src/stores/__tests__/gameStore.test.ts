@@ -18,6 +18,7 @@ import {
   useCurrentTurnTokenId,
 } from '../gameStore';
 import type { CombatState, Token } from '@/types';
+import type { Drawing } from '@/types/drawings';
 import { TokenLayer, TokenType } from '@/types';
 
 function makeCombat(overrides: Partial<CombatState> = {}): CombatState {
@@ -358,5 +359,70 @@ describe('the selected token', () => {
     useGameStore.getState().clearGameState();
 
     expect(useGameStore.getState().selectedTokenId).toBeNull();
+  });
+});
+
+/**
+ * The drawings on the map on screen, as this member is sent them, in the
+ * order they are drawn, with this page's own adds still on their way.
+ */
+describe("the map's drawings", () => {
+  const drawing = (id: string, extra: Partial<Drawing> = {}): Drawing => ({
+    id, authorId: 'me', audience: 'ALL', layer: 'MARKUP', kind: 'line', color: '#d94f3d', fillColor: null, width: 4,
+    rotation: 0, sortKey: 0, points: [[0, 0], [10, 10]], text: null, createdAt: '2026-10-27T10:00:00.000Z', ...extra,
+  });
+  const ids = () => useGameStore.getState().drawings.map((d) => d.id);
+
+  beforeEach(() => {
+    useGameStore.getState().clearGameState();
+  });
+
+  it('is replaced whole for a map, in drawing order: sortKey, then the time made, then the id', () => {
+    useGameStore.getState().setDrawings('map-a', [
+      drawing('late', { createdAt: '2026-10-27T10:00:05.000Z' }),
+      drawing('b', { createdAt: '2026-10-27T10:00:01.000Z' }),
+      drawing('a', { createdAt: '2026-10-27T10:00:01.000Z' }),
+      drawing('under', { sortKey: -1, createdAt: '2026-10-27T11:00:00.000Z' }),
+    ]);
+
+    expect(ids()).toEqual(['under', 'a', 'b', 'late']);
+    expect(useGameStore.getState().drawingsMapId).toBe('map-a');
+  });
+
+  it('takes a new drawing in its place in the order, and the same drawing again in place of the old', () => {
+    useGameStore.getState().setDrawings('map-a', [drawing('a', { createdAt: '2026-10-27T10:00:01.000Z' }), drawing('c', { createdAt: '2026-10-27T10:00:03.000Z' })]);
+
+    useGameStore.getState().putDrawing(drawing('b', { createdAt: '2026-10-27T10:00:02.000Z' }));
+    useGameStore.getState().putDrawing(drawing('a', { createdAt: '2026-10-27T10:00:01.000Z', color: '#111111' }));
+
+    expect(ids()).toEqual(['a', 'b', 'c']);
+    expect(useGameStore.getState().drawings[0].color).toBe('#111111');
+  });
+
+  it('puts the stored drawing in place of the one this page drew while it was on its way', () => {
+    useGameStore.getState().setDrawings('map-a', [drawing('pending:op1', { createdAt: '9999-01-01T00:00:00.000Z' })]);
+
+    useGameStore.getState().putDrawing(drawing('stored', { createdAt: '2026-10-27T10:00:09.000Z' }), 'pending:op1');
+
+    expect(ids()).toEqual(['stored']);
+  });
+
+  it('lets go of one drawing, or of every one a test picks', () => {
+    useGameStore.getState().setDrawings('map-a', [drawing('a'), drawing('b', { authorId: 'them' }), drawing('c', { audience: 'DM' })]);
+
+    useGameStore.getState().removeDrawing('a');
+    expect(ids()).toEqual(['b', 'c']);
+
+    useGameStore.getState().removeDrawings((d) => d.audience === 'DM');
+    expect(ids()).toEqual(['b']);
+  });
+
+  it('goes when the session is cleared', () => {
+    useGameStore.getState().setDrawings('map-a', [drawing('a')]);
+
+    useGameStore.getState().clearGameState();
+
+    expect(useGameStore.getState().drawings).toEqual([]);
+    expect(useGameStore.getState().drawingsMapId).toBeNull();
   });
 });

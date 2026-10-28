@@ -4,7 +4,7 @@
 // ============================================
 
 import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap, MapPin } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap, MapPin, Pencil } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -50,6 +50,10 @@ import {
   drawFogSelection,
   drawPings,
   PING_DURATION_MS,
+  drawDrawings,
+  drawDrawingPreviews,
+  drawMarkupLayer,
+  createDrawingCache,
   type ActivePing,
   type AoEShape,
   type LightingComposite,
@@ -65,6 +69,7 @@ import { useLightTool } from './map/tools/useLightTool';
 import { useMeasureTools } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
+import { useDrawTool, DEFAULT_DRAW_SETTINGS, type DrawSettings, type DrawToolKind } from './map/tools/useDrawTool';
 import type { MapTool, PointerAt } from './map/tools/types';
 import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
 import { createGestureRecognizer, type Gesture } from './map/gestures';
@@ -77,6 +82,9 @@ import {
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
 import { useWallLightRequest } from './map/useWallLightRequest';
+import { useMapDrawings } from './map/useMapDrawings';
+import { labelFontSize } from './map/drawingGeometry';
+import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { releaseHeldToken, carriedSquare, heldDrawnAt } from './map/tokenHold';
 import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
@@ -114,6 +122,8 @@ import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogCont
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
 import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
+import DrawControls, { type MemberDrawings } from '@/components/campaign/DrawControls';
+import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
 import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
 import { useWallHistory } from '@/hooks/useWallHistory';
@@ -392,6 +402,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const setLightMode = useCallback((mode: LightToolMode) => {
     setDmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
   }, []);
+  // The draw tool, null while Draw is put away, and how the next drawing looks.
+  const [drawKind, setDrawKind] = useState<DrawToolKind | null>(null);
+  const [drawSettings, setDrawSettings] = useState<DrawSettings>(DEFAULT_DRAW_SETTINGS);
 
   // Right-mouse button panning while a DM tool is active (left-click is reserved for tools)
   const rightPanActiveRef = useRef(false);
@@ -544,6 +557,40 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // The fog boxes (map/tools/useFogTool.ts).
   const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
     isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty,
+  });
+
+  // The map's drawings and the strokes on their way (map/useMapDrawings.ts),
+  // and the traced outline of each, kept for every repaint.
+  const mapDrawings = useMapDrawings({
+    socket, mapId: currentMap?.id, joinedEpoch, role: userRole, userId: user?.id, markDirty,
+    onRefused: (message) => showToast(message, 'error'),
+  });
+  const [drawingCache] = useState(createDrawingCache);
+
+  // Whether this member may draw now (utils/drawingRules.ts, the server's
+  // rule), on a map whose picture shows: nothing is drawn on one without it.
+  const mayDraw = canDraw(userRole ?? undefined, { status: campaign?.status ?? 'INACTIVE', playersMayDraw: campaign?.playersMayDraw ?? false });
+  // Erasing one's own asks nothing of the session or the setting, as on the
+  // server: a player who may not draw now is offered the eraser and Clear
+  // mine while the map holds drawings of theirs to erase.
+  const hasOwnToErase = mapDrawings.drawings.some((d) => d.layer === 'MARKUP' && !d.id.startsWith('pending:')
+    && d.authorId === user?.id && canEraseDrawing(userRole ?? undefined, user?.id, d));
+  const eraseOnly = !mayDraw && hasOwnToErase;
+  const drawOffered = (mayDraw || eraseOnly) && !!currentMap?.imageUrl && imageState !== 'error';
+  useEffect(() => {
+    if (!drawOffered) setDrawKind(null);
+    else if (eraseOnly) setDrawKind((kind) => (kind && kind !== 'eraser' ? 'eraser' : kind));
+  }, [drawOffered, eraseOnly]);
+  // The drawings the screen draws, and the eraser may find: in Player
+  // Preview, those a player is sent.
+  const drawingsShown = useCallback(
+    () => mapDrawings.drawings.filter((d) => drawingSentTo(isDM && !previewing ? 'DM' : 'PLAYER', d)),
+    [mapDrawings.drawings, isDM, previewing],
+  );
+  const drawTool = useDrawTool({
+    kind: drawKind, setKind: setDrawKind, settings: drawSettings, mapId: currentMap?.id, gridSize: currentMap?.gridSize ?? 50,
+    role: userRole, userId: user?.id, drawnDrawings: drawingsShown, mapControls, markDirty, drawings: mapDrawings,
+    hoverAt: () => hoverMapPxRef.current, hint: (message) => showToast(message, 'info'),
   });
 
   // ============================================
@@ -1416,7 +1463,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       // and light tools, so it can sit armed while a wall is half-drawn.
       // Esc has to cancel the more transient thing first, or it would
       // quietly close the template instead.
-      for (const tool of [fogTool, wallTool, lightTool, measuring]) {
+      for (const tool of [fogTool, wallTool, lightTool, drawTool.tool, measuring]) {
         if (tool.escape?.()) return;
       }
       if (selectedTokenId) useGameStore.getState().selectToken(null);
@@ -1582,6 +1629,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       dmViewBothPlanes,
     }, viewport);
 
+    // The part of the map on screen, which the drawings are culled to.
+    const visible = canvasSize.width > 0 && canvasSize.height > 0
+      ? {
+        minX: -mapControls.panOffset.x / mapControls.zoom,
+        minY: -mapControls.panOffset.y / mapControls.zoom,
+        maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+        maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+      }
+      : null;
+    // 1b. The ground layer's drawings, under the grid. Only the DM may draw
+    //     there, and nothing does yet: the place is kept for a DM's map art.
+    drawDrawings(ctx, { drawings: mapDrawings.drawings, layer: 'GROUND', showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+
     // 2. Grid overlay
     if (showGrid) {
       drawGrid(ctx, { gridColor }, viewport);
@@ -1612,7 +1672,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef, canvasSize.width, canvasSize.height, mapDrawings.drawings, drawingCache]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1896,13 +1956,43 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       }, viewport);
     }
 
+    // 13. The drawings, the topmost layer of the map: over the tokens, a
+    //     player's fog and the lit darkness, so a table can plan over
+    //     ground it cannot see. A drawing for the DM alone shows in the
+    //     DM's own view only, never in a preview. They are kept as pixels
+    //     and copied on, drawn again only when they or the view change, so
+    //     a repaint for a ping or a stroke on its way strokes none of them.
+    //     Then the strokes on their way, and the laser pointer and the
+    //     pings on top.
+    const visible = canvasSize.width > 0 && canvasSize.height > 0
+      ? {
+        minX: -mapControls.panOffset.x / mapControls.zoom,
+        minY: -mapControls.panOffset.y / mapControls.zoom,
+        maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+        maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+      }
+      : null;
+    drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+    const previewNow = Date.now();
+    const ownStroke = drawTool.inProgress();
+    const shownPreviews = [...mapDrawings.previews.current.values(), ...(ownStroke ? [ownStroke] : [])];
+    if (shownPreviews.length > 0) {
+      drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: false }, viewport);
+    }
+
+    // The laser pointer goes over everything, with the pings: pointing is
+    // a signal from someone at the table, as a ping is.
+    if (shownPreviews.length > 0) {
+      drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: true }, viewport);
+    }
+
     if (pings.length > 0) {
       drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
     }
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef, mapDrawings.previews, mapDrawings.drawings, drawingCache, canvasSize.width, canvasSize.height, drawTool]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1924,7 +2014,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Terrain-only content.
   useEffect(() => {
     markDirty('terrain');
-  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
+  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, mapDrawings.drawings]);
 
   // Spirit flags affect the base/spirit images (terrain) and spirit-token
   // alpha (tokens).
@@ -1956,7 +2046,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
 
   // ============================================
   // Token Hit Testing
@@ -2381,12 +2471,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   /**
    * The tools a press or a move is offered to, in this order, until one takes
-   * it: the armed Ping, a DM tool, then doors, the fog boxes, the measuring
-   * tools, and tokens and panning last. The order is what decides a click
+   * it: the armed Ping, the draw tool, a DM tool, then doors, the fog boxes,
+   * the measuring tools, and tokens and panning last. The order is what decides a click
    * when two tools are up at once. When the button lifts each finishes what
    * it holds, in the same order.
    */
-  const pointerTools: MapTool[] = [pingTool, wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
+  const pointerTools: MapTool[] = [pingTool, drawTool.tool, wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
 
   // A mouse and a pen reach the tools as they happen. The mouse is never
   // captured, so a press that leaves the canvas behaves as it always has: a
@@ -2419,13 +2509,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return { ...e, detail: Math.max(e.detail, clicks.count(e.kind, t, e.clientX, e.clientY)) };
   };
 
-  /** A button pressed: the right one pans under a DM tool, the left one goes to the tools. */
+  /** A button pressed: the right one pans under a DM tool or Draw, the left one goes to the tools. */
   const pressButton = (e: MapPointer, via: PointerAt['via']) => {
     if (!canvasRef.current || !currentMap) return;
 
     // Right-button while a tool is active: start panning (left-click is reserved for tools).
     // In normal pan mode, right-click is the context menu — handled by handleContextMenu.
-    if (e.button === 2 && (wallMode || fogMode || lightMode) && isDM) {
+    if (e.button === 2 && (((wallMode || fogMode || lightMode) && isDM) || drawKind !== null)) {
       cancelFogDrag(); // Panning away mid-drag must not reveal anything
       rightPanActiveRef.current = true;
       mapControls.startDrag(e);
@@ -2521,7 +2611,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   /** Set from a finger's drag reaching the tools until it ends. */
   const fingerPressRef = useRef(false);
   const gestureHandlerRef = useRef<(g: Gesture) => void>(() => undefined);
-  /** Whether a press may long-press, asked as it lands: not while a wall, fog or light tool is up. */
+  /** Whether a press may long-press, asked as it lands: not while a wall, fog, light or draw tool is up. */
   const longPressAllowedRef = useRef(true);
   const [gestures] = useState(() => createGestureRecognizer((g) => gestureHandlerRef.current(g), {
     longPressAt: () => longPressAllowedRef.current,
@@ -2576,7 +2666,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
   useEffect(() => {
     gestureHandlerRef.current = handleGesture;
-    longPressAllowedRef.current = !(wallMode || fogMode || lightMode);
+    longPressAllowedRef.current = !(wallMode || fogMode || lightMode || drawKind);
   });
 
   /**
@@ -2625,7 +2715,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   });
   useEffect(() => {
     dropGestures();
-  }, [wallMode, fogMode, lightMode]);
+  }, [wallMode, fogMode, lightMode, drawKind]);
   useEffect(() => {
     const onBlur = () => dropGestures();
     window.addEventListener('blur', onBlur);
@@ -3101,11 +3191,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     const e = fromMouseEvent(event);
     e.preventDefault();
     if (!canvasRef.current || !currentMap) return;
-    // The right button pans while a wall, fog or light tool is up, so no menu
+    // The right button pans while a wall, fog, light or draw tool is up, so no menu
     // opens: some browsers send this event as the button goes down, before
     // any drag, so a drag cannot be told from a click here. A finger's
     // long-press does nothing there either, and its press stays free to drag.
-    if ((wallMode || fogMode || lightMode) && isDM) return;
+    if (((wallMode || fogMode || lightMode) && isDM) || drawKind) return;
 
     // A stylus opens no menu by holding, but some browsers turn a stylus
     // held still into a right-click (Windows Ink does). Its barrel button's
@@ -3239,6 +3329,47 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const heldBarBottom = useMeasuredBottom(heldBarRef, containerRef, putBackShown, underToolbar);
   const aoeTop = heldBarBottom !== null ? heldBarBottom + BAND_GAP : underToolbar;
 
+  /**
+   * Open Draw with the pen, putting away what would take its presses (a DM
+   * tool, the ruler, the area template, a held token); or put it away.
+   */
+  const toggleDraw = () => {
+    if (drawKind) {
+      setDrawKind(null);
+      return;
+    }
+    setDmTool(null);
+    setSelectedLightId(null);
+    putRulerAway();
+    if (draggedToken) cancelHold();
+    setDrawKind(eraseOnly ? 'eraser' : 'pen');
+  };
+  /** How many drawings Clear mine, or for the DM Clear drawings, would erase. */
+  const clearableDrawings = mapDrawings.drawings.filter((d) => d.layer === 'MARKUP' && !d.id.startsWith('pending:')
+    && (isDM || (d.authorId === user?.id && canEraseDrawing(userRole ?? undefined, user?.id, d)))).length;
+  /** For the DM: each other member with drawings Clear one member's would erase, and how many. */
+  const membersWithDrawings = useMemo((): MemberDrawings[] => {
+    if (!isDM) return [];
+    const counts = new Map<string, number>();
+    for (const d of mapDrawings.drawings) {
+      if (d.layer !== 'MARKUP' || d.audience !== 'ALL' || !d.authorId || d.authorId === user?.id || d.id.startsWith('pending:')) continue;
+      counts.set(d.authorId, (counts.get(d.authorId) ?? 0) + 1);
+    }
+    const named = [...counts].map(([authorId, count]) => ({
+      authorId,
+      name: campaign?.memberships?.find((m) => m.userId === authorId)?.user?.displayName ?? null,
+      count,
+    }));
+    // By name, and anyone who has left after the members.
+    return named.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? '').localeCompare(b.name ?? ''));
+  }, [isDM, mapDrawings.drawings, user?.id, campaign?.memberships]);
+  // A label's box takes the keys as it opens, after the press that opened it.
+  const labelBoxRef = useRef<HTMLInputElement>(null);
+  const labelAt = drawTool.textBox?.at;
+  useLayoutEffect(() => {
+    if (labelAt) labelBoxRef.current?.focus({ preventScroll: true });
+  }, [labelAt]);
+
   // ============================================
   // Render
   // ============================================
@@ -3285,6 +3416,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           className={`absolute inset-0 touch-none ${
             pingArmed ? 'cursor-crosshair' :
             draggedToken ? 'cursor-grabbing' :
+            drawKind === 'eraser' ? 'cursor-cell' :
+            drawKind === 'text' ? 'cursor-text' :
+            drawKind ? 'cursor-crosshair' :
             wallMode === 'wall-draw' ? 'cursor-crosshair' :
             wallMode === 'wall-polygon' ? 'cursor-crosshair' :
             wallMode === 'wall-split' ? (splitHoverPoint ? 'cursor-pointer' : 'cursor-crosshair') :
@@ -3302,6 +3436,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           onPointerCancel={handlePointerCancel}
           onPointerLeave={handlePointerLeave}
           onContextMenu={handleContextMenu}
+          // While a label's box is open the press on the map that follows
+          // a pointer's down must not take the keys back from it.
+          onMouseDown={(e) => { if (drawTool.textOpen()) e.preventDefault(); }}
         />
       </div>
 
@@ -3456,7 +3593,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <div className="flex items-center gap-2">
               <div className="w-px h-6 bg-moss-green/20" />
               <Button
-                onClick={handleToggleRuler}
+                onClick={() => { setDrawKind(null); handleToggleRuler(); }}
                 variant="secondary" iconOnly className={showRuler ? 'bg-moss-green/20' : undefined}
                 title="Ruler — measure distance"
                 aria-label="Ruler — measure distance"
@@ -3476,7 +3613,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
               {/* Toggle AoE tool */}
               <Button
-                onClick={handleToggleAoE}
+                onClick={() => { setDrawKind(null); handleToggleAoE(); }}
                 variant="secondary" iconOnly className={showAoE ? 'bg-moss-green/20' : undefined}
                 title="AoE Shape — area of effect overlay"
                 aria-label="AoE Shape — area of effect overlay"
@@ -3494,6 +3631,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               >
                 <MapPin className={`w-4 h-4 ${pingArmed ? 'text-brand-ink' : ''}`} />
               </Button>
+
+              {/* Draw, for whoever may draw now: the DM, or a player while
+                  Players may draw is on and the session is live. */}
+              {drawOffered && (
+                <Button
+                  onClick={toggleDraw}
+                  variant="secondary" iconOnly className={drawKind ? 'bg-moss-green/20' : undefined}
+                  aria-label="Draw"
+                  aria-pressed={drawKind !== null}
+                  title={eraseOnly ? 'Draw: drawing is off for now; erase your own drawings' : 'Draw: a pen, shapes, labels and the laser pointer'}
+                >
+                  <Pencil className={`w-4 h-4 ${drawKind ? 'text-brand-ink' : ''}`} />
+                </Button>
+              )}
             </div>
           )}
 
@@ -3548,9 +3699,29 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         );
       })()}
 
-      {/* DM Tool Panels — draggable container with stacked panels */}
-      {userRole === 'DM' && currentMap && (
+      {/* The tool panels, in a stack that can be dragged: the drawing tools
+          for whoever has Draw open, then the DM's Fog, Walls and Lights. */}
+      {(userRole === 'DM' || drawKind) && currentMap && (
         <DmToolPanelContainer containerRef={containerRef} band={topBand}>
+          {drawKind && (
+            <DrawControls
+              kind={drawKind}
+              onKindChange={setDrawKind}
+              settings={drawSettings}
+              onSettingsChange={(patch) => setDrawSettings((prev) => ({ ...prev, ...patch }))}
+              isDM={isDM}
+              onlyErase={eraseOnly}
+              polygonCorners={drawTool.polygonCorners}
+              onPolygonDone={drawTool.finishPolygon}
+              onPolygonCancel={drawTool.cancelPolygon}
+              clearable={clearableDrawings}
+              onClear={isDM ? mapDrawings.clearAll : mapDrawings.clearMine}
+              members={membersWithDrawings}
+              onClearMember={mapDrawings.clearMember}
+              onClose={() => setDrawKind(null)}
+            />
+          )}
+          {userRole === 'DM' && (<>
           <DmFogControls
             fogMode={fogMode}
             fogEnabled={fogEnabled}
@@ -3581,6 +3752,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               setFogMode(mode);
               // Deactivate wall/light tools when switching to fog tool
               if (mode) {
+                setDrawKind(null);
                 setWallMode(null);
                 setLightMode(null);
                 setSelectedLightId(null);
@@ -3607,7 +3779,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             onWallModeChange={(mode) => {
               wallPanel.onWallModeChange(mode);
               // Deactivate fog/light tools when switching to wall tool
-              if (mode) { setFogMode(null); setLightMode(null); setSelectedLightId(null); }
+              if (mode) { setFogMode(null); setLightMode(null); setSelectedLightId(null); setDrawKind(null); }
             }}
           />
           <DmLightControls
@@ -3616,7 +3788,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               setLightMode(mode);
               if (mode !== 'light-select') setSelectedLightId(null);
               // Deactivate wall/fog tools when switching to light tool
-              if (mode) { setWallMode(null); setFogMode(null); }
+              if (mode) { setWallMode(null); setFogMode(null); setDrawKind(null); }
             }}
             onCollapse={() => {
               setLightMode(null);
@@ -3667,7 +3839,46 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             placementDefaults={lightPlacementDefaults}
             onDefaultsChange={setLightPlacementDefaults}
           />
+          </>)}
         </DmToolPanelContainer>
+      )}
+
+      {/* A text label being written, in a box at its point on the map. */}
+      {drawTool.textBox && currentMap && (
+        <input
+          ref={labelBoxRef}
+          aria-label="Label"
+          value={drawTool.textBox.draft}
+          maxLength={DRAWING_LIMITS.maxTextLength}
+          enterKeyHint="done"
+          autoComplete="off"
+          onChange={(e) => drawTool.setTextDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // An input method's Enter confirms, and its Esc cancels, what it is composing.
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              drawTool.commitText();
+              focusMap();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              drawTool.cancelText();
+              focusMap();
+            }
+          }}
+          onBlur={() => drawTool.commitText()}
+          className="absolute z-20 m-0 p-0 min-w-24 bg-parchment/40 border border-dashed border-brand rounded-sm outline-hidden"
+          style={{
+            left: drawTool.textBox.at[0] * mapControls.zoom + mapControls.panOffset.x,
+            top: drawTool.textBox.at[1] * mapControls.zoom + mapControls.panOffset.y,
+            // At least 16 pixels on a touch screen, below which iOS zooms the page to type.
+            fontSize: Math.max(coarsePointer ? 16 : 8, labelFontSize(drawSettings.width) * mapControls.zoom),
+            lineHeight: 1.25,
+            fontWeight: 600,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            color: drawSettings.color,
+          }}
+        />
       )}
 
       {/* DM Preview Player View — offered while dynamic lighting or fog is

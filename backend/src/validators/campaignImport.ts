@@ -38,7 +38,8 @@ export const IMPORT_LIMITS = {
   // before it is parsed. A map with a 500 by 500 fog, 5,000 walls and 1,000
   // tokens carrying the longest SRD stat block holds about 350,000, in
   // 8.3 MB; one with the fog, the walls and all the drawing its markup
-  // layer holds (2,000 drawings, 200,000 points), about 700,000, in 5.1 MB,
+  // layer holds (two shares of 1,000 drawings and 100,000 points), about
+  // 700,000, in 5.1 MB,
   // and with 800 such tokens beside them about 760,000, in 10.2 MB; more
   // tokens than that make a file the export refuses. 10 MB of tiny walls or
   // empty objects holds over a million and cost several times as much to

@@ -7,7 +7,12 @@
  * the upgrade.
  *
  * A map's drawings travel in its file's `drawings`, in drawing order and
- * without their authors, a drawing for the DM alone still the DM's. Its
+ * without their authors, a drawing for the DM alone still the DM's, each
+ * with the share of the map's markup layer it counts to: the DM's, for
+ * every drawing for the DM alone and the campaign's DM's own, or the
+ * players'. An import gives the DM's share to
+ * the importing DM and leaves the players' authorless, and holds each share
+ * to its room. Its
  * `annotations` is written empty: releases up to 1.5.4 store an archive's
  * annotations and send them to every member, and drop a key they do not
  * know, so an archive made here and imported there carries no drawing to
@@ -142,25 +147,26 @@ const kept = (d: Record<string, unknown>) => ({
 });
 
 describe('the drawings on a map', () => {
-  it('come back in their order, one for the DM alone still the DM\'s, with new ids and no author', async () => {
+  it('come back in their order, one for the DM alone still the DM\'s, with new ids, the DM\'s share the importing DM\'s', async () => {
     const { campaignId, mapId } = await campaign('Drawn on');
     const make = (data: Record<string, unknown>) =>
       prisma.mapDrawing.create({ data: { mapId, authorId: userId, kind: 'line', color: '#3d8bd9', width: 3, points: [[0, 0], [10, 10]], ...data } });
     const made = [
       await make({ sortKey: 4, kind: 'polygon', points: [[0, 0], [100, 0], [50, 80]], fillColor: '#e8a33c', width: 2 }),
       await make({ sortKey: -2, audience: 'DM', kind: 'text', points: [[40, 40]], text: 'The vault is here', rotation: 90 }),
-      await make({}),
+      // A player's, whose account has since gone: the players' share.
+      await make({ authorId: null }),
+      // A note for the DM alone whose author's account is gone: the DM's share.
+      await make({ authorId: null, audience: 'DM', sortKey: 9 }),
     ];
     const { file, result } = await roundTrip(campaignId);
 
     expect(result.warnings).toEqual([]);
     const { map, drawings } = await importedDrawings(result.campaignId);
-    const byOrder = [made[1], made[2], made[0]];
+    const byOrder = [made[1], made[2], made[0], made[3]];
     expect(drawings.map(kept)).toEqual(byOrder.map(kept));
-    for (const d of drawings) {
-      expect(d.authorId).toBeNull();
-      expect(made.map((m) => m.id)).not.toContain(d.id);
-    }
+    expect(drawings.map((d) => d.authorId)).toEqual([userId, null, userId, userId]);
+    for (const d of drawings) expect(made.map((m) => m.id)).not.toContain(d.id);
     expect(map.annotations).toEqual([]);
 
     // The archive carries the drawings under `drawings`, without their
@@ -170,7 +176,8 @@ describe('the drawings on a map', () => {
     expect(text).not.toMatch(/\n/);
     const written = JSON.parse(text) as { annotations: unknown[]; drawings: Array<Record<string, unknown>> };
     expect(written.annotations).toEqual([]);
-    expect(written.drawings).toEqual(byOrder.map(kept));
+    expect(written.drawings).toEqual(byOrder.map((d, i) => ({ ...kept(d), share: i === 1 ? 'PLAYERS' : 'DM' })));
+    expect(written.drawings.filter((d) => d.audience === 'DM').map((d) => d.share)).toEqual(['DM', 'DM']);
     expect(written.drawings.some((d) => d.audience === 'DM')).toBe(true);
   });
 
@@ -214,21 +221,61 @@ describe('the drawings on a map', () => {
     expect((await importedDrawings(result.campaignId)).drawings).toHaveLength(1);
   });
 
-  it('are cut at the most a map\'s markup layer holds, drawings and points, and the cut counted', async () => {
-    const line = (i: number) => ({ kind: 'line', color: '#3d8bd9', width: 1, points: [[i % 900, 0], [i % 900, 10]] });
+  it('are cut at the most each share of a map\'s markup layer holds, drawings and points, and the cut counted', async () => {
+    const { DM: dmShare, PLAYERS: playersShare } = DRAWING_LIMITS.markupShares;
+    const line = (i: number, share: string) => ({ kind: 'line', color: '#3d8bd9', width: 1, points: [[i % 900, 0], [i % 900, 10]], share });
     const tooMany = await importCampaign(await oneMapArchive('Too many', {
-      drawings: Array.from({ length: DRAWING_LIMITS.maxMarkupPerMap + 3 }, (_, i) => line(i)),
+      drawings: [
+        ...Array.from({ length: playersShare.drawings + 3 }, (_, i) => line(i, 'PLAYERS')),
+        ...Array.from({ length: dmShare.drawings + 1 }, (_, i) => line(i, 'DM')),
+      ],
     }), userId);
-    expect(tooMany.warnings).toEqual([`Map "Plan": left out the last 3 drawings: a map holds ${DRAWING_LIMITS.maxMarkupPerMap.toLocaleString('en-US')} on its markup layer.`]);
-    expect((await importedDrawings(tooMany.campaignId)).drawings).toHaveLength(DRAWING_LIMITS.maxMarkupPerMap);
+    expect(tooMany.warnings).toEqual([
+      `Map "Plan": left out the last 3 drawings of the players' share: each share of a map's markup layer holds ${playersShare.drawings.toLocaleString('en-US')}.`,
+      `Map "Plan": left out the last 1 drawing of the DM's share: each share of a map's markup layer holds ${dmShare.drawings.toLocaleString('en-US')}.`,
+    ]);
+    const { drawings } = await importedDrawings(tooMany.campaignId);
+    expect(drawings.filter((d) => d.authorId === userId)).toHaveLength(dmShare.drawings);
+    expect(drawings.filter((d) => d.authorId === null)).toHaveLength(playersShare.drawings);
 
     const stroke = { kind: 'pen', color: '#3d8bd9', width: 1, points: Array.from({ length: DRAWING_LIMITS.maxPoints }, (_, i) => [i % 900, Math.floor(i / 900)]) };
-    const strokes = DRAWING_LIMITS.maxMarkupPointsPerMap / DRAWING_LIMITS.maxPoints;
+    const strokes = playersShare.points / DRAWING_LIMITS.maxPoints;
     const tooMuch = await importCampaign(await oneMapArchive('Too much', {
-      drawings: [...Array.from({ length: strokes }, () => stroke), stroke, line(1)],
+      drawings: [...Array.from({ length: strokes }, () => stroke), stroke, line(1, 'PLAYERS'), { ...stroke, share: 'DM' }],
     }), userId);
-    expect(tooMuch.warnings).toEqual([`Map "Plan": left out 2 drawings past the ${DRAWING_LIMITS.maxMarkupPointsPerMap.toLocaleString('en-US')} points a map holds on its markup layer.`]);
-    expect((await importedDrawings(tooMuch.campaignId)).drawings).toHaveLength(strokes);
+    expect(tooMuch.warnings).toEqual([`Map "Plan": left out 2 drawings of the players' share past the ${playersShare.points.toLocaleString('en-US')} points each share of a map's markup layer holds.`]);
+    expect((await importedDrawings(tooMuch.campaignId)).drawings).toHaveLength(strokes + 1);
+  });
+
+  // An archive written before drawings carried their share: one for the DM
+  // alone is the DM's, any other the players'.
+  it('without a share are the DM\'s when for the DM alone, and the players\' otherwise', async () => {
+    const line = { kind: 'line', color: '#3d8bd9', width: 1, points: [[0, 0], [10, 10]] };
+    const result = await importCampaign(await oneMapArchive('No share', {
+      drawings: [{ ...line, audience: 'DM' }, line, { ...line, share: 'nobody' }],
+    }), userId);
+    expect(result.warnings).toEqual([]);
+    expect((await importedDrawings(result.campaignId)).drawings.map((d) => d.authorId)).toEqual([userId, null, null]);
+  });
+
+  // The players' share holds only drawings a player is sent.
+  it('put a drawing for the DM alone in the DM\'s share whatever share the archive names, and count it there', async () => {
+    const line = { kind: 'line', color: '#3d8bd9', width: 1, points: [[0, 0], [10, 10]] };
+    const { DM: dmShare } = DRAWING_LIMITS.markupShares;
+    const result = await importCampaign(await oneMapArchive('Named the players', {
+      drawings: [
+        ...Array.from({ length: dmShare.drawings - 1 }, () => ({ ...line, share: 'DM' })),
+        { ...line, audience: 'DM', share: 'PLAYERS' },
+        { ...line, audience: 'DM', share: 'PLAYERS' },
+        { ...line, share: 'PLAYERS' },
+      ],
+    }), userId);
+    expect(result.warnings).toEqual([
+      `Map "Plan": left out the last 1 drawing of the DM's share: each share of a map's markup layer holds ${dmShare.drawings.toLocaleString('en-US')}.`,
+    ]);
+    const { drawings } = await importedDrawings(result.campaignId);
+    expect(drawings.filter((d) => d.audience === 'DM').map((d) => d.authorId)).toEqual([userId]);
+    expect(drawings.filter((d) => d.authorId === null)).toHaveLength(1);
   });
 
   it('of a map holding all the drawing it may, with a full fog and 5,000 walls, export under 10 MB and import whole', async () => {
@@ -241,20 +288,22 @@ describe('the drawings on a map', () => {
         wallSegments: Array.from({ length: 5000 }, (_, i) => ({ id: randomUUID(), x1: 24000 + i, y1: 24000, x2: 24001 + i, y2: 24999, type: 'wall' })),
       },
     });
-    const perDrawing = DRAWING_LIMITS.maxMarkupPointsPerMap / DRAWING_LIMITS.maxMarkupPerMap;
-    await prisma.mapDrawing.createMany({
-      data: Array.from({ length: DRAWING_LIMITS.maxMarkupPerMap }, (_, d) => ({
-        mapId, authorId: userId, kind: 'pen', color: '#3d8bd9', width: 3,
-        points: Array.from({ length: perDrawing }, (_, i) => [-24999 + d * 12 + i, 24999 - i]),
-      })),
-    });
+    // Both shares full: the DM's own, and the players' (here authorless).
+    const { DM: dmShare, PLAYERS: playersShare } = DRAWING_LIMITS.markupShares;
+    const perDrawing = dmShare.points / dmShare.drawings;
+    const full = (count: number, authorId: string | null, from: number) => Array.from({ length: count }, (_, d) => ({
+      mapId, authorId, kind: 'pen', color: '#3d8bd9', width: 3,
+      points: Array.from({ length: perDrawing }, (_, i) => [-24999 + (from + d) * 12 + i, 24999 - i]),
+    }));
+    await prisma.mapDrawing.createMany({ data: [...full(dmShare.drawings, userId, 0), ...full(playersShare.drawings, null, dmShare.drawings)] });
 
     const { file, result } = await roundTrip(campaignId);
 
     expect(Buffer.byteLength(await mapFile(file))).toBeLessThan(10 * 1024 * 1024);
     expect(result).toMatchObject({ mapCount: 1, warnings: [], skipped: [] });
     const { drawings } = await importedDrawings(result.campaignId);
-    expect(drawings).toHaveLength(DRAWING_LIMITS.maxMarkupPerMap);
-    expect(drawings.reduce((sum, d) => sum + (d.points as unknown[]).length, 0)).toBe(DRAWING_LIMITS.maxMarkupPointsPerMap);
+    expect(drawings).toHaveLength(dmShare.drawings + playersShare.drawings);
+    expect(drawings.reduce((sum, d) => sum + (d.points as unknown[]).length, 0)).toBe(dmShare.points + playersShare.points);
+    expect(drawings.filter((d) => d.authorId === userId)).toHaveLength(dmShare.drawings);
   });
 });

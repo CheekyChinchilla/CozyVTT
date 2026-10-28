@@ -561,6 +561,8 @@ export interface Campaign {
   spiritLayerStyle: string;
   chatCooldownEnabled: boolean;
   chatCooldownSeconds: number;
+  /** Players may draw on the map and point the laser; the DM always may. */
+  playersMayDraw: boolean;
   createdAt: string;
   updatedAt: string;
   lastPlayedAt: string | null;
@@ -1197,6 +1199,7 @@ export interface UpdateCampaignRequest {
   spiritLayerStyle?: string;
   chatCooldownEnabled?: boolean;
   chatCooldownSeconds?: number;
+  playersMayDraw?: boolean;
 }
 
 // Character

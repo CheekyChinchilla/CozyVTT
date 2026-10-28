@@ -25,7 +25,7 @@ import { extractAssetId } from '../utils/asset-urls';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
-import { DRAWING_ORDER, drawingForArchive } from './mapDrawings';
+import { DRAWING_ORDER, campaignDmId, drawingForArchive } from './mapDrawings';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -122,6 +122,9 @@ export async function prepareCampaignExport(
   });
 
   if (!campaign) throw new Error('Campaign not found');
+  // The campaign's DM, by whom each drawing's share of its map's markup
+  // layer is written (drawingShare).
+  const dmId = await campaignDmId(prisma, campaignId);
 
   // 2. Collect all asset IDs we need to include
   const assetIds = new Set<string>();
@@ -190,8 +193,9 @@ export async function prepareCampaignExport(
       // must not be here. They drop a key they do not know, such as
       // `drawings`. Map.annotations, which nothing reads, is not written.
       annotations: [],
-      // The map's drawings, in drawing order and without their authors.
-      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map(drawingForArchive),
+      // The map's drawings, in drawing order and without their authors, each
+      // with the share of the markup layer it counts to.
+      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map((row) => drawingForArchive(row, dmId)),
       wallSegments: map.wallSegments || [],
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
