@@ -154,18 +154,23 @@ const SKILL_NAMES: Record<string, string> = {
  * header over the rows draws its labels with the same widths, so each sits
  * over its column; the half and fifth have a width of their own, so a row's
  * value box does not move with the width of its digits.
+ *
+ * Below `sm` a row takes two lines: the tick and the name fill the first
+ * (the name's basis is the row less the tick and the gap, 1.75 rem), and the
+ * numbers go under the name (`ml-7`). From `sm` up it is one line. The remove
+ * button is 44 px on a touch screen, and so is the column kept for it.
  */
 const COLUMN = {
   tick: 'w-5 shrink-0',
-  name: 'flex-1 min-w-0',
-  base: 'w-10',
+  name: 'flex-1 min-w-0 basis-[calc(100%-1.75rem)] sm:basis-0',
+  base: 'w-10 ml-7 sm:ml-0',
   value: 'w-14',
   reference: 'w-12',
-  remove: 'w-5 shrink-0',
+  remove: 'w-5 pointer-coarse:w-11 shrink-0',
 } as const;
 
 /** A skill row and the header over the rows. */
-const ROW = 'flex items-center space-x-2 px-2';
+const ROW = 'flex flex-wrap items-center gap-x-2 gap-y-1 px-2 sm:flex-nowrap';
 
 /**
  * SkillRow - Single skill display with improvement checkbox
@@ -321,7 +326,7 @@ const SkillRow: React.FC<{
           onClick={onRemove}
           aria-label={`Remove ${controlName}`}
           title="Remove"
-          className={`${COLUMN.remove} p-0.5 rounded-sm text-danger-ink hover:bg-danger/10`}
+          className={`${COLUMN.remove} touch-target inline-flex items-center justify-center p-0.5 rounded-sm text-danger-ink hover:bg-danger/10`}
         >
           <X className="w-4 h-4" />
         </button>
@@ -350,7 +355,7 @@ const AddSkillControl: React.FC<{
   const full = listIsFull({ length: count } as unknown[]);
   return (
     <div className="px-2 py-1">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
         {options && (
           <select
             value={choice}

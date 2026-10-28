@@ -83,7 +83,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
         <div className="flex items-center space-x-2">
           <Swords className="w-5 h-5 text-ink-secondary" />
           <h3 className="text-lg font-bold text-ink">Weapons</h3>
@@ -300,7 +300,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     <td className="px-3 py-2">
                       <button
                         onClick={() => handleDeleteWeapon(index)}
-                        className="p-1 hover:bg-danger/10 rounded-sm text-danger-ink transition-colors"
+                        className="touch-target inline-flex items-center justify-center p-1 hover:bg-danger/10 rounded-sm text-danger-ink transition-colors"
                         title="Delete weapon"
                       >
                         <Trash2 className="w-4 h-4" />

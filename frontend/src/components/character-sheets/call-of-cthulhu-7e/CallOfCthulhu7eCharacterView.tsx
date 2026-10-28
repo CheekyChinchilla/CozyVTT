@@ -175,7 +175,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           <Target className="w-5 h-5" />
           <span>Characteristics</span>
         </h3>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-8 gap-4">
           {data.characteristics && (
             <>
               {orderedCharacteristics(data.characteristics as unknown as Record<string, unknown>).map((key) => (
@@ -373,7 +373,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
             <Package className="w-5 h-5" />
             <span>Wealth & Assets</span>
           </h3>
-          <div className="grid grid-cols-3 gap-4 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
             <div>
               <div className="text-xs text-ink-secondary uppercase mb-1">Spending Level</div>
               <div className="text-xl font-bold text-warning-ink">{data.wealth.spendingLevel}</div>
