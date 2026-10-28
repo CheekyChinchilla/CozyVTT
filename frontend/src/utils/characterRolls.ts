@@ -81,19 +81,26 @@ function fmt(mod: number): string {
 
 
 /**
- * Converts a normal-roll expression beginning with "1d20" to an advantage
+ * One d20 standing alone at the start of an expression: followed by its end,
+ * a sign or a space. `1d200` is another die, and `1d20kh1` keeps a die of its
+ * own already, so neither is one. The dice parser reads `D` as `d`.
+ */
+const LEADING_D20 = /^1d20(?=$|[+\-\s])/i;
+
+/**
+ * Converts a normal-roll expression beginning with one d20 to an advantage
  * expression by replacing "1d20" with "2d20kh1".
  */
 export function withAdvantage(expr: string): string {
-  return expr.replace(/^1d20/, '2d20kh1');
+  return expr.replace(LEADING_D20, '2d20kh1');
 }
 
 /**
- * Converts a normal-roll expression beginning with "1d20" to a disadvantage
+ * Converts a normal-roll expression beginning with one d20 to a disadvantage
  * expression by replacing "1d20" with "2d20kl1".
  */
 export function withDisadvantage(expr: string): string {
-  return expr.replace(/^1d20/, '2d20kl1');
+  return expr.replace(LEADING_D20, '2d20kl1');
 }
 
 // ---------------------------------------------------------------------------

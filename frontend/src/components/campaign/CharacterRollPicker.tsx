@@ -14,13 +14,11 @@ import { api } from '@/services/api';
 import type { Character } from '@/types';
 import {
   getCharacterRolls,
-  withAdvantage,
-  withDisadvantage,
   type RollOption,
   type CharacterRolls,
 } from '@/utils/characterRolls';
 import { resolveCharacterInitiative } from '@/utils/rules/initiative';
-import { getModeLabels, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
+import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 import CustomRollFooter from './CustomRollFooter';
 
 // ---------------------------------------------------------------------------
@@ -181,16 +179,11 @@ export default function CharacterRollPicker({
   }, [onClose]);
 
   const handleRollOption = (opt: RollOption) => {
-    let expr = opt.expression;
-    let purpose = opt.purpose;
+    const { expression, purpose } = opt.supportsAdvantage
+      ? applyRollMode(opt.expression, opt.purpose, mode, character?.gameSystem ?? null)
+      : opt;
 
-    if (opt.supportsAdvantage && mode !== 'normal') {
-      expr = mode === 'advantage' ? withAdvantage(expr) : withDisadvantage(expr);
-      const modeLabel = getModeLabels(character?.gameSystem ?? null)[mode];
-      purpose = `${purpose} (${modeLabel})`;
-    }
-
-    const made = onRoll(expr, purpose, publicName ?? character?.name);
+    const made = onRoll(expression, purpose, publicName ?? character?.name);
     // Spent once the roll is made: a refused roll used to take the die
     // anyway. After the roll, so a failure to decrement cannot swallow it.
     const hitDiceIndex = opt.hitDiceIndex;
@@ -262,7 +255,7 @@ export default function CharacterRollPicker({
             </button>
             {modeOpen && (
               <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
-                {(['normal', 'advantage', 'disadvantage'] as RollMode[]).map((m) => (
+                {ROLL_MODES.map((m) => (
                   <button
                     key={m}
                     onClick={() => { setMode(m); setModeOpen(false); }}

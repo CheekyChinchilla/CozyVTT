@@ -84,3 +84,16 @@ describe('the close button', () => {
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
 });
+
+describe('the roll mode', () => {
+  // The picker's mode and a sheet's Roll mode apply one helper, so these pin
+  // what the picker rolled before it used it.
+  it('rolls a Pathfinder 2e check twice with Fortune, keeping the higher, and the log says so', () => {
+    const onRoll = vi.fn();
+    render(<CharacterRollPicker character={seelah} onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fortune' }));
+    fireEvent.click(screen.getByRole('button', { name: /^STR / }));
+    expect(onRoll).toHaveBeenCalledWith('2d20kh1+4', 'Strength Check (Fortune)', 'Seelah');
+  });
+});
