@@ -695,15 +695,22 @@ describe('the limits on a campaign\'s name and description', () => {
   });
 });
 
-describe('the longest chat message', () => {
-  it('is the same file in the browser and on the server', () => {
+describe('the chat limits', () => {
+  it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/chatLimits.ts')).toBe(read('backend/src/validators/chatLimits.ts'));
   });
 
-  it('is what the chat box uses, with no number of its own', () => {
+  it('give the chat box its longest message, with no number of its own', () => {
     const panel = read('frontend/src/components/campaign/ChatPanel.tsx');
     expect(panel).toContain("from '@/constants/chatLimits'");
     expect(panel).not.toMatch(/\b2000\b|MAX_MESSAGE_LENGTH = /);
+  });
+
+  it('give the history route its longest page, which the chat reads as it looks back', () => {
+    expect(read('backend/src/routes/campaigns.ts')).toContain('limitNum > MAX_CHAT_HISTORY_PAGE');
+    const walk = read('frontend/src/utils/messageHistory.ts');
+    expect(walk).toContain("from '@/constants/chatLimits'");
+    expect(walk).toContain('read(MAX_CHAT_HISTORY_PAGE, cursor)');
   });
 });
 

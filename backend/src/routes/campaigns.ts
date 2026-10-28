@@ -37,6 +37,7 @@ import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validato
 import { escapeLikePattern } from '../utils/likePattern';
 import { standingInvitation, isStanding } from '../utils/invitationState';
 import { CAMPAIGN_LIMITS } from '../validators/campaignLimits';
+import { MAX_CHAT_HISTORY_PAGE } from '../validators/chatLimits';
 import { downloadOnly } from '../middleware/downloadOnly';
 import {
   campaignPreviewLimiter,
@@ -1347,10 +1348,10 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
 
     const limitNum = parseInt(limit as string, 10);
 
-    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > MAX_CHAT_HISTORY_PAGE) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Limit must be between 1 and 100',
+        message: `Limit must be between 1 and ${MAX_CHAT_HISTORY_PAGE}`,
       });
     }
 

@@ -1,7 +1,8 @@
 import { useState, useEffect, useEffectEvent, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus } from 'lucide-react';
+import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus, ChevronDown } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { getDiceRolls } from '@/services/dice.service';
@@ -16,6 +17,7 @@ import Modal from '@/components/ui/Modal';
 import DiceMacroManager from './DiceMacroManager';
 import JumpToNewest from './JumpToNewest';
 import { errorSummary } from '@/utils/errors';
+import { cn } from '@/utils/cn';
 
 /**
  * Stable identity for a roll, used to dedupe the live socket stream against
@@ -101,6 +103,14 @@ export default function DiceRoller() {
   const [purpose, setPurpose] = useState('');
   const [isSecret, setIsSecret] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * The compact layout's footer: the quick rolls in one row that scrolls
+   * sideways, Roll beside the expression, and Character and Purpose behind
+   * More options, so in a short sheet the log keeps its room.
+   */
+  const compact = useCompactLayout();
+  const [moreOptions, setMoreOptions] = useState(false);
 
   // Roll history state
   const [rolls, setRolls] = useState<DiceRolledEvent[]>([]);
@@ -552,6 +562,219 @@ export default function DiceRoller() {
   // Render
   // ============================================
 
+  // The footer's controls, laid out below in one of two ways: the desktop's,
+  // and the compact layout's, which leaves the log its room in a short sheet.
+  const quickRollButtons = QUICK_ROLLS.map((btn) => (
+    <button
+      key={btn.label}
+      onClick={() => handleQuickRoll(btn.expression)}
+      disabled={isRolling}
+      className={`
+        px-2 py-1 rounded-md text-xs font-medium transition-all
+        disabled:opacity-50 disabled:cursor-not-allowed
+        text-ink
+        ${btn.color}${compact ? ' shrink-0 touch-target' : ''}
+      `}
+    >
+      {btn.label}
+    </button>
+  ));
+
+  const specialRollButtons = SPECIAL_ROLLS.map((btn) => (
+    <button
+      key={btn.label}
+      onClick={() => handleQuickRoll(btn.expression)}
+      disabled={isRolling}
+      className={`
+        px-2 py-1 rounded-md border border-warm-amber/30 text-xs font-medium
+        bg-warm-amber/10 hover:bg-warm-amber/20 transition-all
+        disabled:opacity-50 disabled:cursor-not-allowed
+        text-ink${compact ? ' shrink-0 touch-target' : ''}
+      `}
+    >
+      {btn.label}
+    </button>
+  ));
+
+  const savedRollButtons = macros.map((macro) => (
+    <button
+      key={macro.id}
+      onClick={() => handleQuickRoll(macro.expression, macro.name)}
+      disabled={isRolling}
+      title={`${macro.name} — ${macro.expression}`}
+      className={`
+        px-2 py-1 rounded-md border border-spirit-purple/30 text-xs font-medium
+        bg-spirit-purple/10 hover:bg-spirit-purple/20 transition-all
+        disabled:opacity-50 disabled:cursor-not-allowed
+        text-ink max-w-40 truncate${compact ? ' shrink-0 touch-target' : ''}
+      `}
+    >
+      {macro.name}
+    </button>
+  ));
+
+  const savedButton = (
+    <button
+      onClick={() => setIsMacroManagerOpen(true)}
+      title="Saved rolls — add, edit or delete"
+      aria-label="Manage saved rolls"
+      className={`
+        px-2 py-1 rounded-md border border-dashed border-ink-muted/40 text-xs
+        hover:bg-surface transition-all text-ink-secondary
+        flex items-center gap-1${compact ? ' shrink-0 touch-target' : ''}
+      `}
+    >
+      <Plus className="w-3 h-3" />
+      Saved
+    </button>
+  );
+
+  const expressionInput = (
+    <input
+      id="expression"
+      type="text"
+      value={expression}
+      onChange={(e) => setExpression(e.target.value)}
+      onKeyDown={handleKeyDown}
+      placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
+      aria-label="Dice expression"
+      // Read-only while a roll is on its way: disabled, it threw keyboard
+      // focus to the page after every roll.
+      readOnly={isRolling}
+      aria-disabled={isRolling}
+      className={cn('input-cozy px-2 py-1.5 font-mono text-xs read-only:opacity-50 read-only:cursor-not-allowed', compact && 'flex-1 min-w-0 touch-target')}
+    />
+  );
+
+  const characterAndPurpose = (
+    <div
+      id={compact ? 'dice-more-options' : undefined}
+      // Behind More options on the compact layout.
+      hidden={compact && !moreOptions}
+      className={cn('grid grid-cols-2 gap-1.5', compact && !moreOptions && 'hidden')}
+    >
+      <input
+        id="characterName"
+        type="text"
+        value={characterName}
+        onChange={(e) => setCharacterName(e.target.value)}
+        placeholder="Character"
+        aria-label="Character name"
+        // The longest name and purpose the server stores with a roll.
+        maxLength={200}
+        // Read-only while a roll is on its way: disabled, it threw keyboard
+        // focus to the page after every roll.
+        readOnly={isRolling}
+        aria-disabled={isRolling}
+        className={cn('input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed', compact && 'touch-target')}
+      />
+
+      <input
+        id="purpose"
+        type="text"
+        value={purpose}
+        onChange={(e) => setPurpose(e.target.value)}
+        placeholder="Purpose"
+        aria-label="Purpose"
+        maxLength={300}
+        // Read-only while a roll is on its way: disabled, it threw keyboard
+        // focus to the page after every roll.
+        readOnly={isRolling}
+        aria-disabled={isRolling}
+        className={cn('input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed', compact && 'touch-target')}
+      />
+    </div>
+  );
+
+  // Closed, More options names the boxes the next roll still carries.
+  const optionsInUse = [...(characterName.trim() ? ['Character'] : []), ...(purpose.trim() ? ['Purpose'] : [])];
+  const moreOptionsLabel = !moreOptions && optionsInUse.length > 0 ? `More options: ${optionsInUse.join(', ')}` : 'More options';
+
+  const secretRollBox = (
+    <input
+      id="secretRoll"
+      type="checkbox"
+      checked={isSecret}
+      onChange={(e) => setIsSecret(e.target.checked)}
+      disabled={isRolling}
+      className="w-3 h-3 rounded-sm border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
+    />
+  );
+  // Not "only you": the server sends every secret roll to the DM as well,
+  // deliberately, for audit and dispute resolution. Saying otherwise promises
+  // a privacy the app does not provide.
+  const secretRollWords = <span>Secret Roll (hidden from other players)</span>;
+  const secretRoll = compact ? (
+    // The box inside its label, which a finger presses.
+    <label className="touch-target flex items-center gap-2 text-xs text-ink-secondary cursor-pointer">
+      {secretRollBox}
+      <EyeOff className="w-3 h-3" />
+      {secretRollWords}
+    </label>
+  ) : (
+    <div className="flex items-center gap-2">
+      {secretRollBox}
+      <label
+        htmlFor="secretRoll"
+        className="flex items-center gap-1 text-xs text-ink-secondary cursor-pointer"
+      >
+        <EyeOff className="w-3 h-3" />
+        {secretRollWords}
+      </label>
+    </div>
+  );
+
+  const rollButton = (
+    <button
+      type="submit"
+      disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
+      className={cn(compact ? 'shrink-0 touch-target' : 'flex-1', `
+        flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
+        bg-success/15 hover:bg-success/25 border border-success/30 text-success-ink font-semibold text-xs shadow-xs
+        disabled:opacity-50 disabled:cursor-not-allowed
+        transition-all duration-200
+        focus:outline-hidden focus:ring-2 focus:ring-success/50
+      `)}
+    >
+      {isRolling ? (
+        <>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          >
+            <Dices className="w-4 h-4" />
+          </motion.div>
+          <span>Rolling...</span>
+        </>
+      ) : (
+        <>
+          <Send className="w-4 h-4" />
+          <span>Roll</span>
+        </>
+      )}
+    </button>
+  );
+
+  const clearFieldsButton = (
+    <button
+      type="button"
+      onClick={handleClear}
+      disabled={isRolling}
+      className={cn(`
+        px-2 py-1.5 rounded-md border border-ink-muted/30
+        bg-paper/50 hover:bg-paper/70
+        text-ink
+        disabled:opacity-50 disabled:cursor-not-allowed
+        transition-all duration-200
+        focus:outline-hidden focus:ring-2 focus:ring-brand/50
+      `, compact && 'touch-target inline-flex items-center justify-center')}
+      title="Clear all fields"
+      aria-label="Clear all fields"
+    >
+      <RotateCcw className="w-4 h-4" />
+    </button>
+  );
+
   return (
     <>
     {campaign?.id && (
@@ -620,8 +843,10 @@ export default function DiceRoller() {
         </div>
       </div>
 
-      {/* Roll list — a running log, oldest first, like the chat beside it */}
-      <div className="relative flex-1 min-h-0 flex flex-col">
+      {/* Roll list — a running log, oldest first, like the chat beside it.
+          On the compact layout it keeps at least 40 percent of the panel, and
+          the controls under it scroll when they need more room. */}
+      <div className={compact ? 'relative flex-1 min-h-[40%] flex flex-col' : 'relative flex-1 min-h-0 flex flex-col'}>
       <div
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
@@ -664,7 +889,7 @@ export default function DiceRoller() {
       </div>
 
       {/* Input Area */}
-      <div className="shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs">
+      <div className={cn(compact ? 'min-h-0 overflow-y-auto overscroll-contain' : 'shrink-0', 'border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs')}>
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-accent-ink text-center mb-2 italic">
@@ -693,214 +918,92 @@ export default function DiceRoller() {
 
         {/* Quick Roll Buttons */}
         <div className="mb-2">
-          <div className="text-xs text-ink-secondary mb-1">
-            Quick Roll:
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_ROLLS.map((btn) => (
-              <button
-                key={btn.label}
-                onClick={() => handleQuickRoll(btn.expression)}
-                disabled={isRolling}
-                className={`
-                  px-2 py-1 rounded-md text-xs font-medium transition-all
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink
-                  ${btn.color}
-                `}
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {SPECIAL_ROLLS.map((btn) => (
-              <button
-                key={btn.label}
-                onClick={() => handleQuickRoll(btn.expression)}
-                disabled={isRolling}
-                className="
-                  px-2 py-1 rounded-md border border-warm-amber/30 text-xs font-medium
-                  bg-warm-amber/10 hover:bg-warm-amber/20 transition-all
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink
-                "
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
+          {compact ? (
+            // One row that scrolls sideways, the saved rolls and Saved with it.
+            <div role="group" aria-label="Quick Roll" className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain">
+              {quickRollButtons}
+              {specialRollButtons}
+              {savedRollButtons}
+              {savedButton}
+            </div>
+          ) : (
+            <>
+              <div className="text-xs text-ink-secondary mb-1">
+                Quick Roll:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {quickRollButtons}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {specialRollButtons}
+              </div>
 
-          {/* Saved rolls — the player's own, in the order they were saved so a
-              button does not move when one is edited. The row wraps; the panel
-              is a 300px rail at its narrowest and this block never scrolls. */}
-          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-            {macros.map((macro) => (
-              <button
-                key={macro.id}
-                onClick={() => handleQuickRoll(macro.expression, macro.name)}
-                disabled={isRolling}
-                title={`${macro.name} — ${macro.expression}`}
-                className="
-                  px-2 py-1 rounded-md border border-spirit-purple/30 text-xs font-medium
-                  bg-spirit-purple/10 hover:bg-spirit-purple/20 transition-all
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink max-w-40 truncate
-                "
-              >
-                {macro.name}
-              </button>
-            ))}
-            <button
-              onClick={() => setIsMacroManagerOpen(true)}
-              title="Saved rolls — add, edit or delete"
-              aria-label="Manage saved rolls"
-              className="
-                px-2 py-1 rounded-md border border-dashed border-ink-muted/40 text-xs
-                hover:bg-surface transition-all text-ink-secondary
-                flex items-center gap-1
-              "
-            >
-              <Plus className="w-3 h-3" />
-              Saved
-            </button>
-          </div>
+              {/* Saved rolls — the player's own, in the order they were saved so a
+                  button does not move when one is edited. The row wraps; the panel
+                  is a 300px rail at its narrowest and this block never scrolls. */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                {savedRollButtons}
+                {savedButton}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Expression Input */}
         <form onSubmit={handleSubmit} className="space-y-1.5">
-          <div>
-            <input
-              id="expression"
-              type="text"
-              value={expression}
-              onChange={(e) => setExpression(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
-              aria-label="Dice expression"
-              // Read-only while a roll is on its way: disabled, it threw keyboard
-              // focus to the page after every roll.
-              readOnly={isRolling}
-              aria-disabled={isRolling}
-              className="input-cozy px-2 py-1.5 font-mono text-xs read-only:opacity-50 read-only:cursor-not-allowed"
-            />
-          </div>
+          {compact ? (
+            <>
+              <div className="flex gap-1.5">
+                {expressionInput}
+                {rollButton}
+                {clearFieldsButton}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                {secretRoll}
+                <button
+                  type="button"
+                  onClick={() => setMoreOptions((open) => !open)}
+                  aria-expanded={moreOptions}
+                  aria-controls="dice-more-options"
+                  className="touch-target flex items-center gap-1 px-2 py-1 rounded-md text-xs text-ink-secondary hover:bg-surface transition-all"
+                >
+                  <ChevronDown className={cn('w-3 h-3 transition-transform', moreOptions && 'rotate-180')} aria-hidden="true" />
+                  {moreOptionsLabel}
+                </button>
+              </div>
+              {characterAndPurpose}
+            </>
+          ) : (
+            <>
+              <div>
+                {expressionInput}
+              </div>
 
-          <div className="grid grid-cols-2 gap-1.5">
-            <input
-              id="characterName"
-              type="text"
-              value={characterName}
-              onChange={(e) => setCharacterName(e.target.value)}
-              placeholder="Character"
-              aria-label="Character name"
-              // The longest name and purpose the server stores with a roll.
-              maxLength={200}
-              // Read-only while a roll is on its way: disabled, it threw keyboard
-              // focus to the page after every roll.
-              readOnly={isRolling}
-              aria-disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
-            />
+              {characterAndPurpose}
 
-            <input
-              id="purpose"
-              type="text"
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              placeholder="Purpose"
-              aria-label="Purpose"
-              maxLength={300}
-              // Read-only while a roll is on its way: disabled, it threw keyboard
-              // focus to the page after every roll.
-              readOnly={isRolling}
-              aria-disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
-            />
-          </div>
+              {/* Secret Roll Checkbox */}
+              {secretRoll}
 
-          {/* Secret Roll Checkbox */}
-          <div className="flex items-center gap-2">
-            <input
-              id="secretRoll"
-              type="checkbox"
-              checked={isSecret}
-              onChange={(e) => setIsSecret(e.target.checked)}
-              disabled={isRolling}
-              className="w-3 h-3 rounded-sm border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <label
-              htmlFor="secretRoll"
-              className="flex items-center gap-1 text-xs text-ink-secondary cursor-pointer"
-            >
-              <EyeOff className="w-3 h-3" />
-              {/* Not "only you": the server sends every secret roll to the DM
-                  as well, deliberately, for audit and dispute resolution.
-                  Saying otherwise promises a privacy the app does not provide. */}
-              <span>Secret Roll (hidden from other players)</span>
-            </label>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-1.5">
-            <button
-              type="submit"
-              disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
-              className="
-                flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
-                bg-success/15 hover:bg-success/25 border border-success/30 text-success-ink font-semibold text-xs shadow-xs
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-all duration-200
-                focus:outline-hidden focus:ring-2 focus:ring-success/50
-              "
-            >
-              {isRolling ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  >
-                    <Dices className="w-4 h-4" />
-                  </motion.div>
-                  <span>Rolling...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  <span>Roll</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={isRolling}
-              className="
-                px-2 py-1.5 rounded-md border border-ink-muted/30
-                bg-paper/50 hover:bg-paper/70
-                text-ink
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-all duration-200
-                focus:outline-hidden focus:ring-2 focus:ring-brand/50
-              "
-              title="Clear all fields"
-              aria-label="Clear all fields"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-          </div>
+              {/* Action Buttons */}
+              <div className="flex gap-1.5">
+                {rollButton}
+                {clearFieldsButton}
+              </div>
+            </>
+          )}
         </form>
 
-        {/* Hint / Rate Limit Countdown */}
+        {/* Hint / Rate Limit Countdown; the hint is left out of the compact layout's short footer. */}
         {rateLimitCooldown > 0 ? (
           <div className="mt-1.5 text-xs text-danger-ink dark:text-danger-ink text-center font-medium">
             You may roll again in: {rateLimitCooldown} second{rateLimitCooldown !== 1 ? 's' : ''}
           </div>
         ) : (
-          <div className="mt-1.5 text-xs text-ink-muted text-center">
-            Press Enter to roll
-          </div>
+          !compact && (
+            <div className="mt-1.5 text-xs text-ink-muted text-center">
+              Press Enter to roll
+            </div>
+          )
         )}
       </div>
 

@@ -208,7 +208,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 - **System messages** (gray, slightly different style) announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - **Whispers** reach one person only: choose them in the **To** list above the box, or start a message with `/w` or `/whisper` and their name (`/w Mara Meet me by the well`). The line under the box names who it will reach before you send it. Only the two of you see it, marked with a lock; the DM does not see whispers between players. See [Whispering to one person](USER_GUIDE.md#whispering-to-one-person)
-- Scroll up to read the history — the full session log is preserved
+- Scroll up to read the history, and press **Load More** at the top for older messages. The chat holds the newest 400 at a time, and the whole log stays on the server
 - A message that doesn't get through, because the connection dropped or the chat cooldown is still running, is marked **Not sent**. **Retry** sends it again, and a message that did get through after all is not posted twice if you retry within ten minutes; **Discard** removes it
 
 ### The Dice Roller
