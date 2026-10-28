@@ -132,6 +132,7 @@ import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import FloatingLayer from '@/components/ui/FloatingLayer';
+import { whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
@@ -3401,6 +3402,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
   }, [doorContextMenu]);
+
+  // A menu opened elsewhere, the roster's or the tracker's, closes these: the
+  // right-click or long-press that opened it sent no click.
+  const mapMenuOpen = contextMenu !== null || doorContextMenu !== null;
+  useEffect(() => {
+    if (!mapMenuOpen) return;
+    return whenMenuOpens(() => {
+      closeTokenMenu();
+      setDoorContextMenu(null);
+    });
+  }, [mapMenuOpen, closeTokenMenu]);
 
   // After context menu renders, adjust position so it doesn't overflow the
   // viewport; again when Move to Map… opens or closes, which changes its

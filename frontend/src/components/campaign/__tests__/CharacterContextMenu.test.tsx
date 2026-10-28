@@ -11,6 +11,7 @@ import { it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { FileText, Trash2 } from 'lucide-react';
 import CharacterContextMenu from '../CharacterContextMenu';
+import { whenMenuOpens } from '@/components/ui/openMenus';
 
 it('makes every item tall enough for a finger on a touch screen', () => {
   render(
@@ -65,4 +66,28 @@ it('is drawn on the body, outside the panel group it is opened from', () => {
   const menu = screen.getByRole('button', { name: 'View Character Sheet' }).parentElement;
   expect(menu?.closest('[data-group]')).toBeNull();
   expect(menu?.parentElement).toBe(document.body);
+});
+
+// Its opening closes the map's token or door menu (components/ui/openMenus.ts).
+// A menu with no items is not drawn, and closes nothing.
+it('says it has opened when it is drawn, and not when it has no items to draw', () => {
+  const told = vi.fn();
+  const stop = whenMenuOpens(told);
+  try {
+    const { unmount } = render(<CharacterContextMenu x={10} y={10} onClose={vi.fn()} items={[]} />);
+    expect(told).not.toHaveBeenCalled();
+    unmount();
+
+    render(
+      <CharacterContextMenu
+        x={10}
+        y={10}
+        onClose={vi.fn()}
+        items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
+      />,
+    );
+    expect(told).toHaveBeenCalledTimes(1);
+  } finally {
+    stop();
+  }
 });

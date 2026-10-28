@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MENU_ROW_CLASSES, commandLook, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
 import FloatingLayer from '@/components/ui/FloatingLayer';
+import { menuOpened } from '@/components/ui/openMenus';
 
 interface CharacterContextMenuProps {
   x: number;
@@ -43,6 +44,15 @@ export default function CharacterContextMenu({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- measured once, as the menu opens at its point
   }, []);
 
+  // Its opening closes the map's token or door menu, which a right-click or a
+  // long-press here, sending no click, would leave open beside it. A menu
+  // with no items is not drawn and closes nothing. Each opening mounts a new
+  // menu: the roster and the tracker key it by opening.
+  const drawn = items.length > 0;
+  useEffect(() => {
+    if (drawn) menuOpened();
+  }, [drawn]);
+
   // Once placed, and so visible: a hidden button cannot take the cursor.
   const placed = pos !== null;
   useEffect(() => {
@@ -50,6 +60,9 @@ export default function CharacterContextMenu({
   }, [autoFocus, placed]);
 
   // Close on click outside
+  // TODO(play): a long-press on the map, or on another row, while this menu is open opens a second menu beside it:
+  // its lift brings no mousedown here (map/clickSwallow.ts swallows iOS's, Android sends none). Close this menu when
+  // another opens, as the map's menus do through whenMenuOpens, with each menu passing over its own opening.
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
