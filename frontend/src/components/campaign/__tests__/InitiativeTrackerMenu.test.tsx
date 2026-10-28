@@ -17,6 +17,7 @@ import InitiativeTracker from '../InitiativeTracker';
 import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
+import { characterMenuRows, openCharacterMenu } from '@/test/characterMenuRows';
 
 const seat = vi.hoisted(() => ({ role: 'PLAYER' }));
 const getCharacter = vi.hoisted(() => vi.fn());
@@ -53,12 +54,15 @@ vi.mock('@/components/character/CharacterSheetViewerModal', () => ({
   default: ({ character }: { character: { id: string } }) => <div role="dialog" aria-label={`Sheet of ${character.id}`} />,
 }));
 
+// The pickers say what they were given: whose rolls, and where they stand.
 vi.mock('@/components/campaign/CharacterRollPicker', () => ({
-  default: ({ characterId }: { characterId: string }) => <div data-testid="character-rolls">{characterId}</div>,
+  default: ({ characterId, anchorX, anchorY }: { characterId: string; anchorX: number; anchorY: number }) =>
+    <div data-testid="character-rolls">{`${characterId} at ${anchorX}, ${anchorY}`}</div>,
 }));
 
 vi.mock('@/components/campaign/NpcRollPicker', () => ({
-  default: ({ token }: { token: { id: string } }) => <div data-testid="creature-rolls">{token.id}</div>,
+  default: ({ token, anchorX, anchorY }: { token: { id: string }; anchorX: number; anchorY: number }) =>
+    <div data-testid="creature-rolls">{`${token.id} at ${anchorX}, ${anchorY}`}</div>,
 }));
 
 const token = (id: string, name: string, extra: Partial<Token> = {}): Token => ({
@@ -254,5 +258,70 @@ describe('the menu from a finger held on the row', () => {
 
     expect(byRightClick).toEqual(items);
     expect(labels()).toEqual(byRightClick);
+  });
+});
+
+// The menu as each viewer is shown it, item for item, with its icons and
+// looks (test/characterMenuRows.ts), so a change to how it is built shows.
+describe("a combatant's menu, as each viewer is shown it", () => {
+  it.each([
+    ['PLAYER', 'Alice', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['PLAYER', 'Bob', ['[eye] View Character Sheet']],
+    ['DM', 'Alice', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['DM', 'Bob', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['DM', 'Goblin', ['[dices] Roll...']],
+    ['SPECTATOR', 'Alice', ['[eye] View Character Sheet']],
+  ])('for a %s on %s', (role, name, expected) => {
+    seat.role = role;
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 60 });
+
+    expect(characterMenuRows()).toEqual(expected);
+    expect(openCharacterMenu()!.getAttribute('style')).toBe('left: 40px; top: 60px; visibility: visible;');
+  });
+
+  it.each([
+    ['PLAYER', 'Goblin'],
+    ['SPECTATOR', 'Goblin'],
+  ])('offers a %s nothing on %s', (role, name) => {
+    seat.role = role;
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 60 });
+
+    expect(openCharacterMenu()).toBeNull();
+  });
+
+  it('offers the DM nothing on an object', () => {
+    seat.role = 'DM';
+    useGameStore.getState().setTokens([token('chest', 'Chest', { type: TokenType.OBJECT })]);
+    useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [entry('chest', 'Chest', 'npc')] });
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText('Chest'), { clientX: 40, clientY: 60 });
+
+    expect(openCharacterMenu()).toBeNull();
+  });
+
+  it.each([
+    ['PLAYER', 'Alice', 'character-rolls', 'char-alice at 40, 60'],
+    ['DM', 'Goblin', 'creature-rolls', 'g at 40, 60'],
+  ])("opens a %s's Roll... picker on %s where the menu was opened", (role, name, picker, given) => {
+    seat.role = role;
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 60 });
+    fireEvent.click(menuItem('Roll...')!);
+
+    expect(screen.getByTestId(picker)).toHaveTextContent(new RegExp(`^${given}$`));
+  });
+
+  it('closes after an item, and on a press elsewhere', async () => {
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText('Alice'), { clientX: 40, clientY: 60 });
+    fireEvent.click(menuItem('Roll...')!);
+    expect(openCharacterMenu()).toBeNull();
+    expect(screen.getByTestId('character-rolls')).toHaveTextContent('char-alice');
+
+    fireEvent.contextMenu(screen.getByText('Alice'), { clientX: 40, clientY: 60 });
+    fireEvent.mouseDown(document.body);
+    expect(openCharacterMenu()).toBeNull();
   });
 });
