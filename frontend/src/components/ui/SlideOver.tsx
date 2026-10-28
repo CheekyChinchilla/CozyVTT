@@ -6,6 +6,11 @@
 // and closes on Escape (only the top dialog acts on the key, so a dialog the
 // panel opens closes alone). Each panel keeps its own header: put its heading
 // in <SlideOverTitle>, which names the dialog, and its X in <SlideOverClose>.
+//
+// The backdrop is a layer below the panel (z-40 under z-50). On the campaign
+// page's compact layout it is on the panel's layer, before the panel: the
+// sheets there are z-50 (compact/BottomSheet.tsx), and a panel opened over
+// one must dim and block it.
 // ============================================
 
 import { createContext, useContext, useId, type HTMLAttributes, type ReactNode } from 'react';
@@ -13,6 +18,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useIsPresent } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 import { useMotionExit } from '@/utils/motion';
 import { cn } from '@/utils/cn';
 
@@ -51,6 +57,7 @@ export default function SlideOver({
   children,
 }: SlideOverProps) {
   const titleId = useId();
+  const compact = useCompactLayout();
 
   // Portal to <body>: ancestors with transform/filter/backdrop-filter create
   // containing blocks that would trap position:fixed children. `propagate`
@@ -67,7 +74,7 @@ export default function SlideOver({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className={cn('fixed inset-0 z-40 backdrop-blur-xs', backdropClassName)}
+              className={cn(compact ? 'fixed inset-0 z-50 backdrop-blur-xs' : 'fixed inset-0 z-40 backdrop-blur-xs', backdropClassName)}
               onClick={onClose}
               aria-hidden="true"
             />

@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import tailwindTheme from 'tailwindcss/theme.css?raw';
-import { COMPACT_LAYOUT_QUERY } from '../layout';
+import { COMPACT_LAYOUT_QUERY, SHORT_SCREEN_QUERY } from '../layout';
 
 // Every source and stylesheet of the app, tests aside.
 const SOURCES = Object.fromEntries(
@@ -86,5 +86,17 @@ describe('the compact layout query', () => {
       .flatMap(([, css]) => breakpointLg(css));
     const lg = overrides.length > 0 ? overrides[overrides.length - 1] : tailwinds;
     expect(COMPACT_LAYOUT_QUERY).toBe(`(width < ${lg})`);
+  });
+});
+
+describe('the short screen query', () => {
+  // The `short:` variant is written in the app's stylesheet; code that
+  // follows it, a sheet that comes from the side on a phone turned sideways,
+  // asks this constant. Two copies, held to one another here.
+  it("is the query of the stylesheet's short: variant", () => {
+    const variants = Object.entries(SOURCES)
+      .filter(([file]) => file.endsWith('.css'))
+      .flatMap(([, css]) => [...css.matchAll(/@custom-variant\s+short\s+\(@media\s+([^{;]+?)\)\s*;/g)].map((m) => m[1].trim()));
+    expect(variants).toEqual([SHORT_SCREEN_QUERY]);
   });
 });
