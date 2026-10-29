@@ -56,7 +56,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import { AnimatePresence, motion, type TargetAndTransition, type Transition } from 'framer-motion';
+import { AnimatePresence, motion, useIsPresent, type TargetAndTransition, type Transition } from 'framer-motion';
 import { X } from 'lucide-react';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { menuShown } from '@/components/ui/openMenus';
@@ -191,25 +191,29 @@ export function useSheetMotion(open: boolean, from: 'bottom' | 'right') {
   };
 }
 
-/** The dimmed page behind a modal sheet, which closes the sheet when pressed. */
+/**
+ * The dimmed page behind a modal sheet, which closes the sheet when pressed.
+ * While it fades out after the sheet has closed it takes no press, so one
+ * on the map or the bar in that moment reaches them.
+ */
 export function SheetBackdrop({ open, bottom = '0px', onClose }: { open: boolean; bottom?: string; onClose: () => void }) {
+  return <AnimatePresence>{open && <FadingBackdrop key="sheet-backdrop" bottom={bottom} onClose={onClose} />}</AnimatePresence>;
+}
+
+function FadingBackdrop({ bottom, onClose }: { bottom: string; onClose: () => void }) {
+  const present = useIsPresent();
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="sheet-backdrop"
-          data-sheet-backdrop=""
-          aria-hidden="true"
-          className="fixed inset-x-0 top-0 z-50 bg-black/50"
-          style={{ bottom }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          onClick={onClose}
-        />
-      )}
-    </AnimatePresence>
+    <motion.div
+      data-sheet-backdrop=""
+      aria-hidden="true"
+      className="fixed inset-x-0 top-0 z-50 bg-black/50"
+      style={{ bottom, pointerEvents: present ? undefined : 'none' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onClick={present ? onClose : undefined}
+    />
   );
 }
 

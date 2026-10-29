@@ -208,6 +208,20 @@ describe('a sheet at full height', () => {
     expect(anyMenuShown()).toBe(false);
   });
 
+  // The backdrop fades out for 0.2 s after the sheet closes; a press on the
+  // map or the bar in that time landed on it and closed the sheet again.
+  it('takes no press while its backdrop fades after closing', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<Sheet height="full" onClose={onClose} />);
+    rerender(<Sheet height="full" open={false} onClose={onClose} />);
+
+    const fading = backdrop();
+    expect(fading).not.toBeNull();
+    expect(fading?.style.pointerEvents).toBe('none');
+    fireEvent.click(fading as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('holds the keyboard: its heading takes the focus, Tab stays inside and Escape closes it', async () => {
     const onClose = vi.fn();
     render(
