@@ -63,7 +63,7 @@ import FloatingLayer from '@/components/ui/FloatingLayer';
 import { menuShown } from '@/components/ui/openMenus';
 import { isAnyTrapOpen, useFocusTrap } from '@/hooks/useFocusTrap';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { SIDEWAYS_QUERY } from '@/constants/layout';
 import { TAP_SLOP_PX } from '@/components/campaign/map/gestures';
 import { isTypingInto } from '@/components/campaign/map/typingTarget';
 import { useMotionExit } from '@/utils/motion';
@@ -237,7 +237,7 @@ export interface BottomSheetProps {
 }
 
 export function BottomSheet({ open, title, height, onClose, onHeightChange, edges, id, halfHeight = '50dvh', children }: BottomSheetProps) {
-  const sideways = useMediaQuery(SHORT_SCREEN_QUERY);
+  const sideways = useMediaQuery(SIDEWAYS_QUERY);
   const modal = height === 'full';
   const rootRef = useSheet(open, modal, onClose);
   const titleId = useId();

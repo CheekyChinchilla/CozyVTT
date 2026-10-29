@@ -38,14 +38,14 @@
 // Chat button's badge. A sheet the keyboard was in on the desktop's
 // arrangement, as a tablet turns, opens as this one takes over.
 //
-// On a phone turned on its side (a screen under 500 px tall) there is no
-// bar: its buttons sit in the header, and the sheets come from the right
+// On a phone turned on its side (a screen under 500 px tall and wider than
+// it is tall, SIDEWAYS_QUERY) there is no bar: its buttons sit in the header, and the sheets come from the right
 // at the map's full height.
 // ============================================
 
 import { useEffect, useId, useLayoutEffect, useState } from 'react';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { SIDEWAYS_QUERY } from '@/constants/layout';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import { CampaignStatus } from '@/types';
@@ -105,7 +105,7 @@ export interface CompactTableProps {
 
 export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocuments, onOpenShortcuts }: CompactTableProps) {
   const { userRole } = useCampaign();
-  const sideways = useMediaQuery(SHORT_SCREEN_QUERY);
+  const sideways = useMediaQuery(SIDEWAYS_QUERY);
   const sessionTab = useGameStore((s) => s.sessionTab);
   const setSessionTab = useGameStore((s) => s.setSessionTab);
   const setSessionShown = useGameStore((s) => s.setSessionShown);

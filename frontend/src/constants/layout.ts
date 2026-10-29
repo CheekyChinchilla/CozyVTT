@@ -19,3 +19,11 @@ export const COMPACT_LAYOUT_QUERY = '(width < 64rem)';
  * `constants/__tests__/layout.test.ts` holds the two to one another.
  */
 export const SHORT_SCREEN_QUERY = '(max-height: 499.98px)';
+
+/**
+ * A short screen wider than it is tall, as a phone turned on its side is: the
+ * compact layout then puts the bar's buttons in its header and draws its
+ * sheets from the side. A short window narrower than it is tall has no room
+ * for the buttons beside the campaign's name, so it keeps the bar at its foot.
+ */
+export const SIDEWAYS_QUERY = `${SHORT_SCREEN_QUERY} and (orientation: landscape)`;

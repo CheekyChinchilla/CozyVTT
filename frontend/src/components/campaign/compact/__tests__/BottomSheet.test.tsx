@@ -12,7 +12,7 @@ import { BottomSheet, settleDrag, useSheetMotion, type SheetEdges, type SheetHei
 import Modal from '@/components/ui/Modal';
 import SlideOver, { SlideOverTitle } from '@/components/ui/SlideOver';
 import { anyMenuShown } from '@/components/ui/openMenus';
-import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { SHORT_SCREEN_QUERY, SIDEWAYS_QUERY } from '@/constants/layout';
 import { contact } from '@/test/pointer';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 
@@ -560,7 +560,7 @@ describe('what is drawn in front of a sheet', () => {
 describe('a phone turned sideways', () => {
   it('draws the sheet from the right at full height, with no handle', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === SHORT_SCREEN_QUERY,
+      matches: query === SHORT_SCREEN_QUERY || query === SIDEWAYS_QUERY,
       media: query,
       onchange: null,
       addEventListener: () => undefined,
@@ -577,6 +577,24 @@ describe('a phone turned sideways', () => {
     expect(screen.queryByRole('button', { name: /Make Chat/ })).toBeNull();
     // As open to the map as at half height.
     expect(backdrop()).toBeNull();
+  });
+});
+
+describe('a short window narrower than it is tall', () => {
+  it('draws the sheet from the foot of the screen, with its handle', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === SHORT_SCREEN_QUERY,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    }));
+    render(<Sheet onHeightChange={() => undefined} />);
+    expect(sheetElement().className).not.toContain('right-0');
+    expect(screen.getByRole('button', { name: /Make Chat/ })).toBeInTheDocument();
   });
 });
 

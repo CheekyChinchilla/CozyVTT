@@ -11,7 +11,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { TableHosts } from '@/components/campaign/tableHosts';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 import { useGameStore } from '@/stores/gameStore';
-import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { SHORT_SCREEN_QUERY, SIDEWAYS_QUERY } from '@/constants/layout';
 import { CampaignStatus } from '@/types';
 import type { Campaign } from '@/types';
 import type { SessionToolKey } from '@/components/campaign/SessionToolbar';
@@ -312,7 +312,7 @@ describe('taking over from the desktop with the keyboard in a part', () => {
 describe('on a phone turned on its side', () => {
   beforeEach(() => {
     vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
-      matches: query === SHORT_SCREEN_QUERY, media: query, onchange: null,
+      matches: query === SHORT_SCREEN_QUERY || query === SIDEWAYS_QUERY, media: query, onchange: null,
       addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
     }));
   });
@@ -323,5 +323,21 @@ describe('on a phone turned on its side', () => {
     press('Initiative');
     expect(sheet('Initiative').style.bottom).toBe('0px');
     expect(screen.getByRole('img', { name: 'Live' })).toBeInTheDocument();
+  });
+});
+
+describe('in a short window narrower than it is tall', () => {
+  // A desktop window of 400 by 450: the header has no room for six buttons
+  // beside the campaign's name, and the page scrolled sideways.
+  beforeEach(() => {
+    vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
+      matches: query === SHORT_SCREEN_QUERY, media: query, onchange: null,
+      addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+    }));
+  });
+
+  it('keeps the bar at the foot of the screen', () => {
+    table();
+    expect(screen.getByRole('banner')).not.toContainElement(bar());
   });
 });
