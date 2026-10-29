@@ -773,6 +773,78 @@ export default function ChatPanel() {
     );
   }
 
+  // The composer's parts, which the two arrangements lay out differently.
+  // Each has a key, so a change of arrangement keeps the box and its focus.
+  const toLabel = (
+    <label htmlFor="chat-recipient" key="to-label" className={compact ? 'sr-only' : 'text-xs font-medium text-stone-gray'}>To</label>
+  );
+  // Who the message goes to, keyed by user id: display names are not unique.
+  const toList = (
+    <select
+      key="to"
+      id="chat-recipient"
+      value={recipient?.id ?? ''}
+      onChange={chooseRecipient}
+      className={`input-cozy min-w-0 text-sm py-1${compact ? ' w-28 shrink-0 min-h-11' : ' flex-1'}`}
+    >
+      <option value="">Everyone</option>
+      {recipientGone && recipient && <option value={recipient.id}>{recipient.name} (no longer in the campaign)</option>}
+      {/* The DM in a group the app names, which nothing a member writes can copy. */}
+      {dmTarget && (
+        <optgroup label={onlineUserIds.has(dmTarget.userId) ? 'DM' : 'DM, not in session'}>
+          <option value={dmTarget.userId}>{dmTarget.label}</option>
+        </optgroup>
+      )}
+      {players.some((t) => onlineUserIds.has(t.userId)) && (
+        <optgroup label="In session">
+          {players.filter((t) => onlineUserIds.has(t.userId)).map((t) => <option key={t.userId} value={t.userId}>{t.label}</option>)}
+        </optgroup>
+      )}
+      {players.some((t) => !onlineUserIds.has(t.userId)) && (
+        <optgroup label="Not in session">
+          {players.filter((t) => !onlineUserIds.has(t.userId)).map((t) => <option key={t.userId} value={t.userId}>{t.label}</option>)}
+        </optgroup>
+      )}
+    </select>
+  );
+  const messageBox = (
+    <textarea
+      key="box"
+      ref={textareaRef}
+      value={messageInput}
+      onChange={(e) => {
+        setMessageInput(e.target.value);
+        setBoxRefusal(null);
+      }}
+      onKeyDown={handleKeyDown}
+      placeholder={compact ? (recipient ? 'Type a whisper…' : 'Type a message…') : recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
+      aria-label="Chat message"
+      aria-describedby="chat-hint"
+      className={`input-cozy flex-1 text-sm resize-none ${compact ? 'min-w-0 min-h-11' : 'min-h-[60px]'} max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
+      rows={compact ? 1 : 2}
+      maxLength={slashInBox ? MAX_CHAT_MESSAGE_LENGTH + WHISPER_PREFIX_ROOM : MAX_CHAT_MESSAGE_LENGTH}
+      // Read-only through the cooldown, not disabled: disabling the
+      // box threw keyboard focus to the page after every message.
+      readOnly={!canSend}
+      aria-disabled={!canSend}
+    />
+  );
+  const sendButton = (
+    <Button
+      key="send"
+      type="submit"
+      className={`px-4 py-2 flex items-center gap-2${compact ? ' min-h-11 shrink-0' : ''}`}
+      disabled={!messageInput.trim() || !canSend}
+      aria-label={!canSend ? `Rate limited — wait ${cooldownSeconds} seconds` : 'Send message'}
+    >
+      {!canSend && cooldownSeconds > 0 ? (
+        <span className="text-sm font-mono" aria-hidden="true">{cooldownSeconds}s</span>
+      ) : (
+        <Send className="w-4 h-4" aria-hidden="true" />
+      )}
+    </Button>
+  );
+
   return (
     <div className="glass-panel h-full flex flex-col">
       {/* Chat Header */}
@@ -897,68 +969,33 @@ export default function ChatPanel() {
       {/* Input Area */}
       <div className={`${compact ? 'px-3 py-2' : 'p-4'} border-t border-moss-green/20`}>
         <form onSubmit={handleSubmit} className="space-y-2">
-          {/* Who the message goes to. Keyed by user id: display names are not unique. */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="chat-recipient" className="text-xs font-medium text-stone-gray">To</label>
-            <select
-              id="chat-recipient"
-              value={recipient?.id ?? ''}
-              onChange={chooseRecipient}
-              className={`input-cozy flex-1 min-w-0 text-sm py-1${compact ? ' min-h-11' : ''}`}
-            >
-              <option value="">Everyone</option>
-              {recipientGone && recipient && <option value={recipient.id}>{recipient.name} (no longer in the campaign)</option>}
-              {/* The DM in a group the app names, which nothing a member writes can copy. */}
-              {dmTarget && (
-                <optgroup label={onlineUserIds.has(dmTarget.userId) ? 'DM' : 'DM, not in session'}>
-                  <option value={dmTarget.userId}>{dmTarget.label}</option>
-                </optgroup>
-              )}
-              {players.some((t) => onlineUserIds.has(t.userId)) && (
-                <optgroup label="In session">
-                  {players.filter((t) => onlineUserIds.has(t.userId)).map((t) => <option key={t.userId} value={t.userId}>{t.label}</option>)}
-                </optgroup>
-              )}
-              {players.some((t) => !onlineUserIds.has(t.userId)) && (
-                <optgroup label="Not in session">
-                  {players.filter((t) => !onlineUserIds.has(t.userId)).map((t) => <option key={t.userId} value={t.userId}>{t.label}</option>)}
-                </optgroup>
-              )}
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <textarea
-              ref={textareaRef}
-              value={messageInput}
-              onChange={(e) => {
-                setMessageInput(e.target.value);
-                setBoxRefusal(null);
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={compact ? (recipient ? 'Type a whisper…' : 'Type a message…') : recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
-              aria-label="Chat message"
-              aria-describedby="chat-hint"
-              className={`input-cozy flex-1 text-sm resize-none ${compact ? 'min-h-11' : 'min-h-[60px]'} max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
-              rows={compact ? 1 : 2}
-              maxLength={slashInBox ? MAX_CHAT_MESSAGE_LENGTH + WHISPER_PREFIX_ROOM : MAX_CHAT_MESSAGE_LENGTH}
-              // Read-only through the cooldown, not disabled: disabling the
-              // box threw keyboard focus to the page after every message.
-              readOnly={!canSend}
-              aria-disabled={!canSend}
-            />
-            <Button
-              type="submit"
-              className="px-4 py-2 flex items-center gap-2"
-              disabled={!messageInput.trim() || !canSend}
-              aria-label={!canSend ? `Rate limited — wait ${cooldownSeconds} seconds` : 'Send message'}
-            >
-              {!canSend && cooldownSeconds > 0 ? (
-                <span className="text-sm font-mono" aria-hidden="true">{cooldownSeconds}s</span>
-              ) : (
-                <Send className="w-4 h-4" aria-hidden="true" />
-              )}
-            </Button>
-          </div>
+          {/* Who the message goes to (keyed by user id: display names are not
+              unique), the box and Send. The compact layout's Chat sheet puts
+              all three on one row, so the log keeps the room; the parts have
+              keys, so a change of arrangement keeps the box and its focus. */}
+          {/* The compact layout's Chat sheet puts To, the box and Send on one
+              row, so the log keeps the room. */}
+          {compact ? (
+            <>
+              <div key="compose" className="flex items-stretch gap-2">
+                {toLabel}
+                {toList}
+                {messageBox}
+                {sendButton}
+              </div>
+            </>
+          ) : (
+            <>
+              <div key="to" className="flex items-center gap-2">
+                {toLabel}
+                {toList}
+              </div>
+              <div key="compose" className="flex gap-2">
+                {messageBox}
+                {sendButton}
+              </div>
+            </>
+          )}
 
           {goesTo && (
             <p className={`text-xs text-center flex items-center justify-center gap-1 ${goesTo.gone ? 'text-warning-ink' : 'text-accent-ink'}`}>

@@ -6,7 +6,7 @@
 // handle, its title (which names it as a dialog) and a close X, and its
 // content scrolls inside it.
 //
-// - Half height (50dvh) leaves the map above it live: no backdrop, no focus
+// - Half height (50dvh, or the `halfHeight` given) leaves the map above it live: no backdrop, no focus
 //   trap, so a player can watch, pinch and tap the map while reading the
 //   chat. Escape closes it, unless something has used the key or a box is
 //   being typed in, and its heading takes the focus as it opens, so no text
@@ -231,10 +231,12 @@ export interface BottomSheetProps {
   edges?: SheetEdges;
   /** The dialog's id, for a control that opens it to name (aria-controls). */
   id?: string;
+  /** How tall the sheet is at half height, as a CSS length: 50dvh unless given. */
+  halfHeight?: string;
   children: ReactNode;
 }
 
-export function BottomSheet({ open, title, height, onClose, onHeightChange, edges, id, children }: BottomSheetProps) {
+export function BottomSheet({ open, title, height, onClose, onHeightChange, edges, id, halfHeight = '50dvh', children }: BottomSheetProps) {
   const sideways = useMediaQuery(SHORT_SCREEN_QUERY);
   const modal = height === 'full';
   const rootRef = useSheet(open, modal, onClose);
@@ -303,7 +305,7 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
     ? { top, bottom }
     : height === 'full'
       ? { top: `max(3rem, ${top})`, bottom }
-      : { bottom, height: '50dvh', maxHeight: `calc(100dvh - max(3rem, ${top}) - ${bottom})` };
+      : { bottom, height: halfHeight, maxHeight: `calc(100dvh - max(3rem, ${top}) - ${bottom})` };
   if (dragOffset !== null) place.transform = `translateY(${dragOffset}px)`;
 
   const handleBar = <span aria-hidden="true" className="block h-1.5 w-10 rounded-full bg-ink-muted/40" />;

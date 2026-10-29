@@ -174,7 +174,7 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | **Party** | The campaign's info, the roster with your character's hit point buttons, and **Leave Campaign** |
 | **More** | **Notes**, **Session** (the vibe and past sessions), **Documents** (your DM's rulebooks and handouts) and **Shortcuts** |
 
-Each opens as a sheet over the map. Chat, Dice, Initiative and Party open at half height, so you can watch the map, and pinch, pan or tap it, while you chat or roll. Tap the bar at the top of the sheet, or drag it up, for the full height. Close it with its **✕**, its button or **Map**, a drag down, or your phone's **Back**.
+Each opens as a sheet over the map. Dice, Initiative and Party open at half the screen's height and Chat at two thirds, so you can watch the map, and pinch, pan or tap it, while you chat or roll. Tap the bar at the top of the sheet, or drag it up, for the full height. Close it with its **✕**, its button or **Map**, a drag down, or your phone's **Back**.
 
 A press and hold on your token opens its menu as a list from the bottom of the screen, as it does on a character in **Party**'s roster. The map's toolbar keeps **Zoom Out**, **Zoom In**, **Ping** and **Draw** in its one row; its **More** has the rest, such as **Fit to Screen**, the grid and the **Ruler**. Turn the phone on its side and the bar's buttons move into the header, with sheets opening from the right. See [The campaign page on a phone or tablet](USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet) for the whole of it.
 

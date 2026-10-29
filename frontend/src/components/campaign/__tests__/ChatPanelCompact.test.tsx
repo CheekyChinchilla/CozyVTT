@@ -10,7 +10,7 @@
  */
 
 import { it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { MessageHistoryPage } from '@/types';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 
@@ -43,8 +43,24 @@ it('gives the log the room on the compact layout: the heading for screen readers
   expect(box).toHaveAccessibleDescription('Press Enter to send, Shift+Enter for new line');
   // One line holds the short form.
   expect(box).toHaveAttribute('placeholder', 'Type a message…');
-  // The To list is a finger's height.
-  expect(classes(screen.getByRole('combobox', { name: 'To' }))).toContain('min-h-11');
+  // The To list is a finger's height, on one row with the box and Send.
+  const toList = screen.getByRole('combobox', { name: 'To' });
+  expect(classes(toList)).toContain('min-h-11');
+  expect(toList.parentElement).toBe(box.parentElement);
+  expect(box.parentElement).toContainElement(screen.getByRole('button', { name: 'Send message' }));
+});
+
+it('keeps the box, its draft and its focus as the arrangement changes', async () => {
+  const { rerender } = render(<LayoutProvider compact={false}><ChatPanel /></LayoutProvider>);
+  const box = await screen.findByRole('textbox', { name: 'Chat message' });
+  fireEvent.change(box, { target: { value: 'draft' } });
+  box.focus();
+  for (const compact of [true, false, true]) {
+    rerender(<LayoutProvider compact={compact}><ChatPanel /></LayoutProvider>);
+    expect(screen.getByRole('textbox', { name: 'Chat message' })).toBe(box);
+    expect(document.activeElement).toBe(box);
+  }
+  expect(box).toHaveValue('draft');
 });
 
 it('is as it was on the desktop', async () => {

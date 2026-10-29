@@ -7,8 +7,9 @@
 // it again.
 //
 // - Chat, Dice and Initiative open the session sheet, which holds the
-//   session panels (SessionPanels) on the chosen one; More's Notes and
-//   Session open the same sheet on theirs, at full height.
+//   session panels (SessionPanels) on the chosen one, Chat's taller than
+//   half the screen (CHAT_SHEET_HEIGHT); More's Notes and Session open the
+//   same sheet on theirs, at full height.
 // - Party opens a sheet with the campaign's info, its roster and, for the
 //   DM, the Token Roster.
 // - More lists what the desktop's header offers (MoreSheet); its windows
@@ -64,6 +65,13 @@ const onTheBar = (tab: SessionTab): tab is (typeof BAR_PANELS)[number] => BAR_PA
 
 /** How high the session sheet opens on `tab`: Notes and Session, for long reading and writing, at full height. */
 const openingHeight = (tab: SessionTab): SheetHeight => (onTheBar(tab) ? 'half' : 'full');
+
+/**
+ * How tall the session sheet opens on Chat: taller than the other half
+ * sheets, since half of a phone held upright (330 px in Safari on an iPhone
+ * 15) left the chat one message under its box. The map still shows above.
+ */
+export const CHAT_SHEET_HEIGHT = '66dvh';
 
 /** An element's height, followed as it changes. */
 function useHeight() {
@@ -173,6 +181,7 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
         open={sheet === 'session'}
         title={SESSION_TAB_LOOKS[sessionTab].label}
         height={sessionHeight}
+        halfHeight={sessionTab === 'chat' ? CHAT_SHEET_HEIGHT : undefined}
         onHeightChange={setSessionHeight}
         onClose={() => setSheet(null)}
         edges={edges}
