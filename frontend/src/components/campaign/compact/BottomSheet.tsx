@@ -197,18 +197,18 @@ export function useSheetMotion(open: boolean, from: 'bottom' | 'right') {
  * While it fades out after the sheet has closed it takes no press, so one
  * on the map or the bar in that moment reaches them.
  */
-export function SheetBackdrop({ open, bottom = '0px', onClose }: { open: boolean; bottom?: string; onClose: () => void }) {
-  return <AnimatePresence>{open && <FadingBackdrop key="sheet-backdrop" bottom={bottom} onClose={onClose} />}</AnimatePresence>;
+export function SheetBackdrop({ open, top = '0px', bottom = '0px', onClose }: { open: boolean; top?: string; bottom?: string; onClose: () => void }) {
+  return <AnimatePresence>{open && <FadingBackdrop key="sheet-backdrop" top={top} bottom={bottom} onClose={onClose} />}</AnimatePresence>;
 }
 
-function FadingBackdrop({ bottom, onClose }: { bottom: string; onClose: () => void }) {
+function FadingBackdrop({ top, bottom, onClose }: { top: string; bottom: string; onClose: () => void }) {
   const present = useIsPresent();
   return (
     <motion.div
       data-sheet-backdrop=""
       aria-hidden="true"
-      className="fixed inset-x-0 top-0 z-50 bg-black/50"
-      style={{ bottom, pointerEvents: present ? undefined : 'none' }}
+      className="fixed inset-x-0 z-50 bg-black/50"
+      style={{ top, bottom, pointerEvents: present ? undefined : 'none' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -299,6 +299,9 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
     },
   };
 
+  // An arrangement's header and bar stay pressable beside its sheets, the
+  // backdrop's included: on a phone on its side the bar's buttons are in
+  // the header.
   const top = edges?.top ?? '0px';
   const bottom = edges?.bottom ?? '0px';
   const place: CSSProperties = sideways
@@ -314,7 +317,7 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
 
   return (
     <FloatingLayer>
-      <SheetBackdrop open={open && modal} bottom={bottom} onClose={onClose} />
+      <SheetBackdrop open={open && modal} top={top} bottom={bottom} onClose={onClose} />
       <div
         ref={rootRef}
         id={id}

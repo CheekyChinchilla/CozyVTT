@@ -269,6 +269,14 @@ describe('the edges an arrangement gives a sheet', () => {
     expect(sheetElement().style.bottom).toBe('57px');
     expect(backdrop()?.style.bottom).toBe('57px');
   });
+
+  // On a phone on its side the bar's buttons sit in the header. A backdrop
+  // over the header took the first press on one of them, which only closed
+  // the sheet.
+  it("leave the header free of a full sheet's backdrop, the bar's buttons with it on a phone on its side", () => {
+    render(<Sheet edges={edges} height="full" />);
+    expect(backdrop()?.style.top).toBe('3.5rem');
+  });
 });
 
 describe("a drag of the sheet's handle", () => {
