@@ -217,6 +217,8 @@ describe('More', () => {
     expect(openSheets()).toEqual(['Notes']);
     expect(sheet('Notes')).toHaveAttribute('aria-modal', 'true');
     expect(within(bar()).getByRole('button', { name: /^More/ })).toHaveAttribute('aria-current', 'true');
+    // More's own list is closed, so More is not expanded.
+    expect(within(bar()).getByRole('button', { name: /^More/ })).toHaveAttribute('aria-expanded', 'false');
     expect(useGameStore.getState().sessionTab).toBe('notes');
 
     // From there the bar's Chat moves the same sheet to the chat.

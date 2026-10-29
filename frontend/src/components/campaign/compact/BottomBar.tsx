@@ -42,8 +42,14 @@ const TAB_LOOKS: Record<CompactTab, { label: string; icon: LucideIcon }> = {
 };
 
 export interface BottomBarProps {
-  /** The button whose sheet is open; 'map' while none is. */
+  /** The button shown as open (aria-current); 'map' while no sheet is. */
   active: CompactTab;
+  /**
+   * The button whose own sheet is open (aria-expanded), when it is not
+   * `active`: More is shown current while Notes or Session, which it opens,
+   * is open in the session sheet, and its own list is then closed.
+   */
+  expanded?: CompactTab | null;
   onSelect: (tab: CompactTab) => void;
   /** The id of the sheet each button opens, once the arrangement draws them. */
   sheetIds?: Partial<Record<Exclude<CompactTab, 'map'>, string>>;
@@ -51,7 +57,7 @@ export interface BottomBarProps {
   placement?: 'foot' | 'header';
 }
 
-export default function BottomBar({ active, onSelect, sheetIds, placement = 'foot' }: BottomBarProps) {
+export default function BottomBar({ active, expanded = active, onSelect, sheetIds, placement = 'foot' }: BottomBarProps) {
   const unreadChat = useGameStore((s) => s.unreadChat);
   const inHeader = placement === 'header';
 
@@ -71,7 +77,7 @@ export default function BottomBar({ active, onSelect, sheetIds, placement = 'foo
               type="button"
               id={`compact-tab-${tab}`}
               aria-current={open ? 'true' : undefined}
-              aria-expanded={tab === 'map' ? undefined : open}
+              aria-expanded={tab === 'map' ? undefined : expanded === tab}
               aria-controls={tab === 'map' ? undefined : sheetIds?.[tab]}
               onClick={() => onSelect(tab)}
               className={cn(

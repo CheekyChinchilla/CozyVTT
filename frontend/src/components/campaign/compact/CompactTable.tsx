@@ -156,9 +156,14 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
   const active: CompactTab =
     sheet === 'session' ? (onTheBar(sessionTab) ? sessionTab : 'more') : (sheet ?? 'map');
 
+  // The button whose own sheet is open, for aria-expanded: none while More's
+  // Notes or Session is open in the session sheet.
+  const expanded: CompactTab | null = sheet === 'session' ? (onTheBar(sessionTab) ? sessionTab : null) : sheet;
+
   const bar = (
     <BottomBar
       active={active}
+      expanded={expanded}
       onSelect={select}
       placement={sideways ? 'header' : 'foot'}
       sheetIds={{ chat: sessionSheetId, dice: sessionSheetId, initiative: sessionSheetId, party: partySheetId, more: moreSheetId }}
