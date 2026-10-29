@@ -194,7 +194,7 @@ export default function DrawStrip({
                     step={1}
                     value={settings.width}
                     onChange={(e) => onSettingsChange({ width: Number(e.target.value) })}
-                    className="h-7 w-full accent-brand"
+                    className="h-11 w-full accent-brand"
                   />
                 </label>
               )}

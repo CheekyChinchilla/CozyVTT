@@ -844,7 +844,7 @@ export default function ChatPanel() {
             <Button
               onClick={loadMoreMessages}
               disabled={isLoadingMore}
-              variant="secondary" className="text-sm px-4 py-2"
+              variant="secondary" className={`text-sm px-4 py-2${compact ? ' min-h-11' : ''}`}
             >
               {isLoadingMore ? (
                 <>
@@ -904,7 +904,7 @@ export default function ChatPanel() {
               id="chat-recipient"
               value={recipient?.id ?? ''}
               onChange={chooseRecipient}
-              className="input-cozy flex-1 min-w-0 text-sm py-1"
+              className={`input-cozy flex-1 min-w-0 text-sm py-1${compact ? ' min-h-11' : ''}`}
             >
               <option value="">Everyone</option>
               {recipientGone && recipient && <option value={recipient.id}>{recipient.name} (no longer in the campaign)</option>}

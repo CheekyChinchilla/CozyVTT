@@ -131,6 +131,11 @@ describe('the colour', () => {
 });
 
 describe('the width', () => {
+  it('is a slider a finger can take, 44 px tall', () => {
+    strip();
+    expect(screen.getByRole('slider', { name: 'Width' }).className.split(/\s+/)).toContain('h-11');
+  });
+
   it('sets the width, and says how tall a label’s letters are', () => {
     const { props, rerender } = strip();
     fireEvent.change(screen.getByRole('slider', { name: 'Width' }), { target: { value: '9' } });
