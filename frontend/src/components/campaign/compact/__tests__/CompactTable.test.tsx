@@ -68,6 +68,7 @@ const moreRow = (label: string) => {
 const onSheetEntry = () => (window.history.state as Record<string, unknown> | null)?.cozyvttSheet === true;
 
 beforeEach(() => {
+  page.navigate.mockClear();
   page.role = 'PLAYER';
   page.status = 'connected';
   window.localStorage.clear();
@@ -98,7 +99,18 @@ describe('the compact arrangement', () => {
   it('leads back to the dashboard', () => {
     table();
     fireEvent.click(screen.getByRole('button', { name: 'Back to the dashboard' }));
-    expect(page.navigate).toHaveBeenCalledWith('/dashboard');
+    expect(page.navigate).toHaveBeenCalledWith('/dashboard', { replace: false });
+  });
+
+  // A sheet open as the page was left kept its history entry, so Back from
+  // the dashboard came to the campaign page and the next Back did nothing.
+  // Leaving with a sheet open puts the dashboard in that entry's place.
+  it("leads back to the dashboard in place of an open sheet's history entry", () => {
+    table();
+    press('Chat');
+    expect(onSheetEntry()).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the dashboard' }));
+    expect(page.navigate).toHaveBeenCalledWith('/dashboard', { replace: true });
   });
 
   it("shows the connection's state only while it is not connected", () => {

@@ -20,6 +20,7 @@ import { SESSION_STATUS_LABELS } from '@/components/campaign/sessionStatus';
 import { CampaignStatus } from '@/types';
 import type { Campaign } from '@/types';
 import { cn } from '@/utils/cn';
+import { onSheetEntry } from './sheetHistory';
 
 export interface CompactHeaderProps {
   campaign: Campaign;
@@ -69,7 +70,9 @@ export default function CompactHeader({ campaign, bar, ref }: CompactHeaderProps
     >
       <button
         type="button"
-        onClick={() => navigate('/dashboard')}
+        // In place of an open sheet's history entry, so Back from the
+        // dashboard comes straight back here (sheetHistory.ts).
+        onClick={() => navigate('/dashboard', { replace: onSheetEntry() })}
         aria-label="Back to the dashboard"
         title="Dashboard"
         className="inline-flex size-11 shrink-0 items-center justify-center rounded-cozy text-ink transition-colors hover:bg-ink/10 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
