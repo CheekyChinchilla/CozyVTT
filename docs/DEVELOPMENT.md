@@ -495,7 +495,8 @@ On Linux, WebKit needs system libraries that `--with-deps` installs with
 **On a phone or tablet.** The four projects are `desktop`, `phone` (Pixel 10),
 `iphone` (iPhone 15) and `ipad` (iPad Pro 11, landscape); `setup` runs first.
 Run one with `npx playwright test --project=iphone`. The phone checks apply to
-any project whose screen is narrower than the 1024 px layout split: the
+any project whose screen matches the app's `COMPACT_LAYOUT_QUERY`, which the
+spec imports and asks the browser (1024 px at the usual text size): the
 campaign page shows the compact layout's bar and no columns, its **Chat**
 button opens the Chat sheet, and nothing scrolls sideways. The iPad, in
 landscape, takes the desktop path, where the rail's **Chat** tab shows and
