@@ -140,6 +140,56 @@ describe('a part of the table', () => {
     }
   });
 
+  // At the browser floor no browser has moveBefore, so a move takes the part
+  // out of the page and puts it back, and the browser scrolls everything in
+  // it back to the top: a chat log left at its first message, a long
+  // initiative list at its first row.
+  describe('a scrolled list in a part, moved by taking it out and putting it back', () => {
+    /** A list 1,000 px long in a box 200 px tall in the wide arrangement and 100 px in the narrow one. */
+    function scroller(): HTMLElement {
+      const list = document.createElement('div');
+      Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => 1000 });
+      Object.defineProperty(list, 'clientHeight', { configurable: true, get: () => (slotOf(list)?.startsWith('narrow') ? 100 : 200) });
+      part('Session').after(list);
+      return list;
+    }
+
+    function resettingAppends() {
+      const append = Node.prototype.appendChild;
+      return vi.spyOn(Node.prototype, 'appendChild').mockImplementation(function <T extends Node>(this: Node, node: T): T {
+        append.call(this, node);
+        if (node instanceof Element) node.querySelectorAll('*').forEach((el) => { el.scrollTop = 0; });
+        return node;
+      });
+    }
+
+    it('keeps it where the reader left it', () => {
+      const { rerender } = render(<Table arrangement="wide" />);
+      const list = scroller();
+      list.scrollTop = 300;
+      const appends = resettingAppends();
+      try {
+        rerender(<Table arrangement="narrow" />);
+      } finally {
+        appends.mockRestore();
+      }
+      expect(list.scrollTop).toBe(300);
+    });
+
+    it('keeps one read to its end at its end in a box of another height', () => {
+      const { rerender } = render(<Table arrangement="wide" />);
+      const list = scroller();
+      list.scrollTop = 800;
+      const appends = resettingAppends();
+      try {
+        rerender(<Table arrangement="narrow" />);
+      } finally {
+        appends.mockRestore();
+      }
+      expect(list.scrollTop).toBe(1000);
+    });
+  });
+
   it('waits, mounted and out of sight, while no arrangement gives it a slot', () => {
     const { rerender } = render(<Table arrangement="wide" />);
     const map = part('Map');
