@@ -144,3 +144,28 @@ export function useTopBand(
   }, [bandRef, toolbarRef, containerRef]);
   return band;
 }
+
+/**
+ * The height of `el` while it shows, measured again when it changes size:
+ * null while it has no size (not laid out yet, or jsdom).
+ */
+export function useMeasuredHeight(ref: RefObject<HTMLElement | null>, shown: boolean): number | null {
+  const [height, setHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!shown || !el) {
+      setHeight(null);
+      return undefined;
+    }
+    const measure = () => {
+      const h = Math.round(el.getBoundingClientRect().height);
+      setHeight(h === 0 ? null : h);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, shown]);
+  return height;
+}

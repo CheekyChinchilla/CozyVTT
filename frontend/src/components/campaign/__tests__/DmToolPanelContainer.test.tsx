@@ -7,7 +7,7 @@
  * can only be measured in a browser; this pins the rule that sets it.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, fireEvent, screen, act } from '@testing-library/react';
 import { createRef, useRef } from 'react';
 import DmToolPanelContainer from '../DmToolPanelContainer';
@@ -87,6 +87,8 @@ describe('DmToolPanelContainer', () => {
   });
 });
 
+const classesOf = (el: Element) => el.className.split(/\s+/);
+
 /** A box at `left, top` of `width` by `height`, as getBoundingClientRect gives it. */
 const box = (left: number, top: number, width: number, height: number) =>
   ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect;
@@ -95,18 +97,19 @@ const box = (left: number, top: number, width: number, height: number) =>
  * The stack inside a map container at (100, 50) of 800 by 600 pixels, the
  * stack itself 200 by 300. `resize` changes the container's size.
  */
-function renderInMap() {
+function renderInMap(extra: { topLimit?: number } = {}) {
   let mapBox = box(100, 50, 800, 600);
-  function Map({ band }: { band: TopBand | null }) {
+  function Map({ band, hidden = false }: { band: TopBand | null; hidden?: boolean }) {
     const ref = useRef<HTMLDivElement>(null);
     return (
       <div ref={ref} data-testid="map">
-        <DmToolPanelContainer containerRef={ref} band={band}><p>Lights</p></DmToolPanelContainer>
+        <DmToolPanelContainer containerRef={ref} band={band} hidden={hidden} topLimit={extra.topLimit}><p>Lights</p></DmToolPanelContainer>
       </div>
     );
   }
   const { rerender } = render(<Map band={null} />);
   const setBand = (band: TopBand | null) => rerender(<Map band={band} />);
+  const setHidden = (hidden: boolean) => rerender(<Map band={null} hidden={hidden} />);
   const map = screen.getByTestId('map');
   const stack = map.firstElementChild as HTMLElement;
   map.getBoundingClientRect = () => mapBox;
@@ -125,7 +128,7 @@ function renderInMap() {
     mapBox = box(100, 50, width, height);
     act(() => { window.dispatchEvent(new Event('resize')); });
   };
-  return { stack, handle, drag, resize, setBand };
+  return { stack, handle, drag, resize, setBand, setHidden };
 }
 
 // A dragged stack was fixed to the window: it stayed where it was dropped
@@ -160,6 +163,22 @@ describe('moving the DM tool panels', () => {
     resize(500, 400);
     expect(stack.style.left).toBe('300px');
     expect(stack.style.top).toBe('100px');
+  });
+
+  // A map moved between two arrangements of the page waits in a box of no
+  // size for a frame (tableHosts.tsx). The stack was brought "onto" it, to
+  // 0,0, and stayed in the map's top left corner once the map had its size.
+  it('keeps a dragged stack where it was dropped while the map has no size', () => {
+    const { stack, drag, resize } = renderInMap();
+    drag(-300, 100);
+
+    resize(0, 0);
+    expect(stack.style.left).toBe('292px');
+    expect(stack.style.top).toBe('156px');
+
+    resize(800, 600);
+    expect(stack.style.left).toBe('292px');
+    expect(stack.style.top).toBe('156px');
   });
 
   // Where the DM dropped it is theirs, whatever the toolbar does.
@@ -227,5 +246,77 @@ describe('moving the DM tool panels', () => {
     // The map's height less the stack's 3.5rem from the top and 8rem kept at
     // the bottom, never under 6rem; the style engine may fold the sum.
     expect(stack.style.maxHeight.replace(/\s+/g, '')).toMatch(/^max\(6rem,(calc\()?100%-(3\.5rem-8rem|11\.5rem)\)?\)$/);
+  });
+
+  // On the compact layout the dock at the map's foot holds Preview over the
+  // details card, which 8rem did not leave room for.
+  it('stops above the room it is told to leave below it', () => {
+    const { container } = render(
+      <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()} roomBelow={218}><p>Lights</p></DmToolPanelContainer>
+    );
+    const maxHeight = (container.firstElementChild as HTMLElement).style.maxHeight.replace(/\s+/g, '');
+    expect(maxHeight).toContain('218px');
+    expect(maxHeight).not.toContain('8rem');
+  });
+});
+
+// On the compact layout the stack hides behind Tools.
+describe('the stack behind Tools', () => {
+  beforeAll(() => {
+    HTMLElement.prototype.setPointerCapture = () => {};
+  });
+
+  it('is hidden and still mounted while hidden, its panels kept', () => {
+    const { container, rerender } = render(
+      <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()} hidden><p>Fog of War</p></DmToolPanelContainer>
+    );
+    const stack = container.firstElementChild as HTMLElement;
+    expect(stack).toHaveAttribute('hidden');
+    expect(screen.getByText('Fog of War')).toBeInTheDocument();
+
+    rerender(<DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}><p>Fog of War</p></DmToolPanelContainer>);
+    expect(stack).not.toHaveAttribute('hidden');
+  });
+
+  it('offers Hide tools in its handle, 44 pixels in a handle as tall, and starts no drag from it', () => {
+    const onHide = vi.fn();
+    render(<DmToolPanelContainer containerRef={createRef<HTMLDivElement>()} onHide={onHide}><p>Fog of War</p></DmToolPanelContainer>);
+    const handle = screen.getByTitle(/Drag to move the panels/);
+    const hide = screen.getByRole('button', { name: 'Hide tools' });
+
+    expect(handle).toContainElement(hide);
+    expect(classesOf(hide)).toContain('size-11');
+    expect(classesOf(handle)).toContain('min-h-11');
+    expect(classesOf(handle)).not.toContain('pointer-coarse:h-6');
+    fireEvent.pointerDown(hide, { clientX: 500, clientY: 200, pointerId: 3 });
+    fireEvent.click(hide);
+    expect(onHide).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no Hide tools without a way to hide', () => {
+    render(<DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}><p>Fog of War</p></DmToolPanelContainer>);
+    expect(screen.queryByRole('button', { name: 'Hide tools' })).toBeNull();
+  });
+
+  // Dragged up over the compact layout's band, it covered Map controls,
+  // where Tools is.
+  it('keeps a dragged stack under the least top it is given', () => {
+    const { stack, drag } = renderInMap({ topLimit: 62 });
+    drag(0, -500);
+    expect(stack.style.top).toBe('62px');
+  });
+
+  it('leaves a hidden stack where it is, and brings it onto the map once shown', () => {
+    const { stack, drag, resize, setHidden } = renderInMap();
+    drag(0, 250);
+    setHidden(true);
+    resize(500, 400);
+    expect(stack.style.left).toBe('592px');
+    expect(stack.style.top).toBe('300px');
+
+    setHidden(false);
+    resize(500, 400);
+    expect(stack.style.left).toBe('300px');
+    expect(stack.style.top).toBe('100px');
   });
 });

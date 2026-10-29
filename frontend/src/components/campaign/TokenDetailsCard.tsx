@@ -1,5 +1,6 @@
 // ============================================
-// A token's details, in the card at the bottom-left of the map: a large view
+// A token's details, in the card at the bottom-left of the map (on the
+// compact layout, docked across the map's foot): a large view
 // of its picture, its name and square, the hit points this viewer may see,
 // its conditions in full, its initiative while it is in the turn order, and
 // whether the viewer may move it.
@@ -39,7 +40,16 @@ interface TokenDetailsCardProps {
    * The hover card goes with the pointer and has neither.
    */
   onClose?: () => void;
+  /**
+   * In the compact layout's dock at the map's foot, which places it: the
+   * dock's width on a phone, 352 pixels from a small tablet up.
+   */
+  docked?: boolean;
 }
+
+/** The card's box in the map's bottom left corner, and in the compact layout's dock. */
+const CORNER_BOX = 'absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg';
+const DOCKED_BOX = 'relative glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-full sm:w-88 shadow-lg';
 
 /** One labelled row. The labels line up, so the panel reads as a list. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -53,7 +63,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove, onClose }: TokenDetailsCardProps) {
+export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove, onClose, docked = false }: TokenDetailsCardProps) {
   // `undefined` means "not in the turn order": the row is left out rather
   // than shown blank. `null` means it is, but nothing has rolled.
   const initiative = useTokenInitiative(token.id);
@@ -61,7 +71,7 @@ export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove,
   const conditions = token.conditions ?? [];
 
   return (
-    <div className={`absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg${onClose ? ' pointer-events-none' : ''}`}>
+    <div className={`${docked ? DOCKED_BOX : CORNER_BOX}${onClose ? ' pointer-events-none' : ''}`}>
       <div className="flex items-start gap-3.5">
         {/* Large enough to actually recognise the art. On the map a token
             is often only a few dozen pixels at play zoom, which is what
