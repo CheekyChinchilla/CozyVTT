@@ -5,6 +5,7 @@
 
 import { AlertCircle, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 
 // ============================================
 // Component
@@ -12,6 +13,8 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 
 export default function ConnectionStatus() {
   const { status, error, reconnect } = useWebSocket();
+  // Retry is what a phone player needs when the connection drops.
+  const compact = useCompactLayout();
 
   // Don't show anything when fully connected
   if (status === 'connected') {
@@ -59,7 +62,7 @@ export default function ConnectionStatus() {
       {/* Retry button */}
       <button
         onClick={reconnect}
-        className="text-xs px-2 py-1 rounded-sm bg-danger/10 text-danger-ink hover:bg-danger/15 transition-colors"
+        className={`text-xs px-2 py-1 rounded-sm bg-danger/10 text-danger-ink hover:bg-danger/15 transition-colors${compact ? ' min-h-11 min-w-11' : ''}`}
         title={error || 'Reconnect to server'}
       >
         Retry

@@ -36,6 +36,7 @@ import SessionSidebar from '@/components/campaign/SessionSidebar';
 import SessionToolbar, { type SessionToolKey } from '@/components/campaign/SessionToolbar';
 import { useTableSlot } from '@/components/campaign/tableHosts';
 import ConnectionStatus from '@/components/ConnectionStatus';
+import { SESSION_STATUS_LABELS, SessionPausedBanner } from '@/components/campaign/sessionStatus';
 import { CampaignStatus } from '@/types';
 import type { Campaign } from '@/types';
 import Button from '@/components/ui/Button';
@@ -52,12 +53,6 @@ interface DesktopTableProps {
   onOpenTool: (key: SessionToolKey) => void;
   onOpenDocuments: () => void;
   onOpenShortcuts: () => void;
-  /**
-   * Whether this browser chose **Continue anyway** on the Desktop Required
-   * notice. Until it has, the columns are not drawn below 1024 px, under the
-   * notice.
-   */
-  continueOnNarrowScreen: boolean;
 }
 
 export default function DesktopTable({
@@ -67,7 +62,6 @@ export default function DesktopTable({
   onOpenTool,
   onOpenDocuments,
   onOpenShortcuts,
-  continueOnNarrowScreen,
 }: DesktopTableProps) {
   const navigate = useNavigate();
   const { userRole } = useCampaign();
@@ -132,19 +126,19 @@ export default function DesktopTable({
           {campaign.status === CampaignStatus.ACTIVE && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-success/10 border border-success/20">
               <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-              <span className="text-xs font-medium text-success-ink hidden sm:inline">Live</span>
+              <span className="text-xs font-medium text-success-ink hidden sm:inline">{SESSION_STATUS_LABELS[CampaignStatus.ACTIVE]}</span>
             </div>
           )}
           {campaign.status === CampaignStatus.PAUSED && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-warm-amber/10 border border-warm-amber/20">
               <PauseCircle className="w-3.5 h-3.5 text-accent-ink" />
-              <span className="text-xs font-medium text-accent-ink hidden sm:inline">Paused</span>
+              <span className="text-xs font-medium text-accent-ink hidden sm:inline">{SESSION_STATUS_LABELS[CampaignStatus.PAUSED]}</span>
             </div>
           )}
           {campaign.status === CampaignStatus.INACTIVE && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-stone-gray/10 border border-stone-gray/20">
               <div className="w-2 h-2 rounded-full bg-stone-gray/50" />
-              <span className="text-xs font-medium text-stone-gray hidden sm:inline">Inactive</span>
+              <span className="text-xs font-medium text-stone-gray hidden sm:inline">{SESSION_STATUS_LABELS[CampaignStatus.INACTIVE]}</span>
             </div>
           )}
 
@@ -239,19 +233,12 @@ export default function DesktopTable({
       </header>
 
       {/* Session Paused Banner — visible to players when session is paused */}
-      {campaign.status === CampaignStatus.PAUSED && userRole !== 'DM' && (
-        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-warm-amber/10 border-b border-warm-amber/20">
-          <PauseCircle className="w-4 h-4 text-accent-ink shrink-0" />
-          <p className="text-xs font-medium text-accent-ink">
-            Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.
-          </p>
-        </div>
-      )}
+      {campaign.status === CampaignStatus.PAUSED && userRole !== 'DM' && <SessionPausedBanner />}
 
       {/* Main Content - Three Resizable Panels. Relative, so it clips what is
           absolutely placed inside it too, such as the hidden names of the
           rail's icon tabs, which otherwise widened a narrow page. */}
-      <main className={`relative flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
+      <main className="relative flex-1 min-h-0 overflow-hidden">
         {/* The dividers are 6 pixels wide; the library takes a drag over a
             wider strip than it draws. 44 pixels where the primary pointer
             is coarse is the size a finger needs; a mouse keeps its 10. It

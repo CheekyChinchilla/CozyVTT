@@ -37,6 +37,7 @@ If applicable, add screenshots to help explain your problem. For an error on a p
  - OS: [e.g. Windows 11, macOS, iOS]
  - Browser and its version: [e.g. Firefox 130, Safari 17]
  - Phone or tablet, if that is where it happens: [e.g. iPhone 12]
+ - On the campaign page, which layout: [the three columns, or the compact layout with a bar of buttons along the bottom (a phone, a tablet held upright or a window narrower than 1,024 pixels); and whether the phone or tablet was upright or on its side]
 
 **Additional context**
 Add any other context about the problem here.

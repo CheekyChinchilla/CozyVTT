@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Markdown from '@/components/common/Markdown';
 import { NotebookPen, Plus, Trash2, Eye, Pencil, Loader2 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -51,6 +52,8 @@ function isUnsaved(draft: NoteSnapshot | null, saved: NoteSnapshot | null): bool
 }
 
 export default function PersonalNotes() {
+  // In the compact layout's Notes sheet the icon buttons take a finger.
+  const fingerSized = useCompactLayout() ? ' touch-target inline-flex items-center justify-center' : '';
   const { campaign } = useCampaign();
   const campaignId = campaign?.id;
 
@@ -312,7 +315,7 @@ export default function PersonalNotes() {
             onClick={handleCreate}
             title="New note"
             aria-label="New note"
-            className="p-1.5 rounded-cozy border border-warm-amber/40 bg-warm-amber/10 text-accent-ink hover:bg-warm-amber/15 shrink-0"
+            className={`p-1.5 rounded-cozy border border-warm-amber/40 bg-warm-amber/10 text-accent-ink hover:bg-warm-amber/15 shrink-0${fingerSized}`}
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -343,7 +346,7 @@ export default function PersonalNotes() {
                 onClick={() => setEditing((on) => !on)}
                 title={editing ? 'Preview' : 'Edit'}
                 aria-label={editing ? 'Preview' : 'Edit'}
-                className="p-1.5 rounded-cozy border border-warm-amber/30 bg-parchment/60 text-stone-gray hover:text-brand-ink shrink-0"
+                className={`p-1.5 rounded-cozy border border-warm-amber/30 bg-parchment/60 text-stone-gray hover:text-brand-ink shrink-0${fingerSized}`}
               >
                 {editing ? <Eye className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
               </button>
@@ -351,7 +354,7 @@ export default function PersonalNotes() {
                 onClick={() => setConfirmDelete(true)}
                 title="Delete note"
                 aria-label="Delete note"
-                className="p-1.5 rounded-cozy border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 shrink-0"
+                className={`p-1.5 rounded-cozy border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 shrink-0${fingerSized}`}
               >
                 <Trash2 className="w-4 h-4" />
               </button>

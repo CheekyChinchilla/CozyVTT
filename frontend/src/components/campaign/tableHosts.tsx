@@ -21,7 +21,11 @@
 //   place from its first render.
 // - A move keeps the keyboard focus where it was: the browser's moveBefore
 //   keeps it outright, and where there is none the focus is given back after
-//   the move. A scroll position can be lost on such a move.
+//   the move. A move without moveBefore takes the part out of the page and
+//   puts it back, which scrolls everything in it to the top, so each list
+//   that scrolls is put back where it was, and one read to its end, such as
+//   the chat's, at its end in its new box. A blur handler in a part may run
+//   on such a move, before the focus is given back.
 // - A ResizeObserver belongs to the element it observes, so it goes on
 //   observing through a move and reports the new size.
 // - React events from a part bubble through TableHosts, not through the slot:
@@ -85,6 +89,34 @@ function moveInto(parent: Element, node: Element): void {
   if (keepFocus && focused.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
 }
 
+/** Where a list that scrolls stood, and whether it was at its end. */
+interface ScrollPlace {
+  element: Element;
+  top: number;
+  left: number;
+  atEnd: boolean;
+}
+
+/** Where every list that scrolls inside `root` stands. */
+function scrollPlaces(root: Element): ScrollPlace[] {
+  const places: ScrollPlace[] = [];
+  for (const element of root.querySelectorAll('*')) {
+    if (element.scrollHeight <= element.clientHeight && element.scrollWidth <= element.clientWidth) continue;
+    const atEnd = element.scrollHeight > element.clientHeight && element.scrollHeight - element.scrollTop - element.clientHeight <= 1;
+    places.push({ element, top: element.scrollTop, left: element.scrollLeft, atEnd });
+  }
+  return places;
+}
+
+function putBack(places: readonly ScrollPlace[]): void {
+  for (const { element, top, left, atEnd } of places) {
+    if (!element.isConnected) continue;
+    const scrollTop = atEnd ? element.scrollHeight : top;
+    if (element.scrollTop !== scrollTop) element.scrollTop = scrollTop;
+    if (element.scrollLeft !== left) element.scrollLeft = left;
+  }
+}
+
 function makeHost(part: TablePart): HTMLDivElement {
   const host = document.createElement('div');
   host.style.display = 'contents';
@@ -103,6 +135,9 @@ export function TableHosts({ parts, children }: { parts: Record<TablePart, React
     party: makeHost('party'),
   }));
   const parkingRef = useRef<HTMLDivElement>(null);
+  // Where a parked part's lists stood in the slot it left: parked, it is
+  // laid out at no size, where its lists have nothing to scroll.
+  const [parkedScrolls] = useState(() => new WeakMap<HTMLDivElement, ScrollPlace[]>());
   // The parts that have had a slot. Each is drawn from its first, slot or not.
   const [placed, setPlaced] = useState<ReadonlySet<TablePart>>(() => new Set());
 
@@ -111,14 +146,19 @@ export function TableHosts({ parts, children }: { parts: Record<TablePart, React
   const [placement] = useState<Placement>(() => ({
     place(part, slot) {
       const host = hosts[part];
+      const parked = host.parentNode === parkingRef.current;
+      const scrolls = parked ? parkedScrolls.get(host) : host.isConnected ? scrollPlaces(host) : undefined;
       moveInto(slot, host);
+      if (scrolls) putBack(scrolls);
       setPlaced((was) => (was.has(part) ? was : new Set([...was, part])));
       return () => {
         // Taken by another slot since: of two slots for one part, the one
         // that mounted last holds it.
         if (host.parentNode !== slot) return;
-        if (parkingRef.current) moveInto(parkingRef.current, host);
-        else host.remove();
+        if (parkingRef.current) {
+          parkedScrolls.set(host, scrollPlaces(host));
+          moveInto(parkingRef.current, host);
+        } else host.remove();
       };
     },
   }));
@@ -130,6 +170,16 @@ export function TableHosts({ parts, children }: { parts: Record<TablePart, React
       {TABLE_PARTS.map((part) => (placed.has(part) ? createPortal(parts[part], hosts[part], part) : null))}
     </PlacementContext.Provider>
   );
+}
+
+/**
+ * The part the keyboard is in, if it is in one: an arrangement taking over
+ * from another can show that part, so the control in use stays in sight.
+ */
+export function partHoldingFocus(): TablePart | null {
+  const host = document.activeElement?.closest<HTMLElement>('[data-table-part]');
+  const part = host?.dataset.tablePart;
+  return TABLE_PARTS.find((name) => name === part) ?? null;
 }
 
 /**

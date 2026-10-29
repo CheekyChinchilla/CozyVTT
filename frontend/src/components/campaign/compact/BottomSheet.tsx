@@ -6,11 +6,12 @@
 // handle, its title (which names it as a dialog) and a close X, and its
 // content scrolls inside it.
 //
-// - Half height (50dvh) leaves the map above it live: no backdrop, no focus
+// - Half height (50dvh, or the `halfHeight` given) leaves the map above it live: no backdrop, no focus
 //   trap, so a player can watch, pinch and tap the map while reading the
 //   chat. Escape closes it, unless something has used the key or a box is
 //   being typed in, and its heading takes the focus as it opens, so no text
-//   box raises a phone's keyboard by itself.
+//   box raises a phone's keyboard by itself; a control inside it that has
+//   the focus already keeps it.
 // - Full height (from 3rem below the top) is modal: a backdrop that closes
 //   it, the keyboard kept inside it (useFocusTrap, which also gives Escape
 //   to the top dialog only), and it is a menu on the screen (openMenus.ts),
@@ -56,13 +57,13 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import { AnimatePresence, motion, type TargetAndTransition, type Transition } from 'framer-motion';
+import { AnimatePresence, motion, useIsPresent, type TargetAndTransition, type Transition } from 'framer-motion';
 import { X } from 'lucide-react';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { menuShown } from '@/components/ui/openMenus';
 import { isAnyTrapOpen, useFocusTrap } from '@/hooks/useFocusTrap';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { SIDEWAYS_QUERY } from '@/constants/layout';
 import { TAP_SLOP_PX } from '@/components/campaign/map/gestures';
 import { isTypingInto } from '@/components/campaign/map/typingTarget';
 import { useMotionExit } from '@/utils/motion';
@@ -191,25 +192,29 @@ export function useSheetMotion(open: boolean, from: 'bottom' | 'right') {
   };
 }
 
-/** The dimmed page behind a modal sheet, which closes the sheet when pressed. */
-export function SheetBackdrop({ open, bottom = '0px', onClose }: { open: boolean; bottom?: string; onClose: () => void }) {
+/**
+ * The dimmed page behind a modal sheet, which closes the sheet when pressed.
+ * While it fades out after the sheet has closed it takes no press, so one
+ * on the map or the bar in that moment reaches them.
+ */
+export function SheetBackdrop({ open, top = '0px', bottom = '0px', onClose }: { open: boolean; top?: string; bottom?: string; onClose: () => void }) {
+  return <AnimatePresence>{open && <FadingBackdrop key="sheet-backdrop" top={top} bottom={bottom} onClose={onClose} />}</AnimatePresence>;
+}
+
+function FadingBackdrop({ top, bottom, onClose }: { top: string; bottom: string; onClose: () => void }) {
+  const present = useIsPresent();
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="sheet-backdrop"
-          data-sheet-backdrop=""
-          aria-hidden="true"
-          className="fixed inset-x-0 top-0 z-50 bg-black/50"
-          style={{ bottom }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          onClick={onClose}
-        />
-      )}
-    </AnimatePresence>
+    <motion.div
+      data-sheet-backdrop=""
+      aria-hidden="true"
+      className="fixed inset-x-0 z-50 bg-black/50"
+      style={{ top, bottom, pointerEvents: present ? undefined : 'none' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onClick={present ? onClose : undefined}
+    />
   );
 }
 
@@ -224,11 +229,15 @@ export interface BottomSheetProps {
   onHeightChange?: (height: SheetHeight) => void;
   /** Where the sheet stops; see SheetEdges. */
   edges?: SheetEdges;
+  /** The dialog's id, for a control that opens it to name (aria-controls). */
+  id?: string;
+  /** How tall the sheet is at half height, as a CSS length: 50dvh unless given. */
+  halfHeight?: string;
   children: ReactNode;
 }
 
-export function BottomSheet({ open, title, height, onClose, onHeightChange, edges, children }: BottomSheetProps) {
-  const sideways = useMediaQuery(SHORT_SCREEN_QUERY);
+export function BottomSheet({ open, title, height, onClose, onHeightChange, edges, id, halfHeight = '50dvh', children }: BottomSheetProps) {
+  const sideways = useMediaQuery(SIDEWAYS_QUERY);
   const modal = height === 'full';
   const rootRef = useSheet(open, modal, onClose);
   const titleId = useId();
@@ -236,9 +245,12 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
   const motionProps = useSheetMotion(open, sideways ? 'right' : 'bottom');
 
   // As it opens, a sheet that is not modal gives its heading the focus; a
-  // modal one's focus trap does, as the heading is marked data-autofocus.
+  // modal one's focus trap does, as the heading is marked data-autofocus. A
+  // control inside it that has the focus already keeps it, as one does when
+  // a tablet turned to the compact layout opens the sheet it is in.
   const focusHeading = useEffectEvent(() => {
-    if (!modal) headingRef.current?.focus({ preventScroll: true });
+    if (modal || rootRef.current?.contains(document.activeElement)) return;
+    headingRef.current?.focus({ preventScroll: true });
   });
   useEffect(() => {
     if (!open) return;
@@ -287,13 +299,16 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
     },
   };
 
+  // An arrangement's header and bar stay pressable beside its sheets, the
+  // backdrop's included: on a phone on its side the bar's buttons are in
+  // the header.
   const top = edges?.top ?? '0px';
   const bottom = edges?.bottom ?? '0px';
   const place: CSSProperties = sideways
     ? { top, bottom }
     : height === 'full'
       ? { top: `max(3rem, ${top})`, bottom }
-      : { bottom, height: '50dvh', maxHeight: `calc(100dvh - max(3rem, ${top}) - ${bottom})` };
+      : { bottom, height: halfHeight, maxHeight: `calc(100dvh - max(3rem, ${top}) - ${bottom})` };
   if (dragOffset !== null) place.transform = `translateY(${dragOffset}px)`;
 
   const handleBar = <span aria-hidden="true" className="block h-1.5 w-10 rounded-full bg-ink-muted/40" />;
@@ -302,9 +317,10 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
 
   return (
     <FloatingLayer>
-      <SheetBackdrop open={open && modal} bottom={bottom} onClose={onClose} />
+      <SheetBackdrop open={open && modal} top={top} bottom={bottom} onClose={onClose} />
       <div
         ref={rootRef}
+        id={id}
         role="dialog"
         aria-modal={modal || undefined}
         aria-labelledby={titleId}

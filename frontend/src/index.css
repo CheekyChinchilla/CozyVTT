@@ -427,6 +427,31 @@
   }
 }
 
+/* The compact layout's sheets and map (components/campaign/compact/
+   CompactTable.tsx marks them): every control a finger's size, 44 by 44 CSS
+   px, whatever the panel inside was written with for a desktop column and a
+   mouse. Outside any layer, so a panel's own height class cannot undo it; a
+   switch keeps its drawn pill, and a check box or a radio button is pressed
+   through its label. styles/__tests__/fingerControls.test.ts reads it. */
+.finger-controls
+  :is(
+    button:not([role='switch']),
+    select,
+    summary,
+    a[href],
+    [role='button'],
+    [role='tab'],
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='hidden'], [type='color'])
+  ) {
+  min-height: 2.75rem;
+}
+.finger-controls :is(button:not([role='switch']), summary, a[href], [role='button'], [role='tab']) {
+  min-width: 2.75rem;
+}
+.finger-controls label:has(> input:is([type='checkbox'], [type='radio'])) {
+  min-height: 2.75rem;
+}
+
 /* Panel resize separator styles (react-resizable-panels v4 renders
    [data-separator] elements; the attribute value tracks interaction
    state: inactive | hover | active | disabled) */

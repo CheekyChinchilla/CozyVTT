@@ -626,6 +626,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
+              {/* TODO(ui): on a phone 360 px wide two cards to a row leave
+                  each about 150 px, and the card's row of Set Active, Edit,
+                  Export and Delete runs past its edge, so Delete map is cut
+                  off and cannot be pressed. One card to a row below `sm`, or
+                  the row wrapping, would keep every button on the card. */}
               <AnimatePresence>
                 {maps.map((map) => (
                   <div key={map.id}>

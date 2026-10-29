@@ -69,12 +69,15 @@ export default function SessionPanels() {
       ? { role: 'group', 'aria-label': SESSION_TAB_LOOKS[tab].label }
       : { role: 'tabpanel', 'aria-labelledby': `session-tab-${tab}` };
 
+  // In a sheet, under the sheet's own heading, the panels need no space above.
+  const pad = compact ? 'px-2 pb-2' : 'p-3';
+
   return (
     <>
       <div
         id="session-tabpanel-chat"
         {...panel('chat')}
-        className={cn('absolute inset-0 p-3', activeTab === 'chat' ? 'animate-fade-in' : 'invisible')}
+        className={cn('absolute inset-0', pad, activeTab === 'chat' ? 'animate-fade-in' : 'invisible')}
       >
         <ChatPanel />
       </div>
@@ -82,7 +85,7 @@ export default function SessionPanels() {
       <div
         id="session-tabpanel-dice"
         {...panel('dice')}
-        className={cn('absolute inset-0 p-3', activeTab === 'dice' ? 'animate-fade-in' : 'invisible')}
+        className={cn('absolute inset-0', pad, activeTab === 'dice' ? 'animate-fade-in' : 'invisible')}
       >
         <DiceRoller />
       </div>
@@ -91,7 +94,7 @@ export default function SessionPanels() {
         id="session-tabpanel-initiative"
         {...panel('initiative')}
         className={cn(
-          'absolute inset-0 p-3 overflow-y-auto',
+          'absolute inset-0', pad, 'overflow-y-auto',
           activeTab === 'initiative' ? 'animate-fade-in' : 'invisible'
         )}
       >
@@ -102,7 +105,7 @@ export default function SessionPanels() {
         id="session-tabpanel-notes"
         {...panel('notes')}
         className={cn(
-          'absolute inset-0 p-3',
+          'absolute inset-0', pad,
           activeTab === 'notes' ? 'animate-fade-in' : 'invisible'
         )}
       >
@@ -113,7 +116,7 @@ export default function SessionPanels() {
         id="session-tabpanel-session"
         {...panel('session')}
         className={cn(
-          'absolute inset-0 p-3 overflow-y-auto space-y-4',
+          'absolute inset-0', pad, 'overflow-y-auto space-y-4',
           activeTab === 'session' ? 'animate-fade-in' : 'invisible'
         )}
       >

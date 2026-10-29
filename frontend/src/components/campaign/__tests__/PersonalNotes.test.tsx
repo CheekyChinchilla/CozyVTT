@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import PersonalNotes from '../PersonalNotes';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 import type { PersonalNote, PersonalNoteSummary } from '@/types';
 
 const campaign = { id: 'camp-1' };
@@ -264,5 +265,21 @@ describe('PersonalNotes autosave', () => {
       await vi.advanceTimersByTimeAsync(1200);
     });
     await waitFor(() => expect(screen.getByText('Saved')).toBeInTheDocument());
+  });
+});
+
+// In the compact layout's Notes sheet the icon buttons were 30 px, under a
+// fingertip's 44.
+describe('in the compact layout', () => {
+  it('sizes its icon buttons for a finger, and leaves them as they were on the desktop', async () => {
+    listNotes.mockResolvedValue({ notes: [] });
+    const { unmount } = render(<LayoutProvider compact><PersonalNotes /></LayoutProvider>);
+    const compactButton = await screen.findByRole('button', { name: 'New note' });
+    expect(compactButton.className.split(/\s+/)).toContain('touch-target');
+    unmount();
+
+    render(<PersonalNotes />);
+    const desktopButton = await screen.findByRole('button', { name: 'New note' });
+    expect(desktopButton.className.split(/\s+/)).not.toContain('touch-target');
   });
 });

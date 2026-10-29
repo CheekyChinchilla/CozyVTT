@@ -13,13 +13,20 @@
 //   tab's sheet for the next, leaves the entry where it is: history.back()
 //   lands later, and an entry pushed before it lands would be the one it
 //   took off. So the entry is taken off once nothing has opened by the end
-//   of the task that closed the last sheet.
+//   of the task that closed the last sheet. A sheet that opens after that,
+//   before the browser has gone back, gets its entry once it has.
 // - The entry is the page's own entry with a mark added, at the same
 //   address, so the router sees no navigation. Only a marked entry is taken
 //   back off: a sheet that closes because the page is being left, after the
 //   router has put the next page's entry on, leaves history alone. A sheet
 //   still open as the page is left leaves its entry behind it, so Back to
-//   the page lands on that entry first, one press that changes nothing.
+//   the page lands on that entry first, one press that changes nothing; a
+//   reload with a sheet open leaves the same. History has no way to take
+//   an entry off once the page is past it, so the page's own ways out
+//   replace it (onSheetEntry): the header's back button, and leaving or
+//   being removed from the campaign (useAccessRevoked, which always
+//   replaces). The browser's address bar and a lost sign-in, which loads
+//   the sign-in page, still leave it.
 // - A dialog opened over the top sheet (a Modal, a SlideOver, an editor)
 //   is what Back closes, through its own close, the one Escape calls, so a
 //   dialog that asks before closing asks; the sheet stays, and the entry
@@ -57,6 +64,9 @@ function pushMarkedEntry(): void {
 function onPopState(): void {
   if (ownBack) {
     ownBack = false;
+    // A sheet opened after the close asked to go back, before the browser
+    // got there, found the entry still on and put none on; it gets one now.
+    if (openSheets.length > 0 && !onMarkedEntry()) pushMarkedEntry();
     return;
   }
   // Back or Forward between two entries of the page: only leaving the marked
@@ -73,6 +83,16 @@ function onPopState(): void {
   openSheets.pop();
   if (openSheets.length > 0) pushMarkedEntry();
   top.close();
+}
+
+/**
+ * Whether the browser's current entry is a sheet's. A way out of the page,
+ * such as its header's back button, replaces that entry with the page it
+ * goes to, so Back from there comes to the campaign page and not to a
+ * press that does nothing.
+ */
+export function onSheetEntry(): boolean {
+  return onMarkedEntry();
 }
 
 /** An open sheet's hold on the entry. */

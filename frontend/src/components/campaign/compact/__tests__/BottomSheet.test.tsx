@@ -12,7 +12,7 @@ import { BottomSheet, settleDrag, useSheetMotion, type SheetEdges, type SheetHei
 import Modal from '@/components/ui/Modal';
 import SlideOver, { SlideOverTitle } from '@/components/ui/SlideOver';
 import { anyMenuShown } from '@/components/ui/openMenus';
-import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { SHORT_SCREEN_QUERY, SIDEWAYS_QUERY } from '@/constants/layout';
 import { contact } from '@/test/pointer';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 
@@ -122,6 +122,17 @@ describe('a sheet at half height', () => {
     expect(tab).toHaveFocus();
   });
 
+  // A tablet turned from its wide arrangement opens the sheet that the box
+  // being typed in was moved into; the heading took the focus from the box,
+  // and on a phone the keyboard with it.
+  it('leaves the focus on a control inside it that has it as it opens', async () => {
+    render(<Sheet><input aria-label="Message" /></Sheet>);
+    const box = screen.getByRole('textbox', { name: 'Message' });
+    box.focus();
+    await nextFrame();
+    expect(box).toHaveFocus();
+  });
+
   it('closes on Escape, used up so the map does not act on it too', () => {
     const onClose = vi.fn();
     render(<Sheet onClose={onClose} />);
@@ -208,6 +219,20 @@ describe('a sheet at full height', () => {
     expect(anyMenuShown()).toBe(false);
   });
 
+  // The backdrop fades out for 0.2 s after the sheet closes; a press on the
+  // map or the bar in that time landed on it and closed the sheet again.
+  it('takes no press while its backdrop fades after closing', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<Sheet height="full" onClose={onClose} />);
+    rerender(<Sheet height="full" open={false} onClose={onClose} />);
+
+    const fading = backdrop();
+    expect(fading).not.toBeNull();
+    expect(fading?.style.pointerEvents).toBe('none');
+    fireEvent.click(fading as HTMLElement);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('holds the keyboard: its heading takes the focus, Tab stays inside and Escape closes it', async () => {
     const onClose = vi.fn();
     render(
@@ -243,6 +268,14 @@ describe('the edges an arrangement gives a sheet', () => {
     expect(sheetElement().style.top).toMatch(/3\.5rem/);
     expect(sheetElement().style.bottom).toBe('57px');
     expect(backdrop()?.style.bottom).toBe('57px');
+  });
+
+  // On a phone on its side the bar's buttons sit in the header. A backdrop
+  // over the header took the first press on one of them, which only closed
+  // the sheet.
+  it("leave the header free of a full sheet's backdrop, the bar's buttons with it on a phone on its side", () => {
+    render(<Sheet edges={edges} height="full" />);
+    expect(backdrop()?.style.top).toBe('3.5rem');
   });
 });
 
@@ -377,6 +410,33 @@ describe("the browser's Back", () => {
   });
 });
 
+describe("a sheet opened while the browser is still going back for the last one's close", () => {
+  // A browser's history.back() lands a task or more later. A sheet opened in
+  // between found the entry still there and put none on; the late arrival
+  // then left it with none, so the next Back left the page.
+  it('gets an entry of its own once the browser has gone back', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    try {
+      const { rerender } = render(<Sheet open />);
+      rerender(<Sheet open={false} />);
+      // The close's history.back() is asked for after the task that closed it.
+      await waitFor(() => expect(back).toHaveBeenCalledTimes(1));
+
+      rerender(<Sheet open />);
+      // The browser lands on the page's own entry, the sheet still open.
+      act(() => {
+        const { cozyvttSheet: _mark, ...page } = (window.history.state ?? {}) as Record<string, unknown>;
+        window.history.replaceState(page, '');
+        window.dispatchEvent(new PopStateEvent('popstate', { state: page }));
+      });
+
+      expect(onSheetEntry()).toBe(true);
+    } finally {
+      back.mockRestore();
+    }
+  });
+});
+
 describe("the browser's Back with a dialog over a sheet", () => {
   it('closes the dialog through its own close, never the sheet under it, and keeps the entry and the focus', async () => {
     const onSheetClose = vi.fn();
@@ -500,7 +560,7 @@ describe('what is drawn in front of a sheet', () => {
 describe('a phone turned sideways', () => {
   it('draws the sheet from the right at full height, with no handle', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query === SHORT_SCREEN_QUERY,
+      matches: query === SHORT_SCREEN_QUERY || query === SIDEWAYS_QUERY,
       media: query,
       onchange: null,
       addEventListener: () => undefined,
@@ -517,6 +577,24 @@ describe('a phone turned sideways', () => {
     expect(screen.queryByRole('button', { name: /Make Chat/ })).toBeNull();
     // As open to the map as at half height.
     expect(backdrop()).toBeNull();
+  });
+});
+
+describe('a short window narrower than it is tall', () => {
+  it('draws the sheet from the foot of the screen, with its handle', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === SHORT_SCREEN_QUERY,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    }));
+    render(<Sheet onHeightChange={() => undefined} />);
+    expect(sheetElement().className).not.toContain('right-0');
+    expect(screen.getByRole('button', { name: /Make Chat/ })).toBeInTheDocument();
   });
 });
 

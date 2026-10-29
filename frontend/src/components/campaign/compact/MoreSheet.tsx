@@ -41,6 +41,8 @@ export interface MoreSheetProps {
   onOpenPanel: (panel: MorePanel) => void;
   /** Where the arrangement's sheets stop; see BottomSheet. */
   edges?: SheetEdges;
+  /** The sheet's id, which the bar's More button names. */
+  id?: string;
 }
 
 const action = (id: string, label: string, icon: MenuAction['icon'], run: () => void, extra: Partial<MenuAction> = {}): MenuAction => ({
@@ -69,6 +71,7 @@ export default function MoreSheet({
   onOpenShortcuts,
   onOpenPanel,
   edges,
+  id,
 }: MoreSheetProps) {
   const { userRole } = useCampaign();
 
@@ -86,7 +89,7 @@ export default function MoreSheet({
   const ownerSettings = [action('owner-settings', 'Owner Settings', Settings, () => onOpenTool('settings'))];
 
   return (
-    <BottomSheet open={open} title="More" height="full" onClose={onClose} edges={edges}>
+    <BottomSheet open={open} title="More" height="full" onClose={onClose} edges={edges} id={id}>
       <div className="px-3 pb-3">
         <Group heading="At the table" items={atTheTable} onClose={onClose} />
         {userRole === 'DM' && <Group heading="DM tools" items={dmTools} onClose={onClose} />}

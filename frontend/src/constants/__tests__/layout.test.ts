@@ -9,8 +9,8 @@
  * `(width >= <--breakpoint-lg>)`), so the query must be the exact complement
  * of `lg`, in its unit. A rem in a media query is the browser's default text
  * size, which its user sets, so a width in px agreed with `lg` only at 16 px:
- * at 12 px the Desktop Required notice was hidden while its focus trap held
- * the keyboard, and at 20 px it was shown with no trap.
+ * at 12 px the narrow-screen notice of the time was hidden while its focus
+ * trap held the keyboard, and at 20 px it was shown with no trap.
  */
 import { describe, it, expect } from 'vitest';
 import tailwindTheme from 'tailwindcss/theme.css?raw';
