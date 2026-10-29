@@ -11,6 +11,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 import { getMessages } from '@/services/message.service';
 import { mergeMessages } from '@/utils/messageMerge';
 import { cursorBefore } from '@/utils/messageHistory';
@@ -127,6 +128,11 @@ export default function ChatPanel() {
   const { socket, joinedEpoch } = useWebSocket();
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
+  // In the compact layout's Chat sheet, about 330 px tall on a phone, the
+  // sheet's heading names the chat, so the panel keeps its own heading for
+  // screen readers only, the box starts at one line and the hint about the
+  // keys is read out but not shown: the log gets the room.
+  const compact = useCompactLayout();
   const onlineUserIds = useOnlineUserIds();
 
   // Everyone in the campaign, by user id, with the name the chat shows for
@@ -770,9 +776,9 @@ export default function ChatPanel() {
   return (
     <div className="glass-panel h-full flex flex-col">
       {/* Chat Header */}
-      <div className="flex items-center gap-2 p-4 border-b border-moss-green/20">
-        <MessageCircle className="w-5 h-5 text-brand-ink" />
-        <h3 className="text-lg font-semibold text-brand-ink">Chat</h3>
+      <div className={`flex items-center gap-2 border-b border-moss-green/20 ${compact ? 'px-3 py-1 min-h-9' : 'p-4'}`}>
+        {!compact && <MessageCircle className="w-5 h-5 text-brand-ink" />}
+        <h3 className={compact ? 'sr-only' : 'text-lg font-semibold text-brand-ink'}>Chat</h3>
         {/* What the panel holds, which in a long session is not all there is. */}
         {messages.length > 0 && (
           <span className="text-xs text-stone-gray/70 ml-auto">
@@ -787,7 +793,7 @@ export default function ChatPanel() {
             title="Clear old join and leave messages"
             className={`p-1.5 rounded-lg text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 ${
               messages.length > 0 ? '' : 'ml-auto'
-            }`}
+            }${compact ? ' touch-target inline-flex items-center justify-center' : ''}`}
           >
             <Eraser className="w-4 h-4" />
           </button>
@@ -889,7 +895,7 @@ export default function ChatPanel() {
       </div>
 
       {/* Input Area */}
-      <div className="p-4 border-t border-moss-green/20">
+      <div className={`${compact ? 'px-3 py-2' : 'p-4'} border-t border-moss-green/20`}>
         <form onSubmit={handleSubmit} className="space-y-2">
           {/* Who the message goes to. Keyed by user id: display names are not unique. */}
           <div className="flex items-center gap-2">
@@ -929,11 +935,11 @@ export default function ChatPanel() {
                 setBoxRefusal(null);
               }}
               onKeyDown={handleKeyDown}
-              placeholder={recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
+              placeholder={compact ? (recipient ? 'Type a whisper…' : 'Type a message…') : recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
               aria-label="Chat message"
               aria-describedby="chat-hint"
-              className={`input-cozy flex-1 text-sm resize-none min-h-[60px] max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
-              rows={2}
+              className={`input-cozy flex-1 text-sm resize-none ${compact ? 'min-h-11' : 'min-h-[60px]'} max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
+              rows={compact ? 1 : 2}
               maxLength={slashInBox ? MAX_CHAT_MESSAGE_LENGTH + WHISPER_PREFIX_ROOM : MAX_CHAT_MESSAGE_LENGTH}
               // Read-only through the cooldown, not disabled: disabling the
               // box threw keyboard focus to the page after every message.
@@ -981,7 +987,7 @@ export default function ChatPanel() {
             </p>
           )}
           {canSend && countedLength < LENGTH_WARNING_AT && (
-            <p id="chat-hint" className="text-xs text-stone-gray/70 text-center">
+            <p id="chat-hint" className={compact ? 'sr-only' : 'text-xs text-stone-gray/70 text-center'}>
               Press Enter to send, Shift+Enter for new line
             </p>
           )}
