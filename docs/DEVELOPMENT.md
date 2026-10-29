@@ -495,8 +495,12 @@ On Linux, WebKit needs system libraries that `--with-deps` installs with
 **On a phone or tablet.** The four projects are `desktop`, `phone` (Pixel 10),
 `iphone` (iPhone 15) and `ipad` (iPad Pro 11, landscape); `setup` runs first.
 Run one with `npx playwright test --project=iphone`. The phone checks apply to
-any project whose screen is narrower than the 1024 px layout split, so the
-iPad takes the desktop path. WebKit here is Playwright's build, not Safari:
+any project whose screen is narrower than the 1024 px layout split: the
+campaign page shows the compact layout's bar and no columns, its **Chat**
+button opens the Chat sheet, and nothing scrolls sideways. The iPad, in
+landscape, takes the desktop path, where the rail's **Chat** tab shows and
+no bar. Each run makes a campaign named `Smoke <project> <time>`; delete it
+afterwards on an instance that is not throwaway. WebKit here is Playwright's build, not Safari:
 it catches layout and engine differences, but final checks on iOS belong on a
 real device.
 

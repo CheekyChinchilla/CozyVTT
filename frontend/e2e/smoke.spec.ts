@@ -5,7 +5,9 @@ import { ADMIN, PRODUCTION } from './instance';
  * layout to whatever overflows, so the window's width would hide it. */
 const sidewaysOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - screen.width);
 
-/** The width below which the app uses its phone layout (the lg breakpoint). */
+/** The width below which the campaign page draws its compact layout: the
+ * app's COMPACT_LAYOUT_QUERY (src/constants/layout.ts), 64rem, at the usual
+ * 16 px text. */
 const LAYOUT_SPLIT = 1024;
 
 /** Whether this project's screen is narrower than that split, whatever the
@@ -50,13 +52,22 @@ test('creates a campaign and opens its table, with a live connection through the
   const socket = await live;
   expect(socket.isClosed()).toBe(false);
 
-  // On a phone the table opens behind a notice; past it, the table fits the
-  // screen. The session rail's tab names (hidden text) once sat 200 pixels
-  // past the edge there, so the whole page scrolled sideways.
+  // On a phone the table is the compact layout: the map, and a bar along
+  // the bottom whose buttons open the panels as sheets over it. Chat opens
+  // the chat, and the page fits the screen with it open; the session rail's
+  // hidden tab names once sat 200 pixels past the edge, so a phone's page
+  // scrolled sideways.
   if (onPhone(page)) {
-    await page.getByRole('button', { name: 'Continue anyway' }).click();
-    await expect(page.getByRole('heading', { name: 'Desktop Required' })).toBeHidden();
+    const bar = page.getByRole('navigation', { name: 'Table' });
+    await expect(bar).toBeVisible();
+    await expect(page.locator('[data-panel]')).toHaveCount(0);
+    await bar.getByRole('button', { name: /^Chat/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Chat' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
     expect(await sidewaysOverflow(page)).toBeLessThanOrEqual(0);
+  } else {
+    await expect(page.getByRole('navigation', { name: 'Table' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Chat' })).toBeVisible();
   }
 });
 
