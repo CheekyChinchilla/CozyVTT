@@ -1,7 +1,8 @@
 /**
  * The Map Library is a dialog: announced by name, closed by Escape and a
  * named Close button. Escape in Create Map or Edit Map closes only that one.
- * A map card's icon buttons are named as their tooltips are.
+ * A map card's icon buttons are named as their tooltips are, and on a phone
+ * each card has a row of its own.
  */
 
 import { it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -77,4 +78,14 @@ it("names a map card's icon buttons as their tooltips do", async () => {
   for (const title of ['Edit map', 'Export as .uvtt file', 'Delete map']) {
     expect(screen.getByTitle(title)).toHaveAttribute('aria-label', title);
   }
+});
+
+it('puts one map card to a row on a phone, so every button of a card is on it', async () => {
+  // Two to a row on a phone 360 px wide left each card about 150 px, and
+  // Set Active, Edit, Export and Delete ran past its edge: Delete was cut off.
+  render(<MapManager isOpen onClose={() => {}} />);
+  await screen.findByText('Cave');
+  const grid = screen.getByTitle('Delete map').closest('.grid');
+  expect(grid?.className.split(/\s+/)).toEqual(expect.arrayContaining(['grid-cols-1', 'sm:grid-cols-2']));
+  expect(grid?.className.split(/\s+/)).not.toContain('grid-cols-2');
 });
