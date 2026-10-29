@@ -12,6 +12,7 @@ No technical knowledge required. Let's go.
 2. [Accepting a Campaign Invitation](#accepting-a-campaign-invitation)
 3. [Creating Your Character](#creating-your-character)
 4. [The Campaign Page](#the-campaign-page)
+   - [On a phone](#on-a-phone)
    - [Leaving a campaign](#leaving-a-campaign)
 5. [Chat and Dice](#chat-and-dice)
 6. [Moving Your Token](#moving-your-token)
@@ -127,7 +128,7 @@ Click your campaign from the dashboard to enter it. This is where the action hap
 
 *Screenshot pending — Full campaign page with labeled sections.*
 
-The page has three main areas:
+On a computer, or a tablet held sideways, the page has three main areas, described below. On a phone it has a layout of its own: see [On a phone](#on-a-phone).
 
 ### Left Sidebar — Campaign Info
 - Campaign name and description at the top
@@ -139,7 +140,7 @@ The page has three main areas:
 - **Your role** at the bottom of the **Campaign Info** panel, and under it **Leave Campaign**, which takes you out of the campaign after asking (see [Leaving a campaign](#leaving-a-campaign))
 
 ### Center — The Map
-This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)).
+This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet or a phone, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)).
 
 ### Right Sidebar — Your Tools
 A tabbed panel — click a tab to switch between:
@@ -159,6 +160,23 @@ The top bar shows:
 - Navigation controls
 
 *Screenshot pending — Campaign header with status indicators.*
+
+### On a phone
+
+On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the map fills the screen. Above it a one-line header has the arrow back to your dashboard, the campaign's name and **Live** or **Paused**. Along the bottom a bar of buttons opens everything the side panels hold:
+
+| Button | What it opens |
+|---|---|
+| **Map** | Closes whatever is open, back to the map |
+| **Chat** | The chat. A number on the button counts the messages that came in while it was closed |
+| **Dice** | The dice roller |
+| **Initiative** | The turn order |
+| **Party** | The campaign's info, the roster with your character's hit point buttons, and **Leave Campaign** |
+| **More** | **Notes**, **Session** (the vibe and past sessions), **Documents** (your DM's rulebooks and handouts) and **Shortcuts** |
+
+Each opens as a sheet over the map. Chat, Dice, Initiative and Party open at half height, so you can watch the map, and pinch, pan or tap it, while you chat or roll. Tap the bar at the top of the sheet, or drag it up, for the full height. Close it with its **✕**, its button or **Map**, a drag down, or your phone's **Back**.
+
+A press and hold on your token opens its menu as a list from the bottom of the screen, as it does on a character in **Party**'s roster. The map's toolbar keeps **Zoom Out**, **Zoom In**, **Ping** and **Draw** in its one row; its **More** has the rest, such as **Fit to Screen**, the grid and the **Ruler**. Turn the phone on its side and the bar's buttons move into the header, with sheets opening from the right. See [The campaign page on a phone or tablet](USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet) for the whole of it.
 
 ### Rulebooks and Handouts
 
@@ -342,7 +360,7 @@ If your token is missing or in the wrong place, just let your DM know in chat �
 
 ### On a touch screen
 
-On a tablet, or a phone after **Continue anyway**, your finger does what the mouse does, and a little more:
+On a tablet or a phone your finger does what the mouse does, and a little more:
 
 | To | Do this |
 |---|---|
@@ -350,7 +368,7 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 | Move it in two taps | Tap your token, then tap the square. In between it stays in your hand, drawn faded on its own square with the selection ring, so you can move the map with one finger, or pinch, and keep hold of it. Slide the token from its own square to carry it, or tap the square it came from to put it back. |
 | Put back a token you are holding | Tap **Put back** in the bar at the top of the map, which names the token. It does what **Esc** does. |
 | Move the map | Slide one finger anywhere but on a token you can move. Pinch two fingers to zoom, about your fingers. |
-| Read a token's details | Tap it. It is selected, and its card shows at the bottom left of the map, as hovering it with a mouse would (see [Pointing at a token](#pointing-at-a-token)). The card lets taps through to the map under it, except on its **✕**, which closes it until you next tap a token, the same one included. |
+| Read a token's details | Tap it. It is selected, and its card shows at the bottom left of the map (on a phone, across its foot), as hovering it with a mouse would (see [Pointing at a token](#pointing-at-a-token)). The card lets taps through to the map under it, except on its **✕**, which closes it until you next tap a token, the same one included. |
 | Open a token's menu | Press and hold the token for half a second: the menu a right-click opens there opens, with the same items, and the token is selected. Lift your finger and tap an item. |
 | Open a character's or a combatant's menu | Press and hold its row in the **Campaign Roster** or the initiative tracker for half a second: the menu a right-click opens there opens. A tap on a character still opens its sheet, and sliding your finger scrolls the panel. |
 | Roll from your sheet with advantage | Tap a stat to roll it. Press and hold it for half a second for **Normal**, **Advantage** and **Disadvantage** (**Fortune** and **Misfortune** in Pathfinder 2e), or set **Roll mode** in the sheet's header for a run of rolls. See [Rolling from your sheet](#rolling-from-your-sheet). |

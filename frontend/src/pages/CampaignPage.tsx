@@ -2,18 +2,19 @@
 // Campaign Page
 // The game table: the map, the session panels and the Party content, drawn
 // once (components/campaign/tableHosts.tsx) and arranged by one of the
-// page's arrangements, today the desktop's three columns
-// (components/campaign/DesktopTable.tsx). Everything an arrangement change
-// must keep stays here: the page's listeners, every window and slide-over
-// and whether it is open, and the token quick editor.
+// page's two arrangements: the desktop's three columns
+// (components/campaign/DesktopTable.tsx) from 1024 px wide, and below that
+// the compact one, the map with a bar of sheets
+// (components/campaign/compact/CompactTable.tsx). Exactly one is mounted,
+// chosen by COMPACT_LAYOUT_QUERY. Everything an arrangement change must keep
+// stays here: the page's listeners, every window and slide-over and whether
+// it is open, and the token quick editor.
 // ============================================
 
-import { useState, useEffect, useId, lazy, Suspense, type ReactNode } from 'react';
+import { useState, useEffect, lazy, Suspense, type ReactNode } from 'react';
 import { isCampaignOwner } from '@/utils/campaignRoles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router';
-import { createPortal } from 'react-dom';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { COMPACT_LAYOUT_QUERY } from '@/constants/layout';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
@@ -46,17 +47,14 @@ import CampaignDocumentsModal from '@/components/documents/CampaignDocumentsModa
 import ShortcutsPanel from '@/components/campaign/ShortcutsPanel';
 import SessionPanels from '@/components/campaign/SessionPanels';
 import DesktopTable from '@/components/campaign/DesktopTable';
+import CompactTable from '@/components/campaign/compact/CompactTable';
 import { TableHosts, type TablePart } from '@/components/campaign/tableHosts';
 import { type SessionToolKey } from '@/components/campaign/SessionToolbar';
 import { CampaignStatus } from '@/types';
 import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
-import { optionalStorage } from '@/utils/optionalStorage';
 import { useAccessRevoked } from '@/hooks/useAccessRevoked';
-
-/** Set to `yes` once this browser has chosen Continue anyway on a narrow screen. */
-const NARROW_SCREEN_KEY = 'cozyvtt.continueOnNarrowScreen';
 
 // ============================================
 // Campaign Page Content (inside provider)
@@ -133,21 +131,6 @@ function CampaignPageContent() {
   const [isTokenTemplateLibraryOpen, setIsTokenTemplateLibraryOpen] = useState(false);
   const [quickEditToken, setQuickEditToken] = useState<Token | null>(null);
   const compact = useCompactLayout();
-
-  // Below 1024 px the page covers itself with a "Desktop Required" notice
-  // until **Continue anyway**, which this browser then remembers.
-  const [continueOnNarrowScreen, setContinueOnNarrowScreen] = useState(
-    () => optionalStorage.getItem(NARROW_SCREEN_KEY) === 'yes',
-  );
-  const continueAnyway = () => {
-    optionalStorage.setItem(NARROW_SCREEN_KEY, 'yes');
-    setContinueOnNarrowScreen(true);
-  };
-  // The notice is drawn only below lg (1024 px); while it shows it holds the
-  // keyboard, over any window or side panel open under it.
-  const narrowScreen = useMediaQuery(COMPACT_LAYOUT_QUERY);
-  const narrowNoticeRef = useFocusTrap(narrowScreen && !continueOnNarrowScreen);
-  const narrowNoticeTitleId = useId();
 
   // SessionToolbar reports which tool was clicked; the open/close state
   // for each slide-over stays here.
@@ -283,9 +266,15 @@ function CampaignPageContent() {
     // which put the bottom of the page under the toolbar.
     <div className="h-dvh flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       <TableHosts parts={tableParts}>
-        {/* No compact arrangement is drawn yet; LayoutProvider below says
-            false on every screen. */}
-        {!compact && (
+        {compact ? (
+          <CompactTable
+            campaign={campaign}
+            isOwner={isOwner}
+            onOpenTool={(key) => sessionPanelOpeners[key]()}
+            onOpenDocuments={() => setIsDocumentsOpen(true)}
+            onOpenShortcuts={() => setIsShortcutsOpen(true)}
+          />
+        ) : (
           <DesktopTable
             campaign={campaign}
             isOwner={isOwner}
@@ -301,7 +290,6 @@ function CampaignPageContent() {
             onOpenTool={(key) => sessionPanelOpeners[key]()}
             onOpenDocuments={() => setIsDocumentsOpen(true)}
             onOpenShortcuts={() => setIsShortcutsOpen(true)}
-            continueOnNarrowScreen={continueOnNarrowScreen}
           />
         )}
       </TableHosts>
@@ -396,41 +384,6 @@ function CampaignPageContent() {
 
       {/* What the server refuses, shown as a message */}
       <TableRefusals />
-
-      {/* Narrow screen notice, on <body> above every panel and window (z-60)
-          so none can cover it; toasts stay above it. */}
-      {!continueOnNarrowScreen && createPortal(
-        <div className="lg:hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-80">
-          <div
-            ref={narrowNoticeRef}
-            role={narrowScreen ? 'dialog' : undefined}
-            aria-modal={narrowScreen ? true : undefined}
-            aria-labelledby={narrowNoticeTitleId}
-            className="card-cozy max-w-md text-center space-y-4"
-          >
-            <h2 id={narrowNoticeTitleId} className="text-xl font-bold text-brand-ink">
-              Desktop Required
-            </h2>
-            <p className="text-stone-gray">
-              The campaign view is optimized for desktop screens (1024px+). Mobile
-              support will be added in future updates.
-            </p>
-            <p className="text-stone-gray">
-              On a narrow window or a tablet you can continue anyway. The page keeps
-              its desktop layout, so some panels will be cramped.
-            </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button onClick={() => navigate('/dashboard')}>
-                Back to Dashboard
-              </Button>
-              <Button variant="secondary" onClick={continueAnyway}>
-                Continue anyway
-              </Button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }
@@ -440,12 +393,13 @@ function CampaignPageContent() {
 // ============================================
 
 export default function CampaignPage() {
+  // The page's one question of the screen's width: below it, the compact
+  // arrangement, on any device, a narrow desktop window included.
+  const compact = useMediaQuery(COMPACT_LAYOUT_QUERY);
   return (
     <CampaignProvider>
       <WebSocketProvider>
-        {/* The compact arrangement is not drawn yet: every screen gets the
-            desktop's, and below 1024 px the Desktop Required notice over it. */}
-        <LayoutProvider compact={false}>
+        <LayoutProvider compact={compact}>
           <CampaignPageContent />
         </LayoutProvider>
       </WebSocketProvider>

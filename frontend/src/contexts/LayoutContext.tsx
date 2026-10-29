@@ -2,8 +2,9 @@
 // Layout Context: which arrangement the campaign page draws
 //
 // The campaign page has a desktop arrangement, three columns
-// (components/campaign/DesktopTable.tsx), and room for a compact one; exactly
-// one is mounted at a time, and the parts they arrange are drawn once for the
+// (components/campaign/DesktopTable.tsx), and a compact one below 1024 px
+// (components/campaign/compact/CompactTable.tsx); exactly one is mounted at
+// a time, and the parts they arrange are drawn once for the
 // page and moved between them (components/campaign/tableHosts.tsx). The page
 // says which one with LayoutProvider; a component that changes with it asks
 // useCompactLayout. The width is COMPACT_LAYOUT_QUERY's (constants/layout.ts);

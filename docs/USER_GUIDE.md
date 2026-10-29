@@ -180,7 +180,7 @@ Click **Create Campaign** and you're in. You'll be taken straight to the campaig
 
 ### Campaign Page Overview
 
-The campaign page is your command center during play. It's a three-column workspace designed for a desktop screen:
+The campaign page is your command center during play. On a computer, or a tablet held sideways, it's a three-column workspace (on a phone it has a layout of its own; see [The campaign page on a phone or tablet](#the-campaign-page-on-a-phone-or-tablet)):
 
 *Screenshot pending — Full campaign page layout with labeled panels.*
 
@@ -190,9 +190,40 @@ The campaign page is your command center during play. It's a three-column worksp
 
 You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. On a phone or a tablet a divider takes your finger anywhere in a strip 44 pixels wide around it, so you need not hit the thin line itself. A menu or a picker open over that strip takes your tap itself. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
 
-**In a window narrower than 1024 pixels**, such as a laptop with two windows side by side, a tablet or a phone, the page first shows a **Desktop Required** notice. Click **Continue anyway** to open the table there: it keeps the same three-column desktop layout, so the panels are cramped, and the header's buttons wrap onto a second row. Your browser remembers the choice, so the notice does not come back; clearing the site's data for your CozyVTT brings it back. A layout made for phones is planned for a later release.
+**In a window narrower than 1,024 pixels**, such as a phone, most tablets held upright, or a laptop with two windows side by side, the page uses its compact layout, described in the next section.
 
-**On a tablet** in landscape, 1024 pixels wide or more, the table opens as on a computer and works by touch: slide a token with your finger, tap a token for its details, press and hold a token, a character or a combatant for its menu, and pinch to zoom (see [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). The page is as tall as the browser shows it, so on a phone or a tablet its bottom stays above the browser's toolbar.
+**On a tablet** in landscape, 1,024 pixels wide or more, the table opens as on a computer and works by touch: slide a token with your finger, tap a token for its details, press and hold a token, a character or a combatant for its menu, and pinch to zoom (see [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). The page is as tall as the browser shows it, so on a phone or a tablet its bottom stays above the browser's toolbar.
+
+### The campaign page on a phone or tablet
+
+On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the campaign page shows the map across the whole screen, with a one-line header above it and a bar of buttons along the bottom. Nothing is left out: every panel and tool of the three-column layout is one or two taps away.
+
+*Screenshot pending — The campaign page on a phone, with the Chat sheet open.*
+
+The header holds **Back to the dashboard** (the arrow), the campaign's name and the session's state (**Live**, **Paused** or **Inactive**). If the connection to the server drops, its state shows there too until it is back.
+
+The bar along the bottom:
+
+| Button | What it opens |
+|---|---|
+| **Map** | Closes whatever is open over the map |
+| **Chat** | The chat. A number on the button counts messages that arrived while the chat was closed |
+| **Dice** | The dice roller |
+| **Initiative** | The initiative tracker |
+| **Party** | The campaign's info, the roster and, for the DM, the **Token Roster** |
+| **More** | **Notes**, **Session** (the vibe, the session controls and past sessions), **Documents** and **Shortcuts**; for the DM, every tool of the header's toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere** and **Campaign Settings**; and **Owner Settings** for the campaign's owner when someone else is the DM |
+
+Each opens as a sheet that rises over the map. **Chat**, **Dice**, **Initiative** and **Party** open at half the screen's height, so the map above stays in view and you can still pinch, pan and tap it. Tap the bar at the top of a sheet, or drag it up, to make the sheet full height, and tap or drag it down again to make it half. To close a sheet, tap its **✕**, tap its button again or **Map**, drag it down by the bar at its top, press **Esc**, or use the phone's **Back**. Tapping another button switches to its sheet. **Notes**, **Session** and **More** open at full height.
+
+The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** opens its tools in a strip across the bottom of the map, with the map above it to draw on. A token's details show at the bottom of the map when you tap it.
+
+Menus open as a list from the bottom of the screen: press and hold a token, a door, a character in the roster or a combatant in the initiative tracker. Tap an item, or **Cancel**.
+
+**A phone on its side** has no room for the bar, so its buttons move into the header, and sheets open from the right at the map's full height.
+
+**On a tablet** the sheets and the bar are at most 672 pixels wide, in the middle of the screen. Turning a tablet between upright and sideways switches between this layout and the three columns without losing anything: a message you were typing, a token you were carrying, the zoom, **Preview Player View** and any window you had open stay as they were.
+
+**In a narrow browser window on a computer** the compact layout works with the mouse and the keyboard: click where you would tap, and **Enter** and **Esc** work as on the three-column page. Make the window 1,024 pixels wide or more for the three columns.
 
 ---
 
@@ -668,7 +699,7 @@ still appears, marked as having no notes.
 
 ### Moving Around the Map
 
-The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. On a map too narrow for them in one row, such as a tablet's with both side panels open, the buttons wrap onto a second row, and the panels below the toolbar move down to make room. Nothing you do there changes anyone else's view, except a **Ping** and what you draw, which the whole table sees.
+The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. On a phone the toolbar has fewer buttons and the rest are under its **More** (see [The campaign page on a phone or tablet](#the-campaign-page-on-a-phone-or-tablet)). On a map too narrow for them in one row, such as a tablet's with both side panels open, the buttons wrap onto a second row, and the panels below the toolbar move down to make room. Nothing you do there changes anyone else's view, except a **Ping** and what you draw, which the whole table sees.
 
 | Control | What it does |
 |---|---|

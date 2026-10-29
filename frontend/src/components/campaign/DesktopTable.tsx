@@ -53,12 +53,6 @@ interface DesktopTableProps {
   onOpenTool: (key: SessionToolKey) => void;
   onOpenDocuments: () => void;
   onOpenShortcuts: () => void;
-  /**
-   * Whether this browser chose **Continue anyway** on the Desktop Required
-   * notice. Until it has, the columns are not drawn below 1024 px, under the
-   * notice.
-   */
-  continueOnNarrowScreen: boolean;
 }
 
 export default function DesktopTable({
@@ -68,7 +62,6 @@ export default function DesktopTable({
   onOpenTool,
   onOpenDocuments,
   onOpenShortcuts,
-  continueOnNarrowScreen,
 }: DesktopTableProps) {
   const navigate = useNavigate();
   const { userRole } = useCampaign();
@@ -245,7 +238,7 @@ export default function DesktopTable({
       {/* Main Content - Three Resizable Panels. Relative, so it clips what is
           absolutely placed inside it too, such as the hidden names of the
           rail's icon tabs, which otherwise widened a narrow page. */}
-      <main className={`relative flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
+      <main className="relative flex-1 min-h-0 overflow-hidden">
         {/* The dividers are 6 pixels wide; the library takes a drag over a
             wider strip than it draws. 44 pixels where the primary pointer
             is coarse is the size a finger needs; a mouse keeps its 10. It

@@ -918,6 +918,23 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 
 A stylus never opens a menu by holding; use a finger.
 
+### On a phone
+
+On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the campaign page has its compact layout: the map across the screen, a bar of buttons along the bottom and everything else in sheets that rise over the map (see [The campaign page on a phone or tablet](USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet)). Your tools are all there:
+
+| On the desktop | On a phone |
+|---|---|
+| The header's DM toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere**, **Campaign Settings** | **More**, under **DM tools**. Each opens the same panel, which fills the screen |
+| **Campaign documents**, **Keyboard shortcuts** | **More**: **Documents**, **Shortcuts** |
+| The **Session** tab (session controls, the vibe, past sessions) and **Notes** | **More**: **Session**, **Notes** |
+| The left column: **Campaign Info**, the **Campaign Roster**, the **Token Roster** | **Party** |
+| The **Fog of War**, **Walls** and **Lights** panels at the top right of the map | The map's **More**, then **Show tools**. The panels show at the top right, folded, as on the desktop; **Hide tools**, in the map's **More** or on the bar above the panels, puts them away and puts down the tool you had up |
+| The spirit tokens button in the map's toolbar | The map's **More**: **Show spirit tokens** |
+| **Draw** | **Draw**, in the map's toolbar: its tools open in a strip across the foot of the map, with the map above it to draw on. **Clear…** offers every drawing or one member's, and asks before it clears |
+| **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
+
+A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** included, so a tablet propped up for the table stays in the players' view.
+
 ## Combat and Initiative
 
 ### Starting the Initiative Tracker

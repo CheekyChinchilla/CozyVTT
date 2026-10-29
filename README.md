@@ -41,6 +41,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign; players and spectators can leave a campaign on their own
 - **Setup wizard** — guided first-run initialization; no manual database seeding required. It asks for a one-time setup token printed in the backend log, so only the person running the server can create the first administrator
 - **Admin dashboard** — user management, system settings, activity logs, uploaded files, instance backups (database and uploaded files)
+- **Works on phones and tablets** — below 1,024 pixels wide the campaign page has a layout of its own: the map across the screen, a bar of Map, Chat, Dice, Initiative, Party and More along the bottom, and each panel in a sheet over the map; menus open as lists from the bottom of the screen, and Back closes what is open. On a phone on its side the bar moves into the header. A tablet turned across 1,024 pixels switches layout without losing anything
 - **Keyboard and screen reader support** — dialogs and side panels are named, keep focus and close on Escape; the dice and chat logs announce new entries; initiative runs from the keyboard; a token can be selected, moved, turned and stepped through from the keyboard, a screen reader hears which one is selected, and **?** lists the map's shortcuts; reduced-motion settings are honoured
 
 ### Campaign Tools
@@ -60,7 +61,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Vibe tracker** — time-of-day periods (dawn, day, dusk and night by default, all editable) that tint the map with a colour filter
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
 - **Session management** — start, pause, resume, and end sessions with full state capture (token positions, map, vibe)
-- **Resizable session workspace** — drag to resize or collapse the roster, map, and side panels; a tabbed sidebar keeps Chat, Dice, Initiative, Notes and Session full-height, with an unread-message badge; layout persists per browser
+- **Resizable session workspace** — on a computer or a tablet held sideways, drag to resize or collapse the roster, map, and side panels; a tabbed sidebar keeps Chat, Dice, Initiative, Notes and Session full-height, with an unread-message badge; layout persists per browser
 
 ### Character Sheets
 - **D&D 5th Edition** — full sheet with stats, skills, saving throws, attacks, spells, inventory
