@@ -1,4 +1,4 @@
-import { useState, useEffect, useEffectEvent, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
+import { Fragment, useState, useEffect, useEffectEvent, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus, ChevronDown } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -649,8 +649,11 @@ export default function DiceRoller() {
   const characterAndPurpose = (
     <div
       id={compact ? 'dice-more-options' : undefined}
-      // Behind More options on the compact layout.
+      // Behind More options on the compact layout. A box here with the
+      // keyboard opens More options, so a turn of a tablet from the desktop's
+      // arrangement leaves the box being typed in on screen.
       hidden={compact && !moreOptions}
+      onFocus={() => setMoreOptions(true)}
       className={cn('grid grid-cols-2 gap-1.5', compact && !moreOptions && 'hidden')}
     >
       <input
@@ -951,14 +954,19 @@ export default function DiceRoller() {
 
         {/* Expression Input */}
         <form onSubmit={handleSubmit} className="space-y-1.5">
+          {/* The two arrangements order the same parts differently; each
+              part has a key, so a change of arrangement moves it and keeps
+              its element and the keyboard, and never makes one box of
+              another (a turned tablet once put the focus from Character on
+              Secret Roll). */}
           {compact ? (
             <>
-              <div className="flex gap-1.5">
+              <div key="expression" className="flex gap-1.5">
                 {expressionInput}
                 {rollButton}
                 {clearFieldsButton}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <div key="secret" className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                 {secretRoll}
                 <button
                   type="button"
@@ -971,21 +979,21 @@ export default function DiceRoller() {
                   {moreOptionsLabel}
                 </button>
               </div>
-              {characterAndPurpose}
+              <Fragment key="character-and-purpose">{characterAndPurpose}</Fragment>
             </>
           ) : (
             <>
-              <div>
+              <div key="expression">
                 {expressionInput}
               </div>
 
-              {characterAndPurpose}
+              <Fragment key="character-and-purpose">{characterAndPurpose}</Fragment>
 
               {/* Secret Roll Checkbox */}
-              {secretRoll}
+              <Fragment key="secret">{secretRoll}</Fragment>
 
               {/* Action Buttons */}
-              <div className="flex gap-1.5">
+              <div key="actions" className="flex gap-1.5">
                 {rollButton}
                 {clearFieldsButton}
               </div>
