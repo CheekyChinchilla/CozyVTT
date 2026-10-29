@@ -301,6 +301,24 @@ export default function ChatPanel() {
     scrollToBottom(true);
   };
 
+  /**
+   * Keep a reader at the newest message there when the log's box changes
+   * size: the log keeps its scroll position as its box shrinks, which would
+   * leave the newest messages below it (a sheet made half height again, the
+   * panel moved from the desktop's rail into the compact layout's sheet, a
+   * window made shorter).
+   */
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (wasAtBottomRef.current) container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+    // The log is drawn once the history has loaded.
+  }, [isLoading]);
+
   // ============================================
   // Load Messages
   // ============================================
