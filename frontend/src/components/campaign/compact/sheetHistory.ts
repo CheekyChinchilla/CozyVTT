@@ -13,13 +13,16 @@
 //   tab's sheet for the next, leaves the entry where it is: history.back()
 //   lands later, and an entry pushed before it lands would be the one it
 //   took off. So the entry is taken off once nothing has opened by the end
-//   of the task that closed the last sheet.
+//   of the task that closed the last sheet. A sheet that opens after that,
+//   before the browser has gone back, gets its entry once it has.
 // - The entry is the page's own entry with a mark added, at the same
 //   address, so the router sees no navigation. Only a marked entry is taken
 //   back off: a sheet that closes because the page is being left, after the
 //   router has put the next page's entry on, leaves history alone. A sheet
 //   still open as the page is left leaves its entry behind it, so Back to
-//   the page lands on that entry first, one press that changes nothing.
+//   the page lands on that entry first, one press that changes nothing; a
+//   reload with a sheet open leaves the same. History has no way to take
+//   an entry off once the page is past it.
 // - A dialog opened over the top sheet (a Modal, a SlideOver, an editor)
 //   is what Back closes, through its own close, the one Escape calls, so a
 //   dialog that asks before closing asks; the sheet stays, and the entry
@@ -57,6 +60,9 @@ function pushMarkedEntry(): void {
 function onPopState(): void {
   if (ownBack) {
     ownBack = false;
+    // A sheet opened after the close asked to go back, before the browser
+    // got there, found the entry still on and put none on; it gets one now.
+    if (openSheets.length > 0 && !onMarkedEntry()) pushMarkedEntry();
     return;
   }
   // Back or Forward between two entries of the page: only leaving the marked

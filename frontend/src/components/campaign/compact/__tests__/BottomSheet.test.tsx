@@ -391,6 +391,33 @@ describe("the browser's Back", () => {
   });
 });
 
+describe("a sheet opened while the browser is still going back for the last one's close", () => {
+  // A browser's history.back() lands a task or more later. A sheet opened in
+  // between found the entry still there and put none on; the late arrival
+  // then left it with none, so the next Back left the page.
+  it('gets an entry of its own once the browser has gone back', async () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    try {
+      const { rerender } = render(<Sheet open />);
+      rerender(<Sheet open={false} />);
+      // The close's history.back() is asked for after the task that closed it.
+      await waitFor(() => expect(back).toHaveBeenCalledTimes(1));
+
+      rerender(<Sheet open />);
+      // The browser lands on the page's own entry, the sheet still open.
+      act(() => {
+        const { cozyvttSheet: _mark, ...page } = (window.history.state ?? {}) as Record<string, unknown>;
+        window.history.replaceState(page, '');
+        window.dispatchEvent(new PopStateEvent('popstate', { state: page }));
+      });
+
+      expect(onSheetEntry()).toBe(true);
+    } finally {
+      back.mockRestore();
+    }
+  });
+});
+
 describe("the browser's Back with a dialog over a sheet", () => {
   it('closes the dialog through its own close, never the sheet under it, and keeps the entry and the focus', async () => {
     const onSheetClose = vi.fn();
