@@ -785,7 +785,7 @@ export default function ChatPanel() {
       id="chat-recipient"
       value={recipient?.id ?? ''}
       onChange={chooseRecipient}
-      className={`input-cozy min-w-0 text-sm py-1${compact ? ' w-28 shrink-0 min-h-11' : ' flex-1'}`}
+      className={`input-cozy min-w-0 text-sm py-1${compact ? ' w-32 px-2.5 shrink-0 min-h-11' : ' flex-1'}`}
     >
       <option value="">Everyone</option>
       {recipientGone && recipient && <option value={recipient.id}>{recipient.name} (no longer in the campaign)</option>}
@@ -817,10 +817,10 @@ export default function ChatPanel() {
         setBoxRefusal(null);
       }}
       onKeyDown={handleKeyDown}
-      placeholder={compact ? (recipient ? 'Type a whisper…' : 'Type a message…') : recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
+      placeholder={compact ? (recipient ? 'Whisper…' : 'Message…') : recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
       aria-label="Chat message"
       aria-describedby="chat-hint"
-      className={`input-cozy flex-1 text-sm resize-none ${compact ? 'min-w-0 min-h-11' : 'min-h-[60px]'} max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
+      className={`input-cozy flex-1 text-sm resize-none ${compact ? 'min-w-0 min-h-11 px-2.5' : 'min-h-[60px]'} max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
       rows={compact ? 1 : 2}
       maxLength={slashInBox ? MAX_CHAT_MESSAGE_LENGTH + WHISPER_PREFIX_ROOM : MAX_CHAT_MESSAGE_LENGTH}
       // Read-only through the cooldown, not disabled: disabling the
@@ -833,7 +833,7 @@ export default function ChatPanel() {
     <Button
       key="send"
       type="submit"
-      className={`px-4 py-2 flex items-center gap-2${compact ? ' min-h-11 shrink-0' : ''}`}
+      className={`${compact ? 'px-3 min-h-11 shrink-0' : 'px-4'} py-2 flex items-center gap-2`}
       disabled={!messageInput.trim() || !canSend}
       aria-label={!canSend ? `Rate limited — wait ${cooldownSeconds} seconds` : 'Send message'}
     >

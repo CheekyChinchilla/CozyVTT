@@ -41,11 +41,16 @@ it('gives the log the room on the compact layout: the heading for screen readers
   expect(classes(box)).not.toContain('min-h-[60px]');
   expect(classes(screen.getByText('Press Enter to send, Shift+Enter for new line'))).toContain('sr-only');
   expect(box).toHaveAccessibleDescription('Press Enter to send, Shift+Enter for new line');
-  // One line holds the short form.
-  expect(box).toHaveAttribute('placeholder', 'Type a message…');
-  // The To list is a finger's height, on one row with the box and Send.
+  // One line holds the short form, beside To and Send in a sheet 352 px wide.
+  expect(box).toHaveAttribute('placeholder', 'Message…');
+  // The To list is a finger's height, on one row with the box and Send, and
+  // wide enough to show Everyone whole (about 111 px with its arrow at 16 px
+  // text). The three keep their sides narrow, so in the 352 px sheet of a
+  // phone on its side the box still holds its placeholder on one line.
   const toList = screen.getByRole('combobox', { name: 'To' });
-  expect(classes(toList)).toContain('min-h-11');
+  expect(classes(toList)).toEqual(expect.arrayContaining(['min-h-11', 'w-32', 'px-2.5']));
+  expect(classes(box)).toContain('px-2.5');
+  expect(classes(screen.getByRole('button', { name: 'Send message' }))).toContain('px-3');
   expect(toList.parentElement).toBe(box.parentElement);
   expect(box.parentElement).toContainElement(screen.getByRole('button', { name: 'Send message' }));
 });
