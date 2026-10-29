@@ -382,6 +382,8 @@ describe('a change of arrangement', () => {
     expect(sheet).toContainElement(part('Chat'));
     expect(sheet).toHaveAttribute('data-state', 'open');
     expect(sheet).not.toHaveAttribute('inert');
+    // The sheet's heading, which takes the focus as a sheet opens, leaves it.
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
     expect(document.activeElement).toBe(part('Chat'));
   });
 

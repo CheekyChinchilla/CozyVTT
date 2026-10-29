@@ -10,7 +10,8 @@
 //   trap, so a player can watch, pinch and tap the map while reading the
 //   chat. Escape closes it, unless something has used the key or a box is
 //   being typed in, and its heading takes the focus as it opens, so no text
-//   box raises a phone's keyboard by itself.
+//   box raises a phone's keyboard by itself; a control inside it that has
+//   the focus already keeps it.
 // - Full height (from 3rem below the top) is modal: a backdrop that closes
 //   it, the keyboard kept inside it (useFocusTrap, which also gives Escape
 //   to the top dialog only), and it is a menu on the screen (openMenus.ts),
@@ -242,9 +243,12 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
   const motionProps = useSheetMotion(open, sideways ? 'right' : 'bottom');
 
   // As it opens, a sheet that is not modal gives its heading the focus; a
-  // modal one's focus trap does, as the heading is marked data-autofocus.
+  // modal one's focus trap does, as the heading is marked data-autofocus. A
+  // control inside it that has the focus already keeps it, as one does when
+  // a tablet turned to the compact layout opens the sheet it is in.
   const focusHeading = useEffectEvent(() => {
-    if (!modal) headingRef.current?.focus({ preventScroll: true });
+    if (modal || rootRef.current?.contains(document.activeElement)) return;
+    headingRef.current?.focus({ preventScroll: true });
   });
   useEffect(() => {
     if (!open) return;

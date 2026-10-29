@@ -122,6 +122,17 @@ describe('a sheet at half height', () => {
     expect(tab).toHaveFocus();
   });
 
+  // A tablet turned from its wide arrangement opens the sheet that the box
+  // being typed in was moved into; the heading took the focus from the box,
+  // and on a phone the keyboard with it.
+  it('leaves the focus on a control inside it that has it as it opens', async () => {
+    render(<Sheet><input aria-label="Message" /></Sheet>);
+    const box = screen.getByRole('textbox', { name: 'Message' });
+    box.focus();
+    await nextFrame();
+    expect(box).toHaveFocus();
+  });
+
   it('closes on Escape, used up so the map does not act on it too', () => {
     const onClose = vi.fn();
     render(<Sheet onClose={onClose} />);
