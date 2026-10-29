@@ -64,7 +64,9 @@ export default function BottomBar({ active, expanded = active, onSelect, sheetId
   return (
     <nav
       aria-label="Table"
-      className={inHeader ? 'shrink-0' : 'shrink-0 border-t border-brand/20 bg-parchment pb-[env(safe-area-inset-bottom)]'}
+      // In the header the buttons give up width down to 44 px before the
+      // row runs past a narrow, short window's edge.
+      className={inHeader ? 'min-w-0' : 'shrink-0 border-t border-brand/20 bg-parchment pb-[env(safe-area-inset-bottom)]'}
     >
       <div className={inHeader ? 'flex items-center gap-0.5' : 'mx-auto grid h-14 w-full max-w-2xl grid-cols-6'}>
         {COMPACT_TABS.map((tab) => {
@@ -83,7 +85,7 @@ export default function BottomBar({ active, expanded = active, onSelect, sheetId
               className={cn(
                 'relative flex min-w-0 flex-col items-center justify-center gap-0.5 transition-colors',
                 'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand',
-                inHeader ? 'h-12 w-13 rounded-cozy text-[10px]' : 'text-[11px] md:text-xs',
+                inHeader ? 'h-12 w-13 min-w-11 rounded-cozy text-[10px]' : 'text-[11px] md:text-xs',
                 open ? 'font-semibold text-brand-ink' : 'font-medium text-ink-muted hover:text-ink',
                 open && inHeader && 'bg-brand/10'
               )}
