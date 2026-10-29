@@ -26,3 +26,11 @@ if (typeof Element !== 'undefined' && !('setPointerCapture' in Element.prototype
     hasPointerCapture: { configurable: true, writable: true, value(this: Element, pointerId: number) { return idsOf(this).has(pointerId); } },
   });
 }
+
+// jsdom has no scrolling methods. ChatPanel and the dice log scroll to their
+// newest entry on a timer after loading, which can fire after a test has
+// ended, and an error then fails the whole run on a slow runner. Stubbed
+// once, on Element, so a test can still define or spy on its own.
+if (typeof Element !== 'undefined' && !('scrollTo' in Element.prototype)) {
+  Object.defineProperty(Element.prototype, 'scrollTo', { configurable: true, writable: true, value() {} });
+}
