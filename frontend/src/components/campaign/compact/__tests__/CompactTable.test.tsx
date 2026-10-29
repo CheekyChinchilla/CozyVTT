@@ -133,6 +133,15 @@ describe('the compact arrangement', () => {
     expect(screen.getByRole('button', { name: 'Retry' }).className.split(/\s+/)).toContain('min-h-11');
   });
 
+  // The panels were written for a mouse; the compact layout gives every
+  // control in them a finger's size (index.css, .finger-controls).
+  it("gives every control in the session and Party content a finger's size", () => {
+    table();
+    expect(screen.getByText('session panels').closest('.finger-controls')).not.toBeNull();
+    expect(screen.getByText('party content').closest('.finger-controls')).not.toBeNull();
+    expect(screen.getByTestId('map').closest('.finger-controls')).not.toBeNull();
+  });
+
   it('puts More on the page after the session and Party sheets, so it opens over them', () => {
     table();
     expect(sheets().map((el) => el.querySelector('h2')?.textContent)).toEqual(['Chat', 'Party', 'More']);

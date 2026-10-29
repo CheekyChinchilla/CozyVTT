@@ -23,6 +23,10 @@
 // The sheets are put on the page in the order they mount, so More, opened
 // over the others, mounts after them.
 //
+// The session and Party content and the map were written for a mouse in a
+// desktop column; their slots are marked finger-controls (index.css), which
+// gives every control in them 44 by 44 CSS px here and nowhere else.
+//
 // The arrangement's sheets stop under the header and above the bar
 // (`edges`), so the bar stays to be pressed beside any of them, More's
 // included: one press goes from More to Chat. More is modal for the
@@ -177,7 +181,7 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
       {campaign.status === CampaignStatus.PAUSED && userRole !== 'DM' && <SessionPausedBanner />}
 
       {/* The map is the page's, moved in here (tableHosts.tsx). */}
-      <main ref={mapSlot.ref} className="relative min-h-0 flex-1 overflow-hidden" />
+      <main ref={mapSlot.ref} className="finger-controls relative min-h-0 flex-1 overflow-hidden" />
 
       {!sideways && bar}
 
@@ -192,7 +196,7 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
         edges={edges}
       >
         {/* The session panels are the page's, moved in here; each fills this box. */}
-        <div ref={sessionSlot.ref} className="absolute inset-0" />
+        <div ref={sessionSlot.ref} className="finger-controls absolute inset-0" />
       </BottomSheet>
 
       <BottomSheet
@@ -205,7 +209,7 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
         edges={edges}
       >
         {/* The Party content is the page's, moved in here. */}
-        <div ref={partySlot.ref} className="px-4 pt-1 pb-4" />
+        <div ref={partySlot.ref} className="finger-controls px-4 pt-1 pb-4" />
       </BottomSheet>
 
       <MoreSheet
