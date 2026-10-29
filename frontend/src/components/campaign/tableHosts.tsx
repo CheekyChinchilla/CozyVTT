@@ -173,6 +173,16 @@ export function TableHosts({ parts, children }: { parts: Record<TablePart, React
 }
 
 /**
+ * The part the keyboard is in, if it is in one: an arrangement taking over
+ * from another can show that part, so the control in use stays in sight.
+ */
+export function partHoldingFocus(): TablePart | null {
+  const host = document.activeElement?.closest<HTMLElement>('[data-table-part]');
+  const part = host?.dataset.tablePart;
+  return TABLE_PARTS.find((name) => name === part) ?? null;
+}
+
+/**
  * Where an arrangement draws `part`: `ref` goes on the element the part fills.
  * Under TableHosts that element takes no children of its own, since the part
  * is moved into it. `hosted` is false with no TableHosts above, as for a

@@ -11,7 +11,9 @@
 // arrangement gives the sheets' ids (`sheetIds`), which sheet it opens
 // (`aria-controls`). The Chat button carries the unread count the rail's
 // Chat tab shows (the game store's `unreadChat`). On a tablet the buttons
-// are at most 672 px wide, centred, as the sheets are.
+// are at most 672 px wide, centred, as the sheets are. On a phone turned on
+// its side there is no height to spare for a bar, so the same buttons sit in
+// the arrangement's header, smaller (`placement` 'header').
 // ============================================
 
 import { Ellipsis, Map as MapIcon, Users, type LucideIcon } from 'lucide-react';
@@ -45,14 +47,20 @@ export interface BottomBarProps {
   onSelect: (tab: CompactTab) => void;
   /** The id of the sheet each button opens, once the arrangement draws them. */
   sheetIds?: Partial<Record<Exclude<CompactTab, 'map'>, string>>;
+  /** Along the foot of the screen, or in the header on a screen too short for a bar. */
+  placement?: 'foot' | 'header';
 }
 
-export default function BottomBar({ active, onSelect, sheetIds }: BottomBarProps) {
+export default function BottomBar({ active, onSelect, sheetIds, placement = 'foot' }: BottomBarProps) {
   const unreadChat = useGameStore((s) => s.unreadChat);
+  const inHeader = placement === 'header';
 
   return (
-    <nav aria-label="Table" className="shrink-0 border-t border-brand/20 bg-parchment pb-[env(safe-area-inset-bottom)]">
-      <div className="mx-auto grid h-14 w-full max-w-2xl grid-cols-6">
+    <nav
+      aria-label="Table"
+      className={inHeader ? 'shrink-0' : 'shrink-0 border-t border-brand/20 bg-parchment pb-[env(safe-area-inset-bottom)]'}
+    >
+      <div className={inHeader ? 'flex items-center gap-0.5' : 'mx-auto grid h-14 w-full max-w-2xl grid-cols-6'}>
         {COMPACT_TABS.map((tab) => {
           const { label, icon: Icon } = TAB_LOOKS[tab];
           const open = active === tab;
@@ -67,9 +75,11 @@ export default function BottomBar({ active, onSelect, sheetIds }: BottomBarProps
               aria-controls={tab === 'map' ? undefined : sheetIds?.[tab]}
               onClick={() => onSelect(tab)}
               className={cn(
-                'relative flex min-w-0 flex-col items-center justify-center gap-0.5 text-[11px] transition-colors',
+                'relative flex min-w-0 flex-col items-center justify-center gap-0.5 transition-colors',
                 'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand',
-                open ? 'font-semibold text-brand-ink' : 'font-medium text-ink-muted hover:text-ink'
+                inHeader ? 'h-12 w-13 rounded-cozy text-[10px]' : 'text-[11px] md:text-xs',
+                open ? 'font-semibold text-brand-ink' : 'font-medium text-ink-muted hover:text-ink',
+                open && inHeader && 'bg-brand/10'
               )}
             >
               <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />

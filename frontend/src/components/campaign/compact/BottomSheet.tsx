@@ -228,10 +228,12 @@ export interface BottomSheetProps {
   onHeightChange?: (height: SheetHeight) => void;
   /** Where the sheet stops; see SheetEdges. */
   edges?: SheetEdges;
+  /** The dialog's id, for a control that opens it to name (aria-controls). */
+  id?: string;
   children: ReactNode;
 }
 
-export function BottomSheet({ open, title, height, onClose, onHeightChange, edges, children }: BottomSheetProps) {
+export function BottomSheet({ open, title, height, onClose, onHeightChange, edges, id, children }: BottomSheetProps) {
   const sideways = useMediaQuery(SHORT_SCREEN_QUERY);
   const modal = height === 'full';
   const rootRef = useSheet(open, modal, onClose);
@@ -309,6 +311,7 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
       <SheetBackdrop open={open && modal} bottom={bottom} onClose={onClose} />
       <div
         ref={rootRef}
+        id={id}
         role="dialog"
         aria-modal={modal || undefined}
         aria-labelledby={titleId}
