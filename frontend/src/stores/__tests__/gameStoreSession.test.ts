@@ -93,3 +93,48 @@ describe('a page that opens a campaign', () => {
     expect(store.getState().sessionTab).toBe('notes');
   });
 });
+
+// On the compact layout the session panels sit in a sheet, closed most of
+// the time with the Chat tab still chosen. The chat was then taken as on
+// screen, so nothing counted and the bar's Chat badge never lit.
+describe('the unread count while the session panels are put away', () => {
+  it('counts while they are not shown, even with the chat chosen, and showing them on the chat reads them', async () => {
+    const store = await freshStore();
+    expect(store.getState().sessionTab).toBe('chat');
+
+    store.getState().setSessionShown(false);
+    store.getState().countUnreadChat();
+    store.getState().countUnreadChat();
+    expect(store.getState().unreadChat).toBe(2);
+
+    store.getState().setSessionShown(true);
+    expect(store.getState().unreadChat).toBe(0);
+  });
+
+  it('keeps them while they are shown on another panel, until the chat is opened', async () => {
+    const store = await freshStore();
+    store.getState().setSessionShown(false);
+    store.getState().countUnreadChat();
+
+    store.getState().setSessionTab('dice');
+    store.getState().setSessionShown(true);
+    expect(store.getState().unreadChat).toBe(1);
+
+    store.getState().setSessionTab('chat');
+    expect(store.getState().unreadChat).toBe(0);
+  });
+
+  it('opening the chat while they are put away reads nothing', async () => {
+    const store = await freshStore();
+    store.getState().setSessionTab('dice');
+    store.getState().setSessionShown(false);
+    store.getState().countUnreadChat();
+
+    store.getState().setSessionTab('chat');
+    expect(store.getState().unreadChat).toBe(1);
+  });
+
+  it('are shown on a page that has just loaded, as the desktop rail is', async () => {
+    expect((await freshStore()).getState().sessionShown).toBe(true);
+  });
+});

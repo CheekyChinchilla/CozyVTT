@@ -68,8 +68,8 @@ function storedSessionTab(): SessionTab {
 }
 
 /** Whether the chat is on screen, so a message arriving is read as it comes. */
-function chatOnScreen(s: { sessionTab: SessionTab }): boolean {
-  return s.sessionTab === 'chat';
+function chatOnScreen(s: { sessionTab: SessionTab; sessionShown: boolean }): boolean {
+  return s.sessionShown && s.sessionTab === 'chat';
 }
 
 interface GameState {
@@ -138,6 +138,13 @@ interface GameState {
    * on screen: the Chat tab's badge. Back to none when the chat is opened.
    */
   unreadChat: number;
+  /**
+   * Whether the session panels are on screen. The desktop's rail always
+   * shows them; the compact layout keeps them in a sheet, shown only while it
+   * is open, and says so here. A session's teardown leaves it as it is,
+   * since the arrangement on screen keeps it.
+   */
+  sessionShown: boolean;
 
   // ---- Actions (named after the events that drive them) ----
   /** Wholesale replace — map load, map change, reconnect resync. */
@@ -184,6 +191,8 @@ interface GameState {
   setSessionTab: (tab: SessionTab) => void;
   /** `chat.message` from someone else: one more unread, unless the chat is on screen. */
   countUnreadChat: () => void;
+  /** The session panels are shown or put away. Shown on the chat, it reads what arrived meanwhile. */
+  setSessionShown: (shown: boolean) => void;
   /**
    * Session teardown, and a page's start: what a page that opens a campaign
    * begins with. The open tab is read again from this browser's storage, as
@@ -206,6 +215,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   drawingsMapId: null,
   sessionTab: storedSessionTab(),
   unreadChat: 0,
+  sessionShown: true,
 
   setTokens: (list) =>
     set((s) => ({
@@ -321,8 +331,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setSessionTab: (tab) => {
     optionalStorage.setItem(SESSION_TAB_KEY, tab);
-    set((s) => ({ sessionTab: tab, unreadChat: chatOnScreen({ sessionTab: tab }) ? 0 : s.unreadChat }));
+    set((s) => ({ sessionTab: tab, unreadChat: chatOnScreen({ ...s, sessionTab: tab }) ? 0 : s.unreadChat }));
   },
+
+  setSessionShown: (shown) =>
+    set((s) => ({ sessionShown: shown, unreadChat: chatOnScreen({ ...s, sessionShown: shown }) ? 0 : s.unreadChat })),
 
   countUnreadChat: () => set((s) => (chatOnScreen(s) ? s : { unreadChat: s.unreadChat + 1 })),
 
