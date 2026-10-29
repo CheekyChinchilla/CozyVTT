@@ -3,7 +3,8 @@
 //
 // One row: a way back to the dashboard, the campaign's name as the page's
 // heading, and the session's state (Live, Paused or Inactive). The
-// connection's state shows only while it is not connected, when it matters.
+// connection's state shows only while it is not connected, when it matters;
+// a screen reader hears it change either way.
 // Everything else the desktop's header holds is under the bar's More.
 //
 // On a phone turned on its side the bar's buttons sit at the end of this
@@ -89,7 +90,12 @@ export default function CompactHeader({ campaign, bar, ref }: CompactHeaderProps
         {campaign.name}
       </h1>
 
-      {status !== 'connected' && <ConnectionStatus />}
+      {/* Mounted always, out of sight while connected: a live region added
+          with its words in it, or taken away, is not read out by many
+          screen readers, so a drop and a return are both heard. */}
+      <div className={status === 'connected' ? 'sr-only' : 'contents'}>
+        <ConnectionStatus />
+      </div>
       <SessionState status={campaign.status} small={bar !== undefined} />
 
       {bar && (

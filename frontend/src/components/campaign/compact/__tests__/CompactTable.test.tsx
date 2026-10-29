@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { TableHosts } from '@/components/campaign/tableHosts';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 import { useGameStore } from '@/stores/gameStore';
 import { SHORT_SCREEN_QUERY } from '@/constants/layout';
 import { CampaignStatus } from '@/types';
@@ -39,9 +40,11 @@ function openers() {
 function table(status?: CampaignStatus) {
   const asked = openers();
   render(
-    <TableHosts parts={parts}>
-      <CompactTable campaign={campaign(status)} isOwner={false} {...asked} />
-    </TableHosts>
+    <LayoutProvider compact>
+      <TableHosts parts={parts}>
+        <CompactTable campaign={campaign(status)} isOwner={false} {...asked} />
+      </TableHosts>
+    </LayoutProvider>
   );
   return asked;
 }
@@ -113,13 +116,21 @@ describe('the compact arrangement', () => {
     expect(page.navigate).toHaveBeenCalledWith('/dashboard', { replace: true });
   });
 
-  it("shows the connection's state only while it is not connected", () => {
+  // A live region added with its words already in it is not read out by
+  // many screen readers, and one taken away says nothing: the region stays,
+  // out of sight while connected, so both changes are heard.
+  it("keeps the connection's state for a screen reader, and shows it only while it is not connected", () => {
     table();
-    expect(screen.queryByRole('status')).toBeNull();
+    const region = screen.getByRole('status');
+    expect(region).toHaveTextContent('Connected');
+    expect(region.closest('.sr-only')).not.toBeNull();
     cleanup();
     page.status = 'disconnected';
     table();
     expect(screen.getByRole('status')).toHaveTextContent('Disconnected');
+    expect(screen.getByRole('status').closest('.sr-only')).toBeNull();
+    // Retry, the one control a player needs when the connection drops, takes a finger.
+    expect(screen.getByRole('button', { name: 'Retry' }).className.split(/\s+/)).toContain('min-h-11');
   });
 
   it('puts More on the page after the session and Party sheets, so it opens over them', () => {
