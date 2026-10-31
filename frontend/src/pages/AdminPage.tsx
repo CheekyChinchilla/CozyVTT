@@ -124,6 +124,21 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+/**
+ * Scroll a strip that scrolls sideways, as the row of tabs does on a narrow
+ * screen, just far enough to show `item` inside its padding. Only the strip
+ * moves: scrollIntoView would scroll the page too.
+ */
+function keepInStrip(strip: HTMLElement, item: HTMLElement) {
+  const style = getComputedStyle(strip);
+  const box = strip.getBoundingClientRect();
+  const left = box.left + (parseFloat(style.paddingLeft) || 0);
+  const right = box.right - (parseFloat(style.paddingRight) || 0);
+  const shown = item.getBoundingClientRect();
+  if (shown.left < left) strip.scrollLeft -= left - shown.left;
+  else if (shown.right > right) strip.scrollLeft += shown.right - right;
+}
+
 /** The time of day a sign-in lock ends, as the user list shows it. */
 function formatLockTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -159,6 +174,15 @@ export default function AdminPage() {
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
+  // The open tab stays in view in a row of tabs scrolled sideways, however
+  // it was opened (Assets also opens from a link in Delete User).
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    const tab = strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (strip && tab) keepInStrip(strip, tab);
+  }, [activeTab]);
 
   // ---- Dashboard ----
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -963,7 +987,16 @@ export default function AdminPage() {
 
           {/* Tab Navigation */}
           <nav aria-label="Admin panel sections">
-            <div role="tablist" aria-label="Admin tabs" className="flex gap-1 mt-4">
+            {/* The seven tabs need about 820 px. Below 1024 px they scroll
+                sideways in their own strip, which runs to the screen's
+                edges, so the page never does; its padding keeps a focus
+                ring and the open tab's lower edge inside it. */}
+            <div
+              ref={tabStripRef}
+              role="tablist"
+              aria-label="Admin tabs"
+              className="flex gap-1 mt-4 max-lg:-mx-4 max-lg:px-4 max-lg:py-1 max-lg:overflow-x-auto max-lg:overscroll-x-contain"
+            >
               {tabs.map(tab => (
                 <button
                   key={tab.id}
@@ -972,7 +1005,10 @@ export default function AdminPage() {
                   aria-selected={activeTab === tab.id}
                   aria-controls={`tabpanel-${tab.id}`}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                  // A tab reached with the keyboard comes wholly into view;
+                  // the browser stops at one partly shown.
+                  onFocus={(e) => { if (tabStripRef.current) keepInStrip(tabStripRef.current, e.currentTarget); }}
+                  className={`flex items-center gap-2 shrink-0 px-4 py-2 pointer-coarse:min-h-11 rounded-t-lg text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? 'bg-paper text-brand-ink border border-b-paper border-moss-green/20 -mb-px'
                       : 'text-warm-gray hover:text-brand-ink hover:bg-paper/50'
