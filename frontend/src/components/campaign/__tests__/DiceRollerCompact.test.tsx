@@ -7,10 +7,10 @@
  * left the log nothing. On the compact layout the quick rolls, the saved rolls
  * and **Saved** sit in one row that scrolls sideways, Roll sits beside the
  * expression, Character and Purpose wait behind **More options**, and the log
- * keeps at least 40 percent of the panel's height, the controls scrolling
+ * keeps at least 55 percent of the panel's height, the controls scrolling
  * when they need more. On the desktop nothing changes.
  *
- * jsdom lays nothing out, so the 40 percent is read from the classes that
+ * jsdom lays nothing out, so the 55 percent is read from the classes that
  * set it; a browser shows the result.
  */
 
@@ -130,10 +130,10 @@ it('rolls from the expression beside its Roll button, and keeps Secret Roll in s
   expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '2d6+3', secret: true });
 });
 
-it('keeps at least 40 percent of the panel for the log, the controls scrolling when they need more', () => {
+it('keeps at least 55 percent of the panel for the log, the controls scrolling when they need more', () => {
   renderCompact();
   const { box, controls } = logAndControls();
-  expect(box.className.split(' ')).toContain('min-h-[40%]');
+  expect(box.className.split(' ')).toContain('min-h-[55%]');
   expect(box.className.split(' ')).not.toContain('min-h-0');
   expect(controls.className.split(' ')).toEqual(expect.arrayContaining(['min-h-0', 'overflow-y-auto']));
   expect(controls.className.split(' ')).not.toContain('shrink-0');
@@ -156,7 +156,7 @@ it('gives every control under the log a 44 pixel target on a touch screen', asyn
   expect(controls.length).toBe(19);
   for (const control of controls) expect(control.className.split(/\s+/), control.textContent ?? '').toContain('touch-target');
   // The log keeps its floor beside them.
-  expect(logAndControls().box.className.split(' ')).toContain('min-h-[40%]');
+  expect(logAndControls().box.className.split(' ')).toContain('min-h-[55%]');
 });
 
 it('leaves the desktop panel as it was', async () => {

@@ -778,6 +778,40 @@ export default function DiceRoller() {
     </button>
   );
 
+  // Only worth offering once there is a secret roll to hide. Purely a view
+  // preference over rolls this person may already see.
+  const secretRollsToggle = hasSecretRolls && (
+    <button
+      onClick={() => setShowSecretRolls((show) => !show)}
+      aria-pressed={showSecretRolls}
+      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${
+        showSecretRolls
+          ? 'border-ink-muted/30 bg-paper/50 text-ink hover:bg-paper/70'
+          : 'border-warm-amber/40 bg-warm-amber/10 text-accent-ink'
+      }${compact ? ' touch-target' : ''}`}
+      title={
+        showSecretRolls
+          ? 'Hide secret rolls in this list (only affects your view)'
+          : 'Show secret rolls in this list (only affects your view)'
+      }
+    >
+      {showSecretRolls ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+      <span>Secret</span>
+    </button>
+  );
+
+  // DM only.
+  const clearHistoryButton = userRole === 'DM' && rolls.length > 0 && (
+    <button
+      onClick={handleClearHistory}
+      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/15 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all${compact ? ' touch-target' : ''}`}
+      title="Clear all roll history"
+    >
+      <Trash2 className="w-3 h-3" />
+      <span>Clear</span>
+    </button>
+  );
+
   return (
     <>
     {campaign?.id && (
@@ -800,7 +834,10 @@ export default function DiceRoller() {
       onCancel={() => setConfirmClear(false)}
     />
     <div className="h-full flex flex-col bg-surface/50 backdrop-blur-xs rounded-lg border border-ink-muted/20 relative">
-      {/* Header */}
+      {/* Header. The compact layout's sheet names the panel already, so
+          there the log starts at the top, and Secret and Clear go under the
+          controls. */}
+      {!compact && (
       <div className="shrink-0 p-3 border-b border-ink-muted/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -810,46 +847,18 @@ export default function DiceRoller() {
             </h2>
           </div>
           <div className="flex items-center gap-1.5">
-          {/* Only worth offering once there is a secret roll to hide. Purely a
-              view preference over rolls this person may already see. */}
-          {hasSecretRolls && (
-            <button
-              onClick={() => setShowSecretRolls((show) => !show)}
-              aria-pressed={showSecretRolls}
-              className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${
-                showSecretRolls
-                  ? 'border-ink-muted/30 bg-paper/50 text-ink hover:bg-paper/70'
-                  : 'border-warm-amber/40 bg-warm-amber/10 text-accent-ink'
-              }`}
-              title={
-                showSecretRolls
-                  ? 'Hide secret rolls in this list (only affects your view)'
-                  : 'Show secret rolls in this list (only affects your view)'
-              }
-            >
-              {showSecretRolls ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-              <span>Secret</span>
-            </button>
-          )}
-          {/* DM Only: Clear History Button */}
-          {userRole === 'DM' && rolls.length > 0 && (
-            <button
-              onClick={handleClearHistory}
-              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/15 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all"
-              title="Clear all roll history"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>Clear</span>
-            </button>
-          )}
+          {secretRollsToggle}
+          {clearHistoryButton}
           </div>
         </div>
       </div>
+      )}
 
       {/* Roll list — a running log, oldest first, like the chat beside it.
-          On the compact layout it keeps at least 40 percent of the panel, and
-          the controls under it scroll when they need more room. */}
-      <div className={compact ? 'relative flex-1 min-h-[40%] flex flex-col' : 'relative flex-1 min-h-0 flex flex-col'}>
+          On the compact layout it keeps at least 55 percent of the panel,
+          room for three rolls of two lines in a sheet half a phone's height,
+          and the controls under it scroll when they need more room. */}
+      <div className={compact ? 'relative flex-1 min-h-[55%] flex flex-col' : 'relative flex-1 min-h-0 flex flex-col'}>
       <div
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
@@ -857,7 +866,7 @@ export default function DiceRoller() {
         aria-live={historyIn ? 'polite' : 'off'}
         aria-label="Dice rolls"
         aria-relevant="additions"
-        className="flex-1 overflow-y-auto p-3 min-h-0"
+        className={compact ? 'flex-1 overflow-y-auto px-2 py-1.5 min-h-0' : 'flex-1 overflow-y-auto p-3 min-h-0'}
       >
         {rolls.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -870,13 +879,14 @@ export default function DiceRoller() {
           // Oldest at the top, newest at the bottom, like the chat panel beside
           // it. `shownRolls` is newest-first in state, so this reverses a copy
           // rather than mutating it.
-          <div className="space-y-2">
+          <div className={compact ? 'space-y-1' : 'space-y-2'}>
             {[...shownRolls].reverse().map((roll) => (
               <DiceResult
                 key={rollKey(roll)}
                 roll={roll}
                 isCurrentUser={user?.id === roll.userId}
                 rollerIsDM={roll.userId !== null && dmUserIds.has(roll.userId)}
+                dense={compact}
               />
             ))}
             {shownRolls.length === 0 && (
@@ -1000,6 +1010,14 @@ export default function DiceRoller() {
             </>
           )}
         </form>
+
+        {/* The header's Secret and Clear, on the compact layout. */}
+        {compact && (secretRollsToggle || clearHistoryButton) && (
+          <div className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5">
+            {secretRollsToggle}
+            {clearHistoryButton}
+          </div>
+        )}
 
         {/* Hint / Rate Limit Countdown; the hint is left out of the compact layout's short footer. */}
         {rateLimitCooldown > 0 ? (
