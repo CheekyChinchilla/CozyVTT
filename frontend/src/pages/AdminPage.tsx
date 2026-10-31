@@ -979,7 +979,9 @@ export default function AdminPage() {
                 <p className="text-xs text-warm-gray mt-0.5">Platform administration</p>
               </div>
             </div>
-            <span className="text-sm text-warm-gray">
+            {/* A name of one long word breaks where it must, so on a phone
+                it never pushes the header past the screen's edge. */}
+            <span className="min-w-0 wrap-anywhere text-sm text-warm-gray">
               Signed in as{' '}
               <span className="font-medium text-brand-ink">{user?.displayName}</span>
             </span>

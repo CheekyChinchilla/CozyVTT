@@ -2,7 +2,7 @@
  * The Admin Panel's seven tabs need about 820 px, and the row never wrapped,
  * so on a phone every tab's page scrolled sideways. Below 1024 px the row now
  * scrolls in its own strip, the open tab kept in view, and on a touch screen
- * each tab is at least 44 px tall.
+ * each tab is at least 44 px tall. A long name in the header breaks.
  */
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -96,4 +96,12 @@ it('scrolls the strip to show a tab opened past its edge, and back for one befor
   fireEvent.focus(screen.getByRole('tab', { name: 'Backups' }));
   expect(scrollLeft).toBe(350);
   expect(screen.getByRole('tab', { name: 'Assets' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('lets a long name after Signed in as break, so it never widens the header', () => {
+  // A name of one long word, such as 30 letters, ran 90 px past a 360 px phone.
+  renderPage();
+  const name = screen.getByText('Root');
+  expect(name.parentElement).toHaveTextContent('Signed in as Root');
+  expect(classes(name.parentElement as HTMLElement)).toEqual(expect.arrayContaining(['min-w-0', 'wrap-anywhere']));
 });
