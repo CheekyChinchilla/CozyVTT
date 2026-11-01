@@ -232,6 +232,33 @@ describe('Remove under Members', () => {
   });
 });
 
+// The badge printed the stored role, so a player read PLAYER and a
+// spectator SPECTATOR.
+describe("Members' role badges", () => {
+  it('name each role as the rest of the page does', () => {
+    current = {
+      ...campaign(),
+      memberships: [
+        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
+        { userId: 'sam', role: 'SPECTATOR', user: { displayName: 'Sam' } },
+      ],
+    } as unknown as Campaign;
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    /** The member's row, from the line that names them. */
+    const row = (name: string) => {
+      const found = screen.getByText(name).closest<HTMLElement>('.justify-between');
+      if (!found) throw new Error(`no row for ${name}`);
+      return found;
+    };
+    expect(within(row('Dain')).getByText('DM')).toBeTruthy();
+    expect(within(row('Pia')).getByText('Player')).toBeTruthy();
+    expect(within(row('Sam')).getByText('Spectator')).toBeTruthy();
+  });
+});
+
 // Remove's question and its toast said "Player" whoever was removed, a
 // spectator too.
 describe("Remove's question and its toast", () => {

@@ -649,10 +649,10 @@ export default function CampaignSettingsModal({
                           {isDm ? (
                             <span className="flex items-center gap-1">
                               <ShieldCheck className="w-3 h-3" />
-                              DM
+                              {CAMPAIGN_ROLE_LABEL[membership.role]}
                             </span>
                           ) : (
-                            membership.role
+                            CAMPAIGN_ROLE_LABEL[membership.role]
                           )}
                         </span>
 
