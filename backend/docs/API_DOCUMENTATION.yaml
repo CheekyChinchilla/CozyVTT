@@ -9536,7 +9536,8 @@ paths:
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
         without a picture. Each asset's entry in `assets/asset-manifest.json`
-        gives its `originalName`, `mimeType`, `type`, `fileSize` and `tags`.
+        gives its `originalName`, `mimeType`, `type`, `fileSize`, `name`,
+        `description` (`null` when it has none) and `tags`.
         Each map file (`maps/map-<n>.json`, written without
         indentation) carries the map's drawings in `drawings`, in drawing
         order, each with the `Drawing` fields but `id`, `authorId` and
@@ -9803,6 +9804,14 @@ paths:
         A `tags` of more than 1,000 entries, or one that is not a list,
         imports as none. Nothing is reported for tags left out. An archive
         made before tags were carried imports its assets with none.
+        Each asset keeps the `name` and `description` its entry gives, held
+        to what `POST /api/assets/upload` stores: trimmed, and none when
+        empty or not text. A name over 200 characters or a description over
+        1,000 is cut to fit, and `warnings` says so (`Asset "<file name>":
+        shortened its name to 200 characters.`, and `its description to
+        1,000 characters.`); U+0000 is taken out. An asset with no name, as
+        in an archive made before names were carried, is named after its
+        file without the extension, and one with no description has none.
 
         The campaign starts in PREPARATION with the first imported map as its
         current map, and with `playersMayDraw` as the archive's

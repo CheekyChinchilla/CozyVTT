@@ -262,6 +262,18 @@ export const TokenTemplateImportSchema = z.object({
  */
 export const IMPORTABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO'] as const;
 
+// An asset's own name or description, as an upload sets one
+// (validators/assets.ts): trimmed, and none when empty. One that is not text
+// is taken as none, so an asset whose entry has neither, as in archives made
+// before they were carried, is named after its file and has no description.
+// The importer cuts one over the upload's limit to it and says so.
+const ImportAssetTextSchema = z
+  .string()
+  .trim()
+  .optional()
+  .catch(undefined)
+  .transform((text) => text || undefined);
+
 // An asset's tags, held to what an upload may set (validators/assets.ts) and
 // tidied as an upload's are. A tag that is not text or is too long is left
 // out on its own, as a token's condition is; one that held U+0000 arrives
@@ -284,6 +296,8 @@ export const AssetEntrySchema = z.object({
   mimeType: z.string().max(100),
   type: z.enum(IMPORTABLE_ASSET_TYPES),
   fileSize: z.number().int().min(0),
+  name: ImportAssetTextSchema,
+  description: ImportAssetTextSchema,
   tags: ImportAssetTagsSchema.optional(),
 }).strip();
 
