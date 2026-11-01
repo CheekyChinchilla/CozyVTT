@@ -17,9 +17,9 @@ import {
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { storedFilePath } from '../utils/storedPath';
-import { canReadAssetById, canReferenceAsset, isMapPicture, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
+import { canReadAssetById, canReferenceAsset, isMapPicture, isTokenPicture, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES, TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE } from '../validators/walls';
-import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
+import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES, TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
 import type { WallSegment, FogState, LightSource } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
@@ -1497,6 +1497,10 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
+    // And only a token picture, whatever folder the address gives (isTokenPicture).
+    if (!(await isTokenPicture(normalizedTokenImageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
+    }
 
     // Control can only be given to a player of this campaign: the DM needs no
     // naming, and a spectator controls nothing. A token bound to a character
@@ -1779,6 +1783,9 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       : shapes.value.imageUrl ? (normalizeAssetUrl(shapes.value.imageUrl, 'tokens') || existingToken.imageUrl) : '';
     if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, userId, existingToken.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+    if (nextImageUrl !== undefined && !(await isTokenPicture(nextImageUrl, existingToken.imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
 
     // Build updated token (merge updates with existing). The position and the

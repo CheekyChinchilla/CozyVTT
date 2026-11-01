@@ -6,7 +6,7 @@ import { ownerStillIn, mayReadCharacter } from '../utils/characterCampaign';
 import { holdCharacter, addToMemberCharacters, removeFromMemberCharacters, removeFromEveryMemberCharacters } from '../utils/memberCharacters';
 import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
-import { canReferenceAsset } from '../services/permissions';
+import { canReferenceAsset, isTokenPicture } from '../services/permissions';
 import { GameSystem } from '../game-systems';
 import {
   validateCharacterData,
@@ -16,6 +16,7 @@ import {
   sheetNameFor,
 } from '../validators/game-systems';
 import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/characters';
+import { TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { broadcastToCampaign, emitCharacterUpdated } from '../websocket/utils';
 import {
   characterForReader, clearKeeperNotes, hasKeeperNotes, isKeeperOf, sheetKeepingKeeperNotes, sheetWithoutKeeperNotes,
@@ -247,6 +248,10 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // a character pointing at it counted as the campaign using it.
     if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+    // And only a token picture, which is what the sheet editors upload (isTokenPicture).
+    if (!(await isTokenPicture(normalizedTokenImageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
 
     // Keeper's Notes are written only by the Keeper: the DM of the campaign
@@ -686,6 +691,9 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       // The picture already on the sheet may be sent back as it is.
       if (!(await canReferenceAsset(normalizedTokenImageUrl, req.session.userId!, character.tokenImageUrl))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
+      if (!(await isTokenPicture(normalizedTokenImageUrl, character.tokenImageUrl))) {
+        return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
       }
       updateData.tokenImageUrl = normalizedTokenImageUrl;
     }

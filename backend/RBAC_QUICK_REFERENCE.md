@@ -454,7 +454,16 @@ update (image and spirit layer), token create and update, token and creature
 templates, and a character's `tokenImageUrl`. So pointing at an asset never
 grants the right to read it. A map's picture and spirit layer must also be
 an asset uploaded as a map picture (`isMapPicture`, asked by the map routes
-after `canReferenceAsset`). An update may send back the address already
+after `canReferenceAsset`). A token's, a token template's, a creature's, a
+character's and a character template's picture must likewise be an asset
+uploaded as a token picture (`isTokenPicture`, asked after
+`canReferenceAsset`, so a picture the caller may not read answers 403 before
+its type is looked at). The address a record already stores passes on that
+record's own update, but every copy is held to the rule, so copying an older
+record whose picture is not a token picture (Duplicate, Save as Template,
+placing it from a template, a creature or a character, a character made from
+a character template, a template copied to another campaign) answers 400.
+An update may send back the address already
 stored even if it can no longer be read, and an address naming an asset that
 does not exist is accepted, since it grants nothing. So is a picture a record
 of the same campaign already stores (a copy: Duplicate, Save as Template,

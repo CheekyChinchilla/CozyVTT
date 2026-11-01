@@ -26,6 +26,13 @@ export const TOKEN_TYPES = ['player', 'npc', 'object'] as const;
 export const TOKEN_DISPOSITIONS = ['friendly', 'neutral', 'hostile'] as const;
 export const TOKEN_DISPLAY_MODES = ['pog', 'top-down', 'full-art'] as const;
 
+/**
+ * What every route that takes a token's picture answers for one that is not
+ * an asset uploaded as a token picture: a token's, a token template's, a
+ * creature's, a character's or a character template's.
+ */
+export const TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE = 'The token image must be a token picture from the asset library.';
+
 export const TokenSizeSchema = z.object({
   width: z.number().int().min(1).max(10),
   height: z.number().int().min(1).max(10),

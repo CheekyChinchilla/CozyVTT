@@ -15,11 +15,11 @@ import {
   UpdateTokenTemplateSchema,
   SaveTokenAsTemplateSchema,
 } from '../validators/tokenTemplates';
-import { TOKEN_TYPES } from '../validators/tokens';
+import { TOKEN_TYPES, TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { issueMessages } from '../validators/issueMessages';
 import { jsonOrNull } from '../utils/prisma-json';
 import { normalizeAssetUrl } from '../utils/asset-urls';
-import { canReferenceAsset } from '../services/permissions';
+import { canReferenceAsset, isTokenPicture } from '../services/permissions';
 import logger from '../utils/logger';
 import { escapeLikePattern } from '../utils/likePattern';
 
@@ -115,6 +115,10 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
+    // And only a token picture (isTokenPicture).
+    if (!(await isTokenPicture(imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
+    }
     const template = await prisma.tokenTemplate.create({
       data: {
         id: randomUUID(),
@@ -169,6 +173,9 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // A new picture the DM may read; the one already stored may stay.
     if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+    if (nextImageUrl !== undefined && !(await isTokenPicture(nextImageUrl, existing.imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
     const updated = await prisma.tokenTemplate.update({
       where: { id },
@@ -241,6 +248,10 @@ router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Re
     // A picture the DM may read: a template's picture counts as the campaign using it.
     if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+    // And only a token picture (isTokenPicture).
+    if (!(await isTokenPicture(imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
     const template = await prisma.tokenTemplate.create({
       data: {
@@ -316,6 +327,11 @@ router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: Authentica
     const imageUrl = normalizeAssetUrl(source.imageUrl, 'tokens');
     if (!(await canReferenceAsset(imageUrl, userId, undefined, targetCampaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+    // And only a token picture: the copy is a new picture, held to the rule
+    // as any other is (isTokenPicture).
+    if (!(await isTokenPicture(imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
 
     // Create the copy in the target campaign
