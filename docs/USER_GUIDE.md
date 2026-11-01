@@ -296,7 +296,7 @@ Each token has:
 
 **Selecting and the keyboard:** Clicking a token also selects it, marked with a dashed light-blue ring, and the keyboard then acts on it: the arrow keys move it a square (five with **Shift**), **,** and **.** step to the previous or next token you can act on, and **Enter** opens its menu. Press **?** on the map for every key, or see [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts).
 
-**Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces, or select it and press **[** or **]**. The DM can turn any token at any time, and set an exact angle in **Edit Token**; a player can turn the tokens they control while the session is live, as they move them.
+**Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces, or select it and press **[** or **]**. The DM can turn any token at any time, and set an exact angle in **Edit Token**; a player can turn the tokens they control whenever they can move them, which is at any time except while the session is paused or has ended.
 
 *GIF pending — Picking up a token and putting it down across the map.*
 

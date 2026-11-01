@@ -348,7 +348,7 @@ When the DM has placed your character's token on the map, you can move it: click
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
-**Turning your token.** To show which way you're facing, right-click your token (on a touch screen, press and hold it) and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control, while the session is live: like moving, turning waits while it is paused or has ended.
+**Turning your token.** To show which way you're facing, right-click your token (on a touch screen, press and hold it) and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control whenever you can move it: like moving, turning waits while the session is paused or has ended.
 
 **When you can't move your token:**
 - If the session is **Paused**, moving and turning your token are disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
