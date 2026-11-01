@@ -124,6 +124,41 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+/**
+ * Scroll a strip that scrolls sideways, as the row of tabs does on a narrow
+ * screen, just far enough to show `item` inside its padding. Only the strip
+ * moves: scrollIntoView would scroll the page too.
+ */
+function keepInStrip(strip: HTMLElement, item: HTMLElement) {
+  const style = getComputedStyle(strip);
+  const box = strip.getBoundingClientRect();
+  const left = box.left + (parseFloat(style.paddingLeft) || 0);
+  const right = box.right - (parseFloat(style.paddingRight) || 0);
+  const shown = item.getBoundingClientRect();
+  if (shown.left < left) strip.scrollLeft -= left - shown.left;
+  else if (shown.right > right) strip.scrollLeft += shown.right - right;
+}
+
+/** Which ends of a sideways strip have more beyond them. */
+type StripMore = 'none' | 'start' | 'end' | 'both';
+
+/**
+ * A fade on each end of the row of tabs that has more tabs past it, below
+ * 1024 px, where the row scrolls: a row that stopped at a tab's edge read as
+ * all there was.
+ */
+const STRIP_FADE: Record<Exclude<StripMore, 'none'>, string> = {
+  start: 'max-lg:[mask-image:linear-gradient(to_right,transparent,black_4rem)]',
+  end: 'max-lg:[mask-image:linear-gradient(to_left,transparent,black_4rem)]',
+  both: 'max-lg:[mask-image:linear-gradient(to_right,transparent,black_4rem,black_calc(100%_-_4rem),transparent)]',
+};
+
+function stripMore(strip: HTMLElement): StripMore {
+  const start = strip.scrollLeft > 1;
+  const end = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1;
+  return start && end ? 'both' : start ? 'start' : end ? 'end' : 'none';
+}
+
 /** The time of day a sign-in lock ends, as the user list shows it. */
 function formatLockTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -159,6 +194,31 @@ export default function AdminPage() {
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
+  // The open tab stays in view in a row of tabs scrolled sideways, however
+  // it was opened (Assets also opens from a link in Delete User).
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    const tab = strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (strip && tab) keepInStrip(strip, tab);
+  }, [activeTab]);
+
+  // Which ends of the row have tabs past them, as it scrolls or resizes.
+  const [tabStripMore, setTabStripMore] = useState<StripMore>('none');
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    if (!strip) return undefined;
+    const measure = () => setTabStripMore(stripMore(strip));
+    measure();
+    strip.addEventListener('scroll', measure, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(strip);
+    return () => {
+      strip.removeEventListener('scroll', measure);
+      observer?.disconnect();
+    };
+  }, []);
 
   // ---- Dashboard ----
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -955,15 +1015,30 @@ export default function AdminPage() {
                 <p className="text-xs text-warm-gray mt-0.5">Platform administration</p>
               </div>
             </div>
-            <span className="text-sm text-warm-gray">
+            {/* A name of one long word breaks where it must, so on a phone
+                it never pushes the header past the screen's edge. */}
+            <span className="min-w-0 wrap-anywhere text-sm text-warm-gray">
               Signed in as{' '}
               <span className="font-medium text-brand-ink">{user?.displayName}</span>
             </span>
           </div>
 
           {/* Tab Navigation */}
-          <nav aria-label="Admin panel sections">
-            <div role="tablist" aria-label="Admin tabs" className="flex gap-1 mt-4">
+          <nav aria-label="Admin panel sections" className={tabStripMore === 'none' ? undefined : 'relative'}>
+            {/* The seven tabs need about 820 px. Below 1024 px they scroll
+                sideways in their own strip, which runs to the screen's
+                edges, so the page never does; its padding keeps a focus
+                ring and the open tab's lower edge inside it, and an end
+                with more tabs past it fades (STRIP_FADE) under a chevron
+                that is only for the eye. */}
+            <div
+              ref={tabStripRef}
+              role="tablist"
+              aria-label="Admin tabs"
+              className={`flex gap-1 mt-4 max-lg:-mx-4 max-lg:px-4 max-lg:py-1 max-lg:overflow-x-auto max-lg:overscroll-x-contain${
+                tabStripMore === 'none' ? '' : ` ${STRIP_FADE[tabStripMore]}`
+              }`}
+            >
               {tabs.map(tab => (
                 <button
                   key={tab.id}
@@ -972,7 +1047,10 @@ export default function AdminPage() {
                   aria-selected={activeTab === tab.id}
                   aria-controls={`tabpanel-${tab.id}`}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                  // A tab reached with the keyboard comes wholly into view;
+                  // the browser stops at one partly shown.
+                  onFocus={(e) => { if (tabStripRef.current) keepInStrip(tabStripRef.current, e.currentTarget); }}
+                  className={`flex items-center gap-2 shrink-0 px-4 py-2 pointer-coarse:min-h-11 rounded-t-lg text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? 'bg-paper text-brand-ink border border-b-paper border-moss-green/20 -mb-px'
                       : 'text-warm-gray hover:text-brand-ink hover:bg-paper/50'
@@ -983,6 +1061,12 @@ export default function AdminPage() {
                 </button>
               ))}
             </div>
+            {(tabStripMore === 'start' || tabStripMore === 'both') && (
+              <ChevronLeft aria-hidden="true" className="pointer-events-none absolute -left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-warm-gray lg:hidden" />
+            )}
+            {(tabStripMore === 'end' || tabStripMore === 'both') && (
+              <ChevronRight aria-hidden="true" className="pointer-events-none absolute -right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-warm-gray lg:hidden" />
+            )}
           </nav>
         </div>
       </header>
