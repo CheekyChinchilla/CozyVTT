@@ -264,7 +264,7 @@ describe('where the uploads folder is changed under Docker', () => {
 });
 
 describe('what a backup leaves out of the uploads folder, in the deployment guide', () => {
-  const guide = section('docs/DEPLOYMENT.md', '### Via Admin Dashboard', '\n### ');
+  const guide = section('docs/DEPLOYMENT.md', '### Via the Admin Panel', '\n### ');
 
   it('says a symbolic link is left out, with the line the backend logs for it', () => {
     expect(guide).toContain(`\`${LEFT_OUT_OF_BACKUP}\``);

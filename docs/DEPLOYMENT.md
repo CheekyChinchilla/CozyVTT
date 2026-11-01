@@ -166,7 +166,7 @@ docker compose down -v       # ⚠️ Also removes volumes — deletes all datab
 
 Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it. The bundled nginx stops at once, players connected or not.
 
-**While the Admin Dashboard is making or restoring a backup, stopping waits for it.** The backend takes no new requests, lets the backup or restore finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping` (`A backup is being restored` for a restore). `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back. A restore still unfinished then may be left half done, and the log says so; restoring the backup again puts everything as it was in the backup.
+**While the Admin Panel is making or restoring a backup, stopping waits for it.** The backend takes no new requests, lets the backup or restore finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping` (`A backup is being restored` for a restore). `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back. A restore still unfinished then may be left half done, and the log says so; restoring the backup again puts everything as it was in the backup.
 
 **Deleting an account removes its files just after the page confirms it.** If the backend is stopped in those seconds it waits up to 4 seconds for the removal to finish. Files it did not reach stay as assets with no owner, which an administrator can find with the **No Uploader (account deleted)** filter on the **Assets** tab of the Admin Panel and delete.
 
@@ -448,14 +448,14 @@ Whatever proxy you use, it must:
 - Pass `X-Forwarded-Proto` to the backend, and `X-Forwarded-For` with the visitor's own address last (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits))
 - Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead), and more if you raise any `MAX_*_SIZE_MB` — see [Upload Size Limits](#upload-size-limits)
 - For importing campaigns: allow `/api/campaigns/import` (which also covers `/api/campaigns/import/preview`) a request body of at least **505 MB**, the 500 MB largest archive plus overhead, and give it about **300 seconds** to answer, since a large archive takes minutes to unpack. The bundled nginx allows 512 MB there whatever `NGINX_MAX_BODY_SIZE` says. Without this, importing an archive bigger than your body limit shows "This archive is larger than the server accepts", and a slow import shows an error while the backend carries on and finishes it. Where your proxy can, pass the upload straight through instead of saving it first (`proxy_request_buffering off` in nginx)
-- For the Admin Dashboard's backups: allow `/api/admin/backups/restore` a request body as large as your biggest backup (the bundled nginx allows 4 GB), and give both `/api/admin/backups` and `/api/admin/backups/restore` about **600 seconds** to answer (most proxies wait 60). Making or restoring a backup, uploaded files and all, happens inside that one request. Without this, restoring a backup bigger than your body limit fails with **413**, and making a backup that takes longer than your proxy waits shows **504**; the backend carries on, and the backup appears in the list when it is done. Where your proxy can, have it pass the restore upload straight through instead of saving it first (`proxy_request_buffering off` in nginx), so a stranger cannot fill its disk
+- For the Admin Panel's backups: allow `/api/admin/backups/restore` a request body as large as your biggest backup (the bundled nginx allows 4 GB), and give both `/api/admin/backups` and `/api/admin/backups/restore` about **600 seconds** to answer (most proxies wait 60). Making or restoring a backup, uploaded files and all, happens inside that one request. Without this, restoring a backup bigger than your body limit fails with **413**, and making a backup that takes longer than your proxy waits shows **504**; the backend carries on, and the backup appears in the list when it is done. Where your proxy can, have it pass the restore upload straight through instead of saving it first (`proxy_request_buffering off` in nginx), so a stranger cannot fill its disk
 - Let a large campaign import or backup restore take its time to arrive on a slow connection. CozyVTT itself waits up to an hour for an upload, so it is your proxy's limits that count: give these paths a body timeout that drops a client that **stops** sending, not one that ends a slow but steady upload. nginx's `client_body_timeout` works that way (60 seconds between two pieces of the upload, by default), and the bundled nginx relies on it
 
 Optional: have your proxy compress the backend's answers (gzip for `application/json`), as the bundled nginx does. A map's tokens, walls and fog travel as JSON and shrink to a fraction of their size. The frontend container already compresses the app's own scripts and styles.
 
 > ⚠️ **A proxy that only serves the web pages looks like it works.** If `/api` isn't routed to the backend, those requests come back as the CozyVTT web page itself with a success code, so the site loads normally while every API call quietly fails. Symptoms: a brand-new install shows the login page instead of the setup wizard, and `/setup` bounces straight back to the home page. The `curl` check above tells you in one command.
 
-> ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured. Cloudflare also gives up on a request that has had no answer for **100 seconds**. Both limits apply to the dashboard's backups: restoring a backup over 100 MB fails at Cloudflare, and making or restoring one that takes longer than 100 seconds shows an error even though the backend carries on. They apply to campaign imports too: an archive over 100 MB cannot be imported through Cloudflare, and a large import may show an error although it finishes. Exports are not affected, because the server starts sending an export straight away. To restore a large backup, copy it to the server and use the restore script steps under [Via Admin Dashboard](#via-admin-dashboard).
+> ⚠️ **Cloudflare users:** Cloudflare-proxied requests — including Cloudflare Tunnel — are capped at **100 MB** per request body on Free and Pro plans. Uploads above that are rejected at Cloudflare's edge no matter how CozyVTT or your proxy is configured. Cloudflare also gives up on a request that has had no answer for **100 seconds**. Both limits apply to the Admin Panel's backups: restoring a backup over 100 MB fails at Cloudflare, and making or restoring one that takes longer than 100 seconds shows an error even though the backend carries on. They apply to campaign imports too: an archive over 100 MB cannot be imported through Cloudflare, and a large import may show an error although it finishes. Exports are not affected, because the server starts sending an export straight away. To restore a large backup, copy it to the server and use the restore script steps under [Via the Admin Panel](#via-the-admin-panel).
 
 ### Updating after you've edited `docker-compose.yml`
 
@@ -830,7 +830,7 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Output: frontend/dist/
 ```
 
-If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. The driver also offers `sslmode=no-verify`, which encrypts the connection without checking the certificate. The Admin Dashboard's **Create Backup** and **Restore** give `pg_dump` and `psql` `sslmode=require` in its place, which does the same for them. Leave `sslrootcert` out of an address with `no-verify`: given that file, `pg_dump` and `psql` check the certificate against it under `require`, so backups and restores fail where the backend connects.
+If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. The driver also offers `sslmode=no-verify`, which encrypts the connection without checking the certificate. The Admin Panel's **Create Backup** and **Restore** give `pg_dump` and `psql` `sslmode=require` in its place, which does the same for them. Leave `sslrootcert` out of an address with `no-verify`: given that file, `pg_dump` and `psql` check the certificate against it under `require`, so backups and restores fail where the backend connects.
 
 To keep CozyVTT's tables apart from other software's in a database they share, end `DATABASE_URL` with `?schema=` and a name of its own, such as `?schema=cozyvtt` (join it to another setting with `&`: `?sslmode=verify-full&schema=cozyvtt`). Everything CozyVTT stores goes into that PostgreSQL schema, the sign-ins included. **Create Backup** then backs up that schema alone, and **Restore** replaces that schema alone; see [Database Backups](#database-backups). The backup and restore scripts work with the `public` schema only, and refuse such an address.
 
@@ -1018,7 +1018,7 @@ curl -sI https://your-domain.com/ | grep -i -e content-security -e permissions-p
 
 It should print three lines. These lines are a copy of `frontend/security-headers.conf`, so after an upgrade compare them with that file.
 
-**Backups need PostgreSQL's command-line tools.** The Admin Dashboard's **Create Backup** and restore run `pg_dump` and `psql` on the machine the backend runs on. The `postgresql-15` package from step 2 brings them; `pg_dump --version` should print 15 or higher. If it says command not found, install `postgresql-client-15` from the same repository.
+**Backups need PostgreSQL's command-line tools.** The Admin Panel's **Create Backup** and restore run `pg_dump` and `psql` on the machine the backend runs on. The `postgresql-15` package from step 2 brings them; `pg_dump --version` should print 15 or higher. If it says command not found, install `postgresql-client-15` from the same repository.
 
 ---
 
@@ -1083,7 +1083,7 @@ MAX_DOCUMENT_SIZE_MB=50
 NGINX_MAX_BODY_SIZE=55M
 ```
 
-These take effect on `docker compose up -d` (no image rebuild needed): the backend enforces them, and the app fetches them at runtime for the admin panel and the upload dialog. Values that aren't a positive number are ignored, with a warning in the backend log.
+These take effect on `docker compose up -d` (no image rebuild needed): the backend enforces them, and the app fetches them at runtime for the Admin Panel and the upload dialog. Values that aren't a positive number are ignored, with a warning in the backend log.
 
 Whatever these say, a map, token or avatar picture can be at most 16,384 pixels on each side, and an animated one at most 1,000 frames and 200 million pixels across them for a map (50 million for a token or avatar); raising a size limit does not raise these (see [Asset Types](USER_GUIDE.md#asset-types) in the User Guide).
 
@@ -1110,7 +1110,7 @@ Upload limits: MAP 50MB, TOKEN 5MB, AUDIO 250MB, AVATAR 2MB, DOCUMENT 50MB
 NGINX_MAX_BODY_SIZE=55M is smaller than the largest upload limit AUDIO (250 MB). ...
 ```
 
-The admin panel shows the same numbers under **Settings → Upload Size Limits**, along with the body size your proxy needs.
+The Admin Panel shows the same numbers under **Settings → Upload Size Limits**, along with the body size your proxy needs.
 
 ### Campaign Import and Export Limits
 
@@ -1166,7 +1166,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | `PORT` | `4000` | The port the backend listens on | No: the compose file sets 4000 |
 | `NODE_ENV` | none, which runs the backend as `development` | Set it to `production` on a real instance. Anything else accepts a weak `SESSION_SECRET` with only a warning and writes no files to `backend/logs/` | No: the compose file sets `production` |
 | `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.override.yml` instead; [Database Backups](#database-backups) shows how that file works |
-| `BACKUP_DIR` | `backups` | Where the Admin Dashboard writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
+| `BACKUP_DIR` | `backups` | Where the Admin Panel writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
 | `INSTANCE_NAME` | none | The name emails use while the **Instance Name** in **Admin → Settings** is empty or still CozyVTT | No |
 | `FRONTEND_URL` | none | An older name for `APP_URL`, read only when `APP_URL` is not set | No: the compose file always sets `APP_URL` |
 
@@ -1188,11 +1188,11 @@ Back up `backend/uploads/` alongside your database dumps. See [Database Backups]
 df -h backend/uploads
 ```
 
-The `Use%` column is the same number the dashboard shows. If it is high, delete files nobody needs from the **Assets** tab (including **Leftover Files**), delete old backups from **Backups**, or move `backend/uploads/` to a larger disk.
+The `Use%` column is the same number the Admin Panel's **Dashboard** tab shows. If it is high, delete files nobody needs from the **Assets** tab (including **Leftover Files**), delete old backups from **Backups**, or move `backend/uploads/` to a larger disk.
 
 A file can be left in `backend/uploads/` with no asset naming it, for example when a restored backup brings back files its database does not know. The **Assets** tab of the Admin Panel lists these under **Leftover Files** and can delete them after asking; see [Files with no owner, and leftover files](USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins) in the user guide.
 
-Instance backups made from the Admin Dashboard are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the dashboard lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`, run through `sh -c` so that the `*` is read by an account that can see into the folder, and the `chmod` makes the moved backups readable by that user alone, as new ones are:
+Instance backups made from the Admin Panel are written to `backend/backups/`, **not** inside `uploads/`: a backup holds every credential on the instance, while `uploads/` is media you may sync anywhere. Versions before 1.5.0 wrote them to `backend/uploads/backups/`; if you have backups there, move them to `backend/backups/`, which is the only directory the Admin Panel lists now. Both folders belong to the container's user, so on Docker the move needs `sudo`, run through `sh -c` so that the `*` is read by an account that can see into the folder, and the `chmod` makes the moved backups readable by that user alone, as new ones are:
 
 ```bash
 sudo sh -c 'mv backend/uploads/backups/*.zip backend/backups/ && chmod 600 backend/backups/*.zip'
@@ -1202,7 +1202,7 @@ Without Docker, `backend/backups/` appears the first time the Backups tab is ope
 
 On an install without Docker the backend writes them to a `backups` folder in its working directory (`backend/backups`, beside `uploads`); set the `BACKUP_DIR` environment variable to put them somewhere else. A folder inside the uploads directory is refused, and the backend will not start with one. The Docker setup keeps them at `backend/backups/` on the host and does not pass `BACKUP_DIR` through.
 
-Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for its folder and the dumps in it, including any an earlier version left readable. While a backup or a restore runs, the working copy of the database it keeps in the system's temporary folder (`/tmp` unless `TMPDIR` says otherwise) sits in a folder of its own with the same protection, and is removed when it finishes, whether it worked or not. On a Docker host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the dashboard needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
+Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for its folder and the dumps in it, including any an earlier version left readable. While a backup or a restore runs, the working copy of the database it keeps in the system's temporary folder (`/tmp` unless `TMPDIR` says otherwise) sits in a folder of its own with the same protection, and is removed when it finishes, whether it worked or not. On a Docker host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the Admin Panel needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
 
 If the backend is stopped part-way through a backup or a restore (killed, or the machine loses power), its temporary folder (`cozyvtt-db-…` or `cozyvtt-restore-…`) is left behind. On Docker, the backend's `/tmp` is a volume of its own, `backend_tmp`, which outlives the container, and the backend removes such a folder each time it starts, for example with `docker compose restart backend`. On a manual install it stays until you delete it.
 
@@ -1212,7 +1212,7 @@ For large or multi-server deployments, consider mounting an S3-compatible object
 
 ## Per-User Permissions
 
-Beyond the platform role (Admin / User), two permissions are granted individually from **Admin Dashboard → Users**, as pill toggles beside each user's role. Both default to off, including on upgrade, and neither appears for admins, who have both implicitly.
+Beyond the platform role (Admin / User), two permissions are granted individually from **Admin Panel → Users**, as pill toggles beside each user's role. Both default to off, including on upgrade, and neither appears for admins, who have both implicitly.
 
 | Permission | Grants |
 |---|---|
@@ -1229,9 +1229,12 @@ An instance always keeps at least one admin. While you are the only one, you can
 
 ## Database Backups
 
-### Via Admin Dashboard
+<!-- The heading below was "Via Admin Dashboard": this keeps links made to it working. -->
+<a id="via-admin-dashboard"></a>
 
-**Admin Dashboard → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. The bin beside a backup in the list deletes that file for good; it asks first, naming the file.
+### Via the Admin Panel
+
+**Admin Panel → Backups → Create Backup** generates a ZIP holding a `pg_dump` of the database and every uploaded file, which you can download for offsite storage. It is written to `backend/backups/` on the host, which the backend creates and takes ownership of on its first start, so there is nothing to make by hand. The bin beside a backup in the list deletes that file for good; it asks first, naming the file.
 
 Only what is inside `backend/uploads/` itself goes into a backup. If you have put a symbolic link there (a shortcut to a folder on another disk, say), the backup leaves the link and everything it points to out, and the backend log names it with the line `The backup left out something in the uploads folder that is not a file or a folder`; back that folder up on its own. A file or folder you copied in by hand whose name has two dots in a row or a backslash in it is left out too, since a restore refuses such a name, and the log names it with the line `The backup left out something in the uploads folder whose name a restore refuses`; rename it if you want it in the backup. The files CozyVTT stores itself never have such names.
 
@@ -1306,7 +1309,7 @@ sudo sh -c 'mv backend/backups/*.zip /srv/cozyvtt-backups/'
 
 **Do not pick a folder inside `backend/uploads/`.** A backup holds every credential on the instance, and `uploads/` is the folder you may sync or copy anywhere. Under Docker nothing stops you: the backend sees only its own `/app/backups` and cannot tell where that is on the host. `BACKUP_DIR` applies only to an install without Docker, and there a folder inside the uploads directory is refused.
 
-**Admin Dashboard → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own.
+**Admin Panel → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own.
 
 Before anything is touched, the file is checked: its name must end in `.zip`, it must be a ZIP archive of at most 4 GB that unpacks to at most 10 GiB in at most 100,000 files, and its database must be a complete `pg_dump` of a CozyVTT database, holding nothing but SQL. A file that fails any of these is refused with the reason on screen, and nothing has changed. Only one restore runs at a time: while one is running, a second restore, and **Create Backup**, are refused until it has finished. A backup of the database as it is at that moment is then written to the backup list (database only, named like any other backup), so restoring the wrong file can be undone by restoring that one; the restore names it when it finishes. The database is loaded in a single step that is undone as a whole if any part of it fails, so a backup that cannot be applied leaves your existing data untouched, and the reason is in the backend log:
 
@@ -1314,7 +1317,7 @@ Before anything is touched, the file is checked: its name must end in `.zip`, it
 docker compose logs backend | grep -i restore
 ```
 
-**If the dashboard cannot back up the database as it is, it restores nothing.** That backup is what lets a restore be undone, so without it the dashboard stops and says so. It happens when the database itself is damaged, or when it runs a newer PostgreSQL than the backend's tools (the log then says `server version mismatch`). If the message names the backups folder instead, the backend cannot write there: fix the folder's owner or free space on its disk and try again, which keeps the undo. The same message, saying nothing was changed, can also come before any of this, when the uploaded backup itself cannot be saved in that folder. To restore anyway, take the database out of the dashboard backup and load it with the restore script, which asks you to confirm and makes no copy first. The commands below read the backup from `backend/backups/`. A backup you uploaded from your own computer is not kept on the server, so copy it there first (for example `scp backup-2026-01-01T03-00-00.zip you@your-server:`) and use its path in place of `backend/backups/…` in both `unzip` lines. With the file in your own home folder, the first `unzip` line needs no `sudo`; keep `sudo` on the second, because on Docker `backend/uploads` belongs to the container's user. From the CozyVTT folder, with the stack running and your backup's name in place of the example:
+**If the Admin Panel cannot back up the database as it is, it restores nothing.** That backup is what lets a restore be undone, so without it the Admin Panel stops and says so. It happens when the database itself is damaged, or when it runs a newer PostgreSQL than the backend's tools (the log then says `server version mismatch`). If the message names the backups folder instead, the backend cannot write there: fix the folder's owner or free space on its disk and try again, which keeps the undo. The same message, saying nothing was changed, can also come before any of this, when the uploaded backup itself cannot be saved in that folder. To restore anyway, take the database out of the Admin Panel's backup and load it with the restore script, which asks you to confirm and makes no copy first. The commands below read the backup from `backend/backups/`. A backup you uploaded from your own computer is not kept on the server, so copy it there first (for example `scp backup-2026-01-01T03-00-00.zip you@your-server:`) and use its path in place of `backend/backups/…` in both `unzip` lines. With the file in your own home folder, the first `unzip` line needs no `sudo`; keep `sudo` on the second, because on Docker `backend/uploads` belongs to the container's user. From the CozyVTT folder, with the stack running and your backup's name in place of the example:
 
 ```bash
 (umask 077; sudo unzip -p backend/backups/backup-2026-01-01T03-00-00.zip database.sql | gzip > restore-me.sql.gz)
@@ -1335,9 +1338,9 @@ A database-only backup (the kind a restore makes first) has no uploaded files, a
 
 If the backend is stopped while a restore is running, the uploaded backup it was working from is left in the backups folder as `restore-temp-….zip`; it is deleted the next time the backend starts.
 
-**Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.
+**Restore only backups made by the Admin Panel or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.
 
-**If your `DATABASE_URL` names a schema** (it ends in `?schema=` and a name, as in [step 3 of the manual install](#3-configure-and-build)), a backup holds that schema alone, and a restore drops and recreates that schema alone: `public` and every other schema in the database are left as they were. The one exception is anything another program built on CozyVTT's tables, such as a view of them, or a foreign key in its own table pointing at one of them: the database removes it along with the schema, so make it again after a restore. A backup restores only onto an instance whose `DATABASE_URL` names the schema it came from; any other is refused with **This file cannot be restored because it is a backup of the database schema "…", and this instance keeps its data in the schema "…"**, and nothing changes. To move such a backup between schemas, set the same `?schema=` on the instance you restore it on. The backup and restore scripts below work with the `public` schema only and stop with a message if `DATABASE_URL` names another; use the dashboard. A file `backup.sh` made on such an install with 1.5.3 or earlier holds the whole database, and neither the dashboard nor the scripts restore it; see [Restoring an older script backup of an install that names a schema](#restoring-an-older-script-backup-of-an-install-that-names-a-schema).
+**If your `DATABASE_URL` names a schema** (it ends in `?schema=` and a name, as in [step 3 of the manual install](#3-configure-and-build)), a backup holds that schema alone, and a restore drops and recreates that schema alone: `public` and every other schema in the database are left as they were. The one exception is anything another program built on CozyVTT's tables, such as a view of them, or a foreign key in its own table pointing at one of them: the database removes it along with the schema, so make it again after a restore. A backup restores only onto an instance whose `DATABASE_URL` names the schema it came from; any other is refused with **This file cannot be restored because it is a backup of the database schema "…", and this instance keeps its data in the schema "…"**, and nothing changes. To move such a backup between schemas, set the same `?schema=` on the instance you restore it on. The backup and restore scripts below work with the `public` schema only and stop with a message if `DATABASE_URL` names another; use the Admin Panel. A file `backup.sh` made on such an install with 1.5.3 or earlier holds the whole database, and neither the Admin Panel nor the scripts restore it; see [Restoring an older script backup of an install that names a schema](#restoring-an-older-script-backup-of-an-install-that-names-a-schema).
 
 A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema (or the schema `DATABASE_URL` names), which needs the database role to own the database and that schema. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (in each command the `cozyvtt` after `-d` or `DATABASE` is the database, the one after `TO` the user). The second command is needed on PostgreSQL 14, and on a database first created on 14 and upgraded since; on newer ones it does no harm:
 
@@ -1371,11 +1374,11 @@ holding nothing but SQL. Anything else is refused with the reason, and nothing
 has changed. It then replaces the database's contents in a single step that is
 undone entirely if any part of it fails, so a backup that cannot be applied
 leaves your existing data as it was. Ownership and permission lines from
-another instance are ignored, as the dashboard ignores them, so a backup made
-under a different database user name still restores. Like the dashboard, the
-script runs `psql` in its restricted mode, which needs a PostgreSQL release
-from August 2025 or later; on Docker that is the database container's own
-`psql`, and `docker compose pull database` followed by
+another instance are ignored, as the Admin Panel's restore ignores them, so a
+backup made under a different database user name still restores. Like the
+Admin Panel's restore, the script runs `psql` in its restricted mode, which
+needs a PostgreSQL release from August 2025 or later; on Docker that is the
+database container's own `psql`, and `docker compose pull database` followed by
 `docker compose up -d database` brings an older image up to date.
 
 **Restart the backend as soon as a restore finishes.** The restore empties the
@@ -1436,7 +1439,7 @@ you changed them):
 The `umask 077` in brackets makes the file readable by you alone, as the script's are: it holds every password hash and MFA secret on the instance. (Password reset and invitation links are stored hashed, so a backup holds no working link.)
 
 `--exclude-table-data=public.session` leaves the login sessions out, as the
-dashboard and the script do, so restoring the file cannot sign back in someone
+Admin Panel and the script do, so restoring the file cannot sign back in someone
 who was signed out after it was made.
 
 To restore it, use `restore.sh` from the section above, which accepts this file
@@ -1448,7 +1451,7 @@ step that is undone if any part fails, and empties the login sessions.
 
 ### Restoring an older script backup of an install that names a schema
 
-Only for a manual install whose `DATABASE_URL` ends in `?schema=` and a name, and only for a file `backup.sh` made with 1.5.3 or earlier. Those files hold the whole database, every schema in it, so the dashboard refuses them and the scripts stop at the `?schema=` address. Load one into a new, empty database and point CozyVTT at that. Your current database is not touched, so you can go back to it by undoing step 3.
+Only for a manual install whose `DATABASE_URL` ends in `?schema=` and a name, and only for a file `backup.sh` made with 1.5.3 or earlier. Those files hold the whole database, every schema in it, so the Admin Panel refuses them and the scripts stop at the `?schema=` address. Load one into a new, empty database and point CozyVTT at that. Your current database is not touched, so you can go back to it by undoing step 3.
 
 1. Make the empty database, owned by CozyVTT's database user (use your own names if you changed them; the second `cozyvtt` is the user):
 
@@ -1477,7 +1480,7 @@ Only for a manual install whose `DATABASE_URL` ends in `?schema=` and a name, an
 
    It ends with `All migrations have been successfully applied` or `No pending migrations to apply`. Everyone signs in again afterwards.
 
-5. Once you have checked your campaigns are there, make a backup from the dashboard. It holds your schema alone and restores as usual.
+5. Once you have checked your campaigns are there, make a backup from the Admin Panel's **Backups** tab. It holds your schema alone and restores as usual.
 
 The new database also holds a copy of whatever other software kept in the old one; CozyVTT ignores it.
 
@@ -1580,7 +1583,7 @@ docker compose exec -u appuser backend wget -qO- http://localhost:4000/health
 
 Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
 
-The **Status** card on the Admin Panel's dashboard shows three lights and a count of the live connections open at that moment:
+The **Status** card on the Admin Panel's **Dashboard** tab shows three lights and a count of the live connections open at that moment:
 
 | Light | Green when | What it does not tell you |
 |---|---|---|

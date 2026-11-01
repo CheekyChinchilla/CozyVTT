@@ -9945,7 +9945,7 @@ paths:
   /api/admin/health:
     get:
       tags: [Admin]
-      summary: Check the server's parts, for the dashboard's status card
+      summary: Check the server's parts, for the Admin Panel's status card
       description: >-
         Platform ADMIN only. Asks the database for an answer and checks that the
         live-connection (Socket.io) server is running. Answers 200 whatever it
@@ -10037,7 +10037,7 @@ paths:
                       How full the disk holding the uploads folder is (the
                       nearest folder that exists, before the first upload), or
                       null when the server cannot read it. No per-user storage
-                      quota is enforced; the dashboard warns from this instead.
+                      quota is enforced; the Admin Panel warns from this instead.
                     properties:
                       totalBytes:
                         type: integer

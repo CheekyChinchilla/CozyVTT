@@ -113,7 +113,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 | `INSTANCE_NAME` | No | — | The name emails use while the name in Admin > Settings is empty or still CozyVTT |
 | `SETUP_TOKEN` | No | — | The token the setup wizard asks for; unset, the backend makes one and prints it in its log until setup has run |
 | `UPLOAD_DIR` | No | `uploads` | Where uploaded files are stored, relative to the backend folder |
-| `BACKUP_DIR` | No | `backups` | Where the Admin Dashboard writes backups; must not be inside the uploads folder |
+| `BACKUP_DIR` | No | `backups` | Where the Admin Panel writes backups; must not be inside the uploads folder |
 | `SESSION_MAX_AGE` | No | `3600000` | Milliseconds a sign-in lasts without a request |
 | `REMEMBER_ME_MAX_AGE` | No | `2592000000` | Milliseconds a **Remember me** sign-in lasts, and the longest any sign-in lasts |
 | `RATE_LIMIT_MAX_REQUESTS` | No | `300` | Requests per minute to `/api` from one address |
@@ -603,7 +603,7 @@ Some of those deserve a note:
   files and CI pin, when any line in either Dockerfile that installs it names the
   unpinned `postgresql-client`, or when the stage that runs (the last one) does
   not install it. It also fails when `backend/scripts/restore.sh`
-  stops ending its load with the statements the dashboard restore ends it with,
+  stops ending its load with the statements the Admin Panel's restore ends it with,
   when the combat state's fields differ between the two packages, when the
   special characters a password needs differ between the browser and the
   server, when the email address check differs between them (the body of
@@ -852,7 +852,7 @@ tagged, rehearse exactly that:
    a real instance's, so do this on a machine that is not running one.
 2. Seed it through the app: an admin, a player with two-factor sign-in on,
    a campaign with a lit map (walls, a light, a hidden token with notes, some
-   revealed fog) and a character; then make a backup from the Admin Dashboard
+   revealed fog) and a character; then make a backup from the Admin Panel
    and one with `./backend/scripts/backup.sh`.
 3. Record a fingerprint of the data with `psql` in the database container:
    an `md5` of each map's tokens, walls, lights and fog, of each character's
@@ -862,7 +862,7 @@ tagged, rehearse exactly that:
 5. Check that the migrations applied (`docker compose logs backend`), the
    fingerprints are unchanged, `/health` answers through the bundled nginx,
    the old passwords still sign in, the player is sent nothing the DM hid,
-   the previous release's dashboard backup restores on the new code, a new
+   a backup from the previous release's Admin Panel restores on the new code, a new
    backup downloads and restores, and `backup.sh` then `restore.sh` work.
 6. Open the campaign in a browser as the DM and as the player.
 

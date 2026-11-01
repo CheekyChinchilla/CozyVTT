@@ -1624,7 +1624,7 @@ Get platform statistics (user count, active campaigns, storage usage, etc.).
 ### `GET /api/admin/health` *(Admin only)*
 
 Whether the database answers and the live-connection server is running, for the
-dashboard's status card: `{ status, services: { api, database, websocket }, connections }`,
+**Status** card on the Admin Panel's **Dashboard** tab: `{ status, services: { api, database, websocket }, connections }`,
 with `status` `healthy` only when every part is `ok`. Always `200`; the public
 `GET /health` is the one for uptime monitors.
 
