@@ -93,13 +93,25 @@ interface NpcQuickEditorProps {
 // Helpers
 // ============================================
 
+/** What the editor says while a token carries as many conditions as it may. */
+const CONDITIONS_FULL_NOTE = `A token carries at most ${TOKEN_LIMITS.maxConditions} conditions and effects. Take one off to add another.`;
+
 /** A condition or an effect the game system lists, lit while the token has it. */
-function OfferedCondition({ name, active, onToggle }: { name: string; active: boolean; onToggle: (name: string) => void }) {
+function OfferedCondition({ name, active, onToggle, full }: {
+  name: string;
+  active: boolean;
+  onToggle: (name: string) => void;
+  /** The id of the note saying the token carries all it may, while it does; one it carries can still come off. */
+  full?: string;
+}) {
+  const off = !active && full !== undefined;
   return (
     <button
       aria-pressed={active}
+      disabled={off}
+      aria-describedby={off ? full : undefined}
       onClick={() => onToggle(name)}
-      className={`px-2 py-1 text-xs rounded-cozy border transition-all ${
+      className={`px-2 py-1 text-xs rounded-cozy border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
         active
           ? 'border-warning/50 bg-warning/15 text-warning-ink'
           : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
@@ -161,6 +173,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const offeredConditions = conditionsOffered(campaign?.gameSystem ?? null);
   const offeredEffects = effectsOffered(campaign?.gameSystem ?? null);
   const effectsHeadingId = useId();
+  const conditionsFullId = useId();
   // Hidden and obscured are shown from the table alone, never ahead of it: a
   // button saying "hidden" while every player still saw the token was worse
   // than one that waits for the save.
@@ -473,11 +486,15 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     carries(name) ? conditions.filter((c) => conditionKey(c) !== conditionKey(name)) : [...conditions, name]
   ), [conditions, carries, saveConditions]);
 
+  // At the most a token may carry, the server refuses one more: nothing adds
+  // one, and a note says why.
+  const conditionsFull = conditions.length >= TOKEN_LIMITS.maxConditions;
+
   // A typed condition is added once: one the lists offer, a condition or an
   // effect, takes the list's spelling, and one the token already has (in any
   // spelling) adds nothing.
   const typedCondition = customCondition.trim();
-  const canAddCondition = typedCondition !== '' && conditions.length < TOKEN_LIMITS.maxConditions;
+  const canAddCondition = typedCondition !== '' && !conditionsFull;
   const addCustomCondition = useCallback(() => {
     if (!canAddCondition) return;
     const same = (c: string) => conditionKey(c) === conditionKey(typedCondition);
@@ -1068,15 +1085,17 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             </div>
           )}
 
+          {/* Always there, empty until the token is full, so a screen reader
+              reads the note out when it appears. */}
+          <p id={conditionsFullId} role="status" className={`text-[11px] text-stone-gray italic ${conditionsFull ? 'mb-2' : ''}`}>
+            {conditionsFull ? CONDITIONS_FULL_NOTE : null}
+          </p>
+
           {/* The game system's conditions, then its effects under them */}
-          {/* TODO(ui): at TOKEN_LIMITS.maxConditions an unlit listed button
-              still sends one more, which the server refuses and the editor
-              rolls back with a message. Disable it there, saying why, as the
-              typed box's Add button is. */}
           {offeredConditions.length > 0 && (
             <div role="group" aria-label="Conditions" className="flex flex-wrap gap-1 mb-2">
               {offeredConditions.map((c) => (
-                <OfferedCondition key={c} name={c} active={carries(c)} onToggle={toggleListed} />
+                <OfferedCondition key={c} name={c} active={carries(c)} onToggle={toggleListed} full={conditionsFull ? conditionsFullId : undefined} />
               ))}
             </div>
           )}
@@ -1085,7 +1104,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               <h4 id={effectsHeadingId} className="text-[11px] font-semibold text-stone-gray mb-1">Effects</h4>
               <div className="flex flex-wrap gap-1">
                 {offeredEffects.map((c) => (
-                  <OfferedCondition key={c} name={c} active={carries(c)} onToggle={toggleListed} />
+                  <OfferedCondition key={c} name={c} active={carries(c)} onToggle={toggleListed} full={conditionsFull ? conditionsFullId : undefined} />
                 ))}
               </div>
             </div>
@@ -1112,6 +1131,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               type="submit"
               disabled={!canAddCondition}
               aria-label="Add condition"
+              aria-describedby={conditionsFull ? conditionsFullId : undefined}
               className="px-2 py-1 text-xs rounded-cozy border border-moss-green/30 text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-3.5 h-3.5" />
