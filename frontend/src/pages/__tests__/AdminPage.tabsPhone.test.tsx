@@ -105,3 +105,49 @@ it('lets a long name after Signed in as break, so it never widens the header', (
   expect(name.parentElement).toHaveTextContent('Signed in as Root');
   expect(classes(name.parentElement as HTMLElement)).toEqual(expect.arrayContaining(['min-w-0', 'wrap-anywhere']));
 });
+
+it('fades and marks the edge of the row past which more tabs lie, and neither edge where all fit', () => {
+  // On a Pixel 10 the row stopped with Assets whole and nothing of Settings,
+  // so it read as three tabs. A fade says there are more, on that side only.
+  renderPage();
+  const strip = screen.getByRole('tablist', { name: 'Admin tabs' });
+  const fade = () => classes(strip).filter((c) => c.includes('mask-image'));
+  // A chevron on each side with more, for the eye only.
+  const marks = () => [...(strip.parentElement as HTMLElement).querySelectorAll(':scope > svg')].map((svg) => {
+    const svgClasses = (svg.getAttribute('class') ?? '').split(/\s+/);
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    expect(svgClasses).toContain('pointer-events-none');
+    return svgClasses.includes('lucide-chevron-left') ? 'left' : 'right';
+  });
+  let scrollLeft = 0;
+  let scrollWidth = 360;
+  Object.defineProperty(strip, 'scrollLeft', { get: () => scrollLeft, set: (v: number) => { scrollLeft = v; }, configurable: true });
+  Object.defineProperty(strip, 'scrollWidth', { get: () => scrollWidth, configurable: true });
+  Object.defineProperty(strip, 'clientWidth', { get: () => 360, configurable: true });
+  const at = (left: number) => { scrollLeft = left; fireEvent.scroll(strip); };
+
+  at(0);
+  expect(fade()).toEqual([]);
+  expect(marks()).toEqual([]);
+
+  // Seven tabs, 853 px, in a 360 px strip.
+  scrollWidth = 853;
+  at(0);
+  expect(fade()).toHaveLength(1);
+  expect(fade()[0]).toMatch(/^max-lg:/);
+  expect(fade()[0]).toContain('to_left');
+  expect(marks()).toEqual(['right']);
+
+  at(200);
+  expect(fade()).toHaveLength(1);
+  expect(fade()[0]).toMatch(/^max-lg:/);
+  expect(fade()[0]).toContain('to_right');
+  expect(fade()[0]).toContain('calc');
+  expect(marks()).toEqual(['left', 'right']);
+
+  at(493);
+  expect(fade()).toHaveLength(1);
+  expect(fade()[0]).toContain('to_right');
+  expect(fade()[0]).not.toContain('calc');
+  expect(marks()).toEqual(['left']);
+});
