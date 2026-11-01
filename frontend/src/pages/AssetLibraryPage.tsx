@@ -180,7 +180,7 @@ export default function AssetLibraryPage() {
                 className="flex items-center gap-2"
               >
                 <Upload className="w-5 h-5" />
-                <span className="hidden sm:inline">Upload Asset</span>
+                <span className="max-sm:sr-only">Upload Asset</span>
               </Button>
             ) : (
               <div className="px-4 py-2 text-sm text-stone-gray/60 italic hidden sm:block">
@@ -227,7 +227,7 @@ export default function AssetLibraryPage() {
                   className="flex items-center gap-2 rounded-lg!"
                 >
                   {icon}
-                  <span className="hidden sm:inline">{label}</span>
+                  <span className="max-sm:sr-only">{label}</span>
                 </Button>
               ))}
             </div>
