@@ -12,9 +12,12 @@ import {
   CONDITION_ABBREVIATIONS,
   COC7E_CONDITIONS,
   DND5E_CONDITIONS,
+  DND5E_EFFECTS,
   MAX_CONDITION_BADGES,
   conditionAbbreviation,
+  conditionKey,
   conditionsOffered,
+  effectsOffered,
 } from '../conditions';
 import { GameSystem } from '@/types/gameSystem';
 
@@ -37,8 +40,8 @@ describe('condition abbreviations', () => {
   // held for both while the editors disagreed with each other. They now compare
   // against the one exported list instead.
 
-  it('has a code for every listed condition, and no codes for anything else', () => {
-    const names = [...DND5E_CONDITIONS, ...COC7E_CONDITIONS.map((c) => c.label)];
+  it('has a code for every listed condition and effect, and no codes for anything else', () => {
+    const names = [...DND5E_CONDITIONS, ...DND5E_EFFECTS, ...COC7E_CONDITIONS.map((c) => c.label)];
     const listed = [...new Set(names.map((c) => c.toLowerCase()))].sort();
     const coded = Object.keys(CONDITION_ABBREVIATIONS).sort();
     expect(coded).toEqual(listed);
@@ -65,6 +68,43 @@ describe('condition abbreviations', () => {
     ].sort());
   });
 
+  it('offers the D&D 5e effects a table tracks beside the conditions, and none of the conditions among them', () => {
+    // Spelled out for the same reason as the conditions above.
+    expect([...DND5E_EFFECTS]).toEqual([
+      'Baned', 'Blessed', 'Concentrating', 'Dodging', 'Hasted', 'Hexed', "Hunter's Mark", 'Raging', 'Slowed',
+    ]);
+    const conditions = new Set(DND5E_CONDITIONS.map((c) => c.toLowerCase()));
+    expect(DND5E_EFFECTS.filter((e) => conditions.has(e.toLowerCase()))).toEqual([]);
+  });
+
+  it('gives each effect a code of its own, apart from every condition\'s', () => {
+    const effectCodes = DND5E_EFFECTS.map(conditionAbbreviation);
+    expect(new Set(effectCodes).size).toBe(DND5E_EFFECTS.length);
+    const conditionCodes = new Set([...DND5E_CONDITIONS, ...COC7E_CONDITIONS.map((c) => c.label)].map(conditionAbbreviation));
+    expect(effectCodes.filter((code) => conditionCodes.has(code))).toEqual([]);
+  });
+
+  it('lists the effects in D&D 5e only', () => {
+    expect(effectsOffered(GameSystem.DND_5E)).toBe(DND5E_EFFECTS);
+    expect(effectsOffered(GameSystem.CALL_OF_CTHULHU_7E)).toEqual([]);
+    expect(effectsOffered(GameSystem.PATHFINDER_2E)).toEqual([]);
+    expect(effectsOffered(GameSystem.SHADOWRUN_6E)).toEqual([]);
+    expect(effectsOffered(null)).toEqual([]);
+  });
+
+  it('knows a name by one key, whatever its capitals, spaces or apostrophe', () => {
+    // iOS and iPadOS type a curly apostrophe; some keyboards a modifier letter.
+    for (const typed of ["Hunter's Mark", 'hunter\u2019s mark', '  HUNTER\u2018S MARK ', 'Hunter\u02BCs Mark']) {
+      expect(conditionKey(typed)).toBe("hunter's mark");
+    }
+  });
+
+  it('gives a listed effect its badge however its name is typed', () => {
+    expect(conditionAbbreviation('Hunter\u2019s Mark')).toBe('HM');
+    expect(conditionAbbreviation('HUNTER\u2019S MARK')).toBe('HM');
+    expect(conditionAbbreviation('hasted')).toBe('HA');
+  });
+
   it('is case- and whitespace-insensitive', () => {
     expect(conditionAbbreviation('poisoned')).toBe('PO');
     expect(conditionAbbreviation('POISONED')).toBe('PO');
@@ -73,7 +113,7 @@ describe('condition abbreviations', () => {
 
   it('falls back to two letters for a homebrew condition', () => {
     expect(conditionAbbreviation('Cursed')).toBe('CU');
-    expect(conditionAbbreviation('slowed')).toBe('SL');
+    expect(conditionAbbreviation('marked')).toBe('MA');
   });
 
   it('does not throw on empty input', () => {
