@@ -1069,6 +1069,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
           )}
 
           {/* The game system's conditions, then its effects under them */}
+          {/* TODO(ui): at TOKEN_LIMITS.maxConditions an unlit listed button
+              still sends one more, which the server refuses and the editor
+              rolls back with a message. Disable it there, saying why, as the
+              typed box's Add button is. */}
           {offeredConditions.length > 0 && (
             <div role="group" aria-label="Conditions" className="flex flex-wrap gap-1 mb-2">
               {offeredConditions.map((c) => (

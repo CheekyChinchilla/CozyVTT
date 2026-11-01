@@ -169,6 +169,9 @@ export function conditionKey(name: string): string {
  */
 export function conditionAbbreviation(condition: string): string {
   if (!condition) return '?';
+  // TODO(ui): the lookup reaches Object.prototype, so a condition typed as
+  // "constructor" or "toString" badges the text of a built-in function.
+  // Look only at the table's own keys (Object.prototype.hasOwnProperty).
   const known = CONDITION_ABBREVIATIONS[conditionKey(condition)];
   if (known) return known;
   return condition.trim().slice(0, 2).toUpperCase();
