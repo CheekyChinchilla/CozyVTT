@@ -127,8 +127,11 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
   const partySheetId = useId();
   const moreSheetId = useId();
 
+  // A panel opens at its own height, a bar panel from Notes or Session
+  // included; between the bar's panels the sheet keeps the height its handle
+  // was given.
   const openSession = (tab: SessionTab) => {
-    if (sheet !== 'session') setSessionHeight(openingHeight(tab));
+    if (sheet !== 'session' || onTheBar(tab) !== onTheBar(sessionTab)) setSessionHeight(openingHeight(tab));
     setSessionTab(tab);
     setSheet('session');
   };
