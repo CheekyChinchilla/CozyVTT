@@ -31,6 +31,7 @@ _Nothing at present._
 - `next release` **Call of Cthulhu: an age stored as text shows as a blank number box.** The editor hands the stored text to its number box as it is, so text that is not a number shows nothing (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `after the next release` **On a wider screen, an editor's two notes under the portrait can be drawn over each other,** when the message for a refused picture and **Saves as personal token** show together (the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors).
 - `after the next release` **Some sheet editor controls do not work for a screen reader or the keyboard.** The buttons that remove a D&D 5e attack, spell or inventory item, and most of the Pathfinder 2e editor's delete buttons, have no name; a Flexible sheet's delete buttons stay invisible when the keyboard reaches them; and its list ticks have no name or state.
+- `next release` **A D&D 5e attack's damage and a Pathfinder 2e strike's damage can be clicked to roll on the sheet whatever they hold,** so text the dice cannot roll, such as `1d8 slashing` or `1d8+4 S`, fails at the server. The **Roll...** pickers and a Call of Cthulhu weapon already leave such damage out (`AttacksList.tsx`, `StrikesList.tsx`).
 
 ### Tokens
 
