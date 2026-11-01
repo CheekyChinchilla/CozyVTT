@@ -7,7 +7,8 @@
 import React from 'react';
 import { Sword, Zap, Dices } from 'lucide-react';
 import type { DnD5eAttack } from '@/types/game-systems/dnd5e';
-import { rollTarget } from '../../useSheetRolls';
+import { diceExpressionProblem } from '@/utils/diceExpression';
+import { notARoll, rollTarget } from '../../useSheetRolls';
 
 /**
  * The attack shape was declared again here, a copy of `DnD5eAttack` that had to
@@ -51,15 +52,21 @@ const AttackRow: React.FC<{
     if (onRollAttack) onRollAttack(attackExpr, attackPurpose);
   };
 
+  // Damage the dice cannot roll ("1d8 slashing") is shown and not offered as
+  // a roll: its title gives the parser's reason, and a click on it does not
+  // fall through to the attack.
+  const damageProblem = onRollDamage && attack.damageRoll ? diceExpressionProblem(attack.damageRoll) : null;
+  const rollsDamage = !!onRollDamage && !!attack.damageRoll && damageProblem === null;
+
   const handleDamageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onRollDamage && attack.damageRoll) onRollDamage(attack.damageRoll, `${attack.name} Damage`);
+    if (rollsDamage && attack.damageRoll) onRollDamage?.(attack.damageRoll, `${attack.name} Damage`);
   };
 
   return (
     <div
       className={`p-3 bg-ink/5 border border-ink/10 rounded-lg transition-colors group ${
-        isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none [-webkit-touch-callout:none]' : 'hover:bg-ink/10'
+        isClickable ? 'cursor-pointer hover:not-has-[[data-not-a-roll]:hover]:bg-accent/10 hover:not-has-[[data-not-a-roll]:hover]:border-accent/30 select-none [-webkit-touch-callout:none]' : 'hover:bg-ink/10'
       }`}
       onClick={isClickable ? handleAttackClick : undefined}
       {...(isClickable ? rollTarget(attackExpr, attackPurpose, 'DND_5E') : undefined)}
@@ -75,7 +82,7 @@ const AttackRow: React.FC<{
           <span className="font-semibold text-ink">{attack.name}</span>
         </div>
         {isClickable && (
-          <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />
+          <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:not-group-has-[[data-not-a-roll]:hover]:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />
         )}
       </div>
 
@@ -90,14 +97,11 @@ const AttackRow: React.FC<{
         </div>
 
         {/* Damage — click separately to roll damage only */}
-        {/* TODO(sheets): any damage text is offered as a roll here and in the
-            further damage lines below, so text the dice parser refuses
-            ("1d8 slashing") fails at the server. Right: offer it only when
-            isValidDiceExpression accepts it, as the roll picker does. */}
         <div
-          className={onRollDamage && attack.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
+          className={rollsDamage ? 'cursor-pointer hover:text-danger-ink' : damageProblem ? 'cursor-default' : ''}
           onClick={onRollDamage && attack.damageRoll ? handleDamageClick : undefined}
-          title={onRollDamage && attack.damageRoll ? `Click to roll damage: ${attack.damageRoll}` : undefined}
+          title={rollsDamage ? `Click to roll damage: ${attack.damageRoll}` : undefined}
+          {...(damageProblem ? notARoll(damageProblem) : undefined)}
         >
           <span className="text-xs text-ink-muted">Damage</span>
           <div className="font-semibold text-ink-secondary">
@@ -131,22 +135,24 @@ const AttackRow: React.FC<{
             .map((entry, idx) => {
               const roll = (entry.damageRoll ?? '').trim();
               const label = entry.label?.trim() || 'Alternate';
-              const rollable = !!onRollDamage;
+              const problem = onRollDamage ? diceExpressionProblem(roll) : null;
+              const rollable = !!onRollDamage && problem === null;
               return (
                 <div
                   key={idx}
                   className={`flex items-baseline gap-2 text-sm ${
-                    rollable ? 'cursor-pointer hover:text-danger-ink' : ''
+                    rollable ? 'cursor-pointer hover:text-danger-ink' : problem ? 'cursor-default' : ''
                   }`}
                   onClick={
-                    rollable
+                    onRollDamage
                       ? (e) => {
                           e.stopPropagation();
-                          onRollDamage?.(roll, `${attack.name} — ${label}`);
+                          if (rollable) onRollDamage(roll, `${attack.name} — ${label}`);
                         }
                       : undefined
                   }
                   title={rollable ? `Click to roll ${label}: ${roll}` : undefined}
+                  {...(problem ? notARoll(problem) : undefined)}
                 >
                   <span className="text-xs text-ink-muted">{label}</span>
                   <span className="font-semibold text-ink-secondary">{roll}</span>

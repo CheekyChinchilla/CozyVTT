@@ -341,7 +341,7 @@ One thing to know: if the DM has **paused** the session, your rolls from the **D
 
 ### Rolling from your sheet
 
-Your character's sheet rolls at the table when you open it on the campaign page, from the **Campaign Roster** for instance. Click an ability, a saving throw, a skill or an attack to roll it, or a weapon's damage to roll that. The roll lands in the **Dice** panel named for what it was, such as "Dexterity Save". A small dice icon beside a stat says it rolls. A sheet opened from the **Characters** page doesn't roll, since there's no table there.
+Your character's sheet rolls at the table when you open it on the campaign page, from the **Campaign Roster** for instance. Click an ability, a saving throw, a skill or an attack to roll it, or a weapon's damage to roll that. Damage the dice can't roll, such as `1d8 slashing`, stays on the sheet as text: pointing at it says why, and a click on it rolls nothing. On a D&D 5e or Pathfinder 2e sheet, put just the dice in the damage roll box (**Damage Roll** in D&D 5e), such as `1d8+3`, and the type in the damage type box. The roll lands in the **Dice** panel named for what it was, such as "Dexterity Save". A small dice icon beside a stat says it rolls. A sheet opened from the **Characters** page doesn't roll, since there's no table there.
 
 **Advantage and Disadvantage.** Right-click an ability, a saving throw, a skill or an attack for a small menu of **Normal**, **Advantage** and **Disadvantage**, and choose one to roll. On a phone or a tablet, press and hold the stat for half a second instead: the menu opens where your finger is, and you lift your finger and tap a choice. The stat doesn't also roll as you lift, and a finger that slides scrolls the sheet as usual and opens nothing.
 
@@ -672,9 +672,9 @@ CozyVTT doesn't apply that for you yet. After a long rest, click **Edit** on you
 
 The eleven buttons are the ones the rules name, not a limit. If your game has a property of its own, type it into **Add your own property** and it gets a label like any other. Your own properties show in amber while editing so you can tell them apart, and clicking one removes it.
 
-**More than one damage roll.** A spear is 1d6 in one hand and 1d8 in two, and a spell may hit harder at higher levels. Use **Other Damage Rolls** to add each one with a note saying when it applies — "Two-handed", "At 5th level". Each gets its own line on your sheet that you can click to roll, so you're not doing arithmetic mid-fight.
+**More than one damage roll.** A spear is 1d6 in one hand and 1d8 in two, and a spell may hit harder at higher levels. Use **Other Damage Rolls** to add each one with a note saying when it applies — "Two-handed", "At 5th level". Each gets its own line on your sheet that you can click to roll when it holds just the dice, such as `1d8+3`, so you're not doing arithmetic mid-fight.
 
-If you already wrote a second damage die into a weapon's notes, it stays exactly as you typed it — nothing rewrites your sheet. Move it into its own row whenever you like and it becomes rollable.
+If you already wrote a second damage die into a weapon's notes, it stays exactly as you typed it — nothing rewrites your sheet. Move it into its own row whenever you like, with just the dice in it, such as `1d8+3`, and it becomes rollable.
 
 ### Exporting and Importing
 
