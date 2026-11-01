@@ -3,7 +3,7 @@
 // Protected route - requires authentication
 // ============================================
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -29,6 +29,10 @@ import {
   Move,
 } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
+import { cn } from '@/utils/cn';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { SIDEWAYS_QUERY } from '@/constants/layout';
 import { apiErrorMessage } from '@/utils/errors';
 import { isStrongPassword } from '@/utils/validation';
 import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
@@ -55,19 +59,30 @@ interface AvatarCropModalProps {
   onClose: () => void;
 }
 
+/** The preview canvas's own pixels; it is drawn smaller where the screen is. */
+const CANVAS_SIZE = 300;
+/** How far one arrow key moves the picture, in screen pixels; with Shift, five times as far. */
+const NUDGE_PX = 10;
+const NUDGES = new Map<string, { x: number; y: number }>([
+  ['ArrowLeft', { x: -1, y: 0 }],
+  ['ArrowRight', { x: 1, y: 0 }],
+  ['ArrowUp', { x: 0, y: -1 }],
+  ['ArrowDown', { x: 0, y: 1 }],
+]);
+
 function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  // On a phone on its side the picture and its controls sit side by side.
+  const sideways = useMediaQuery(SIDEWAYS_QUERY);
+  const hintId = useId();
 
   // Crop state: offset = top-left of the visible area in image coords, zoom = scale
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [offsetStart, setOffsetStart] = useState({ x: 0, y: 0 });
+  /** The pointer moving the picture, where it went down and where the picture was then. */
+  const drag = useRef<{ pointerId: number; x: number; y: number; offset: { x: number; y: number } } | null>(null);
   const [imgLoaded, setImgLoaded] = useState(false);
-
-  const CANVAS_SIZE = 300; // square preview canvas
 
   // Load image and initialize centering
   useEffect(() => {
@@ -125,25 +140,50 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
     [zoom],
   );
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setOffsetStart({ ...offset });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!dragging || !imageRef.current) return;
+  /**
+   * How many of the picture's pixels one screen pixel over the crop area is.
+   * The canvas is drawn at the size the screen leaves it, so this is read
+   * from the canvas as drawn.
+   */
+  const picturePerScreenPixel = (): number => {
     const img = imageRef.current;
-    const minDim = Math.min(img.naturalWidth, img.naturalHeight);
-    const visibleSize = minDim / zoom;
-    // pixels-per-canvas-pixel in image space
-    const scale = visibleSize / CANVAS_SIZE;
-    const dx = (e.clientX - dragStart.x) * scale;
-    const dy = (e.clientY - dragStart.y) * scale;
-    setOffset(clampOffset(offsetStart.x - dx, offsetStart.y - dy));
+    if (!img) return 0;
+    const visibleSize = Math.min(img.naturalWidth, img.naturalHeight) / zoom;
+    const shown = canvasRef.current?.getBoundingClientRect().width || CANVAS_SIZE;
+    return visibleSize / shown;
   };
 
-  const handleMouseUp = () => setDragging(false);
+  // Pointer events, so a finger and a pen move the picture as a mouse does.
+  // The crop area takes no touch gestures of its own (touch-none), so a drag
+  // there never scrolls the page; pointer capture keeps the drag going when
+  // the pointer leaves it.
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!imgLoaded || drag.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, offset: { ...offset } };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const start = drag.current;
+    if (!start || start.pointerId !== e.pointerId) return;
+    const scale = picturePerScreenPixel();
+    const dx = (e.clientX - start.x) * scale;
+    const dy = (e.clientY - start.y) * scale;
+    setOffset(clampOffset(start.offset.x - dx, start.offset.y - dy));
+  };
+
+  const handlePointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (drag.current?.pointerId === e.pointerId) drag.current = null;
+  };
+
+  // The arrow keys move the picture as a drag that way does.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const way = NUDGES.get(e.key);
+    if (!way || !imgLoaded) return;
+    e.preventDefault();
+    const step = NUDGE_PX * (e.shiftKey ? 5 : 1) * picturePerScreenPixel();
+    setOffset(clampOffset(offset.x - way.x * step, offset.y - way.y * step));
+  };
 
   const handleZoomChange = (newZoom: number) => {
     if (!imageRef.current) return;
@@ -178,42 +218,55 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
     );
   };
 
+  // The window fits a phone 360 px tall on its side, with a finger as the
+  // pointer. Modal is at most 90dvh (324 px there); its padding (24 px from
+  // 640 px wide), border and header (the 44 px close button and 24 px below
+  // it) take 118, leaving 206 for the picture beside its controls. The
+  // picture takes 90dvh less 7.5rem, 204; the controls are the 44 px slider,
+  // the hint and the buttons in one 44 px row, 12 px apart, so they stay
+  // shorter. Held upright the controls go under the picture: the padding,
+  // border and header take 102 on a phone, and the controls with the gap
+  // above them at most 176, so the picture takes 90dvh less 18rem (288), and
+  // at most the width there is. The test of this window holds the classes.
   return (
-    <div
-      className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="bg-soft-cream border border-moss-green/30 rounded-xl shadow-2xl w-full max-w-sm">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-moss-green/15">
-          <h3 className="text-base font-semibold text-brand-ink">Crop Avatar</h3>
-          <p className="text-xs text-warm-gray flex items-center gap-1">
-            <Move className="w-3 h-3" /> Drag to reposition
-          </p>
+    <Modal open onClose={onClose} title="Crop Avatar" size={sideways ? 'lg' : 'sm'}>
+      <div className={sideways ? 'flex items-center gap-4' : 'space-y-4'}>
+        <div className={sideways ? 'shrink-0' : 'flex justify-center'}>
+          {/* A surface of its own for the arrow keys, as the map is: a screen
+              reader names it and passes the keys to it. */}
+          <div
+            tabIndex={0}
+            data-autofocus
+            role="application"
+            aria-label="Picture to crop"
+            aria-describedby={hintId}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerEnd}
+            onLostPointerCapture={handlePointerEnd}
+            onKeyDown={handleKeyDown}
+            className={cn(
+              'relative aspect-square rounded-full overflow-hidden border-2 border-moss-green/30',
+              'touch-none cursor-grab active:cursor-grabbing focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand',
+              sideways ? 'w-[min(300px,calc(90dvh-7.5rem))]' : 'w-[min(300px,100%,calc(90dvh-18rem))]'
+            )}
+          >
+            <canvas
+              ref={canvasRef}
+              width={CANVAS_SIZE}
+              height={CANVAS_SIZE}
+              className="block size-full"
+            />
+            {!imgLoaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-moss-green/10">
+                <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-hidden="true" />
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Canvas */}
-        <div className="p-5 space-y-4">
-          <div className="flex justify-center">
-            <div className="relative rounded-full overflow-hidden border-2 border-moss-green/30 w-[300px] h-[300px]">
-              <canvas
-                ref={canvasRef}
-                width={CANVAS_SIZE}
-                height={CANVAS_SIZE}
-                className="cursor-grab active:cursor-grabbing block"
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-              />
-              {!imgLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center bg-moss-green/10">
-                  <Loader2 className="w-8 h-8 text-brand-ink animate-spin" />
-                </div>
-              )}
-            </div>
-          </div>
-
+        <div className="min-w-0 flex-1 space-y-3">
           {/* Zoom slider */}
           <div className="flex items-center gap-3">
             <ZoomOut className="w-4 h-4 text-stone-gray shrink-0" aria-hidden="true" />
@@ -226,24 +279,23 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
               step={0.05}
               value={zoom}
               onChange={(e) => handleZoomChange(Number(e.target.value))}
-              className="flex-1 accent-moss-green"
+              className="flex-1 min-w-0 accent-moss-green touch-target"
             />
             <ZoomIn className="w-4 h-4 text-stone-gray shrink-0" aria-hidden="true" />
           </div>
-          <p className="text-xs text-warm-gray text-center">
-            Saved as 512×512 JPEG. Drag to reposition, slide to zoom.
+          <p id={hintId} className="text-xs text-warm-gray text-center flex items-center justify-center gap-1">
+            <Move className="w-3 h-3 shrink-0" aria-hidden="true" />
+            Saved as 512×512 JPEG. Drag the picture or use the arrow keys to move it; slide to zoom.
           </p>
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-3 px-5 pb-5">
-          <Button onClick={onClose} variant="secondary" className="flex-1">Cancel</Button>
-          <Button onClick={handleConfirm} disabled={!imgLoaded} className="flex-1">
-            Apply & Upload
-          </Button>
+          <div className="flex gap-3">
+            <Button onClick={onClose} variant="secondary" className="flex-1 touch-target">Cancel</Button>
+            <Button onClick={handleConfirm} disabled={!imgLoaded} className="flex-1 touch-target">
+              Apply & Upload
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -686,29 +738,33 @@ export default function ProfilePage() {
           <div className="flex items-start gap-6">
             {/* Avatar */}
             <div className="shrink-0">
-              <div
-                className="relative group cursor-pointer"
+              {/* A button, so Tab reaches it and the focus comes back to it
+                  when Crop Avatar closes; the file box itself is hidden. */}
+              <button
+                type="button"
+                aria-label={avatarDisplayUrl ? 'Change avatar' : 'Choose avatar'}
+                className="relative group block cursor-pointer rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={() => fileInputRef.current?.click()}
               >
                 {avatarDisplayUrl ? (
                   <img
                     src={avatarDisplayUrl}
-                    alt={user?.displayName}
+                    alt=""
                     className="w-20 h-20 rounded-full object-cover border-2 border-moss-green/30"
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-moss-green/20 flex items-center justify-center border-2 border-moss-green/30">
-                    <User className="w-9 h-9 text-brand-ink/60" />
+                    <User className="w-9 h-9 text-brand-ink/60" aria-hidden="true" />
                   </div>
                 )}
-                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
                   {avatarUploading ? (
-                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    <Loader2 className="w-6 h-6 text-white animate-spin" aria-hidden="true" />
                   ) : (
-                    <Upload className="w-6 h-6 text-white" />
+                    <Upload className="w-6 h-6 text-white" aria-hidden="true" />
                   )}
                 </div>
-              </div>
+              </button>
               <input
                 ref={fileInputRef}
                 type="file"

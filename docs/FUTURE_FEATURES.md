@@ -62,10 +62,6 @@ _Nothing at present._
 - `next release` **Preview Player View is named "Toggle DM player view preview" for a screen reader,** so a voice command for the words the button shows finds nothing (`MapCanvas.tsx`).
 - `after the next release` **With a mouse, the AoE Shape panel covers the foot of the first toolbar buttons,** by about 20 pixels over **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen** (`MapCanvas.tsx`).
 
-### Accounts
-
-- `next release` **The profile picture's crop window is small and takes only a mouse.** It is a 300 pixel canvas dragged with the mouse alone, and a screen reader or the keyboard is not told it is a dialog (`ProfilePage.tsx`).
-
 ---
 
 ## Backlog
