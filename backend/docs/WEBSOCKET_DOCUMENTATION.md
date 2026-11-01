@@ -1,6 +1,6 @@
 # CozyVTT WebSocket Documentation
 
-**Last Updated:** 2026-10-13
+**Last Updated:** 2026-10-31
 
 > **This is not a public API.** These events are the ones CozyVTT's own web
 > client sends and receives. They are not versioned, carry no compatibility
@@ -31,11 +31,12 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 
 - Real-time token movement
 - Dice roll synchronization (public and secret rolls)
-- In-game chat
+- In-game chat, whispers to one member included
 - Map switching (the DM's `map.change`)
 - Wall segment management (add, remove, bulk operations) and doors
 - Light sources, manual fog of war and explored memory
 - Map pings
+- Drawing on the map, the previews of strokes on their way and the laser pointer
 - Spirit layer control and per-token visibility
 - Initiative tracker (combat state, turn advancement)
 - Announcements of the session lifecycle (`session.started`, `session.paused`, `session.resumed`, `session.ended`)
@@ -43,7 +44,7 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 - Atmosphere effects and ambient audio
 - Character HP updates
 
-Three things people expect on the socket are not there:
+Four things people expect on the socket are not there:
 
 - **Creating, editing and deleting a token** are REST calls (`POST`, `PUT` and
   `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). There is no
@@ -71,8 +72,8 @@ Three things people expect on the socket are not there:
   one or nothing; when the vibe ends while its track plays, with none. A track
   the DM put on over the vibe is left playing.
 - **Saving Campaign Settings** is a REST call (`PUT /api/campaigns/{campaignId}`).
-  When it changes the name, description, game system, chat cooldown or
-  **Players may draw**, every connected member is sent
+  When the save carries the name, description, game system, chat cooldown or
+  **Players may draw**, changed or not, every connected member is sent
   `campaign.settings.updated` with `campaignId`, `name`, `description`,
   `gameSystem`, `chatCooldownEnabled`, `chatCooldownSeconds` and
   `playersMayDraw` as stored. A refused save sends nothing.
@@ -98,9 +99,9 @@ Three things people expect on the socket are not there:
 ### Room Structure
 
 **User Rooms:**
-- Each user has a personal room (userId)
-- Allows direct messages to specific users
-- Persists across multiple tabs
+- Each user has a personal room (userId), holding every socket of theirs in every campaign they have open
+- The server uses it to reach all of them at once: `invitation.received`, a role change, a removal or a leave, an ended sign-in
+- A whisper does not go through it: it goes to the sender's and the recipient's sockets in the campaign it was sent in
 
 **Campaign Rooms:**
 - Each campaign has a room (campaignId)
@@ -298,7 +299,7 @@ All game events require campaign authentication:
 Specific events also check role:
 - DM can move any token
 - Player can only move tokens they control
-- Spectator can send chat messages, whispers among them, and map pings but cannot roll dice, roll initiative, move tokens, open or close doors, or change a character's hit points or hit dice
+- Spectator can send chat messages, whispers among them, and map pings but cannot roll dice, roll initiative, move tokens, open or close doors, draw on the map or erase a drawing, or change a character's hit points or hit dice
 
 ---
 
@@ -756,7 +757,7 @@ socket.on('token.moved', (data) => {
 
 A carried token's release comes from its carrier. When a socket disconnects
 partway through a drag, or leaves the campaign while its connection stays open
-(its member removed, or the socket authenticating into another campaign),
+(its member removed or leaving, or the socket authenticating into another campaign),
 every socket its frames reached is sent `token.moved`
 with the token's stored position and `movedBy: null`, or `token:disappeared`
 where that socket would not be sent the token now (decided from the map as it

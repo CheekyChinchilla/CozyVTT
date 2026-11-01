@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way._
+_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31._
 
 ## Middleware Cheat Sheet
 
@@ -93,7 +93,9 @@ a copy has none.
 #### 5. Campaign DM or Player (Excludes Spectators)
 No route guard refuses spectators alone. Where spectators are refused, the
 handler does it: `dice.roll` (socket) through `canRollDice`, token control
-through `canControlToken`, and doors through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
+through `canControlToken`, drawing and erasing through `canDraw` and
+`canEraseDrawing` (see [Who may draw on a map](#who-may-draw-on-a-map)), and
+doors through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
 may open or close an unlocked door and nothing else, the segment's position
 and size they send being ignored, on a lit map only a door one of their
 tokens can see, and under manual fog only one beside a square revealed to
@@ -437,7 +439,8 @@ gates what is broadcast: a map's live wall, light, fog, settings, ping,
 drawing and explored-memory-reset events go through `emitToMapReaders` in
 `websocket/utils.ts`, or its per-role form `emitToMapReadersAs`, which send
 them to the whole campaign for the current map and to the DM's sockets for any
-other. A map the DM has prepared but not
+other (`drawing:previewed` applies the same rule in its own loop, which skips
+the sender's socket). A map the DM has prepared but not
 switched to is therefore the DM's alone, tokens left visible on it included.
 
 ## Reading an asset: access follows use
