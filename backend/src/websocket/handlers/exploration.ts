@@ -191,6 +191,11 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
           socket.emit('error', { message: 'That user is not a member of this campaign' });
           return;
         }
+        // Player Preview shows the table's map, so a report for someone else
+        // on a map the table is not on would remember ground they never saw
+        // once the table goes there. Dropped as quietly as the rest: one can
+        // cross a map switch in flight.
+        if (map.campaign.currentMapId !== mapId) return;
         userId = named;
       }
       queueReveal(io, socket.campaignId, mapId, userId, cells);

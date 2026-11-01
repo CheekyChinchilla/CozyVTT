@@ -218,13 +218,21 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * frame's position: one who sees it there is sent the frame, and first the
    * token itself if they do not have it; one who had it and no longer sees
    * it is told it has gone, and sent nothing more until it comes back.
+   * `currentMapId` is the campaign's as this frame read it: the audience is
+   * kept for up to DRAG_DECISION_MS, and a map the table has left since is
+   * the DM's again from the next frame on.
    */
-  async function emitDragFrame(token: Token, mapId: string, x: number, y: number): Promise<void> {
+  async function emitDragFrame(token: Token, mapId: string, currentMapId: string | null, x: number, y: number): Promise<void> {
     const audience = await dragAudienceFor(mapId, token);
     const there: Token = { ...token, position: { x, y } };
     for (const s of await campaignSockets(io, socket.campaignId!)) {
       const recipient = audience.recipients.get(s.id);
       if (!recipient) continue;
+      // Their page is on the new map, and holds nothing of this one to put back.
+      if (!canReadMap((s as unknown as AuthenticatedSocket).role, mapId, currentMapId)) {
+        audience.holding.delete(s.id);
+        continue;
+      }
       if (recipient.sees(there)) {
         if (!audience.holding.has(s.id)) {
           s.emit('token:appeared', { token: recipient.shown(there), mapId });
@@ -276,6 +284,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
         const back = { tokenId, mapId: drag.mapId, x: token.position.x, y: token.position.y, movedBy: null };
         for (const s of told) {
+          // A map the table has left since is the DM's again: nothing of it,
+          // the token going included, goes to anyone else.
+          if (!canReadMap((s as unknown as AuthenticatedSocket).role, map.id, map.campaign.currentMapId)) continue;
           const recipient = frameRecipient(s as unknown as AuthenticatedSocket, map, tokens, tokenId, spiritVisibility);
           const holds = audience.holding.has(s.id);
           if (recipient?.sees(token)) {
@@ -452,7 +463,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // draws the token where it is being carried but leaves where it
       // stands, which decides sight and explored memory, until the drop, so
       // carrying a player's token about reveals nothing on the way.
-      await emitDragFrame(movingToken, mapId, x, y);
+      await emitDragFrame(movingToken, mapId, map.campaign.currentMapId, x, y);
     } catch (error) {
       logger.error('token.move failed', { err: error });
     }

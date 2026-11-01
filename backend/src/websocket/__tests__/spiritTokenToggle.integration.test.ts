@@ -204,3 +204,30 @@ describe('spirit_layer.token.toggle', () => {
     dm.disconnect();
   });
 });
+
+describe('spirit_layer.token.toggle on a map the table is not on', () => {
+  it('sends the player nothing, and the DM the toggle', async () => {
+    const prepared = await prisma.map.create({
+      data: {
+        campaignId, name: 'Prepared Toggle Map', imageUrl: '/api/assets/maps/none', baseLayerUrl: '/api/assets/maps/none',
+        width: 20, height: 20, annotations: [], lightingEnabled: false,
+        tokens: [token(OWN, 5, playerId, true), token(TARGET, 6, null, false, 'dm eyes only')],
+      },
+    });
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const quiet = Promise.all([
+      expectNoEvent(player, 'spirit_layer.token.toggled', 800),
+      expectNoEvent(player, 'map.changed', 800),
+      expectNoEvent(dm, 'map.changed', 800),
+    ]);
+    const toDm = waitForEvent<{ tokenId: string }>(dm, 'spirit_layer.token.toggled');
+    dm.emit('spirit_layer.token.toggle', { mapId: prepared.id, tokenId: TARGET, visible: true });
+    expect((await toDm).tokenId).toBe(TARGET);
+    await quiet;
+
+    dm.disconnect();
+    player.disconnect();
+  });
+});

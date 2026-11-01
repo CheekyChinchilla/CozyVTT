@@ -74,7 +74,19 @@ afterAll(async () => {
 });
 
 const wallFor = () => ({ id: randomUUID(), x1: 0, y1: 0, x2: 50, y2: 0, type: 'wall' });
+const doorFor = () => ({ ...wallFor(), type: 'door-closed' });
 const lightFor = () => ({ id: randomUUID(), x: 25, y: 25, brightRadius: 1, dimRadius: 2, color: '#ffcc88', enabled: true });
+const maps = (mapId: string) => `/api/campaigns/${campaignId}/maps/${mapId}`;
+
+/** A wall or a light already on the map, for the edits that change or remove one. */
+async function withWall<T extends { id: string }>(mapId: string, segment: T): Promise<T> {
+  await prisma.map.update({ where: { id: mapId }, data: { wallSegments: [segment] } });
+  return segment;
+}
+async function withLight<T extends { id: string }>(mapId: string, light: T): Promise<T> {
+  await prisma.map.update({ where: { id: mapId }, data: { lights: [light] } });
+  return light;
+}
 
 /** Each source of a map's live edit: what the DM does, and what it sends. */
 const SOURCES: Array<[string, string, string, (mapId: string) => Promise<unknown> | void]> = [
@@ -85,6 +97,35 @@ const SOURCES: Array<[string, string, string, (mapId: string) => Promise<unknown
   ['exploration:reset', 'exploration:state', 'DM', (mapId) => { dm.emit('exploration:reset', { mapId }); }],
   ['POST lights', 'light:added', 'DM', (mapId) => rest.post(`/api/campaigns/${campaignId}/maps/${mapId}/lights`).send(lightFor())],
   ['PUT map settings', 'map:settings:updated', 'DM', (mapId) => rest.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ fogEnabled: true, globalIllumination: false })],
+  ['wall:remove', 'wall:removed', 'DM', async (mapId) => {
+    const wall = await withWall(mapId, wallFor());
+    dm.emit('wall:remove', { mapId, segmentId: wall.id });
+  }],
+  ["wall:update, the DM's door", 'wall:updated', 'DM', async (mapId) => {
+    const door = await withWall(mapId, doorFor());
+    dm.emit('wall:update', { mapId, segment: { ...door, type: 'door-open' } });
+  }],
+  ['walls:replace', 'walls:replaced', 'DM', (mapId) => { dm.emit('walls:replace', { mapId, segments: [wallFor()] }); }],
+  ['light:update', 'light:updated', 'DM', async (mapId) => {
+    const light = await withLight(mapId, lightFor());
+    dm.emit('light:update', { mapId, light: { ...light, brightRadius: 2, dimRadius: 3 } });
+  }],
+  ['light:remove', 'light:removed', 'DM', async (mapId) => {
+    const light = await withLight(mapId, lightFor());
+    dm.emit('light:remove', { mapId, lightId: light.id });
+  }],
+  ['lights:replace', 'lights:replaced', 'DM', (mapId) => { dm.emit('lights:replace', { mapId, lights: [lightFor()] }); }],
+  ['PUT walls', 'walls:replaced', 'DM', (mapId) => rest.put(`${maps(mapId)}/walls`).send({ segments: [wallFor()] })],
+  ['POST walls', 'wall:added', 'DM', (mapId) => rest.post(`${maps(mapId)}/walls`).send(wallFor())],
+  ['PATCH walls', 'wall:updated', 'DM', async (mapId) => {
+    const door = await withWall(mapId, doorFor());
+    return rest.patch(`${maps(mapId)}/walls/${door.id}`).send({ type: 'door-open' });
+  }],
+  ['DELETE walls', 'wall:removed', 'DM', async (mapId) => {
+    const wall = await withWall(mapId, wallFor());
+    return rest.delete(`${maps(mapId)}/walls/${wall.id}`);
+  }],
+  ['PUT lighting', 'map:settings:updated', 'DM', (mapId) => rest.put(`${maps(mapId)}/lighting`).send({ enabled: true })],
 ];
 
 describe.each(SOURCES)('%s', (_source, event, dmEvent, act) => {
