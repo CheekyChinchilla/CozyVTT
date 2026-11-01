@@ -553,7 +553,7 @@ If a creature is somewhere you haven't explored, you won't see a ring for it —
 
 **Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
 
-**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
+**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. In D&D 5e the DM can mark effects the same way, with codes of their own, such as **BS** for Blessed, **CO** for Concentrating and **HM** for Hunter's Mark. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
 
 ### Rolling Your Own Initiative
 

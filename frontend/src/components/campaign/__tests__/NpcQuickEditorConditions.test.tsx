@@ -10,13 +10,14 @@
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import { useGameStore } from '@/stores/gameStore';
 import { TOKEN_LIMITS } from '@/constants/tokenLimits';
+import { DND5E_CONDITIONS, DND5E_EFFECTS } from '@/utils/conditions';
 
 const updateToken = vi.fn();
 const campaign = vi.hoisted(() => ({ gameSystem: 'DND_5E' as string | null }));
@@ -126,4 +127,60 @@ it('stops adding at the most conditions a token may carry', () => {
   const box = screen.getByRole('textbox', { name: 'Add a condition' });
   fireEvent.change(box, { target: { value: 'One more' } });
   expect(screen.getByRole('button', { name: 'Add condition' })).toBeDisabled();
+});
+
+it('offers the D&D 5e effects in a group of their own under the conditions', async () => {
+  campaign.gameSystem = 'DND_5E';
+  open();
+  const conditions = screen.getByRole('group', { name: 'Conditions' });
+  const effects = screen.getByRole('group', { name: 'Effects' });
+  expect(within(conditions).getAllByRole('button').map((b) => b.textContent)).toEqual([...DND5E_CONDITIONS]);
+  expect(within(effects).getAllByRole('button').map((b) => b.textContent)).toEqual([...DND5E_EFFECTS]);
+  expect(conditions.compareDocumentPosition(effects) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  await userEvent.click(within(effects).getByRole('button', { name: 'Hasted' }));
+  await waitFor(() => expect(sentConditions()).toEqual(['Hasted']));
+});
+
+it("takes an effect's listed spelling when it is typed, and a typed effect of the DM's own still works", async () => {
+  campaign.gameSystem = 'DND_5E';
+  open();
+  await waitForDialogFocus();
+  const box = screen.getByRole('textbox', { name: 'Add a condition' });
+  await userEvent.type(box, "hunter's mark{Enter}");
+  await waitFor(() => expect(sentConditions()).toEqual(["Hunter's Mark"]));
+  await userEvent.type(box, 'Sanctuary{Enter}');
+  await waitFor(() => expect(sentConditions()).toEqual(["Hunter's Mark", 'Sanctuary']));
+});
+
+it.each(['CALL_OF_CTHULHU_7E', 'PATHFINDER_2E', null])('offers no effects in %s', (system) => {
+  campaign.gameSystem = system;
+  open();
+  expect(screen.queryByRole('group', { name: 'Effects' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Hasted' })).not.toBeInTheDocument();
+});
+
+it('lights a listed effect the token carries in another spelling, and takes every spelling of it off', async () => {
+  campaign.gameSystem = 'DND_5E';
+  open({ ...cultist, conditions: ['hunter\u2019s mark', 'Prone'] });
+  const effects = screen.getByRole('group', { name: 'Effects' });
+  const mark = within(effects).getByRole('button', { name: "Hunter's Mark" });
+  expect(mark).toHaveAttribute('aria-pressed', 'true');
+  expect(within(effects).getByRole('button', { name: 'Hasted' })).toHaveAttribute('aria-pressed', 'false');
+
+  await userEvent.click(mark);
+  await waitFor(() => expect(sentConditions()).toEqual(['Prone']));
+});
+
+it('adds nothing when the token carries a typed effect already, in other capitals or with a curly apostrophe', async () => {
+  campaign.gameSystem = 'DND_5E';
+  open({ ...cultist, conditions: ['HASTED'] });
+  await waitForDialogFocus();
+  expect(within(screen.getByRole('group', { name: 'Effects' })).getByRole('button', { name: 'Hasted' })).toHaveAttribute('aria-pressed', 'true');
+  const box = screen.getByRole('textbox', { name: 'Add a condition' });
+  await userEvent.type(box, 'hasted{Enter}');
+  expect(updateToken).not.toHaveBeenCalled();
+
+  await userEvent.type(box, 'Hunter\u2019s Mark{Enter}');
+  await waitFor(() => expect(sentConditions()).toEqual(['HASTED', "Hunter's Mark"]));
 });
