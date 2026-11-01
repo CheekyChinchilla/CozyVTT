@@ -136,6 +136,23 @@ function withOneCthulhuMythos(sheet: CoC7eFormData): CoC7eFormData {
 }
 
 /**
+ * The stored age as the Age box takes it. The schema stores every age as
+ * text, and a template or the API may have stored text that is not a whole
+ * number, which a number box cannot show: that is returned as `text`, for the
+ * header to show and keep until a number is typed. A sheet with no age shows
+ * 0, and an empty age an empty box, as they always have; an empty age is kept
+ * empty until a number is typed.
+ */
+function splitStoredAge(age: string | number | undefined): { number: number | null; text: string | null } {
+  if (age === undefined) return { number: 0, text: null };
+  if (typeof age === 'number') return { number: age, text: null };
+  const trimmed = age.trim();
+  if (trimmed === '') return { number: null, text: null };
+  if (/^\d+$/.test(trimmed)) return { number: Number(trimmed), text: null };
+  return { number: null, text: age };
+}
+
+/**
  * CallOfCthulhu7eCharacterEditor - Editable CoC 7e character sheet
  */
 export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEditorProps> = ({
@@ -539,6 +556,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       ? 'bg-black/5 border-black/30 placeholder:text-black/50 focus:ring-black/40'
       : 'bg-white/10 border-white/30 placeholder:text-white/50 focus:ring-white/60';
     const refusedBox = dark ? 'border-2 border-black' : 'border-2 border-white';
+    const age = splitStoredAge(formData.age);
     const headerClasses = isCustomColor
       ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${ink.border}`
       : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
@@ -735,16 +753,14 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* TODO(typing): the age is stored as text and handed to this number box
-                as it is, which shows text that is not a number as blank. Right:
-                decide what such text should show, then pass the box a number. */}
+            {/* While the age is text or empty, leaving the box empty keeps it. */}
             <NumberField
-              value={(formData.age ?? 0) as number}
+              value={age.number}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               aria-label="Age"
               className={`text-sm border ${box} rounded-sm px-2 py-1 ${ink.text} focus:outline-hidden focus:ring-2`}
-              fallback={0}
+              fallback={age.number === null ? null : 0}
             />
             <input
               type="text"
@@ -765,6 +781,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               className={`text-sm border ${box} rounded-sm px-2 py-1 col-span-2 ${ink.text} focus:outline-hidden focus:ring-2`}
             />
           </div>
+          {age.text !== null && (
+            <p className={`text-xs ${ink.soft}`}>
+              Age saved as text: <span className="font-medium">{age.text}</span>. Type a number to replace it.
+            </p>
+          )}
 
           <input
             type="text"
