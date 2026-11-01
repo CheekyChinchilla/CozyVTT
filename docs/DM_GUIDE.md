@@ -604,7 +604,7 @@ A large campaign takes as long to export as your connection needs; nothing gives
 - All tokens placed on maps
 - Custom creatures and their stat blocks
 - Token templates
-- All associated asset files (map images, token images) that you can open yourself. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact. Such a map shows "This map has no picture" until you choose one in **Edit Map**; a token without one is drawn as a plain marker until you choose one in **Edit Token**
+- All associated asset files (map images, token images) that you can open yourself, each with its tags, so the Asset Library's search and tag chips find it in the imported campaign as they did here. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact. Such a map shows "This map has no picture" until you choose one in **Edit Map**; a token without one is drawn as a plain marker until you choose one in **Edit Token**
 - Campaign settings (name, description, game system, vibe settings, spirit layer, **Players may draw**)
 - With **Include audio assets** ticked, the sound files the atmosphere uses, so each period and the ambient track play again in the imported campaign. Without it, the imported campaign's periods and ambient sound have no track, the import window says which, and you can choose new ones in the Atmosphere panel
 

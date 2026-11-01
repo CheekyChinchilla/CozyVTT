@@ -21,9 +21,18 @@ export const MAX_ORIGINAL_NAME_LENGTH = 255;
 
 const text = (field: string) => z.string({ error: `Send the ${field} once, as text.` });
 
-/** Comma-separated tags as one list: each trimmed, empty ones dropped, each kept once. */
+/**
+ * Tags as an asset keeps them: each split at its commas and trimmed, empty
+ * ones dropped, each kept once. An upload sends them as one comma-separated
+ * text, and a campaign archive as a list.
+ */
+export function tidyTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.flatMap((tag) => tag.split(',')).map((tag) => tag.trim()).filter(Boolean))];
+}
+
+/** Comma-separated tags as one list, tidied. */
 const tagList = text('tags')
-  .transform((raw) => [...new Set(raw.split(',').map((tag) => tag.trim()).filter(Boolean))])
+  .transform((raw) => tidyTags([raw]))
   .pipe(
     z
       .array(z.string().max(MAX_ASSET_TAG_LENGTH, `Each tag must be ${MAX_ASSET_TAG_LENGTH} characters or fewer`))

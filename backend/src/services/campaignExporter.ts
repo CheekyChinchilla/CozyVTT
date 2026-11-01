@@ -72,13 +72,23 @@ const ZIP_BYTES_PER_ENTRY = 256;
 
 // ── Asset reference extractor ───────────────────────────────────────────────
 
+/** An asset going into the archive: its file, and what the asset manifest says of it. */
+interface ArchivedAsset {
+  filePath: string;
+  mimeType: string;
+  originalName: string;
+  type: string;
+  fileSize: number;
+  tags: string[];
+}
+
 /**
  * Resolve an asset ID to its file path on disk, if the exporting user may read
  * the asset. Returns null if not. An archive is a way of reading every file
  * in it, so what goes in follows the same read rule as the asset routes: a
  * campaign could otherwise name another user's private file and export it.
  */
-async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<{ filePath: string; mimeType: string; originalName: string; type: string; fileSize: number } | null> {
+async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<ArchivedAsset | null> {
   const asset = await prisma.asset.findUnique({ where: { id: assetId } });
   if (!asset) return null;
   if (!(await canReadAsset(asset, viewer.userId, viewer.isAdmin))) return null;
@@ -96,6 +106,7 @@ async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<
     originalName: asset.originalName,
     type: asset.type,
     fileSize: asset.fileSize,
+    tags: asset.tags,
   };
 }
 
@@ -127,7 +138,7 @@ export async function prepareCampaignExport(
 
   // 2. Collect all asset IDs we need to include
   const assetIds = new Set<string>();
-  const assetMap: Map<string, { filePath: string; mimeType: string; originalName: string; type: string; fileSize: number }> = new Map();
+  const assetMap: Map<string, ArchivedAsset> = new Map();
 
   /**
    * Register an asset for inclusion. Returns the UUID reference key. With
@@ -246,13 +257,14 @@ export async function prepareCampaignExport(
   // TODO(assets): an asset's own name and description are not written, so an
   // import names each asset after its file name and gives it no description.
   // Carry both, held on import to the upload's limits (validators/assets.ts).
-  const assetManifest: Record<string, { originalName: string; mimeType: string; type: string; fileSize: number }> = {};
+  const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath'>> = {};
   for (const [id, info] of assetMap.entries()) {
     assetManifest[id] = {
       originalName: info.originalName,
       mimeType: info.mimeType,
       type: info.type,
       fileSize: info.fileSize,
+      tags: info.tags,
     };
   }
 

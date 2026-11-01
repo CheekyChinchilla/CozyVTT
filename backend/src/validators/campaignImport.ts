@@ -13,6 +13,8 @@ import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TO
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
 import { TOKEN_LIMITS } from './tokenLimits';
 import { CAMPAIGN_LIMITS } from './campaignLimits';
+import { ASSET_LIMITS } from './assetLimits';
+import { tidyTags } from './assets';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +47,10 @@ export const IMPORT_LIMITS = {
   // empty objects holds over a million and cost several times as much to
   // parse.
   MAX_MAP_VALUES: 1_000_000,
+  // The longest list of tags an asset's entry may give. Tidying one tag costs
+  // little, but a 10 MB entry holds millions; an export writes at most 50,
+  // and 1.5.1 and earlier stored lists longer than that.
+  MAX_ASSET_TAG_ENTRIES: 1000,
   FORMAT_VERSION: 1,
 } as const;
 
@@ -256,6 +262,20 @@ export const TokenTemplateImportSchema = z.object({
  */
 export const IMPORTABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO'] as const;
 
+// An asset's tags, held to what an upload may set (validators/assets.ts) and
+// tidied as an upload's are. A tag that is not text, is too long, or holds a
+// character PostgreSQL cannot store in text (U+0000) is left out on its own,
+// as a token's condition is. A picture tagged on 1.5.1 or earlier may have
+// more tags than an upload now may, and keeps the first ones, in order. A
+// list too long to be one an export wrote, or one that is not a list,
+// imports as none, and is not walked. Archives made before tags were
+// carried have no list, and their assets none.
+const ImportAssetTagsSchema = z
+  .unknown()
+  .transform((tags) => (Array.isArray(tags) && tags.length <= IMPORT_LIMITS.MAX_ASSET_TAG_ENTRIES ? tags : []))
+  .pipe(z.array(z.string().refine((tag) => !tag.includes('\u0000')).catch('')))
+  .transform((tags) => tidyTags(tags).filter((tag) => tag.length <= ASSET_LIMITS.maxTagLength).slice(0, ASSET_LIMITS.maxTags));
+
 // The declared MIME type is kept for the log only: the stored type and file
 // extension come from the file's own bytes, as on upload.
 export const AssetEntrySchema = z.object({
@@ -263,6 +283,7 @@ export const AssetEntrySchema = z.object({
   mimeType: z.string().max(100),
   type: z.enum(IMPORTABLE_ASSET_TYPES),
   fileSize: z.number().int().min(0),
+  tags: ImportAssetTagsSchema.optional(),
 }).strip();
 
 // Each entry is checked on its own by the importer: one that is not an
