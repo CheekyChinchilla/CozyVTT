@@ -175,7 +175,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/characters')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">Manage</span>
+                  <span className="max-sm:sr-only">Manage</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -273,7 +273,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/assets')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">View Library</span>
+                  <span className="max-sm:sr-only">View Library</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -315,7 +315,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/documents')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">View Documents</span>
+                  <span className="max-sm:sr-only">View Documents</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -355,7 +355,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/character-templates')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">Browse</span>
+                  <span className="max-sm:sr-only">Browse</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -436,7 +436,7 @@ export default function DashboardPage() {
                   variant="secondary" className="flex items-center gap-2"
                 >
                   <Upload className="w-4 h-4" />
-                  <span className="hidden sm:inline">Import</span>
+                  <span className="max-sm:sr-only">Import</span>
                 </Button>
                 <Button
                   onClick={() => setShowCreateModal(true)}

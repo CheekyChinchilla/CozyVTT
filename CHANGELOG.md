@@ -154,6 +154,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Every map card in the Map Library can be deleted on a phone.** On a phone the library showed two map cards to a row, too narrow for a card's **Set Active**, **Edit**, **Export** and **Delete** buttons, so **Delete map** ran past the card's edge and could not be pressed. Below 640 pixels each card now has a row of its own.
 
+- **Buttons that show only an icon on a phone now have a name a screen reader reads.** Below 640 pixels wide some buttons show only their icon, and a screen reader lost their words there as well, so it said only "button": the dashboard's **Manage**, **View Library**, **View Documents**, **Browse** and **Import**, the Asset Library's **Upload Asset** and its **All Assets**, **Global**, **Personal** and **Campaign** buttons, **New Template** on Character Templates, and **Write one** and **Read** on Documents. They look as before, and a screen reader now reads their words.
+
 - **A tap on a menu over a divider between the page's columns works.** On a tablet, a tap on an item of a token's, a door's or a character's menu, or of a **Roll...** picker, did nothing where the item lay over the strip around a divider that takes a finger's drag: the strip took the tap as the start of a drag. The strip was 20 pixels wide in 1.5.4 and is 44 in this release. A menu or a picker now takes every tap on it.
 
 - **A token's or a door's menu closes when a character's menu opens.** A right-click on a character in the **Campaign Roster** or on a combatant in the initiative tracker, or a press and hold on one, opened its menu and left the map's token or door menu open beside it. Opening a character's menu now closes the map's.

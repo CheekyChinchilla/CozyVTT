@@ -144,7 +144,7 @@ export default function CharacterTemplatesPage() {
               </Button>
               <Button onClick={() => setShowCreate(true)} className="flex items-center gap-2">
                 <Plus className="w-5 h-5" />
-                <span className="hidden sm:inline">New Template</span>
+                <span className="max-sm:sr-only">New Template</span>
               </Button>
             </div>
           </div>

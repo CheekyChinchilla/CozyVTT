@@ -108,7 +108,7 @@ export default function DesktopTable({
             variant="secondary" className="flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Dashboard</span>
+            <span className="max-sm:sr-only">Dashboard</span>
           </Button>
 
           <div className="h-6 w-px bg-moss-green/20" />

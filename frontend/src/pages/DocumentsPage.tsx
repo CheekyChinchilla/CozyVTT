@@ -107,7 +107,7 @@ export default function DocumentsPage() {
               className="flex items-center gap-2"
             >
               <FilePlus className="w-4 h-4" />
-              <span className="hidden sm:inline">Write one</span>
+              <span className="max-sm:sr-only">Write one</span>
             </Button>
             <Button type="button" onClick={() => setShowUpload(true)} className="flex items-center gap-2">
               <Upload className="w-4 h-4" />
@@ -176,7 +176,7 @@ export default function DocumentsPage() {
                       className="flex items-center gap-2 text-sm"
                     >
                       <BookOpen className="w-4 h-4" />
-                      <span className="hidden sm:inline">Read</span>
+                      <span className="max-sm:sr-only">Read</span>
                     </Button>
                     <a
                       href={api.getDocumentUrl(doc.id)}
