@@ -154,9 +154,11 @@ You can also drag the divider to resize the sidebar, or collapse it to give the 
 
 ### The Header Bar
 The top bar shows:
-- Campaign name, a **Live** or **Paused** badge while a session is running or paused, and the current vibe
-- Connection indicator — a dot that goes green when you're connected
-- A **book icon** — the rulebooks and handouts your DM has shared with this campaign
+- Campaign name, a **Live**, **Paused** or **Inactive** badge, and the current vibe
+- Connection indicator: a dot that goes green when you're connected
+- A **book icon**, **Campaign documents**: the rulebooks and handouts your DM has shared with this campaign
+- A **keyboard icon**, **Keyboard shortcuts**: every key the map takes (see [Keyboard Shortcuts](#keyboard-shortcuts))
+- **Hide party panel** and **Hide session panel**, which fold the side columns away, and **Show party panel** and **Show session panel**, which bring them back
 - Navigation controls
 
 *Screenshot pending — Campaign header with status indicators.*
@@ -342,7 +344,7 @@ When the DM has placed your character's token on the map, you can move it: click
 
 **Selecting a token.** Clicking a token also selects it, and a dashed light-blue ring marks it until you click empty ground or select another; dragging the map leaves it selected. You can select any token you can see, yours or not, by clicking it; a right-click selects the token too when its menu opens for you. A token that isn't yours is only selected, never picked up. A screen reader says which token is selected and on which square.
 
-**Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then the **Ping** button if you pressed it, then a token you're holding, then the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
+**Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then the **Ping** button if you pressed it, then a token you're holding, then the drawing tools, the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
 
 *GIF pending — Picking up a player token and placing it across the map.*
 
@@ -382,7 +384,7 @@ On a tablet or a phone your finger does what the mouse does, and a little more:
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
-On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus and of a character sheet's roll menu, the buttons of a sheet's **Roll mode**, the close buttons of messages, dialogs, side panels and the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−1** beside the hit points and **+1** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
+On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus and of a character sheet's roll menu, the buttons of a sheet's **Roll mode**, the close buttons of messages, dialogs, side panels and the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−** beside the hit points and **+** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
 
 ### Two creatures can't stand in the same square
 

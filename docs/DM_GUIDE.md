@@ -329,7 +329,7 @@ Right-click an NPC token on the map (DM only) and choose **Roll...** to open the
 - **Skills** — the skills the stat block records a bonus for, each labelled with the ability it uses. Anything else is covered by the ability checks above
 - **Combat** — attack rolls (`+N to hit` parsed from action descriptions) and damage rolls (every `XdY+Z` expression extracted from each action)
 
-For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage** selector that rewrites the dice expression before rolling (`2d20kh1` / `2d20kl1`). Pathfinder 2e shows the same selector labeled **Fortune / Misfortune**.
+For d20 systems (D&D 5e, PF2e) the picker also has a **Roll mode** list of **Normal**, **Advantage** and **Disadvantage**, which rewrites the dice expression before rolling (`2d20kh1` / `2d20kl1`). In Pathfinder 2e it reads **Normal**, **Fortune** and **Misfortune**.
 
 > **Rolling from a player's sheet.** You can roll from any player character's sheet, opened from the **Campaign Roster**, as its player can: a click rolls a stat, a right-click on an ability, a save, a skill or an attack (on a touch screen, press and hold it) offers **Normal**, **Advantage** and **Disadvantage** for that roll, and **Roll mode** in the sheet's header sets one of them for every such roll until you change it or close the sheet. It starts at **Normal** each time the sheet opens and is not saved. A Pathfinder 2e sheet names them **Fortune** and **Misfortune**; a Call of Cthulhu sheet has neither. The roll goes to the dice log under the character's name. See [Rolling from your sheet](PLAYER_GUIDE.md#rolling-from-your-sheet).
 
@@ -1121,7 +1121,7 @@ Open the **Walls** panel, one of the DM tool panels stacked at the top right of 
 - **Polygon** — Click to place corners of a room; click near the starting point, or click **Done** in the panel, to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
 
-On a touch screen every tool works with one finger: a tap is a click, and dragging a finger is dragging the mouse. Finish a line with **Done** in the panel: a double tap finishes it only when its two taps land within 4 pixels of each other, which a fingertip rarely manages. Nothing needs a keyboard: the panel's **Done**, **Cancel**, **Add to selection**, **Delete** and **Undo** do what a double-click, **Esc**, **Shift**, the **Delete** key and **Ctrl+Z** do. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
+On a touch screen every tool works with one finger: a tap is a click, and dragging a finger is dragging the mouse. Finish a line with **Done** in the panel: a double tap finishes it only when its two taps land within 4 pixels of each other, which a fingertip rarely manages. Nothing needs a keyboard: the panel's **Done**, **Cancel**, **Add to selection**, **Delete segment** and **Undo** do what a double-click, **Esc**, **Shift**, the **Delete** key and **Ctrl+Z** do. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 
@@ -1206,7 +1206,7 @@ a wall set that does not line up with its artwork.
 | Select every wall | **Ctrl+A** (**Cmd+A** on a Mac) |
 | Move what is selected | Drag any of it, or nudge with the **arrow keys** |
 | Move by a whole square | **Shift** + an arrow key |
-| Delete what is selected | **Delete** or **Backspace**, or the panel's **Delete** button, which says how many walls it will delete, whatever their types |
+| Delete what is selected | **Delete** or **Backspace**, or the panel's **Delete segment** button (**Delete 3 segments** with three selected), whatever their types |
 | Let go | **Escape** once clears the selection, again puts the tool away |
 
 These keys, like **Ctrl+Z** and **Ctrl+Y** below, act on the map only while you
