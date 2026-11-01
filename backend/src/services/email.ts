@@ -185,6 +185,8 @@ export async function sendTestEmail(toEmail: string, toName: string): Promise<vo
     p(`Hello <strong>${escapeHtml(toName)}</strong>,`) +
     p(`This is a test email from ${escapeHtml(instanceName)}. If you received this, your SMTP configuration is working correctly.`) +
     divider +
+    // TODO(ui): the app names the page the Admin Panel; this line and the backup
+    // scripts' schema message (scripts/backup.sh, restore.sh) say Admin Dashboard.
     p('<em style="color:#8B7355;font-size:13px;">No action is required. This email was triggered from the Admin Dashboard.</em>');
 
   await transporter.sendMail({

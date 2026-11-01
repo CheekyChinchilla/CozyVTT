@@ -262,6 +262,8 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
     done
   fi
   if [[ -n "$DB_SCHEMA" && "$DB_SCHEMA" != public ]]; then
+    # TODO(ui): the app names the page the Admin Panel; this message, the other
+    # script's and the test email (src/services/email.ts) say Admin Dashboard.
     echo "❌ DATABASE_URL names the database schema \"$DB_SCHEMA\", and this script works"
     echo "   with the public schema only. Nothing was changed. Use Create Backup and"
     echo "   Restore in the Admin Dashboard, which keep to the schema DATABASE_URL names."
