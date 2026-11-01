@@ -20,6 +20,7 @@ const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { importCampaign } from '../campaignImporter';
+import * as importContent from '../campaignImportContent';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip, type FixtureEntry } from '../../__tests__/helpers/zipFixtures';
 
@@ -83,10 +84,23 @@ afterAll(async () => {
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
 
+/**
+ * Give the map at `index` a name holding U+0000 once it is prepared. The
+ * database cannot store the character, so that map's row is refused by the
+ * database itself; an archive's own text arrives without it.
+ */
+function refuseMapRow(index: number): void {
+  const prepare = importContent.prepareMap;
+  jest.spyOn(importContent, 'prepareMap').mockImplementation((raw, ctx) => {
+    const prepared = prepare(raw, ctx);
+    return prepared && ctx.index === index ? { ...prepared, data: { ...prepared.data, name: 'Broken\u0000Tower' } } : prepared;
+  });
+}
+
 describe('a campaign import that fails after its second map', () => {
-  // PostgreSQL cannot store a NUL character, so the third map's row is
-  // refused by the database itself, after the first two have been written.
-  const failing = () => archive([map('Cellar'), map('Hall'), map('Broken\u0000Tower')]);
+  // The third map's row is refused after the first two have been written.
+  const failing = () => archive([map('Cellar'), map('Hall'), map('Tower')]);
+  beforeEach(() => refuseMapRow(2));
 
   it('leaves no campaign, maps or asset rows behind', async () => {
     await expect(importCampaign(await failing(), userId)).rejects.toThrow();

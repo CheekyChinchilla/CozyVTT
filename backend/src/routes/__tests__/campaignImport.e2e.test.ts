@@ -23,6 +23,7 @@ import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { writeZip, renameEntry } from '../../__tests__/helpers/zipFixtures';
+import * as importContent from '../../services/campaignImportContent';
 
 const app = createTestApp();
 const PNG = Buffer.from(
@@ -172,6 +173,33 @@ describe('POST /api/campaigns/import', () => {
     expect(tempFiles()).toEqual([]);
   });
 
+  it('refuses a campaign name holding U+0000, leaving nothing behind', async () => {
+    const before = await prisma.campaign.count({ where: { ownerId: playerId } });
+    const res = await player.post('/api/campaigns/import').field('campaignName', 'My\u0000Copy').attach('file', exported);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Validation Error', message: 'Text cannot contain the null character (U+0000).' });
+    expect(await prisma.campaign.count({ where: { ownerId: playerId } })).toBe(before);
+    expect(tempFiles()).toEqual([]);
+  });
+
+  it('imports an archive whose description holds U+0000 without the character, and says so', async () => {
+    const file = path.join(SCRATCH, 'nul-description.cozyvtt');
+    await writeZip(file, [
+      { name: 'manifest.json', data: manifest },
+      { name: 'campaign.json', data: JSON.stringify({ name: 'Crafted', description: 'Under\u0000 the\u0000 hill' }) },
+    ]);
+
+    const res = await player.post('/api/campaigns/import').attach('file', file);
+
+    expect(res.status).toBe(201);
+    expect(res.body.warnings).toEqual([
+      'campaign.json: removed 2 null characters (U+0000) from its text, which the app cannot store.',
+    ]);
+    const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: res.body.campaignId } });
+    expect(campaign.description).toBe('Under the hill');
+    expect(tempFiles()).toEqual([]);
+  });
+
   it('refuses an archive with an entry that leaves its folder, creating nothing', async () => {
     const file = path.join(SCRATCH, 'slip.cozyvtt');
     await writeZip(file, [
@@ -274,20 +302,31 @@ describe('POST /api/campaigns/import', () => {
     fs.rmSync(recent);
   });
 
-  // PostgreSQL cannot store a NUL character, so this map's row is refused by
-  // the database itself once the campaign and the map before it are written.
+  // The second map is given a name holding U+0000 once it is prepared, so its
+  // row is refused by the database itself once the campaign and the map
+  // before it are written; an archive's own text arrives without it.
   it('answers 500 with no database detail when a campaign cannot be saved, and keeps none of it', async () => {
-    const file = path.join(SCRATCH, 'nul.cozyvtt');
+    const file = path.join(SCRATCH, 'refused.cozyvtt');
     const map = (name: string) => JSON.stringify({ name, width: 5, height: 5, gridSize: 50, feetPerSquare: 5, tokens: [] });
     await writeZip(file, [
       { name: 'manifest.json', data: manifest.replace('"mapCount":0', '"mapCount":2') },
       { name: 'campaign.json', data: '{"name":"Crafted"}' },
       { name: 'maps/map-0.json', data: map('Fine') },
-      { name: 'maps/map-1.json', data: map('Not\u0000fine') },
+      { name: 'maps/map-1.json', data: map('Not fine') },
     ]);
     const before = await prisma.campaign.count({ where: { ownerId: playerId } });
+    const prepare = importContent.prepareMap;
+    const spy = jest.spyOn(importContent, 'prepareMap').mockImplementation((raw, ctx) => {
+      const prepared = prepare(raw, ctx);
+      return prepared && ctx.index === 1 ? { ...prepared, data: { ...prepared.data, name: 'Not\u0000fine' } } : prepared;
+    });
 
-    const res = await player.post('/api/campaigns/import').attach('file', file);
+    let res: request.Response;
+    try {
+      res = await player.post('/api/campaigns/import').attach('file', file);
+    } finally {
+      spy.mockRestore();
+    }
 
     expect(res.status).toBe(500);
     expect(res.body).toEqual({

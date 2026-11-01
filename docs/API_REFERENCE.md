@@ -94,6 +94,8 @@ that is acting as that user, with exactly that user's permissions — see
 
 All endpoints are prefixed with `/api`. Requests and responses use JSON (`Content-Type: application/json`) unless noted otherwise (file uploads use multipart/form-data).
 
+A request holding U+0000, the null character, anywhere in its body, a key included, as `%00` in its path or query string, or in an upload's form field or file name, answers `400` with `{ "error": "Validation Error", "message": "Text cannot contain the null character (U+0000)." }` and changes nothing, whichever endpoint it is for: the database cannot store the character. A password is the exception, and is taken as it is sent: `password`, `newPassword` and `currentPassword` on the sign-in, registration, setup, password, account deletion and two-factor routes, and `currentPassword` on `PUT /api/users/:id`, each only at the top of its own route's body. The live table refuses an event holding one with the same message.
+
 ### Base URL
 
 | Environment | URL |
@@ -756,7 +758,7 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
 }
 ```
 
-The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors, lights and drawings left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, U+0000 is taken out of every text and counted in `warnings` by file, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors, lights and drawings left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 

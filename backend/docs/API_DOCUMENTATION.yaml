@@ -42,6 +42,23 @@ info:
     a browser sends no such header and is unaffected. Request bodies are JSON;
     a form-encoded body is not read.
 
+    A request holding U+0000, the null character, which the database cannot
+    store, is refused with 400
+    `{ error: 'Validation Error', message: 'Text cannot contain the null character (U+0000).' }`
+    before any route reads it: anywhere in its JSON body, a key included, or
+    as `%00` in its path or query string, and before the sign-in is checked.
+    The upload routes (`POST /api/assets/upload`, `POST /api/campaigns/import`
+    and `POST /api/campaigns/{campaignId}/maps/import-uvtt`) refuse one in a
+    form field or the file's name the same way, keeping nothing of the upload.
+    A password is the exception, taken as it is sent: the `password` of
+    `POST /api/auth/login`, `/api/auth/register`, `/api/setup/init`,
+    `DELETE /api/auth/account` and `POST /api/auth/mfa/setup`, `mfa/disable`
+    and `mfa/backup-codes`; the `newPassword` of `POST /api/auth/reset-password`;
+    the `currentPassword` and `newPassword` of `POST /api/auth/change-password`;
+    and the `currentPassword` of `PUT /api/users/{id}`. Each only as text at
+    the top of its own route's body; anything else in the same body is
+    checked.
+
     ## MFA Flow
     If a user has MFA enabled, `/api/auth/login` returns `{ mfaRequired: true }` instead of a full session.
     The client must then call `/api/auth/mfa/verify-login` with a TOTP code or backup code to complete authentication.
@@ -5955,7 +5972,9 @@ paths:
             most 50 tags") or a tag over 50 characters ("Each tag must be 50
             characters or fewer"); or `name`, `description` or `tags` sent
             more than once ("Send the name once, as text.", and so on; this
-            answered 500 before). `error` is `File Too Large` when
+            answered 500 before); or a field or the file's name holding
+            U+0000 ("Text cannot contain the null character (U+0000).";
+            this answered 500 too). `error` is `File Too Large` when
             the file exceeds its type's limit, which is checked before its
             content, so a file over it gets this answer whatever it holds. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
@@ -9777,8 +9796,8 @@ paths:
         for its spirit layer picture).
         Each asset keeps the `tags` its entry gives, held to what
         `POST /api/assets/upload` stores: each trimmed and split at commas,
-        empty ones dropped, each kept once. A tag that is not text, is over
-        50 characters or holds U+0000 is left out on its own. Of what is
+        empty ones dropped, each kept once. A tag that is not text or is over
+        50 characters is left out on its own. Of what is
         left, the first 50 are kept, in order, so a picture tagged on 1.5.1
         or earlier, which allowed more, keeps as many as an upload may have.
         A `tags` of more than 1,000 entries, or one that is not a list,
@@ -9798,7 +9817,12 @@ paths:
         imported can be edited and saved again. Text or a list over its limit
         is cut to it and reported in `warnings`: a map name over 200
         characters, a token name over 200 or notes over 5,000, and text or
-        lists in a stat block over the creature routes' limits. A stat block
+        lists in a stat block over the creature routes' limits. U+0000,
+        which the database cannot store, is taken out of every text and key
+        in each data file as it is read, and `warnings` says how many from
+        which file (`campaign.json: removed 2 null characters (U+0000) from
+        its text, which the app cannot store.`); a name left empty by it is
+        treated as one that was empty. A stat block
         that still does not fit is left off its token or template; a
         creature without one is listed in `skipped`. A game system that is
         not a `GameSystem` value, on the campaign or a creature, imports as
@@ -9928,7 +9952,8 @@ paths:
         '400':
           description: >-
             The upload errors of the preview route, a `campaignName` out of
-            range (`Validation Error`), or an archive the server refuses
+            range or a form field or file name holding U+0000
+            (`Validation Error`), or an archive the server refuses
             (`Import Failed`, with the reason in `message`). Nothing is
             created.
           content:

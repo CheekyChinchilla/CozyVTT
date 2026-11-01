@@ -95,6 +95,34 @@ describe('POST /api/assets/upload metadata', () => {
     await expectRefused([['tags', `ok,${'t'.repeat(51)}`]], /tag must be 50 characters or fewer/i);
   });
 
+  it('refuses a tag, a name or a description holding U+0000, which the database cannot store', async () => {
+    await expectRefused([['tags', 'good,bad\u0000tag']], /^Text cannot contain the null character \(U\+0000\)\.$/);
+    await expectRefused([['name', 'Gob\u0000lin']], /null character/);
+    await expectRefused([['description', 'Leader\u0000']], /null character/);
+  });
+
+  it('refuses a file name holding U+0000, and leaves no file', async () => {
+    // Written as `filename*`, which the form parser decodes; a raw U+0000 in
+    // the part's header is refused by the parser itself.
+    const boundary = 'nul-file-name';
+    const part = (headers: string, content: string | Buffer) =>
+      Buffer.concat([Buffer.from(`--${boundary}\r\n${headers}\r\n\r\n`), Buffer.from(content), Buffer.from('\r\n')]);
+    const body = Buffer.concat([
+      part('Content-Disposition: form-data; name="type"', 'TOKEN'),
+      part('Content-Disposition: form-data; name="scope"', 'USER'),
+      part(`Content-Disposition: form-data; name="file"; filename*=utf-8''tok%00en.png\r\nContent-Type: image/png`, PNG),
+      Buffer.from(`--${boundary}--\r\n`),
+    ]);
+    const before = filesOnDisk().length;
+    const res = await agent
+      .post('/api/assets/upload')
+      .set('Content-Type', `multipart/form-data; boundary=${boundary}`)
+      .send(body);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Validation Error', message: 'Text cannot contain the null character (U+0000).' });
+    expect(filesOnDisk().length).toBe(before);
+  });
+
   it('refuses a field sent twice, without a server error', async () => {
     await expectRefused([['name', 'One'], ['name', 'Two']], /once/);
   });

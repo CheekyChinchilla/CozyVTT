@@ -144,11 +144,11 @@ describe('an archive made by hand', () => {
     expect(await importedTags(result.campaignId)).toEqual({ 'mixed.png': [longest, 'kept'] });
   });
 
-  it('leaves out a tag holding a character the database cannot store, and keeps the rest', async () => {
+  it('keeps a tag without a character the database cannot store, and leaves out one left empty', async () => {
     const result = await importCampaign(await archiveOf([['nul', { tags: ['good', 'bad\u0000tag', '\u0000'] }]]), userId);
 
     expect(result.skipped).toEqual([]);
-    expect(await importedTags(result.campaignId)).toEqual({ 'nul.png': ['good'] });
+    expect(await importedTags(result.campaignId)).toEqual({ 'nul.png': ['good', 'badtag'] });
   });
 
   it('keeps the first 50 tags, in order, of a picture with more, as one tagged before the limit may have', async () => {
