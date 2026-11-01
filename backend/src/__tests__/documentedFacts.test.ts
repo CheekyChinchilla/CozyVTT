@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { isSmtpConfigured } from '../services/email';
 import { createApp } from '../app';
+import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../routes/admin';
 import { appLayers } from './helpers/routeInventory';
 
 const root = path.resolve(__dirname, '../../..');
@@ -259,6 +260,18 @@ describe('where the uploads folder is changed under Docker', () => {
     expect(row).toContain('`docker-compose.override.yml`');
     expect(row).not.toContain('`docker-compose.yml`');
     expect(read('.env.example')).toContain('uploads volume in docker-compose.override.yml');
+  });
+});
+
+describe('what a backup leaves out of the uploads folder, in the deployment guide', () => {
+  const guide = section('docs/DEPLOYMENT.md', '### Via Admin Dashboard', '\n### ');
+
+  it('says a symbolic link is left out, with the line the backend logs for it', () => {
+    expect(guide).toContain(`\`${LEFT_OUT_OF_BACKUP}\``);
+  });
+
+  it('says a name a restore refuses is left out, with the line the backend logs for it', () => {
+    expect(guide).toContain(`\`${NAME_LEFT_OUT_OF_BACKUP}\``);
   });
 });
 

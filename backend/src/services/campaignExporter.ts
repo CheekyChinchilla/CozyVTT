@@ -12,13 +12,12 @@
  * Security: strips all user IDs, server-specific paths, and internal references.
  */
 
-import { ZipArchive, type ZipEntryData } from 'archiver';
 import type { Writable } from 'stream';
-import { pipeline } from 'stream/promises';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { writeZipTo, type ZipEntrySource } from '../utils/zipWriter';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import { readTokens, readJsonObject } from '../utils/prisma-json';
 import { extractAssetId } from '../utils/asset-urls';
@@ -353,29 +352,22 @@ export async function prepareCampaignExport(
   return {
     filename,
     async writeTo(out: Writable): Promise<void> {
-      const archive = new ZipArchive({ zlib: { level: 6 } });
-      const written = pipeline(archive, out);
-
-      for (const file of dataFiles) archive.append(file.content, { name: file.name });
-      // Pictures and sound are compressed already; packing them again costs
-      // the server time and saves nothing, and stored they take exactly the
-      // space the size check above counted.
-      for (const [id, info] of assetMap.entries()) {
-        const ext = path.extname(info.originalName) || mimeToExt(info.mimeType);
-        const entry: ZipEntryData = { name: `assets/${id}${ext}`, store: true };
-        archive.file(info.filePath, entry);
-      }
-      archive.append(assetManifestFile.content, { name: assetManifestFile.name });
-      // An error here reaches `written` too, which is where it is handled.
-      archive.finalize().catch(() => undefined);
-
-      try {
-        await written;
-      } catch (error) {
-        // The caller hung up, or a file could not be read: stop reading the rest.
-        archive.abort();
-        throw error;
-      }
+      const entries: ZipEntrySource[] = [
+        ...dataFiles,
+        // Pictures and sound are compressed already; packing them again costs
+        // the server time and saves nothing, and stored they take exactly the
+        // space the size check above counted. One deleted since it was
+        // listed is left out, and an import says its file is missing.
+        ...[...assetMap.entries()].map(([id, info]) => ({
+          name: `assets/${id}${path.extname(info.originalName) || mimeToExt(info.mimeType)}`,
+          file: info.filePath,
+          store: true,
+          skipIfGone: true,
+        })),
+        assetManifestFile,
+      ];
+      // The caller hanging up, or a file that cannot be read, stops it.
+      const archiveSize = await writeZipTo(out, entries);
 
       logger.info('Campaign exported', {
         campaignId,
@@ -383,7 +375,7 @@ export async function prepareCampaignExport(
         creatureCount: creaturesData.length,
         tokenTemplateCount: tokenTemplatesData.length,
         assetCount: assetMap.size,
-        archiveSize: archive.pointer(),
+        archiveSize,
       });
     },
   };

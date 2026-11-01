@@ -2,7 +2,6 @@ import fs from 'fs/promises';
 import { readdirSync, readlinkSync, realpathSync } from 'fs';
 import os from 'os';
 import path from 'path';
-import { ZipArchive } from 'archiver';
 import unzipper from 'unzipper';
 import {
   extractArchiveSafely,
@@ -18,6 +17,7 @@ import {
 import { expectFileMode } from '../../__tests__/helpers/fileModes';
 import {
   writeZip,
+  zipBuffer,
   repeatedBytes,
   claimUnpackedSize,
   renameEntry,
@@ -26,21 +26,6 @@ import {
 } from '../../__tests__/helpers/zipFixtures';
 
 const MB = 1024 * 1024;
-
-/** A ZIP holding the given files. */
-async function zipOf(entries: Record<string, string>): Promise<Buffer> {
-  const archive = new ZipArchive();
-  const chunks: Buffer[] = [];
-  archive.on('data', (chunk: Buffer) => chunks.push(chunk));
-  const ended = new Promise<void>((resolve, reject) => {
-    archive.on('end', () => resolve());
-    archive.on('error', reject);
-  });
-  for (const [name, body] of Object.entries(entries)) archive.append(body, { name });
-  await archive.finalize();
-  await ended;
-  return Buffer.concat(chunks);
-}
 
 const LIMITS = { maxFiles: 10, maxTotalBytes: 1024 * 1024 };
 
@@ -124,7 +109,7 @@ describe('extractArchiveSafely', () => {
   it('creates the folder it unpacks into readable by its owner alone', async () => {
     const dest = path.join(root, 'unpacked');
     const file = path.join(root, 'backup.zip');
-    await fs.writeFile(file, await zipOf({ 'database.sql': 'SELECT 1;\n', 'uploads/a/b.txt': 'b' }));
+    await fs.writeFile(file, await zipBuffer({ 'database.sql': 'SELECT 1;\n', 'uploads/a/b.txt': 'b' }));
 
     await extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
 
@@ -137,7 +122,7 @@ describe('extractArchiveSafely', () => {
     const dest = path.join(root, 'unpacked');
     const many = Object.fromEntries(Array.from({ length: LIMITS.maxFiles + 1 }, (_, i) => [`f${i}.txt`, 'x']));
     const file = path.join(root, 'many.zip');
-    await fs.writeFile(file, await zipOf(many));
+    await fs.writeFile(file, await zipBuffer(many));
     const directory = await unzipper.Open.file(file);
 
     await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toThrow(/more than the \d+ it may hold/);
@@ -205,19 +190,40 @@ describe('extractArchiveSafely', () => {
   it('writes a symbolic link entry as an ordinary file, so it cannot be followed out', async () => {
     const dest = path.join(root, 'unpacked');
     const file = path.join(root, 'link.zip');
-    const archive = new ZipArchive();
-    const out = (await import('fs')).createWriteStream(file);
-    const closed = new Promise<void>((resolve) => out.on('close', () => resolve()));
-    archive.pipe(out);
-    archive.symlink('uploads/link', '../../../../etc');
-    await archive.finalize();
-    await closed;
+    await writeZip(file, [{ name: 'uploads/link', data: '../../../../etc', mode: 0o120777 }]);
 
     await extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
 
     const written = await fs.lstat(path.join(dest, 'uploads/link'));
     expect(written.isSymbolicLink()).toBe(false);
     expect(written.isFile()).toBe(true);
+  });
+
+  // A backup past 4 GB, or of more than 65,535 files, carries ZIP64 fields,
+  // as yazl writes them; forced here on a small one.
+  it('unpacks an archive whose entries and end carry ZIP64 fields', async () => {
+    const dest = path.join(root, 'unpacked');
+    const file = path.join(root, 'zip64.zip');
+    await writeZip(
+      file,
+      [
+        { name: 'database.sql', data: 'SELECT 1;\n' },
+        { name: 'uploads/maps/a.png', data: () => repeatedBytes(3 * MB, 7), store: true },
+      ],
+      { zip64: true }
+    );
+    // Each entry's sizes are in its ZIP64 field, the short ones full.
+    const bytes = await fs.readFile(file);
+    const directory = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
+    const sizes: number[] = [];
+    for (let at = bytes.indexOf(directory); at !== -1; at = bytes.indexOf(directory, at + 1)) sizes.push(bytes.readUInt32LE(at + 20));
+    expect(sizes).toEqual([0xffffffff, 0xffffffff]);
+
+    expect(await countListedEntries(file)).toBe(2);
+    await extractArchiveSafely(file, await openArchiveFile(file, 10), dest, { maxFiles: 10, maxTotalBytes: 10 * MB });
+
+    expect(await fs.readFile(path.join(dest, 'database.sql'), 'utf8')).toBe('SELECT 1;\n');
+    expect((await fs.readFile(path.join(dest, 'uploads/maps/a.png'))).equals(Buffer.alloc(3 * MB, 7))).toBe(true);
   });
 });
 

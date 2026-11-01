@@ -151,8 +151,9 @@ _Nothing at present._
   build and test tools: Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30
   and jest-dom 7. **Done** for the backend's web framework: Express 5, with
   express-rate-limit 8 and helmet 8, and for its smaller libraries:
-  connect-pg-simple 10, archiver 8, dotenv 18 and file-type 22; mathjs is no
-  longer used, since the dice parser needs no library.
+  connect-pg-simple 10, dotenv 18 and file-type 22. mathjs is no longer used,
+  since the dice parser needs no library, nor is archiver 8: yazl 3 writes the
+  backups and campaign exports.
   **Done** for React: React 19.3 with React Router 8.4, and for framer-motion
   14, lucide-react 1 and react-markdown 10. React Router 6 had two moderate
   advisories that could not be reached in CozyVTT, a single-page app with no
@@ -176,13 +177,29 @@ _Nothing at present._
 - **Read zip files with yauzl in place of unzipper.** Restoring a backup and
   importing a campaign read the archive with unzipper, which brings seven
   packages of its own (bluebird, fs-extra and five more); yauzl, the reading
-  half of the yazl library planned for writing zips, brings one. The reading
+  half of yazl, which now writes them, brings one. The reading
   side is where an uploaded archive is held to its limits: the entry count, the
   sizes it declares against what it inflates to, the end-of-directory record's
   place, and every name kept inside its folder (`backend/src/utils/archive.ts`
   and the campaign importer). A move keeps each of those checks and their
   tests, and has a security review of its own before it merges.
-  **Do** after the writing side has moved to yazl; nothing is wrong today.
+  **Do**: the writing side, which this waited for, has moved to yazl. Nothing
+  is wrong today.
+
+- **A backup of tens of thousands of uploaded files is slow to make.** yazl,
+  which writes backups, looks through every entry before the one it writes
+  next, so the time grows with the square of the file count: about 3 seconds
+  for 10,000 files, 18 for 40,000, a minute for 80,000 and two minutes for
+  100,000, the most a restore takes, against about 9 seconds for 40,000 with
+  archiver, which wrote them before. Memory stays small: 275 MB at 100,000
+  files, inside the backend's 512 MB. On a slower host, such as a Raspberry
+  Pi, a large instance's backup could pass the 600 seconds nginx gives the
+  request, and **Create Backup** would then report a failure while the
+  backend finished the backup later. Remembering where the first unfinished
+  entry is would make yazl's cost grow in step with the count: report it
+  upstream, or write the backup with a writer that has no such cost.
+  **Do** if a large instance's backups grow slow; nothing is wrong at the
+  sizes seen so far.
 
 - `next release` **One dice grammar for both sides.** The parser is now one file
   kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`

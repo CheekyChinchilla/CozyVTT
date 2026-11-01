@@ -146,7 +146,7 @@ describe('THIRD_PARTY_LICENSES.md', () => {
 
   /** The package and project behind each library the tables name. */
   const ROWS: Record<string, [Project, string]> = {
-    archiver: ['backend', 'archiver'],
+    yazl: ['backend', 'yazl'],
     unzipper: ['backend', 'unzipper'],
     'file-type': ['backend', 'file-type'],
     React: ['frontend', 'react'],
