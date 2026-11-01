@@ -974,6 +974,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Spirit Layer Image Loading
   // ============================================
 
+  // TODO(maps): a switch to another map with a spirit layer goes on drawing
+  // the last map's spirit layer picture over it until its own has loaded;
+  // keep the spirit picture with the map it was loaded for, as the map's
+  // picture is (pictureFor), so another map's is never drawn.
   useEffect(() => {
     if (!currentMap?.spiritLayerUrl) {
       setSpiritLayerImage(null);
