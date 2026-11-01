@@ -14,8 +14,14 @@
 // `data-autofocus`, which the trap focuses. React's `autoFocus` moves focus
 // before the trap records where it came from, so focus could not return to
 // the opener, and the trap then moved it to the first control anyway.
+//
+// On the campaign page's compact layout the browser's Back closes the dialog
+// on top as Escape does (components/campaign/compact/sheetHistory.ts), so an
+// open trap there holds a place on the history; the desktop's is untouched.
 
 import { useEffect, useRef } from 'react';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import { dialogOpened } from '@/components/campaign/compact/sheetHistory';
 
 const FOCUSABLE_SELECTORS = [
   'a[href]',
@@ -26,32 +32,11 @@ const FOCUSABLE_SELECTORS = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
-/** An open trap: when it opened, and what Escape calls in it. */
-interface OpenTrap {
-  opened: number;
-  /** Calls the dialog's close, as Escape does; false when it has none. */
-  close: () => boolean;
-}
+/** An open trap, known by its identity. */
+type OpenTrap = object;
 
 /** The open traps, oldest first; only the last acts on a key. */
 const openTraps: OpenTrap[] = [];
-
-let openings = 0;
-
-/**
- * A number that grows with each opening: of a trap, and of whatever else
- * stacks with the dialogs and needs to know what opened after it (the
- * compact layout's sheets, components/campaign/compact/sheetHistory.ts).
- */
-export function nextOpening(): number {
-  openings += 1;
-  return openings;
-}
-
-/** The dialog on top, if one is open: when it opened, and its close, as Escape calls it. */
-export function topTrap(): Readonly<OpenTrap> | undefined {
-  return openTraps[openTraps.length - 1];
-}
 
 /**
  * Whether any dialog's focus trap is open. The map's keys stand aside while
@@ -69,6 +54,12 @@ export interface FocusTrapOptions {
    * made full height, keeps the control in use.
    */
   keepFocusInside?: boolean;
+  /**
+   * Whether the browser's Back closes the dialog on the compact layout,
+   * through the close Escape calls. True unless set false, as a sheet that
+   * answers Back itself does (compact/BottomSheet.tsx).
+   */
+  closesOnBack?: boolean;
 }
 
 /**
@@ -89,18 +80,20 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void, options: Foc
   onCloseRef.current = onClose;
   const keepFocusInsideRef = useRef(options.keepFocusInside === true);
   keepFocusInsideRef.current = options.keepFocusInside === true;
+  const closesOnBack = useCompactLayout() && options.closesOnBack !== false;
+
+  // Its own effect, so a layout that changes while the dialog is open takes
+  // or gives back the history's entry without the trap starting over.
+  useEffect(() => {
+    if (!isOpen || !closesOnBack) return;
+    const entry = dialogOpened(() => onCloseRef.current?.());
+    return () => entry.release();
+  }, [isOpen, closesOnBack]);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    const trap: OpenTrap = {
-      opened: nextOpening(),
-      close: () => {
-        if (!onCloseRef.current) return false;
-        onCloseRef.current();
-        return true;
-      },
-    };
+    const trap: OpenTrap = {};
     openTraps.push(trap);
 
     // Remember the element that had focus before the modal opened

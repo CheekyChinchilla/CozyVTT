@@ -27,23 +27,29 @@
 //   being removed from the campaign (useAccessRevoked, which always
 //   replaces). The browser's address bar and a lost sign-in, which loads
 //   the sign-in page, still leave it.
-// - A dialog opened over the top sheet (a Modal, a SlideOver, an editor)
-//   is what Back closes, through its own close, the one Escape calls, so a
-//   dialog that asks before closing asks; the sheet stays, and the entry
-//   goes back on for it.
+// - A dialog (a Modal, a SlideOver, the character sheet and its editor)
+//   holds the entry on the compact layout as a sheet does, whether a sheet
+//   is under it or not: its focus trap says so as it opens (dialogOpened,
+//   from useFocusTrap). A row of More or of an action sheet closes its
+//   sheet and opens a dialog in the same press, or a moment later, so the
+//   dialog keeps the entry or gets one. Back calls the dialog's own close,
+//   the one Escape calls, so a dialog that asks before closing asks; the
+//   entry goes back on while it stays, and comes off once it has closed
+//   with nothing else open.
 // ============================================
-
-import { nextOpening, topTrap } from '@/hooks/useFocusTrap';
 
 const MARK = 'cozyvttSheet';
 
 interface OpenSheet {
-  /** When it opened, among the dialogs (useFocusTrap's nextOpening). */
-  opened: number;
+  /**
+   * What Back does to it: a sheet closes at once; a dialog is asked to close,
+   * and leaves the list only as it does, since it may ask first.
+   */
+  kind: 'sheet' | 'dialog';
   close: () => void;
 }
 
-/** The open sheets, oldest first; Back closes the last. */
+/** The open sheets and dialogs, oldest first; Back closes the last. */
 const openSheets: OpenSheet[] = [];
 
 /** The popstate our own history.back() brings, which closes nothing. */
@@ -70,14 +76,15 @@ function onPopState(): void {
     return;
   }
   // Back or Forward between two entries of the page: only leaving the marked
-  // entry with a sheet open is Back closing it.
+  // entry with a sheet or dialog open is Back closing it.
   if (onMarkedEntry()) return;
   const top = openSheets[openSheets.length - 1];
   if (!top) return;
-  const dialog = topTrap();
-  if (dialog && dialog.opened > top.opened) {
+  // A dialog may ask before it closes, or not close; it holds the entry
+  // until it has, and its release then takes the entry off.
+  if (top.kind === 'dialog') {
     pushMarkedEntry();
-    dialog.close();
+    top.close();
     return;
   }
   openSheets.pop();
@@ -102,17 +109,16 @@ export interface SheetEntry {
    * closed the sheet, or a second time, does nothing.
    */
   release: () => void;
-  /** Whether this is the sheet opened last of those still open. */
+  /** Whether this is the sheet or dialog opened last of those still open. */
   isTop: () => boolean;
 }
 
-/** A sheet has opened: Back now calls `close`, unless a sheet that opened after it is still open. */
-export function sheetOpened(close: () => void): SheetEntry {
+function holdEntry(kind: OpenSheet['kind'], close: () => void): SheetEntry {
   if (!listening) {
     window.addEventListener('popstate', onPopState);
     listening = true;
   }
-  const sheet: OpenSheet = { opened: nextOpening(), close };
+  const sheet: OpenSheet = { kind, close };
   openSheets.push(sheet);
   if (!onMarkedEntry()) pushMarkedEntry();
 
@@ -130,4 +136,18 @@ export function sheetOpened(close: () => void): SheetEntry {
     },
     isTop: () => openSheets[openSheets.length - 1] === sheet,
   };
+}
+
+/** A sheet has opened: Back now calls `close`, unless a sheet or dialog that opened after it is still open. */
+export function sheetOpened(close: () => void): SheetEntry {
+  return holdEntry('sheet', close);
+}
+
+/**
+ * A dialog has opened on the compact layout: Back now calls `close`, the
+ * close Escape calls, unless a sheet or dialog that opened after it is still
+ * open. `release` once the dialog has closed.
+ */
+export function dialogOpened(close: () => void): SheetEntry {
+  return holdEntry('dialog', close);
 }

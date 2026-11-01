@@ -19,12 +19,24 @@
 import { Ellipsis, Map as MapIcon, Users, type LucideIcon } from 'lucide-react';
 import { useGameStore } from '@/stores/gameStore';
 import { cn } from '@/utils/cn';
-import { SESSION_TAB_LOOKS, unreadBadge } from '@/components/campaign/sessionTabs';
+import { SESSION_TAB_LOOKS, unreadBadge, type SessionTab } from '@/components/campaign/sessionTabs';
+import { SHEET_WIDTH } from './BottomSheet';
 
-export type CompactTab = 'map' | 'chat' | 'dice' | 'initiative' | 'party' | 'more';
+/**
+ * The session panels the bar has a button for, in order: the one list of
+ * them. More opens the others (MoreSheet's MORE_PANELS).
+ */
+export const BAR_PANELS = ['chat', 'dice', 'initiative'] as const satisfies readonly SessionTab[];
+
+export type BarPanel = (typeof BAR_PANELS)[number];
+
+/** Whether the bar has a button for a session panel. */
+export const onTheBar = (tab: SessionTab): tab is BarPanel => BAR_PANELS.some((panel) => panel === tab);
+
+export type CompactTab = 'map' | BarPanel | 'party' | 'more';
 
 /** The bar's buttons, in order. */
-export const COMPACT_TABS: readonly CompactTab[] = ['map', 'chat', 'dice', 'initiative', 'party', 'more'];
+export const COMPACT_TABS: readonly CompactTab[] = ['map', ...BAR_PANELS, 'party', 'more'];
 
 /**
  * The bar's height, its top rule and the safe area under it included: where
@@ -32,14 +44,19 @@ export const COMPACT_TABS: readonly CompactTab[] = ['map', 'chat', 'dice', 'init
  */
 export const BOTTOM_BAR_HEIGHT = 'calc(3.5rem + 1px + env(safe-area-inset-bottom, 0px))';
 
-const TAB_LOOKS: Record<CompactTab, { label: string; icon: LucideIcon }> = {
-  map: { label: 'Map', icon: MapIcon },
-  chat: SESSION_TAB_LOOKS.chat,
-  dice: SESSION_TAB_LOOKS.dice,
-  initiative: SESSION_TAB_LOOKS.initiative,
-  party: { label: 'Party', icon: Users },
-  more: { label: 'More', icon: Ellipsis },
-};
+/** A button's name and icon; a session panel's are the rail's tab's. */
+function tabLook(tab: CompactTab): { label: string; icon: LucideIcon } {
+  switch (tab) {
+    case 'map':
+      return { label: 'Map', icon: MapIcon };
+    case 'party':
+      return { label: 'Party', icon: Users };
+    case 'more':
+      return { label: 'More', icon: Ellipsis };
+    default:
+      return SESSION_TAB_LOOKS[tab];
+  }
+}
 
 export interface BottomBarProps {
   /** The button shown as open (aria-current); 'map' while no sheet is. */
@@ -68,9 +85,9 @@ export default function BottomBar({ active, expanded = active, onSelect, sheetId
       // row runs past a narrow, short window's edge.
       className={inHeader ? 'min-w-0' : 'shrink-0 border-t border-brand/20 bg-parchment pb-[env(safe-area-inset-bottom)]'}
     >
-      <div className={inHeader ? 'flex items-center gap-0.5' : 'mx-auto grid h-14 w-full max-w-2xl grid-cols-6'}>
+      <div className={inHeader ? 'flex items-center gap-0.5' : cn(SHEET_WIDTH, 'grid h-14 grid-cols-6')}>
         {COMPACT_TABS.map((tab) => {
-          const { label, icon: Icon } = TAB_LOOKS[tab];
+          const { label, icon: Icon } = tabLook(tab);
           const open = active === tab;
           const badge = tab === 'chat' && unreadChat > 0 ? unreadBadge(unreadChat) : null;
           return (

@@ -246,6 +246,34 @@ describe('More', () => {
     expect(openSheets()).toEqual(['Chat']);
   });
 
+  // They kept More's full height and its backdrop, where the guides say
+  // the bar's panels open at half height with the map live above them.
+  it("leaves the bar's Chat, Dice and Initiative to open at half height from Notes or Session", () => {
+    table();
+    for (const [row, name] of [['Notes', 'Chat'], ['Session', 'Dice'], ['Notes', 'Initiative']]) {
+      press('More');
+      fireEvent.click(moreRow(row));
+      expect(sheet(row)).toHaveAttribute('aria-modal', 'true');
+
+      press(name);
+      expect(openSheets()).toEqual([name]);
+      expect(sheet(name)).not.toHaveAttribute('aria-modal');
+      expect(sheet(name).style.height).toBe('50dvh');
+    }
+  });
+
+  it("keeps the height chosen by the sheet's handle between the bar's panels", () => {
+    table();
+    press('Chat');
+    // The sheet is hidden until it has begun to slide in, so its handle has no accessible name yet.
+    fireEvent.click(within(sheet('Chat')).getByLabelText('Make Chat full height'));
+    expect(sheet('Chat')).toHaveAttribute('aria-modal', 'true');
+
+    press('Dice');
+    expect(openSheets()).toEqual(['Dice']);
+    expect(sheet('Dice')).toHaveAttribute('aria-modal', 'true');
+  });
+
   it("asks the page for its windows: Documents, Shortcuts and the DM's tools", () => {
     page.role = 'DM';
     const openers = table();

@@ -174,7 +174,7 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | **Party** | The campaign's info, the roster with your character's hit point buttons, and **Leave Campaign** |
 | **More** | **Notes**, **Session** (the vibe and past sessions), **Documents** (your DM's rulebooks and handouts) and **Shortcuts** |
 
-Each opens as a sheet over the map. Chat, Dice, Initiative and Party open at half the screen's height, so you can watch the map, and pinch, pan or tap it, while you chat or roll. Tap the bar at the top of the sheet, or drag it up, for the full height. Close it with its **✕**, its button or **Map**, a drag down, or your phone's **Back**.
+Each opens as a sheet over the map. Chat, Dice, Initiative and Party open at half the screen's height, so you can watch the map, and pinch, pan or tap it, while you chat or roll. Tap the bar at the top of the sheet, or drag it up, for the full height. Close it with its **✕**, its button or **Map**, a drag down, or your phone's **Back**. **Back** also closes a window opened over the map, such as a character sheet; its editor asks **Discard Changes?** first if you have changed something.
 
 In **Dice** each roll takes two lines, who rolled it, what for and when over the expression and its dice, with the total beside them in large type, so several fit in the half-height sheet.
 

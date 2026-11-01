@@ -21,12 +21,16 @@ import { BookOpen, Keyboard, Settings } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import type { MenuAction } from '@/components/ui/menu';
 import { TOOL_GROUPS, type SessionToolKey } from '@/components/campaign/SessionToolbar';
-import { SESSION_TAB_LOOKS } from '@/components/campaign/sessionTabs';
+import { SESSION_TABS, SESSION_TAB_LOOKS, type SessionTab } from '@/components/campaign/sessionTabs';
 import { BottomSheet, type SheetEdges } from './BottomSheet';
+import { onTheBar, type BarPanel } from './BottomBar';
 import SheetMenuRows from './SheetMenuRows';
 
-/** The session panels More opens; the bar opens the others. */
-export type MorePanel = 'notes' | 'session';
+/** The session panels More opens: every one the bar has no button for (BAR_PANELS). */
+export type MorePanel = Exclude<SessionTab, BarPanel>;
+
+/** More's session panels, in the rail's order. */
+export const MORE_PANELS: readonly MorePanel[] = SESSION_TABS.filter((tab): tab is MorePanel => !onTheBar(tab));
 
 export interface MoreSheetProps {
   open: boolean;
@@ -37,7 +41,7 @@ export interface MoreSheetProps {
   onOpenTool: (key: SessionToolKey) => void;
   onOpenDocuments: () => void;
   onOpenShortcuts: () => void;
-  /** Open the session sheet on Notes or Session. */
+  /** Open the session sheet on one of More's panels, Notes or Session. */
   onOpenPanel: (panel: MorePanel) => void;
   /** Where the arrangement's sheets stop; see BottomSheet. */
   edges?: SheetEdges;
@@ -76,8 +80,7 @@ export default function MoreSheet({
   const { userRole } = useCampaign();
 
   const atTheTable = [
-    action('notes', SESSION_TAB_LOOKS.notes.label, SESSION_TAB_LOOKS.notes.icon, () => onOpenPanel('notes')),
-    action('session', SESSION_TAB_LOOKS.session.label, SESSION_TAB_LOOKS.session.icon, () => onOpenPanel('session')),
+    ...MORE_PANELS.map((panel) => action(panel, SESSION_TAB_LOOKS[panel].label, SESSION_TAB_LOOKS[panel].icon, () => onOpenPanel(panel))),
     action('documents', 'Documents', BookOpen, onOpenDocuments),
     action('shortcuts', 'Shortcuts', Keyboard, onOpenShortcuts),
   ];

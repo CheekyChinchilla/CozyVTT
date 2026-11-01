@@ -116,8 +116,9 @@ export function settleDrag(dy: number, sheetPx: number, height: SheetHeight, res
  * sheet's root, which holds the focus trap.
  */
 export function useSheet(open: boolean, modal: boolean, onClose: () => void) {
-  // A sheet made full height while open keeps the focus where it is.
-  const rootRef = useFocusTrap(open && modal, onClose, { keepFocusInside: true });
+  // A sheet made full height while open keeps the focus where it is. Back
+  // closes the sheet through its own entry below, not as a dialog's.
+  const rootRef = useFocusTrap(open && modal, onClose, { keepFocusInside: true, closesOnBack: false });
   const close = useEffectEvent(() => onClose());
   const entryRef = useRef<SheetEntry | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);

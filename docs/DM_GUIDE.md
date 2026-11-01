@@ -924,7 +924,7 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 
 | On the desktop | On a phone |
 |---|---|
-| The header's DM toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere**, **Campaign Settings** | **More**, under **DM tools**. Each opens the same panel, which fills the screen |
+| The header's DM toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere**, **Campaign Settings** | **More**, under **DM tools**. Each opens the same panel, which fills the screen; the phone's **Back** closes it |
 | **Campaign documents**, **Keyboard shortcuts** | **More**: **Documents**, **Shortcuts** |
 | The **Session** tab (session controls, the vibe, past sessions) and **Notes** | **More**: **Session**, **Notes** |
 | The left column: **Campaign Info**, the **Campaign Roster**, the **Token Roster** | **Party** |

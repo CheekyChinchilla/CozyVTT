@@ -449,7 +449,8 @@ describe("the browser's Back with a dialog over a sheet", () => {
         </>
       );
     }
-    render(<Sheet height="full" onClose={onSheetClose}><Confirm /></Sheet>);
+    // On the compact layout, where every sheet is; a dialog there holds the entry as a sheet does.
+    render(<LayoutProvider compact><Sheet height="full" onClose={onSheetClose}><Confirm /></Sheet></LayoutProvider>);
     await nextFrame();
     const remove = screen.getByRole('button', { name: 'Remove' });
     remove.focus();

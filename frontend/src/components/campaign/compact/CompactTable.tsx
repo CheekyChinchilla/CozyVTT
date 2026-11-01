@@ -54,17 +54,12 @@ import { SESSION_TAB_LOOKS, type SessionTab } from '@/components/campaign/sessio
 import { SessionPausedBanner } from '@/components/campaign/sessionStatus';
 import { partHoldingFocus, useTableSlot } from '@/components/campaign/tableHosts';
 import { BottomSheet, type SheetEdges, type SheetHeight } from './BottomSheet';
-import BottomBar, { BOTTOM_BAR_HEIGHT, type CompactTab } from './BottomBar';
+import BottomBar, { BAR_PANELS, BOTTOM_BAR_HEIGHT, onTheBar, type BottomBarProps, type CompactTab } from './BottomBar';
 import CompactHeader from './CompactHeader';
 import MoreSheet, { type MorePanel } from './MoreSheet';
 
 /** The arrangement's sheets, of which one at most is open. */
 type CompactSheet = 'session' | 'party' | 'more';
-
-/** The session panels the bar has a button for; More opens the others. */
-const BAR_PANELS = ['chat', 'dice', 'initiative'] as const satisfies readonly SessionTab[];
-
-const onTheBar = (tab: SessionTab): tab is (typeof BAR_PANELS)[number] => BAR_PANELS.some((panel) => panel === tab);
 
 /** How high the session sheet opens on `tab`: Notes and Session, for long reading and writing, at full height. */
 const openingHeight = (tab: SessionTab): SheetHeight => (onTheBar(tab) ? 'half' : 'full');
@@ -127,8 +122,11 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
   const partySheetId = useId();
   const moreSheetId = useId();
 
+  // A panel opens at its own height, a bar panel from Notes or Session
+  // included; between the bar's panels the sheet keeps the height its handle
+  // was given.
   const openSession = (tab: SessionTab) => {
-    if (sheet !== 'session') setSessionHeight(openingHeight(tab));
+    if (sheet !== 'session' || onTheBar(tab) !== onTheBar(sessionTab)) setSessionHeight(openingHeight(tab));
     setSessionTab(tab);
     setSheet('session');
   };
@@ -156,13 +154,16 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
   // Notes or Session is open in the session sheet.
   const expanded: CompactTab | null = sheet === 'session' ? (onTheBar(sessionTab) ? sessionTab : null) : sheet;
 
+  const sheetIds: NonNullable<BottomBarProps['sheetIds']> = { party: partySheetId, more: moreSheetId };
+  for (const panel of BAR_PANELS) sheetIds[panel] = sessionSheetId;
+
   const bar = (
     <BottomBar
       active={active}
       expanded={expanded}
       onSelect={select}
       placement={sideways ? 'header' : 'foot'}
-      sheetIds={{ chat: sessionSheetId, dice: sessionSheetId, initiative: sessionSheetId, party: partySheetId, more: moreSheetId }}
+      sheetIds={sheetIds}
     />
   );
 
