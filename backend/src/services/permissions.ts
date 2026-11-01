@@ -6,6 +6,7 @@ import { getSpiritVisibility, getSpiritVisibilityAcrossCampaigns } from '../util
 import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
 import { escapeLikePattern } from '../utils/likePattern';
 import { sessionLetsPlayersAct } from '../utils/drawingRules';
+import { picturesInSharedDocuments } from './sharedDocumentPictures';
 
 /**
  * Permission Verification Helpers
@@ -287,49 +288,236 @@ export async function canPlaceAssetAtScope(
   return { allowed: true, campaignId };
 }
 
-/**
- * The spirit-layer images a user may not see in the given campaigns: the
- * spirit plane of a map is shown to a player only once they have crossed
- * over (or the DM has opened it to everyone), and the asset library must not
- * hand them the picture the map itself withholds. The DM's campaigns hide
- * nothing. Returns asset ids, for a listing to leave out.
- */
-export async function spiritLayerAssetIdsHiddenFrom(userId: string, campaignIds: string[]): Promise<string[]> {
-  if (campaignIds.length === 0) return [];
-  // In a fixed number of queries however many campaigns: worked out one
-  // campaign at a time, a player in many made the asset list run hundreds.
-  const sees = await getSpiritVisibilityAcrossCampaigns(userId, campaignIds);
-  const hiddenIn = [...sees].filter(([, visible]) => !visible).map(([campaignId]) => campaignId);
-  if (hiddenIn.length === 0) return [];
-  const maps = await prisma.map.findMany({
-    where: { campaignId: { in: hiddenIn }, spiritLayerUrl: { not: null } },
-    select: { spiritLayerUrl: true },
-  });
-  return maps.map((map) => extractAssetId(map.spiritLayerUrl)).filter((id): id is string => id !== null);
+/** A map's picture addresses: all the map-picture rule reads of a map. */
+const MAP_PICTURES_SELECT = {
+  id: true, imageUrl: true, baseLayerUrl: true, spiritLayerUrl: true,
+} as const satisfies Prisma.MapSelect;
+type MapPictures = Prisma.MapGetPayload<{ select: typeof MAP_PICTURES_SELECT }>;
+
+/** What the map-picture rule knows of one campaign, for one member who is not its DM. */
+export interface CampaignMapPictures {
+  /** Every asset a map of the campaign names as its picture, base layer or spirit layer. */
+  named: ReadonlySet<string>;
+  /** Those the current map shows this member: its picture and base layer, and its spirit layer if they see that plane. */
+  shown: ReadonlySet<string>;
+  /** Pictures a document shared with the campaign embeds: the DM chose to show them to its members. */
+  inSharedDocuments: ReadonlySet<string>;
+  /**
+   * Pictures a map at another of the member's tables shows them (picturesAtTables),
+   * each with everyone who sits at a table showing it.
+   */
+  atOtherTables: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
-/** Whether `assetId` is a spirit-layer image of a map in `campaignId` that `userId` may not see there. */
-async function spiritLayerHidesAsset(assetId: string, campaignId: string, userId: string): Promise<boolean> {
-  const asSpiritLayer = await prisma.map.findFirst({
-    where: { campaignId, spiritLayerUrl: { contains: assetId } },
-    select: { id: true },
+/**
+ * The pictures of a campaign's maps as one member who is not its DM sees
+ * them. `maps` may be every map of the campaign or only those naming the
+ * assets in question: a map that names none of them changes no answer.
+ * Addresses are read with extractAssetId, the reader the write routes check
+ * an address with before storing it.
+ */
+export function campaignMapPictures(
+  maps: readonly MapPictures[],
+  currentMapId: string | null,
+  seesSpiritPlane: boolean
+): Pick<CampaignMapPictures, 'named' | 'shown'> {
+  const named = new Set<string>();
+  const shown = new Set<string>();
+  for (const map of maps) {
+    const picture = extractAssetId(map.imageUrl);
+    const base = extractAssetId(map.baseLayerUrl);
+    const spirit = extractAssetId(map.spiritLayerUrl);
+    for (const id of [picture, base, spirit]) if (id) named.add(id);
+    if (map.id !== currentMapId) continue;
+    for (const id of [picture, base, seesSpiritPlane ? spirit : null]) if (id) shown.add(id);
+  }
+  return { named, shown };
+}
+
+/**
+ * Whether a campaign asset is kept from a member of that campaign who is not
+ * its DM: a player or a spectator. A map's picture, base layer or spirit
+ * layer, and a map picture no map uses yet, is theirs to see only while a
+ * table they sit at is on a map that shows it to them, and anything they
+ * uploaded themselves always. Token art and every other asset are left alone.
+ *
+ * "A table they sit at" is the picture's own campaign's, and any other of
+ * theirs whose current map shows it, while the picture's uploader sits there
+ * too: as for a member of that campaign alone (assetUsedInUserCampaign), the
+ * uploader's presence is what keeps a campaign of one's own from opening
+ * someone else's picture. A picture embedded in a document shared with the
+ * picture's campaign shows to its members as well, as the handout does.
+ *
+ * The one rule for the asset list and for reading an asset, so a member is
+ * listed a picture exactly when it opens for them. Final for a member:
+ * nothing else they can point at opens it, since a player could set their
+ * character's picture to a map's while the table was there and keep it after
+ * the table left. Only maps, which the DM alone sets, and the DM's shared
+ * documents count.
+ */
+export function mapPictureHidden(
+  asset: Pick<AssetAccessFacts, 'id' | 'type' | 'uploadedById'>,
+  viewerId: string,
+  pictures: CampaignMapPictures
+): boolean {
+  if (asset.uploadedById === viewerId) return false;
+  if (pictures.shown.has(asset.id) || pictures.inSharedDocuments.has(asset.id)) return false;
+  if (asset.uploadedById !== null && pictures.atOtherTables.get(asset.id)?.has(asset.uploadedById)) return false;
+  return asset.type === 'MAP' || pictures.named.has(asset.id);
+}
+
+/** The facts read of a user's tables: their campaigns, their maps and which spirit planes they see. */
+interface Tables {
+  memberships: ReadonlyArray<{ campaignId: string; role: CampaignRole }>;
+  currentMapOf: ReadonlyMap<string, string | null>;
+  maps: ReadonlyArray<MapPictures & { campaignId: string }>;
+  seesSpirit: ReadonlyMap<string, boolean>;
+}
+
+/**
+ * For each picture a table the user sits at is on, the campaigns whose
+ * table it is: the current map of each of their campaigns, the ones they
+ * run included, with its spirit layer only where they see that plane (a DM
+ * always does). A map a table is not on counts for nothing, so a picture is
+ * not kept by putting it on a map of one's own.
+ */
+function picturesOnTables(tables: Tables): Map<string, Set<string>> {
+  const runs = new Set(tables.memberships.filter((m) => m.role === 'DM').map((m) => m.campaignId));
+  const showing = new Map<string, Set<string>>();
+  for (const map of tables.maps) {
+    if (tables.currentMapOf.get(map.campaignId) !== map.id) continue;
+    const spiritShown = runs.has(map.campaignId) || tables.seesSpirit.get(map.campaignId) === true;
+    const ids = [extractAssetId(map.imageUrl), extractAssetId(map.baseLayerUrl), spiritShown ? extractAssetId(map.spiritLayerUrl) : null];
+    for (const id of ids) {
+      if (!id) continue;
+      const campaigns = showing.get(id) ?? new Set<string>();
+      campaigns.add(map.campaignId);
+      showing.set(id, campaigns);
+    }
+  }
+  return showing;
+}
+
+/** picturesOnTables, with each picture's campaigns turned into everyone who sits at them. */
+async function picturesAtTables(tables: Tables): Promise<Map<string, Set<string>>> {
+  const showing = picturesOnTables(tables);
+  const campaignIds = [...new Set([...showing.values()].flatMap((c) => [...c]))];
+  const seated = campaignIds.length === 0
+    ? []
+    : await prisma.campaignMembership.findMany({ where: { campaignId: { in: campaignIds } }, select: { campaignId: true, userId: true } });
+  const membersOf = new Map<string, Set<string>>();
+  for (const seat of seated) membersOf.set(seat.campaignId, (membersOf.get(seat.campaignId) ?? new Set<string>()).add(seat.userId));
+  const result = new Map<string, Set<string>>();
+  for (const [assetId, campaigns] of showing) {
+    result.set(assetId, new Set([...campaigns].flatMap((c) => [...(membersOf.get(c) ?? [])])));
+  }
+  return result;
+}
+
+/**
+ * A user's tables: their campaigns and those campaigns' maps, or only the
+ * maps naming `onlyAssetId`, with the spirit planes they see. The spirit
+ * planes are read only where a map is read.
+ */
+async function tablesOf(userId: string, onlyAssetId?: string): Promise<Tables> {
+  const memberships = await prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } });
+  const campaignIds = memberships.map((m) => m.campaignId);
+  if (campaignIds.length === 0) return { memberships, currentMapOf: new Map(), maps: [], seesSpirit: new Map() };
+  const naming: Prisma.MapWhereInput = onlyAssetId === undefined ? {} : {
+    OR: [
+      { imageUrl: { contains: onlyAssetId } },
+      { baseLayerUrl: { contains: onlyAssetId } },
+      { spiritLayerUrl: { contains: onlyAssetId } },
+    ],
+  };
+  const [campaigns, maps] = await Promise.all([
+    prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, currentMapId: true } }),
+    prisma.map.findMany({ where: { AND: [{ campaignId: { in: campaignIds } }, naming] }, select: { ...MAP_PICTURES_SELECT, campaignId: true } }),
+  ]);
+  const withMaps = [...new Set(maps.map((m) => m.campaignId))];
+  const seesSpirit = withMaps.length === 0 ? new Map<string, boolean>() : await getSpiritVisibilityAcrossCampaigns(userId, withMaps);
+  return { memberships, currentMapOf: new Map(campaigns.map((c) => [c.id, c.currentMapId])), maps, seesSpirit };
+}
+
+/**
+ * The campaign assets the map-picture rule keeps from this user in the given
+ * campaigns, all of them ones where the user is a member who is not the DM.
+ * Returns asset ids, for a listing to leave out. In a fixed number of
+ * queries however many campaigns: worked out one campaign at a time, a
+ * player in many made the asset list run hundreds.
+ */
+export async function mapPictureAssetIdsHiddenFrom(userId: string, campaignIds: string[]): Promise<string[]> {
+  const ids = [...new Set(campaignIds)];
+  if (ids.length === 0) return [];
+  const tables = await tablesOf(userId);
+  const own = new Map(ids.map((campaignId) => [campaignId, campaignMapPictures(
+    tables.maps.filter((m) => m.campaignId === campaignId),
+    tables.currentMapOf.get(campaignId) ?? null,
+    tables.seesSpirit.get(campaignId) === true
+  )]));
+  const named = [...new Set([...own.values()].flatMap((p) => [...p.named]))];
+  const candidates = await prisma.asset.findMany({
+    where: { scope: 'CAMPAIGN', campaignId: { in: ids }, OR: [{ type: 'MAP' }, { id: { in: named } }] },
+    select: { id: true, type: true, uploadedById: true, campaignId: true },
   });
-  if (!asSpiritLayer) return false;
-  // Shown openly on the map the campaign is showing: nothing to keep. A
-  // prepared map does not count, since a player is not sent it at all.
-  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
-  const asBaseLayer = campaign?.currentMapId
-    ? await prisma.map.findFirst({
-        where: {
-          id: campaign.currentMapId,
-          campaignId,
-          OR: [{ imageUrl: { contains: assetId } }, { baseLayerUrl: { contains: assetId } }],
-        },
-        select: { id: true },
-      })
-    : null;
-  if (asBaseLayer) return false;
-  return !(await getSpiritVisibility(campaignId, userId));
+  // The shared documents are asked about the candidates alone.
+  const [atOtherTables, documents] = await Promise.all([
+    picturesAtTables(tables),
+    picturesInSharedDocuments(ids, new Set(candidates.map((a) => a.id))),
+  ]);
+  const picturesIn = new Map([...own].map(([campaignId, pictures]): [string, CampaignMapPictures] => [campaignId, {
+    ...pictures,
+    inSharedDocuments: documents.get(campaignId) ?? new Set(),
+    atOtherTables,
+  }]));
+  return candidates
+    .filter((asset) => {
+      const pictures = asset.campaignId ? picturesIn.get(asset.campaignId) : undefined;
+      return pictures !== undefined && mapPictureHidden(asset, userId, pictures);
+    })
+    .map((asset) => asset.id);
+}
+
+/**
+ * The same rule for one asset of `campaignId`, read by a member who is not
+ * its DM. One query when no map names the asset (token art, a picture not
+ * yet on a map) and the rule shows it; the user's other tables and the
+ * campaign's shared documents are read only for a picture the campaign's own
+ * table keeps from them.
+ */
+async function mapPictureHiddenInCampaign(
+  asset: Pick<AssetAccessFacts, 'id' | 'type' | 'uploadedById'>,
+  campaignId: string,
+  userId: string
+): Promise<boolean> {
+  // Narrowed by the database to the maps whose addresses mention the id;
+  // campaignMapPictures then reads each address exactly.
+  const maps = await prisma.map.findMany({
+    where: {
+      campaignId,
+      OR: [
+        { imageUrl: { contains: asset.id } },
+        { baseLayerUrl: { contains: asset.id } },
+        { spiritLayerUrl: { contains: asset.id } },
+      ],
+    },
+    select: MAP_PICTURES_SELECT,
+  });
+  let currentMapId: string | null = null;
+  let seesSpiritPlane = false;
+  if (maps.length > 0) {
+    currentMapId = (await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }))?.currentMapId ?? null;
+    if (maps.some((m) => m.id === currentMapId && m.spiritLayerUrl)) {
+      seesSpiritPlane = await getSpiritVisibility(campaignId, userId);
+    }
+  }
+  const own = campaignMapPictures(maps, currentMapId, seesSpiritPlane);
+  if (!mapPictureHidden(asset, userId, { ...own, inSharedDocuments: new Set(), atOtherTables: new Map() })) return false;
+  const [documents, atOtherTables] = await Promise.all([
+    picturesInSharedDocuments([campaignId], new Set([asset.id])),
+    tablesOf(userId, asset.id).then(picturesAtTables),
+  ]);
+  return mapPictureHidden(asset, userId, { ...own, inSharedDocuments: documents.get(campaignId) ?? new Set(), atOtherTables });
 }
 
 /**
@@ -479,6 +667,7 @@ async function assetUsedInUserCampaign(
 /** The asset fields the read decision depends on. */
 export interface AssetAccessFacts {
   id: string;
+  type: AssetType;
   scope: AssetScope;
   uploadedById: string | null;
   campaignId: string | null;
@@ -515,7 +704,7 @@ export async function canReadAsset(
       where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
     });
     if (membership?.role === 'DM') return true;
-    if (membership) return !(await spiritLayerHidesAsset(asset.id, asset.campaignId, userId));
+    if (membership) return !(await mapPictureHiddenInCampaign(asset, asset.campaignId, userId));
     // Scoped to one campaign, but a map in another may point at it.
     if (await assetUsedInUserCampaign(asset.id, userId, asset.uploadedById)) return true;
     return documentSharedWithUser(asset.id, userId);
@@ -619,7 +808,7 @@ export async function canReadAssetById(
 ): Promise<boolean> {
   const asset = await prisma.asset.findUnique({
     where: { id: assetId },
-    select: { id: true, scope: true, uploadedById: true, campaignId: true },
+    select: { id: true, type: true, scope: true, uploadedById: true, campaignId: true },
   });
   if (!asset) return false;
   return canReadAsset(asset, userId, isAdmin);
@@ -657,7 +846,7 @@ export async function canReferenceAsset(
   if (!assetId) return true;
   const asset = await prisma.asset.findUnique({
     where: { id: assetId },
-    select: { id: true, scope: true, uploadedById: true, campaignId: true },
+    select: { id: true, type: true, scope: true, uploadedById: true, campaignId: true },
   });
   if (!asset) return true;
   // TODO(assets): the asset's type is not read here, so a token's picture can

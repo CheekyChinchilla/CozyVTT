@@ -62,7 +62,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const facts = (id: string) => ({ id, scope: 'USER' as const, uploadedById: ownerId, campaignId: null });
+const facts = (id: string) => ({ id, type: 'TOKEN' as const, scope: 'USER' as const, uploadedById: ownerId, campaignId: null });
 
 it('grants the DM a picture a token on one of their maps uses', async () => {
   expect(await canReadAsset(facts(usedId), dmId, false)).toBe(true);

@@ -19,6 +19,7 @@ import path from 'path';
 import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { storedFilePath } from '../utils/storedPath';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import { readTokens, readJsonObject } from '../utils/prisma-json';
 import { extractAssetId } from '../utils/asset-urls';
@@ -85,7 +86,7 @@ async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<
   if (!(await canReadAsset(asset, viewer.userId, viewer.isAdmin))) return null;
 
   // asset.filePath is stored as a relative path from the project root (e.g. "uploads/maps/...")
-  const fullPath = path.resolve(asset.filePath.replace(/\\/g, '/'));
+  const fullPath = storedFilePath(asset.filePath);
   if (!fs.existsSync(fullPath)) {
     logger.warn('Asset file not found on disk', { assetId, filePath: asset.filePath, resolvedPath: fullPath });
     return null;

@@ -31,7 +31,7 @@ async function orphanBy(uploadedById: string) {
       filename: `orphan-${randomUUID()}.png`, originalName: 'lair.png', mimeType: 'image/png', fileSize: 1,
       filePath: `/nowhere/orphan-${randomUUID()}.png`, name: 'Boss lair', tags: [],
     },
-    select: { id: true, scope: true, uploadedById: true, campaignId: true },
+    select: { id: true, type: true, scope: true, uploadedById: true, campaignId: true },
   });
 }
 

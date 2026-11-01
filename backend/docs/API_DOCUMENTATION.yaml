@@ -5596,9 +5596,18 @@ paths:
         campaigns is not listed, though the file routes serve it to them.
 
         For anyone but a platform admin, and for an admin who sends
-        `usable=true` without `campaignId`, a spirit-layer image of a map in
-        a campaign where the caller is not the DM, and whose spirit plane is
-        still closed to them, is left out.
+        `usable=true` without `campaignId`, a campaign's map pictures are
+        left out where the caller is a member who is not the DM (a player or
+        a spectator): a CAMPAIGN asset that a map of its campaign names as
+        its image, base layer or spirit layer, and any MAP asset of the
+        campaign, unless a map they may read shows it to them (see
+        `GET /api/assets/maps/{id}`), a document its campaign's DM shared
+        with the campaign embeds it, or they uploaded it. This is the read rule of the file
+        routes, so such a member is listed an asset exactly when its read
+        answers 200. Token art and other assets are listed as before. A
+        platform admin is otherwise held to none of this: with no
+        `campaignId` and no `usable=true` they are listed every asset on the
+        instance, and with `campaignId` every asset of that campaign.
 
         A `type` or `scope` outside its enum, or either sent more than once,
         answers 400. A `page` below 1, or one that is not a number, is
@@ -5953,7 +5962,7 @@ paths:
       description: >-
         Decided by the same read rule as the file-serving routes below, so a
         caller who may load the file may read its details: its uploader, an
-        admin, a member of its campaign (with the spirit-layer check for a
+        admin, a member of its campaign (with the map-picture check for a
         non-DM member), or a member of a campaign that uses it (a DM's
         personal map the table is showing, a token's art, a document shared
         with the campaign, the atmosphere track); GLOBAL to anyone signed in.
@@ -6578,10 +6587,22 @@ paths:
 
         - a platform admin may read any asset;
         - GLOBAL: anyone signed in;
-        - CAMPAIGN: any member of that campaign, except that a non-DM member
-          is refused a spirit-layer image of one of its maps while the spirit
-          plane is closed to them (unless the same image is a layer of the
-          map the campaign is showing);
+        - CAMPAIGN: any member of that campaign, except that a member who is
+          not the DM (a player or a spectator) is refused the campaign's map
+          pictures: an asset a map of the campaign names as its image, base
+          layer or spirit layer, and any MAP asset of the campaign. Such a
+          picture is readable to them only while one of these shows it: the
+          campaign's current map (as its image or base layer, or as its
+          spirit layer while the spirit plane is open to them); the current
+          map of another campaign they are a member of, played in or run,
+          with the same spirit rule, while the asset's uploader is a member
+          of that campaign too; or a plain text or Markdown document of the
+          asset's campaign (shared with it, or written or uploaded in it)
+          that its current DM uploaded, whose first 1 MiB names the asset
+          (`/api/assets/<kind>/<id>`, among its first 200 such addresses).
+          One they uploaded is always readable. For such a member this is final: no
+          other use of the asset (a character's picture, a token, a
+          template) opens it;
         - USER: its uploader.
 
         Beyond its scope, an asset is readable by someone who shares a

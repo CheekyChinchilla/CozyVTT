@@ -7,6 +7,7 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { positiveIntegerFromEnv } from '../config/env';
 import { createTurnQueue } from '../utils/turnQueue';
+import { storedFilePath } from '../utils/storedPath';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import {
@@ -26,7 +27,7 @@ import {
   TYPED_DOCUMENT_MIME,
 } from '../validators/documents';
 import {
-  canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, mayChangeAsset, spiritLayerAssetIdsHiddenFrom,
+  canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, mayChangeAsset, mapPictureAssetIdsHiddenFrom,
   assetChangeFactsFor,
 } from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
@@ -79,14 +80,6 @@ export const uploadLimiter = rateLimit({
   },
 });
 
-/**
- * Normalize a stored file path for cross-platform compatibility.
- * Converts Windows backslashes to forward slashes so paths recorded during
- * local Windows development (npm run dev) resolve correctly in Linux Docker.
- */
-function normalizePath(filePath: string): string {
-  return path.resolve(filePath.replace(/\\/g, '/'));
-}
 
 /**
  * What a client is told about an asset. Selected, not included: where a file
@@ -231,22 +224,35 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       where.scope = scope;
     }
 
+    // Conditions that must all hold, each with an OR of its own: the search
+    // and the map pictures kept from a member.
+    const conditions: Prisma.AssetWhereInput[] = [];
+
     // Search: a name in part, matched as typed (a % or _ in it is not a
     // wildcard), or a tag whole, whatever its case. Tags are kept as typed and
     // Prisma matches an array's items by exact case, so the spellings of the
     // tag in use are looked up first (Dragon, dragon), a handful at most, and
     // matched as they are; the visibility rules below then apply as to any
-    // filter. In AND, as those rules use OR and id.
+    // filter. In AND, as those rules use OR.
     if (search) {
       const spellings = await prisma.$queryRaw<Array<{ tag: string }>>`
         SELECT DISTINCT tag FROM "Asset", unnest(tags) AS tag WHERE lower(tag) = lower(${search})`;
-      where.AND = [{
+      conditions.push({
         OR: [
           { name: { contains: escapeLikePattern(search), mode: 'insensitive' } },
           ...(spellings.length > 0 ? [{ tags: { hasSome: spellings.map((row) => row.tag) } }] : []),
         ],
-      }];
+      });
     }
+
+    // A map's pictures are kept from a member who is not the DM until the
+    // table is on a map showing them (mapPictureHidden, the rule the read
+    // asks too). Only campaign assets: a member's own personal upload is
+    // theirs wherever it is used.
+    const hideMapPictures = async (memberCampaignIds: string[]) => {
+      const hidden = await mapPictureAssetIdsHiddenFrom(userId, memberCampaignIds);
+      if (hidden.length > 0) conditions.push({ OR: [{ scope: { not: 'CAMPAIGN' } }, { id: { notIn: hidden } }] });
+    };
 
     // Campaign filter
     const isAdmin = req.session.platformRole === 'ADMIN';
@@ -258,7 +264,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     }
 
     if (campaignId) {
-      // Admin bypasses membership check
+      // Admin bypasses membership check, and is shown the whole library.
       if (!isAdmin) {
         const membership = await prisma.campaignMembership.findUnique({
           where: {
@@ -275,13 +281,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
             message: 'You do not have access to this campaign',
           });
         }
+        if (membership.role !== 'DM') await hideMapPictures([campaignId]);
       }
 
       where.campaignId = campaignId;
-      if (!isAdmin) {
-        const hidden = await spiritLayerAssetIdsHiddenFrom(userId, [campaignId]);
-        if (hidden.length > 0) where.id = { notIn: hidden };
-      }
     } else if (!isAdmin || usable === 'true') {
       // Non-admin: enforce three-scope visibility rules. So for an admin who
       // asks for what they may use (`usable=true`, the map and token picture
@@ -289,19 +292,19 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       // anything else on the instance would be offered and then refused.
       const userMemberships = await prisma.campaignMembership.findMany({
         where: { userId },
-        select: { campaignId: true },
+        select: { campaignId: true, role: true },
       });
 
-      const campaignIds = userMemberships.map((m: { campaignId: string }) => m.campaignId);
+      const campaignIds = userMemberships.map((m) => m.campaignId);
 
       where.OR = [
         { scope: 'GLOBAL' },                          // Platform-wide assets
         { scope: 'USER', uploadedById: userId },       // User's own personal assets
         ...campaignIds.map((cId: string) => ({ scope: 'CAMPAIGN' as const, campaignId: cId })), // Campaign assets
       ];
-      const hidden = await spiritLayerAssetIdsHiddenFrom(userId, campaignIds);
-      if (hidden.length > 0) where.id = { notIn: hidden };
+      await hideMapPictures(userMemberships.filter((m) => m.role !== 'DM').map((m) => m.campaignId));
     }
+    if (conditions.length > 0) where.AND = conditions;
     // Admin with no campaignId: no OR filter — sees all assets across all scopes/users
 
     // Get total count for pagination
@@ -648,6 +651,13 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
 
     // Scope-based permission matrix, shared with the scope move and the
     // document editor (mayChangeAsset).
+    // TODO(assets): an uploader who is still a member may change a campaign
+    // asset (mayChangeAsset), so a DM who handed the seat over can, as a
+    // player, delete with force=true, or move out of the campaign with
+    // PATCH /:id/scope, a picture they uploaded that the new DM's maps use, a
+    // prepared map's included; and the 409 without force tells them some
+    // map uses it. A picture one of the campaign's maps uses should be the
+    // campaign's DM's alone to delete or move.
     if (!(await mayChangeAsset(asset, userId, isAdmin))) {
       // One the caller may not even read is answered as if it were not there.
       if (!(await canReadAssetFile(asset, req))) {
@@ -746,7 +756,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const downloadPath = normalizePath(asset.filePath);
+    const downloadPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(downloadPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -885,7 +895,7 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
       });
     }
 
-    const documentPath = normalizePath(asset.filePath);
+    const documentPath = storedFilePath(asset.filePath);
     const bytes = Buffer.from(parsed.data.content, 'utf8');
 
     // One save of a document at a time, its file and its recorded size
@@ -1025,7 +1035,7 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
     }
 
-    const documentPath = normalizePath(asset.filePath);
+    const documentPath = storedFilePath(asset.filePath);
     let stat: fs.Stats;
     try {
       stat = await fs.promises.stat(documentPath);
@@ -1112,7 +1122,7 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const mapPath = normalizePath(asset.filePath);
+    const mapPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(mapPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -1158,7 +1168,7 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const tokenPath = normalizePath(asset.filePath);
+    const tokenPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(tokenPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -1194,12 +1204,12 @@ function serveThumbnail(type: 'MAP' | 'TOKEN', notFound: string, label: string) 
       if (!asset || !(await canReadAssetFile(asset, req))) {
         return res.status(404).json({ error: 'Not Found', message: notFound });
       }
-      const thumbnail = asset.thumbnailPath ? normalizePath(asset.thumbnailPath) : null;
+      const thumbnail = asset.thumbnailPath ? storedFilePath(asset.thumbnailPath) : null;
       if (thumbnail && fs.existsSync(thumbnail)) {
         if (handleAssetCaching(req, res, `${asset.id}-thumbnail`)) return;
         return sendImageAsset(res, thumbnail);
       }
-      const full = normalizePath(asset.filePath);
+      const full = storedFilePath(asset.filePath);
       if (!fs.existsSync(full)) {
         return res.status(404).json({ error: 'Not Found', message: 'Asset file not found on server' });
       }
@@ -1243,7 +1253,7 @@ router.get('/audio/:id', authenticated, async (req: AuthenticatedRequest, res: R
     }
 
     // Check the file exists (normalize path for cross-platform compatibility)
-    const audioPath = normalizePath(asset.filePath);
+    const audioPath = storedFilePath(asset.filePath);
     const stat = await fs.promises.stat(audioPath).catch(() => null);
     if (!stat?.isFile()) {
       return res.status(404).json({
@@ -1350,7 +1360,7 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const avatarPath = normalizePath(asset.filePath);
+    const avatarPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(avatarPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -1463,7 +1473,8 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     if (!isAdmin) {
       // Moving out of where it is: whoever may delete it there. A global asset
       // manager moving another manager's global asset out of the library
-      // would take it from every DM, which deleting it forbids.
+      // would take it from every DM, which deleting it forbids. (A former
+      // DM's old campaign pictures: see the TODO(assets) at DELETE /:id.)
       if (!(await mayChangeAsset(asset, userId, false))) {
         return res.status(403).json({ error: 'Forbidden', message: MOVE_REFUSALS[asset.scope] });
       }

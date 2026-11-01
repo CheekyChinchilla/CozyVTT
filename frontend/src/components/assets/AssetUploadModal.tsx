@@ -41,7 +41,7 @@ interface AssetUploadModalProps {
 /** What each choice means, under it, when the dialog offers `campaignOption`. */
 const CAMPAIGN_OPTION_CHOICES = [
   { scope: AssetScope.USER, icon: User, label: 'Personal', hint: 'Players see it once its map is on screen, while you are in the campaign.' },
-  { scope: AssetScope.CAMPAIGN, icon: Users, label: 'Campaign', hint: 'Everyone in the campaign can browse it now, and it stays if you leave.' },
+  { scope: AssetScope.CAMPAIGN, icon: Users, label: 'Campaign', hint: 'Players see it once its map is on screen, and it stays if you leave.' },
 ] as const;
 
 /**
@@ -304,7 +304,11 @@ export default function AssetUploadModal({
     // of your campaigns points at this asset, that campaign's members can see
     // it — otherwise players got a blank battlemap and placeholder token art.
     [AssetScope.USER]: 'Yours, and usable in all your campaigns. Anyone in a campaign can see it once you use it there.',
-    [AssetScope.CAMPAIGN]: 'Shared with all members of the selected campaign.',
+    // A map picture is kept from players until the table is on a map using
+    // it, wherever it is filed.
+    [AssetScope.CAMPAIGN]: assetType === AssetType.MAP
+      ? 'Shared with the selected campaign. Players see it once a map using it is on screen.'
+      : 'Shared with all members of the selected campaign.',
     [AssetScope.GLOBAL]: 'Available to all users across all campaigns on this platform.',
   };
 
