@@ -28,11 +28,12 @@ import api from '@/services/api';
 import campaignService from '@/services/campaign.service';
 import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { CampaignRole } from '@/types';
 import type { CampaignMembership, CampaignInvitationSummary } from '@/types';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { apiErrorMessage } from '@/utils/errors';
-import { isCampaignOwner } from '@/utils/campaignRoles';
+import { CAMPAIGN_ROLE_LABEL, isCampaignOwner } from '@/utils/campaignRoles';
 import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 interface CampaignSettingsModalProps {
@@ -89,6 +90,8 @@ export default function CampaignSettingsModal({
   // ── Members ──────────────────────────────────
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<CampaignMembership | null>(null);
+  // What Remove's question calls the member asked about.
+  const removingRole = memberToRemove ? CAMPAIGN_ROLE_LABEL[memberToRemove.role] : CAMPAIGN_ROLE_LABEL[CampaignRole.PLAYER];
   const [memberToPromote, setMemberToPromote] = useState<CampaignMembership | null>(null);
   const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -217,7 +220,7 @@ export default function CampaignSettingsModal({
     try {
       await api.removeCampaignMember(campaign.id, memberToRemove.userId);
       await refreshCampaign();
-      showToast('Player removed from campaign', 'success');
+      showToast(`${CAMPAIGN_ROLE_LABEL[memberToRemove.role]} removed from campaign`, 'success');
     } catch (err) {
       showToast(apiErrorMessage(err) ?? 'Failed to remove member', 'error');
     } finally {
@@ -792,11 +795,11 @@ export default function CampaignSettingsModal({
         </div>
       </SlideOver>
 
-      {/* Remove member confirm dialog */}
+      {/* Remove member confirm dialog, named for the member's role */}
       <ConfirmDialog
         isOpen={!!memberToRemove}
-        title="Remove Player"
-        message={`Remove ${memberToRemove?.user?.displayName ?? 'this player'} from "${campaign.name}"? They will lose access to the campaign immediately.`}
+        title={`Remove ${removingRole}`}
+        message={`Remove ${memberToRemove?.user?.displayName ?? `this ${removingRole.toLowerCase()}`} from "${campaign.name}"? They will lose access to the campaign immediately.`}
         confirmLabel="Remove"
         cancelLabel="Cancel"
         variant="danger"

@@ -25,6 +25,7 @@
 
 import { CampaignRole } from '@/types';
 import type { CampaignMembership, Character } from '@/types';
+import { CAMPAIGN_ROLE_LABEL } from '@/utils/campaignRoles';
 
 /** A member someone may whisper to, with the name the chat shows for them. */
 export interface WhisperTarget {
@@ -34,11 +35,6 @@ export interface WhisperTarget {
   displayName: string;
 }
 
-const ROLE_LABEL: Record<CampaignRole, string> = {
-  [CampaignRole.DM]: 'DM',
-  [CampaignRole.PLAYER]: 'Player',
-  [CampaignRole.SPECTATOR]: 'Spectator',
-};
 
 /** The day a member joined, short, as the browser writes dates: "3 Oct" or "Oct 3". */
 export function joinedDay(joinedAt: string): string {
@@ -77,7 +73,7 @@ export function whisperTargets(memberships: readonly CampaignMembership[], chara
   for (const group of equalGroups(all, (l) => l.displayName)) {
     for (const l of group) {
       const m = l.membership;
-      l.parts.push(ROLE_LABEL[m.role]);
+      l.parts.push(CAMPAIGN_ROLE_LABEL[m.role]);
       if (m.role === CampaignRole.PLAYER) {
         const characterId = m.characterIds.find((id) => characters.some((c) => c.id === id && c.userId === m.userId));
         const character = characters.find((c) => c.id === characterId);
