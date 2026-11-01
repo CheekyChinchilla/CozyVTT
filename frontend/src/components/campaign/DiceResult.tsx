@@ -75,8 +75,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
 
   // Color scheme based on result type
   const getResultColor = () => {
-    if (isCriticalSuccess) return 'text-success-ink dark:text-success-ink';
-    if (isCriticalFail) return 'text-danger-ink dark:text-danger-ink';
+    if (isCriticalSuccess) return 'text-success-ink';
+    if (isCriticalFail) return 'text-danger-ink';
     return 'text-ink';
   };
 
@@ -87,8 +87,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
   };
 
   const getBgColor = () => {
-    if (isCriticalSuccess) return 'bg-success/10 dark:bg-success/20';
-    if (isCriticalFail) return 'bg-danger/10 dark:bg-danger/20';
+    if (isCriticalSuccess) return 'bg-success/10';
+    if (isCriticalFail) return 'bg-danger/10';
     return isCurrentUser
       ? 'bg-moss-green/10'
       : 'bg-surface/30';
@@ -277,8 +277,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
                             className={`
                               font-mono text-xs px-1 rounded
                               ${!isKept ? 'line-through opacity-40' : ''}
-                              ${isCrit20 ? 'bg-success/15 text-success-ink dark:text-success-ink font-bold' : ''}
-                              ${isCrit1 ? 'bg-danger/15 text-danger-ink dark:text-danger-ink font-bold' : ''}
+                              ${isCrit20 ? 'bg-success/15 text-success-ink font-bold' : ''}
+                              ${isCrit1 ? 'bg-danger/15 text-danger-ink font-bold' : ''}
                             `}
                           >
                             {r}
@@ -315,8 +315,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
           transition={{ duration: 0.3, delay: 0.2 }}
           className={`
             mt-2 pt-2 border-t text-center text-sm font-bold
-            ${isCriticalSuccess ? 'text-success-ink dark:text-success-ink border-success/20' : ''}
-            ${isCriticalFail ? 'text-danger-ink dark:text-danger-ink border-danger/20' : ''}
+            ${isCriticalSuccess ? 'text-success-ink border-success/20' : ''}
+            ${isCriticalFail ? 'text-danger-ink border-danger/20' : ''}
           `}
         >
           {isCriticalSuccess && '🎉 CRITICAL SUCCESS!'}

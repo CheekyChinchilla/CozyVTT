@@ -66,9 +66,9 @@ If you become a collaborator, here's what the codebase expects:
 
 ### Styling and themes
 
-CozyVTT ships 16 themes, including four dark ones, plus user-defined custom colors. Two rules keep
-every screen working across all of them. The first is enforced by a test, so breaking it fails the
-build; nothing checks the second, so it falls to you and the review:
+CozyVTT ships 16 themes, including four dark ones, plus user-defined custom colors. Three rules keep
+every screen working across all of them, and `utils/__tests__/themeTokens.test.ts` enforces each, so
+breaking one fails the build:
 
 - **Never use a raw Tailwind palette color** (`bg-red-50`, `text-stone-500`, `text-blue-600`) in
   themed UI. They keep their light-mode appearance on dark themes. Use the semantic tokens —
@@ -77,11 +77,14 @@ build; nothing checks the second, so it falls to you and the review:
 - **Use the `-ink` variant when the color is text**: `text-danger-ink`, not `text-danger`;
   `text-brand-ink`, not `text-moss-green`. The plain token is a fill (buttons, borders, tints); the
   `-ink` version is derived per theme to stay above WCAG AA against that theme's backgrounds.
+- **Never use Tailwind's `dark:` variant.** It follows the computer's light or dark setting, which
+  the app's theme does not set, so a light theme on a computer set to dark would draw those classes
+  dark. The tokens already follow the theme.
 
-Two areas are deliberately exempt and listed in `utils/__tests__/themeTokens.test.ts`: the character
-sheets (styled as light "paper" cards, matching the physical sheets) and the dark tool panels that
-float over the map, the DM's and the drawing tools. If you add UI there, check its contrast by hand — exempt from theming is not
-exempt from being readable.
+Two areas are deliberately exempt from the first rule and listed in that test: the dark tool panels
+that float over the map, the DM's and the drawing tools, and each character sheet's header colour
+presets (`colorPresets.ts`), which are the player's choice and not the theme's. If you add UI there,
+check its contrast by hand — exempt from theming is not exempt from being readable.
 
 See [ARCHITECTURE.md → Theming](ARCHITECTURE.md#theming) for the full token list.
 

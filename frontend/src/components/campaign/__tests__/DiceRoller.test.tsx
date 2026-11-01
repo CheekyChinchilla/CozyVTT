@@ -10,6 +10,8 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import type { DiceRolledEvent } from '@/types';
+import { PRESET_THEMES, deriveReadableTokens, type ThemeColors } from '@/themes';
+import { contrastRatioChannels, AA_TEXT } from '@/utils/color';
 
 const rollDice = vi.fn().mockResolvedValue({ ok: true, id: 'r' });
 const seat = vi.hoisted(() => ({
@@ -121,5 +123,46 @@ describe('DiceRoller for a screen reader', () => {
     expect(within(dialog).getByText('Sneaking')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: /^Close$/ }));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+// A quick die is a tint of its colour, deeper under the pointer, with the
+// theme's ink on it. Its hover was 80% of the colour, and 40% on a computer
+// set to dark whatever the app's theme: ink fell to about 3.5:1 on a light
+// theme and 2:1 on a dark one.
+describe("DiceRoller's quick dice in every theme", () => {
+  /** The tint `bg-<token>/<percent>` a button takes under `prefix`. */
+  const tint = (button: HTMLElement, prefix: '' | 'hover:') => {
+    const found = button.className.split(/\s+/).map((c) => new RegExp(`^${prefix}bg-([\\w-]+)/(\\d+)$`).exec(c)).find(Boolean);
+    return found ? { token: found[1], alpha: Number(found[2]) / 100 } : null;
+  };
+  const over = (fill: string, background: string, alpha: number) => {
+    const f = fill.split(/\s+/).map(Number);
+    const b = background.split(/\s+/).map(Number);
+    return f.map((v, i) => Math.round(v * alpha + b[i] * (1 - alpha))).join(' ');
+  };
+
+  it('keep the ink readable on each die at rest and under the pointer', () => {
+    render(<DiceRoller />);
+    const dice = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'].map((name) => screen.getByRole('button', { name }));
+    const low: string[] = [];
+    for (const theme of PRESET_THEMES) {
+      const derived = deriveReadableTokens(theme.colors);
+      const channels = (token: string) => derived[`--rgb-${token}`] ?? theme.colors[token as keyof ThemeColors];
+      for (const die of dice) {
+        const rest = tint(die, '');
+        const hover = tint(die, 'hover:');
+        expect(rest && hover, die.textContent ?? '').toBeTruthy();
+        expect(hover!.token).toBe(rest!.token);
+        expect(hover!.alpha).toBeGreaterThan(rest!.alpha);
+        for (const { alpha } of [rest!, hover!]) {
+          for (const bg of [theme.colors.bgBase, theme.colors.bgSurface, theme.colors.paper]) {
+            const ratio = contrastRatioChannels(theme.colors.ink, over(channels(rest!.token), bg, alpha));
+            if (ratio < AA_TEXT) low.push(`${theme.name} ${die.textContent} at ${alpha * 100}%: ${ratio.toFixed(2)}:1`);
+          }
+        }
+      }
+    }
+    expect([...new Set(low)]).toEqual([]);
   });
 });
