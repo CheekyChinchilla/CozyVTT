@@ -21,7 +21,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useCompactLayout } from '@/contexts/LayoutContext';
-import { dialogOpened } from '@/components/campaign/compact/sheetHistory';
+import { dialogOpened, nextOpening } from '@/components/campaign/compact/sheetHistory';
 
 const FOCUSABLE_SELECTORS = [
   'a[href]',
@@ -82,19 +82,16 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void, options: Foc
   keepFocusInsideRef.current = options.keepFocusInside === true;
   const closesOnBack = useCompactLayout() && options.closesOnBack !== false;
 
-  // Its own effect, so a layout that changes while the dialog is open takes
-  // or gives back the history's entry without the trap starting over.
-  useEffect(() => {
-    if (!isOpen || !closesOnBack) return;
-    const entry = dialogOpened(() => onCloseRef.current?.());
-    return () => entry.release();
-  }, [isOpen, closesOnBack]);
+  // When the trap opened, among the dialogs and sheets (sheetHistory's
+  // nextOpening), so its hold on the history keeps its place.
+  const openedRef = useRef(0);
 
   useEffect(() => {
     if (!isOpen) return;
 
     const trap: OpenTrap = {};
     openTraps.push(trap);
+    openedRef.current = nextOpening();
 
     // Remember the element that had focus before the modal opened
     previousFocusRef.current = document.activeElement as HTMLElement;
@@ -173,6 +170,15 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void, options: Foc
   // onCloseRef is stable (created by useRef) — no need to include it.
    
   }, [isOpen]);
+
+  // Its own effect, so a layout that changes while the dialog is open takes
+  // or gives back the history's entry without the trap starting over. After
+  // the trap's, which takes the dialog's place as it opens.
+  useEffect(() => {
+    if (!isOpen || !closesOnBack) return;
+    const entry = dialogOpened(() => onCloseRef.current?.(), openedRef.current);
+    return () => entry.release();
+  }, [isOpen, closesOnBack]);
 
   return containerRef;
 }
