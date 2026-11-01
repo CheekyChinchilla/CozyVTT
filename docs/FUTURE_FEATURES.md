@@ -29,26 +29,43 @@ _Nothing at present._
 ### Character sheets
 
 - `after 1.5.4` **Call of Cthulhu: an age stored as text shows as a blank number box.** The editor hands the stored text to its number box as it is, so text that is not a number shows nothing (`CallOfCthulhu7eCharacterEditor.tsx`).
+- `after the next release` **On a wider screen, an editor's two notes under the portrait can be drawn over each other,** when the message for a refused picture and **Saves as personal token** show together (the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors).
+- `after the next release` **Some sheet editor controls do not work for a screen reader or the keyboard.** The buttons that remove a D&D 5e attack or spell, and most of the Pathfinder 2e editor's delete buttons, have no name; a Flexible sheet's delete buttons stay invisible when the keyboard reaches them; and its list ticks have no name or state.
 
 ### Tokens
 
-_Nothing at present._
+- `after the next release` **A player whose move is refused a square can learn the name of a creature under fog there.** The refusal says "<name> is already standing there." for any creature on the square, one the player's fog covers included. It should name only a token the player's screen draws, and an unseen one as "Someone" (`MapCanvas.tsx`).
+- `after the next release` **In Player Preview a right-click on a hidden creature's square opens the DM's menu for it,** on the screen the players may be watching. It should find only a token the preview draws, as a click on it does (`MapCanvas.tsx`).
+- `next release` **The token menu keeps Move to Map… open from one token to the next, and shows two dividers together when there is no other map** (`MapCanvas.tsx`, `map/tokenMenuItems.ts`).
+- `next release` **The door menu can open partly off the screen** near its right or bottom edge; it should flip to stay on screen, as the token menu does (`MapCanvas.tsx`).
+- `next release` **The initiative tracker's menu has no View Character Sheet for a combatant whose token is on another map** (`InitiativeTracker.tsx`).
+- `after the next release` Suspected: **a drop refused when it arrives with its pick-up is not put back on the mover's screen.** One connection's `token.move.start` and `token.move.end` are handled side by side, so the end can be read before the drag is recorded (`handlers/tokens.ts`).
 
 ### Campaigns and assets
 
 - `after 1.5.4` **A token's picture can name a map's asset,** so an animated map picture of up to 200 million pixels across its frames can go on a token, past the 50 million a token picture may be. A token's picture should name only a token asset, as a map's picture names only a map asset (`services/permissions.ts`).
+- `next release` **On a wide screen, Create Custom in the Creature Library can open the creature being edited.** With a creature's edit form open, **Create Custom** leaves it open as **Edit Creature**; it should open an empty form, as **New Template** does in Token Templates (`CreatureLibrary.tsx`).
+- `next release` **The close ✕ of the Creature Library's and Token Templates' forms has no name for a screen reader** (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
+- `after the next release` **Remove from Campaign in the Campaign Roster does not name the character,** asking "Are you sure you want to remove this character from the campaign?" (`CampaignRoster.tsx`).
 
 ### Play and connection
 
-_Nothing at present._
+- `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
+- `next release` **The dice panels follow the computer's dark mode and not the app's theme,** so a light theme on a computer set to dark shows dark dice panels (`DiceRoller.tsx`, `DiceResult.tsx`).
+- `after the next release` **Deleting a campaign from Campaign Settings tells its owner twice** (`CampaignSettingsModal.tsx`).
 
 ### Maps
 
 - `after 1.5.4` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
+- `next release` **A wall or light added past a map's cap stays drawn after the server refuses it.** At 5,000 walls or 200 lights the server refuses the add, but the Walls and Lights tools have already drawn it. They should refuse at the cap before drawing (`useWallTool.ts`, `useLightTool.ts`).
+- `next release` **A very large fog box, or a large stretch of explored ground, is lost.** A fog box of more than about 142,000 squares is over the live table's 1 MB message limit and never reaches the server, and a report of more than 20,000 newly explored squares is refused whole. A box over the whole map should send `reveal_all` or `hide_all`, and anything else should go in parts (`useFogTool.ts`, `MapCanvas.tsx`).
+- `next release` **Three map controls are hard to read or wrongly worded.** The Fog of War panel's **Confirm?** is white on light green, about 2 to 1; the Lights panel says "Global illumination" where Edit Map says "Global Illumination"; and the **Alternating** diagonal rule in Create Map and Edit Map reads "5/10/5/10 ft" whatever the grid scale (`DmFogControls.tsx`, `MapCanvas.tsx`, `CreateMapModal.tsx`, `EditMapModal.tsx`).
+- `next release` **Preview Player View is named "Toggle DM player view preview" for a screen reader,** so a voice command for the words the button shows finds nothing (`MapCanvas.tsx`).
+- `after the next release` **With a mouse, the AoE Shape panel covers the foot of the first toolbar buttons,** by about 20 pixels over **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen** (`MapCanvas.tsx`).
 
 ### Accounts
 
-_Nothing at present._
+- `next release` **The profile picture's crop window is small and takes only a mouse.** It is a 300 pixel canvas dragged with the mouse alone, and a screen reader or the keyboard is not told it is a dialog (`ProfilePage.tsx`).
 
 ---
 
