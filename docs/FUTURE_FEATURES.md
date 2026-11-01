@@ -173,6 +173,17 @@ _Nothing at present._
   to the `prisma-client` generator with it. **Defer** TypeScript 6.1 and 7
   until typescript-eslint supports them, and for 7 the backend's ts-jest too.
 
+- **Read zip files with yauzl in place of unzipper.** Restoring a backup and
+  importing a campaign read the archive with unzipper, which brings seven
+  packages of its own (bluebird, fs-extra and five more); yauzl, the reading
+  half of the yazl library planned for writing zips, brings one. The reading
+  side is where an uploaded archive is held to its limits: the entry count, the
+  sizes it declares against what it inflates to, the end-of-directory record's
+  place, and every name kept inside its folder (`backend/src/utils/archive.ts`
+  and the campaign importer). A move keeps each of those checks and their
+  tests, and has a security review of its own before it merges.
+  **Do** after the writing side has moved to yazl; nothing is wrong today.
+
 - `next release` **One dice grammar for both sides.** The parser is now one file
   kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
   (checked by `visionParity.test.ts`), and the Dice panel checks expressions
