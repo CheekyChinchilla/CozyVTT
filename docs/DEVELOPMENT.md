@@ -63,7 +63,7 @@ cozyvtt/
 │   │   ├── components/    Reusable UI components (incl. ui/ primitives)
 │   │   │   └── character-sheets/  Game system sheet components
 │   │   ├── constants/     Game system labels, and limits copied from the backend (keepInStep.test.ts compares them)
-│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Theme, Toast)
+│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Layout, Theme, Toast)
 │   │   ├── stores/        Zustand store for live session state
 │   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
 │   │   ├── lib/           React Query client setup
@@ -649,7 +649,18 @@ Some of those deserve a note:
   `ChatMessageBroadcast` against the frontend's), when the kinds of chat
   message differ between `schema.prisma` and the frontend's `MessageType`,
   when the frontend's `ChatMessageEvent` names other fields or types than
-  `ChatMessageSchema` takes,
+  `ChatMessageSchema` takes, when `campaign.settings.updated` has different
+  fields on the two sides (`CampaignSettingsUpdatedBroadcast`), when the
+  fields of a drawing differ between what the server sends (`DrawingSent` in
+  `backend/src/services/mapDrawings.ts`), what `NewDrawingSchema` takes, the
+  API document's `Drawing` schema, the WebSocket guide's table of what a
+  drawing is and the frontend's `Drawing`, or a drawing event or broadcast
+  has other fields in the frontend's `types/drawings.ts` than on the server,
+  when a drawing in a campaign archive carries fields the import does not
+  store, when a column of `Map` is in none, or more than one, of the three
+  lists in `backend/src/utils/spirit-layer.ts` that decide who is sent it, or
+  the frontend's `CampaignMap` or the API document's `Map` schema differ from
+  what a member is sent,
   when `tokenCentre.ts` differs between them, when a `SESSION_SECRET=`
   example in an example file or a guide would start a production server,
   when the themes and fonts the server accepts differ from those the app
