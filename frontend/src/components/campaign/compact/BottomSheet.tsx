@@ -23,8 +23,9 @@
 // - The browser's Back closes it, or a dialog opened over it first
 //   (sheetHistory.ts).
 // - On a tablet it is at most 672 px wide, centred. On a screen under 500 px
-//   tall (a phone turned sideways) it comes from the right at full height,
-//   with no handle; a half-height one stays as open to the map as it was.
+//   tall that is wider than it is tall (SIDEWAYS_QUERY, a phone on its side)
+//   it comes from the right at full height, with no handle; a half-height one
+//   stays as open to the map as it was.
 // - It may keep its content mounted while closed (`open` false): the content
 //   stays laid out, hidden (visibility: hidden once it has slid away) and
 //   inert, so the chat inside it keeps scrolling to its newest message.
