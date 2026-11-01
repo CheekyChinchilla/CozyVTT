@@ -14,6 +14,7 @@ import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
+import { ScrollChevrons, scrollFade, useScrollMore } from '@/components/ui/ScrollCue';
 import DiceMacroManager from './DiceMacroManager';
 import JumpToNewest from './JumpToNewest';
 import { errorSummary } from '@/utils/errors';
@@ -110,6 +111,8 @@ export default function DiceRoller() {
    * More options, so in a short sheet the log keeps its room.
    */
   const compact = useCompactLayout();
+  // Which ends of the compact layout's row of quick rolls have more past them.
+  const { ref: quickRowCue, more: quickRowMore } = useScrollMore<HTMLDivElement>();
   const [moreOptions, setMoreOptions] = useState(false);
 
   // Roll history state
@@ -948,12 +951,21 @@ export default function DiceRoller() {
         {/* Quick Roll Buttons */}
         <div className="mb-2">
           {compact ? (
-            // One row that scrolls sideways, the saved rolls and Saved with it.
-            <div role="group" aria-label="Quick Roll" className="flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain">
-              {quickRollButtons}
-              {specialRollButtons}
-              {savedRollButtons}
-              {savedButton}
+            // One row that scrolls sideways, the saved rolls and Saved with it;
+            // an end with more past it fades under a chevron (ScrollCue.tsx).
+            <div className="relative">
+              <div
+                ref={quickRowCue}
+                role="group"
+                aria-label="Quick Roll"
+                className={cn('flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain', scrollFade(quickRowMore))}
+              >
+                {quickRollButtons}
+                {specialRollButtons}
+                {savedRollButtons}
+                {savedButton}
+              </div>
+              <ScrollChevrons more={quickRowMore} start="left-0" end="right-0" className="text-ink-muted" />
             </div>
           ) : (
             <>

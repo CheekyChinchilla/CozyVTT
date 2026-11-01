@@ -19,6 +19,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import type { ReactNode } from 'react';
 import type { DiceRollAck, DiceRollEvent } from '@/types';
 import { LayoutProvider } from '@/contexts/LayoutContext';
+import { layScrollRow, readScrollCue } from '@/test/scrollCue';
 
 vi.mock('framer-motion', () => ({
   useReducedMotionConfig: () => false,
@@ -88,6 +89,29 @@ it('puts every quick roll in one row that scrolls sideways', async () => {
   expect(row.className).toContain('flex-nowrap');
   expect(row.className).toContain('overflow-x-auto');
   expect(screen.queryByText('Quick Roll:')).toBeNull();
+});
+
+// The dice buttons alone are wider than a phone, and a phone shows no
+// scrollbar until the row moves, so the row read as all there was.
+it('fades and marks the end of the quick rolls past which more lie, and neither end where all fit', async () => {
+  renderCompact();
+  const row = screen.getByRole('group', { name: 'Quick Roll' });
+  await within(row).findByRole('button', { name: 'Longsword' });
+
+  layScrollRow(row, { width: 330, shown: 330 });
+  expect(readScrollCue(row)).toEqual({ fade: [], marks: [] });
+
+  layScrollRow(row, { width: 760, shown: 330, left: 0 });
+  let { fade, marks } = readScrollCue(row);
+  expect(fade).toHaveLength(1);
+  expect(fade[0]).toContain('to_left');
+  expect(marks).toEqual(['right']);
+
+  layScrollRow(row, { width: 760, shown: 330, left: 430 });
+  ({ fade, marks } = readScrollCue(row));
+  expect(fade[0]).toContain('to_right');
+  expect(fade[0]).not.toContain('calc');
+  expect(marks).toEqual(['left']);
 });
 
 it('keeps Character and Purpose behind More options', async () => {
@@ -172,4 +196,6 @@ it('leaves the desktop panel as it was', async () => {
   expect(box.className.split(' ')).toContain('min-h-0');
   expect(controls.className.split(' ')).toContain('shrink-0');
   for (const control of await footerControls()) expect(control.className).not.toContain('touch-target');
+  // Its rows wrap, so they carry no sign of scrolling.
+  expect(document.querySelector('[class*="mask-image"]')).toBeNull();
 });

@@ -9,7 +9,8 @@
 // ends have more, following the row as it scrolls, as it or the window
 // resizes, and as its items change.
 //
-// The Admin Panel's tabs below 1024 px carry it.
+// The Admin Panel's tabs below 1024 px, the compact Draw strip's tools and
+// the compact Dice panel's quick rolls carry it.
 // ============================================
 
 import { useCallback, useEffect, useState, type RefCallback, type RefObject } from 'react';

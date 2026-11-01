@@ -33,6 +33,7 @@ import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { cn } from '@/utils/cn';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { ScrollChevrons, scrollFade, useScrollMore } from '@/components/ui/ScrollCue';
 import { DRAW_TOOL_KINDS } from './map/tools/useDrawTool';
 import {
   ClearDrawingsDialogs, COLOUR_NAMES, drawingsOf, FILLABLE, HINTS, isNamedColour, SHAPES, TOOLS,
@@ -63,6 +64,7 @@ export default function DrawStrip({
   const colourName = isNamedColour(settings.color) ? COLOUR_NAMES[named] : 'Another colour';
   const polygonOpen = kind === 'polygon' && polygonCorners > 0;
   const short = useMediaQuery(SHORT_SCREEN_QUERY);
+  const { ref: toolRowCue, more: toolRowMore } = useScrollMore<HTMLDivElement>();
 
   /** The DM's Clear…: every drawing, or one member's, as a choice when any member has drawings. */
   const clearChoices: MenuItem[] = [
@@ -75,28 +77,34 @@ export default function DrawStrip({
   // The nine tools: under the hint, or on a short screen in the header's
   // row, which a phone on its side has the width for. A scroller may shrink
   // below its content in a column, so under the hint it does not shrink.
+  // With no scrollbar, an end with more tools past it fades under a chevron
+  // (ScrollCue.tsx): at 360 px the row stops at Text label.
   const toolRow = (
-    <div
-      role="group"
-      aria-label="Tools"
-      className={cn('flex gap-1 overflow-x-auto overscroll-x-contain pr-2 [scrollbar-width:none]', short ? 'min-w-0 flex-1' : 'shrink-0')}
-    >
-      {DRAW_TOOL_KINDS.filter((tool) => !onlyErase || tool === 'eraser').map((tool) => {
-        const { label, icon: Icon } = TOOLS[tool];
-        return (
-          <button
-            key={tool}
-            type="button"
-            aria-label={label}
-            aria-pressed={kind === tool}
-            title={label}
-            onClick={() => onKindChange(tool)}
-            className={squareButton(kind === tool)}
-          >
-            <Icon className="h-5 w-5" aria-hidden="true" />
-          </button>
-        );
-      })}
+    <div className={cn('relative', short ? 'min-w-0 flex-1' : 'shrink-0')}>
+      <div
+        ref={toolRowCue}
+        role="group"
+        aria-label="Tools"
+        className={cn('flex gap-1 overflow-x-auto overscroll-x-contain pr-2 [scrollbar-width:none]', scrollFade(toolRowMore))}
+      >
+        {DRAW_TOOL_KINDS.filter((tool) => !onlyErase || tool === 'eraser').map((tool) => {
+          const { label, icon: Icon } = TOOLS[tool];
+          return (
+            <button
+              key={tool}
+              type="button"
+              aria-label={label}
+              aria-pressed={kind === tool}
+              title={label}
+              onClick={() => onKindChange(tool)}
+              className={squareButton(kind === tool)}
+            >
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            </button>
+          );
+        })}
+      </div>
+      <ScrollChevrons more={toolRowMore} start="left-0" end="right-0" className="text-ink-muted" />
     </div>
   );
 
