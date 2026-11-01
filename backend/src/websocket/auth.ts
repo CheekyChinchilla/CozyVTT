@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { sessionIsSignedIn, sessionHasAgedOut } from '../services/signedIn';
 import { pastAdminMfaDeadline } from '../services/adminMfaPolicy';
+import { NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 
 /**
  * WebSocket Authentication Middleware
@@ -215,7 +216,7 @@ export async function authenticateCampaign(
     });
 
     if (!membership) {
-      return { success: false, error: 'You are not a member of this campaign' };
+      return { success: false, error: NOT_A_MEMBER_MESSAGE };
     }
 
     return {
