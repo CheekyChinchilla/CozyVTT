@@ -600,12 +600,12 @@ A large campaign takes as long to export as your connection needs; nothing gives
 **Size limit.** A campaign archive can hold up to **500 MB** of pictures, sound and campaign data, which is the most an import accepts. If the campaign's files add up to more, **Export Campaign** says how large they are instead of making an archive no server could import. If leaving out audio would bring it under the limit, the message says so; otherwise remove maps or pictures the campaign no longer uses and export again. Each person can export 20 campaigns an hour, one at a time.
 
 **What's included:**
-- All maps (images, grid settings, wall segments, fog, lighting)
+- All maps (images, grid settings, wall segments, fog, lighting, and the drawings, those for you alone included)
 - All tokens placed on maps
 - Custom creatures and their stat blocks
 - Token templates
 - All associated asset files (map images, token images) that you can open yourself. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact. Such a map shows "This map has no picture" until you choose one in **Edit Map**; a token without one is drawn as a plain marker until you choose one in **Edit Token**
-- Campaign settings (name, description, game system, vibe settings, spirit layer)
+- Campaign settings (name, description, game system, vibe settings, spirit layer, **Players may draw**)
 - With **Include audio assets** ticked, the sound files the atmosphere uses, so each period and the ambient track play again in the imported campaign. Without it, the imported campaign's periods and ambient sound have no track, the import window says which, and you can choose new ones in the Atmosphere panel
 
 **What's NOT included:**
@@ -828,7 +828,7 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
-- Disables token movement for players, turning included
+- Stops players moving and turning their tokens and drawing on the map; they can still erase their own drawings
 - Shows players a banner above the map: *Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*
@@ -837,7 +837,7 @@ Click **Resume Session** when you're ready to continue. The same session carries
 
 ### Ending a Session
 
-Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens until you start the next session. Nothing needs saving: token positions, fog, walls, lights, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
+Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens or draw until you start the next session. Nothing needs saving: token positions, fog, walls, lights, drawings, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
 
 Untick **Save game state** in the dialog to take no new snapshot. If you paused during the session, the snapshot taken then stays with the record. An ended session cannot be resumed; the next game is a new session.
 
@@ -1521,11 +1521,12 @@ CozyVTT remembers your campaign between sessions, so you can pick up exactly whe
 
 Everything is stored as you play, so there is no save step and nothing is lost by closing the page:
 
-- **Token positions**, fog, walls and lights — everyone stays put on the map
-- **Chat and dice history** — the full log is there when players rejoin
-- **Map selection** — the active map remains active
-- **Atmosphere settings** — audio, effects and the vibe are remembered
-- **Explored areas** — each player's memory of a lit map
+- **Token positions**, fog, walls and lights: everyone stays put on the map
+- **Drawings**: what you and the players drew on each map stays there until it is erased
+- **Chat and dice history**: the full log is there when players rejoin
+- **Map selection**: the active map remains active
+- **Atmosphere settings**: audio, effects and the vibe are remembered
+- **Explored areas**: each player's memory of a lit map
 
 The one exception is an **initiative order**, which lives only while the server is running: a restart or an upgrade forgets it, though the initiative values stay on the tokens.
 
