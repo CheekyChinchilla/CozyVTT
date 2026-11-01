@@ -40,7 +40,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Multi-campaign** — one server, unlimited campaigns, isolated from each other
 - **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign; players and spectators can leave a campaign on their own
 - **Setup wizard** — guided first-run initialization; no manual database seeding required. It asks for a one-time setup token printed in the backend log, so only the person running the server can create the first administrator
-- **Admin dashboard** — user management, system settings, activity logs, uploaded files, instance backups (database and uploaded files)
+- **Admin Panel** — user management, system settings, activity logs, uploaded files, instance backups (database and uploaded files)
 - **Works on phones and tablets** — below 1,024 pixels wide the campaign page has a layout of its own: the map across the screen, a bar of Map, Chat, Dice, Initiative, Party and More along the bottom, and each panel in a sheet over the map; menus open as lists from the bottom of the screen, and Back closes what is open. On a phone on its side the bar moves into the header. A tablet turned across 1,024 pixels switches layout without losing anything
 - **Keyboard and screen reader support** — dialogs and side panels are named, keep focus and close on Escape; the dice and chat logs announce new entries; initiative runs from the keyboard; a token can be selected, moved, turned and stepped through from the keyboard, a screen reader hears which one is selected, and **?** lists the map's shortcuts; reduced-motion settings are honoured
 
@@ -187,7 +187,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment with Ngin
 
 ## Configuration
 
-Most runtime configuration is managed through the Admin dashboard after setup. Email (SMTP) and upload limits are set in `.env`; the dashboard shows them and can send a test email:
+Most runtime configuration is managed through the Admin Panel after setup. Email (SMTP) and upload limits are set in `.env`; the Admin Panel shows them and can send a test email:
 
 | Tab | Setting | Description |
 |-----|---------|-------------|
@@ -205,7 +205,7 @@ Most runtime configuration is managed through the Admin dashboard after setup. E
 However an account is added, its first sign-in ends with the person choosing their own password — an
 admin-issued temporary password cannot be used for anything else.
 
-Instance branding (logo, mascot, favicon) is **not** set from the dashboard yet — see
+Instance branding (logo, mascot, favicon) is **not** set from the Admin Panel yet — see
 [Appearance & Theming](docs/USER_GUIDE.md#appearance--theming) for how to change it today.
 
 ### Default Upload Limits

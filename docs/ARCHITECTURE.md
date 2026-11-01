@@ -188,7 +188,7 @@ src/
 │   ├── keeperNotes.ts    Keeps a Call of Cthulhu sheet's Keeper's Notes to its campaign's DM
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   ├── byteRange.ts      HTTP Range header reading for audio streaming
-│   ├── shutdown.ts       SIGTERM/SIGINT: stop taking requests, let a dashboard backup or
+│   ├── shutdown.ts       SIGTERM/SIGINT: stop taking requests, let an Admin Panel backup or
 │   │                     restore finish (up to 10 minutes, services/backupsInProgress.ts,
 │   │                     services/restoreState.ts) and a deleted
 │   │                     account's file removal (up to 4 seconds), close sockets,
