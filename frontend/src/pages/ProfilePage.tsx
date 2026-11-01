@@ -738,34 +738,33 @@ export default function ProfilePage() {
           <div className="flex items-start gap-6">
             {/* Avatar */}
             <div className="shrink-0">
-              {/* TODO(ui): this opens the file chooser from a div and the input
-                  is hidden, so the keyboard cannot reach it and a screen
-                  reader is not told it is a control; focus has nothing to
-                  return to when Crop Avatar closes. Make it a button named
-                  "Change avatar" (or "Choose avatar" with none). */}
-              <div
-                className="relative group cursor-pointer"
+              {/* A button, so Tab reaches it and the focus comes back to it
+                  when Crop Avatar closes; the file box itself is hidden. */}
+              <button
+                type="button"
+                aria-label={avatarDisplayUrl ? 'Change avatar' : 'Choose avatar'}
+                className="relative group block cursor-pointer rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={() => fileInputRef.current?.click()}
               >
                 {avatarDisplayUrl ? (
                   <img
                     src={avatarDisplayUrl}
-                    alt={user?.displayName}
+                    alt=""
                     className="w-20 h-20 rounded-full object-cover border-2 border-moss-green/30"
                   />
                 ) : (
                   <div className="w-20 h-20 rounded-full bg-moss-green/20 flex items-center justify-center border-2 border-moss-green/30">
-                    <User className="w-9 h-9 text-brand-ink/60" />
+                    <User className="w-9 h-9 text-brand-ink/60" aria-hidden="true" />
                   </div>
                 )}
-                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity flex items-center justify-center">
                   {avatarUploading ? (
-                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                    <Loader2 className="w-6 h-6 text-white animate-spin" aria-hidden="true" />
                   ) : (
-                    <Upload className="w-6 h-6 text-white" />
+                    <Upload className="w-6 h-6 text-white" aria-hidden="true" />
                   )}
                 </div>
-              </div>
+              </button>
               <input
                 ref={fileInputRef}
                 type="file"
