@@ -361,12 +361,13 @@ read bare channels as a color and paint nothing.
    (`prefers-color-scheme`), which the theme does not set: `color-scheme` from rule 2 changes only
    the browser's own controls. The tokens already follow the theme.
 
-The second rule is enforced by a test: `utils/__tests__/themeTokens.test.ts` fails if raw palette
-colors appear outside the two exempt areas (character sheets, which are deliberately styled as light
-"paper" cards, and the dark tool panels over the map, the DM's and the drawing tools). The first is not. `utils/__tests__/themes.contrast.test.ts`
-checks that every preset theme's text tokens, the `-ink` ones included, meet AA on the backgrounds
-they are used on, but nothing fails when text uses a plain fill token such as `text-danger`, so
-review has to catch that. `themeTokens.test.ts` also fails on any `dark:` class.
+Each rule is enforced by a test. `utils/__tests__/themeTokens.test.ts` fails when text uses a plain
+fill token such as `text-danger` (rule 1), when raw palette colors appear outside the two exempt
+areas (rule 3: the dark tool panels over the map, the DM's and the drawing tools, and each character
+sheet's header colour presets, which are the player's choice), and on any `dark:` class (rule 4).
+`utils/__tests__/themeColorScheme.test.ts` checks `color-scheme` for every preset and for custom
+themes (rule 2), and `utils/__tests__/themes.contrast.test.ts` checks that every preset theme's text
+tokens, the `-ink` ones included, meet AA on the backgrounds and tints they are used on.
 
 ### Data Flow (Campaign Page)
 
