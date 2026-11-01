@@ -148,6 +148,10 @@ const AttackRow: React.FC<{
                     onRollDamage
                       ? (e) => {
                           e.stopPropagation();
+                          // TODO(sheets): the Roll... picker sends this roll as
+                          // "<attack> Damage (<label>)" (characterRolls.ts), so
+                          // the Dice panel names one roll two ways. Right: one
+                          // purpose, from a helper both import.
                           onRollDamage(roll, `${attack.name} — ${label}`);
                         }
                       : undefined
