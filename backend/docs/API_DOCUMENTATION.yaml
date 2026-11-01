@@ -9493,7 +9493,9 @@ paths:
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
-        without a picture. Each map file (`maps/map-<n>.json`, written without
+        without a picture. Each asset's entry in `assets/asset-manifest.json`
+        gives its `originalName`, `mimeType`, `type`, `fileSize` and `tags`.
+        Each map file (`maps/map-<n>.json`, written without
         indentation) carries the map's drawings in `drawings`, in drawing
         order, each with the `Drawing` fields but `id`, `authorId` and
         `createdAt`, and `share`, `DM` for every drawing for the DM alone
@@ -9750,6 +9752,15 @@ paths:
         is still imported, and `warnings` says so (`Map "<name>": left out
         its picture, which was not uploaded as a map picture.`, and the same
         for its spirit layer picture).
+        Each asset keeps the `tags` its entry gives, held to what
+        `POST /api/assets/upload` stores: each trimmed and split at commas,
+        empty ones dropped, each kept once. A tag that is not text, is over
+        50 characters or holds U+0000 is left out on its own. Of what is
+        left, the first 50 are kept, in order, so a picture tagged on 1.5.1
+        or earlier, which allowed more, keeps as many as an upload may have.
+        A `tags` of more than 1,000 entries, or one that is not a list,
+        imports as none. Nothing is reported for tags left out. An archive
+        made before tags were carried imports its assets with none.
 
         The campaign starts in PREPARATION with the first imported map as its
         current map, and with `playersMayDraw` as the archive's

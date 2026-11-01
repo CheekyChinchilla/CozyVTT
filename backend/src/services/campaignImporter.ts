@@ -547,6 +547,7 @@ interface StagedAsset {
   originalName: string;
   mimeType: string;
   fileSize: number;
+  tags: string[];
 }
 
 /** Each kind of asset an archive carries, in words. */
@@ -656,6 +657,7 @@ async function stageAssets(
       originalName: displayName(assetInfo.originalName, assetInfo.type, content.ext),
       mimeType: content.mime,
       fileSize,
+      tags: assetInfo.tags ?? [],
     });
   }
   return staged;
@@ -831,6 +833,7 @@ export async function importCampaign(
                 fileSize: a.fileSize,
                 filePath: a.finalPath.replace(/\\/g, '/'),
                 name: cutText(a.originalName.replace(/\.[^.]+$/, ''), ASSET_LIMITS.maxNameLength),
+                tags: a.tags,
                 createdAt: new Date(importedAt + i),
               })),
             });
