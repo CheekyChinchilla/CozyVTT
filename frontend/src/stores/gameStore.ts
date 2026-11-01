@@ -82,6 +82,20 @@ interface GameState {
   heldAt: Record<string, Position>;
   /** Normalized token map — authoritative live positions live here. */
   tokens: Record<string, Token>;
+  /**
+   * The map `tokens` are of, written with them (setTokens). A token event,
+   * or the answer to a request, for any other map is not applied (onMapTokens,
+   * and the `mapId` the token writes take), so no token of another map is
+   * ever drawn, whatever arrives late.
+   */
+  tokensMapId: string | null;
+  /**
+   * The map whose tokens are being fetched to replace `tokens`
+   * (expectTokensOf), and its token events that arrived meanwhile, applied
+   * in order once its tokens are in, so none made during the fetch is lost.
+   */
+  loadingTokensOf: string | null;
+  heldTokenEvents: ReadonlyArray<() => void>;
   /** Render/list order (server order preserved from the last full set). */
   tokenOrder: string[];
   /**
@@ -147,22 +161,40 @@ interface GameState {
   sessionShown: boolean;
 
   // ---- Actions (named after the events that drive them) ----
-  /** Wholesale replace — map load, map change, reconnect resync. */
-  setTokens: (tokens: Token[]) => void;
+  /**
+   * Wholesale replace — map load, map change, reconnect resync — with the
+   * map they are of. A map whose tokens were expected gets the events held
+   * for it applied after.
+   */
+  setTokens: (tokens: Token[], mapId?: string | null) => void;
+  /** The tokens of `mapId` are being fetched; its token events wait for them. Null stops waiting. */
+  expectTokensOf: (mapId: string | null) => void;
+  /**
+   * A token event for `mapId`: applied now when the store holds that map's
+   * tokens, and kept to be applied again onto the answer while that map's
+   * tokens are being fetched, the map on screen's own included; dropped
+   * otherwise. `hold: false` applies it now and keeps nothing (a drag
+   * frame, which only moves where a token is drawn). At most
+   * MAX_HELD_TOKEN_EVENTS are kept, the oldest going first.
+   */
+  onMapTokens: (mapId: string, apply: () => void, options?: { hold?: boolean }) => void;
   /** `token.moved` stream + local drag commit: position-only update. */
   applyTokenMove: (tokenId: string, position: Position) => void;
   /** `token.moved` — a drag frame (`dragging`) or where the token was put down. */
   receiveTokenMove: (tokenId: string, position: Position, dragging: boolean) => void;
-  /** New token placed (REST response or DM action). */
-  addToken: (token: Token) => void;
+  /**
+   * New token placed (REST response or DM action). `mapId`, the map the
+   * request named, when given: a token of another map is not added.
+   */
+  addToken: (token: Token, mapId?: string) => void;
   /** `token:appeared` — update position if known, otherwise add. */
   revealToken: (token: Token) => void;
-  /** `token:disappeared` / delete. */
-  removeToken: (tokenId: string) => void;
-  /** Targeted field update (visibility, layer, conditions, ...). */
-  patchToken: (tokenId: string, patch: Partial<Token>) => void;
-  /** Full-object replace after an editor save (NpcQuickEditor). */
-  replaceToken: (token: Token) => void;
+  /** `token:disappeared` / delete. `mapId` as for addToken. */
+  removeToken: (tokenId: string, mapId?: string) => void;
+  /** Targeted field update (visibility, layer, conditions, ...). `mapId` as for addToken. */
+  patchToken: (tokenId: string, patch: Partial<Token>, mapId?: string) => void;
+  /** Full-object replace after an editor save (NpcQuickEditor). `mapId` as for addToken. */
+  replaceToken: (token: Token, mapId?: string) => void;
   /** `initiative.state` — wholesale replace of the combat snapshot. */
   setCombatState: (combat: CombatState) => void;
   /** Point at a token from either side; pass null to clear. */
@@ -201,9 +233,19 @@ interface GameState {
   clearGameState: () => void;
 }
 
+/**
+ * The most token events kept while a map's tokens are fetched. A fetch ends
+ * within the request's timeout, and drag frames are not kept, so a table
+ * makes far fewer than this in that time.
+ */
+export const MAX_HELD_TOKEN_EVENTS = 2000;
+
 export const useGameStore = create<GameState>((set, get) => ({
   heldAt: {},
   tokens: {},
+  tokensMapId: null,
+  loadingTokensOf: null,
+  heldTokenEvents: [],
   tokenOrder: [],
   combat: EMPTY_COMBAT,
   peekTokenId: null,
@@ -217,13 +259,30 @@ export const useGameStore = create<GameState>((set, get) => ({
   unreadChat: 0,
   sessionShown: true,
 
-  setTokens: (list) =>
+  setTokens: (list, mapId = null) => {
+    const expected = mapId !== null && get().loadingTokensOf === mapId;
+    const held = expected ? get().heldTokenEvents : [];
     set((s) => ({
       tokens: Object.fromEntries(list.map((t) => [t.id, t])),
+      tokensMapId: mapId,
       tokenOrder: list.map((t) => t.id),
       heldAt: {},
       selectedTokenId: s.selectedTokenId !== null && list.some((t) => t.id === s.selectedTokenId) ? s.selectedTokenId : null,
-    })),
+      ...(expected ? { loadingTokensOf: null, heldTokenEvents: [] } : {}),
+    }));
+    for (const apply of held) apply();
+  },
+
+  expectTokensOf: (mapId) => set({ loadingTokensOf: mapId, heldTokenEvents: [] }),
+
+  onMapTokens: (mapId, apply, options) => {
+    if (mapId === get().loadingTokensOf && options?.hold !== false) {
+      set((s) => ({ heldTokenEvents: [...s.heldTokenEvents.slice(-(MAX_HELD_TOKEN_EVENTS - 1)), apply] }));
+    }
+    // The map on screen keeps moving while it is fetched again; the answer,
+    // read before this, gets it once more when it lands.
+    if (mapId === get().tokensMapId) apply();
+  },
 
   applyTokenMove: (tokenId, position) => {
     const token = get().tokens[tokenId];
@@ -243,8 +302,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ heldAt: home ? withoutKey(get().heldAt, tokenId) : { ...get().heldAt, [tokenId]: position } });
   },
 
-  addToken: (token) =>
-    set((s) => ({
+  addToken: (token, mapId) =>
+    set((s) => (mapId !== undefined && mapId !== s.tokensMapId ? s : {
       tokens: { ...s.tokens, [token.id]: token },
       tokenOrder: s.tokenOrder.includes(token.id) ? s.tokenOrder : [...s.tokenOrder, token.id],
     })),
@@ -260,9 +319,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  removeToken: (tokenId) =>
+  removeToken: (tokenId, mapId) =>
     set((s) => {
-      if (!s.tokens[tokenId]) return s;
+      if (!s.tokens[tokenId] || (mapId !== undefined && mapId !== s.tokensMapId)) return s;
       const tokens = { ...s.tokens };
       delete tokens[tokenId];
       return {
@@ -273,14 +332,14 @@ export const useGameStore = create<GameState>((set, get) => ({
       };
     }),
 
-  patchToken: (tokenId, patch) => {
+  patchToken: (tokenId, patch, mapId) => {
     const token = get().tokens[tokenId];
-    if (!token) return;
+    if (!token || (mapId !== undefined && mapId !== get().tokensMapId)) return;
     set({ tokens: { ...get().tokens, [tokenId]: { ...token, ...patch } } });
   },
 
-  replaceToken: (token) => {
-    if (!get().tokens[token.id]) return;
+  replaceToken: (token, mapId) => {
+    if (!get().tokens[token.id] || (mapId !== undefined && mapId !== get().tokensMapId)) return;
     set({ tokens: { ...get().tokens, [token.id]: token } });
   },
 
@@ -341,7 +400,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   clearGameState: () =>
     set({
-      tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null,
+      tokens: {}, tokensMapId: null, loadingTokensOf: null, heldTokenEvents: [],
+      tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null,
       characterHp: {}, onlineUserIds: new Set(), drawings: [], drawingsMapId: null,
       sessionTab: storedSessionTab(), unreadChat: 0,
     }),

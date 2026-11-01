@@ -22,10 +22,63 @@ import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings,
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus, errorSummary } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
+import { optionalSessionStorage } from '@/utils/optionalStorage';
 
 // ============================================
 // Types
 // ============================================
+
+/**
+ * Something on the page that cares which map it shows, such as an editor
+ * with unsaved work on it. Registered with registerViewedMapGuard.
+ */
+export interface ViewedMapGuard {
+  /**
+   * Asked before the page shows another map or moves the table, with what
+   * is about to happen (ViewedMapChange). False, or a promise of false,
+   * leaves everything as it is. Leaving the page itself (a reload, closing
+   * the tab) is the browser's beforeunload, which this does not ask.
+   */
+  mayLeave: (change: ViewedMapChange) => boolean | Promise<boolean>;
+  /**
+   * True while the map on screen must stay there. When the table is moved
+   * off it from elsewhere (another tab's Set Active, a script), the page
+   * then keeps it, as a map being prepared, instead of following.
+   */
+  holds?: () => boolean;
+}
+
+/**
+ * What is about to change the map on screen, as a guard is told:
+ * - `open-other`: Open to prepare on another map;
+ * - `back-to-table`: Back to the table, or the phone's Back while preparing;
+ * - `set-active`: the Map Library's Set Active on a map other than the one on screen;
+ * - `bring-everyone`: the table brought to the map on screen (Bring everyone
+ *   here, or Set Active on it), asked once the tokens to bring are chosen;
+ * - `delete`: deleting the map on screen.
+ * `toMapId` is the map the page shows next, or null for none.
+ */
+export interface ViewedMapChange {
+  kind: 'open-other' | 'back-to-table' | 'set-active' | 'bring-everyone' | 'delete';
+  toMapId: string | null;
+}
+
+/** Why preparing ended without the DM asking, for the page to say. */
+export interface PreparingEnded {
+  mapName: string;
+  reason: 'deleted' | 'not-dm';
+}
+
+/** Back to the table gave up: the table moved each time its map was read. */
+export class TableKeptMovingError extends Error {
+  constructor() {
+    super("The table moved to another map while its map was loading. Press Back to the table again.");
+    this.name = 'TableKeptMovingError';
+  }
+}
+
+/** This tab's map being prepared in a campaign, kept across a reload of the tab. */
+export const preparingMapKey = (campaignId: string) => `cozyvtt-preparing-map:${campaignId}`;
 
 // NOTE: live token state moved out of this context into the
 // zustand game store (`@/stores/gameStore`). Context value changes
@@ -35,7 +88,16 @@ import { withMemberRole } from '@/utils/campaignRoles';
 interface CampaignContextState {
   // Campaign Data
   campaign: Campaign | null;
+  /** The table's map: the campaign's current map, which every player is on. */
   currentMap: CampaignMap | null;
+  /**
+   * The map this page shows: the one the DM opened to prepare while they
+   * prepare one, otherwise the table's. Everything drawn on the map and
+   * every edit made there is for this map.
+   */
+  viewedMap: CampaignMap | null;
+  /** Whether the DM is preparing a map the table is not on, on this page. */
+  isPreparing: boolean;
 
   // User Role
   userRole: CampaignRole | null;
@@ -54,10 +116,10 @@ interface CampaignContextState {
    */
   refreshCampaign: () => Promise<void>;
   /**
-   * Re-fetch ONLY the current map (tokens, walls, lights, fog) without
-   * reloading the whole campaign envelope. Used after a WebSocket reconnect
-   * to pick up state changes that broadcast while we were disconnected
-   * (e.g. token positions moved by other players during the drop).
+   * Re-fetch ONLY the map on screen (tokens, walls, lights, fog) without
+   * reloading the whole campaign envelope: the table's, or the one being
+   * prepared. Used when tokens changed on the server without a map event,
+   * such as a character's new token picture.
    */
   refreshCurrentMap: () => Promise<void>;
   /**
@@ -73,12 +135,59 @@ interface CampaignContextState {
    */
   setCurrentMap: (map: CampaignMap | null | ((current: CampaignMap | null) => CampaignMap | null)) => void;
   /**
+   * Replace whichever of the table's map and the map being prepared has
+   * this id, with the map an edit answered or from its latest value. Never
+   * moves the table: campaign.currentMapId is left alone.
+   */
+  updateMap: (mapId: string, map: CampaignMap | ((current: CampaignMap) => CampaignMap)) => void;
+  /**
+   * The table is on this map (map.changed). The table's map always follows;
+   * the page follows too unless it shows a map being prepared, or something
+   * on it holds the map on screen (ViewedMapGuard.holds), which then stays
+   * as a prepared map. One naming the map being prepared ends preparing.
+   * Answers whether the page now shows this map, with its tokens.
+   */
+  receiveTableMap: (map: CampaignMap) => boolean;
+  /**
+   * The table was moved to this map from this page (Set Active, Bring
+   * everyone here) and the page goes with it: preparing ends, and its
+   * tokens are the ones on screen.
+   */
+  showTableMap: (map: CampaignMap) => void;
+  /**
+   * DM: show a map of the campaign on this page only, to prepare it while
+   * the players stay on the table's map. Resolves once its map and tokens
+   * are on screen, true; false when a guard said no or another change of
+   * the map on screen came first. Rejects when the map could not be loaded,
+   * for the caller to say so. The table's own map opens as Back to the
+   * table does.
+   */
+  openToPrepare: (mapId: string) => Promise<boolean>;
+  /**
+   * Stop preparing and show the table's map again, fetched afresh: while
+   * preparing, the table's token moves, walls, fog and drawings were not
+   * applied here. A table moved while the fetch is out is fetched again
+   * where it is. False when a guard said no; rejects when the map could not
+   * be loaded, and the page stays where it is.
+   */
+  backToTable: () => Promise<boolean>;
+  /** Ask every registered guard whether the map on screen may change so; false when one says no. */
+  mayChangeViewedMap: (change: ViewedMapChange) => Promise<boolean>;
+  /**
+   * Why preparing last ended without the DM asking (the map deleted, the DM
+   * seat gone), until clearPreparingEnded: the page says so.
+   */
+  preparingEnded: PreparingEnded | null;
+  clearPreparingEnded: () => void;
+  /** Register a guard for changes of the map on screen; returns the function that removes it. */
+  registerViewedMapGuard: (guard: ViewedMapGuard) => () => void;
+  /**
    * Keep `campaign.maps` in step with the Map Library: insert a created or
    * imported map, or replace a renamed one by id. The Move to Map… submenu
    * reads that list, so a map missing from it cannot be a move target.
    */
   upsertCampaignMap: (map: CampaignMap) => void;
-  /** Drop a deleted map from `campaign.maps`. */
+  /** Drop a deleted map from `campaign.maps`, and stop preparing it if it is the one being prepared. */
   removeCampaignMap: (mapId: string) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
   updateCampaignSpiritLayer: (enabled: boolean, style?: string) => void;
@@ -164,6 +273,29 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     return () => { shownCampaignId.current = null; };
   }, [campaign?.id]);
   const [currentMap, setCurrentMapState] = useState<CampaignMap | null>(null);
+  // The map the DM opened to prepare on this page, or null to follow the
+  // table. Read through the ref by work that finishes after an await and by
+  // the socket handlers, which are registered once.
+  const [preparedMap, setPreparedMapState] = useState<CampaignMap | null>(null);
+  const preparedRef = useRef<CampaignMap | null>(null);
+  const [preparingEnded, setPreparingEnded] = useState<PreparingEnded | null>(null);
+  // The table's map as last written, read by work that finishes after an
+  // await. Every move of the table, and every map.changed, is counted, so a
+  // read of the table's map that went out before one is never applied over
+  // it; an edit of the map (updateMap) is not a move and is not counted.
+  const tableMapRef = useRef<CampaignMap | null>(null);
+  const tableSeq = useRef(0);
+  const campaignRef = useRef<Campaign | null>(null);
+  campaignRef.current = campaign;
+  // Each change of the map on screen this page makes (Open to prepare, Back
+  // to the table, a switch, a reload's restore, a reconnect) is numbered, and
+  // work that finishes after an await applies only while no newer one has
+  // started. The table moving under the page is not one: it moves only the
+  // table's map, or shows it where the page follows the table.
+  const viewSeq = useRef(0);
+  const guards = useRef(new Set<ViewedMapGuard>());
+  const userIdRef = useRef<string | undefined>(user?.id);
+  userIdRef.current = user?.id;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // DM local view preference — not persisted, resets each session
@@ -195,6 +327,39 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     campaign && user
       ? campaign.memberships?.find((m) => m.userId === user.id)?.role || null
       : null;
+  const userRoleRef = useRef(userRole);
+  userRoleRef.current = userRole;
+
+  // The map being prepared, written here only, and kept for this tab so a
+  // reload (which iOS Safari makes of a tab it put in the background) comes
+  // back to it.
+  const setPrepared = useCallback((map: CampaignMap | null, ended?: PreparingEnded['reason']) => {
+    const before = preparedRef.current;
+    preparedRef.current = map;
+    setPreparedMapState(map);
+    if (!map && before && ended) setPreparingEnded({ mapName: before.name, reason: ended });
+    const campaignId = shownCampaignId.current;
+    if (!campaignId) return;
+    if (map) optionalSessionStorage.setItem(preparingMapKey(campaignId), map.id);
+    else optionalSessionStorage.removeItem(preparingMapKey(campaignId));
+  }, []);
+
+  /** Write the table's map, counting the change unless it is only an edit of it. */
+  const putTableMap = useCallback((next: CampaignMap | null | ((current: CampaignMap | null) => CampaignMap | null), counted = true) => {
+    const value = typeof next === 'function' ? next(tableMapRef.current) : next;
+    if (value === tableMapRef.current) return;
+    tableMapRef.current = value;
+    if (counted) tableSeq.current += 1;
+    setCurrentMapState(value);
+  }, []);
+  /** The table's map id, as last known. */
+  const tableMapId = () => tableMapRef.current?.id ?? campaignRef.current?.currentMapId ?? null;
+  /** The tokens of a map, now the ones on screen. */
+  const showTokensOf = (map: CampaignMap) => useGameStore.getState().setTokens(map.tokens || [], map.id);
+  /** A fetch of this map's tokens has ended without them: its events wait no longer. */
+  const stopExpecting = (mapId: string) => {
+    if (useGameStore.getState().loadingTokensOf === mapId) useGameStore.getState().expectTokensOf(null);
+  };
 
   // The atmosphere and the vibe's tint, worked out from a campaign as the
   // server holds it: on the first load, and after a reconnect, when the DM
@@ -238,20 +403,55 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       // per this user's role. The campaign response (maps: true) returns raw unfiltered
       // token JSON — we must NOT use those tokens directly.
       if (data.currentMapId) {
+        // Token events for the map that arrive while it is read wait for it.
+        useGameStore.getState().expectTokensOf(data.currentMapId);
         try {
           const { map, spiritVisible } = await api.getMap(data.id, data.currentMapId);
           if (!isNewest()) return;
-          setCurrentMapState(map);
-          useGameStore.getState().setTokens(map.tokens || []);
+          putTableMap(map);
+          showTokensOf(map);
           setPlayerSpiritVisible(spiritVisible ?? false);
         } catch {
           if (!isNewest()) return;
           // Fall back to embedded map metadata (no tokens) if the fetch fails
           const mapMeta = data.maps?.find((m: { id: string }) => m.id === data.currentMapId);
           if (mapMeta) {
-            setCurrentMapState(mapMeta);
-            useGameStore.getState().setTokens([]);
+            putTableMap(mapMeta);
+            useGameStore.getState().setTokens([], mapMeta.id);
+          } else {
+            stopExpecting(data.currentMapId);
           }
+        }
+      }
+
+      // A map this tab was preparing before a reload: for the DM only, and
+      // only while it is still a map of the campaign the table is not on.
+      const kept = optionalSessionStorage.getItem(preparingMapKey(data.id));
+      const isDm = data.memberships?.some((m) => m.userId === userIdRef.current && m.role === 'DM') ?? false;
+      if (kept && (!isDm || kept === data.currentMapId || !data.maps?.some((m) => m.id === kept))) {
+        optionalSessionStorage.removeItem(preparingMapKey(data.id));
+      } else if (kept) {
+        // Superseded only by something the DM does here, which sets the
+        // kept map itself; the table moving meanwhile does not cancel it.
+        const seq = ++viewSeq.current;
+        useGameStore.getState().expectTokensOf(kept);
+        try {
+          const { map } = await api.getMap(data.id, kept);
+          if (!isNewest() || seq !== viewSeq.current) {
+            stopExpecting(kept);
+            return;
+          }
+          if (map.id === tableMapId()) {
+            // The table has come to it while the page loaded.
+            stopExpecting(kept);
+            optionalSessionStorage.removeItem(preparingMapKey(data.id));
+            return;
+          }
+          setPrepared(map);
+          showTokensOf(map);
+        } catch {
+          stopExpecting(kept);
+          if (isNewest()) optionalSessionStorage.removeItem(preparingMapKey(data.id));
         }
       }
     } catch (err) {
@@ -271,7 +471,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     } finally {
       if (isNewest()) setLoading(false);
     }
-  }, [navigate, applyCampaignEffects]);
+  }, [navigate, applyCampaignEffects, setPrepared, putTableMap]);
 
   /** The campaign as it is now, or null when a newer re-read has started or the page has moved on. */
   const rereadCampaign = useCallback(async (campaignId: string) => {
@@ -302,17 +502,31 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // while we were disconnected. Cheaper than a full campaign reload and
   // doesn't blip atmosphere/audio state.
   const refreshCurrentMap = useCallback(async () => {
-    if (!campaign?.id || !currentMap?.id) return;
+    const shown = preparedRef.current ?? tableMapRef.current;
+    if (!campaign?.id || !shown) return;
+    const seq = viewSeq.current;
+    const tSeq = tableSeq.current;
+    useGameStore.getState().expectTokensOf(shown.id);
     try {
-      const { map, spiritVisible } = await api.getMap(campaign.id, currentMap.id);
-      setCurrentMapState(map);
-      useGameStore.getState().setTokens(map.tokens || []);
-      setPlayerSpiritVisible(spiritVisible ?? false);
+      const { map, spiritVisible } = await api.getMap(campaign.id, shown.id);
+      if (preparedRef.current?.id === map.id && seq === viewSeq.current) {
+        setPrepared(map);
+      } else if (tableMapRef.current?.id === map.id && !preparedRef.current && seq === viewSeq.current && tSeq === tableSeq.current) {
+        putTableMap(map);
+        setPlayerSpiritVisible(spiritVisible ?? false);
+      } else {
+        // The page has moved to another map, or a newer copy of this one
+        // arrived meanwhile: these are not its tokens now.
+        stopExpecting(map.id);
+        return;
+      }
+      showTokensOf(map);
     } catch (err) {
+      stopExpecting(shown.id);
       console.error('[CampaignContext] Failed to refresh current map after reconnect:', errorSummary(err));
       // Non-fatal — user will receive future real-time updates normally
     }
-  }, [campaign?.id, currentMap?.id]);
+  }, [campaign?.id, setPrepared, putTableMap]);
 
   // Events sent while this page was offline are not replayed: a pause or an
   // end, a member's role, a switch to another map, the vibe, the weather and
@@ -325,7 +539,8 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     // Each answer is applied only while the page still shows this campaign:
     // one arriving after a switch to another would write over it.
     const stillShown = () => shownCampaignId.current === campaignId;
-    let mapId = currentMap?.id ?? null;
+    let mapId = tableMapId();
+    let isDm = userRoleRef.current === 'DM';
     try {
       const fresh = await campaignService.getCampaign(campaignId);
       if (!stillShown()) return;
@@ -346,20 +561,73 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       setActiveSession(fresh.activeSession ?? null);
       applyCampaignEffects(fresh);
       mapId = fresh.currentMapId ?? null;
+      // The list just read, not the one this page had: the role may have
+      // changed while it was away.
+      isDm = fresh.memberships?.some((m) => m.userId === userIdRef.current && m.role === 'DM') ?? false;
     } catch (err) {
       console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', errorSummary(err));
     }
-    if (!mapId) return;
-    try {
-      const { map, spiritVisible } = await api.getMap(campaignId, mapId);
-      if (!stillShown()) return;
-      setCurrentMapState(map);
-      useGameStore.getState().setTokens(map.tokens || []);
-      setPlayerSpiritVisible(spiritVisible ?? false);
-    } catch (err) {
-      console.error('[CampaignContext] Failed to refresh the current map after reconnect:', errorSummary(err));
+    const seq = ++viewSeq.current;
+    // The table moved off the map on screen while the page was away, and
+    // something on it holds that map: it stays, as a prepared map.
+    if (!preparedRef.current && isDm && tableMapRef.current && tableMapRef.current.id !== mapId
+      && [...guards.current].some((g) => g.holds?.() === true)) {
+      setPrepared(tableMapRef.current);
     }
-  }, [campaign?.id, currentMap?.id, applyCampaignEffects]);
+    const prepared = preparedRef.current;
+    // Still preparing, and still allowed to: the table may have come to that
+    // map, or this user may no longer be its DM, while the page was away.
+    const keepPreparing = prepared !== null && prepared.id !== mapId && isDm;
+    let tableMap: CampaignMap | null = tableMapRef.current;
+    if (mapId) {
+      const tSeq = tableSeq.current;
+      if (!keepPreparing) useGameStore.getState().expectTokensOf(mapId);
+      try {
+        const { map, spiritVisible } = await api.getMap(campaignId, mapId);
+        if (!stillShown() || seq !== viewSeq.current) {
+          stopExpecting(mapId);
+          return;
+        }
+        // A map.changed that came in meanwhile is newer than this read.
+        if (tSeq === tableSeq.current) {
+          putTableMap(map);
+          tableMap = map;
+        }
+        if (!keepPreparing) {
+          if (prepared) setPrepared(null, prepared.id === mapId ? undefined : 'not-dm');
+          if (tSeq === tableSeq.current) showTokensOf(map);
+          else stopExpecting(mapId);
+          setPlayerSpiritVisible(spiritVisible ?? false);
+        }
+      } catch (err) {
+        stopExpecting(mapId);
+        console.error('[CampaignContext] Failed to refresh the current map after reconnect:', errorSummary(err));
+      }
+    }
+    if (!keepPreparing || !prepared) return;
+    // The map being prepared, and its tokens, as the server holds them now.
+    // One deleted while the page was away ends preparing.
+    useGameStore.getState().expectTokensOf(prepared.id);
+    try {
+      const { map } = await api.getMap(campaignId, prepared.id);
+      if (!stillShown() || seq !== viewSeq.current) {
+        stopExpecting(prepared.id);
+        return;
+      }
+      setPrepared(map);
+      showTokensOf(map);
+    } catch (err) {
+      stopExpecting(prepared.id);
+      if (!stillShown() || seq !== viewSeq.current) return;
+      if (apiErrorStatus(err) === 404) {
+        setPrepared(null, 'deleted');
+        if (tableMap) showTokensOf(tableMap);
+        else useGameStore.getState().setTokens([], null);
+      } else {
+        console.error('[CampaignContext] Failed to refresh the map being prepared after reconnect:', errorSummary(err));
+      }
+    }
+  }, [campaign?.id, applyCampaignEffects, setPrepared, putTableMap]);
 
   // Update currentVibe + activeVibeEffect when vibe.updated WS event arrives
   const updateVibe = useCallback((period: string, hue: string, filter: string) => {
@@ -414,16 +682,16 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // which pointed at the map the page loaded with until this kept it current.
   const setCurrentMap = useCallback((map: CampaignMap | null | ((current: CampaignMap | null) => CampaignMap | null)) => {
     if (typeof map === 'function') {
-      setCurrentMapState(map);
+      putTableMap(map);
       return;
     }
-    setCurrentMapState(map);
+    putTableMap(map);
     if (map) {
       setCampaign((prev) =>
         prev && prev.currentMapId !== map.id ? { ...prev, currentMapId: map.id } : prev,
       );
     }
-  }, []);
+  }, [putTableMap]);
 
   // Keep campaign.maps in step with the Map Library (create, rename, import).
   const upsertCampaignMap = useCallback((map: CampaignMap) => {
@@ -436,13 +704,178 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     });
   }, []);
 
+  // Leave the map being prepared for the table's, at once and asking no
+  // guard: the map was deleted, or this user is no longer the DM. The page
+  // says why (preparingEnded). The table's map shows at once with the
+  // tokens it was last read with, then as it is now.
+  const endPreparing = useCallback((reason: PreparingEnded['reason']) => {
+    if (!preparedRef.current) return;
+    const seq = ++viewSeq.current;
+    setPrepared(null, reason);
+    const tableMap = tableMapRef.current;
+    if (tableMap) showTokensOf(tableMap);
+    else useGameStore.getState().setTokens([], null);
+    const campaignId = shownCampaignId.current;
+    const tableId = tableMapId();
+    if (!campaignId || !tableId) return;
+    const tSeq = tableSeq.current;
+    useGameStore.getState().expectTokensOf(tableId);
+    api.getMap(campaignId, tableId)
+      .then(({ map, spiritVisible }) => {
+        if (seq !== viewSeq.current || shownCampaignId.current !== campaignId || tSeq !== tableSeq.current) {
+          stopExpecting(tableId);
+          return;
+        }
+        putTableMap(map);
+        showTokensOf(map);
+        setPlayerSpiritVisible(spiritVisible ?? false);
+      })
+      .catch((err: unknown) => {
+        // The table's map stays on screen with the tokens it was last read with.
+        stopExpecting(tableId);
+        console.error('[CampaignContext] Failed to load the table\'s map:', errorSummary(err));
+      });
+  }, [setPrepared, putTableMap]);
+
   // Drop a deleted map from campaign.maps.
   const removeCampaignMap = useCallback((mapId: string) => {
     setCampaign((prev) => {
       if (!prev?.maps) return prev;
       return { ...prev, maps: prev.maps.filter((m) => m.id !== mapId) };
     });
+    if (preparedRef.current?.id === mapId) endPreparing('deleted');
+  }, [endPreparing]);
+
+  const updateMap = useCallback((mapId: string, map: CampaignMap | ((current: CampaignMap) => CampaignMap)) => {
+    const next = (current: CampaignMap) => (typeof map === 'function' ? map(current) : map);
+    putTableMap((current) => (current && current.id === mapId ? next(current) : current), false);
+    const prepared = preparedRef.current;
+    if (prepared && prepared.id === mapId) setPrepared(next(prepared));
+  }, [setPrepared, putTableMap]);
+
+  // The page shows the table's map, now `map`, with its tokens. Preparing
+  // ends: the table has come to the prepared map, or the page went with it.
+  const followTable = useCallback((map: CampaignMap) => {
+    setCurrentMap(map);
+    if (preparedRef.current) setPrepared(null);
+    // The map as the server sends it now is newer than any event kept for
+    // a read of it still out: those are dropped, not applied over it, and
+    // the read's older answer is not applied (tableSeq).
+    if (useGameStore.getState().loadingTokensOf === map.id) useGameStore.getState().expectTokensOf(null);
+    showTokensOf(map);
+  }, [setCurrentMap, setPrepared]);
+
+  const showTableMap = useCallback((map: CampaignMap) => {
+    viewSeq.current += 1;
+    followTable(map);
+  }, [followTable]);
+
+  const receiveTableMap = useCallback((map: CampaignMap): boolean => {
+    const prepared = preparedRef.current;
+    const shown = tableMapRef.current;
+    // Unsaved work on the map on screen keeps it there as a prepared map,
+    // for the DM alone: the table moves on without this page.
+    const held = !prepared && shown !== null && shown.id !== map.id
+      && userRoleRef.current === 'DM' && [...guards.current].some((g) => g.holds?.() === true);
+    if (held) {
+      setPrepared(shown);
+      setCurrentMap(map);
+      return false;
+    }
+    if (prepared && prepared.id !== map.id) {
+      setCurrentMap(map);
+      return false;
+    }
+    followTable(map);
+    return true;
+  }, [setCurrentMap, setPrepared, followTable]);
+
+  const mayChangeViewedMap = useCallback(async (change: ViewedMapChange): Promise<boolean> => {
+    for (const guard of [...guards.current]) {
+      if (!(await guard.mayLeave(change))) return false;
+    }
+    return true;
   }, []);
+
+  const registerViewedMapGuard = useCallback((guard: ViewedMapGuard) => {
+    guards.current.add(guard);
+    return () => {
+      guards.current.delete(guard);
+    };
+  }, []);
+
+  const backToTable = useCallback(async (): Promise<boolean> => {
+    if (!preparedRef.current) return true;
+    if (!(await mayChangeViewedMap({ kind: 'back-to-table', toMapId: tableMapId() }))) return false;
+    const campaignId = shownCampaignId.current;
+    if (!campaignId) return false;
+    const seq = ++viewSeq.current;
+    // The table can move while its map is read; it is then read again where
+    // it is, a few times at most.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      // The table came to the map being prepared meanwhile: that is the table.
+      if (!preparedRef.current) return true;
+      const tableId = tableMapId();
+      if (!tableId) {
+        setPrepared(null);
+        useGameStore.getState().setTokens([], null);
+        return true;
+      }
+      const tSeq = tableSeq.current;
+      useGameStore.getState().expectTokensOf(tableId);
+      let answer: Awaited<ReturnType<typeof api.getMap>>;
+      try {
+        answer = await api.getMap(campaignId, tableId);
+      } catch (err) {
+        stopExpecting(tableId);
+        console.error('[CampaignContext] Failed to load the table\'s map:', errorSummary(err));
+        throw err;
+      }
+      if (seq !== viewSeq.current || shownCampaignId.current !== campaignId) {
+        stopExpecting(tableId);
+        return false;
+      }
+      if (tSeq !== tableSeq.current) continue;
+      putTableMap(answer.map);
+      setPrepared(null);
+      showTokensOf(answer.map);
+      setPlayerSpiritVisible(answer.spiritVisible ?? false);
+      return true;
+    }
+    // Still preparing; the page says why.
+    throw new TableKeptMovingError();
+  }, [mayChangeViewedMap, setPrepared, putTableMap]);
+
+  const openToPrepare = useCallback(async (mapId: string): Promise<boolean> => {
+    const campaignId = shownCampaignId.current;
+    if (!campaignId || userRoleRef.current !== 'DM') return false;
+    if (mapId === tableMapId()) return backToTable();
+    if (preparedRef.current?.id === mapId) return true;
+    if (!(await mayChangeViewedMap({ kind: 'open-other', toMapId: mapId }))) return false;
+    const seq = ++viewSeq.current;
+    useGameStore.getState().expectTokensOf(mapId);
+    try {
+      const { map } = await api.getMap(campaignId, mapId);
+      if (seq !== viewSeq.current || shownCampaignId.current !== campaignId || userRoleRef.current !== 'DM') {
+        stopExpecting(mapId);
+        return false;
+      }
+      // The table came to it while it loaded, and the page with it.
+      if (map.id === tableMapId()) {
+        stopExpecting(mapId);
+        return true;
+      }
+      setPrepared(map);
+      showTokensOf(map);
+      return true;
+    } catch (err) {
+      stopExpecting(mapId);
+      console.error('[CampaignContext] Failed to open the map to prepare:', errorSummary(err));
+      throw err;
+    }
+  }, [backToTable, mayChangeViewedMap, setPrepared]);
+
+  const clearPreparingEnded = useCallback(() => setPreparingEnded(null), []);
 
   // Update atmosphere effect (called by AtmospherePlayer on WS broadcast)
   const updateAtmosphereEffect = useCallback((effect: string | null) => {
@@ -543,6 +976,13 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     };
   }, [rereadCampaign]);
 
+  // A map being prepared is the DM's alone: once this user is not the DM
+  // (the seat handed over, or their role changed) the page shows the
+  // table's map, which is all the server sends them now.
+  useEffect(() => {
+    if (userRole !== 'DM' && preparedRef.current) endPreparing('not-dm');
+  }, [userRole, endPreparing]);
+
   // Update spirit layer enabled/style in local campaign state
   const updateCampaignSpiritLayer = useCallback((enabled: boolean, style?: string) => {
     setCampaign((prev) =>
@@ -562,6 +1002,10 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // the previous campaign's tokens would flash on the next session screen.
   useEffect(() => {
     useGameStore.getState().clearGameState();
+    // Another campaign's page starts on its table's map; this tab's kept
+    // map for the old one stays kept.
+    preparedRef.current = null;
+    setPreparedMapState(null);
     if (id) {
       loadCampaign(id);
     }
@@ -577,9 +1021,13 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // Context value — memoized so consumers only re-render when a field they
   // read actually changes, not on every provider render (e.g. token moves
   // no longer force the whole campaign subtree to reconcile).
+  const viewedMap = preparedMap ?? currentMap;
+  const isPreparing = preparedMap !== null;
   const value: CampaignContextState = useMemo(() => ({
     campaign,
     currentMap,
+    viewedMap,
+    isPreparing,
     userRole,
     loading,
     error,
@@ -588,6 +1036,15 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     refreshCurrentMap,
     catchUpAfterReconnect,
     setCurrentMap,
+    updateMap,
+    receiveTableMap,
+    showTableMap,
+    openToPrepare,
+    backToTable,
+    mayChangeViewedMap,
+    registerViewedMapGuard,
+    preparingEnded,
+    clearPreparingEnded,
     upsertCampaignMap,
     removeCampaignMap,
     updateCampaignSpiritLayer,
@@ -609,6 +1066,8 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }), [
     campaign,
     currentMap,
+    viewedMap,
+    isPreparing,
     userRole,
     loading,
     error,
@@ -617,6 +1076,15 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     refreshCurrentMap,
     setCurrentMap,
     catchUpAfterReconnect,
+    updateMap,
+    receiveTableMap,
+    showTableMap,
+    openToPrepare,
+    backToTable,
+    mayChangeViewedMap,
+    registerViewedMapGuard,
+    preparingEnded,
+    clearPreparingEnded,
     upsertCampaignMap,
     removeCampaignMap,
     updateCampaignSpiritLayer,
