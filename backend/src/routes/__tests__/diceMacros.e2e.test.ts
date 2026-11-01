@@ -28,6 +28,7 @@ import {
   TEST_PASSWORD,
 } from '../../__tests__/helpers/db';
 import { MAX_MACROS_PER_CAMPAIGN, MAX_MACRO_NAME_LENGTH } from '../../validators/diceMacros';
+import { MAX_MACRO_CHARACTER_NAME_LENGTH } from '../../validators/diceLimits';
 
 const app = createTestApp();
 
@@ -126,6 +127,49 @@ describe('/api/campaigns/:campaignId/macros', () => {
       ).toBe(400);
     });
 
+    it('saves no character or purpose when given none', async () => {
+      const agent = await login(emails.player);
+      const res = await create(agent, { name: 'Stat roll', expression: '4d6kh3' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.macro).toMatchObject({ characterName: null, purpose: null });
+    });
+
+    it('saves a character and a purpose of its own, trimmed', async () => {
+      const agent = await login(emails.player);
+      const res = await create(agent, {
+        name: 'Goblin', expression: '1d20+4', characterName: '  Goblin boss ', purpose: ' Scimitar attack  ',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.macro).toMatchObject({ characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+      expect(await prisma.diceMacro.findUnique({ where: { id: res.body.macro.id } })).toMatchObject({
+        characterName: 'Goblin boss', purpose: 'Scimitar attack',
+      });
+
+      const listed = await agent.get(`/api/campaigns/${campaignId}/macros`);
+      expect(listed.body.macros[0]).toMatchObject({ characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+    });
+
+    it('stores an empty character or purpose as none', async () => {
+      const agent = await login(emails.player);
+      const res = await create(agent, { name: 'Blank', expression: '1d20', characterName: '   ', purpose: '' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.macro).toMatchObject({ characterName: null, purpose: null });
+    });
+
+    it(`refuses a character over ${MAX_MACRO_CHARACTER_NAME_LENGTH} characters, and saves nothing`, async () => {
+      const agent = await login(emails.player);
+      const res = await create(agent, {
+        name: 'Long', expression: '1d20', characterName: 'x'.repeat(MAX_MACRO_CHARACTER_NAME_LENGTH + 1),
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe(`Character name must be ${MAX_MACRO_CHARACTER_NAME_LENGTH} characters or fewer`);
+      expect(await prisma.diceMacro.count({ where: { campaignId } })).toBe(0);
+    });
+
     it(`refuses more than ${MAX_MACROS_PER_CAMPAIGN} in one campaign`, async () => {
       await prisma.diceMacro.createMany({
         data: Array.from({ length: MAX_MACROS_PER_CAMPAIGN }, (_, i) => ({
@@ -203,6 +247,17 @@ describe('/api/campaigns/:campaignId/macros', () => {
       expect(still?.name).toBe('Player only');
     });
 
+    it('refuses to let the DM give a player\'s macro a character or a purpose', async () => {
+      const agent = await login(emails.dm);
+      const res = await agent.put(`/api/campaigns/${campaignId}/macros/${playerMacroId}`)
+        .send({ characterName: 'Puppet', purpose: 'Hijacked' });
+
+      expect(res.status).toBe(404);
+      expect(await prisma.diceMacro.findUnique({ where: { id: playerMacroId } })).toMatchObject({
+        characterName: null, purpose: null,
+      });
+    });
+
     it('refuses someone who is not in the campaign', async () => {
       const agent = await login(emails.outsider);
       expect((await agent.get(`/api/campaigns/${campaignId}/macros`)).status).toBe(403);
@@ -253,6 +308,48 @@ describe('/api/campaigns/:campaignId/macros', () => {
       expect(res.status).toBe(200);
       expect(res.body.macro.name).toBe('Original');
       expect(res.body.macro.expression).toBe('2d6+3');
+    });
+
+    it('sets a character and a purpose without touching the name or the expression', async () => {
+      const agent = await login(emails.player);
+      const res = await agent.put(`/api/campaigns/${campaignId}/macros/${macroId}`)
+        .send({ characterName: ' Grik ', purpose: 'Initiative' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.macro).toMatchObject({
+        name: 'Original', expression: '1d20', characterName: 'Grik', purpose: 'Initiative',
+      });
+    });
+
+    it('keeps the character and the purpose through an edit that leaves them out', async () => {
+      await prisma.diceMacro.update({ where: { id: macroId }, data: { characterName: 'Grik', purpose: 'Initiative' } });
+      const agent = await login(emails.player);
+      const res = await agent.put(`/api/campaigns/${campaignId}/macros/${macroId}`).send({ name: 'Renamed' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.macro).toMatchObject({ name: 'Renamed', characterName: 'Grik', purpose: 'Initiative' });
+    });
+
+    it('clears the character with an empty string and the purpose with null', async () => {
+      await prisma.diceMacro.update({ where: { id: macroId }, data: { characterName: 'Grik', purpose: 'Initiative' } });
+      const agent = await login(emails.player);
+      const res = await agent.put(`/api/campaigns/${campaignId}/macros/${macroId}`)
+        .send({ characterName: '', purpose: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.macro).toMatchObject({ name: 'Original', characterName: null, purpose: null });
+      expect(await prisma.diceMacro.findUnique({ where: { id: macroId } })).toMatchObject({
+        characterName: null, purpose: null,
+      });
+    });
+
+    it('refuses an over-long purpose on an edit, and keeps the one it had', async () => {
+      await prisma.diceMacro.update({ where: { id: macroId }, data: { purpose: 'Initiative' } });
+      const agent = await login(emails.player);
+      const res = await agent.put(`/api/campaigns/${campaignId}/macros/${macroId}`).send({ purpose: 'x'.repeat(201) });
+
+      expect(res.status).toBe(400);
+      expect((await prisma.diceMacro.findUnique({ where: { id: macroId } }))?.purpose).toBe('Initiative');
     });
 
     it('will not let an edit make it unrollable', async () => {

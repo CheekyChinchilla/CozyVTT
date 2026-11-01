@@ -22,6 +22,12 @@ import {
   MAX_MACRO_NAME_LENGTH,
   MAX_MACRO_EXPRESSION_LENGTH,
 } from '../diceMacros';
+import {
+  MAX_MACRO_CHARACTER_NAME_LENGTH,
+  MAX_MACRO_PURPOSE_LENGTH,
+  MAX_ROLL_CHARACTER_NAME_LENGTH,
+  MAX_ROLL_PURPOSE_LENGTH,
+} from '../diceLimits';
 
 /** The first issue message, which is what the routes return. */
 const refusal = (result: { success: boolean; error?: { issues: { message: string }[] } }) =>
@@ -197,5 +203,84 @@ describe('UpdateDiceMacroSchema', () => {
     const result = UpdateDiceMacroSchema.safeParse({});
     expect(result.success).toBe(false);
     expect(refusal(result)).toMatch(/nothing to update/i);
+  });
+});
+
+/**
+ * The character a saved roll is made as when the Character box is empty, and
+ * what it is for. Both are optional free text, trimmed, and stored as null
+ * when empty, as a roll's own character name and purpose are.
+ */
+describe('a saved roll\'s character and purpose', () => {
+  const create = (fields: Record<string, unknown>) =>
+    CreateDiceMacroSchema.safeParse({ name: 'Scimitar', expression: '1d20+4', ...fields });
+
+  it('may be left out, and then are not set', () => {
+    const result = create({});
+    expect(result.success).toBe(true);
+    expect(result.data?.characterName ?? null).toBeNull();
+    expect(result.data?.purpose ?? null).toBeNull();
+  });
+
+  it('are trimmed', () => {
+    const result = create({ characterName: '  Goblin boss  ', purpose: '  Scimitar attack ' });
+    expect(result.data).toMatchObject({ characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+  });
+
+  it.each([[''], ['   '], [null]])('are null when given %j', (value) => {
+    const result = create({ characterName: value, purpose: value });
+    expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ characterName: null, purpose: null });
+  });
+
+  it(`take a character of exactly ${MAX_MACRO_CHARACTER_NAME_LENGTH} characters, counted after trimming`, () => {
+    const result = create({ characterName: ` ${'x'.repeat(MAX_MACRO_CHARACTER_NAME_LENGTH)} ` });
+    expect(result.success).toBe(true);
+  });
+
+  it(`refuse a character over ${MAX_MACRO_CHARACTER_NAME_LENGTH} characters`, () => {
+    const result = create({ characterName: 'x'.repeat(MAX_MACRO_CHARACTER_NAME_LENGTH + 1) });
+    expect(refusal(result)).toBe(`Character name must be ${MAX_MACRO_CHARACTER_NAME_LENGTH} characters or fewer`);
+  });
+
+  it(`take a purpose of exactly ${MAX_MACRO_PURPOSE_LENGTH} characters, and refuse one longer`, () => {
+    expect(create({ purpose: 'x'.repeat(MAX_MACRO_PURPOSE_LENGTH) }).success).toBe(true);
+    expect(refusal(create({ purpose: 'x'.repeat(MAX_MACRO_PURPOSE_LENGTH + 1) }))).toBe(
+      `Purpose must be ${MAX_MACRO_PURPOSE_LENGTH} characters or fewer`
+    );
+  });
+
+  it('refuse anything but text', () => {
+    expect(refusal(create({ characterName: 7 }))).toBe('Character name must be text');
+    expect(refusal(create({ purpose: ['Attack'] }))).toBe('Purpose must be text');
+  });
+
+  it('are at most 200 characters each, and always fit in a roll made from them', () => {
+    expect(MAX_MACRO_CHARACTER_NAME_LENGTH).toBe(200);
+    expect(MAX_MACRO_PURPOSE_LENGTH).toBe(200);
+    expect(MAX_MACRO_CHARACTER_NAME_LENGTH).toBeLessThanOrEqual(MAX_ROLL_CHARACTER_NAME_LENGTH);
+    expect(MAX_MACRO_PURPOSE_LENGTH).toBeLessThanOrEqual(MAX_ROLL_PURPOSE_LENGTH);
+  });
+
+  describe('on an edit', () => {
+    it('are each a valid edit on their own', () => {
+      expect(UpdateDiceMacroSchema.safeParse({ characterName: 'Grik' }).success).toBe(true);
+      expect(UpdateDiceMacroSchema.safeParse({ purpose: 'Initiative' }).success).toBe(true);
+    });
+
+    it('are cleared by an empty string or null, which is a valid edit too', () => {
+      expect(UpdateDiceMacroSchema.safeParse({ characterName: '' }).data).toEqual({ characterName: null });
+      expect(UpdateDiceMacroSchema.safeParse({ purpose: null }).data).toEqual({ purpose: null });
+    });
+
+    it('are left alone when absent', () => {
+      const result = UpdateDiceMacroSchema.safeParse({ name: 'Renamed' });
+      expect(result.data).toEqual({ name: 'Renamed' });
+    });
+
+    it('are held to the same limits', () => {
+      expect(refusal(UpdateDiceMacroSchema.safeParse({ characterName: 'x'.repeat(MAX_MACRO_CHARACTER_NAME_LENGTH + 1) }))).toMatch(/200 characters or fewer/);
+      expect(refusal(UpdateDiceMacroSchema.safeParse({ purpose: 'x'.repeat(MAX_MACRO_PURPOSE_LENGTH + 1) }))).toMatch(/200 characters or fewer/);
+    });
   });
 });

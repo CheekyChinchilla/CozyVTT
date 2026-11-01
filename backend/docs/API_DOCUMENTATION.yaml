@@ -3901,8 +3901,13 @@ paths:
         `1d20 5` with no operator between the terms — is refused here, with 400,
         and does not become a button that fails every time it is pressed; so is
         one that could divide by zero (`1d20/0`) or whose total could pass a
-        32-bit integer for any roll of its dice (`9999*9999*9999`). Both fields
-        are trimmed and must not be empty. Any
+        32-bit integer for any roll of its dice (`9999*9999*9999`). The name
+        and the expression are trimmed and must not be empty. `characterName`
+        and `purpose` are optional free text, trimmed; left out, empty or
+        `null`, each is stored as `null`. The dice panel rolls a saved roll as
+        `characterName` while its own Character box is empty, and sends
+        `purpose`, or the name when there is none, as what the roll is for.
+        `characterName` names no character record. Any
         member, spectators included, may save macros. A player may keep 50 per
         campaign; saving another answers 400.
       operationId: createDiceMacro
@@ -3928,6 +3933,22 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 200
+                characterName:
+                  type: string
+                  nullable: true
+                  maxLength: 200
+                  description: >
+                    Over 200 characters after trimming answers 400 with
+                    "Character name must be 200 characters or fewer".
+                  example: Goblin boss
+                purpose:
+                  type: string
+                  nullable: true
+                  maxLength: 200
+                  description: >
+                    Over 200 characters after trimming answers 400 with
+                    "Purpose must be 200 characters or fewer".
+                  example: Scimitar attack
       responses:
         '201':
           description: Macro saved
@@ -3983,12 +4004,14 @@ paths:
     put:
       tags:
         - Dice Macros
-      summary: Rename a macro or correct its expression
+      summary: Rename a macro, correct its expression, or set its character name and purpose
       description: >
-        Either field alone is a valid edit; a body with neither answers 400. A
-        new expression is checked the same way it was on creation, so an edit
-        cannot make a macro unrollable. A macro belonging to someone else
-        answers 404.
+        Any field alone is a valid edit, and a field left out keeps its value;
+        a body with none answers 400 with "Nothing to update: send a name, an
+        expression, a character name or a purpose". A new expression is
+        checked the same way it was on creation, so an edit cannot make a
+        macro unrollable. `characterName` or `purpose` sent empty or `null`
+        clears it. A macro belonging to someone else answers 404.
       operationId: updateDiceMacro
       security:
         - cookieAuth: []
@@ -4014,6 +4037,14 @@ paths:
                 expression:
                   type: string
                   minLength: 1
+                  maxLength: 200
+                characterName:
+                  type: string
+                  nullable: true
+                  maxLength: 200
+                purpose:
+                  type: string
+                  nullable: true
                   maxLength: 200
       responses:
         '200':
@@ -12611,7 +12642,8 @@ components:
       type: object
       description: >
         A player's saved dice roll for one campaign — a name and an expression,
-        shown as a one-click button in the dice panel. Private to whoever saved
+        shown as a one-click button in the dice panel, with an optional
+        character name and purpose of its own. Private to whoever saved
         it, the DM included. The expression is validated when written against the
         same code that rolls it, so a stored macro can always be rolled.
       properties:
@@ -12632,6 +12664,21 @@ components:
           type: string
           maxLength: 200
           example: 4d6kh3
+        characterName:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: >
+            Who the dice panel rolls it as while its Character box is empty;
+            free text, naming no character record. `null` for none.
+          example: Goblin boss
+        purpose:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: >
+            What the roll is for; `null` sends the name in its place.
+          example: Scimitar attack
         createdAt:
           type: string
           format: date-time

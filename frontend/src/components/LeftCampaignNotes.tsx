@@ -21,6 +21,7 @@ import { leftCampaignNoteQuery, useLeftCampaignsQuery } from '@/hooks/queries';
 import { apiErrorMessage } from '@/utils/errors';
 import { downloadTextFile } from '@/utils/download';
 import { leftCampaignFilename, leftCampaignMarkdown } from '@/utils/leftCampaignNotes';
+import { savedRollDetail } from '@/utils/savedRolls';
 import type { LeftCampaignDetail, LeftCampaignSummary, PersonalNoteSummary } from '@/types';
 import '@/styles/note-markdown.css';
 
@@ -187,6 +188,7 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
                   <li key={macro.id} className="flex flex-wrap items-baseline gap-x-2">
                     <span className="text-stone-gray">{macro.name}</span>
                     <code className="font-mono text-xs text-warm-gray">{macro.expression}</code>
+                    {savedRollDetail(macro) && <span className="text-xs text-warm-gray">{savedRollDetail(macro)}</span>}
                   </li>
                 ))}
               </ul>

@@ -3,7 +3,12 @@
  *
  * A saved roll's button sent only its dice, with whatever the Purpose and
  * Character boxes held, usually nothing, so the table saw "1d20+5" and not
- * "Longsword". It now goes out with its name as the roll's purpose.
+ * "Longsword". It now goes out with its name as the roll's purpose, or with a
+ * purpose of its own when it has one.
+ *
+ * A saved roll can also keep a character, for a DM who saves a creature's
+ * attack: it is rolled as that character while the Character box is empty,
+ * and the box wins when it has something in it.
  */
 
 import { it, expect, vi, beforeAll, beforeEach } from 'vitest';
@@ -42,7 +47,10 @@ vi.mock('@/contexts/WebSocketContext', () => ({
 }));
 vi.mock('@/services/dice.service', () => ({ getDiceRolls: vi.fn().mockResolvedValue([]) }));
 vi.mock('@/services/api', () => {
-  const client = { listDiceMacros: vi.fn().mockResolvedValue({ macros: [{ id: 'm1', userId: 'me', campaignId: 'campaign-1', name: 'Longsword', expression: '1d20+5', createdAt: '', updatedAt: '' }] }) };
+  const client = { listDiceMacros: vi.fn().mockResolvedValue({ macros: [
+    { id: 'm1', userId: 'me', campaignId: 'campaign-1', name: 'Longsword', expression: '1d20+5', characterName: null, purpose: null, createdAt: '', updatedAt: '' },
+    { id: 'm2', userId: 'me', campaignId: 'campaign-1', name: 'Goblin', expression: '1d20+4', characterName: 'Goblin boss', purpose: 'Scimitar attack', createdAt: '', updatedAt: '' },
+  ] }) };
   return { api: client, default: client };
 });
 vi.mock('../DiceMacroManager', () => ({ default: () => null }));
@@ -83,4 +91,59 @@ it('names a saved roll made while the session is paused, which stays on this scr
 
   expect(rollDice).not.toHaveBeenCalled();
   expect(await screen.findByText(/Longsword/, { selector: ':not(button)' })).toBeTruthy();
+});
+
+it('rolls a saved roll as its own character, for its own purpose, while the Character box is empty', async () => {
+  render(<DiceRoller />);
+  fireEvent.change(screen.getByLabelText('Purpose'), { target: { value: 'Ignored' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
+
+  await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '1d20+4', characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+});
+
+it('rolls a saved roll as the character in the Character box when it has one', async () => {
+  render(<DiceRoller />);
+  fireEvent.change(screen.getByLabelText('Character name'), { target: { value: 'Grik' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
+
+  await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ characterName: 'Grik', purpose: 'Scimitar attack' });
+});
+
+it('takes a Character box of only spaces as empty', async () => {
+  render(<DiceRoller />);
+  fireEvent.change(screen.getByLabelText('Character name'), { target: { value: '   ' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
+
+  await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ characterName: 'Goblin boss' });
+});
+
+it('sends no character for a saved roll without one while the box is empty', async () => {
+  render(<DiceRoller />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Longsword' }));
+
+  await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
+  expect(rollDice.mock.calls[0][0].characterName).toBeUndefined();
+});
+
+it('leaves a typed roll to the boxes, whatever the saved rolls hold', async () => {
+  render(<DiceRoller />);
+  await screen.findByRole('button', { name: 'Goblin' });
+  fireEvent.change(screen.getByLabelText('Dice expression'), { target: { value: '2d6' } });
+  fireEvent.click(screen.getByRole('button', { name: /^Roll$/ }));
+
+  await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '2d6', characterName: undefined, purpose: undefined });
+});
+
+it('rolls a saved roll made while the session is paused as its own character, for its own purpose', async () => {
+  campaignStatus.value = 'PAUSED';
+  render(<DiceRoller />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Goblin' }));
+
+  expect(rollDice).not.toHaveBeenCalled();
+  expect(await screen.findByText(/Goblin boss/)).toBeTruthy();
+  expect(screen.getByText(/Scimitar attack/)).toBeTruthy();
 });

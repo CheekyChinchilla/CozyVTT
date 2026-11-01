@@ -162,6 +162,15 @@ about; the list is not exhaustive.
   an existing enum, so the new types can be used at once. 1.5.4 runs on an
   upgraded database: it reads neither the table nor the column, and a
   campaign it makes takes the default.
+- `20261101181352_add_dice_macro_character` - `DiceMacro.characterName` and
+  `DiceMacro.purpose`, the character a saved roll is made as when the dice
+  panel's **Character** box is empty and what it is for. One `ALTER TABLE`
+  adding both, `TEXT` with no default, so every existing saved roll gets null
+  for both and rolls as it did. Their 200-character limit is the
+  validator's (`validators/diceMacros.ts`), as with the other text columns. No
+  existing row is changed or removed. 1.5.4 runs on an upgraded database: it
+  reads neither column, and a saved roll it makes or edits leaves them as they
+  are.
 
 ## Data migrations (one-off scripts)
 

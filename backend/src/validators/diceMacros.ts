@@ -2,7 +2,8 @@
  * What a saved dice macro may contain.
  *
  * A macro is a name and a dice expression, saved so a roll that is not on a
- * character sheet does not have to be retyped every session.
+ * character sheet does not have to be retyped every session, with an optional
+ * character name and purpose of its own.
  *
  * The expression is checked against the **real dice parser**, not a charset
  * pattern. Both of the frontend's helpers — `isValidDiceExpression` and
@@ -26,6 +27,7 @@
 
 import { z } from 'zod';
 import { parseDiceExpression, DiceParserError } from '../utils/dice-parser';
+import { MAX_MACRO_CHARACTER_NAME_LENGTH, MAX_MACRO_PURPOSE_LENGTH } from './diceLimits';
 
 /** Long enough to name a homebrew subsystem, short enough to sit on a button. */
 export const MAX_MACRO_NAME_LENGTH = 60;
@@ -113,24 +115,52 @@ const macroName = z
   .min(1, 'A macro needs a name')
   .max(MAX_MACRO_NAME_LENGTH, `Name must be ${MAX_MACRO_NAME_LENGTH} characters or fewer`);
 
+/**
+ * Free text a saved roll keeps of its own: the character it is made as when
+ * the dice panel's Character box is empty, and what it is for. Trimmed, and
+ * null when empty or null, as a roll's own character name and purpose are
+ * stored; on an edit, that clears it.
+ */
+const optionalLabel = (label: string, max: number) =>
+  z
+    .string({ error: `${label} must be text` })
+    .trim()
+    .max(max, { error: `${label} must be ${max} characters or fewer` })
+    .nullable()
+    .transform((text) => text || null)
+    .optional();
+
+const characterName = optionalLabel('Character name', MAX_MACRO_CHARACTER_NAME_LENGTH);
+const purpose = optionalLabel('Purpose', MAX_MACRO_PURPOSE_LENGTH);
+
 export const CreateDiceMacroSchema = z.object({
   name: macroName,
   expression: rollableExpression,
+  characterName,
+  purpose,
 });
 
 /**
- * Either field alone is a valid edit — a macro gets renamed, or its expression
- * corrected — but a body with neither changes nothing and is refused so a
- * mistake is visible rather than silent. Same rule as personal notes.
+ * Any field alone is a valid edit (a macro gets renamed, its expression
+ * corrected, its character cleared), but a body with none changes nothing and
+ * is refused so a mistake is visible rather than silent. Same rule as personal
+ * notes.
  */
 export const UpdateDiceMacroSchema = z
   .object({
     name: macroName.optional(),
     expression: rollableExpression.optional(),
+    characterName,
+    purpose,
   })
-  .refine((body) => body.name !== undefined || body.expression !== undefined, {
-    message: 'Nothing to update: send a name, an expression, or both',
-  });
+  .refine(
+    (body) =>
+      body.name !== undefined ||
+      body.expression !== undefined ||
+      body.characterName !== undefined ||
+      body.purpose !== undefined,
+    { message: 'Nothing to update: send a name, an expression, a character name or a purpose' }
+  );
 
 export type CreateDiceMacroInput = z.infer<typeof CreateDiceMacroSchema>;
 export type UpdateDiceMacroInput = z.infer<typeof UpdateDiceMacroSchema>;

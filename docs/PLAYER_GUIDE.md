@@ -301,15 +301,28 @@ homebrew subsystem your table invented, a recurring `2d6+3` for a house rule,
 `4d6kh3` for rolling up a new character, an attack the sheet can't describe.
 Rather than retyping those every session, save them: press **Saved** under the
 dice buttons (on a phone, at the end of their row, which scrolls sideways), give the roll a name and an expression, and it becomes a button of
-its own. Click it and it rolls, with its name as the roll's purpose, so the
-**Dice** panel shows "Longsword" and not just `1d20+5`. Whatever is in the
+its own. Click it and it rolls, with its name as the roll's purpose (or a
+purpose of its own, below), so the **Dice** panel shows "Longsword" and not
+just `1d20+5`. Whatever is in the
 **Character** box goes with it, as for a typed roll.
+
+A saved roll can also have a **Character** and a **Purpose** of its own, in the
+two optional boxes under the name and the expression (up to 200 characters
+each). While the dice panel's **Character** box is empty, the roll is made as
+the saved roll's character; when the box has a name in it, the box wins, as it
+always has. A saved roll with a purpose of its own goes out with that purpose
+in place of its name, so a button called "Goblin" can show "Scimitar attack" in
+the **Dice** panel. The dice panel's own **Purpose** box is for rolls you type;
+a saved roll leaves it alone. The character is plain text: it is not
+linked to a character sheet. The **Saved** list shows each roll's character and
+purpose under its name, and you can change or clear them with the pencil
+button (**Edit**) beside it.
 
 If you have just typed something into the expression box, opening **Saved**
 carries it across, so naming it is the only thing left to do.
 
 Your list of saved rolls is **yours alone** — not even your DM can see it, only
-the name of one you roll — and saved rolls stay
+the roll you make with one, with its character and its purpose or name — and saved rolls stay
 with the campaign you made them in, so one table's homebrew doesn't clutter
 another game. You can rename, edit or delete them from the same **Saved** button,
 and you can keep up to 50 per campaign. If an expression can't be rolled, CozyVTT

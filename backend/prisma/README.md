@@ -38,7 +38,10 @@ The schema is in [`schema.prisma`](./schema.prisma) — 23 models grouped by dom
   the dice panel. **Private to whoever saved them**, scoped and answered exactly
   the way `PersonalNote` is. The `expression` column is checked against the real
   dice parser when it is written, so a stored macro is always one that can be
-  rolled — see `validators/diceMacros.ts`
+  rolled — see `validators/diceMacros.ts`. `characterName` and `purpose`,
+  null unless set, are the character the roll is made as when the dice panel's
+  Character box is empty and what it is for; the character is free text, not a
+  link to a `Character`
 - `CampaignDocument` — shares a `DOCUMENT` asset with one campaign. A document
   is private to its uploader until linked; the link is what lets that
   campaign's members read it, and `canReadAsset` in `services/permissions.ts`

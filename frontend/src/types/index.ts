@@ -727,6 +727,10 @@ export interface DiceMacro {
   campaignId: string;
   name: string;
   expression: string;
+  /** Who it is rolled as while the Character box is empty; free text, naming no character. */
+  characterName: string | null;
+  /** What it is rolled for; without one, its name. */
+  purpose: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -715,6 +715,21 @@ describe('the chat limits', () => {
   });
 });
 
+describe('the dice limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/diceLimits.ts')).toBe(read('backend/src/validators/diceLimits.ts'));
+  });
+
+  it.each([
+    'frontend/src/components/campaign/DiceRoller.tsx',
+    'frontend/src/components/campaign/DiceMacroManager.tsx',
+  ])('give the boxes in %s their longest, with no number of their own', (file) => {
+    const source = read(file);
+    expect(source).toContain("from '@/constants/diceLimits'");
+    expect(source).not.toMatch(/maxLength=\{\d+\}/);
+  });
+});
+
 describe('the files each kind of asset may be uploaded as', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/uploadTypes.ts')).toBe(read('backend/src/validators/uploadTypes.ts'));
@@ -1157,6 +1172,36 @@ describe('the columns of a map and who is sent them', () => {
 
   it.each(['listMaps', 'getCampaignById'])('are the fields the API document gives each map %s sends, with the spirit layer', (operationId) => {
     expect(documentedMapItemFields(operationId)).toEqual([...MAP_FIELDS_SENT_TO_EVERYONE, 'spiritLayerUrl'].sort());
+  });
+});
+
+
+// The saved roll routes send every column of DiceMacro as stored. The
+// frontend's DiceMacro is what the dice panel and the Saved window read of
+// one, and the API document's DiceMacro schema describes it; a column missing
+// from either is one the page never uses or the document never mentions.
+describe('a saved roll as the routes send it', () => {
+  const columns: string[] = Object.values(Prisma.DiceMacroScalarFieldEnum).sort();
+  const model = /\nmodel DiceMacro \{([\s\S]*?)\n\}/.exec(read('backend/prisma/schema.prisma'))?.[1] ?? '';
+  const nullable = [...model.matchAll(/^\s+(\w+)\s+\w+\?/gm)].map((m) => m[1]).sort();
+
+  it('is read by the frontend\'s DiceMacro, every column of it, the nullable ones as null', () => {
+    const declared = interfaceFields(read('frontend/src/types/index.ts'), 'DiceMacro').map((line) => {
+      const m = /^(\w+):\s*(.+);$/.exec(line);
+      if (!m) throw new Error(`DiceMacro has a line this test cannot read: ${line}`);
+      return { field: m[1], orNull: /\|\s*null$/.test(m[2]) };
+    });
+    expect(nullable).toEqual(['characterName', 'purpose']);
+    expect(declared.map((d) => d.field).sort()).toEqual(columns);
+    expect(declared.filter((d) => d.orNull).map((d) => d.field).sort()).toEqual(nullable);
+  });
+
+  it('is the DiceMacro schema in the API document, the same properties nullable', () => {
+    const m = /\n {4}DiceMacro:\n {6}type: object\n[\s\S]*?\n {6}properties:\n([\s\S]*?)\n {4}\w+:\n/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer has the DiceMacro schema where this test looks; update this test with the file');
+    const properties = m[1].split(/\n(?= {8}\w+:)/);
+    expect(properties.map((p) => /^ {8}(\w+):/.exec(p)?.[1]).sort()).toEqual(columns);
+    expect(properties.filter((p) => /\n {10}nullable: true/.test(p)).map((p) => /^ {8}(\w+):/.exec(p)?.[1]).sort()).toEqual(nullable);
   });
 });
 

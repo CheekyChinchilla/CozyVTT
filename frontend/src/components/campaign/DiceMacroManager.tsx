@@ -1,5 +1,6 @@
 /**
- * Add, rename, correct and delete your saved dice rolls.
+ * Add, rename, correct and delete your saved dice rolls, and give each one a
+ * character and a purpose of its own.
  *
  * The macros themselves are one-click buttons in the dice panel; this is where
  * the list is managed, so the panel keeps a single row of buttons and nothing
@@ -13,12 +14,14 @@
  * someone save a button that fails every time they press it.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
 import { Dices, Plus, Pencil, Trash2, Loader2, Check, X } from 'lucide-react';
 import { Button, Modal, Input } from '@/components/ui';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
+import { savedRollDetail } from '@/utils/savedRolls';
+import { MAX_MACRO_CHARACTER_NAME_LENGTH, MAX_MACRO_PURPOSE_LENGTH } from '@/constants/diceLimits';
 import type { DiceMacro } from '@/types';
 
 interface DiceMacroManagerProps {
@@ -44,11 +47,15 @@ export default function DiceMacroManager({
 
   const [newName, setNewName] = useState('');
   const [newExpression, setNewExpression] = useState('');
+  const [newCharacter, setNewCharacter] = useState('');
+  const [newPurpose, setNewPurpose] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editExpression, setEditExpression] = useState('');
+  const [editCharacter, setEditCharacter] = useState('');
+  const [editPurpose, setEditPurpose] = useState('');
 
   const [macroToDelete, setMacroToDelete] = useState<DiceMacro | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -81,6 +88,8 @@ export default function DiceMacroManager({
     void load();
     setNewName('');
     setNewExpression(initialExpression.trim());
+    setNewCharacter('');
+    setNewPurpose('');
     setEditingId(null);
     setError(null);
   }, [isOpen, load, initialExpression]);
@@ -89,13 +98,19 @@ export default function DiceMacroManager({
     setSaving(true);
     setError(null);
     try {
+      const characterName = newCharacter.trim();
+      const purpose = newPurpose.trim();
       const { macro } = await api.createDiceMacro(campaignId, {
         name: newName.trim(),
         expression: newExpression.trim(),
+        ...(characterName ? { characterName } : {}),
+        ...(purpose ? { purpose } : {}),
       });
       publish([...macros, macro]);
       setNewName('');
       setNewExpression('');
+      setNewCharacter('');
+      setNewPurpose('');
     } catch (err) {
       // The server's wording explains itself — "Too many dice. Maximum 100 per
       // expression." — so it is shown rather than replaced with something vague.
@@ -109,6 +124,8 @@ export default function DiceMacroManager({
     setEditingId(macro.id);
     setEditName(macro.name);
     setEditExpression(macro.expression);
+    setEditCharacter(macro.characterName ?? '');
+    setEditPurpose(macro.purpose ?? '');
     setError(null);
   };
 
@@ -117,9 +134,12 @@ export default function DiceMacroManager({
     setSaving(true);
     setError(null);
     try {
+      // An empty character or purpose is sent as it is, which clears it.
       const { macro } = await api.updateDiceMacro(campaignId, editingId, {
         name: editName.trim(),
         expression: editExpression.trim(),
+        characterName: editCharacter.trim(),
+        purpose: editPurpose.trim(),
       });
       // Replaced in place: the order is the order of the buttons, and an edit
       // must not move one.
@@ -150,13 +170,22 @@ export default function DiceMacroManager({
 
   const canAdd = newName.trim().length > 0 && newExpression.trim().length > 0 && !saving;
 
+  const addOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && canAdd && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      void handleAdd();
+    }
+  };
+
   return (
     <>
       <Modal open={isOpen} onClose={onClose} title="Saved rolls" icon={Dices} size="md">
         <div className="space-y-4">
           <p className="text-xs text-ink-secondary">
             Rolls you save here become buttons in the dice panel. They are yours alone
-            and stay with this campaign.
+            and stay with this campaign. A roll with a character of its own is made as
+            that character while the panel's Character box is empty, and a roll goes out
+            with its purpose, or its name when it has none.
           </p>
 
           {error && (
@@ -176,6 +205,9 @@ export default function DiceMacroManager({
               Nothing saved yet. Add a roll below and it will appear in the dice panel.
             </p>
           ) : (
+            // TODO(ui): the Edit, Delete, Save and Cancel buttons are p-1.5 around a
+            // 16 px icon, so 28 by 28 px on a phone too. On a touch screen they
+            // should be 44 by 44 (touch-target), as the compact layout's controls are.
             <ul className="space-y-1.5">
               {macros.map((macro) => (
                 <li
@@ -184,18 +216,36 @@ export default function DiceMacroManager({
                 >
                   {editingId === macro.id ? (
                     <>
-                      <Input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        aria-label={`Name for ${macro.name}`}
-                        className="flex-1 min-w-0"
-                      />
-                      <Input
-                        value={editExpression}
-                        onChange={(e) => setEditExpression(e.target.value)}
-                        aria-label={`Expression for ${macro.name}`}
-                        className="flex-1 min-w-0 font-mono"
-                      />
+                      <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          aria-label={`Name for ${macro.name}`}
+                          className="min-w-0"
+                        />
+                        <Input
+                          value={editExpression}
+                          onChange={(e) => setEditExpression(e.target.value)}
+                          aria-label={`Expression for ${macro.name}`}
+                          className="min-w-0 font-mono"
+                        />
+                        <Input
+                          value={editCharacter}
+                          onChange={(e) => setEditCharacter(e.target.value)}
+                          placeholder="Character (optional)"
+                          aria-label={`Character for ${macro.name}`}
+                          maxLength={MAX_MACRO_CHARACTER_NAME_LENGTH}
+                          className="min-w-0"
+                        />
+                        <Input
+                          value={editPurpose}
+                          onChange={(e) => setEditPurpose(e.target.value)}
+                          placeholder="Purpose (optional)"
+                          aria-label={`Purpose for ${macro.name}`}
+                          maxLength={MAX_MACRO_PURPOSE_LENGTH}
+                          className="min-w-0"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={handleSaveEdit}
@@ -216,7 +266,12 @@ export default function DiceMacroManager({
                     </>
                   ) : (
                     <>
-                      <span className="flex-1 min-w-0 truncate text-sm text-ink">{macro.name}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block truncate text-sm text-ink">{macro.name}</span>
+                        {savedRollDetail(macro) && (
+                          <span className="block truncate text-xs text-ink-secondary">{savedRollDetail(macro)}</span>
+                        )}
+                      </span>
                       <span className="font-mono text-xs text-ink-secondary shrink-0">
                         {macro.expression}
                       </span>
@@ -251,27 +306,43 @@ export default function DiceMacroManager({
           {/* Add a new one */}
           <div className="pt-3 border-t border-moss-green/20 space-y-2">
             <div className="text-xs text-ink-secondary">Add a roll</div>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 placeholder="Name, e.g. Wild magic"
                 aria-label="Macro name"
-                className="flex-1 min-w-0"
+                className="min-w-0"
+                onKeyDown={addOnEnter}
               />
               <Input
                 value={newExpression}
                 onChange={(e) => setNewExpression(e.target.value)}
                 placeholder="e.g. 4d6kh3"
                 aria-label="Macro expression"
-                className="flex-1 min-w-0 font-mono"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && canAdd && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    void handleAdd();
-                  }
-                }}
+                className="min-w-0 font-mono"
+                onKeyDown={addOnEnter}
               />
+              <Input
+                value={newCharacter}
+                onChange={(e) => setNewCharacter(e.target.value)}
+                placeholder="Character (optional)"
+                aria-label="Macro character"
+                maxLength={MAX_MACRO_CHARACTER_NAME_LENGTH}
+                className="min-w-0"
+                onKeyDown={addOnEnter}
+              />
+              <Input
+                value={newPurpose}
+                onChange={(e) => setNewPurpose(e.target.value)}
+                placeholder="Purpose (optional)"
+                aria-label="Macro purpose"
+                maxLength={MAX_MACRO_PURPOSE_LENGTH}
+                className="min-w-0"
+                onKeyDown={addOnEnter}
+              />
+            </div>
+            <div className="flex justify-end">
               <Button
                 type="button"
                 onClick={handleAdd}
