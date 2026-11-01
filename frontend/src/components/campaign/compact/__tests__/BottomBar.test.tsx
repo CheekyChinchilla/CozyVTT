@@ -7,8 +7,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useGameStore } from '@/stores/gameStore';
-import { unreadBadge } from '@/components/campaign/sessionTabs';
-import BottomBar, { BOTTOM_BAR_HEIGHT, COMPACT_TABS, type BottomBarProps, type CompactTab } from '../BottomBar';
+import { SESSION_TABS, unreadBadge } from '@/components/campaign/sessionTabs';
+import BottomBar, { BAR_PANELS, BOTTOM_BAR_HEIGHT, COMPACT_TABS, type BottomBarProps, type CompactTab } from '../BottomBar';
+import { SHEET_WIDTH } from '../BottomSheet';
+import { MORE_PANELS } from '../MoreSheet';
 
 beforeEach(() => {
   act(() => { useGameStore.getState().clearGameState(); });
@@ -79,7 +81,23 @@ describe('the bottom bar', () => {
     const row = buttons()[0].parentElement as HTMLElement;
     expect(row.className).toContain('h-14');
     expect(row.className).toContain('max-w-2xl');
+    expect(row.className).toContain(SHEET_WIDTH);
     expect(BOTTOM_BAR_HEIGHT).toBe('calc(3.5rem + 1px + env(safe-area-inset-bottom, 0px))');
+  });
+
+  // The grid's column count is written as a class, which a stylesheet can
+  // only have as a literal; it must be the number of buttons.
+  it('has a column for each of its buttons', () => {
+    bar();
+    const row = buttons()[0].parentElement as HTMLElement;
+    expect(row.className.split(/\s+/)).toContain(`grid-cols-${COMPACT_TABS.length}`);
+  });
+});
+
+describe('the session panels on the compact layout', () => {
+  it('are each on the bar or in More, and never both', () => {
+    expect([...BAR_PANELS, ...MORE_PANELS].sort()).toEqual([...SESSION_TABS].sort());
+    expect(MORE_PANELS).toEqual(['notes', 'session']);
   });
 });
 
