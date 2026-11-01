@@ -67,6 +67,8 @@ router.post('/:campaignId/macros', campaignMember, async (req: AuthenticatedRequ
         userId,
         name: parsed.data.name,
         expression: parsed.data.expression,
+        characterName: parsed.data.characterName ?? null,
+        purpose: parsed.data.purpose ?? null,
       },
     });
 
@@ -104,8 +106,8 @@ router.get('/:campaignId/macros/:macroId', campaignMember, async (req: Authentic
 
 /**
  * PUT /api/campaigns/:campaignId/macros/:macroId
- * Rename a macro or correct its expression.
- * Requires: Campaign membership, and authorship.
+ * Rename a macro, correct its expression, or set or clear its character name
+ * and purpose. Requires: Campaign membership, and authorship.
  */
 router.put('/:campaignId/macros/:macroId', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -137,6 +139,8 @@ router.put('/:campaignId/macros/:macroId', campaignMember, async (req: Authentic
       data: {
         ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
         ...(parsed.data.expression !== undefined ? { expression: parsed.data.expression } : {}),
+        ...(parsed.data.characterName !== undefined ? { characterName: parsed.data.characterName } : {}),
+        ...(parsed.data.purpose !== undefined ? { purpose: parsed.data.purpose } : {}),
       },
     });
 

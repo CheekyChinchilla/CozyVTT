@@ -439,7 +439,10 @@ A player's saved dice rolls for one campaign. **Requires campaign membership.**
 
 `GET` returns your own macros, **oldest first** — that is the order they appear
 as buttons, and people aim at those without looking, so an edit must not move
-one. `POST` takes `{ name, expression }`.
+one. `POST` takes `{ name, expression }`, and may add `characterName` and
+`purpose`: free text of up to 200 characters each, trimmed, and stored as
+`null` when left out, empty or `null`. The character name names no character
+record.
 
 **They are private to whoever saved them, the DM included.** Every query is
 scoped by the session's own user id; a macro belonging to someone else answers
@@ -452,10 +455,11 @@ to 50 per campaign per player.
 
 ### `GET|PUT|DELETE /api/campaigns/:campaignId/macros/:macroId`
 
-Read, edit or delete one of your own. `PUT` accepts `name`, `expression` or both;
-a body changing neither is refused so a mistake is visible. A new expression is
-checked exactly as it was on creation, so an edit cannot leave a macro
-unrollable.
+Read, edit or delete one of your own. `PUT` accepts any of `name`,
+`expression`, `characterName` and `purpose`, and keeps any field it is not
+sent; a body with none of them is refused so a mistake is visible. A new
+expression is checked exactly as it was on creation, so an edit cannot leave a
+macro unrollable. `characterName` or `purpose` sent empty or `null` clears it.
 
 
 ### `GET /api/campaigns/left`, `GET /api/campaigns/left/:campaignId`, `GET /api/campaigns/left/:campaignId/notes` and `GET /api/campaigns/left/:campaignId/notes/:noteId`
