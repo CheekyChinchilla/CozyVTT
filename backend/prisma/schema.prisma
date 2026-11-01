@@ -360,6 +360,14 @@ model DiceMacro {
   /// macro is one that can actually be rolled — see validators/diceMacros.ts.
   expression String
 
+  /// Who the roll is made as when the dice panel's Character box is empty.
+  /// Free text, as the box is: it names no Character row. Null for none.
+  characterName String?
+
+  /// What the roll is for, shown with it in place of the name. Null for the
+  /// name itself.
+  purpose String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

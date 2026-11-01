@@ -585,6 +585,8 @@ erDiagram
         string campaignId FK
         string name
         string expression
+        string characterName
+        string purpose
         datetime createdAt
     }
 
