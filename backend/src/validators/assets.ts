@@ -31,6 +31,9 @@ export function tidyTags(tags: readonly string[]): string[] {
 }
 
 /** Comma-separated tags as one list, tidied. */
+// TODO(assets): a tag holding U+0000 passes here, and PostgreSQL refuses the
+// character in text when the asset row is written. Refuse it with a message,
+// as a campaign import leaves such a tag out (validators/campaignImport.ts).
 const tagList = text('tags')
   .transform((raw) => tidyTags([raw]))
   .pipe(

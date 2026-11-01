@@ -56,6 +56,11 @@ export const IMPORT_LIMITS = {
 
 // ── Helper sub-schemas ──────────────────────────────────────────────────────
 
+// TODO(assets): text in an archive (a campaign, map, token, creature or
+// template name, notes, a description) may hold U+0000, which PostgreSQL
+// refuses in text, so one such character fails the whole import. Drop or
+// refuse it where each field is read, as ImportAssetTagsSchema does for tags.
+
 const PositionSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
