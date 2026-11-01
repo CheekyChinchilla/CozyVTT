@@ -3021,9 +3021,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
 
   /**
+   * Whether a drag is over the map's own element. The character sheet a
+   * token opens, and its editor, are drawn on the body but are React children
+   * of the map, so their drags reach these handlers too; a drag of text
+   * between their boxes is theirs.
+   */
+  const dragOnMap = (e: React.DragEvent<HTMLDivElement>) =>
+    e.target instanceof Node && containerRef.current?.contains(e.target) === true;
+
+  /**
    * Drag-from-roster: allow drop onto map canvas
    */
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!dragOnMap(e)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
   };
@@ -3032,6 +3042,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    * Drag-from-roster: receive character token drop and place on map
    */
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    if (!dragOnMap(e)) return;
     e.preventDefault();
     if (!campaign?.id || !currentMap || userRole !== 'DM' || !canvasRef.current) return;
 
