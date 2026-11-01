@@ -97,3 +97,18 @@ export function clearLayer(ctx: CanvasRenderingContext2D): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 }
+
+/**
+ * A layer's drawing between a save and a restore that always runs, so an
+ * error part-way leaves the context's state as it was before (its alpha, its
+ * compositing, its fill) and the layer's next frame starts clean. The error
+ * goes on to the render loop, which logs it and draws the other layers.
+ */
+export function drawSaved(ctx: CanvasRenderingContext2D, draw: () => void): void {
+  ctx.save();
+  try {
+    draw();
+  } finally {
+    ctx.restore();
+  }
+}
