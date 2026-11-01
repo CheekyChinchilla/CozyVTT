@@ -17,7 +17,7 @@ import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 let current: Campaign;
 const viewer = vi.hoisted(() => ({ role: 'DM', user: { id: 'dm', platformRole: 'USER' } }));
 const updateCampaign = vi.hoisted(() => vi.fn());
-const invitationsApi = vi.hoisted(() => ({ listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn() }));
+const invitationsApi = vi.hoisted(() => ({ listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn(), removeCampaignMember: vi.fn() }));
 vi.mock('@/services/api', () => ({ default: invitationsApi, api: invitationsApi }));
 vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ campaign: current, refreshCampaign: vi.fn(), userRole: viewer.role }) }));
 // Stable, as the real one is.
@@ -35,6 +35,8 @@ beforeEach(() => {
   updateCampaign.mockReset().mockResolvedValue({});
   invitationsApi.listCampaignInvitations.mockReset().mockResolvedValue({ invitations: [] });
   invitationsApi.withdrawCampaignInvitation.mockReset().mockResolvedValue({ message: 'Invitation withdrawn' });
+  invitationsApi.removeCampaignMember.mockReset().mockResolvedValue({ message: 'Member removed' });
+  showToast.mockReset();
 });
 
 import CampaignSettingsModal from '../CampaignSettingsModal';
@@ -227,5 +229,45 @@ describe('Remove under Members', () => {
 
     expect(screen.getByRole('button', { name: 'Remove Pip from campaign' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Remove Olwen from campaign' })).toBeNull();
+  });
+});
+
+// Remove's question and its toast said "Player" whoever was removed, a
+// spectator too.
+describe("Remove's question and its toast", () => {
+  const members = () => ({
+    ...campaign(),
+    memberships: [
+      { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
+      { userId: 'sam', role: 'SPECTATOR', user: { displayName: 'Sam' } },
+    ],
+  }) as unknown as Campaign;
+
+  async function remove(name: string, title: string) {
+    fireEvent.click(screen.getByRole('button', { name: `Remove ${name} from campaign` }));
+    const confirm = await screen.findByRole('dialog', { name: title });
+    expect(confirm).toHaveTextContent(`Remove ${name} from "The Keep"?`);
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Remove' }));
+  }
+
+  it('name a spectator a spectator', async () => {
+    current = members();
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    await remove('Sam', 'Remove Spectator');
+
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Spectator removed from campaign', 'success'));
+    expect(invitationsApi.removeCampaignMember).toHaveBeenCalledWith('c1', 'sam');
+  });
+
+  it('name a player a player, as before', async () => {
+    current = members();
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    await remove('Pia', 'Remove Player');
+
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Player removed from campaign', 'success'));
   });
 });

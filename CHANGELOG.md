@@ -161,6 +161,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The remove button is no longer shown beside the campaign's owner.** A DM who had been handed the seat saw it beside the owner, who sits at the table as a player, on the **Members** tab of **Campaign Settings**, and pressing it ended in "Cannot remove the campaign owner from their own campaign". The owner's row now has no remove button.
 
+- **Removing a spectator from a campaign calls them a spectator.** The question **Remove** asks under **Members** in Campaign Settings, and the message after it, called every member a player, a spectator too: "Remove Player" and "Player removed from campaign". They now name the member's role: **Remove Spectator** and "Spectator removed from campaign" for a spectator, and the same as before for a player.
+
 - **The dashboard no longer shows a campaign you have just been removed from.** When the DM removed you, or the owner deleted the campaign, while you had it open, the page took you to your dashboard, which could go on showing the campaign's card, and not its notes under **Notes From Campaigns You Have Left**, for up to 30 seconds. The dashboard now fetches its lists again as you arrive.
 
 ## [1.5.4] - 2026-10-25
