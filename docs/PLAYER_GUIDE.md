@@ -697,9 +697,9 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 **Display Name:** Click **Edit** beside **Profile Information** to change it, then **Save Changes**. This is what everyone else sees, and it can be 2 to 50 characters.
 
 **Avatar:** Click your avatar (or the placeholder) to upload a profile picture, a JPEG, PNG or WebP image. Use the built-in crop tool to frame it:
-- Drag the image to reposition
+- Drag the image with the mouse, a finger or a pen to reposition it, or use the arrow keys (with **Shift** to move it further)
 - Use the zoom slider to zoom in/out
-- Click **Apply & Upload** when you're happy
+- Click **Apply & Upload** when you're happy, or **Cancel** (or press **Esc**) to keep your avatar as it was
 
 A new avatar replaces the old one, and the old picture is deleted. **Remove Avatar**, under your avatar, takes it away and deletes the picture, and you are shown with the placeholder again.
 
