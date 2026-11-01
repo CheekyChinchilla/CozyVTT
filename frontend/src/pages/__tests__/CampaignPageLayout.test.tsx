@@ -158,6 +158,8 @@ vi.mock('@/components/campaign/MapManager', () => ({
 }));
 
 const nothing = vi.hoisted(() => () => ({ default: () => null }));
+// The banner over a map being prepared: none here, no map is.
+vi.mock('@/components/campaign/PreparingBanner', nothing);
 vi.mock('@/components/campaign/TokenManager', nothing);
 vi.mock('@/components/campaign/SpiritLayerControls', nothing);
 vi.mock('@/components/campaign/AtmospherePanel', nothing);

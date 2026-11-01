@@ -52,6 +52,8 @@ const endTable = vi.hoisted(() => vi.fn());
 vi.mock('@/hooks/useAccessRevoked', () => ({ useAccessRevoked: () => endTable }));
 
 const nothing = vi.hoisted(() => () => ({ default: () => null }));
+// The banner over a map being prepared: none here, no map is.
+vi.mock('@/components/campaign/PreparingBanner', nothing);
 const infoProps = vi.hoisted(() => [] as Array<{ onLeft?: unknown }>);
 vi.mock('@/components/campaign/CampaignInfo', () => ({
   default: (props: { onLeft?: unknown }) => { infoProps.push(props); return null; },
