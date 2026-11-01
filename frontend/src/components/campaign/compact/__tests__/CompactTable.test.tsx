@@ -22,7 +22,7 @@ vi.mock('react-router', () => ({ useNavigate: () => page.navigate }));
 vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ userRole: page.role }) }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ status: page.status, error: null, reconnect: () => undefined }) }));
 
-import CompactTable, { CHAT_SHEET_HEIGHT } from '../CompactTable';
+import CompactTable from '../CompactTable';
 
 const campaign = (status: CampaignStatus = CampaignStatus.ACTIVE) =>
   ({ id: 'campaign-1', name: 'The Sunken Crown', status, ownerId: 'owner', memberships: [], characters: [] }) as unknown as Campaign;
@@ -170,15 +170,15 @@ describe("the bar's buttons", () => {
     expect(useGameStore.getState().sessionTab).toBe('dice');
   });
 
-  // A half sheet is 330 px on an iPhone 15 (659 px tall in Safari), which
-  // left the chat one message under its box. Chat opens taller, the map
-  // still showing above it; the others keep half the screen.
-  it('open Chat taller than the other half sheets, with the map still above it', () => {
+  // Chat opened at two thirds of the screen and covered too much of the
+  // map; its messages are denser instead (ChatMessageCompact.test.tsx), so
+  // it opens at half height like the others.
+  it('open Chat, Dice and Initiative at half the screen, the map above them', () => {
     table();
-    press('Chat');
-    expect(sheet('Chat').style.height).toBe(CHAT_SHEET_HEIGHT);
-    press('Dice');
-    expect(sheet('Dice').style.height).toBe('50dvh');
+    for (const name of ['Chat', 'Dice', 'Initiative']) {
+      press(name);
+      expect(sheet(name).style.height).toBe('50dvh');
+    }
   });
 
   it('name the sheet each opens, say whether it is open, and mark the open one', () => {

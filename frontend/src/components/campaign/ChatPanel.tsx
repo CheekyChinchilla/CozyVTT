@@ -130,8 +130,10 @@ export default function ChatPanel() {
   const { userRole, campaign } = useCampaign();
   // In the compact layout's Chat sheet, about 330 px tall on a phone, the
   // sheet's heading names the chat, so the panel keeps its own heading for
-  // screen readers only, the box starts at one line and the hint about the
-  // keys is read out but not shown: the log gets the room.
+  // screen readers only, the line with the count is slim, the box starts at
+  // one line and the hint about the keys is read out but not shown; the
+  // messages sit closer together, each a denser row (ChatMessage). The log
+  // gets the room.
   const compact = useCompactLayout();
   const onlineUserIds = useOnlineUserIds();
 
@@ -845,32 +847,59 @@ export default function ChatPanel() {
     </Button>
   );
 
+  // What the panel holds, which in a long session is not all there is.
+  const shownCount = messages.length > 0 && (
+    <span className="text-xs text-stone-gray/70 ml-auto">
+      {messages.length} shown
+    </span>
+  );
+  const clearJoinsButton = userRole === 'DM' && (
+    <button
+      onClick={() => setConfirmClearJoins(true)}
+      disabled={clearingJoins}
+      aria-label="Clear old join and leave messages"
+      title="Clear old join and leave messages"
+      className={`p-1.5 rounded-lg text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 ${
+        messages.length > 0 ? '' : 'ml-auto'
+      }${compact ? ' touch-target inline-flex items-center justify-center' : ''}`}
+    >
+      <Eraser className="w-4 h-4" />
+    </button>
+  );
+  const loadMoreButton = (
+    <Button
+      onClick={loadMoreMessages}
+      disabled={isLoadingMore}
+      variant="secondary" className={`text-sm px-4 py-2${compact ? ' min-h-11' : ''}`}
+    >
+      {isLoadingMore ? (
+        <>
+          <Loader className="w-3 h-3 animate-spin mr-2" />
+          Loading...
+        </>
+      ) : (
+        'Load More'
+      )}
+    </Button>
+  );
+  const hasEarlier = earlier.kind !== 'none' && messages.length > 0;
+
   return (
     <div className="glass-panel h-full flex flex-col">
-      {/* Chat Header */}
-      <div className={`flex items-center gap-2 border-b border-moss-green/20 ${compact ? 'px-3 py-1 min-h-9' : 'p-4'}`}>
-        {!compact && <MessageCircle className="w-5 h-5 text-brand-ink" />}
-        <h3 className={compact ? 'sr-only' : 'text-lg font-semibold text-brand-ink'}>Chat</h3>
-        {/* What the panel holds, which in a long session is not all there is. */}
-        {messages.length > 0 && (
-          <span className="text-xs text-stone-gray/70 ml-auto">
-            {messages.length} shown
-          </span>
-        )}
-        {userRole === 'DM' && (
-          <button
-            onClick={() => setConfirmClearJoins(true)}
-            disabled={clearingJoins}
-            aria-label="Clear old join and leave messages"
-            title="Clear old join and leave messages"
-            className={`p-1.5 rounded-lg text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 ${
-              messages.length > 0 ? '' : 'ml-auto'
-            }${compact ? ' touch-target inline-flex items-center justify-center' : ''}`}
-          >
-            <Eraser className="w-4 h-4" />
-          </button>
-        )}
+      {/* Chat Header. In the compact layout's sheet, whose heading names the
+          chat, the panel's heading is read out only, and the count and the
+          DM's eraser go at the top of the log beside Load More, where they
+          scroll away with the history. */}
+      {compact ? (
+        <h3 className="sr-only">Chat</h3>
+      ) : (
+      <div className="flex items-center gap-2 border-b border-moss-green/20 p-4">
+        <MessageCircle className="w-5 h-5 text-brand-ink" />
+        <h3 className="text-lg font-semibold text-brand-ink">Chat</h3>
+        {shownCount}
+        {clearJoinsButton}
       </div>
+      )}
 
       <ConfirmDialog
         isOpen={confirmClearJoins}
@@ -908,26 +937,23 @@ export default function ChatPanel() {
         aria-live={historyReads > 0 ? 'off' : 'polite'}
         aria-label="Chat messages"
         aria-relevant="additions"
-        className="flex-1 overflow-y-auto p-4 space-y-3"
+        className={compact ? 'flex-1 overflow-y-auto px-2 py-1.5 space-y-1.5' : 'flex-1 overflow-y-auto p-4 space-y-3'}
       >
-        {/* Load More Button */}
-        {earlier.kind !== 'none' && messages.length > 0 && (
-          <div className="text-center pb-2">
-            <Button
-              onClick={loadMoreMessages}
-              disabled={isLoadingMore}
-              variant="secondary" className={`text-sm px-4 py-2${compact ? ' min-h-11' : ''}`}
-            >
-              {isLoadingMore ? (
-                <>
-                  <Loader className="w-3 h-3 animate-spin mr-2" />
-                  Loading...
-                </>
-              ) : (
-                'Load More'
-              )}
-            </Button>
-          </div>
+        {/* Load More Button; on the compact layout with the count and the DM's eraser */}
+        {compact ? (
+          (messages.length > 0 || clearJoinsButton) && (
+            <div className="flex items-center gap-2">
+              {hasEarlier && loadMoreButton}
+              {shownCount}
+              {clearJoinsButton}
+            </div>
+          )
+        ) : (
+          hasEarlier && (
+            <div className="text-center pb-2">
+              {loadMoreButton}
+            </div>
+          )
         )}
 
         {/* Messages List */}
