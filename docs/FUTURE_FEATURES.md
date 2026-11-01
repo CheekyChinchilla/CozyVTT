@@ -51,7 +51,6 @@ _Nothing at present._
 ### Play and connection
 
 - `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
-- `next release` **The dice panels follow the computer's dark mode and not the app's theme,** so a light theme on a computer set to dark shows dark dice panels (`DiceRoller.tsx`, `DiceResult.tsx`).
 - `after the next release` **Deleting a campaign from Campaign Settings tells its owner twice** (`CampaignSettingsModal.tsx`).
 
 ### Maps

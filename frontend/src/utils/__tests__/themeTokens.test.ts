@@ -135,6 +135,18 @@ describe('themed surfaces use semantic tokens', () => {
     expect(found).toEqual([]);
   });
 
+  // Tailwind's dark: variant follows the computer's dark mode, which the app's
+  // theme does not set, so a light theme on a computer set to dark drew the
+  // dice panels dark. The tokens follow the theme. No file is exempt.
+  it('uses no dark: variant', () => {
+    const DARK = /\bdark:(?=[\w-])/g;
+    const found = Object.entries(SOURCES)
+      .map(([path, source]) => ({ file: path, count: (source.match(DARK) ?? []).length }))
+      .filter((entry) => entry.count > 0)
+      .map((entry) => `${entry.file} (${entry.count})`);
+    expect(found).toEqual([]);
+  });
+
   it('keeps the exemption list small and intentional', () => {
     // A growing exemption list means the rule is being worked around rather
     // than followed; make that visible in review.

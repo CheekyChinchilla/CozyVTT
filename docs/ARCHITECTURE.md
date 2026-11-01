@@ -340,7 +340,7 @@ read bare channels as a color and paint nothing.
 | **Ink variants** | `brand-ink`, `accent-ink`, `spirit-ink`, `danger-ink`, `success-ink`, `warning-ink`, `info-ink` | **Text** in that color |
 | States | `danger`, `success`, `warning`, `info`, `spirit` | Status fills, borders, tints |
 
-**Three rules keep themes readable:**
+**Four rules keep themes readable:**
 
 1. **Use `-ink` when the color is text.** `accent` is a fill — as text it measured as low as 1.84:1.
    The `-ink` variants are derived per theme by `deriveReadableTokens`
@@ -357,13 +357,16 @@ read bare channels as a color and paint nothing.
 3. **Never use a raw Tailwind palette color on a themed surface.** `bg-red-50` stays pale pink on a
    dark theme. Use the state tokens, or the `.alert-*` / `.badge-*` classes in
    [index.css](../frontend/src/index.css).
+4. **Never use Tailwind's `dark:` variant.** It follows the computer's light or dark setting
+   (`prefers-color-scheme`), which the theme does not set: `color-scheme` from rule 2 changes only
+   the browser's own controls. The tokens already follow the theme.
 
 The second rule is enforced by a test: `utils/__tests__/themeTokens.test.ts` fails if raw palette
 colors appear outside the two exempt areas (character sheets, which are deliberately styled as light
 "paper" cards, and the dark tool panels over the map, the DM's and the drawing tools). The first is not. `utils/__tests__/themes.contrast.test.ts`
 checks that every preset theme's text tokens, the `-ink` ones included, meet AA on the backgrounds
 they are used on, but nothing fails when text uses a plain fill token such as `text-danger`, so
-review has to catch that.
+review has to catch that. `themeTokens.test.ts` also fails on any `dark:` class.
 
 ### Data Flow (Campaign Page)
 

@@ -60,15 +60,16 @@ function rollLocally(
   };
 }
 
-// Quick roll button configurations with whimsical forest colors
+// Quick roll button configurations with whimsical forest colors: a 15% tint,
+// 30% under the pointer, on which the theme's ink reads in every theme.
 const QUICK_ROLLS = [
-  { label: 'd4', expression: '1d4', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
-  { label: 'd6', expression: '1d6', color: 'bg-success/15 dark:bg-success/30 border-success/50 hover:bg-success/80 dark:hover:bg-success/40' },
-  { label: 'd8', expression: '1d8', color: 'bg-spirit/15 dark:bg-spirit/30 border-spirit/50 hover:bg-spirit/80 dark:hover:bg-spirit/40' },
-  { label: 'd10', expression: '1d10', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
-  { label: 'd12', expression: '1d12', color: 'bg-token-friendly/15 dark:bg-token-friendly/30 border-token-friendly/50 hover:bg-token-friendly/80 dark:hover:bg-token-friendly/40' },
-  { label: 'd20', expression: '1d20', color: 'bg-danger/15 dark:bg-danger/30 border-danger/50 hover:bg-danger/80 dark:hover:bg-danger/40' },
-  { label: 'd100', expression: '1d100', color: 'bg-info/15 dark:bg-info/30 border-info/50 hover:bg-info/80 dark:hover:bg-info/40' },
+  { label: 'd4', expression: '1d4', color: 'bg-warning/15 border-warning/50 hover:bg-warning/30' },
+  { label: 'd6', expression: '1d6', color: 'bg-success/15 border-success/50 hover:bg-success/30' },
+  { label: 'd8', expression: '1d8', color: 'bg-spirit/15 border-spirit/50 hover:bg-spirit/30' },
+  { label: 'd10', expression: '1d10', color: 'bg-warning/15 border-warning/50 hover:bg-warning/30' },
+  { label: 'd12', expression: '1d12', color: 'bg-token-friendly/15 border-token-friendly/50 hover:bg-token-friendly/30' },
+  { label: 'd20', expression: '1d20', color: 'bg-danger/15 border-danger/50 hover:bg-danger/30' },
+  { label: 'd100', expression: '1d100', color: 'bg-info/15 border-info/50 hover:bg-info/30' },
 ];
 
 const SPECIAL_ROLLS = [
@@ -825,7 +826,7 @@ export default function DiceRoller() {
   const clearHistoryButton = userRole === 'DM' && rolls.length > 0 && (
     <button
       onClick={handleClearHistory}
-      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/15 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all${compact ? ' touch-target' : ''}`}
+      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 transition-all${compact ? ' touch-target' : ''}`}
       title="Clear all roll history"
     >
       <Trash2 className="w-3 h-3" />
@@ -862,7 +863,7 @@ export default function DiceRoller() {
       <div className="shrink-0 p-3 border-b border-ink-muted/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Dices className="w-4 h-4 text-brand-ink dark:text-brand-ink" />
+            <Dices className="w-4 h-4 text-brand-ink" />
             <h2 className="text-base font-semibold text-ink">
               Dice Roller
             </h2>
@@ -942,7 +943,7 @@ export default function DiceRoller() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mb-2 flex items-center gap-2 text-danger-ink dark:text-danger-ink text-xs"
+              className="mb-2 flex items-center gap-2 text-danger-ink text-xs"
             >
               <AlertCircle className="w-3 h-3 shrink-0" />
               <span>{error}</span>
@@ -1051,7 +1052,7 @@ export default function DiceRoller() {
 
         {/* Hint / Rate Limit Countdown; the hint is left out of the compact layout's short footer. */}
         {rateLimitCooldown > 0 ? (
-          <div className="mt-1.5 text-xs text-danger-ink dark:text-danger-ink text-center font-medium">
+          <div className="mt-1.5 text-xs text-danger-ink text-center font-medium">
             You may roll again in: {rateLimitCooldown} second{rateLimitCooldown !== 1 ? 's' : ''}
           </div>
         ) : (
