@@ -710,7 +710,8 @@ describe('the chat limits', () => {
     expect(read('backend/src/routes/campaigns.ts')).toContain('limitNum > MAX_CHAT_HISTORY_PAGE');
     const walk = read('frontend/src/utils/messageHistory.ts');
     expect(walk).toContain("from '@/constants/chatLimits'");
-    expect(walk).toContain('read(MAX_CHAT_HISTORY_PAGE, cursor)');
+    expect(walk).toContain('let limit = MAX_CHAT_HISTORY_PAGE;');
+    expect(walk).toContain('read(limit, cursor)');
   });
 });
 
