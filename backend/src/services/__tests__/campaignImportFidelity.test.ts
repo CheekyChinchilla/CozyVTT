@@ -19,6 +19,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import sharp from 'sharp';
 
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-fidelity-'));
 const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
@@ -130,6 +131,67 @@ describe('a campaign exported and imported again', () => {
     expect(storedWalls.map(({ id: _id, ...w }) => w)).toEqual(walls.map(({ id: _id, ...w }) => w));
     const storedLights = map.lights as unknown as StoredLight[];
     expect(storedLights.map(({ id: _id, ...l }) => l)).toEqual(lights.map(({ id: _id, ...l }) => l));
+  }, 60_000);
+
+  it('brings back every picture, creature and token template, each picture byte for byte', async () => {
+    const source = await createTestCampaign(userId, { name: 'Every file' });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    // Four pictures of their own, the map's random enough that deflate
+    // cannot shrink it and larger than one read.
+    const noise = { type: 'gaussian', mean: 128, sigma: 40 } as const;
+    const pictures: Record<string, { bytes: Buffer; type: 'MAP' | 'TOKEN' }> = {
+      'Hall.png': { bytes: await sharp({ create: { width: 400, height: 300, channels: 3, background: '#808080', noise } }).png().toBuffer(), type: 'MAP' },
+      'Goblin.png': { bytes: await sharp({ create: { width: 2, height: 2, channels: 4, background: '#3a7d44' } }).png().toBuffer(), type: 'TOKEN' },
+      'Ogre.png': { bytes: await sharp({ create: { width: 3, height: 2, channels: 4, background: '#7d443a' } }).png().toBuffer(), type: 'TOKEN' },
+      'Crate.png': { bytes: await sharp({ create: { width: 2, height: 3, channels: 4, background: '#443a7d' } }).png().toBuffer(), type: 'TOKEN' },
+    };
+    const address: Record<string, string> = {};
+    for (const [name, { bytes, type }] of Object.entries(pictures)) {
+      const file = path.join(UPLOAD_DIR, `every-file-${name}`);
+      fs.writeFileSync(file, bytes);
+      const asset = await prisma.asset.create({
+        data: {
+          type, scope: 'CAMPAIGN', campaignId: source.id, uploadedById: userId, filename: path.basename(file),
+          originalName: name, mimeType: 'image/png', fileSize: bytes.length, filePath: file, name,
+        },
+      });
+      address[name] = `/api/assets/${type === 'MAP' ? 'maps' : 'tokens'}/${asset.id}`;
+    }
+    await prisma.map.create({
+      data: {
+        campaignId: source.id, name: 'Hall', imageUrl: address['Hall.png'], baseLayerUrl: address['Hall.png'],
+        width: 8, height: 6, gridSize: 50, annotations: [],
+        tokens: [{ id: randomUUID(), ...token({ imageUrl: address['Goblin.png'], layer: 'token', visible: true, type: 'npc' }) }],
+      },
+    });
+    const statBlock = { ac: 12, speed: '30 ft.', abilities: { str: 11, dex: 12, con: 12, int: 10, wis: 10, cha: 10 } };
+    await prisma.creatureTemplate.create({
+      data: { campaignId: source.id, createdById: userId, name: 'Ogre', imageUrl: address['Ogre.png'], statBlock, source: 'custom' },
+    });
+    await prisma.tokenTemplate.create({
+      data: { campaignId: source.id, createdById: userId, name: 'Crate', imageUrl: address['Crate.png'], type: 'object' },
+    });
+
+    const file = path.join(SCRATCH, 'every-file.cozyvtt');
+    const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
+    await prepared.writeTo(fs.createWriteStream(file));
+    const result = await importCampaign(file, userId);
+
+    expect(result).toMatchObject({ mapCount: 1, tokenCount: 1, warnings: [], skipped: [] });
+    const imported = await prisma.campaign.findUniqueOrThrow({
+      where: { id: result.campaignId },
+      include: { assets: true, maps: true, creatureTemplates: true, tokenTemplates: true },
+    });
+    const received = Object.fromEntries(imported.assets.map((a) => [a.originalName, fs.readFileSync(path.resolve(a.filePath))]));
+    expect(received).toEqual(Object.fromEntries(Object.entries(pictures).map(([name, p]) => [name, p.bytes])));
+    // Each points at its own copy.
+    const idOf = (name: string) => imported.assets.find((a) => a.originalName === name)?.id;
+    const [map] = imported.maps;
+    expect(map.imageUrl).toContain(idOf('Hall.png'));
+    expect((map.tokens as unknown as StoredToken[])[0].imageUrl).toContain(idOf('Goblin.png'));
+    expect(imported.creatureTemplates.map((c) => [c.name, c.imageUrl?.includes(idOf('Ogre.png')!)])).toEqual([['Ogre', true]]);
+    expect(imported.tokenTemplates.map((t) => [t.name, t.imageUrl?.includes(idOf('Crate.png')!)])).toEqual([['Crate', true]]);
   }, 60_000);
 });
 

@@ -141,6 +141,44 @@ describe('a campaign export', () => {
     expect(entries.find((e) => e.path === 'campaign.json')?.compressionMethod).toBe(8);
   }, 60_000);
 
+  it('logs the size of the archive it sent', async () => {
+    await mapWithPicture('Measured Keep', 3 * MB);
+    const info = jest.spyOn(logger, 'info');
+
+    const res = await exportOverSocket(() => {});
+
+    expect(res.status).toBe(200);
+    const call = info.mock.calls.map((c) => c as unknown[]).find((c) => c[0] === 'Campaign exported');
+    expect(call?.[1]).toMatchObject({ archiveSize: res.body.length });
+  }, 60_000);
+
+  // Root reads a file whatever its mode, so the refusal below cannot be set
+  // up for it.
+  const asAnAccount = process.getuid?.() === 0 ? it.skip : it;
+  asAnAccount('ends the download unfinished when a picture cannot be read, and the server carries on', async () => {
+    await mapWithPicture('Locked Keep', 2 * MB);
+    fs.chmodSync(path.join(UPLOAD_DIR, 'Locked Keep.png'), 0o000);
+    const failed = jest.spyOn(logger, 'error');
+    try {
+      const ended = await new Promise<string>((resolve) => {
+        http
+          .get({ host: '127.0.0.1', port, path: `/api/campaigns/${campaignId}/export`, headers: { Cookie: cookie } }, (res) => {
+            res.on('data', () => {});
+            res.on('end', () => resolve('finished'));
+            res.on('aborted', () => resolve('cut off'));
+            res.on('error', () => resolve('cut off'));
+          })
+          .on('error', () => resolve('cut off'));
+      });
+
+      expect(ended).toBe('cut off');
+      expect(failed.mock.calls.some((call) => (call as unknown[])[0] === 'Campaign export stopped part-way')).toBe(true);
+      expect((await agent.get('/api/auth/me')).status).toBe(200);
+    } finally {
+      fs.chmodSync(path.join(UPLOAD_DIR, 'Locked Keep.png'), 0o600);
+    }
+  }, 60_000);
+
   it('keeps memory bounded however large the campaign is', async () => {
     await mapWithPicture('Huge Keep', 150 * MB);
     const before = process.memoryUsage().rss;
