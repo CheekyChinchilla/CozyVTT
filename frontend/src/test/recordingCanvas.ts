@@ -54,7 +54,13 @@ export class FakeImage {
   private source = '';
   set src(value: string) { this.source = value; pictures.push(this); }
   get src() { return this.source; }
+  private finishDecoding: (() => void) | null = null;
+  /** Decoding ahead, which finishes when the test calls `decoded`. */
+  decode(): Promise<void> { return new Promise((resolve) => { this.finishDecoding = resolve; }); }
   load() { act(() => { this.onload?.(); }); }
+  fail() { act(() => { this.onerror?.(new Event('error')); }); }
+  /** Finishes decoding ahead, and lets the page act on it. */
+  async decoded() { await act(async () => { this.finishDecoding?.(); }); }
 }
 
 /** Lets the map's render loop draw its next frame. */

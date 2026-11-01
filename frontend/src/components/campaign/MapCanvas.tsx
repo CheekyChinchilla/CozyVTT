@@ -139,7 +139,7 @@ import ActionSheet, { headedMenu } from '@/components/campaign/compact/ActionShe
 import { TokenSheetPicture, tokenSheetLine } from '@/components/campaign/compact/tokenSheetHeader';
 import { anyMenuShown, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
-import { mapImageState } from './map/mapImageState';
+import { mapImageState, pictureFor, PICTURE_DECODE_WAIT_MS, type LoadedPicture } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
 import { useTopBand, underBand, useMeasuredBottom, useMeasuredHeight, BAND_GAP } from './map/toolbarLayout';
 
@@ -255,9 +255,18 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const [deviceRatio, setDeviceRatio] = useState(readDeviceRatio);
   // The ratio the canvases are drawn at: the screen's, within the limits.
   const dpr = effectiveDpr(deviceRatio, canvasSize.width, canvasSize.height);
-  const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
+  // The last map picture loaded, and the map and address of one that did
+  // not load. The picture drawn is decided from them for the map on screen
+  // (map/mapImageState.ts), so no map is drawn on another map's picture.
+  const [loadedPicture, setLoadedPicture] = useState<LoadedPicture<HTMLImageElement> | null>(null);
+  const [failedPicture, setFailedPicture] = useState<{ mapId: string; url: string } | null>(null);
+  const mapImage = pictureFor(loadedPicture, currentMap);
+  const mapImageRef = useRef(mapImage);
+  mapImageRef.current = mapImage;
+  const imageLoaded = mapImage !== null;
+  const imageError = failedPicture !== null && failedPicture.mapId === currentMap?.id && failedPicture.url === currentMap.imageUrl
+    ? 'Failed to load map image'
+    : null;
   const imageState = mapImageState(currentMap, imageLoaded, imageError);
 
   // Spirit layer image
@@ -907,42 +916,59 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // ============================================
 
   /**
-   * Load map image when currentMap changes
+   * Load the map's picture when the map or its picture changes. A new
+   * picture for the map on screen takes the old one's place only once it
+   * has loaded and decoded, in one frame, so every screen keeps the map and
+   * its tokens meanwhile; if it does not load, the old one stays and the
+   * error shows over it. A map with nothing drawn yet shows its picture as
+   * soon as it has loaded.
    */
+  const pictureMapId = currentMap?.id;
+  const pictureUrl = currentMap?.imageUrl;
   useEffect(() => {
-    if (!currentMap?.imageUrl) {
-      setMapImage(null);
-      setImageLoaded(false);
-      setImageError(null);
+    setFailedPicture(null);
+    if (!pictureMapId || !pictureUrl) {
+      setLoadedPicture(null);
       return;
     }
 
-    setImageLoaded(false);
-    setImageError(null);
-
+    let current = true;
     const img = new Image();
     img.crossOrigin = 'anonymous'; // For CORS support
 
+    let shown = false;
+    let decodeWait: ReturnType<typeof setTimeout> | undefined;
+    const show = () => {
+      if (!current || shown) return;
+      shown = true;
+      clearTimeout(decodeWait);
+      setLoadedPicture({ mapId: pictureMapId, url: pictureUrl, image: img });
+    };
     img.onload = () => {
-      setMapImage(img);
-      setImageLoaded(true);
-      setImageError(null);
+      if (mapImageRef.current === null) {
+        show();
+        return;
+      }
+      // A picture the browser will not decode ahead, or has not decoded in
+      // PICTURE_DECODE_WAIT_MS, is shown anyway, and decoded on its first draw.
+      decodeWait = setTimeout(show, PICTURE_DECODE_WAIT_MS);
+      void img.decode().catch(() => undefined).then(show);
     };
 
     img.onerror = () => {
-      setImageError('Failed to load map image');
-      setImageLoaded(false);
-      setMapImage(null);
+      setFailedPicture({ mapId: pictureMapId, url: pictureUrl });
     };
 
     // Use the imageUrl directly - backend now returns full paths
-    img.src = currentMap.imageUrl;
+    img.src = pictureUrl;
 
     return () => {
+      current = false;
+      clearTimeout(decodeWait);
       img.onload = null;
       img.onerror = null;
     };
-  }, [currentMap?.imageUrl]);
+  }, [pictureMapId, pictureUrl]);
 
   // ============================================
   // Spirit Layer Image Loading
@@ -4680,9 +4706,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* Image Error State */}
-      {imageState === 'error' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
+      {/* Image Error State. A new picture that did not load leaves the one
+          before it drawn, and presses pass through the message to the map. */}
+      {(imageState === 'error' || imageState === 'kept') && (
+        <div className={`absolute inset-0 flex items-center justify-center ${imageState === 'kept' ? 'pointer-events-none' : 'bg-parchment/80'}`}>
           <div className="glass-panel p-4 text-center">
             <p className="text-sm text-danger-ink mb-2">{imageError}</p>
             <p className="text-xs text-stone-gray">Check map image URL</p>

@@ -12,15 +12,19 @@
  * The stand-ins are those of MapCanvasTouch.test.tsx. jsdom measures every
  * element as 0 by 0 and has no media queries, so the container's rectangle,
  * the ratio, `matchMedia` and the resize observer are stood in for here.
- * Canvas drawing is off except in the last group, which records each layer's
- * calls.
+ * Canvas drawing is off except in the groups that record each layer's calls.
+ *
+ * The last two groups are about the map's picture arriving: a new map is
+ * fitted to the view once, and a new picture for the map on screen takes
+ * the old one's place only when it is ready.
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import type { CampaignMap, Token } from '@/types';
 import { mouse } from '@/test/pointer';
 import { recordDrawing, nextFrame, pictures, FakeImage } from '@/test/recordingCanvas';
+import { PICTURE_DECODE_WAIT_MS } from '../map/mapImageState';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -492,5 +496,220 @@ describe('fitting a new map to the view', () => {
     resizeContainer(400, 300);
 
     expect(zoom()).toBe('54%');
+  });
+});
+
+// ── A new picture for the map on screen ─────────────────────────────────────
+
+// Edit Map's picture change reaches every member's page as the same map with
+// a new address. The map and its tokens stay drawn on the picture they had
+// until the new one is ready; a switch to another map waits for its own.
+describe('a new picture for the map on screen', () => {
+  const drawing = recordDrawing();
+  const OLD = '/api/assets/maps/x';
+  const NEW = '/api/assets/maps/y';
+  const NEWER = '/api/assets/maps/w';
+  const OTHER = '/api/assets/maps/z';
+  /** The last picture asked for at an address. */
+  const pictureAt = (src: string) => pictures.filter((p) => p.src === src).pop()!;
+  /** The pictures a layer drew among its calls. */
+  const picturesIn = (calls: Array<{ method: string; args: unknown[] }>) =>
+    calls.filter((c) => c.method === 'drawImage' && c.args[0] instanceof FakeImage).map((c) => c.args[0]);
+  const tokenCircles = (calls: Array<{ method: string; args: unknown[] }>) => calls.filter((c) => c.method === 'arc').length;
+  const zoom = () => screen.getByText(/^\d+%$/).textContent;
+  /** Page position of map pixel (x, y) in the fitted view: 54%, centred. */
+  const fitted = (x: number, y: number) => {
+    const z = (600 * 0.9) / 1000;
+    return { clientX: 100 + (800 - 1000 * z) / 2 + x * z, clientY: 50 + (600 - 1000 * z) / 2 + y * z };
+  };
+  const fittedSquare = (x: number, y: number) => fitted(x * 50 + 25, (19 - y) * 50 + 25);
+
+  async function shown() {
+    render(<MapCanvas />);
+    act(() => { useGameStore.getState().setTokens([token('tok-goblin', 'Goblin', 5, 13)]); });
+    pictureAt(OLD).load();
+    await nextFrame();
+    const [terrain, tokensLayer] = layers();
+    expect(picturesIn(drawing.take(terrain))).toEqual([pictureAt(OLD)]);
+    expect(tokenCircles(drawing.take(tokensLayer))).toBeGreaterThan(0);
+  }
+
+  it('keeps drawing the map and its tokens on the old picture until the new one has loaded, then draws the new one', async () => {
+    await shown();
+    const old = pictureAt(OLD);
+    const [terrain, tokensLayer] = layers();
+
+    act(() => { h.set({ currentMap: mapWith({ imageUrl: NEW }) }); });
+    await nextFrame();
+
+    expect(screen.queryByText('Loading map...')).toBeNull();
+    expect(picturesIn(drawing.take(terrain))).toEqual([old]);
+    expect(tokenCircles(drawing.take(tokensLayer))).toBeGreaterThan(0);
+
+    // Loaded, and still decoding: nothing of it is drawn until it is ready.
+    pictureAt(NEW).load();
+    await nextFrame();
+    expect(picturesIn(drawing.take(terrain))).not.toContain(pictureAt(NEW));
+    expect(screen.queryByText('Loading map...')).toBeNull();
+
+    await pictureAt(NEW).decoded();
+    await nextFrame();
+
+    expect(picturesIn(drawing.take(terrain))).toEqual([pictureAt(NEW)]);
+    expect(screen.queryByText('Loading map...')).toBeNull();
+  });
+
+  it('leaves the view and a carried token as they were', async () => {
+    await shown();
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom In' }));
+    const zoomed = zoom();
+    expect(zoomed).not.toBe('54%');
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom Out' }));
+    expect(zoom()).toBe('54%');
+
+    mouse.down(surface(), fittedSquare(5, 13));
+    mouse.up(surface(), fittedSquare(5, 13));
+    expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a' }]);
+
+    act(() => { h.set({ currentMap: mapWith({ imageUrl: NEW }) }); });
+    pictureAt(NEW).load();
+    await pictureAt(NEW).decoded();
+    await nextFrame();
+    expect(picturesIn(drawing.take(layers()[0]))).toEqual([pictureAt(NEW)]);
+
+    expect(zoom()).toBe('54%');
+    expect(sentOf('token.move.end')).toEqual([]);
+    mouse.down(surface(), fittedSquare(8, 2));
+    mouse.up(surface(), fittedSquare(8, 2));
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 8, y: 2 }]);
+  });
+
+  it('keeps the old picture when the new one does not load, and says so', async () => {
+    await shown();
+    const old = pictureAt(OLD);
+    const [terrain, tokensLayer] = layers();
+
+    act(() => { h.set({ currentMap: mapWith({ imageUrl: NEW }) }); });
+    pictureAt(NEW).fail();
+    await nextFrame();
+
+    expect(screen.getByText('Failed to load map image')).toBeInTheDocument();
+    expect(picturesIn(drawing.take(terrain))).toEqual([old]);
+    expect(tokenCircles(drawing.take(tokensLayer))).toBeGreaterThan(0);
+  });
+
+  it('shows another map only on its own picture, loading until it has', async () => {
+    await shown();
+    const [terrain, tokensLayer] = layers();
+
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B', imageUrl: NEW }) }); });
+    await nextFrame();
+
+    expect(screen.getByText('Loading map...')).toBeInTheDocument();
+    expect(picturesIn(drawing.take(terrain))).toEqual([]);
+    expect(tokenCircles(drawing.take(tokensLayer))).toBe(0);
+
+    pictureAt(NEW).load();
+    await nextFrame();
+
+    expect(screen.queryByText('Loading map...')).toBeNull();
+    expect(picturesIn(drawing.take(terrain))).toEqual([pictureAt(NEW)]);
+  });
+
+  it('shows another map at the same address on that picture at once', async () => {
+    await shown();
+    const old = pictureAt(OLD);
+    const [terrain] = layers();
+
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await nextFrame();
+
+    expect(screen.queryByText('Loading map...')).toBeNull();
+    expect(picturesIn(drawing.take(terrain))).toEqual([old]);
+  });
+
+  // A late load or decode belongs to the map and address it was asked for:
+  // one the page has moved on from changes nothing.
+  it('draws neither map on a picture that finishes decoding after the table has moved on', async () => {
+    await shown();
+    act(() => { h.set({ currentMap: mapWith({ imageUrl: NEW }) }); });
+    const pending = pictureAt(NEW);
+    pending.load();
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B', imageUrl: OTHER }) }); });
+    pictureAt(OTHER).load();
+    await pending.decoded();
+    await nextFrame();
+
+    const drawn = picturesIn(drawing.take(layers()[0]));
+    expect(drawn).not.toContain(pending);
+    expect(drawn).toEqual([pictureAt(OTHER)]);
+    expect(screen.queryByText('Loading map...')).toBeNull();
+  });
+
+  it('ends a second change of picture made before the first is ready on the second', async () => {
+    await shown();
+    act(() => { h.set({ currentMap: mapWith({ imageUrl: NEW }) }); });
+    const first = pictureAt(NEW);
+    first.load();
+    act(() => { h.set({ currentMap: mapWith({ imageUrl: NEWER }) }); });
+    const second = pictureAt(NEWER);
+    second.load();
+    await second.decoded();
+    await nextFrame();
+    expect(picturesIn(drawing.take(layers()[0]))).toEqual([second]);
+
+    await first.decoded();
+    await nextFrame();
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Zoom In' })); });
+    await nextFrame();
+    expect(picturesIn(drawing.take(layers()[0]))).toEqual([second]);
+  });
+
+  it("draws only A's picture after a switch to B and straight back, before and after B's loads", async () => {
+    await shown();
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B', imageUrl: OTHER }) }); });
+    const forB = pictureAt(OTHER);
+    act(() => { h.set({ currentMap: mapWith() }); });
+    await nextFrame();
+    /** The addresses of the pictures the terrain drew since the last look, each once. */
+    const srcs = () => [...new Set(picturesIn(drawing.take(layers()[0])).map((p) => (p as FakeImage).src))];
+    expect(srcs()).toEqual([OLD]);
+
+    forB.load();
+    pictureAt(OLD).load();
+    await pictureAt(OLD).decoded();
+    await nextFrame();
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Zoom In' })); });
+    await nextFrame();
+    expect(srcs()).toEqual([OLD]);
+    expect(screen.queryByText('Loading map...')).toBeNull();
+  });
+
+  // A decoding that never ends must not keep the old picture for good.
+  it('shows a new picture whose decoding has not ended after PICTURE_DECODE_WAIT_MS', async () => {
+    await shown();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      act(() => { h.set({ currentMap: mapWith({ imageUrl: NEW }) }); });
+      pictureAt(NEW).load();
+      act(() => { vi.advanceTimersByTime(PICTURE_DECODE_WAIT_MS - 1); });
+      await nextFrame();
+      expect(picturesIn(drawing.take(layers()[0]))).not.toContain(pictureAt(NEW));
+
+      act(() => { vi.advanceTimersByTime(1); });
+      await nextFrame();
+      expect(picturesIn(drawing.take(layers()[0]))).toEqual([pictureAt(NEW)]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows the error over a first picture that does not load', async () => {
+    render(<MapCanvas />);
+    pictureAt(OLD).fail();
+    await nextFrame();
+
+    expect(screen.getByText('Failed to load map image')).toBeInTheDocument();
+    expect(picturesIn(drawing.take(layers()[0]))).toEqual([]);
   });
 });
