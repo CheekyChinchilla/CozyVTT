@@ -13,7 +13,8 @@ import { LIMIT_NOTE_CLASS } from '../limitNoteClass';
 import { SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 import type { CoC7eWeapon } from '@/types/game-systems';
 import { cocDamageWithBonus, cocWeaponSkillValue } from '@/utils/rules/callOfCthulhu7e';
-import { isValidDiceExpression } from '@/utils/diceExpression';
+import { diceExpressionProblem } from '@/utils/diceExpression';
+import { notARoll } from '../../useSheetRolls';
 
 // The weapon shape lives in types/game-systems. This file used to keep its own
 // copy, which required `skill`, `damage` and the rest that the backend schema
@@ -136,13 +137,15 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                 // does not have reads as no number.
                 const namedValue = cocWeaponSkillValue(skills, weapon.skill ?? '', Number.NaN);
                 const damageRoll = weapon.damage ? cocDamageWithBonus(weapon.damage, damageBonus) : '';
-                // Damage the dice cannot read is shown and not offered as a roll.
-                const rollsDamage = isClickable && damageRoll !== '' && isValidDiceExpression(damageRoll);
+                // Damage the dice cannot read is shown and not offered as a
+                // roll: its title gives the parser's reason.
+                const damageProblem = isClickable && damageRoll !== '' ? diceExpressionProblem(damageRoll) : null;
+                const rollsDamage = isClickable && damageRoll !== '' && damageProblem === null;
                 const skillPurpose = `${weapon.name} (${weapon.skill}) — target: ${skillValue}%`;
                 return (
                 <tr
                   key={index}
-                  className={`border-b border-ink/20 group ${isClickable ? 'cursor-pointer hover:bg-ink/5 select-none' : 'hover:bg-ink/5'}`}
+                  className={`border-b border-ink/20 group ${isClickable ? 'cursor-pointer hover:not-has-[[data-not-a-roll]:hover]:bg-ink/5 select-none' : 'hover:bg-ink/5'}`}
                   onClick={isClickable ? () => onRoll!('1d100', skillPurpose) : undefined}
                   title={isClickable ? `Click to roll ${weapon.skill} (target: ${skillValue}%)` : undefined}
                 >
@@ -160,7 +163,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     ) : (
                       <div className="flex items-center gap-1">
                         <span className="font-medium text-ink">{weapon.name}</span>
-                        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
+                        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:not-group-has-[[data-not-a-roll]:hover]:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                       </div>
                     )}
                   </td>
@@ -206,11 +209,14 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
 
                   {/* Damage — click to roll damage separately. A click here never
                       reaches the row, which rolls the skill, even for damage
-                      that cannot be rolled. */}
+                      that cannot be rolled: that is handed to the table, which
+                      says why it cannot roll it and sends nothing
+                      (useTableRoll). */}
                   <td
-                    className={`px-3 py-2 text-center ${rollsDamage ? 'cursor-pointer hover:text-danger-ink font-semibold' : ''}`}
-                    onClick={isClickable ? (e) => { e.stopPropagation(); if (rollsDamage) onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
+                    className={`px-3 py-2 text-center ${rollsDamage ? 'cursor-pointer hover:text-danger-ink font-semibold' : damageProblem ? 'cursor-default' : ''}`}
+                    onClick={isClickable ? (e) => { e.stopPropagation(); if (damageRoll !== '') onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
                     title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
+                    {...(damageProblem ? notARoll(damageProblem) : undefined)}
                   >
                     {editable ? (
                       <input
