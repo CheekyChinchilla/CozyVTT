@@ -471,7 +471,7 @@ function CombatantRow({
 // ---------------------------------------------------------------------------
 
 export default function InitiativeTracker() {
-  const { userRole, currentMap, campaign } = useCampaign();
+  const { userRole, currentMap, viewedMap, campaign } = useCampaign();
   const { user } = useAuth();
   const { showToast } = useToast();
   // Initiative reads token names/ids, not coordinates — skip move re-renders.
@@ -501,7 +501,11 @@ export default function InitiativeTracker() {
   const reorderHintId = useId();
 
   const isDM = userRole === 'DM';
+  // The table's map, where a combatant is unless its entry says otherwise,
+  // and the map on screen, whose tokens the Add list offers: a DM preparing
+  // a map adds its tokens to the order from there.
   const mapId = currentMap?.id ?? null;
+  const viewedMapId = viewedMap?.id ?? null;
   const coarsePointer = useCoarsePointer();
 
   // ── A combatant's sheet and rolls ────────────────────────────────────────
@@ -600,9 +604,9 @@ export default function InitiativeTracker() {
   // ── DM Actions ───────────────────────────────────────────────────────────
 
   const handleAddToken = useCallback((token: Token) => {
-    if (!socket || !mapId) return;
-    socket.emitInitiativeAdd({ tokenId: token.id, mapId });
-  }, [socket, mapId]);
+    if (!socket || !viewedMapId) return;
+    socket.emitInitiativeAdd({ tokenId: token.id, mapId: viewedMapId });
+  }, [socket, viewedMapId]);
 
   const handleRemove = useCallback((tokenId: string) => {
     if (!socket) return;
@@ -616,6 +620,13 @@ export default function InitiativeTracker() {
   const mapOf = useCallback((tokenId: string): string | null =>
     combatState.combatants.find((c) => c.tokenId === tokenId)?.mapId ?? mapId,
   [combatState.combatants, mapId]);
+  /**
+   * The rolls of a combatant on a map the table is not on go to the DM
+   * alone: its name, or what it rolls, would tell the players of a map
+   * being prepared. As the server does with its initiative roll.
+   */
+  const rollFor = (tokenId: string) => (expression: string, purpose: string, characterName?: string) =>
+    tableRoll({ expression, purpose, characterName, ...(mapOf(tokenId) !== mapId ? { secret: true } : {}) });
 
   const handleSetInitiative = useCallback((tokenId: string, value: number | null) => {
     const onMap = mapOf(tokenId);
@@ -841,7 +852,7 @@ export default function InitiativeTracker() {
             {isDM && (
               <div className="space-y-2 pt-1 border-t border-moss-green/10">
                 {/* Add combatant */}
-                {mapId && (
+                {viewedMapId && (
                   <button
                     onClick={() => setShowAddModal(true)}
                     className="w-full flex items-center justify-center gap-2 py-1.5 px-3 text-xs font-medium text-brand-ink border border-dashed border-moss-green/30 rounded-lg hover:bg-moss-green/5 transition-colors"
@@ -905,7 +916,7 @@ export default function InitiativeTracker() {
 
       {/* Add combatant modal */}
       <AddCombatantModal
-        open={showAddModal && mapId !== null}
+        open={showAddModal && viewedMapId !== null}
         tokens={tokens}
         combatantIds={combatantIds}
         onAdd={handleAddToken}
@@ -933,8 +944,10 @@ export default function InitiativeTracker() {
           character={sheet.character}
           campaignId={campaign.id}
           membership={membership}
-          // Rolls from it reach the whole table, as from Roll... below.
+          // Rolls from it reach the whole table, as from Roll... below,
+          // or the DM alone for a combatant on a map the table is not on.
           publicName={characterRollPublicName(tokenOf(sheet.tokenId), user?.id)}
+          secretRolls={mapOf(sheet.tokenId) !== mapId}
           onClose={() => setSheet(null)}
         />
       )}
@@ -946,7 +959,7 @@ export default function InitiativeTracker() {
           anchorX={characterRolls.x}
           anchorY={characterRolls.y}
           publicName={characterRollPublicName(tokenOf(characterRolls.tokenId), user?.id)}
-          onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
+          onRoll={rollFor(characterRolls.tokenId)}
           onRollInitiative={canRollFor(characterRolls.tokenId) ? () => handleRollForToken(characterRolls.tokenId) : undefined}
           onClose={() => setCharacterRolls(null)}
         />
@@ -961,7 +974,7 @@ export default function InitiativeTracker() {
             gameSystem={campaign?.gameSystem ?? 'DND_5E'}
             anchorX={creatureRolls.x}
             anchorY={creatureRolls.y}
-            onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
+            onRoll={rollFor(creatureRolls.tokenId)}
             onClose={() => setCreatureRolls(null)}
           />
         );

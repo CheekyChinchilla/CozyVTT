@@ -7300,7 +7300,9 @@ paths:
         drawings go with it, as does every player's explored-area memory of it; its image
         asset is kept. If any combatant stood on it, those combatants leave
         the initiative order and the order is sent again to every connected
-        member (`initiative.state`).
+        member (`initiative.state`). The DM's connected sockets are then sent
+        `map.deleted` with the map's `mapId`, so a page preparing that map
+        goes back to the table's; players are sent nothing.
       operationId: deleteMap
       security:
         - cookieAuth: []

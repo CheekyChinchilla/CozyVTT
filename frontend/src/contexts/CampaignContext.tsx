@@ -976,6 +976,18 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     };
   }, [rereadCampaign]);
 
+  // A map deleted from another of the DM's pages, or by a script: the DM's
+  // sockets are told, so a page preparing it goes back to the table's.
+  useEffect(() => {
+    const handleMapDeleted = (data: { mapId?: unknown }) => {
+      if (typeof data?.mapId === 'string') removeCampaignMap(data.mapId);
+    };
+    socketClient.on('map.deleted', handleMapDeleted);
+    return () => {
+      socketClient.off('map.deleted', handleMapDeleted);
+    };
+  }, [removeCampaignMap]);
+
   // A map being prepared is the DM's alone: once this user is not the DM
   // (the seat handed over, or their role changed) the page shows the
   // table's map, which is all the server sends them now.

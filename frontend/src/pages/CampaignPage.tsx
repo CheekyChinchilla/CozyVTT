@@ -62,7 +62,7 @@ import { useAccessRevoked } from '@/hooks/useAccessRevoked';
 
 function CampaignPageContent() {
   const navigate = useNavigate();
-  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap, catchUpAfterReconnect } = useCampaign();
+  const { campaign, viewedMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap, catchUpAfterReconnect } = useCampaign();
   const { user } = useAuth();
 
   /**
@@ -343,18 +343,18 @@ function CampaignPageContent() {
       )}
 
       {/* NPC Quick Editor — DM only */}
-      {userRole === 'DM' && quickEditToken && campaign && currentMap && (
+      {userRole === 'DM' && quickEditToken && campaign && viewedMap && (
         <NpcQuickEditor
           token={quickEditToken}
           campaignId={campaign.id}
-          mapId={currentMap.id}
+          mapId={viewedMap.id}
           onClose={() => setQuickEditToken(null)}
           onTokenUpdate={(updated) => {
             // A stat block saves when the editor closes, so its answer often
             // arrives after the DM closed the editor or opened another token.
             // Update the editor only while it still shows this token.
             setQuickEditToken((open) => (open?.id === updated.id ? updated : open));
-            useGameStore.getState().replaceToken(updated);
+            useGameStore.getState().replaceToken(updated, viewedMap.id);
           }}
         />
       )}

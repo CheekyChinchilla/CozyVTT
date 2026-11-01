@@ -20,5 +20,5 @@ export async function setTokenFlag(
 ): Promise<void> {
   const patch = flag === 'visible' ? { visible: value } : { obscured: value };
   await api.updateToken(campaignId, mapId, token.id, patch);
-  useGameStore.getState().patchToken(token.id, patch);
+  useGameStore.getState().patchToken(token.id, patch, mapId);
 }

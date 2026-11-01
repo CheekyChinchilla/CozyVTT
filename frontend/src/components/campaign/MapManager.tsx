@@ -299,7 +299,7 @@ function MapCard({
 // ============================================
 
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
-  const { campaign, currentMap, setCurrentMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
+  const { campaign, currentMap, setCurrentMap, updateMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
 
   const [maps, setMaps] = useState<CampaignMap[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -370,10 +370,10 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const handleUpdated = (updated: CampaignMap) => {
     setMaps((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     upsertCampaignMap(updated);
-    // If the updated map is the current one, refresh context
-    if (currentMap?.id === updated.id) {
-      setCurrentMap(updated);
-    }
+    // The table's map or the one being prepared, whichever this is. A map
+    // being prepared is told of its edit by nothing else: the server sends
+    // map.changed for the table's map alone.
+    updateMap(updated.id, updated);
   };
 
   const handleExport = async (map: CampaignMap) => {

@@ -64,6 +64,7 @@ const h = vi.hoisted(() => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
+  const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, () => undefined);
   const noop = () => undefined;
   const campaign = {
     id: 'campaign-1', name: 'Test', spiritLayerEnabled: false,
@@ -78,6 +79,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         currentMap: h.state.currentMap,
         viewedMap: h.state.currentMap,
         setCurrentMap: noop,
+        ...mapActions,
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
@@ -187,8 +189,9 @@ function sentOf(event: string): unknown[] {
   return h.sent.filter(([e]) => e === event).map(([, p]) => p);
 }
 
+/** Tokens on the map on screen, as the page holds them once that map has loaded. */
 function show(...tokens: Token[]) {
-  act(() => { useGameStore.getState().setTokens(tokens); });
+  act(() => { useGameStore.getState().setTokens(tokens, (h.state.currentMap as { id?: string } | null)?.id ?? null); });
 }
 
 function fire(event: string, payload: unknown) {

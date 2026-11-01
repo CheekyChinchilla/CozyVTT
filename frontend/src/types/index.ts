@@ -1340,6 +1340,8 @@ export interface TokenMoveEndEvent {
 
 export interface TokenMovedEvent {
   tokenId: string;
+  /** The map the token is on: a page applies only the moves on the map it shows. */
+  mapId: string;
   x: number;
   y: number;
   /** Null for anyone but the DM and the mover while the token is obscured. */

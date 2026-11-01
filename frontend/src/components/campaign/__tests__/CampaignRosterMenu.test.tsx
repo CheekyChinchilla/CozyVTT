@@ -26,7 +26,8 @@ vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => 
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'c1', memberships: [{ userId: h.seat.userId, role: h.seat.role }] },
-    currentMap: h.currentMap,
+    // The table on another map than the one on screen, which Add to Map uses.
+    currentMap: h.currentMap ? { ...h.currentMap, id: 'map-table' } : null,
     viewedMap: h.currentMap,
     userRole: h.seat.role,
   }),

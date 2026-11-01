@@ -60,7 +60,7 @@ interface TokenTemplateLibraryProps {
 // ============================================
 
 export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateLibraryProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
 
   // ── Data state ──
   const [templates, setTemplates] = useState<TokenTemplate[]>([]);
@@ -147,12 +147,12 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
 
   // ── Place template on map ──
   const handlePlace = useCallback(async (template: TokenTemplate) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setPlacingId(template.id);
 
     const position = {
-      x: Math.floor(currentMap.width / 2),
-      y: Math.floor(currentMap.height / 2),
+      x: Math.floor(viewedMap.width / 2),
+      y: Math.floor(viewedMap.height / 2),
     };
 
     try {
@@ -177,16 +177,16 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
 
       const result = await api.addToken(
         campaign.id,
-        currentMap.id,
+        viewedMap.id,
         tokenPayload
       );
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, viewedMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place token on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap]);
+  }, [campaign, viewedMap]);
 
   // ── Delete template ──
   const handleDelete = useCallback(async (id: string) => {

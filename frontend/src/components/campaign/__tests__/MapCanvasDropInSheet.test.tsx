@@ -43,6 +43,7 @@ const h = vi.hoisted(() => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
+  const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, () => undefined);
   const noop = () => undefined;
   const campaign = {
     id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, status: 'ACTIVE', maps: [],
@@ -56,7 +57,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
     useCampaign: () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
       return {
-        currentMap: h.state.currentMap, setCurrentMap: noop, userRole: 'DM', campaign,
+        currentMap: h.state.currentMap, setCurrentMap: noop, ...mapActions, userRole: 'DM', campaign,
         viewedMap: h.state.currentMap,
         updateCampaignSpiritLayer: noop, dmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop,
         activeVibeEffect: null, updateVibe: noop, activeAtmosphereEffect: null, characterHpCache: {},

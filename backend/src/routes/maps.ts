@@ -1284,6 +1284,10 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
       await resendInitiative(campaignId, { evenWhenEmpty: true });
     }
 
+    // A page of the DM's may be preparing it. It was never the table's map,
+    // so this reaches the DM's sockets alone.
+    await tellMapReaders(campaignId, id, 'map.deleted', { mapId: id });
+
     return res.status(200).json({
       message: 'Map deleted successfully',
     });

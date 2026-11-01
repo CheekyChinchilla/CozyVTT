@@ -22,11 +22,12 @@ vi.mock('@/services/api', () => ({
   api: { getMap: (...a: unknown[]) => getMap(...a), pingSession: vi.fn() },
 }));
 const roleChanged = vi.fn();
+const socketOn = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
     onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(),
     onMemberRoleChanged: (cb: (d: unknown) => void) => roleChanged(cb),
-    on: vi.fn(), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
+    on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me' } }) }));
@@ -75,6 +76,7 @@ beforeEach(() => {
   getCampaign.mockReset();
   getMap.mockReset();
   roleChanged.mockReset();
+  socketOn.mockReset();
   window.sessionStorage.clear();
   getMap.mockImplementation((_c: string, mapId: string) => Promise.resolve({ map: served(mapId), spiritVisible: false }));
 });
@@ -426,6 +428,21 @@ describe('a guard on the map on screen', () => {
     expect(latest!.viewedMap?.id).toBe('village');
     expect(latest!.currentMap?.id).toBe('tower');
     expect(shown()).toEqual(['village-token']);
+  });
+});
+
+describe('a map deleted from elsewhere', () => {
+  it("ends preparing when the DM's sockets are told the map being prepared went", async () => {
+    await openPage();
+    await prepare('crypt');
+    const onDeleted = socketOn.mock.calls.filter(([event]) => event === 'map.deleted').pop()?.[1] as ((d: unknown) => void) | undefined;
+    expect(onDeleted).toBeDefined();
+    act(() => { onDeleted!({ mapId: 'tower' }); });
+    expect(latest!.isPreparing).toBe(true);
+    act(() => { onDeleted!({ mapId: 'crypt' }); });
+    expect(latest!.isPreparing).toBe(false);
+    expect(latest!.preparingEnded).toEqual({ mapName: 'Crypt', reason: 'deleted' });
+    expect(latest!.campaign?.maps?.map((m) => m.id)).toEqual(['village']);
   });
 });
 

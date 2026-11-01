@@ -58,7 +58,7 @@ interface TokenManagerProps {
 // ============================================
 
 export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
   // Manager lists tokens by name/flags — no need to re-render on moves.
   const tokens = useTokenListIgnoringMovement();
 
@@ -132,8 +132,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     if (!tokenName.trim() || tokenName === previous?.name) setTokenName(next.name);
     setAssignTo(players.some((m) => m.userId === next.userId) ? next.userId : 'none');
   };
-  const otherMaps = (campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id);
-  const canAdd = !!tokenName.trim() && !!currentMap;
+  const otherMaps = (campaign?.maps ?? []).filter((m) => m.id !== viewedMap?.id);
+  const canAdd = !!tokenName.trim() && !!viewedMap;
 
   // ============================================
   // Add Token
@@ -175,14 +175,14 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   }, [campaign]);
 
   const handleAddToken = useCallback(async () => {
-    if (!campaign || !currentMap || !tokenName.trim()) return;
+    if (!campaign || !viewedMap || !tokenName.trim()) return;
     setIsAdding(true);
     setError(null);
 
     // Place at the center of the current map
     const position = {
-      x: Math.floor(currentMap.width / 2),
-      y: Math.floor(currentMap.height / 2),
+      x: Math.floor(viewedMap.width / 2),
+      y: Math.floor(viewedMap.height / 2),
     };
 
     try {
@@ -241,10 +241,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
         };
       }
 
-      const result = await api.addToken(campaign.id, currentMap.id, tokenPayload);
+      const result = await api.addToken(campaign.id, viewedMap.id, tokenPayload);
 
       // Optimistic local update then broadcast so other clients get the new token
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, viewedMap.id);
 
       // Reset form (keep asset selected in case DM wants to place another)
       setTokenName('');
@@ -264,17 +264,17 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     } finally {
       setIsAdding(false);
     }
-  }, [campaign, currentMap, selectedAsset, pickedCharacter, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden]);
+  }, [campaign, viewedMap, selectedAsset, pickedCharacter, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden]);
 
   // ============================================
   // Token List Actions
   // ============================================
 
   const handleToggleVisibility = async (token: Token) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setTogglingVisibilityId(token.id);
     try {
-      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
+      await setTokenFlag(campaign.id, viewedMap.id, token, 'visible', !token.visible);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to toggle token visibility');
     } finally {
@@ -283,10 +283,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   };
 
   const handleToggleObscured = async (token: Token) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setTogglingVisibilityId(token.id);
     try {
-      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
+      await setTokenFlag(campaign.id, viewedMap.id, token, 'obscured', !token.obscured);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to toggle token identity');
     } finally {
@@ -295,12 +295,12 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   };
 
   const handleToggleLayer = async (token: Token) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setTogglingLayerId(token.id);
     const newLayer = token.layer === TokenLayer.TOKEN ? TokenLayer.SPIRIT : TokenLayer.TOKEN;
     try {
-      await api.updateToken(campaign.id, currentMap.id, token.id, { layer: newLayer });
-      useGameStore.getState().patchToken(token.id, { layer: newLayer });
+      await api.updateToken(campaign.id, viewedMap.id, token.id, { layer: newLayer });
+      useGameStore.getState().patchToken(token.id, { layer: newLayer }, viewedMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to move token between layers');
     } finally {
@@ -309,7 +309,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   };
 
   const handleMoveToMap = async (token: Token, targetMapId: string) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setIsMovingTokenMap(true);
     setError(null);
 
@@ -319,9 +319,9 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     try {
       // One request: the server moves the token as it is, clamped onto the
       // target map, and tells everyone on this map itself.
-      await api.moveTokens(campaign.id, currentMap.id, [token.id], targetMap.id);
+      await api.moveTokens(campaign.id, viewedMap.id, [token.id], targetMap.id);
 
-      useGameStore.getState().removeToken(token.id);
+      useGameStore.getState().removeToken(token.id, viewedMap.id);
       setMovingTokenId(null);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to move token to map');
@@ -331,12 +331,12 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   };
 
   const handleDelete = async (token: Token) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setTokenToRemove(null);
     setDeletingId(token.id);
     try {
-      await api.deleteToken(campaign.id, currentMap.id, token.id);
-      useGameStore.getState().removeToken(token.id);
+      await api.deleteToken(campaign.id, viewedMap.id, token.id);
+      useGameStore.getState().removeToken(token.id, viewedMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to remove token from map');
     } finally {
@@ -734,7 +734,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
           {/* Darkvision (NPC and Player only; objects do not see) */}
           {tokenType !== TokenType.OBJECT && (
-            <TokenVisionField value={sightRadius} onChange={setSightRadius} feetPerSquare={currentMap?.feetPerSquare ?? 5} />
+            <TokenVisionField value={sightRadius} onChange={setSightRadius} feetPerSquare={viewedMap?.feetPerSquare ?? 5} />
           )}
 
           {/* Assign to player (NPC and Player only) */}
@@ -759,7 +759,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
             </div>
           )}
 
-          {!currentMap && (
+          {!viewedMap && (
             <p className="text-xs text-warning-ink mb-2">
               No map is currently loaded — load a map first.
             </p>
@@ -793,7 +793,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
             )}
           </h3>
 
-          {!currentMap ? (
+          {!viewedMap ? (
             <p className="text-sm text-stone-gray/70 italic">No map loaded.</p>
           ) : tokens.length === 0 ? (
             <p className="text-sm text-stone-gray/70 italic">

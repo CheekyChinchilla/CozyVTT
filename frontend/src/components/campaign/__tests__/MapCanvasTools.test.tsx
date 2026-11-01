@@ -68,6 +68,7 @@ const h = vi.hoisted(() => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
+  const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, (map) => h.set({ currentMap: map }));
   const noop = () => undefined;
   const setCurrentMap = (next: unknown) => {
     h.set({ currentMap: typeof next === 'function' ? (next as (p: unknown) => unknown)(h.state.currentMap) : next });
@@ -80,6 +81,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         currentMap: h.state.currentMap,
         viewedMap: h.state.currentMap,
         setCurrentMap,
+        ...mapActions,
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,

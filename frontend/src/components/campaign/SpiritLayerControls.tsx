@@ -104,7 +104,7 @@ interface SpiritLayerControlsProps {
 }
 
 export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerControlsProps) {
-  const { campaign, currentMap, updateCampaignSpiritLayer, dmViewBothPlanes, setDmViewBothPlanes } = useCampaign();
+  const { campaign, viewedMap, updateCampaignSpiritLayer, dmViewBothPlanes, setDmViewBothPlanes } = useCampaign();
   // Lists spirit tokens by name — no need to re-render on token movement.
   const tokens = useTokenListIgnoringMovement();
   const { socket } = useWebSocket();
@@ -218,12 +218,12 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
 
   const handleTokenVisibilityToggle = useCallback(
     async (token: Token) => {
-      if (!socket || !currentMap) return;
+      if (!socket || !viewedMap) return;
       setTokenTogglingIds((prev) => new Set(prev).add(token.id));
       setErrorMsg(null);
 
       try {
-        socket.emitSpiritLayerTokenToggle(currentMap.id, token.id, !token.visible);
+        socket.emitSpiritLayerTokenToggle(viewedMap.id, token.id, !token.visible);
       } catch {
         setErrorMsg('Failed to toggle token visibility');
       } finally {
@@ -234,7 +234,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
         });
       }
     },
-    [socket, currentMap]
+    [socket, viewedMap]
   );
 
   // ============================================
@@ -431,7 +431,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
             to send it to the spirit realm or return it to the material plane.
           </p>
 
-          {!currentMap ? (
+          {!viewedMap ? (
             <p className="text-sm text-stone-gray/70 italic">No map loaded.</p>
           ) : spiritTokens.length === 0 ? (
             <p className="text-sm text-stone-gray/70 italic">

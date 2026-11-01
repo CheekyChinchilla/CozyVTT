@@ -145,3 +145,21 @@ describe.each(SOURCES)('%s', (_source, event, dmEvent, act) => {
     expect((await heard).mapId).toBe(shownId);
   });
 });
+
+// A DM's other tab showing a map being prepared was told nothing when the
+// map was deleted, and every edit made there failed until a reload.
+describe('deleting a map the table is not on', () => {
+  it("tells the DM's sockets which map went, and no player", async () => {
+    const doomed = (await prisma.map.create({
+      data: {
+        campaignId, name: 'Doomed', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
+        width: 4, height: 4, gridSize: 50, tokens: [], annotations: [],
+      },
+    })).id;
+    const quiet = expectNoEvent(player, 'map.deleted', 800);
+    const heard = waitForEvent<{ mapId: string }>(dm, 'map.deleted');
+    expect((await rest.delete(`/api/campaigns/${campaignId}/maps/${doomed}`)).status).toBe(200);
+    expect((await heard).mapId).toBe(doomed);
+    await quiet;
+  });
+});

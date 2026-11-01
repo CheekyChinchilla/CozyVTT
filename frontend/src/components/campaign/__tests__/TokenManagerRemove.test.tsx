@@ -54,7 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.listAssets.mockResolvedValue({ assets: [], pagination: {} });
   api.deleteToken.mockResolvedValue({ message: 'ok' });
-  useGameStore.getState().setTokens([goblin]);
+  useGameStore.getState().setTokens([goblin], 'map-1');
 });
 
 describe('removing a token in the Token Manager', () => {
