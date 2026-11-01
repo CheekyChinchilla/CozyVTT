@@ -3904,8 +3904,10 @@ paths:
         32-bit integer for any roll of its dice (`9999*9999*9999`). The name
         and the expression are trimmed and must not be empty. `characterName`
         and `purpose` are optional free text, trimmed; left out, empty or
-        `null`, each is stored as `null`. The character name is free text and
-        names no character record. Any
+        `null`, each is stored as `null`. The dice panel rolls a saved roll as
+        `characterName` while its own Character box is empty, and sends
+        `purpose`, or the name when there is none, as what the roll is for.
+        `characterName` names no character record. Any
         member, spectators included, may save macros. A player may keep 50 per
         campaign; saving another answers 400.
       operationId: createDiceMacro
@@ -12667,15 +12669,15 @@ components:
           nullable: true
           maxLength: 200
           description: >
-            Who the roll is made as; free text, naming no character record.
-            `null` for none.
+            Who the dice panel rolls it as while its Character box is empty;
+            free text, naming no character record. `null` for none.
           example: Goblin boss
         purpose:
           type: string
           nullable: true
           maxLength: 200
           description: >
-            What the roll is for. `null` for none.
+            What the roll is for; `null` sends the name in its place.
           example: Scimitar attack
         createdAt:
           type: string

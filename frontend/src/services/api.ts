@@ -736,18 +736,20 @@ class ApiClient {
     return response.data;
   }
 
+  /** An empty or null character name or purpose is stored as none. */
   async createDiceMacro(
     campaignId: string,
-    body: { name: string; expression: string },
+    body: { name: string; expression: string; characterName?: string | null; purpose?: string | null },
   ): Promise<{ macro: import('@/types').DiceMacro }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/macros`, body);
     return response.data;
   }
 
+  /** A field left out is kept; an empty or null character name or purpose clears it. */
   async updateDiceMacro(
     campaignId: string,
     macroId: string,
-    body: { name?: string; expression?: string },
+    body: { name?: string; expression?: string; characterName?: string | null; purpose?: string | null },
   ): Promise<{ macro: import('@/types').DiceMacro }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/macros/${macroId}`, body);
     return response.data;

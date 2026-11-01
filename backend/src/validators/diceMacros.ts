@@ -27,19 +27,10 @@
 
 import { z } from 'zod';
 import { parseDiceExpression, DiceParserError } from '../utils/dice-parser';
-import { MAX_ROLL_CHARACTER_NAME_LENGTH } from './dice';
+import { MAX_MACRO_CHARACTER_NAME_LENGTH, MAX_MACRO_PURPOSE_LENGTH } from './diceLimits';
 
 /** Long enough to name a homebrew subsystem, short enough to sit on a button. */
 export const MAX_MACRO_NAME_LENGTH = 60;
-
-/**
- * The character a saved roll is made as goes out as the roll's own character
- * name, so it takes the roll's limit.
- */
-export const MAX_MACRO_CHARACTER_NAME_LENGTH = MAX_ROLL_CHARACTER_NAME_LENGTH;
-
-/** Under a roll's own purpose limit, which also has room for what a sheet adds. */
-export const MAX_MACRO_PURPOSE_LENGTH = 200;
 
 /**
  * Matches the parser's own ceiling, so the length error comes from one place

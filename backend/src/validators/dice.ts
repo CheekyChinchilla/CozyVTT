@@ -9,9 +9,7 @@
  */
 
 import { z } from 'zod';
-
-export const MAX_ROLL_CHARACTER_NAME_LENGTH = 200;
-export const MAX_ROLL_PURPOSE_LENGTH = 300;
+import { MAX_ROLL_CHARACTER_NAME_LENGTH, MAX_ROLL_PURPOSE_LENGTH } from './diceLimits';
 
 export const DiceRollSchema = z.object(
   {

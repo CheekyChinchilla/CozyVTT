@@ -633,7 +633,12 @@ Some of those deserve a note:
   differs between the two, when the chat limit file
   (`backend/src/validators/chatLimits.ts`, copied as
   `frontend/src/constants/chatLimits.ts` for the chat box) differs between
-  the two or the chat box writes the number itself, when the drawing limits
+  the two or the chat box writes the number itself, when the dice limits file
+  (`backend/src/validators/diceLimits.ts`, copied as
+  `frontend/src/constants/diceLimits.ts` for the dice panel and the **Saved**
+  window) differs between the two or either writes a `maxLength` of its own,
+  when the frontend's `DiceMacro` or the API document's `DiceMacro` schema
+  differs from the columns of `DiceMacro`, nullable ones included, when the drawing limits
   file (`backend/src/validators/drawingLimits.ts`, copied as
   `frontend/src/constants/drawingLimits.ts` for the draw tool) differs between
   the two or its audiences and layers differ from the `DrawingAudience` and

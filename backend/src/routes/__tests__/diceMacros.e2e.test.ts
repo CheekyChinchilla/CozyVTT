@@ -27,7 +27,8 @@ import {
   cleanupCampaigns,
   TEST_PASSWORD,
 } from '../../__tests__/helpers/db';
-import { MAX_MACROS_PER_CAMPAIGN, MAX_MACRO_NAME_LENGTH, MAX_MACRO_CHARACTER_NAME_LENGTH } from '../../validators/diceMacros';
+import { MAX_MACROS_PER_CAMPAIGN, MAX_MACRO_NAME_LENGTH } from '../../validators/diceMacros';
+import { MAX_MACRO_CHARACTER_NAME_LENGTH } from '../../validators/diceLimits';
 
 const app = createTestApp();
 

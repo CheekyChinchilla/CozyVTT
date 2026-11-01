@@ -648,7 +648,25 @@ The **Dice Roller** has its own **Dice** tab beside Chat. Click one of the dice 
 named roll — a house rule, a homebrew subsystem, `4d6kh3` for rolling up a
 character. It becomes a one-click button beside the dice. Saved rolls are private
 to you and belong to the one campaign, and the same button is where you rename,
-edit or delete them. See the
+edit or delete them.
+
+A saved roll can also keep a **Character** and a **Purpose** of its own, both
+optional, up to 200 characters each. This is for a DM who saves a creature's
+attack, say "Goblin boss" and "Scimitar attack", and does not want to retype the
+name every time:
+
+| When you press the saved roll's button | The roll is made as | The roll is for |
+|---|---|---|
+| The dice panel's **Character** box is empty | the saved roll's own character, or you under your own name if it has none | the saved roll's own purpose, or its name if it has none |
+| The **Character** box has a name in it | the name in the box | the saved roll's own purpose, or its name if it has none |
+
+The dice panel's own **Purpose** box is for rolls you type; a saved roll leaves
+it alone.
+
+The character is plain text, like the **Character** box: it is not linked to a
+character sheet, so renaming or deleting a character changes nothing in your
+saved rolls. To clear a saved roll's character or purpose, edit it under
+**Saved**, empty the box and save. See the
 [Player Guide](PLAYER_GUIDE.md#the-dice-roller) for the full description.
 
 **Supported dice notation:**

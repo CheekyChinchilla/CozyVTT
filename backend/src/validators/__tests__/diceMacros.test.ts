@@ -21,10 +21,13 @@ import {
   UpdateDiceMacroSchema,
   MAX_MACRO_NAME_LENGTH,
   MAX_MACRO_EXPRESSION_LENGTH,
+} from '../diceMacros';
+import {
   MAX_MACRO_CHARACTER_NAME_LENGTH,
   MAX_MACRO_PURPOSE_LENGTH,
-} from '../diceMacros';
-import { MAX_ROLL_CHARACTER_NAME_LENGTH, MAX_ROLL_PURPOSE_LENGTH } from '../dice';
+  MAX_ROLL_CHARACTER_NAME_LENGTH,
+  MAX_ROLL_PURPOSE_LENGTH,
+} from '../diceLimits';
 
 /** The first issue message, which is what the routes return. */
 const refusal = (result: { success: boolean; error?: { issues: { message: string }[] } }) =>

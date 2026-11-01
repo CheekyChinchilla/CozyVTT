@@ -18,6 +18,8 @@ import { ScrollChevrons, scrollFade, useScrollMore } from '@/components/ui/Scrol
 import DiceMacroManager from './DiceMacroManager';
 import JumpToNewest from './JumpToNewest';
 import { errorSummary } from '@/utils/errors';
+import { rollLabels, savedRollDetail } from '@/utils/savedRolls';
+import { MAX_ROLL_CHARACTER_NAME_LENGTH, MAX_ROLL_PURPOSE_LENGTH } from '@/constants/diceLimits';
 import { cn } from '@/utils/cn';
 
 /**
@@ -392,9 +394,9 @@ export default function DiceRoller() {
   // Roll Handlers
   // ============================================
 
-  /** `named` is a saved roll's name, sent as the roll's purpose in place of the Purpose box. */
-  const rollDice = (expr: string, named?: string) => {
-    const rollPurpose = (named ?? purpose).trim();
+  /** `saved` is the saved roll whose button was pressed; see rollLabels for what it changes. */
+  const rollDice = (expr: string, saved?: DiceMacro) => {
+    const { characterName: rollCharacter, purpose: rollPurpose } = rollLabels({ characterName, purpose }, saved);
     if (isSpectator) {
       setError('Spectators watch the dice; they cannot roll.');
       return;
@@ -406,7 +408,7 @@ export default function DiceRoller() {
       if (validationError) { setError(validationError); return; }
       setError(null);
       setIsRolling(true);
-      const localResult = rollLocally(expr, user, characterName.trim(), rollPurpose);
+      const localResult = rollLocally(expr, user, rollCharacter, rollPurpose);
       setRolls((prev) => [localResult, ...prev]);
       clearPendingRoll();
       return;
@@ -439,7 +441,7 @@ export default function DiceRoller() {
     void socket
       .rollDice({
         expression: expr.trim(),
-        characterName: characterName.trim() || undefined,
+        characterName: rollCharacter || undefined,
         purpose: rollPurpose || undefined,
         secret: isSecret,
       })
@@ -465,9 +467,9 @@ export default function DiceRoller() {
     rollDice(expression);
   };
 
-  const handleQuickRoll = (expr: string, named?: string) => {
+  const handleQuickRoll = (expr: string, saved?: DiceMacro) => {
     setExpression(expr);
-    rollDice(expr, named);
+    rollDice(expr, saved);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -618,9 +620,9 @@ export default function DiceRoller() {
   const savedRollButtons = macros.map((macro) => (
     <button
       key={macro.id}
-      onClick={() => handleQuickRoll(macro.expression, macro.name)}
+      onClick={() => handleQuickRoll(macro.expression, macro)}
       disabled={isRolling}
-      title={`${macro.name} — ${macro.expression}`}
+      title={[`${macro.name} — ${macro.expression}`, savedRollDetail(macro)].filter(Boolean).join(', ')}
       className={`
         px-2 py-1 rounded-md border border-spirit-purple/30 text-xs font-medium
         bg-spirit-purple/10 hover:bg-spirit-purple/20 transition-all
@@ -683,7 +685,7 @@ export default function DiceRoller() {
         placeholder="Character"
         aria-label="Character name"
         // The longest name and purpose the server stores with a roll.
-        maxLength={200}
+        maxLength={MAX_ROLL_CHARACTER_NAME_LENGTH}
         // Read-only while a roll is on its way: disabled, it threw keyboard
         // focus to the page after every roll.
         readOnly={isRolling}
@@ -698,7 +700,7 @@ export default function DiceRoller() {
         onChange={(e) => setPurpose(e.target.value)}
         placeholder="Purpose"
         aria-label="Purpose"
-        maxLength={300}
+        maxLength={MAX_ROLL_PURPOSE_LENGTH}
         // Read-only while a roll is on its way: disabled, it threw keyboard
         // focus to the page after every roll.
         readOnly={isRolling}
