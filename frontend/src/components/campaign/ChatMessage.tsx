@@ -5,6 +5,7 @@
 
 import { memo } from 'react';
 import { useMinuteClock } from '@/hooks/useMinuteClock';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 import { Bot, Lock, Shield } from 'lucide-react';
 import type { Message, MessageType } from '@/types';
 import { formatRelativeTime } from '@/utils/format';
@@ -101,6 +102,109 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
     ? 'System'
     : message.user?.displayName || 'Unknown User';
 
+  const compact = useCompactLayout();
+
+  const nameColor = isDM ? 'text-warning-ink' : isSystem || isCurrentUser ? 'text-brand-ink' : 'text-stone-gray';
+  const onlyYou = `Only you and ${whisperPeer} can see this.`;
+  const sentAt = message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time';
+
+  const notSentRow = notSentReason && (
+    <div className={`${compact ? 'mt-1' : 'mt-2'} flex flex-wrap items-center gap-2 text-xs`} role="status">
+      <span className="text-danger-ink">Not sent: {notSentReason}</span>
+      <button type="button" onClick={() => onRetry?.(message)} className="font-medium text-brand-ink underline hover:no-underline">
+        Retry
+      </button>
+      <button type="button" onClick={() => onDiscard?.(message)} className="font-medium text-stone-gray underline hover:no-underline">
+        Discard
+      </button>
+    </div>
+  );
+
+  // Metadata (e.g., dice roll results) - hide for internal system actions
+  const metadataBlock = message.metadata &&
+    Object.keys(message.metadata).length > 0 &&
+    message.metadata.action !== 'user.joined' &&
+    message.metadata.action !== 'user.left' &&
+    message.metadata.action !== 'spirit_layer.toggle' &&
+    message.metadata.action !== 'vibe.update' &&
+    message.metadata.action !== 'session.started' &&
+    message.metadata.action !== 'session.paused' &&
+    message.metadata.action !== 'session.ended' &&
+    message.metadata.action !== 'session.resumed' && (
+      <div className="mt-2 pt-2 border-t">
+        <pre className="text-xs opacity-70 font-mono">
+          {JSON.stringify(message.metadata, null, 2)}
+        </pre>
+      </div>
+    );
+
+  /**
+   * The compact layout's chat, where a sheet half a phone's height should
+   * show several messages: the sender and the time start the message's own
+   * line, at the size they have on the desktop, and the padding is slimmer.
+   * The icons, the colours, a whisper's way to whisper back and Not sent are
+   * the desktop's.
+   */
+  if (compact) {
+    const icon = 'mr-1 inline h-3.5 w-3.5 align-[-0.15em]';
+    return (
+      <div
+        data-message-id={message.id}
+        className={`rounded-lg border px-2.5 py-1 ${bg} ${borderColor} ${isPending ? 'opacity-60' : ''} ${notSentReason ? 'border-danger/40' : ''}`}
+      >
+        <p className={`text-sm ${textColor} whitespace-pre-wrap wrap-break-word`}>
+          {isSystem && <Bot className={`${icon} text-brand-ink`} />}
+          {isWhisper && (
+            <span title={onlyYou} className="inline">
+              <Lock className={`${icon} text-accent-ink`} aria-hidden="true" />
+            </span>
+          )}
+          {showShield && <Shield className={`${icon} text-warning-ink`} />}
+          {isWhisper ? (
+            <>
+              {onWhisperBack ? (
+                // A finger's height, without making the line taller.
+                <button
+                  type="button"
+                  onClick={() => onWhisperBack(message)}
+                  title={`Whisper to ${whisperPeer}`}
+                  className="-my-3 inline-flex items-center align-middle text-xs font-semibold text-accent-ink underline-offset-2 hover:underline"
+                >
+                  {whisperLabel}
+                </button>
+              ) : (
+                <span className="text-xs font-semibold text-accent-ink">{whisperLabel}</span>
+              )}
+              <span className="sr-only">{onlyYou}</span>
+            </>
+          ) : (
+            <span className={`text-xs font-semibold ${nameColor}`}>
+              {displayName}
+              {isCurrentUser && !isSystem && ' (You)'}
+            </span>
+          )}
+          {/* The text keeps its own spaces and line breaks, so one space each. */}
+          {notSentReason ? null : isPending ? (
+            <>
+              {' '}
+              <span className="whitespace-nowrap text-xs text-stone-gray/50 italic">sending…</span>
+            </>
+          ) : (
+            <>
+              {' '}
+              <span className="whitespace-nowrap text-xs text-stone-gray/70" title={sentAt}>
+                {messageAge(message.createdAt, now)}
+              </span>
+            </>
+          )}{' '}
+          {message.content}
+        </p>
+        {notSentRow}
+        {metadataBlock}
+      </div>
+    );
+  }
+
   return (
     <div
       data-message-id={message.id}
@@ -113,7 +217,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
         {/* Icon for special message types */}
         {isSystem && <Bot className="w-3.5 h-3.5 text-brand-ink" />}
         {isWhisper && (
-          <span title={`Only you and ${whisperPeer} can see this.`} className="inline-flex shrink-0">
+          <span title={onlyYou} className="inline-flex shrink-0">
             <Lock className="w-3.5 h-3.5 text-accent-ink" aria-hidden="true" />
           </span>
         )}
@@ -133,21 +237,11 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
             ) : (
               <span className="min-w-0 text-left text-xs font-semibold text-accent-ink">{whisperLabel}</span>
             )}
-            <span className="sr-only">Only you and {whisperPeer} can see this.</span>
+            <span className="sr-only">{onlyYou}</span>
           </>
         ) : (
         /* Username */
-        <span
-          className={`text-xs font-semibold ${
-            isDM
-              ? 'text-warning-ink'
-              : isSystem
-              ? 'text-brand-ink'
-              : isCurrentUser
-              ? 'text-brand-ink'
-              : 'text-stone-gray'
-          }`}
-        >
+        <span className={`text-xs font-semibold ${nameColor}`}>
           {displayName}
           {isCurrentUser && !isSystem && ' (You)'}
         </span>
@@ -157,7 +251,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
         {notSentReason ? null : isPending ? (
           <span className="shrink-0 whitespace-nowrap text-xs text-stone-gray/50 italic">sending…</span>
         ) : (
-          <span className="shrink-0 whitespace-nowrap text-xs text-stone-gray/70" title={message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time'}>
+          <span className="shrink-0 whitespace-nowrap text-xs text-stone-gray/70" title={sentAt}>
             {messageAge(message.createdAt, now)}
           </span>
         )}
@@ -168,35 +262,9 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
         {message.content}
       </p>
 
-      {notSentReason && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" role="status">
-          <span className="text-danger-ink">Not sent: {notSentReason}</span>
-          <button type="button" onClick={() => onRetry?.(message)} className="font-medium text-brand-ink underline hover:no-underline">
-            Retry
-          </button>
-          <button type="button" onClick={() => onDiscard?.(message)} className="font-medium text-stone-gray underline hover:no-underline">
-            Discard
-          </button>
-        </div>
-      )}
+      {notSentRow}
 
-      {/* Metadata (e.g., dice roll results) - hide for internal system actions */}
-      {message.metadata &&
-       Object.keys(message.metadata).length > 0 &&
-       message.metadata.action !== 'user.joined' &&
-       message.metadata.action !== 'user.left' &&
-       message.metadata.action !== 'spirit_layer.toggle' &&
-       message.metadata.action !== 'vibe.update' &&
-       message.metadata.action !== 'session.started' &&
-       message.metadata.action !== 'session.paused' &&
-       message.metadata.action !== 'session.ended' &&
-       message.metadata.action !== 'session.resumed' && (
-        <div className="mt-2 pt-2 border-t">
-          <pre className="text-xs opacity-70 font-mono">
-            {JSON.stringify(message.metadata, null, 2)}
-          </pre>
-        </div>
-      )}
+      {metadataBlock}
     </div>
   );
 }
