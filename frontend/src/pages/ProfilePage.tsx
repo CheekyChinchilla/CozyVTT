@@ -738,6 +738,11 @@ export default function ProfilePage() {
           <div className="flex items-start gap-6">
             {/* Avatar */}
             <div className="shrink-0">
+              {/* TODO(ui): this opens the file chooser from a div and the input
+                  is hidden, so the keyboard cannot reach it and a screen
+                  reader is not told it is a control; focus has nothing to
+                  return to when Crop Avatar closes. Make it a button named
+                  "Change avatar" (or "Choose avatar" with none). */}
               <div
                 className="relative group cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
