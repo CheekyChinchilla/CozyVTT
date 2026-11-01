@@ -371,10 +371,11 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               // Constitution — never the stored string, which would roll all
               // five. A pool with nothing left, or a total that is not a die,
               // stays as plain text rather than offering a roll it cannot make.
-              const die = hitDieExpression(hd);
+              const con = data.stats?.constitution?.modifier ?? 0;
+              const die = hitDieExpression(hd, con);
               const max = hitDiceMaximum(hd);
-              const spendable = !!onRoll && canSpendHitDie(hd);
-              const expr = die === null ? '' : spendRoll(die, data.stats?.constitution?.modifier ?? 0);
+              const spendable = !!onRoll && canSpendHitDie(hd, con);
+              const expr = die === null ? '' : spendRoll(die, con);
               const purpose = `Spend a Hit Die${hd.class ? ` (${hd.class})` : ''}`;
               return (
                 <div

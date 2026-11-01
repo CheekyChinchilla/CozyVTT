@@ -119,6 +119,19 @@ describe('buildNpcRolls — D&D 5e', () => {
   });
 });
 
+// The dice in an action's text are offered only when the parser rolls them;
+// more than 100 dice, a die over d1000 or a bonus over 9,999 the server refuses.
+describe('buildNpcRolls — dice the parser refuses', () => {
+  it('offers no damage roll for them', () => {
+    const titan: NpcStatBlock = {
+      ...goblin,
+      actions: [{ name: 'Crush', description: 'Melee Weapon Attack: +12 to hit. Hit: 700 (200d6) bludgeoning damage, or 3 (1d6) on a miss.' }],
+    };
+    const damage = buildNpcRolls(titan, 'DND_5E').combat.filter((o) => o.purpose.startsWith('Crush Damage'));
+    expect(damage.map((o) => o.expression)).toEqual(['1d6']);
+  });
+});
+
 describe('buildNpcRolls — Pathfinder 2e', () => {
   // PF2e prints final modifiers; nothing is derived from ranks or level.
   const pf2eCreature: NpcStatBlock = {

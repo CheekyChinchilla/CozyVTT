@@ -253,8 +253,8 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
   if (Array.isArray(data.hitDice)) {
     const con = data.stats?.constitution?.modifier ?? 0;
     data.hitDice.forEach((hd, index) => {
-      if (!canSpendHitDie(hd)) return;
-      const die = hitDieExpression(hd);
+      if (!canSpendHitDie(hd, con)) return;
+      const die = hitDieExpression(hd, con);
       if (die === null) return;
       const max = hitDiceMaximum(hd);
       const left = max === null ? `${hd.remaining} left` : `${hd.remaining}/${max}`;

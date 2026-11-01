@@ -2018,7 +2018,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               />
               <input
                 type="text"
-                value={die.die ?? (die.total ? hitDieExpression(die) ?? '' : '')}
+                value={die.die ?? (die.total ? hitDieExpression(die, formData.stats?.constitution?.modifier ?? 0) ?? '' : '')}
                 onChange={(e) => updateField(`hitDice.${index}.die`, e.target.value)}
                 placeholder="d10"
                 aria-label={`Hit die of row ${index + 1}`}

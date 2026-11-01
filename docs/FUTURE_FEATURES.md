@@ -200,15 +200,6 @@ _Nothing at present._
   **Do** if a large instance's backups grow slow; nothing is wrong at the
   sizes seen so far.
 
-- `next release` **One dice grammar for both sides.** The parser is now one file
-  kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
-  (checked by `visionParity.test.ts`), and the Dice panel checks expressions
-  and rolls a paused table's dice with it. One character-set check is left,
-  `frontend/src/utils/diceExpression.ts`, which decides whether a value on a
-  character sheet is offered as a roll and accepts things the parser refuses,
-  such as `2d6+` and `dddd`. **Do** by having it call the parser, after checking
-  what each sheet's rolls send through it.
-
 - **Two backend suites still stub `file-type`.** The backend tests load the
   real library (`backend/jest.config.js` compiles it to CommonJS), and
   `backend/src/middleware/__tests__/fileTypeVerdicts.test.ts` checks its

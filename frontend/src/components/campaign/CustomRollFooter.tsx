@@ -1,6 +1,6 @@
 import { useState, KeyboardEvent } from 'react';
 import { Plus } from 'lucide-react';
-import { isValidDiceExpression } from '@/utils/characterRolls';
+import { diceExpressionProblem } from '@/utils/diceExpression';
 
 interface CustomRollFooterProps {
   /**
@@ -32,7 +32,8 @@ export default function CustomRollFooter({ onRoll, compact = false }: CustomRoll
   const submit = () => {
     const expr = expression.trim();
     if (!expr) { setError('Enter a dice expression'); return; }
-    if (!isValidDiceExpression(expr)) { setError('Invalid dice expression'); return; }
+    const problem = diceExpressionProblem(expr);
+    if (problem) { setError(problem); return; }
     onRoll(expr, label.trim() || 'Custom Roll');
   };
 

@@ -6,15 +6,11 @@
  * character name and purpose of its own.
  *
  * The expression is checked against the **real dice parser**, not a charset
- * pattern. Both of the frontend's helpers — `isValidDiceExpression` and
- * `DiceRoller`'s own `validateExpression` — only look at which characters are
- * present, so they accept `dddd` and `2d6++3`. That is fine for instant feedback
- * on something about to be rolled, because the server rejects it a moment later
- * and the person sees the error while they are still looking at the box.
- *
- * A macro is different: it is stored once and clicked for months. Saving one that
- * cannot be rolled means a button failing every time it is pressed, with the
- * mistake made long ago and nowhere in sight.
+ * pattern. The frontend's checks ask the same parser before a roll is sent,
+ * but a check in the browser stops nothing sent another way, and a macro is
+ * stored once and clicked for months. Saving one that cannot be rolled means a
+ * button failing every time it is pressed, with the mistake made long ago and
+ * nowhere in sight.
  *
  * So the gate is `parseDiceExpression`, which answers by rolling the expression
  * and discarding the result — the same question the button will ask, so the two
