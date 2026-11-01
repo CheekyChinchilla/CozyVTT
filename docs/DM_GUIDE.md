@@ -245,9 +245,9 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 - **NPCs and monsters** — the **Place on Map** button on a creature in the **Creature Library**, or on a token template.
 - **Anything you built yourself** — **Place on Map** in the **Token Manager**.
 
-Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included. On a touch screen, put your finger on a token and slide it to the square, or tap it and then tap the square, as the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) describes; with a wall, fog or light tool up, your finger goes to the tool instead.
+Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included. On a touch screen, put your finger on a token and slide it to the square, or tap it and then tap the square, as the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) describes; with a wall, fog or light tool or **Draw** up, your finger goes to the tool instead.
 
-Clicking a token also selects it, with a dashed light-blue ring, and right-clicking a token selects the one whose menu opens. A click on empty ground clears the selection; dragging the map leaves it alone. While a wall, fog or light tool, the ruler or the area template is up, a click goes to that tool, so the selection stays as it was. Switching maps starts with nothing selected.
+Clicking a token also selects it, with a dashed light-blue ring, and right-clicking a token selects the one whose menu opens. A click on empty ground clears the selection; dragging the map leaves it alone. While a wall, fog or light tool, **Draw**, the ruler or the area template is up, or **Ping** is pressed, a click goes to that tool, so the selection stays as it was. Switching maps starts with nothing selected.
 
 **From the keyboard.** Once you have clicked the map, the arrow keys move the selected token a square, or five with **Shift**, with the view following it, and **[** and **]** turn it 45 degrees. **,** and **.** (or **<** and **>**) step through every token the map shows you, hidden ones included: in the turn order during a fight, the rest row by row from the top, and the view pans to keep the selection in sight. **Enter** opens the token's menu at the token, panning it into view first and keeping the menu inside the map. **Esc** lets go of one thing a press: the menu, the armed **Ping**, a held token, your tool, then the selection. While the wall **Select** tool holds walls, the arrow keys move the walls instead (see [Selecting and Moving Walls](#selecting-and-moving-walls)). The keys go to the map only while it has the keyboard: a click anywhere else, such as on the chat or a panel, gives them to that, a window open over the map takes them, and **Shift+Tab** takes the keyboard back to the page. A selected token your screen no longer draws, such as one in a preview that the previewed player cannot see, stays selected and the keys leave it alone.
 
@@ -293,7 +293,7 @@ A token can face any direction, to show which way a creature is looking or a car
 - **Select the token and press [ or ]** to turn it 45 degrees anticlockwise or clockwise, held or not.
 - **For an exact angle,** open **Edit Token** and type it in **Facing**, in degrees clockwise: 0 is the picture as uploaded, 90 a quarter turn to the right. A full turn wraps round, so 405 becomes 45.
 
-The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu or with **[** and **]**, while the session is live; during a pause, as with moving, they can't. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
+The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu or with **[** and **]**, whenever they can move it; while the session is paused or has ended, as with moving, they can't. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
 
 #### Changing a Token's Image
 
@@ -329,7 +329,7 @@ Right-click an NPC token on the map (DM only) and choose **Roll...** to open the
 - **Skills** — the skills the stat block records a bonus for, each labelled with the ability it uses. Anything else is covered by the ability checks above
 - **Combat** — attack rolls (`+N to hit` parsed from action descriptions) and damage rolls (every `XdY+Z` expression extracted from each action)
 
-For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage** selector that rewrites the dice expression before rolling (`2d20kh1` / `2d20kl1`). Pathfinder 2e shows the same selector labeled **Fortune / Misfortune**.
+For d20 systems (D&D 5e, PF2e) the picker also has a **Roll mode** list of **Normal**, **Advantage** and **Disadvantage**, which rewrites the dice expression before rolling (`2d20kh1` / `2d20kl1`). In Pathfinder 2e it reads **Normal**, **Fortune** and **Misfortune**.
 
 > **Rolling from a player's sheet.** You can roll from any player character's sheet, opened from the **Campaign Roster**, as its player can: a click rolls a stat, a right-click on an ability, a save, a skill or an attack (on a touch screen, press and hold it) offers **Normal**, **Advantage** and **Disadvantage** for that roll, and **Roll mode** in the sheet's header sets one of them for every such roll until you change it or close the sheet. It starts at **Normal** each time the sheet opens and is not saved. A Pathfinder 2e sheet names them **Fortune** and **Misfortune**; a Call of Cthulhu sheet has neither. The roll goes to the dice log under the character's name. See [Rolling from your sheet](PLAYER_GUIDE.md#rolling-from-your-sheet).
 
@@ -600,12 +600,12 @@ A large campaign takes as long to export as your connection needs; nothing gives
 **Size limit.** A campaign archive can hold up to **500 MB** of pictures, sound and campaign data, which is the most an import accepts. If the campaign's files add up to more, **Export Campaign** says how large they are instead of making an archive no server could import. If leaving out audio would bring it under the limit, the message says so; otherwise remove maps or pictures the campaign no longer uses and export again. Each person can export 20 campaigns an hour, one at a time.
 
 **What's included:**
-- All maps (images, grid settings, wall segments, fog, lighting)
+- All maps (images, grid settings, wall segments, fog, lighting, and the drawings, those for you alone included)
 - All tokens placed on maps
 - Custom creatures and their stat blocks
 - Token templates
 - All associated asset files (map images, token images) that you can open yourself. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact. Such a map shows "This map has no picture" until you choose one in **Edit Map**; a token without one is drawn as a plain marker until you choose one in **Edit Token**
-- Campaign settings (name, description, game system, vibe settings, spirit layer)
+- Campaign settings (name, description, game system, vibe settings, spirit layer, **Players may draw**)
 - With **Include audio assets** ticked, the sound files the atmosphere uses, so each period and the ambient track play again in the imported campaign. Without it, the imported campaign's periods and ambient sound have no track, the import window says which, and you can choose new ones in the Atmosphere panel
 
 **What's NOT included:**
@@ -828,7 +828,7 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
-- Disables token movement for players, turning included
+- Stops players moving and turning their tokens and drawing on the map; they can still erase their own drawings
 - Shows players a banner above the map: *Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*
@@ -837,7 +837,7 @@ Click **Resume Session** when you're ready to continue. The same session carries
 
 ### Ending a Session
 
-Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens until you start the next session. Nothing needs saving: token positions, fog, walls, lights, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
+Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens or draw until you start the next session. Nothing needs saving: token positions, fog, walls, lights, drawings, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
 
 Untick **Save game state** in the dialog to take no new snapshot. If you paused during the session, the snapshot taken then stays with the record. An ended session cannot be resumed; the next game is a new session.
 
@@ -884,8 +884,6 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 
 *GIF pending — DM changing the vibe and player view updating.*
 
----
-
 ### Keyboard Shortcuts
 
 Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo:
@@ -914,7 +912,7 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 | Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
 | Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
 | Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
-| Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag, and a double tap pings nothing either; with the wall tool it finishes a line. Put the tool away to open a menu by holding, or to ping by a double tap. |
+| Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag, and a double tap pings nothing either. To finish a wall line, tap **Done** in the Walls panel. Put the tool away to open a menu by holding, or to ping by a double tap. |
 
 A stylus never opens a menu by holding; use a finger.
 
@@ -934,6 +932,8 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
 
 A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** included, so a tablet propped up for the table stays in the players' view.
+
+---
 
 ## Combat and Initiative
 
@@ -1121,7 +1121,7 @@ Open the **Walls** panel, one of the DM tool panels stacked at the top right of 
 - **Polygon** — Click to place corners of a room; click near the starting point, or click **Done** in the panel, to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
 
-On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. Nothing needs a keyboard: the panel's **Done**, **Cancel**, **Add to selection**, **Delete** and **Undo** do what a double-click, **Esc**, **Shift**, the **Delete** key and **Ctrl+Z** do. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
+On a touch screen every tool works with one finger: a tap is a click, and dragging a finger is dragging the mouse. Finish a line with **Done** in the panel: a double tap finishes it only when its two taps land within 4 pixels of each other, which a fingertip rarely manages. Nothing needs a keyboard: the panel's **Done**, **Cancel**, **Add to selection**, **Delete segment** and **Undo** do what a double-click, **Esc**, **Shift**, the **Delete** key and **Ctrl+Z** do. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 
@@ -1206,7 +1206,7 @@ a wall set that does not line up with its artwork.
 | Select every wall | **Ctrl+A** (**Cmd+A** on a Mac) |
 | Move what is selected | Drag any of it, or nudge with the **arrow keys** |
 | Move by a whole square | **Shift** + an arrow key |
-| Delete what is selected | **Delete** or **Backspace**, or the panel's **Delete** button, which says how many walls it will delete, whatever their types |
+| Delete what is selected | **Delete** or **Backspace**, or the panel's **Delete segment** button (**Delete 3 segments** with three selected), whatever their types |
 | Let go | **Escape** once clears the selection, again puts the tool away |
 
 These keys, like **Ctrl+Z** and **Ctrl+Y** below, act on the map only while you
@@ -1521,11 +1521,12 @@ CozyVTT remembers your campaign between sessions, so you can pick up exactly whe
 
 Everything is stored as you play, so there is no save step and nothing is lost by closing the page:
 
-- **Token positions**, fog, walls and lights — everyone stays put on the map
-- **Chat and dice history** — the full log is there when players rejoin
-- **Map selection** — the active map remains active
-- **Atmosphere settings** — audio, effects and the vibe are remembered
-- **Explored areas** — each player's memory of a lit map
+- **Token positions**, fog, walls and lights: everyone stays put on the map
+- **Drawings**: what you and the players drew on each map stays there until it is erased
+- **Chat and dice history**: the full log is there when players rejoin
+- **Map selection**: the active map remains active
+- **Atmosphere settings**: audio, effects and the vibe are remembered
+- **Explored areas**: each player's memory of a lit map
 
 The one exception is an **initiative order**, which lives only while the server is running: a restart or an upgrade forgets it, though the initiative values stay on the tokens.
 

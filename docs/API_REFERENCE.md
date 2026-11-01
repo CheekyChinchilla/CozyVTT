@@ -261,9 +261,11 @@ A wrong `currentPassword` answers `401`. Ten wrong passwords in 15 minutes for t
 Permanently delete the authenticated user's account, with their memberships,
 characters, notes and dice macros, their avatar, and every personal (`USER`
 scope) upload that nothing names and no campaign shares, row and file. Chat
-messages, dice rolls, campaign uploads, shared documents and personal uploads
-something still names stay, with no owner, as do the character templates they
-published and the token templates and creatures they made. A personal upload
+messages, dice rolls, what they drew on maps, campaign uploads, shared
+documents and personal uploads something still names stay, with no owner, as
+do the character templates they published and the token templates and
+creatures they made, and whispers sent to them stay with their senders, with
+no recipient. A personal upload
 that only one campaign uses or shares, a campaign they were in, becomes that
 campaign's.
 Every sign-in of the account ends, on every device, and any open game connection
@@ -458,8 +460,8 @@ unrollable.
 
 ### `GET /api/campaigns/left`, `GET /api/campaigns/left/:campaignId`, `GET /api/campaigns/left/:campaignId/notes` and `GET /api/campaigns/left/:campaignId/notes/:noteId`
 
-Removing a member keeps their personal notes and dice macros, but the notes and
-macros routes above answer only members. `GET /api/campaigns/left` lists the
+Removing a member, or their leaving, keeps their personal notes and dice
+macros, but the notes and macros routes above answer only members. `GET /api/campaigns/left` lists the
 campaigns you are no longer in and still have notes or macros in, by name, each
 with your note titles (newest edit first, no text) and your macros.
 `GET /api/campaigns/left/:campaignId` returns `campaign` (`id`, `name`), your
@@ -544,7 +546,7 @@ facts, which is what allows an owner to hand the game to a co-DM or to an
 automated account and remain at the table as an ordinary player. Deleting the
 campaign stays with the owner, and so does handing the DM seat on, so an owner
 sitting as a player can take the seat back; the owner also cannot be removed
-from the campaign. Everything else a DM does follows the role.
+from the campaign, or leave it. Everything else a DM does follows the role.
 
 Rejected with `400` if `userId` is text that is not a user id ("A campaign
 member must be named by their user id"; a missing `userId`, or one that is not
@@ -750,7 +752,7 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
 }
 ```
 
-The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors and lights left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors, lights and drawings left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
@@ -1543,7 +1545,7 @@ change their own password with `POST /api/auth/change-password`, which asks for 
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A personal upload that only one campaign uses or shares, a campaign they were in, becomes that campaign's. A campaign they own passes to its sitting DM.
+Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, drawings on maps, other uploads, published character templates, token templates and creatures stay with no owner, and whispers sent to them stay with their senders. A personal upload that only one campaign uses or shares, a campaign they were in, becomes that campaign's. A campaign they own passes to its sitting DM.
 
 **409** while they sit in the DM seat of any campaign, whether or not they own it, or own a campaign whose DM seat is empty. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
 

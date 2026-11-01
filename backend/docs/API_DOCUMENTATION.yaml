@@ -1525,7 +1525,9 @@ paths:
         was not in, or outside a campaign, stays `USER` and an activity log
         line names it. Their chat messages, dice rolls, campaign assets and
         the personal assets that stay are kept with the user field set to
-        null, and documents they shared into a campaign stay shared (the
+        null, as are what they drew on maps (`authorId` null; the DM's to
+        erase) and the whispers sent to them (`recipientId` null; their
+        sender's alone), and documents they shared into a campaign stay shared (the
         share passes to the campaign's DM, or its owner). Character
         templates they published, and token templates and creatures they
         made, stay with no author: their `createdById` is set to null.
@@ -2497,8 +2499,17 @@ paths:
         such as `Invalid input: expected string, received number`.
         Unknown fields are ignored. Changing `gameSystem` after characters
         have been created logs a warning, but the change is still allowed.
-        Nothing is broadcast, except for `vibeSettings` (below); open pages
-        see the other changes on their next fetch.
+        A request that carries `name`, `description`, `gameSystem`,
+        `chatCooldownEnabled`, `chatCooldownSeconds` or `playersMayDraw`,
+        changed or not, sends every connected member
+        `campaign.settings.updated` with `campaignId`, `name`,
+        `description`, `gameSystem`, `chatCooldownEnabled`,
+        `chatCooldownSeconds` and `playersMayDraw` as stored, so open pages
+        follow them without a reload. A refused request sends nothing, and a
+        send that fails is logged and the change stays saved. `vibeSettings`
+        is broadcast as described below. Open pages see a change to
+        `status`, `spiritLayerEnabled` or `spiritLayerStyle` on their next
+        fetch.
       operationId: updateCampaign
       security:
         - cookieAuth: []
@@ -3094,8 +3105,8 @@ paths:
         characters. Their open connections take the new role at once, and
         `campaign.role.changed` (`{ campaignId, userId, role }`) goes to
         everyone in the campaign so open pages follow it, with a
-        `roster.updated`; the initiative order and the map on screen are sent
-        again as the new role sees it.
+        `roster.updated`; the initiative order, the map on screen and its
+        drawings (`drawings:state`) are sent again as the new role sees them.
       operationId: changeMemberRole
       security:
         - cookieAuth: []
@@ -3157,7 +3168,9 @@ paths:
         (even when they are not the DM), or a platform admin. Both members'
         open connections take their new roles at once; `campaign.dm.transferred`
         and a `roster.updated` for each go to the campaign, and the initiative
-        order and the map on screen are sent again as each new role sees it.
+        order, the map on screen and its drawings (`drawings:state`) are sent
+        again as each new role sees them, so a drawing for the DM alone goes
+        with the seat.
         The caller need not be a member when they own the campaign or are an
         admin, so the route answers for itself: a campaign that does not exist,
         or one the caller is neither a member of, its owner nor an admin,
@@ -4060,9 +4073,10 @@ paths:
       summary: List your notes and dice macros from campaigns you have left
       description: >-
         The campaigns the caller is no longer a member of and still has
-        personal notes or dice macros in, sorted by name. Removing a member
-        deletes neither, but the notes and macros routes ask for membership,
-        so this is how a removed player reads their own. Each campaign carries
+        personal notes or dice macros in, sorted by name. Removing a member,
+        or their leaving (`POST /api/campaigns/{campaignId}/leave`), deletes
+        neither, but the notes and macros routes ask for membership, so this
+        is how a member who is out of the campaign reads their own. Each campaign carries
         the titles of the caller's notes (most recently edited first, no
         `content`) and their macros (oldest first); a note's text comes from
         `GET /api/campaigns/left/{campaignId}/notes/{noteId}`, one note at a
@@ -7261,8 +7275,8 @@ paths:
       description: >-
         Delete a map (DM only). The campaign's current map cannot be deleted:
         that answers 400 (`Cannot delete the current map. Set a different map
-        as current first.`). The map's tokens, walls, lights and fog go with
-        it, as does every player's explored-area memory of it; its image
+        as current first.`). The map's tokens, walls, lights, fog and
+        drawings go with it, as does every player's explored-area memory of it; its image
         asset is kept. If any combatant stood on it, those combatants leave
         the initiative order and the order is sent again to every connected
         member (`initiative.state`).
@@ -9737,15 +9751,19 @@ paths:
         region, imported with a new id, as the importing DM's when its `share`
         is `DM` and with no author when it is `PLAYERS` (a drawing for the DM
         alone goes to the DM's share whatever it names, and one for everyone
-        without `share` to the players'), and one that is not, a
-        drawing on the ground layer or a record of another shape included, is
-        left out and counted in `warnings` (`Map "<name>": left out 1 drawing
-        the app cannot store.`); so are those past the 1,000 drawings and
-        100,000 points each share of a map's markup layer holds (`Map
-        "<name>": left out the last 3 drawings of the players' share: each
-        share of a map's markup layer holds 1,000.`), and a `drawings` or
-        `annotations` that is not a list (`Map "<name>": left out its
-        annotations, which could not be read.`). Fog whose grid does not match its
+        without `share` to the players'), and one that is not is left out and
+        counted in `warnings`: one that `drawing:add` would refuse, a drawing
+        on the ground layer or a record of another shape included, as `Map
+        "<name>": left out 1 drawing the app cannot store.`, and one more than
+        500 squares outside its map as `Map "<name>": left out 1 drawing more
+        than 500 squares outside the map.` So are those past the 1,000
+        drawings each share of a map's markup layer holds (`Map "<name>": left
+        out the last 3 drawings of the players' share: each share of a map's
+        markup layer holds 1,000.`) or past its 100,000 points (`Map
+        "<name>": left out 2 drawings of the players' share past the 100,000
+        points each share of a map's markup layer holds.`), and a `drawings`
+        or `annotations` that is not a list (`Map "<name>": left out its
+        drawings, which could not be read.`, or `its annotations`). Fog whose grid does not match its
         map is dropped, as the server would rebuild it anyway. A map is
         left out whole when its width, height, grid size or feet per square
         are outside the map limits (1 to 500 squares, grid size 10 to 500,

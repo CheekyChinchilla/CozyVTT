@@ -28,27 +28,44 @@ _Nothing at present._
 
 ### Character sheets
 
-- `after 1.5.4` **Call of Cthulhu: an age stored as text shows as a blank number box.** The editor hands the stored text to its number box as it is, so text that is not a number shows nothing (`CallOfCthulhu7eCharacterEditor.tsx`).
+- `next release` **Call of Cthulhu: an age stored as text shows as a blank number box.** The editor hands the stored text to its number box as it is, so text that is not a number shows nothing (`CallOfCthulhu7eCharacterEditor.tsx`).
+- `after the next release` **On a wider screen, an editor's two notes under the portrait can be drawn over each other,** when the message for a refused picture and **Saves as personal token** show together (the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors).
+- `after the next release` **Some sheet editor controls do not work for a screen reader or the keyboard.** The buttons that remove a D&D 5e attack or spell, and most of the Pathfinder 2e editor's delete buttons, have no name; a Flexible sheet's delete buttons stay invisible when the keyboard reaches them; and its list ticks have no name or state.
 
 ### Tokens
 
-_Nothing at present._
+- `after the next release` **A player whose move is refused a square can learn the name of a creature under fog there.** The refusal says "<name> is already standing there." for any creature on the square, one the player's fog covers included. It should name only a token the player's screen draws, and an unseen one as "Someone" (`MapCanvas.tsx`).
+- `after the next release` **In Player Preview a right-click on a hidden creature's square opens the DM's menu for it,** on the screen the players may be watching. It should find only a token the preview draws, as a click on it does (`MapCanvas.tsx`).
+- `next release` **The token menu keeps Move to Map… open from one token to the next, and shows two dividers together when there is no other map** (`MapCanvas.tsx`, `map/tokenMenuItems.ts`).
+- `next release` **The door menu can open partly off the screen** near its right or bottom edge; it should flip to stay on screen, as the token menu does (`MapCanvas.tsx`).
+- `next release` **The initiative tracker's menu has no View Character Sheet for a combatant whose token is on another map** (`InitiativeTracker.tsx`).
+- `after the next release` Suspected: **a drop refused when it arrives with its pick-up is not put back on the mover's screen.** One connection's `token.move.start` and `token.move.end` are handled side by side, so the end can be read before the drag is recorded (`handlers/tokens.ts`).
 
 ### Campaigns and assets
 
-- `after 1.5.4` **A token's picture can name a map's asset,** so an animated map picture of up to 200 million pixels across its frames can go on a token, past the 50 million a token picture may be. A token's picture should name only a token asset, as a map's picture names only a map asset (`services/permissions.ts`).
+- `next release` **A token's picture can name a map's asset,** so an animated map picture of up to 200 million pixels across its frames can go on a token, past the 50 million a token picture may be. A token's picture should name only a token asset, as a map's picture names only a map asset (`services/permissions.ts`).
+- `next release` **On a wide screen, Create Custom in the Creature Library can open the creature being edited.** With a creature's edit form open, **Create Custom** leaves it open as **Edit Creature**; it should open an empty form, as **New Template** does in Token Templates (`CreatureLibrary.tsx`).
+- `next release` **The close ✕ of the Creature Library's and Token Templates' forms has no name for a screen reader** (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
+- `after the next release` **Remove from Campaign in the Campaign Roster does not name the character,** asking "Are you sure you want to remove this character from the campaign?" (`CampaignRoster.tsx`).
 
 ### Play and connection
 
-_Nothing at present._
+- `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
+- `next release` **The dice panels follow the computer's dark mode and not the app's theme,** so a light theme on a computer set to dark shows dark dice panels (`DiceRoller.tsx`, `DiceResult.tsx`).
+- `after the next release` **Deleting a campaign from Campaign Settings tells its owner twice** (`CampaignSettingsModal.tsx`).
 
 ### Maps
 
-- `after 1.5.4` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
+- `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
+- `next release` **A wall or light added past a map's cap stays drawn after the server refuses it.** At 5,000 walls or 200 lights the server refuses the add, but the Walls and Lights tools have already drawn it. They should refuse at the cap before drawing (`useWallTool.ts`, `useLightTool.ts`).
+- `next release` **A very large fog box, or a large stretch of explored ground, is lost.** A fog box of more than about 142,000 squares is over the live table's 1 MB message limit and never reaches the server, and a report of more than 20,000 newly explored squares is refused whole. A box over the whole map should send `reveal_all` or `hide_all`, and anything else should go in parts (`useFogTool.ts`, `MapCanvas.tsx`).
+- `next release` **Three map controls are hard to read or wrongly worded.** The Fog of War panel's **Confirm?** is white on light green, about 2 to 1; the Lights panel says "Global illumination" where Edit Map says "Global Illumination"; and the **Alternating** diagonal rule in Create Map and Edit Map reads "5/10/5/10 ft" whatever the grid scale (`DmFogControls.tsx`, `MapCanvas.tsx`, `CreateMapModal.tsx`, `EditMapModal.tsx`).
+- `next release` **Preview Player View is named "Toggle DM player view preview" for a screen reader,** so a voice command for the words the button shows finds nothing (`MapCanvas.tsx`).
+- `after the next release` **With a mouse, the AoE Shape panel covers the foot of the first toolbar buttons,** by about 20 pixels over **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen** (`MapCanvas.tsx`).
 
 ### Accounts
 
-_Nothing at present._
+- `next release` **The profile picture's crop window is small and takes only a mouse.** It is a 300 pixel canvas dragged with the mouse alone, and a screen reader or the keyboard is not told it is a dialog (`ProfilePage.tsx`).
 
 ---
 
@@ -56,9 +73,9 @@ _Nothing at present._
 
 ### User-facing
 
-- **A saved roll that remembers who rolls it.** Since 1.5.4 a saved roll in the **Dice** tab goes out with its name as the roll's purpose, but the **Character** box is still whatever was typed there last, so a DM who saves a roll for a creature or NPC retypes the name each time. A saved roll could keep a character name of its own (and, if wanted, a purpose separate from its button label), used when the box is empty. It needs new columns on `DiceMacro` (a migration), the macro routes and their limits, and the **Saved** editor.
-- **Show how far a carried token has moved.** While a token is picked up, show the distance from the square it left to where it would be put down, in squares and in the system's units, in the lower left of the map where the pointer's grid coordinates show today. Use the ruler's distance rule, so the two never disagree.
-- `after 1.5.4` **Animated maps and tokens.** A token can be a GIF, and a WebP map or token is accepted whether or not it is animated, but on the map both stay on their first frame: in tests in Chrome 153 and Firefox 156 a canvas drew only the first frame of an animated GIF, WebP or PNG, however often it repainted, so playing one needs the browser's frame decoder (`ImageDecoder`, in Chrome and in Firefox from about 133, not in Safari) drawing each frame into the map layer, with a still picture where it is missing. An animated picture carries no script, so the guards that matter stay as they are: the content check, the image library limited to its PNG, JPEG, WebP and GIF readers (`utils/sharpInput.ts`), and the page's security policy. Since 1.5.4 an upload or import of a map, token or avatar is refused over 16,384 pixels on a side, and an animation over 1,000 frames or over 200 million pixels across its frames for a map (50 million for a token or avatar), read from the picture's header before anything is unpacked (`utils/pictureLimits.ts`). Needs: a map-layer playback hook (current frame and one ahead, frame durations, loop count, closing every frame), paused under reduced motion, in a hidden tab and by a per-viewer Pause button; a decision on tokens, whose layer would repaint at the frame rate; and, before accepting animated PNG (refused today as `image/apng`), a frame count read from its `acTL` chunk, since the image library does not report an APNG's frames and it would pass the limits unchecked. Large animated maps cost every player a lot (a 4,096-pixel frame took over 150 ms to decode in a test), so the guides would advise modest sizes. Best done with the map layer rework for screen resolution in the drawing and mobile work. Today, animated token pictures also play forever in the Token Roster, the Token Manager and the token hover card, whatever the reduced-motion setting.
+- `next release` **A saved roll that remembers who rolls it.** Since 1.5.4 a saved roll in the **Dice** tab goes out with its name as the roll's purpose, but the **Character** box is still whatever was typed there last, so a DM who saves a roll for a creature or NPC retypes the name each time. A saved roll could keep a character name of its own (and, if wanted, a purpose separate from its button label), used when the box is empty. It needs new columns on `DiceMacro` (a migration), the macro routes and their limits, and the **Saved** editor.
+- `next release` **Show how far a carried token has moved.** While a token is picked up, show the distance from the square it left to where it would be put down, in squares and in the system's units, in the lower left of the map where the pointer's grid coordinates show today. Use the ruler's distance rule, so the two never disagree.
+- `next release` **Animated maps and tokens.** A token can be a GIF, and a WebP map or token is accepted whether or not it is animated, but on the map both stay on their first frame: in tests in Chrome 153 and Firefox 156 a canvas drew only the first frame of an animated GIF, WebP or PNG, however often it repainted, so playing one needs the browser's frame decoder (`ImageDecoder`, in Chrome and in Firefox from about 133, not in Safari) drawing each frame into the map layer, with a still picture where it is missing. An animated picture carries no script, so the guards that matter stay as they are: the content check, the image library limited to its PNG, JPEG, WebP and GIF readers (`utils/sharpInput.ts`), and the page's security policy. Since 1.5.4 an upload or import of a map, token or avatar is refused over 16,384 pixels on a side, and an animation over 1,000 frames or over 200 million pixels across its frames for a map (50 million for a token or avatar), read from the picture's header before anything is unpacked (`utils/pictureLimits.ts`). Needs: a map-layer playback hook (current frame and one ahead, frame durations, loop count, closing every frame), paused under reduced motion, in a hidden tab and by a per-viewer Pause button; a decision on tokens, whose layer would repaint at the frame rate; and, before accepting animated PNG (refused today as `image/apng`), a frame count read from its `acTL` chunk, since the image library does not report an APNG's frames and it would pass the limits unchecked. Large animated maps cost every player a lot (a 4,096-pixel frame took over 150 ms to decode in a test), so the guides would advise modest sizes. The map's layers are now drawn at the screen's pixel ratio, the rework this was waiting for. Today, animated token pictures also play forever in the Token Roster, the Token Manager and the token hover card, whatever the reduced-motion setting.
 - **Sound effects.** Dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
 - **Browser notifications.** Desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
 - **Per-user default dice color.** Surface a color in the dice picker so a player's rolls visually stand apart in the dice panel. Needs: pass the color into the dice log (`DiceRoller.tsx` and `DiceResult.tsx`) and the socket roll payload metadata, then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
@@ -72,15 +89,19 @@ _Nothing at present._
 - **Admin upload UI for instance branding (logo / favicon / mascot).** The backend already accepts `customLogoUrl` / `customFaviconUrl` / `customMascotUrl` on `SystemSettings`, as paths this instance serves, and `ThemeContext` reads them and dynamically swaps the favicon when set. What's missing is a file-upload form on the Admin → Appearance tab so an instance operator can swap branding at runtime without redeploy. Until then, operators replace the defaults at `frontend/public/default-logo.png` and `frontend/public/default-mascot.png` and rebuild.
 - **Change your email address from the app.** The server accepts a new address on `PUT /api/users/:id`, with the current password when the change is your own, but no screen sends one, so today an address can only be changed through the API.
 - **A per-user storage quota, as an admin setting.** Nothing limits how much one account uploads in total; the upload rate limit slows a script, and the Admin Panel's System Overview warns once the disk holding the uploads is over 80% full. A quota would sum each user's `Asset.fileSize` before accepting an upload, with a limit set in **Admin → Settings**, off by default so no upgrade starts refusing uploads. It needs a column in `SystemSettings` (a migration), the check in the upload, typed-document and UVTT routes and in campaign import, and a clear refusal saying how much space the user has left.
-- **Disable an account.** `after 1.5.4` An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as DM; and a line in **Admin → Activity**.
+- `after the next release` **Disable an account.** An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as DM; and a line in **Admin → Activity**.
+- `after the next release` **A history of character saves.** ([#41](https://github.com/CheekyChinchilla/CozyVTT/issues/41)) A save replaces the sheet, so an edit made by mistake, or a save from a page left open, cannot be taken back. Keeping earlier versions needs a table of its own (a migration), a decision on how many to keep and for how long, and a way to look at one and restore it.
+- **Item and spell lists shared across a campaign or the instance.** ([#56](https://github.com/CheekyChinchilla/CozyVTT/issues/56)) Each sheet holds its own items and spells, typed in by hand.
+- **The app in other languages.** ([#30](https://github.com/CheekyChinchilla/CozyVTT/issues/30)) Every word the app shows is written into its code in English. Translating it means gathering them into per-language files and choosing a library to read them. Not planned yet.
+- **Bonus and penalty dice from a Call of Cthulhu sheet.** A Call of Cthulhu sheet has no **Roll mode**, and its stats have no menu of bonus and penalty dice: a roll is a single d100. The rules roll an extra tens die and keep the better or the worse. It needs the dice to roll and show that die, and a check against the rulebook for how bonus and penalty dice cancel.
 
 ### DM tools
 
 - **Let the DM read whispers, as a campaign setting.** A whisper is for its two people alone, and the DM sees one only when they are one of them. Some tables may want the DM copied on whispers between players, to keep the game's secrets in one place or to watch for harassment. A **DM can read whispers** setting in **Campaign Settings**, off by default, would make the DM one more reader, on the live message (`handlers/chat.ts`) and in the chat history (`GET /api/campaigns/:campaignId/messages`), and the **To** list would then say "Only you, Mara and the DM can see this". It needs a column on `Campaign` (a migration). Build it if tables ask.
-- **A light a token carries.** A torch, a lantern or a *Light* cantrip moves with whoever holds it, but every light today is placed on the map at a fixed point (`LightSource`, in map pixels), and a token has only its own darkvision (`sightRadius`). A token would carry a light of its own, with bright and dim radius, colour and on/off as a map light has, drawn at its centre and following it as it moves, kept with the token when it is saved as a template or creature. The server decides what players see by the lights (`filterTokensByLighting` in `backend/src/utils/spirit-layer.ts`, and the line-of-sight cache for lights), so a carried light has to count there too, and to move with the token when it is put down; while it is carried, the light stays where the token stands, as sight does.
-- **Offer common spell and class effects beside the conditions.** The token editor's D&D 5e list is exactly the rules' fifteen conditions (`DND5E_CONDITIONS` in `frontend/src/utils/conditions.ts`), and stays so. Effects a table tracks the same way, such as Hexed, Hunter's Mark, Blessed, Baned, Concentrating, Raging, Hasted, Slowed and Dodging, can only be typed in today, and show as their first two letters. A separate **Effects** group under the conditions would offer them, each with its own two-letter badge kept unique beside the conditions' (the badge test already checks that), and a typed effect of your own would still work. Check each against the rules for its name and what it is.
-- **Prepare a map without showing it to players.** During play the DM can edit walls, lights, fog and tokens only on the map at the table: the map canvas shows the campaign's current map, and opening another from the **Map Library** moves every player onto it. **Edit Map** changes a map's name, picture and grid without switching, but not what is drawn on it. A DM-only way to open any map on the DM's own screen while the players stay where they are, with a clear sign that it is not the table's map and a way back, needs the DM's canvas to follow a map the DM picks rather than the campaign's current one, and the edits made there to reach no player.
-- **Give temporary hit points from the right-click menu.** Temporary hit points can be set on a character's sheet and on a creature in **Edit Token**, but not from the map or the roster. A **Temporary HP...** item on a token's right-click menu and on a roster character's would ask for a number and set it. A second grant follows each system's rules (in D&D 5e temporary hit points do not add together); check the rulebooks before building it, and leave the item out of systems without temporary hit points.
+- `next release` **A light a token carries.** A torch, a lantern or a *Light* cantrip moves with whoever holds it, but every light today is placed on the map at a fixed point (`LightSource`, in map pixels), and a token has only its own darkvision (`sightRadius`). A token would carry a light of its own, with bright and dim radius, colour and on/off as a map light has, drawn at its centre and following it as it moves, kept with the token when it is saved as a template or creature. The server decides what players see by the lights (`filterTokensByLighting` in `backend/src/utils/spirit-layer.ts`, and the line-of-sight cache for lights), so a carried light has to count there too, and to move with the token when it is put down; while it is carried, the light stays where the token stands, as sight does.
+- `next release` **Offer common spell and class effects beside the conditions.** The token editor's D&D 5e list is exactly the rules' fifteen conditions (`DND5E_CONDITIONS` in `frontend/src/utils/conditions.ts`), and stays so. Effects a table tracks the same way, such as Hexed, Hunter's Mark, Blessed, Baned, Concentrating, Raging, Hasted, Slowed and Dodging, can only be typed in today, and show as their first two letters. A separate **Effects** group under the conditions would offer them, each with its own two-letter badge kept unique beside the conditions' (the badge test already checks that), and a typed effect of your own would still work. Check each against the rules for its name and what it is.
+- `next release` **Prepare a map without showing it to players.** During play the DM can edit walls, lights, fog and tokens only on the map at the table: the map canvas shows the campaign's current map, and opening another from the **Map Library** moves every player onto it. **Edit Map** changes a map's name, picture and grid without switching, but not what is drawn on it. A DM-only way to open any map on the DM's own screen while the players stay where they are, with a clear sign that it is not the table's map and a way back, needs the DM's canvas to follow a map the DM picks rather than the campaign's current one, and the edits made there to reach no player.
+- `next release` **Give temporary hit points from the token's menu.** Temporary hit points can be set on a character's sheet and on a creature in **Edit Token**, but not from the map or the roster. A **Temporary HP...** item on a token's menu and on a roster character's would ask for a number and set it. A second grant follows each system's rules (in D&D 5e temporary hit points do not add together); check the rulebooks before building it, and leave the item out of systems without temporary hit points.
 
 - **Change a member's role from the app.** The spectator role exists, and the server has a route for changing a member's role, but nothing in the app calls it: every invitation makes a player, so the only way to make someone a spectator today is a direct API call. A role picker on the **Members** tab of Campaign Settings would close that gap.
 - **Show that a hidden-HP creature is down.** Players are sent a creature's hit points only when its HP bar is on, so a creature at 0 HP with its bar off still looks standing to them and blocks its square. A separate "down" flag the server could send without the numbers would let the body fade and be stood on.
@@ -90,6 +111,8 @@ _Nothing at present._
 - **Optionally reveal along a carried token's path.** Sight and explored memory follow a token only where it is put down, for every drag. Roll20 makes this a page setting ("Update On Token Drop"), and with it off a player's explored areas fill in along the path as the DM drags their token, which some DMs use to walk a party through a map ahead of play. A per-map flag beside **Remember Explored Areas** could offer that, off by default. The drag frames already carry `dragging: true`, so the switch would be one decision in the store's `receiveTokenMove`: apply a frame as a move when the map allows it. It needs a column with a default (an additive migration), the map settings route and broadcast, the Edit Map checkbox and the DM guide. Not planned for any release yet.
 - **Wall collision (`wallsBlockMovement`).** Previously implemented and removed due to bugs. If reattempted, start fresh without reviving the old code.
 - **Auto-detection of walls from map images.** LLM, contour, and trace approaches all failed previously. Treat any future attempt as new R&D, not a continuation.
+- `next release` **Draw a map yourself, from a blank one.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) Choose a map's size and a background colour and draw the map on a ground layer under the grid in place of uploading a picture, with tokens, walls, lights and fog working as on any map, and **Save as picture** to turn it into an ordinary map picture when one is wanted. Tools that make a detailed map quick would follow: select and move a drawing, undo and redo, a floor brush, a fill bucket, textures, stamps and a room. Today a map needs a picture (`POST /api/campaigns/:campaignId/maps` refuses one without `imageUrl`), and the map's layers wait for the picture before they draw. It needs a column on `Map` for the colour (a migration).
+- **A token template that keeps its facing.** A token placed from a template always faces the default way, because `TokenTemplate` has no rotation column. It needs one (a migration), the template editor and the placement.
 
 ### Polish / tech debt
 
@@ -147,9 +170,10 @@ _Nothing at present._
   security pull requests have been on since 1.5.3 reached `main`.
   **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
   candidate, so wait until it is stable with a patch release or two, and move
-  to the `prisma-client` generator with it. **Defer** TypeScript 7.
+  to the `prisma-client` generator with it. **Defer** TypeScript 6.1 and 7
+  until typescript-eslint supports them, and for 7 the backend's ts-jest too.
 
-- **One dice grammar for both sides.** `after 1.5.4` The parser is now one file
+- `next release` **One dice grammar for both sides.** The parser is now one file
   kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
   (checked by `visionParity.test.ts`), and the Dice panel checks expressions
   and rolls a paused table's dice with it. One character-set check is left,
@@ -186,8 +210,8 @@ _Nothing at present._
   refused, a hand-over steps down every DM, and a DM cannot be demoted,
   removed or have their account deleted. Relaxing those checks is the cheap
   part. The expensive part is the code that treats the DM as one person. The
-  live table compares the DM role on about 60 lines and the frontend on about
-  170, and most of those are checks any DM would pass, but some are not: who
+  live table compares the DM role on dozens of lines and the frontend on over
+  a hundred, and most of those are checks any DM would pass, but some are not: who
   controls initiative, who the fog is drawn for, which single person a "DM
   rolled" attribution names, and `campaignDmMembership` in
   `frontend/src/utils/campaignRoles.ts`, which returns one DM. Ownership would
@@ -269,7 +293,7 @@ _Nothing at present._
   Intelligence modifier while the read-only view shows a plain 10. Only sheets
   that never set it are affected, and the DM can correct it by hand.
 
-- **`docs/API_REFERENCE.md` covers 84 of the 166 routes.** Deliberate: it is a
+- **`docs/API_REFERENCE.md` covers 85 of the 168 routes.** Deliberate: it is a
   hand-written guide to the endpoints people ask about, and
   `backend/docs/API_DOCUMENTATION.yaml` is the complete list.
   `scripts/spec-coverage.py` enforces the split and prints the current counts:
@@ -350,6 +374,34 @@ _Nothing at present._
   `cross-origin` resource policy when `CORS_ORIGIN` differs, `use-credentials`
   on canvas images, and a test that renders the policy with an address set.
   **Revisit if** someone needs it with a setup a proxy cannot cover.
+
+- `next release` **Small-screen polish after the phone layout.** On a phone on
+  its side the token, door and character menus and the **Roll...** pickers
+  still rise from the bottom, and the side sheets do not keep clear of a notch;
+  the on-screen keyboard can cover the chat box; a notched phone draws the bar
+  under its home indicator; CozyVTT cannot be added to a home screen as an
+  app; the pages outside the campaign page take the screen's height with the
+  browser's toolbar hidden; the grid previews in Create Map and Edit Map are
+  drawn at one pixel per point; a token held by a tap loses its hit-point bar,
+  badges and rings while held; **Enter** on a token off the edge pans it only
+  one square into view; some controls a finger reaches are still under 44
+  pixels (the Fog of War panel, Player Preview's list); the campaign header
+  takes two rows on an iPad on its side; Create Map's footer can cover its
+  Grid Size box on an iPhone; and a sheet's tabs are not announced as tabs.
+  Each wants a check on a real device first.
+
+- **Roll from a character sheet with the keyboard.** A sheet's rollable
+  stats roll on a click or a tap, but none of them takes the keyboard's focus,
+  so a keyboard user cannot roll from a sheet at all, and **Roll mode** only
+  sets how the next click rolls. Each rollable row wants to be a control that
+  **Enter** rolls, with its roll menu on the keyboard too, in every system's
+  view.
+
+- **Reorder the initiative tracker with buttons a keyboard user can see.**
+  The DM's up and down arrows on a combatant's row show only where a finger is
+  the pointer. With a keyboard the grip's arrow keys move a combatant, but
+  nothing on screen says so. Showing the arrows with every pointer, or a hint
+  on the grip, would close that.
 
 ---
 

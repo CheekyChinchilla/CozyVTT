@@ -15,13 +15,19 @@ No technical knowledge required. Let's go.
    - [On a phone](#on-a-phone)
    - [Leaving a campaign](#leaving-a-campaign)
 5. [Chat and Dice](#chat-and-dice)
+   - [Rolling from your sheet](#rolling-from-your-sheet)
 6. [Moving Your Token](#moving-your-token)
-7. [Measuring and Spell Areas](#measuring-and-spell-areas)
-8. [The Initiative Tracker](#the-initiative-tracker)
-9. [The Vibe Tracker](#the-vibe-tracker)
-10. [Managing Your Characters](#managing-your-characters)
-11. [Your Profile](#your-profile)
-12. [Quick Reference](#quick-reference)
+   - [On a touch screen](#on-a-touch-screen)
+7. [Your Own Notes](#your-own-notes)
+8. [Measuring and Spell Areas](#measuring-and-spell-areas)
+   - [Pointing at the Map](#pointing-at-the-map)
+   - [Drawing and pointing](#drawing-and-pointing)
+9. [The Initiative Tracker](#the-initiative-tracker)
+10. [The Vibe Tracker](#the-vibe-tracker)
+11. [Managing Your Characters](#managing-your-characters)
+12. [Your Profile](#your-profile)
+13. [Quick Reference](#quick-reference)
+    - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ---
 
@@ -154,16 +160,18 @@ You can also drag the divider to resize the sidebar, or collapse it to give the 
 
 ### The Header Bar
 The top bar shows:
-- Campaign name, a **Live** or **Paused** badge while a session is running or paused, and the current vibe
-- Connection indicator — a dot that goes green when you're connected
-- A **book icon** — the rulebooks and handouts your DM has shared with this campaign
+- Campaign name, a **Live**, **Paused** or **Inactive** badge, and the current vibe
+- Connection indicator: a dot that goes green when you're connected
+- A **book icon**, **Campaign documents**: the rulebooks and handouts your DM has shared with this campaign
+- A **keyboard icon**, **Keyboard shortcuts**: every key the map takes (see [Keyboard Shortcuts](#keyboard-shortcuts))
+- **Hide party panel** and **Hide session panel**, which fold the side columns away, and **Show party panel** and **Show session panel**, which bring them back
 - Navigation controls
 
 *Screenshot pending — Campaign header with status indicators.*
 
 ### On a phone
 
-On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the map fills the screen. Above it a one-line header has the arrow back to your dashboard, the campaign's name and **Live** or **Paused**. Along the bottom a bar of buttons opens everything the side panels hold:
+On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the map fills the screen. Above it a one-line header has the arrow back to your dashboard, the campaign's name and **Live**, **Paused** or **Inactive** (a coloured dot on a phone turned on its side). Along the bottom a bar of buttons opens everything the side panels hold:
 
 | Button | What it opens |
 |---|---|
@@ -271,7 +279,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it. A roll you make from your sheet, the roster or the map's **Roll...** menu lands there too; if one doesn't go through, a message says why.
 
 **Rolling custom expressions:**
-Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. Supported notation:
+Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. On a phone the two boxes are under **More options**, below the expression. Supported notation:
 
 | Expression | What it does |
 |-----------|-------------|
@@ -292,7 +300,7 @@ One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers 
 homebrew subsystem your table invented, a recurring `2d6+3` for a house rule,
 `4d6kh3` for rolling up a new character, an attack the sheet can't describe.
 Rather than retyping those every session, save them: press **Saved** under the
-dice buttons, give the roll a name and an expression, and it becomes a button of
+dice buttons (on a phone, at the end of their row, which scrolls sideways), give the roll a name and an expression, and it becomes a button of
 its own. Click it and it rolls, with its name as the roll's purpose, so the
 **Dice** panel shows "Longsword" and not just `1d20+5`. Whatever is in the
 **Character** box goes with it, as for a typed roll.
@@ -312,7 +320,7 @@ that never works.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
 
-**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel, which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
+**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel (on a phone, at the foot of the Dice sheet), which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
@@ -342,13 +350,13 @@ When the DM has placed your character's token on the map, you can move it: click
 
 **Selecting a token.** Clicking a token also selects it, and a dashed light-blue ring marks it until you click empty ground or select another; dragging the map leaves it selected. You can select any token you can see, yours or not, by clicking it; a right-click selects the token too when its menu opens for you. A token that isn't yours is only selected, never picked up. A screen reader says which token is selected and on which square.
 
-**Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then the **Ping** button if you pressed it, then a token you're holding, then the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
+**Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then the **Ping** button if you pressed it, then a token you're holding, then the drawing tools, the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
 
 *GIF pending — Picking up a player token and placing it across the map.*
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
-**Turning your token.** To show which way you're facing, right-click your token (on a touch screen, press and hold it) and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control, while the session is live: like moving, turning waits while it is paused or has ended.
+**Turning your token.** To show which way you're facing, right-click your token (on a touch screen, press and hold it) and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control whenever you can move it: like moving, turning waits while the session is paused or has ended.
 
 **When you can't move your token:**
 - If the session is **Paused**, moving and turning your token are disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
@@ -382,7 +390,7 @@ On a tablet or a phone your finger does what the mouse does, and a little more:
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
-On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus and of a character sheet's roll menu, the buttons of a sheet's **Roll mode**, the close buttons of messages, dialogs, side panels and the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−1** beside the hit points and **+1** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
+On a phone or a tablet some controls are bigger than on a computer, at least 44 pixels square, so a fingertip hits the one it means: the map's toolbar, **Put back**, the **AoE Shape** panel's buttons, the card's **✕**, the items of the token, door and character menus and of a character sheet's roll menu, the buttons of a sheet's **Roll mode**, the close buttons of messages, dialogs, side panels and the **Roll...** pickers, the icon buttons in the page's header, your character's hit point buttons in the party panel, and the names and your die in the initiative tracker. A menu taller than the screen scrolls. Where a row is too narrow for its buttons, they go onto a line of their own: in a narrow party panel your character's hit point buttons take two lines, **−5** and **−** beside the hit points and **+** and **+5** under them on the right. With a mouse they keep their usual size, and other controls keep the size they have on a computer.
 
 ### Two creatures can't stand in the same square
 
@@ -391,26 +399,6 @@ Try to finish a move on a square somebody is already standing in and the move is
 A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight. That only works when you can see its hit points: another player's character, or a creature whose HP bar the DM has turned on. A creature whose hit points the DM keeps hidden looks standing to you until the DM removes it.
 
 If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
-
-## Your Own Notes
-
-The **Notes** tab is yours alone. Keep up to 200 notes for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
-
-**Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
-
-**Write in Markdown.** A `#` makes a heading, `**bold**` makes bold, a `-` starts a list, and `[text](https://…)` makes a link. The eye button switches to a preview so you can see it laid out; the pencil switches back to editing.
-
-Notes save themselves a moment after you stop typing — there's no Save button to forget. Pick between them with the dropdown at the top, and the **+** button starts a new one.
-
-A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
-
-**If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
-
-### Catching up on last time
-
-The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
-
-If a session shows no notes, your DM simply didn't write any that night.
 
 ### Pointing at a token
 
@@ -438,6 +426,28 @@ If you hear nothing, check your browser has not blocked sound for the tab. Most 
 
 ---
 
+## Your Own Notes
+
+The **Notes** tab is yours alone. Keep up to 200 notes for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
+
+**Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
+
+**Write in Markdown.** A `#` makes a heading, `**bold**` makes bold, a `-` starts a list, and `[text](https://…)` makes a link. The eye button switches to a preview so you can see it laid out; the pencil switches back to editing.
+
+Notes save themselves a moment after you stop typing — there's no Save button to forget. Pick between them with the dropdown at the top, and the **+** button starts a new one.
+
+A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
+
+**If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
+
+### Catching up on last time
+
+The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
+
+If a session shows no notes, your DM simply didn't write any that night.
+
+---
+
 ## Measuring and Spell Areas
 
 Two tools in the toolbar above the map answer "can I actually reach that?" before you commit to a turn. Both are private — they draw on your screen only, so nobody sees you working out whether the fireball catches your own party.
@@ -457,6 +467,46 @@ On a touch screen, which has no cursor to aim with, put your finger on the squar
 Press **Esc** to drop the placement, and again to put the tool away.
 
 Shapes cover whole squares wherever the grid allows it. A cone's spreading edges are at an angle so they'll still clip across squares — that's the shape, not a bug. Judge the edge cases the way you would at the table, and if it matters, ask your DM.
+
+### Pointing at the Map
+
+Saying "no, the *other* door" never works. Instead, click the map, put your mouse where you mean and press **Tab**. A dot appears with rings radiating out of it, in your colour and labelled with your name, and everyone at the table sees it in the same spot for a couple of seconds.
+
+A few things worth knowing:
+
+- **Your mouse has to be over the map's picture.** Tab does nothing if the cursor is over the chat panel, the sidebar or the empty space around the map.
+- **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
+- **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
+- **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
+- Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
+
+If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
+
+**Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
+
+**Double tap to ping.** On a touch screen, two quick taps on empty ground ping the spot where the second lands. The taps must come within half a second of each other and land within 20 pixels of each other. The first tap still does what a tap does, such as clearing the selection, so there is no wait. A third quick tap starts again: three taps ping once, four twice. It works only while no tool is up: with **Ping**, **Draw**, the **Ruler** or **AoE Shape** up, a tap is that tool's. Two taps on a token, or on a door, do what they always do and ping nothing; to point at a creature, use **Ping**, or press and hold it if it has no menu for you. A stylus double taps the same way; a mouse's double-click pings nothing.
+
+### Drawing and pointing
+
+**Draw** (the pencil, after **Ping** in the map's toolbar) opens the drawing tools in the top right corner of the map, with the pen chosen; on a phone they open in a strip across the foot of the map. Sketch a plan, circle a door, label a room: everyone at the table sees it as you draw, and it stays on the map until it is erased. Click **Draw** again, the **×** on the panel (**Done** on a phone's strip), or press **Esc** to put the tools away.
+
+| Tool | How |
+|---|---|
+| **Pen** | Drag to draw freehand. A click makes a dot. |
+| **Line**, **Arrow** | Drag from one end to the other. |
+| **Rectangle**, **Ellipse** | Drag from one corner of the box to the other. |
+| **Polygon** | Click or tap each corner, then the first corner again, or **Done**, to close it. |
+| **Text label** | Click or tap where it goes, type it and press **Enter**. |
+| **Eraser** | Click or tap one of your own drawings to erase it. |
+| **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. |
+
+Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the DM can erase anyone's.
+
+While the tools are up, a click draws, so it does not pick up your token. Put them away to move it. With a mouse the right button moves the map; on a touch screen, two fingers do.
+
+You can draw while your DM lets players draw (**Players may draw**, on unless they turn it off), except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
+
+Drawings are the topmost layer of the map: they show over the tokens, the fog and the dark, so you can plan over ground you have not seen yet ("we'll head this way"). The laser pointer shows over everything too, as a ping does.
 
 ---
 
@@ -484,6 +534,14 @@ The DM controls when initiative advances — after your turn, they'll click **Ne
 
 **Sheets and rolls from the tracker.** Click or tap a character's name in the tracker, or right-click it, and choose **View Character Sheet** to read their sheet, or, on your own character, **Roll...** for the same rolls as right-clicking your token on the map. Double-clicking a character's name opens their sheet straight away. From the keyboard, press **Tab** until the name has the focus and press **Enter** for the menu. Creatures have nothing to open here, and neither does a character whose token is on a map the DM hasn't switched to.
 
+**Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
+
+If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all, and neither is one on a map the DM hasn't switched to or on the other plane.
+
+**Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
+
+**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
+
 ### Rolling Your Own Initiative
 
 Once the DM has added your token to the tracker, you roll for yourself — you don't have to wait for the DM to do it for you. There are two ways, and they do the same thing:
@@ -494,6 +552,10 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
 Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload. If your token's identity is obscured, the roll comes in under your token's name for you and as *Unknown creature* for everyone else; the history keeps it as *Unknown creature*, so that is how it reads after a reload.
+
+**The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your DM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
+
+Your DM can still roll for you (and re-roll, or type a value in by hand) — handy if you're away from the keyboard when combat kicks off.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 
@@ -506,6 +568,52 @@ Roll once, before the DM clicks **Start Combat**: a second roll is refused, and 
 **D&D 5e players — the "other bonus" box.** Your Dexterity is added automatically, but plenty of things add to initiative beyond it: the **Alert** feat's flat +5, a Bard's Jack of All Trades or a Champion's Remarkable Athlete, subclasses that let you use a different ability. Put the total of those in **Initiative — other bonus** on the Combat tab and it's included every time; the box takes anything from -30 to +30. The Initiative number itself is worked out for you now, so there's nothing to keep in step by hand.
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
+
+---
+
+## The Vibe Tracker
+
+The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your DM edits or removes the current period, your view follows at once.
+
+*Screenshot pending — Vibe tracker showing the current period.*
+
+You don't control this — only the DM does. Just let it color your roleplaying.
+
+---
+
+## Managing Your Characters
+
+### Your Character Library
+
+The **Characters** page shows all your characters across every campaign and system. You can have up to 1,000 characters, copies included; past that, creating, copying or importing another says so, and deleting one you no longer need makes room.
+
+*Screenshot pending — Characters page with multiple characters.*
+
+**Things you can do from the Characters page:**
+
+- **Click a character** — Open its sheet to read. **Edit** is on the sheet itself when you want to change something
+
+The card's menu (**⋮**) holds the rest:
+
+- **Edit Character** — Skip straight to the character editor
+- **Copy/Duplicate** — Duplicate a character (handy for making variants or backups)
+- **Assign to Campaign** — Add a character to a campaign. For a character already in one it reads **Reassign Campaign**, which moves it to another or unassigns it
+- **Export as JSON** — Download your character as a JSON file (great for backups or sharing builds)
+- **Delete Character** — Remove a character permanently (you'll be asked to confirm)
+
+**Import**, at the top of the page, loads a previously exported character JSON.
+
+### Editing Your Character
+
+Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. **Edit Character** in the card's menu skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
+
+If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. If you typed something while the save was still going through, the editor stays open with it instead of closing, and you save again. Simply opening a sheet and reading it never counts as a change.
+
+Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
+
+**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. You don't lose what you typed. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the new version, which keeps the hit points your DM set. Press **Save my changes** to save them, or **Keep editing** to carry on without saving. If you both changed the same thing, the box shows your value and the newer one, and you pick which to keep before saving. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
+
+> **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 
 ### Levelling up (D&D 5e)
 
@@ -554,104 +662,6 @@ The eleven buttons are the ones the rules name, not a limit. If your game has a 
 **More than one damage roll.** A spear is 1d6 in one hand and 1d8 in two, and a spell may hit harder at higher levels. Use **Other Damage Rolls** to add each one with a note saying when it applies — "Two-handed", "At 5th level". Each gets its own line on your sheet that you can click to roll, so you're not doing arithmetic mid-fight.
 
 If you already wrote a second damage die into a weapon's notes, it stays exactly as you typed it — nothing rewrites your sheet. Move it into its own row whenever you like and it becomes rollable.
-
-**The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your DM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
-
-Your DM can still roll for you (and re-roll, or type a value in by hand) — handy if you're away from the keyboard when combat kicks off.
-
-**Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
-
-If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all, and neither is one on a map the DM hasn't switched to or on the other plane.
-
-**Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
-
-**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token and the panel in the bottom-left names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
-
-### Pointing at the Map
-
-Saying "no, the *other* door" never works. Instead, click the map, put your mouse where you mean and press **Tab**. A dot appears with rings radiating out of it, in your colour and labelled with your name, and everyone at the table sees it in the same spot for a couple of seconds.
-
-A few things worth knowing:
-
-- **Your mouse has to be over the map's picture.** Tab does nothing if the cursor is over the chat panel, the sidebar or the empty space around the map.
-- **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
-- **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
-- **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
-- Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
-
-If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
-
-**Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
-
-**Double tap to ping.** On a touch screen, two quick taps on empty ground ping the spot where the second lands. The taps must come within half a second of each other and land within 20 pixels of each other. The first tap still does what a tap does, such as clearing the selection, so there is no wait. A third quick tap starts again: three taps ping once, four twice. It works only while no tool is up: with **Ping**, **Draw**, the **Ruler** or **AoE Shape** up, a tap is that tool's. Two taps on a token, or on a door, do what they always do and ping nothing; to point at a creature, use **Ping**, or press and hold it if it has no menu for you. A stylus double taps the same way; a mouse's double-click pings nothing.
-
-### Drawing and pointing
-
-**Draw** (the pencil, after **Ping** in the map's toolbar) opens the drawing tools in the top right corner of the map, with the pen chosen. Sketch a plan, circle a door, label a room: everyone at the table sees it as you draw, and it stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** to put the tools away.
-
-| Tool | How |
-|---|---|
-| **Pen** | Drag to draw freehand. A click makes a dot. |
-| **Line**, **Arrow** | Drag from one end to the other. |
-| **Rectangle**, **Ellipse** | Drag from one corner of the box to the other. |
-| **Polygon** | Click or tap each corner, then the first corner again, or **Done**, to close it. |
-| **Text label** | Click or tap where it goes, type it and press **Enter**. |
-| **Eraser** | Click or tap one of your own drawings to erase it. |
-| **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. |
-
-Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the DM can erase anyone's.
-
-While the tools are up, a click draws, so it does not pick up your token. Put them away to move it. With a mouse the right button moves the map; on a touch screen, two fingers do.
-
-You can draw while your DM lets players draw (**Players may draw**, on unless they turn it off), except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
-
-Drawings are the topmost layer of the map: they show over the tokens, the fog and the dark, so you can plan over ground you have not seen yet ("we'll head this way"). The laser pointer shows over everything too, as a ping does.
-
----
-
-## The Vibe Tracker
-
-The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your DM edits or removes the current period, your view follows at once.
-
-*Screenshot pending — Vibe tracker showing the current period.*
-
-You don't control this — only the DM does. Just let it color your roleplaying.
-
----
-
-## Managing Your Characters
-
-### Your Character Library
-
-The **Characters** page shows all your characters across every campaign and system. You can have up to 1,000 characters, copies included; past that, creating, copying or importing another says so, and deleting one you no longer need makes room.
-
-*Screenshot pending — Characters page with multiple characters.*
-
-**Things you can do from the Characters page:**
-
-- **Click a character** — Open its sheet to read. **Edit** is on the sheet itself when you want to change something
-
-The card's menu (**⋮**) holds the rest:
-
-- **Edit Character** — Skip straight to the character editor
-- **Copy/Duplicate** — Duplicate a character (handy for making variants or backups)
-- **Assign to Campaign** — Add a character to a campaign. For a character already in one it reads **Reassign Campaign**, which moves it to another or unassigns it
-- **Export as JSON** — Download your character as a JSON file (great for backups or sharing builds)
-- **Delete Character** — Remove a character permanently (you'll be asked to confirm)
-
-**Import**, at the top of the page, loads a previously exported character JSON.
-
-### Editing Your Character
-
-Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. **Edit Character** in the card's menu skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
-
-If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. If you typed something while the save was still going through, the editor stays open with it instead of closing, and you save again. Simply opening a sheet and reading it never counts as a change.
-
-Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
-
-**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. You don't lose what you typed. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the new version, which keeps the hit points your DM set. Press **Save my changes** to save them, or **Keep editing** to carry on without saving. If you both changed the same thing, the box shows your value and the newer one, and you pick which to keep before saving. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
-
-> **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 
 ### Exporting and Importing
 

@@ -75,7 +75,7 @@ Note: `AssetType` includes `OTHER`, but the upload route rejects it — only MAP
 ## Important constraints
 
 - **Email uniqueness** — `User.email` unique index, case-folded to lowercase before insert
-- **One DM per campaign** — enforced in `routes/campaigns.ts`, not by a constraint, because the DM role is a value in the membership row. The database enforces one membership per user per campaign (`@@unique([userId, campaignId])`)
+- **One DM per campaign** — enforced in `routes/campaigns.ts` (the hand-over and the role route) and `services/campaignMembers.ts` (a removal or a leave never takes the DM out), not by a constraint, because the DM role is a value in the membership row. The database enforces one membership per user per campaign (`@@unique([userId, campaignId])`)
 - **Cascade deletions** — deleting a campaign removes its memberships, invitations, maps (and their explored memory and drawings), sessions, messages, dice rolls, creature templates and favourites, token templates, personal notes, dice macros and document links. Its campaign-scoped assets are kept: the delete route turns each into its uploader's USER asset first, and `Asset.campaignId` is `SetNull`
 - **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
@@ -89,7 +89,7 @@ Several models use Prisma's `Json` type for flexibility:
 |---|---|
 | `Campaign.vibeSettings` | Vibe periods with color/audio config |
 | `Map.tokens` | Array of token objects (position, image, HP, conditions, stat block, etc.) |
-| `Map.annotations` | Unused, always `[]`, and never sent to members; drawings are rows of `MapDrawing`, which a campaign archive carries under each map file's `drawings` (fog is `Map.fogData`) |
+| `Map.annotations` | Unused: nothing reads it, members are sent it as `[]`, and new maps and imports write `[]`. A map imported from an archive by 1.5.4 or earlier can still hold up to 500 records that archive carried, which the DM's replies that return the stored row whole include. Drawings are rows of `MapDrawing`, which a campaign archive carries under each map file's `drawings` (fog is `Map.fogData`) |
 | `Map.wallSegments` | Wall geometry (`WallSegment[]`) |
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |
