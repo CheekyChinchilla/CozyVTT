@@ -3,8 +3,9 @@
  * only when the dice parser rolls it, as the Roll... picker offers it. Damage
  * it cannot roll, such as "1d8+4 S", is shown as text that does not look like
  * a roll: its own title gives the parser's reason, in place of the strike's
- * "Click: roll", and a click on it rolls nothing, neither the damage nor the
- * strike around it.
+ * "Click: roll", and a click on it never rolls the strike around it. The
+ * click hands the damage to the table, which says why it cannot roll it and
+ * sends nothing (useTableRoll).
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -27,7 +28,7 @@ describe("a strike's damage on the sheet", () => {
     expect(onRollDamage).toHaveBeenCalledWith('1d8+4', 'Longsword Damage');
   });
 
-  it('offers no roll for damage the dice cannot roll', () => {
+  it('shows damage the dice cannot roll as no roll, and hands a click on it to the table to say why', () => {
     const onRollStrike = vi.fn();
     const onRollDamage = vi.fn();
     render(
@@ -47,7 +48,7 @@ describe("a strike's damage on the sheet", () => {
     ]) {
       const damage = screen.getByText(text);
       fireEvent.click(damage);
-      expect(onRollDamage).not.toHaveBeenCalled();
+      expect(onRollDamage).toHaveBeenLastCalledWith(text, `${text === '1d4+' ? 'Dagger' : 'Longsword'} Damage`);
       expect(shownTitle(damage)).toBe(reason);
       expect(damage.parentElement).toHaveClass('cursor-default');
     }

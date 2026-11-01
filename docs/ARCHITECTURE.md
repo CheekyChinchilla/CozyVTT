@@ -872,7 +872,8 @@ sends no `error` event: `chat.message`, `dice.roll`, `dice.clearHistory`,
 `drawing:add`, `drawing:remove`, `drawing:clear_mine` and `drawing:clear`
 take one, and the web client shows the answer where the request was made
 (the chat row's **Not sent**, the Dice panel's banner, `hooks/useTableRoll.ts`
-for rolls from a sheet or a menu, and the draw tool, which takes back a
+for rolls from a sheet or a menu, which sends none the shared dice parser
+refuses and gives its reason in the same message, and the draw tool, which takes back a
 refused stroke, erase or clear and shows the reason). Every other refusal is an `error` event,
 and the campaign page shows each one as a message (`TableRefusals.tsx`), once
 the page has joined the campaign. No panel listens to `error` for itself.

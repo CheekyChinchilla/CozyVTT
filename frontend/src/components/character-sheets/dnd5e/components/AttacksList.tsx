@@ -53,14 +53,15 @@ const AttackRow: React.FC<{
   };
 
   // Damage the dice cannot roll ("1d8 slashing") is shown and not offered as
-  // a roll: its title gives the parser's reason, and a click on it does not
-  // fall through to the attack.
+  // a roll: its title gives the parser's reason, and a click on it never
+  // falls through to the attack. The click is handed to the table, which
+  // says why it cannot roll it and sends nothing (useTableRoll).
   const damageProblem = onRollDamage && attack.damageRoll ? diceExpressionProblem(attack.damageRoll) : null;
   const rollsDamage = !!onRollDamage && !!attack.damageRoll && damageProblem === null;
 
   const handleDamageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (rollsDamage && attack.damageRoll) onRollDamage?.(attack.damageRoll, `${attack.name} Damage`);
+    if (onRollDamage && attack.damageRoll) onRollDamage(attack.damageRoll, `${attack.name} Damage`);
   };
 
   return (
@@ -147,7 +148,7 @@ const AttackRow: React.FC<{
                     onRollDamage
                       ? (e) => {
                           e.stopPropagation();
-                          if (rollable) onRollDamage(roll, `${attack.name} — ${label}`);
+                          onRollDamage(roll, `${attack.name} — ${label}`);
                         }
                       : undefined
                   }

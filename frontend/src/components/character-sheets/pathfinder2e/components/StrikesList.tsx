@@ -84,8 +84,9 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
           : '';
         const attackPurpose = `${strike.name} Strike`;
         // Damage the dice cannot roll ("1d8+4 S") is shown and not offered as
-        // a roll: its title gives the parser's reason, and a click on it does
-        // not fall through to the strike.
+        // a roll: its title gives the parser's reason, and a click on it never
+        // falls through to the strike. The click is handed to the table,
+        // which says why it cannot roll it and sends nothing (useTableRoll).
         const damageRoll = strike.damageRoll ?? '';
         const damageProblem = onRollDamage && damageRoll !== '' ? diceExpressionProblem(damageRoll) : null;
         const rollsDamage = !!onRollDamage && damageRoll !== '' && damageProblem === null;
@@ -136,7 +137,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
               {/* Damage — click separately */}
               <div
                 className={rollsDamage ? 'cursor-pointer hover:text-danger-ink' : damageProblem ? 'cursor-default' : ''}
-                onClick={onRollDamage && damageRoll !== '' ? (e) => { e.stopPropagation(); if (rollsDamage) onRollDamage(damageRoll, `${strike.name} Damage`); } : undefined}
+                onClick={onRollDamage && damageRoll !== '' ? (e) => { e.stopPropagation(); onRollDamage(damageRoll, `${strike.name} Damage`); } : undefined}
                 title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
                 {...(damageProblem ? notARoll(damageProblem) : undefined)}
               >

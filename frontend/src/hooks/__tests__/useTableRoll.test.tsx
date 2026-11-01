@@ -58,3 +58,18 @@ it('says so when there is no table to roll on', async () => {
   expect(made).toBe(false);
   expect(showToast).toHaveBeenCalledWith('Roll not made: Not connected to server', 'error');
 });
+
+// The server rolls by the same parser and would refuse it with the same
+// reason, so it is not sent: v1.5.4 sent it and showed the server's answer.
+it('sends nothing the dice cannot roll, and says why as the server would', async () => {
+  // What the server answers such a roll.
+  rollDice.mockResolvedValueOnce({ ok: false, error: 'Invalid dice expression: Missing an operator between "1d8" and "slashing"' });
+  const { result } = renderHook(() => useTableRoll(socket as never));
+
+  let made: boolean | undefined;
+  await act(async () => { made = await result.current({ expression: '1d8 slashing', purpose: 'Longsword Damage' }); });
+
+  expect(made).toBe(false);
+  expect(rollDice).not.toHaveBeenCalled();
+  expect(showToast).toHaveBeenCalledWith('Roll not made: Invalid dice expression: Missing an operator between "1d8" and "slashing"', 'error');
+});

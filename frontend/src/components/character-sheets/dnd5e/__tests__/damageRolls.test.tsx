@@ -3,8 +3,9 @@
  * when the dice parser rolls it, as the Roll... picker offers it. Damage it
  * cannot roll, such as "1d8 slashing", is shown as text that does not look
  * like a roll: its own title gives the parser's reason, in place of the
- * attack's "Click: roll", and a click on it rolls nothing, neither the damage
- * nor the attack around it.
+ * attack's "Click: roll", and a click on it never rolls the attack around it.
+ * The click hands the damage to the table, which says why it cannot roll it
+ * and sends nothing (useTableRoll).
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -27,7 +28,7 @@ describe("an attack's damage on the sheet", () => {
     expect(onRollDamage).toHaveBeenCalledWith('1d8+3', 'Longsword Damage');
   });
 
-  it('offers no roll for damage the dice cannot roll', () => {
+  it('shows damage the dice cannot roll as no roll, and hands a click on it to the table to say why', () => {
     const onRollAttack = vi.fn();
     const onRollDamage = vi.fn();
     render(
@@ -47,7 +48,7 @@ describe("an attack's damage on the sheet", () => {
     ]) {
       const damage = screen.getByText(text);
       fireEvent.click(damage);
-      expect(onRollDamage).not.toHaveBeenCalled();
+      expect(onRollDamage).toHaveBeenLastCalledWith(text, `${text === '1d4+' ? 'Dagger' : 'Longsword'} Damage`);
       expect(shownTitle(damage)).toBe(reason);
       expect(damage.parentElement).toHaveClass('cursor-default');
     }
@@ -94,7 +95,7 @@ describe("an attack's damage on the sheet", () => {
 
     const unrollable = screen.getByText('2d6 fire');
     fireEvent.click(unrollable);
-    expect(onRollDamage).toHaveBeenCalledTimes(1);
+    expect(onRollDamage).toHaveBeenLastCalledWith('2d6 fire', 'Longsword — Flame Tongue');
     expect(onRollAttack).not.toHaveBeenCalled();
     expect(shownTitle(unrollable)).toBe('Invalid dice expression: Missing an operator between "2d6" and "fire"');
     expect(unrollable.parentElement).toHaveClass('cursor-default');
