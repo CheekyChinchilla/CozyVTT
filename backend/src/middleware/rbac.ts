@@ -28,8 +28,10 @@ export interface AuthenticatedRequest<P = Record<string, string>> extends Reques
 
 /**
  * What a signed-in user is told when they are not a member of the campaign a
- * route names: the 403 the membership check answers, and the leave route's
- * answer when a removal wins the race with the leave (routes/campaigns.ts).
+ * route names: the 403 the membership check answers, the map routes' own
+ * checks (routes/maps.ts), the leave route's answer when a removal wins the
+ * race with the leave (routes/campaigns.ts), and the live table's refusal to
+ * join (websocket/auth.ts).
  */
 export const NOT_A_MEMBER_MESSAGE = 'You are not a member of this campaign';
 

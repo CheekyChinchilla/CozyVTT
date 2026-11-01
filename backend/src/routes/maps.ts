@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
-import { AuthenticatedRequest } from '../middleware/rbac';
+import { AuthenticatedRequest, NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { downloadOnly } from '../middleware/downloadOnly';
 import { oneCampaignArchiveAtATime, whileHoldingArchiveSlot } from '../middleware/campaignArchiveLimits';
@@ -910,7 +910,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     if (!membership) {
       return res.status(403).json({
         error: 'Forbidden',
-        message: 'You are not a member of this campaign',
+        message: NOT_A_MEMBER_MESSAGE,
       });
     }
 
@@ -1652,7 +1652,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     if (!membership) {
       return res.status(403).json({
         error: 'Forbidden',
-        message: 'You are not a member of this campaign',
+        message: NOT_A_MEMBER_MESSAGE,
       });
     }
 

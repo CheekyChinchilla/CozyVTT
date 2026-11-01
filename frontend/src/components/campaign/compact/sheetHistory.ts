@@ -36,6 +36,12 @@
 //   the one Escape calls, so a dialog that asks before closing asks; the
 //   entry goes back on while it stays, and comes off once it has closed
 //   with nothing else open.
+// - The list is kept in the order the sheets and dialogs opened. A dialog
+//   takes its place as its trap opens (nextOpening), on either layout, and
+//   keeps it: when the layout turns compact with one dialog inside another,
+//   such as the editor in the character sheet, both take their holds again,
+//   the inner one first (React runs a child's effects before its parent's),
+//   and Back must still close the one on top.
 // ============================================
 
 const MARK = 'cozyvttSheet';
@@ -47,10 +53,20 @@ interface OpenSheet {
    */
   kind: 'sheet' | 'dialog';
   close: () => void;
+  /** Its place in the order they opened (nextOpening). */
+  opened: number;
 }
 
-/** The open sheets and dialogs, oldest first; Back closes the last. */
+/** The open sheets and dialogs, in the order they opened; Back closes the last. */
 const openSheets: OpenSheet[] = [];
+
+let openings = 0;
+
+/** A number that grows with each opening of a sheet or a dialog's trap, which keeps its place in the list. */
+export function nextOpening(): number {
+  openings += 1;
+  return openings;
+}
 
 /** The popstate our own history.back() brings, which closes nothing. */
 let ownBack = false;
@@ -113,13 +129,14 @@ export interface SheetEntry {
   isTop: () => boolean;
 }
 
-function holdEntry(kind: OpenSheet['kind'], close: () => void): SheetEntry {
+function holdEntry(kind: OpenSheet['kind'], close: () => void, opened: number): SheetEntry {
   if (!listening) {
     window.addEventListener('popstate', onPopState);
     listening = true;
   }
-  const sheet: OpenSheet = { kind, close };
-  openSheets.push(sheet);
+  const sheet: OpenSheet = { kind, close, opened };
+  const later = openSheets.findIndex((other) => other.opened > opened);
+  openSheets.splice(later === -1 ? openSheets.length : later, 0, sheet);
   if (!onMarkedEntry()) pushMarkedEntry();
 
   return {
@@ -140,14 +157,15 @@ function holdEntry(kind: OpenSheet['kind'], close: () => void): SheetEntry {
 
 /** A sheet has opened: Back now calls `close`, unless a sheet or dialog that opened after it is still open. */
 export function sheetOpened(close: () => void): SheetEntry {
-  return holdEntry('sheet', close);
+  return holdEntry('sheet', close, nextOpening());
 }
 
 /**
- * A dialog has opened on the compact layout: Back now calls `close`, the
- * close Escape calls, unless a sheet or dialog that opened after it is still
- * open. `release` once the dialog has closed.
+ * A dialog is open on the compact layout: Back now calls `close`, the close
+ * Escape calls, unless a sheet or dialog that opened after it is still open.
+ * `opened` is the number its trap took as it opened (nextOpening), which
+ * stays the same when the layout turns. `release` once the dialog has closed.
  */
-export function dialogOpened(close: () => void): SheetEntry {
-  return holdEntry('dialog', close);
+export function dialogOpened(close: () => void, opened: number): SheetEntry {
+  return holdEntry('dialog', close, opened);
 }

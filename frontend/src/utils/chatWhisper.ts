@@ -35,7 +35,6 @@ export interface WhisperTarget {
   displayName: string;
 }
 
-
 /** The day a member joined, short, as the browser writes dates: "3 Oct" or "Oct 3". */
 export function joinedDay(joinedAt: string): string {
   return new Date(joinedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });

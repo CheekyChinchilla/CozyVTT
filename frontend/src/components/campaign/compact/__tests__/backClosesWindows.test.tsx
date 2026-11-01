@@ -16,7 +16,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import userEvent from '@testing-library/user-event';
 import { useState, type ReactNode } from 'react';
 import { TableHosts } from '@/components/campaign/tableHosts';
-import { LayoutProvider } from '@/contexts/LayoutContext';
+import { LayoutProvider, useCompactLayout } from '@/contexts/LayoutContext';
 import { useGameStore } from '@/stores/gameStore';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import Modal from '@/components/ui/Modal';
@@ -28,6 +28,7 @@ import { CampaignStatus } from '@/types';
 import type { Campaign, CampaignMembership, Character } from '@/types';
 import type { SessionToolKey } from '@/components/campaign/SessionToolbar';
 import ActionSheet from '../ActionSheet';
+import { BottomSheet } from '../BottomSheet';
 
 vi.mock('react-router', () => ({ useNavigate: () => () => undefined }));
 vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ userRole: 'DM' }) }));
@@ -189,10 +190,13 @@ describe('Back with a window opened over a sheet', () => {
   });
 });
 
-describe("Back with a window a token's action sheet opened", () => {
-  const sheetCharacter = { ...pf2eCharacter(), userId: 'owner' } as Character;
-  const membership = { userId: 'owner', campaignId: sheetCharacter.campaignId, role: 'PLAYER', characterIds: [] } as unknown as CampaignMembership;
+const sheetCharacter = { ...pf2eCharacter(), userId: 'owner' } as Character;
+const membership = { userId: 'owner', campaignId: sheetCharacter.campaignId, role: 'PLAYER', characterIds: [] } as unknown as CampaignMembership;
+const editor = () => screen.queryByRole('dialog', { name: `Edit Character Sheet: ${sheetCharacter.name}` });
+const viewer = () => screen.queryByRole('dialog', { name: sheetCharacter.name });
+const discardQuestion = () => screen.queryByRole('dialog', { name: 'Discard Changes?' });
 
+describe("Back with a window a token's action sheet opened", () => {
   /**
    * The map's token menu as an action sheet, as MapCanvas draws it on the
    * compact layout: View Character Sheet loads the character and then opens
@@ -219,10 +223,6 @@ describe("Back with a window a token's action sheet opened", () => {
       </LayoutProvider>
     );
   }
-
-  const editor = () => screen.queryByRole('dialog', { name: `Edit Character Sheet: ${sheetCharacter.name}` });
-  const viewer = () => screen.queryByRole('dialog', { name: sheetCharacter.name });
-  const discardQuestion = () => screen.queryByRole('dialog', { name: 'Discard Changes?' });
 
   it('asks Discard Changes? before closing the editor opened from the sheet, and the page stays', async () => {
     arriveAt('/campaigns/c4');
@@ -279,6 +279,159 @@ describe("Back with a window a token's action sheet opened", () => {
     expect(window.location.pathname).toBe('/campaigns/c5');
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Token' })).toBeNull());
     await waitFor(() => expect(onSheetEntry()).toBe(false));
+  });
+});
+
+/**
+ * A tablet turned across 1,024 px, or a desktop window narrowed, with one
+ * window open over another. Each window takes its hold on the history again
+ * as the layout turns compact, and React runs the inner window's effects
+ * before the outer's, so Back used to go to the window underneath: with the
+ * editor open over the sheet it then did nothing at all.
+ */
+describe('Back after the layout turns compact with a window open over a window', () => {
+  it("asks Discard Changes? for the editor opened over the character's sheet", async () => {
+    arriveAt('/campaigns/c7');
+    function Viewer({ compact }: { compact: boolean }) {
+      const [open, setOpen] = useState(true);
+      return (
+        <LayoutProvider compact={compact}>
+          {open && (
+            <CharacterSheetViewerModal character={sheetCharacter} campaignId={sheetCharacter.campaignId ?? undefined} membership={membership} onClose={() => setOpen(false)} />
+          )}
+        </LayoutProvider>
+      );
+    }
+    const { rerender } = render(<Viewer compact={false} />);
+    await waitForDialogFocus(viewer() as HTMLElement);
+    fireEvent.click(within(viewer() as HTMLElement).getByRole('button', { name: /Edit/ }));
+    await waitFor(() => expect(editor()).toBeInTheDocument());
+    await waitForDialogFocus(editor() as HTMLElement);
+    await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
+
+    rerender(<Viewer compact />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(onSheetEntry()).toBe(true);
+
+    await pressBack();
+    await waitFor(() => expect(discardQuestion()).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(editor()).toBeNull());
+    expect(viewer()).toBeInTheDocument();
+
+    await pressBack();
+    await waitFor(() => expect(viewer()).toBeNull());
+    await waitFor(() => expect(onSheetEntry()).toBe(false));
+    expect(window.location.pathname).toBe('/campaigns/c7');
+  });
+
+  it("closes a slide-over's question and leaves the slide-over open", async () => {
+    arriveAt('/campaigns/c8');
+    function Library({ compact }: { compact: boolean }) {
+      const [library, setLibrary] = useState(true);
+      const [asking, setAsking] = useState(false);
+      return (
+        <LayoutProvider compact={compact}>
+          <SlideOver open={library} onClose={() => setLibrary(false)}>
+            <SlideOverTitle>Map Library</SlideOverTitle>
+            <button type="button" onClick={() => setAsking(true)}>Delete map</button>
+            <Modal open={asking} onClose={() => setAsking(false)} title="Delete this map?"><button type="button">Delete</button></Modal>
+          </SlideOver>
+        </LayoutProvider>
+      );
+    }
+    const { rerender } = render(<Library compact={false} />);
+    await waitForDialogFocus(screen.getByRole('dialog', { name: 'Map Library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete map' }));
+    await waitForDialogFocus(screen.getByRole('dialog', { name: 'Delete this map?' }));
+
+    rerender(<Library compact />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    await pressBack();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete this map?' })).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Map Library' })).toBeInTheDocument();
+    expect(onSheetEntry()).toBe(true);
+
+    await pressBack();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Map Library' })).toBeNull());
+    await waitFor(() => expect(onSheetEntry()).toBe(false));
+    expect(window.location.pathname).toBe('/campaigns/c8');
+  });
+
+  it('closes a picker that became a sheet inside the window, and then the window', async () => {
+    arriveAt('/campaigns/c9');
+    /** A picker as the roll pickers draw one: a popover on the desktop, a sheet on the compact layout. */
+    function Picker({ onClose }: { onClose: () => void }) {
+      const content = <button type="button">Perception</button>;
+      return useCompactLayout()
+        ? <BottomSheet open title="Roll for Valeros" height="full" onClose={onClose}>{content}</BottomSheet>
+        : <div role="menu" aria-label="Roll for Valeros">{content}</div>;
+    }
+    function WindowWithPicker({ compact }: { compact: boolean }) {
+      const [windowOpen, setWindowOpen] = useState(true);
+      const [picking, setPicking] = useState(false);
+      return (
+        <LayoutProvider compact={compact}>
+          <Modal open={windowOpen} onClose={() => setWindowOpen(false)} title="Valeros">
+            <button type="button" onClick={() => setPicking(true)}>Roll</button>
+            {picking && <Picker onClose={() => setPicking(false)} />}
+          </Modal>
+        </LayoutProvider>
+      );
+    }
+    const { rerender } = render(<WindowWithPicker compact={false} />);
+    await waitForDialogFocus(screen.getByRole('dialog', { name: 'Valeros' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Roll' }));
+    expect(screen.getByRole('menu', { name: 'Roll for Valeros' })).toBeInTheDocument();
+
+    rerender(<WindowWithPicker compact />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.getByRole('dialog', { name: 'Roll for Valeros' })).toBeInTheDocument();
+
+    await pressBack();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Roll for Valeros' })).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Valeros' })).toBeInTheDocument();
+    expect(onSheetEntry()).toBe(true);
+
+    await pressBack();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Valeros' })).toBeNull());
+    await waitFor(() => expect(onSheetEntry()).toBe(false));
+  });
+
+  it('closes a window opened over a sheet before the sheet, after the layout turns and turns back', async () => {
+    arriveAt('/campaigns/c10');
+    function SheetWithWindow({ compact }: { compact: boolean }) {
+      const [sheetOpen, setSheetOpen] = useState(true);
+      const [asking, setAsking] = useState(false);
+      return (
+        <LayoutProvider compact={compact}>
+          <BottomSheet open={sheetOpen} title="Party" height="half" onClose={() => setSheetOpen(false)}>
+            <button type="button" onClick={() => setAsking(true)}>Leave Campaign</button>
+            <Modal open={asking} onClose={() => setAsking(false)} title="Leave this campaign?"><button type="button">Leave</button></Modal>
+          </BottomSheet>
+        </LayoutProvider>
+      );
+    }
+    const { rerender } = render(<SheetWithWindow compact />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave Campaign' }));
+    await waitForDialogFocus(screen.getByRole('dialog', { name: 'Leave this campaign?' }));
+
+    rerender(<SheetWithWindow compact={false} />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    rerender(<SheetWithWindow compact />);
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    await pressBack();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Leave this campaign?' })).toBeNull());
+    expect(isOpen('Party')).toBe(true);
+    expect(onSheetEntry()).toBe(true);
+
+    await pressBack();
+    await waitFor(() => expect(isOpen('Party')).toBe(false));
+    await waitFor(() => expect(onSheetEntry()).toBe(false));
+    expect(window.location.pathname).toBe('/campaigns/c10');
   });
 });
 

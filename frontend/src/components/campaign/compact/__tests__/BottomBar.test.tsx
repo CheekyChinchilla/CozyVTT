@@ -7,9 +7,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useGameStore } from '@/stores/gameStore';
-import { SESSION_TABS, unreadBadge } from '@/components/campaign/sessionTabs';
-import BottomBar, { BAR_PANELS, BOTTOM_BAR_HEIGHT, COMPACT_TABS, type BottomBarProps, type CompactTab } from '../BottomBar';
-import { SHEET_WIDTH } from '../BottomSheet';
+import { unreadBadge } from '@/components/campaign/sessionTabs';
+import BottomBar, { BOTTOM_BAR_HEIGHT, COMPACT_TABS, type BottomBarProps, type CompactTab } from '../BottomBar';
 import { MORE_PANELS } from '../MoreSheet';
 
 beforeEach(() => {
@@ -81,7 +80,7 @@ describe('the bottom bar', () => {
     const row = buttons()[0].parentElement as HTMLElement;
     expect(row.className).toContain('h-14');
     expect(row.className).toContain('max-w-2xl');
-    expect(row.className).toContain(SHEET_WIDTH);
+    expect(row.className).toContain('mx-auto');
     expect(BOTTOM_BAR_HEIGHT).toBe('calc(3.5rem + 1px + env(safe-area-inset-bottom, 0px))');
   });
 
@@ -94,9 +93,10 @@ describe('the bottom bar', () => {
   });
 });
 
+// MORE_PANELS is every session panel the bar has no button for, so a new
+// panel goes into More by itself; this says so when one does.
 describe('the session panels on the compact layout', () => {
-  it('are each on the bar or in More, and never both', () => {
-    expect([...BAR_PANELS, ...MORE_PANELS].sort()).toEqual([...SESSION_TABS].sort());
+  it('put Notes and Session in More, and no other', () => {
     expect(MORE_PANELS).toEqual(['notes', 'session']);
   });
 });

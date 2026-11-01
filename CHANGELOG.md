@@ -168,6 +168,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Removing a spectator from a campaign calls them a spectator.** The question **Remove** asks under **Members** in Campaign Settings, and the message after it, called every member a player, a spectator too: "Remove Player" and "Player removed from campaign". They now name the member's role: **Remove Spectator** and "Spectator removed from campaign" for a spectator, and the same as before for a player.
 
+- **The Members tab in Campaign Settings writes each role as the rest of the app does.** The badge beside a member showed their role in capitals, "PLAYER" or "SPECTATOR". It now reads "Player" or "Spectator", as the campaign cards on the dashboard do.
+
 - **The dashboard no longer shows a campaign you have just been removed from.** When the DM removed you, or the owner deleted the campaign, while you had it open, the page took you to your dashboard, which could go on showing the campaign's card, and not its notes under **Notes From Campaigns You Have Left**, for up to 30 seconds. The dashboard now fetches its lists again as you arrive.
 
 ## [1.5.4] - 2026-10-25
