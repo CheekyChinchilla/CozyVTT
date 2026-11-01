@@ -18,14 +18,15 @@ No technical knowledge required. Let's go.
    - [Rolling from your sheet](#rolling-from-your-sheet)
 6. [Moving Your Token](#moving-your-token)
    - [On a touch screen](#on-a-touch-screen)
-7. [Measuring and Spell Areas](#measuring-and-spell-areas)
+7. [Your Own Notes](#your-own-notes)
+8. [Measuring and Spell Areas](#measuring-and-spell-areas)
    - [Pointing at the Map](#pointing-at-the-map)
    - [Drawing and pointing](#drawing-and-pointing)
-8. [The Initiative Tracker](#the-initiative-tracker)
-9. [The Vibe Tracker](#the-vibe-tracker)
-10. [Managing Your Characters](#managing-your-characters)
-11. [Your Profile](#your-profile)
-12. [Quick Reference](#quick-reference)
+9. [The Initiative Tracker](#the-initiative-tracker)
+10. [The Vibe Tracker](#the-vibe-tracker)
+11. [Managing Your Characters](#managing-your-characters)
+12. [Your Profile](#your-profile)
+13. [Quick Reference](#quick-reference)
     - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ---
@@ -399,26 +400,6 @@ A creature at **zero hit points** is the exception. It's drawn faded to show it'
 
 If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
 
-## Your Own Notes
-
-The **Notes** tab is yours alone. Keep up to 200 notes for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
-
-**Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
-
-**Write in Markdown.** A `#` makes a heading, `**bold**` makes bold, a `-` starts a list, and `[text](https://…)` makes a link. The eye button switches to a preview so you can see it laid out; the pencil switches back to editing.
-
-Notes save themselves a moment after you stop typing — there's no Save button to forget. Pick between them with the dropdown at the top, and the **+** button starts a new one.
-
-A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
-
-**If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
-
-### Catching up on last time
-
-The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
-
-If a session shows no notes, your DM simply didn't write any that night.
-
 ### Pointing at a token
 
 Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are holding a token: the card follows the square under your cursor, so you can see who is already standing where you are about to land. On a touch screen, which has no hover, tap a token instead: the card shows the token you selected, and taps on the map under it still reach the map. Close it with **✕**; it shows again the next time you tap a token.
@@ -442,6 +423,28 @@ Two things worth knowing:
 Your DM can start an ambient track and lay weather over the map: rain, mist, drifting leaves, sparkles, snow or wind. Both arrive on their own when your DM sets them, and stop when your DM stops them; there is nothing for you to turn on. The time of day can carry its own music too, which changes when the DM changes the vibe.
 
 If you hear nothing, check your browser has not blocked sound for the tab. Most browsers refuse to play audio until you have clicked something on the page, so clicking anywhere in the campaign usually starts it.
+
+---
+
+## Your Own Notes
+
+The **Notes** tab is yours alone. Keep up to 200 notes for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
+
+**Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
+
+**Write in Markdown.** A `#` makes a heading, `**bold**` makes bold, a `-` starts a list, and `[text](https://…)` makes a link. The eye button switches to a preview so you can see it laid out; the pencil switches back to editing.
+
+Notes save themselves a moment after you stop typing — there's no Save button to forget. Pick between them with the dropdown at the top, and the **+** button starts a new one.
+
+A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
+
+**If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
+
+### Catching up on last time
+
+The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
+
+If a session shows no notes, your DM simply didn't write any that night.
 
 ---
 
@@ -566,6 +569,52 @@ Your DM can still roll for you (and re-roll, or type a value in by hand) — han
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
 
+---
+
+## The Vibe Tracker
+
+The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your DM edits or removes the current period, your view follows at once.
+
+*Screenshot pending — Vibe tracker showing the current period.*
+
+You don't control this — only the DM does. Just let it color your roleplaying.
+
+---
+
+## Managing Your Characters
+
+### Your Character Library
+
+The **Characters** page shows all your characters across every campaign and system. You can have up to 1,000 characters, copies included; past that, creating, copying or importing another says so, and deleting one you no longer need makes room.
+
+*Screenshot pending — Characters page with multiple characters.*
+
+**Things you can do from the Characters page:**
+
+- **Click a character** — Open its sheet to read. **Edit** is on the sheet itself when you want to change something
+
+The card's menu (**⋮**) holds the rest:
+
+- **Edit Character** — Skip straight to the character editor
+- **Copy/Duplicate** — Duplicate a character (handy for making variants or backups)
+- **Assign to Campaign** — Add a character to a campaign. For a character already in one it reads **Reassign Campaign**, which moves it to another or unassigns it
+- **Export as JSON** — Download your character as a JSON file (great for backups or sharing builds)
+- **Delete Character** — Remove a character permanently (you'll be asked to confirm)
+
+**Import**, at the top of the page, loads a previously exported character JSON.
+
+### Editing Your Character
+
+Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. **Edit Character** in the card's menu skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
+
+If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. If you typed something while the save was still going through, the editor stays open with it instead of closing, and you save again. Simply opening a sheet and reading it never counts as a change.
+
+Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
+
+**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. You don't lose what you typed. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the new version, which keeps the hit points your DM set. Press **Save my changes** to save them, or **Keep editing** to carry on without saving. If you both changed the same thing, the box shows your value and the newer one, and you pick which to keep before saving. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
+
+> **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
+
 ### Levelling up (D&D 5e)
 
 Change **Level** at the top of the editor and **Proficiency Bonus** moves with it: +2 at levels 1 to 4, +3 at 5 to 8, +4 at 9 to 12, +5 at 13 to 16 and +6 at 17 to 20. Every save, skill and spell number worked out from it follows. If your table uses a different bonus, type it in the box and it stays as you set it; the sheet shows what your level gives under the box, with a button to switch back to it.
@@ -613,52 +662,6 @@ The eleven buttons are the ones the rules name, not a limit. If your game has a 
 **More than one damage roll.** A spear is 1d6 in one hand and 1d8 in two, and a spell may hit harder at higher levels. Use **Other Damage Rolls** to add each one with a note saying when it applies — "Two-handed", "At 5th level". Each gets its own line on your sheet that you can click to roll, so you're not doing arithmetic mid-fight.
 
 If you already wrote a second damage die into a weapon's notes, it stays exactly as you typed it — nothing rewrites your sheet. Move it into its own row whenever you like and it becomes rollable.
-
----
-
-## The Vibe Tracker
-
-The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your DM edits or removes the current period, your view follows at once.
-
-*Screenshot pending — Vibe tracker showing the current period.*
-
-You don't control this — only the DM does. Just let it color your roleplaying.
-
----
-
-## Managing Your Characters
-
-### Your Character Library
-
-The **Characters** page shows all your characters across every campaign and system. You can have up to 1,000 characters, copies included; past that, creating, copying or importing another says so, and deleting one you no longer need makes room.
-
-*Screenshot pending — Characters page with multiple characters.*
-
-**Things you can do from the Characters page:**
-
-- **Click a character** — Open its sheet to read. **Edit** is on the sheet itself when you want to change something
-
-The card's menu (**⋮**) holds the rest:
-
-- **Edit Character** — Skip straight to the character editor
-- **Copy/Duplicate** — Duplicate a character (handy for making variants or backups)
-- **Assign to Campaign** — Add a character to a campaign. For a character already in one it reads **Reassign Campaign**, which moves it to another or unassigns it
-- **Export as JSON** — Download your character as a JSON file (great for backups or sharing builds)
-- **Delete Character** — Remove a character permanently (you'll be asked to confirm)
-
-**Import**, at the top of the page, loads a previously exported character JSON.
-
-### Editing Your Character
-
-Clicking a character card opens its sheet to read; click **Edit** on the sheet to start changing it. **Edit Character** in the card's menu skips the reading step and goes straight to the Character Editor. Either way, make your changes and click **Save** — they take effect immediately.
-
-If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. If you typed something while the save was still going through, the editor stays open with it instead of closing, and you save again. Simply opening a sheet and reading it never counts as a change.
-
-Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
-
-**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. You don't lose what you typed. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the new version, which keeps the hit points your DM set. Press **Save my changes** to save them, or **Keep editing** to carry on without saving. If you both changed the same thing, the box shows your value and the newer one, and you pick which to keep before saving. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
-
-> **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
 
 ### Exporting and Importing
 
