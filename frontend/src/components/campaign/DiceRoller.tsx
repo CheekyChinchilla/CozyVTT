@@ -523,6 +523,22 @@ export default function DiceRoller() {
     setNewBelow(false);
   }, [newestRollKey, newestIsMine]);
 
+  /**
+   * A reader at the newest roll stays there as the log's box changes size: a
+   * window made shorter, or on a phone the Dice sheet made full height and
+   * half again. The browser keeps the scroll position, which put the newest
+   * rolls below the view. The chat panel does the same.
+   */
+  useEffect(() => {
+    const container = rollsContainerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (wasAtBottomRef.current) container.scrollTo({ top: container.scrollHeight });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   const jumpToNewest = () => {
     rollsContainerRef.current?.scrollTo({ top: rollsContainerRef.current.scrollHeight });
     wasAtBottomRef.current = true;
