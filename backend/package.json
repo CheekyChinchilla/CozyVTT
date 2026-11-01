@@ -30,7 +30,6 @@
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
-    "archiver": "^8.0.0",
     "argon2": "^0.44.0",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.6",
@@ -50,11 +49,11 @@
     "socket.io": "^4.8.4",
     "unzipper": "^0.12.5",
     "winston": "^3.19.0",
+    "yazl": "^3.3.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@types/archiver": "^8.0.0",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

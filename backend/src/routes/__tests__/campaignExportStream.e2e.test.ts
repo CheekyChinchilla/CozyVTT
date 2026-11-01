@@ -141,6 +141,81 @@ describe('a campaign export', () => {
     expect(entries.find((e) => e.path === 'campaign.json')?.compressionMethod).toBe(8);
   }, 60_000);
 
+  it('logs the size of the archive it sent', async () => {
+    await mapWithPicture('Measured Keep', 3 * MB);
+    const info = jest.spyOn(logger, 'info');
+
+    const res = await exportOverSocket(() => {});
+
+    expect(res.status).toBe(200);
+    const call = info.mock.calls.map((c) => c as unknown[]).find((c) => c[0] === 'Campaign exported');
+    expect(call?.[1]).toMatchObject({ archiveSize: res.body.length });
+  }, 60_000);
+
+  // Root reads a file whatever its mode, so the refusal below cannot be set
+  // up for it.
+  const asAnAccount = process.getuid?.() === 0 ? it.skip : it;
+  asAnAccount('ends the download unfinished when a picture cannot be read, and the server carries on', async () => {
+    await mapWithPicture('Locked Keep', 2 * MB);
+    fs.chmodSync(path.join(UPLOAD_DIR, 'Locked Keep.png'), 0o000);
+    const failed = jest.spyOn(logger, 'error');
+    try {
+      const ended = await new Promise<string>((resolve) => {
+        http
+          .get({ host: '127.0.0.1', port, path: `/api/campaigns/${campaignId}/export`, headers: { Cookie: cookie } }, (res) => {
+            res.on('data', () => {});
+            res.on('end', () => resolve('finished'));
+            res.on('aborted', () => resolve('cut off'));
+            res.on('error', () => resolve('cut off'));
+          })
+          .on('error', () => resolve('cut off'));
+      });
+
+      expect(ended).toBe('cut off');
+      expect(failed.mock.calls.some((call) => (call as unknown[])[0] === 'Campaign export stopped part-way')).toBe(true);
+      expect((await agent.get('/api/auth/me')).status).toBe(200);
+    } finally {
+      fs.chmodSync(path.join(UPLOAD_DIR, 'Locked Keep.png'), 0o600);
+    }
+  }, 60_000);
+
+  // A download given up part-way must not keep the picture open: an export
+  // that is cancelled again and again would use up the process's files.
+  (process.platform === 'linux' ? it : it.skip)('closes the picture it was reading when the download is cancelled', async () => {
+    await mapWithPicture('Abandoned Keep', 60 * MB);
+    const picture = fs.realpathSync(path.join(UPLOAD_DIR, 'Abandoned Keep.png'));
+    const handles = () =>
+      fs.readdirSync('/proc/self/fd').filter((fd) => {
+        try {
+          return fs.readlinkSync(`/proc/self/fd/${fd}`) === picture;
+        } catch {
+          return false;
+        }
+      }).length;
+    const failed = jest.spyOn(logger, 'error');
+
+    await new Promise<void>((resolve, reject) => {
+      const req = http.get({ host: '127.0.0.1', port, path: `/api/campaigns/${campaignId}/export`, headers: { Cookie: cookie } }, (res) => {
+        let received = 0;
+        res.on('data', (chunk: Buffer) => {
+          received += chunk.length;
+          // Well into the picture, and well short of its end.
+          if (received > 5 * MB) {
+            req.destroy();
+            resolve();
+          }
+        });
+      });
+      req.on('error', () => {});
+      req.setTimeout(30_000, () => reject(new Error('the export never got going')));
+    });
+    const stopped = () => failed.mock.calls.some((call) => (call as unknown[])[0] === 'Campaign export stopped part-way');
+    for (let tries = 0; tries < 100 && (!stopped() || handles() > 0); tries++) await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(stopped()).toBe(true);
+    expect(handles()).toBe(0);
+  }, 60_000);
+
   it('keeps memory bounded however large the campaign is', async () => {
     await mapWithPicture('Huge Keep', 150 * MB);
     const before = process.memoryUsage().rss;

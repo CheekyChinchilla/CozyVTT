@@ -4,12 +4,13 @@
  * A zip bomb is a few hundred kilobytes that unpacks to hundreds of
  * megabytes. Building one in memory would cost the test what it is meant to
  * prove the server does not spend, so every entry here is streamed through
- * archiver into a file.
+ * yazl into a file.
  */
 
 import fs from 'fs';
 import { Readable } from 'stream';
-import { ZipArchive } from 'archiver';
+import { pipeline } from 'stream/promises';
+import { ZipFile } from 'yazl';
 
 export interface FixtureEntry {
   name: string;
@@ -17,6 +18,37 @@ export interface FixtureEntry {
   data: string | Buffer | (() => Readable);
   /** Store the entry without compressing it. */
   store?: boolean;
+  /** The entry's Unix mode, its file type included: 0o120777 makes it a symbolic link. */
+  mode?: number;
+}
+
+/**
+ * A ZIP of `entries`, its entries compressed at zlib's highest level unless
+ * stored. With `zip64`, every entry and the end of the archive carry the
+ * ZIP64 fields an archive past 4 GB or 65,535 entries has.
+ */
+function zipOf(entries: FixtureEntry[], zip64 = false): ZipFile {
+  const zip = new ZipFile();
+  for (const entry of entries) {
+    const options = {
+      compressionLevel: entry.store ? 0 : 9,
+      forceZip64Format: zip64,
+      ...(entry.mode === undefined ? {} : { mode: entry.mode }),
+    };
+    if (typeof entry.data === 'function') zip.addReadStream(entry.data(), entry.name, options);
+    else zip.addBuffer(Buffer.from(entry.data), entry.name, options);
+  }
+  zip.end({ forceZip64Format: zip64 });
+  return zip;
+}
+
+/** A ZIP holding the given files, in memory. */
+export async function zipBuffer(files: Record<string, string>): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of zipOf(Object.entries(files).map(([name, data]) => ({ name, data }))).outputStream) {
+    chunks.push(chunk as Buffer);
+  }
+  return Buffer.concat(chunks);
 }
 
 /** A stream of `bytes` copies of one byte, made a megabyte at a time. */
@@ -36,22 +68,9 @@ export function repeatedBytes(bytes: number, fill = 0x20): Readable {
   });
 }
 
-/** Write a ZIP of `entries` to `dest`. */
-export async function writeZip(dest: string, entries: FixtureEntry[]): Promise<void> {
-  const out = fs.createWriteStream(dest);
-  const closed = new Promise<void>((resolve, reject) => {
-    out.on('close', () => resolve());
-    out.on('error', reject);
-  });
-  const archive = new ZipArchive({ zlib: { level: 9 } });
-  archive.on('error', (err) => out.destroy(err));
-  archive.pipe(out);
-  for (const entry of entries) {
-    const data = typeof entry.data === 'function' ? entry.data() : entry.data;
-    archive.append(data, { name: entry.name, store: entry.store ?? false });
-  }
-  await archive.finalize();
-  await closed;
+/** Write a ZIP of `entries` to `dest`, with ZIP64 fields throughout if `zip64`. */
+export async function writeZip(dest: string, entries: FixtureEntry[], options: { zip64?: boolean } = {}): Promise<void> {
+  await pipeline(zipOf(entries, options.zip64).outputStream, fs.createWriteStream(dest));
 }
 
 /**
@@ -84,9 +103,9 @@ export async function writeManyEntryZip(dest: string, count: number, first: Fixt
 
 /**
  * Rename an entry in place, in its local header and in the directory. The new
- * name must be as long as the old one. archiver cleans the names it writes,
- * so a name that tries to leave the folder it is unpacked into has to be put
- * there afterwards.
+ * name must be as long as the old one. yazl refuses a name that tries to
+ * leave the folder it is unpacked into, so one has to be put there
+ * afterwards.
  */
 export function renameEntry(zipPath: string, from: string, to: string): void {
   const a = Buffer.from(from, 'utf8');

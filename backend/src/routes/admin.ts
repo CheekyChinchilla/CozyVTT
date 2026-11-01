@@ -8,11 +8,11 @@ import crypto from 'crypto';
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import type { Dirent } from 'fs';
 import fs from 'fs/promises';
 import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
-import { ZipArchive } from 'archiver';
 import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -36,7 +36,8 @@ import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { SERVER_BUILT_PATH, UPLOAD_LIMITS, getUploadsDirectory } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
-import { extractArchiveSafely, openArchiveFile, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
+import { extractArchiveSafely, openArchiveFile, isSafeArchivePath, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
+import { writeZipTo, ZipInputError, type ZipEntrySource } from '../utils/zipWriter';
 import {
   startRestore,
   startReplacingDatabase,
@@ -975,6 +976,49 @@ const PARTIAL = '.partial';
 
 const exists = (file: string) => fs.access(file).then(() => true, () => false);
 
+/** What the log says of a link, or anything else not a file or a folder, a backup left out; the deployment guide quotes it. */
+export const LEFT_OUT_OF_BACKUP = 'The backup left out something in the uploads folder that is not a file or a folder';
+/** What the log says of a file or folder a backup left out for its name; the deployment guide quotes it. */
+export const NAME_LEFT_OUT_OF_BACKUP = 'The backup left out something in the uploads folder whose name a restore refuses';
+
+/**
+ * The files of the uploads folder, as a backup holds them: under "uploads/",
+ * a folder's entries in order of name, without the backups folder older
+ * installs kept there. Regular files only: a symbolic link the walk finds is
+ * left out, never followed, since it can point anywhere on the server. Only
+ * the last part of each name is guarded so: a folder replaced by a link after
+ * it was listed is followed, which takes write access to the server's disk.
+ * A name the restore would refuse, such as one with ".." in it, which only a
+ * file copied in by hand can have, is left out too: the restore would refuse
+ * the whole backup for it. Stored, not compressed: pictures and sound are
+ * compressed already, and a deflate stream for each of tens of thousands of
+ * files took more memory than the backend has.
+ */
+async function uploadsToBackUp(): Promise<ZipEntrySource[]> {
+  const found: ZipEntrySource[] = [];
+  const walk = async (folder: string): Promise<void> => {
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(path.join(UPLOADS_DIR, folder), { withFileTypes: true });
+    } catch (error) {
+      // An uploads folder never made, or a folder removed since it was listed.
+      if (errorCode(error) === 'ENOENT') return;
+      throw error;
+    }
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const entry of entries) {
+      const name = folder === '' ? entry.name : `${folder}/${entry.name}`;
+      if (name === 'backups') continue;
+      if (!isSafeArchivePath(`uploads/${name}`)) logger.warn(NAME_LEFT_OUT_OF_BACKUP, { path: name });
+      else if (entry.isDirectory()) await walk(name);
+      else if (entry.isFile()) found.push({ name: `uploads/${name}`, file: path.join(UPLOADS_DIR, name), store: true, skipIfGone: true });
+      else logger.warn(LEFT_OUT_OF_BACKUP, { path: name });
+    }
+  };
+  await walk('');
+  return found;
+}
+
 async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ filename: string; sizeBytes: number }> {
   await ensureBackupDir(BACKUP_DIR).catch((error: unknown) => { throw inBackupsFolder(error); });
   const { filename, handle } = await openNewBackup();
@@ -1003,32 +1047,22 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       throw new DumpFailed(errorCode(execError), errorStderr(execError));
     }
 
-    await new Promise<void>((resolve, reject) => {
-      streamed = true;
-      const output = handle.createWriteStream();
-      const archive = new ZipArchive({ zlib: { level: 6 } });
-      // Both ends can fail: the archive while reading, the file while
-      // writing (a full disk). A stream error with nobody listening is an
-      // uncaught exception, which exits the process mid-backup. Creating the
-      // file on a full disk succeeds; running out of room shows up here.
-      output.on('error', (error) => reject(inBackupsFolder(error)));
-      output.on('close', resolve);
-      archive.on('error', reject);
-      archive.pipe(output);
-      archive.file(sqlPath, { name: 'database.sql' });
-      if (withUploads) {
-        // Under an "uploads/" prefix, skipping the backups folder older
-        // installs had there: its own entry is named "backups", with no slash.
-        archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
-          return entry.name === 'backups' || entry.name.startsWith('backups/') ? false : entry;
-        });
-      }
-      archive.finalize();
+    const uploads = withUploads ? await uploadsToBackUp() : [];
+    streamed = true;
+    // Both ends can fail: reading a file into the archive, and writing the
+    // archive (a full disk). Creating the file on a full disk succeeds;
+    // running out of room shows up here.
+    await writeZipTo(handle.createWriteStream(), [{ name: 'database.sql', file: sqlPath }, ...uploads]).catch((error: unknown) => {
+      throw error instanceof ZipInputError ? error : inBackupsFolder(error);
     });
 
     // Complete: only now does it take a backup's name.
     await fs.rename(partialPath, zipPath).catch((error: unknown) => { throw inBackupsFolder(error); });
     const stat = await fs.stat(zipPath);
+    // TODO(backups): a backup larger than the dashboard restore takes (4 GB, 10 GiB unpacked or
+    // 100,000 files, RESTORE_MAX_FILES and RESTORE_MAX_TOTAL_BYTES above) is reported as made,
+    // and only the restore refuses it. It should warn here, in the reply and the log. This
+    // predates the move to yazl: v1.5.4 did the same.
     return { filename, sizeBytes: stat.size };
   } catch (error) {
     if (!streamed) await handle.close().catch(() => {});

@@ -93,6 +93,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The chat holds the newest 400 messages, and Load More brings back older ones.** Every message of a session stayed in the chat panel, so the page grew heavier the longer a table played, on a phone and on a computer alike. While you are at the newest message, the oldest now leave the panel as new ones arrive, and **Load More**, at the top of the chat, brings them back from the server 50 at a time, then older ones. While you are scrolled up, the oldest leave only once the chat holds 800, and what **Load More** brought back stays until 400 more have arrived; a message marked **Not sent** stays until you retry or discard it. The count at the top of the chat says how many are shown, such as "400 shown". Nothing is deleted: the whole history stays on the server.
 
+- **A backup leaves out a symbolic link in the uploads folder, and the backend log names it.** A link, such as one to a folder on another disk, went into a backup as a link, which a restore turned into a small file holding the path it pointed to; the files behind it were never in the backup. The backup now leaves the link out and the log names it, so back up a folder you link to on its own (see [Via Admin Dashboard](docs/DEPLOYMENT.md#via-admin-dashboard)). A campaign export likewise leaves out a picture or sound file that is itself a link, and the log names it; the export used to hold the link's path in its place, which an import could not use either.
+
 ### Removed
 
 - **The Desktop Required notice is gone.** Below 1,024 pixels the campaign page covered itself with **Desktop Required** until **Continue anyway**, which the browser remembered, and then kept its three columns. The page now uses its phone layout there (see **The campaign page fits a phone** above), and the remembered **Continue anyway** is no longer read. A browser window on a computer narrower than 1,024 pixels gets the phone layout too, with no way back to the three columns but a wider window; the mouse and the keys work in it, and **Esc** closes the open sheet. The phone layout starts below 64 times the browser's text size, which is 1,024 pixels at the usual 16 and 1,280 at Chrome's **Large**.
@@ -176,6 +178,10 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **The Members tab in Campaign Settings writes each role as the rest of the app does.** The badge beside a member showed their role in capitals, "PLAYER" or "SPECTATOR". It now reads "Player" or "Spectator", as the campaign cards on the dashboard do.
 
 - **The dashboard no longer shows a campaign you have just been removed from.** When the DM removed you, or the owner deleted the campaign, while you had it open, the page took you to your dashboard, which could go on showing the campaign's card, and not its notes under **Notes From Campaigns You Have Left**, for up to 30 seconds. The dashboard now fetches its lists again as you arrive.
+
+- **A campaign export stopped part-way no longer keeps a file open in the backend.** A download cancelled before it finished left the picture or sound file it was reading open until the backend restarted, one more for each cancelled export. The export now closes it whenever it stops.
+
+- **A backup no longer holds a file that makes the restore refuse it.** A file copied by hand into `backend/uploads` with two dots in a row or a backslash in its name went into the backup, and the dashboard then refused to restore that backup at all, with "The archive has an unsafe file path, which a backup never has". A backup now leaves such a file out and the backend log names it; rename the file if you want it backed up. A backup made before the upgrade with such a file in it can still be restored from the command line, as [Via Admin Dashboard](docs/DEPLOYMENT.md#via-admin-dashboard) shows.
 
 ## [1.5.4] - 2026-10-25
 
