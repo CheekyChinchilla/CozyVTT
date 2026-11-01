@@ -23,6 +23,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', memberships: [] },
     currentMap: { id: 'map-1', width: 20, height: 20 },
+    viewedMap: { id: 'map-1', width: 20, height: 20 },
   }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({

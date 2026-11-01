@@ -19,7 +19,7 @@ const socket = { on: vi.fn(), off: vi.fn() };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'DM' }] }, currentMap: null, userRole: 'DM' }),
+  useCampaign: () => ({ campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'DM' }] }, currentMap: null, viewedMap: null, userRole: 'DM' }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm' } }) }));

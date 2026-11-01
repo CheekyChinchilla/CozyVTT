@@ -31,6 +31,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', name: 'Test', status: 'ACTIVE', ownerId: 'dm', memberships: [], characters: [] },
     currentMap: { id: 'map-1', name: 'Map', tokens: [] },
+    viewedMap: { id: 'map-1', name: 'Map', tokens: [] },
     loading: false,
     error: null,
     userRole: 'DM',

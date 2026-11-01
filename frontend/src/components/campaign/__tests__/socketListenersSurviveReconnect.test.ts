@@ -111,6 +111,7 @@ vi.mock('@/contexts/CampaignContext', () => {
   const campaign = { id: 'campaign-1', name: 'Test', status: 'ACTIVE', spiritLayerEnabled: false, memberships: [], characters: [] };
   const value = {
     currentMap: MAP, setCurrentMap: noop, userRole: 'PLAYER', campaign, updateCampaignSpiritLayer: noop,
+    viewedMap: MAP,
     dmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop, activeVibeEffect: null,
     updateVibe: noop, activeAtmosphereEffect: null, characterHpCache: {},
   };

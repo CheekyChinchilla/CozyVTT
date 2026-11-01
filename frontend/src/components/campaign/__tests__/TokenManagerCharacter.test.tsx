@@ -44,6 +44,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
       characters: characters.list,
     },
     currentMap: { id: 'map-1', width: 20, height: 20 },
+    viewedMap: { id: 'map-1', width: 20, height: 20 },
   }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: null }) }));

@@ -33,6 +33,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', spiritLayerEnabled: veil.open, spiritLayerStyle: 'wispy' },
     currentMap: { id: 'map-1' },
+    viewedMap: { id: 'map-1' },
     updateCampaignSpiritLayer,
     dmViewBothPlanes: true,
     setDmViewBothPlanes: vi.fn(),

@@ -30,6 +30,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'DM' }] },
     currentMap: { id: 'map-1', width: 20, height: 20 },
+    viewedMap: { id: 'map-1', width: 20, height: 20 },
     userRole: 'DM',
   }),
 }));

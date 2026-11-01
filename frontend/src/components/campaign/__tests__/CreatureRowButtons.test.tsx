@@ -17,7 +17,7 @@ import userEvent from '@testing-library/user-event';
 import type { CreatureTemplate } from '@/types';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: null }, currentMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: null }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/components/assets/AssetPicker', () => ({ default: () => null }));
 

@@ -16,7 +16,7 @@ import type { CreatureTemplate } from '@/types';
 
 const campaign = vi.hoisted(() => ({ gameSystem: 'DND_5E' as string | null }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: campaign.gameSystem }, currentMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: campaign.gameSystem }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/components/assets/AssetPicker', () => ({ default: () => null }));
 

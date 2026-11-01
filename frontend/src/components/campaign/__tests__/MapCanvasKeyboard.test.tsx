@@ -79,6 +79,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
       return {
         currentMap: h.state.currentMap,
+        viewedMap: h.state.currentMap,
         setCurrentMap,
         userRole: h.state.userRole,
         campaign,

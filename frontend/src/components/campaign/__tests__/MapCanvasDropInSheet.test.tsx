@@ -57,6 +57,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
       return {
         currentMap: h.state.currentMap, setCurrentMap: noop, userRole: 'DM', campaign,
+        viewedMap: h.state.currentMap,
         updateCampaignSpiritLayer: noop, dmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop,
         activeVibeEffect: null, updateVibe: noop, activeAtmosphereEffect: null, characterHpCache: {},
       };

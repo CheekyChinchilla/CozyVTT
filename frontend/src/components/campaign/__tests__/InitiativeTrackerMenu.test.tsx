@@ -27,6 +27,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     userRole: seat.role,
     currentMap: { id: 'map-1' },
+    viewedMap: { id: 'map-1' },
     campaign: {
       id: 'camp-1',
       gameSystem: 'DND_5E',

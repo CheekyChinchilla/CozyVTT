@@ -41,6 +41,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
       ],
     },
     currentMap: { id: 'map-1', feetPerSquare: 5 },
+    viewedMap: { id: 'map-1', feetPerSquare: 5 },
   }),
 }));
 vi.mock('@/services/api', () => {

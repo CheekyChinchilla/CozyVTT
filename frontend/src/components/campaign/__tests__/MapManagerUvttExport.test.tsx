@@ -31,6 +31,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', name: 'Lost Mine', currentMapId: null },
     currentMap: null,
+    viewedMap: null,
     setCurrentMap: () => {},
     upsertCampaignMap: () => {},
     removeCampaignMap: () => {},
