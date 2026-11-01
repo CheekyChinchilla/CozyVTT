@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { AuthenticatedRequest } from '../middleware/rbac';
+import { AuthenticatedRequest, NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
@@ -1009,7 +1009,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
  * account deletion's (services/accountDeletion.ts).
  */
 const LEAVE_REFUSED: Record<TakeOutRefusal, { status: number; error: string; message: string }> = {
-  'not-member': { status: 403, error: 'Forbidden', message: 'You are not a member of this campaign' },
+  'not-member': { status: 403, error: 'Forbidden', message: NOT_A_MEMBER_MESSAGE },
   owner: {
     status: 409,
     error: 'Conflict',

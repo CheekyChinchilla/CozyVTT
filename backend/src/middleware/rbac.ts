@@ -27,6 +27,13 @@ export interface AuthenticatedRequest<P = Record<string, string>> extends Reques
 }
 
 /**
+ * What a signed-in user is told when they are not a member of the campaign a
+ * route names: the 403 the membership check answers, and the leave route's
+ * answer when a removal wins the race with the leave (routes/campaigns.ts).
+ */
+export const NOT_A_MEMBER_MESSAGE = 'You are not a member of this campaign';
+
+/**
  * Load campaign membership for authenticated user
  * Attaches membership info to req.campaignMembership
  * Must be used after requireAuth middleware
@@ -70,7 +77,7 @@ export async function loadCampaignMembership(
     if (!membership) {
       return res.status(403).json({
         error: 'Forbidden',
-        message: 'You are not a member of this campaign',
+        message: NOT_A_MEMBER_MESSAGE,
       });
     }
 

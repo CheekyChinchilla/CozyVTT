@@ -1570,10 +1570,6 @@ export interface CharacterHpUpdatedBroadcast {
   hp: { current: number; max: number; temp: number };
 }
 
-/**
- * The DM seat moved to another member. Campaign ownership is a separate thing
- * and does not move with it.
- */
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
 export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
 
@@ -1597,6 +1593,10 @@ export interface MemberRoleChangedBroadcast {
   role: CampaignRole;
 }
 
+/**
+ * The DM seat moved to another member. Campaign ownership is a separate thing
+ * and does not move with it.
+ */
 export interface DmTransferredBroadcast {
   campaignId: string;
   /** Null only if the campaign somehow had no DM to demote. */
