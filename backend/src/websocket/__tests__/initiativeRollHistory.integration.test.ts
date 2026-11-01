@@ -127,6 +127,29 @@ describe('the dice history', () => {
     await nothingToPlayer;
   });
 
+  it('stores a roll for a token on a map the table is not on as a secret roll, for the DM alone', async () => {
+    const prepared = await prisma.map.create({
+      data: {
+        campaignId, name: 'Prepared', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
+        width: 10, height: 10, gridSize: 50, annotations: [], tokens: toJson([token('Lich')]), fogEnabled: false,
+      },
+    });
+    clearState(campaignId);
+    const dm = await connect('dm');
+    const player = await connect('player');
+    const toDm = waitForEvent<Rolled>(dm, 'dice.rolled');
+    const nothingToPlayer = expectNoEvent(player, 'dice.rolled', 500);
+
+    dm.emit('initiative.roll', { tokenId: 'Lich', mapId: prepared.id });
+
+    const live = await toDm;
+    const stored = await prisma.diceRoll.findFirstOrThrow({ where: { campaignId } });
+    expect(stored).toMatchObject({ secret: true, characterName: 'Lich' });
+    expect(live).toMatchObject({ id: stored.id, secret: true });
+    await nothingToPlayer;
+    clearState(campaignId);
+  });
+
   it('names an obscured token for the player who rolled it, and no one else', async () => {
     await placeTokens([token('Seelah', { obscured: true, controlledBy: playerId })], ['Seelah']);
     const dm = await connect('dm');

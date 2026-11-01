@@ -27,7 +27,7 @@ import { TokenLayer, TokenType } from '@/types';
 
 const seat = vi.hoisted(() => ({ role: 'DM' }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-a' } }),
+  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-a' }, viewedMap: { id: 'map-a' } }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }),

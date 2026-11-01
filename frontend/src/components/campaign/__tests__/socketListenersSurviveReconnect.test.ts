@@ -106,11 +106,13 @@ const MAP = vi.hoisted(() => ({
   globalIllumination: true, explorationEnabled: false,
 }));
 
-vi.mock('@/contexts/CampaignContext', () => {
+vi.mock('@/contexts/CampaignContext', async () => {
+  const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => MAP, () => undefined);
   const noop = () => undefined;
   const campaign = { id: 'campaign-1', name: 'Test', status: 'ACTIVE', spiritLayerEnabled: false, memberships: [], characters: [] };
   const value = {
-    currentMap: MAP, setCurrentMap: noop, userRole: 'PLAYER', campaign, updateCampaignSpiritLayer: noop,
+    currentMap: MAP, setCurrentMap: noop, ...mapActions, userRole: 'PLAYER', campaign, updateCampaignSpiritLayer: noop,
+    viewedMap: MAP,
     dmViewBothPlanes: false, playerSpiritVisible: false, setPlayerSpiritVisible: noop, activeVibeEffect: null,
     updateVibe: noop, activeAtmosphereEffect: null, characterHpCache: {},
   };

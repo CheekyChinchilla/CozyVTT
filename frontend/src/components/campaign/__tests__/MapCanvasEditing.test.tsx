@@ -69,6 +69,7 @@ const h = vi.hoisted(() => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
+  const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, (map) => h.set({ currentMap: map }));
   const setCurrentMap = (next: unknown) => {
     h.set({ currentMap: typeof next === 'function' ? (next as (p: unknown) => unknown)(h.state.currentMap) : next });
   };
@@ -82,7 +83,9 @@ vi.mock('@/contexts/CampaignContext', async () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
       return {
         currentMap: h.state.currentMap,
+        viewedMap: h.state.currentMap,
         setCurrentMap,
+        ...mapActions,
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
@@ -515,7 +518,7 @@ describe("the token menu's Remove from Map", () => {
   } as unknown as Token;
 
   function openTokenMenu() {
-    act(() => { useGameStore.getState().setTokens([goblin]); });
+    act(() => { useGameStore.getState().setTokens([goblin], 'map-a'); });
     // The top canvas takes the pointer; the two beneath it ignore it.
     const input = document.querySelector('canvas[class*="cursor-"]');
     if (!input) throw new Error('no input canvas');
@@ -570,7 +573,7 @@ describe("the token menu's View Character Sheet", () => {
   } as unknown as Token);
 
   function openMenuOn(token: Token) {
-    act(() => { useGameStore.getState().setTokens([token]); });
+    act(() => { useGameStore.getState().setTokens([token], 'map-a'); });
     const input = document.querySelector('canvas[class*="cursor-"]');
     if (!input) throw new Error('no input canvas');
     fireEvent.contextMenu(input, { clientX: 10, clientY: 10 });
@@ -610,7 +613,7 @@ describe("the token menu's Rotate Left and Rotate Right", () => {
   } as unknown as Token);
 
   function openMenuOn(token: Token) {
-    act(() => { useGameStore.getState().setTokens([token]); });
+    act(() => { useGameStore.getState().setTokens([token], 'map-a'); });
     const input = document.querySelector('canvas[class*="cursor-"]');
     if (!input) throw new Error('no input canvas');
     fireEvent.contextMenu(input, { clientX: 10, clientY: 10 });

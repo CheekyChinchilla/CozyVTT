@@ -34,7 +34,7 @@ vi.mock('framer-motion', () => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: { emitMapChange: vi.fn() } }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [] }, currentMap: { id: 'map-1', feetPerSquare: 5 } }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [] }, currentMap: { id: 'map-1', feetPerSquare: 5 }, viewedMap: { id: 'map-1', feetPerSquare: 5 } }),
 }));
 const api = vi.hoisted(() => ({
   updateToken: vi.fn(), listAssets: vi.fn(), uploadAsset: vi.fn(), updateCreature: vi.fn(),

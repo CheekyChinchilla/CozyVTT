@@ -15,6 +15,7 @@ import {
 } from '../utils/spirit-layer';
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
+import { storedFilePath } from '../utils/storedPath';
 import { canReadAssetById, canReferenceAsset, isMapPicture, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES, TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
@@ -812,7 +813,7 @@ router.get(
           return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
         }
 
-        const imagePath = path.resolve(asset.filePath.replace(/\\/g, '/'));
+        const imagePath = storedFilePath(asset.filePath);
         let imageBuffer: Buffer;
         try {
           imageBuffer = await fs.readFile(imagePath);
@@ -1282,6 +1283,10 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
     if (removeCombatants(campaignId, (c) => c.mapId === id)) {
       await resendInitiative(campaignId, { evenWhenEmpty: true });
     }
+
+    // A page of the DM's may be preparing it. It was never the table's map,
+    // so this reaches the DM's sockets alone.
+    await tellMapReaders(campaignId, id, 'map.deleted', { mapId: id });
 
     return res.status(200).json({
       message: 'Map deleted successfully',

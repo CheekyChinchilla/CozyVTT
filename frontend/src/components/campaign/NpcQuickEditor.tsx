@@ -125,7 +125,7 @@ function getEffectiveType(token: Token): TokenType {
 // ============================================
 
 export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTokenUpdate }: NpcQuickEditorProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
   const { showToast } = useToast();
 
   // The token as the table holds it (the game store), which a change made
@@ -1033,7 +1033,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             <TokenVisionField
               value={current.sightRadius ?? 0}
               onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
-              feetPerSquare={currentMap?.feetPerSquare ?? 5}
+              feetPerSquare={viewedMap?.feetPerSquare ?? 5}
             />
           </section>
         )}

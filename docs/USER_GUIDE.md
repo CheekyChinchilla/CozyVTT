@@ -223,6 +223,8 @@ The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **
 
 Menus open as a list from the bottom of the screen: press and hold a token, a door, a character in the roster or a combatant in the initiative tracker. Tap an item, or **Cancel**.
 
+**A DM preparing a map** the table is not on sees a banner across the top of the map naming the map on their screen and the one the table is on, with **Back to the table**, **Bring everyone here** and **What reaches the table?** (on a phone on its side, **Back**, **Bring everyone** and an info button). The phone's **Back** goes back to the table. Players see nothing of it (see [Preparing a map while the table plays](DM_GUIDE.md#preparing-a-map-while-the-table-plays) in the DM Guide).
+
 **A phone on its side** has no room for the bar, so its buttons move into the header, and sheets open from the right at the map's full height.
 
 **On a tablet** the sheets and the bar are at most 672 pixels wide, in the middle of the screen. Turning a tablet between upright and sideways switches between this layout and the three columns without losing anything: a message you were typing, a token you were carrying, the zoom, **Preview Player View** and any window you had open stay as they were.
@@ -495,7 +497,7 @@ Click **Upload Asset** to add a new asset. You'll choose:
 - An optional description, up to 1,000 characters
 - The **scope** — where this asset lives:
   - **Personal** — Only you can see and use it
-  - **Campaign** — Shared with everyone in a specific campaign: one you run, or, for a token picture, one you play in
+  - **Campaign** — Shared with everyone in a specific campaign: one you run, or, for a token picture, one you play in. A map picture is the exception: its campaign's players and spectators see it only while a table they sit at is on a map using it, or in a document shared with the campaign, and it leaves their library when the table moves on, so a map the DM is preparing stays a surprise
   - **Global** — Available platform-wide (Admin/Global Asset Manager only)
 - Optional tags for easy filtering later: up to 50, each up to 50 characters
 
@@ -578,7 +580,7 @@ What you type is saved exactly as typed, and replaces the old text all at once: 
 
 Uploads are checked rather than trusted. A PDF must really be a PDF, and a text or Markdown file must really be text; a program renamed to `.md` is refused. Documents are always shown as text or as a PDF, never as a web page, so a file that contains HTML or a script is displayed as-is and nothing in it can run. There is no need to avoid typing `<` or `>` in a document; they show as typed.
 
-Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description (or *image not shown*, when it has none) is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it.
+Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description (or *image not shown*, when it has none) is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it. For a handout, a DM uploads its picture with **Campaign** as the scope: a map picture in the campaign's library, in a handout the DM wrote or uploaded and shared with the campaign, shows to every member of that campaign, as long as its address is within the handout's first 1 MB. A picture in the DM's **Personal** library is not shown that way, and anywhere else, such as your own notes, a campaign's map picture shows to its players only while the table is on a map using it (see [Uploading Assets](#uploading-assets)).
 
 Links in a document or note open in a new tab, so following one never takes you away from the table.
 

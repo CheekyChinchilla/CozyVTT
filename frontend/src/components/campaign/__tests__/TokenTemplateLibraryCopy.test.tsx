@@ -15,7 +15,7 @@ import type { TokenTemplate } from '@/types';
 import { TokenType, TokenDisposition, CampaignRole } from '@/types';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'DND_5E' }, currentMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'DND_5E' }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 

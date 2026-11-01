@@ -461,9 +461,13 @@ export async function broadcastExplorationState(
   cells: number[]
 ): Promise<void> {
   const sockets = await campaignSockets(io, campaignId);
+  // The user's own screens only for a map they may read: a write queued
+  // while the table was on this map can land after it has left.
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   for (const s of sockets) {
     const member = s as unknown as AuthenticatedSocket;
-    if (member.userId === userId || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
+    const own = member.userId === userId && canReadMap(member.role, mapId, campaign?.currentMapId);
+    if (own || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
       s.emit('exploration:state', { mapId, userId, cells });
     }
   }
@@ -503,6 +507,12 @@ export async function broadcastMapData(
     campaignId,
     members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
   );
+  // map.changed puts every page onto the map it carries, so it only ever
+  // carries the table's. Asked here, after the reads above, as well as by
+  // each caller: a resend that passed its caller's check can still be under
+  // way when the DM switches maps, and would put the table back.
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  if (campaign?.currentMapId !== map.id) return;
   for (const s of stillInCampaign(members, campaignId)) {
     const member = s as unknown as AuthenticatedSocket;
     if (audience === 'players' && member.role === 'DM') continue;

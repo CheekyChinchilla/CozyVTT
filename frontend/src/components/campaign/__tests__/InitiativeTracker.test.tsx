@@ -17,7 +17,7 @@ const seat = vi.hoisted(() => ({ role: 'PLAYER' }));
 const emitInitiativeReorder = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-1' } }),
+  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-1' }, viewedMap: { id: 'map-1' } }),
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({

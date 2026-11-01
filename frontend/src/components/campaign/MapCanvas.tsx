@@ -186,7 +186,10 @@ interface MapCanvasProps {
 }
 
 export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasProps) {
-  const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
+  // `currentMap` here is the map this page shows (viewedMap): the table's,
+  // or one the DM is preparing. Every emit, request and filter below is for
+  // it; the table's own map is the context's to follow (receiveTableMap).
+  const { viewedMap: currentMap, isPreparing, receiveTableMap, updateMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
   const characterHpCache = useCharacterHp();
   // Live token state comes from the game store, not the campaign context —
   // socket handlers write there directly (outside React), and this
@@ -468,7 +471,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // token's, the whole party's, or the selected token's (Follow my
   // selection). Those tokens supply the vision, the fog comes from the grid
   // the DM already holds, and the same visibility rule decides what is drawn.
-  const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
+  // Never on a map being prepared: a preview records the previewed player's
+  // explored memory, of ground they have never been sent.
+  const previewing = isDM && dmPreviewPlayerView && previewSelection !== null && !isPreparing;
+  // Opening a map to prepare turns it off, so Back to the table comes back
+  // to the DM's own view.
+  useEffect(() => {
+    if (isPreparing) setDmPreviewPlayerView(false);
+  }, [isPreparing]);
   // Follow my selection looks through the selected token, and with nothing
   // selected through the last one it followed on this map: clearing the
   // selection must not drop the projector back to the DM's view.
@@ -1006,7 +1016,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   useEffect(() => {
     if (!socket) return;
 
+    // Applied only to the tokens of the map they are on (onMapTokens): a DM
+    // preparing a map is still sent the table's, and one arriving while a
+    // map's tokens are being read waits for them.
     const handleTokenMoved = (event: TokenMovedEvent) => {
+      // A drag frame only moves where the token is drawn: nothing to keep for a read.
+      useGameStore.getState().onMapTokens(event.mapId, () => applyTokenMoved(event), { hold: event.dragging !== true });
+    };
+    const applyTokenMoved = (event: TokenMovedEvent) => {
       // Read from the store (not a render closure) so rapid events that arrive
       // in the same macro-task all see the most recently mutated state.
       const store = useGameStore.getState();
@@ -1100,9 +1117,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!socket) return;
 
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
+      // The table's map, which this page shows with its tokens unless the
+      // DM is preparing another here; then only the table's map follows.
+      if (!receiveTableMap(mapData)) return;
       letGoIfGone(mapData.id, (tokenId) => (mapData.tokens ?? []).some((t) => t.id === tokenId));
-      setCurrentMap(mapData);
-      useGameStore.getState().setTokens(mapData.tokens || []);
 
       // For non-DMs: track whether this player is personally in the spirit realm.
       // Play the ethereal audio cue if they are crossing in or out.
@@ -1124,7 +1142,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return () => {
       socket.off('map.changed', handleMapChanged);
     };
-  }, [socket, setCurrentMap, setPlayerSpiritVisible, playEtherealTransition]);
+  }, [socket, receiveTableMap, setPlayerSpiritVisible, playEtherealTransition]);
 
   // ============================================
   // Spirit Layer WebSocket Listeners
@@ -1145,8 +1163,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     };
 
     const handleSpiritTokenToggled = (data: SpiritLayerTokenToggledBroadcast) => {
-      // Update the token's visible flag in the live token store
-      useGameStore.getState().patchToken(data.tokenId, { visible: data.visible });
+      // Only on the map it is on: the DM is told of a toggle on any map.
+      useGameStore.getState().onMapTokens(data.mapId, () => {
+        useGameStore.getState().patchToken(data.tokenId, { visible: data.visible });
+      });
     };
 
     const handleSpiritStyleChanged = (data: { style: string }) => {
@@ -1336,15 +1356,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // multiple tokens in the same macro-task (server re-sync after player
     // move), each call builds on the previous result.
     const handleTokenAppeared = (data: { token: Token; mapId: string }) => {
-      if (!currentMapId || data.mapId !== currentMapId) return;
-      useGameStore.getState().revealToken(data.token);
+      useGameStore.getState().onMapTokens(data.mapId, () => useGameStore.getState().revealToken(data.token));
     };
 
     // Dynamic lighting: token left this player's view
     const handleTokenDisappeared = (data: { tokenId: string; mapId: string }) => {
-      if (!currentMapId || data.mapId !== currentMapId) return;
-      letGoIfGone(data.mapId, (tokenId) => tokenId !== data.tokenId);
-      useGameStore.getState().removeToken(data.tokenId);
+      useGameStore.getState().onMapTokens(data.mapId, () => {
+        letGoIfGone(data.mapId, (tokenId) => tokenId !== data.tokenId);
+        useGameStore.getState().removeToken(data.tokenId);
+      });
     };
 
     // Dynamic lighting toggle broadcast from DM
@@ -1353,15 +1373,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // Only the flags change, on the map as it is now: spreading the map this
     // listener captured put back a picture or grid size edited since.
     const handleSettingsUpdated = (data: { mapId: string; lightingEnabled: boolean; fogEnabled: boolean; globalIllumination: boolean; explorationEnabled: boolean }) => {
-      setCurrentMap((latest) => latest && latest.id === data.mapId
-        ? {
-          ...latest,
-          lightingEnabled: data.lightingEnabled,
-          fogEnabled: data.fogEnabled,
-          globalIllumination: data.globalIllumination,
-          explorationEnabled: data.explorationEnabled,
-        }
-        : latest);
+      // The table's map or the one being prepared, whichever it names.
+      updateMap(data.mapId, (latest) => ({
+        ...latest,
+        lightingEnabled: data.lightingEnabled,
+        fogEnabled: data.fogEnabled,
+        globalIllumination: data.globalIllumination,
+        explorationEnabled: data.explorationEnabled,
+      }));
     };
 
     socketInstance.on('token:appeared', handleTokenAppeared);
@@ -1419,7 +1438,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMapId, joinedEpoch, ownEdits, setCurrentMap, carryWallHistory, carryIntoDrags, revealOpacityRef]);
+  }, [socket, currentMapId, joinedEpoch, ownEdits, updateMap, carryWallHistory, carryIntoDrags, revealOpacityRef]);
 
   // ============================================
   // Map pings — receive, name, and expire
@@ -3071,7 +3090,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         currentMap.id,
         characterTokenRequest(dragData, position, targetLayer),
       );
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, currentMap.id);
     } catch (err) {
       showToast(apiErrorMessage(err) || `Could not place ${dragData.name} on the map`, 'error');
     }
@@ -3133,7 +3152,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!token) return;
     const before = token.rotation;
     const rotation = turned(before, step);
-    useGameStore.getState().patchToken(tokenId, { rotation });
+    useGameStore.getState().patchToken(tokenId, { rotation }, currentMap.id);
     try {
       await api.updateToken(campaign.id, currentMap.id, tokenId, { rotation });
     } catch (err) {
@@ -3142,7 +3161,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       // refusal, once no turn of that token is still waiting, put back the last facing the server
       // confirmed (from a successful reply or the next map resend). And two successful turns sent close
       // together are separate requests that can be written out of order, leaving the earlier facing.
-      useGameStore.getState().patchToken(tokenId, { rotation: before });
+      useGameStore.getState().patchToken(tokenId, { rotation: before }, currentMap.id);
       showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
     }
   };
@@ -3369,7 +3388,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
           conditions: [],
         });
-        useGameStore.getState().addToken(result.token);
+        useGameStore.getState().addToken(result.token, currentMap.id);
       } catch (err) {
         // A copy is a new token, so an older one whose fields predate
         // validation is refused: say which, so the DM can fix it in Edit Token.
@@ -3418,7 +3437,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       setIsMovingTokenLayer(true);
       try {
         await api.updateToken(campaign.id, currentMap.id, token.id, { layer });
-        useGameStore.getState().patchToken(token.id, { layer });
+        useGameStore.getState().patchToken(token.id, { layer }, currentMap.id);
       } catch (err) {
         showToast(apiErrorMessage(err) || (layer === TokenLayer.SPIRIT
           ? 'Could not send the token to the spirit realm'
@@ -3434,7 +3453,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         // One request: the server moves the token as it is and
         // tells everyone on this map itself.
         await api.moveTokens(campaign.id, currentMap.id, [token.id], mapId);
-        useGameStore.getState().removeToken(token.id);
+        useGameStore.getState().removeToken(token.id, currentMap.id);
       } catch (err) {
         showToast(apiErrorMessage(err) || 'Failed to move the token to that map', 'error');
       } finally {
@@ -3826,9 +3845,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // The DM's Player Preview controls, offered while dynamic lighting or
   // fog is on, and kept while a preview is on.
   const previewOffered = userRole === 'DM' && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled);
+  const previewHint = isPreparing
+    ? 'Preview Player View is off while you prepare a map the table is not on'
+    : dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it';
   const playerPreviewControls = (
     <>
-      {dmPreviewPlayerView && (
+      {dmPreviewPlayerView && !isPreparing && (
         <select
           value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
           onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
@@ -3855,21 +3877,26 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
           setDmPreviewPlayerView(next);
         }}
-        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
-          dmPreviewPlayerView
+        disabled={isPreparing}
+        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border disabled:opacity-60 disabled:cursor-not-allowed ${
+          dmPreviewPlayerView && !isPreparing
             ? 'bg-info/30 text-info-ink border-info/50'
             // ink/paper invert together, so this stays a legible contrast
             // chip over the map on both light and dark themes
             : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
         }`}
-        title={dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it'}
+        title={previewHint}
         // TODO(ui): this name does not hold the words the button shows ("Preview Player View",
         // "DM View"), so a voice command for them finds nothing; name it by what it shows,
         // with aria-pressed for the preview being on.
         aria-label="Toggle DM player view preview"
       >
-        {dmPreviewPlayerView ? '👁 DM View' : '🎭 Preview Player View'}
+        {dmPreviewPlayerView && !isPreparing ? '👁 DM View' : '🎭 Preview Player View'}
       </button>
+      {/* Said as well as greyed out: a touch screen shows no tooltip. */}
+      {isPreparing && (
+        <span className="px-2 py-1 rounded-sm text-xs bg-ink/85 text-paper">Off while you prepare a map</span>
+      )}
     </>
   );
   // The drawing tools, while Draw is open: the stack's panel, or on the
@@ -4298,15 +4325,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               if (!campaign || !currentMap) return;
               // Shown at once; the settings broadcast confirms it for every
               // client, this one included. Put back if the save fails.
-              const before = currentMap;
-              setCurrentMap({ ...currentMap, fogEnabled: enabled });
+              // On the map on screen, which may be one being prepared: the
+              // table stays where it is.
+              const { id: mapId, fogEnabled: before } = currentMap;
+              updateMap(mapId, (latest) => ({ ...latest, fogEnabled: enabled }));
               if (!enabled) { setFogMode(null); cancelFogDrag(); }
               try {
-                await mapService.updateMap(campaign.id, currentMap.id, { fogEnabled: enabled });
+                await mapService.updateMap(campaign.id, mapId, { fogEnabled: enabled });
               } catch (err) {
                 // Say why: a map stored larger than the size limits is
                 // refused fog, and the box would otherwise just untick.
-                setCurrentMap(before);
+                updateMap(mapId, (latest) => ({ ...latest, fogEnabled: before }));
                 showToast(apiErrorMessage(err) || 'Could not change fog of war for this map', 'error');
               }
             }}
@@ -4390,12 +4419,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             globalIllumination={currentMap.globalIllumination ?? true}
             onGlobalIlluminationChange={async (on) => {
               if (!campaign) return;
-              const before = currentMap;
-              setCurrentMap({ ...currentMap, globalIllumination: on });
+              const { id: mapId, globalIllumination: before } = currentMap;
+              updateMap(mapId, (latest) => ({ ...latest, globalIllumination: on }));
               try {
-                await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
+                await mapService.updateMap(campaign.id, mapId, { globalIllumination: on });
               } catch (err) {
-                setCurrentMap(before);
+                updateMap(mapId, (latest) => ({ ...latest, globalIllumination: before }));
                 // TODO(ui): the Lights panel's switch reads "Global illumination" and
                 // Edit Map's checkbox "Global Illumination"; settle on one spelling
                 // for both controls and this toast.
@@ -4746,7 +4775,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           if (!token || !campaign?.id || !currentMap?.id) return;
           try {
             await api.deleteToken(campaign.id, currentMap.id, token.id);
-            useGameStore.getState().removeToken(token.id);
+            useGameStore.getState().removeToken(token.id, currentMap.id);
           } catch (err) {
             showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
           }
@@ -4762,8 +4791,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             character={viewingSheet.character}
             campaignId={campaign.id}
             membership={membership}
-            // Rolls from it reach the whole table, as from Roll... below.
+            // Rolls from it reach the whole table, as from Roll... below,
+            // or the DM alone from a map being prepared.
             publicName={characterRollPublicName(tokens.find((t) => t.id === viewingSheet.tokenId), user?.id)}
+            secretRolls={isPreparing}
             onClose={() => setViewingSheet(null)}
           />
         );
@@ -4781,8 +4812,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           // The dice log goes to the whole table, so an obscured token's
           // rolls are filed under the name everyone may see.
           publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
+          // A token on a map the table is not on is the DM's to know of, so
+          // its rolls are secret while the DM prepares that map.
           onRoll={(expression, purpose, characterName) =>
-            tableRoll({ expression, purpose, characterName })
+            tableRoll({ expression, purpose, characterName, ...(isPreparing ? { secret: true } : {}) })
           }
           // Only offered when this token is already in the initiative order and
           // this viewer may roll for it — the DM for anyone, a player for a
@@ -4807,8 +4840,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             anchorX={npcRollPicker.at.x}
             anchorY={npcRollPicker.at.y}
             onRoll={(expression, purpose, characterName) =>
-            tableRoll({ expression, purpose, characterName })
-          }
+              tableRoll({ expression, purpose, characterName, ...(isPreparing ? { secret: true } : {}) })
+            }
             onClose={() => setNpcRollPicker(null)}
           />
         );

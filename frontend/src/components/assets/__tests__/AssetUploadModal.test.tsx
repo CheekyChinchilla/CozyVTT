@@ -85,13 +85,29 @@ describe('switching to a kind of asset the chosen campaign does not take', () =>
   });
 });
 
+// A map picture is kept from players until a map using it is on screen,
+// whichever library it is in, and the Campaign line says so.
+describe('what Campaign says about a map picture', () => {
+  beforeEach(() => { campaigns = [campaign('home', 'DM')]; });
+
+  it('says players see it once its map is on screen, and token art is shared at once', async () => {
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
+    fireEvent.click(await screen.findByText('Campaign'));
+    expect(screen.getByText('Shared with the selected campaign. Players see it once a map using it is on screen.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Token'));
+    fireEvent.click(await screen.findByText('Campaign'));
+    expect(screen.getByText('Shared with all members of the selected campaign.')).toBeInTheDocument();
+  });
+});
+
 // Create Map's Upload New: a picture for a map the DM may be preparing in
 // secret. Personal is chosen at first; the campaign's library is a click
 // away. Nothing else is offered, not even Global to a global asset manager,
 // and the campaign is the one the map is for.
 describe('choosing Personal or the campaign, as Create Map offers', () => {
   const PERSONAL_HINT = 'Players see it once its map is on screen, while you are in the campaign.';
-  const CAMPAIGN_HINT = 'Everyone in the campaign can browse it now, and it stays if you leave.';
+  const CAMPAIGN_HINT = 'Players see it once its map is on screen, and it stays if you leave.';
 
   beforeEach(() => {
     campaigns = [campaign('home', 'DM'), campaign('friday', 'DM')];

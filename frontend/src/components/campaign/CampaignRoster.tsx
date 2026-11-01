@@ -35,7 +35,7 @@ import { TokenLayer } from '@/types';
 interface CharacterMenu { x: number; y: number; characterId: string; characterUserId: string; opening: number }
 
 export default function CampaignRoster() {
-  const { campaign, currentMap, userRole } = useCampaign();
+  const { campaign, viewedMap, userRole } = useCampaign();
   const characterHpCache = useCharacterHp();
   const { socket } = useWebSocket();
   const tableRoll = useTableRoll(socket);
@@ -199,7 +199,7 @@ export default function CampaignRoster() {
    * same as the creature library, because a menu click has no cursor position.
    */
   const handleAddTokenToMap = async () => {
-    if (!contextMenu || !campaign || !currentMap) return;
+    if (!contextMenu || !campaign || !viewedMap) return;
     const character = roster
       .flatMap((member) => member.characters)
       .find((c) => c.id === contextMenu.characterId);
@@ -207,14 +207,14 @@ export default function CampaignRoster() {
     if (!character) return;
 
     const position = {
-      x: Math.floor(currentMap.width / 2),
-      y: Math.floor(currentMap.height / 2),
+      x: Math.floor(viewedMap.width / 2),
+      y: Math.floor(viewedMap.height / 2),
     };
 
     try {
       const result = await api.addToken(
         campaign.id,
-        currentMap.id,
+        viewedMap.id,
         characterTokenRequest(
           characterTokenDrag({
             id: character.id,
@@ -226,7 +226,7 @@ export default function CampaignRoster() {
           TokenLayer.TOKEN,
         ),
       );
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, viewedMap.id);
       showToast(`${character.name} placed on the map`, 'success');
     } catch (error) {
       showToast(apiErrorMessage(error) || 'Could not place that character on the map', 'error');
@@ -252,7 +252,7 @@ export default function CampaignRoster() {
     if (canEditCharacter(viewer, owner, membership)) {
       items.push({ kind: 'command', id: 'edit-sheet', icon: Edit, label: 'Edit Character Sheet', run: handleEditCharacterSheet });
     }
-    if (membership.role === 'DM' && currentMap) {
+    if (membership.role === 'DM' && viewedMap) {
       items.push({ kind: 'command', id: 'add-to-map', icon: MapPin, label: 'Add to Map', run: handleAddTokenToMap });
     }
     // "Reassign to Player" used to sit here. It never did anything —

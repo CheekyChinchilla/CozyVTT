@@ -130,6 +130,28 @@ it('sends nothing for a map the DM has not switched to', async () => {
   await nothingToDm;
 });
 
+it('sends nothing for a token changed or deleted on a map the DM has not switched to', async () => {
+  await prisma.map.update({ where: { id: preparedId }, data: { tokens: [token('lich'), token('ghoul')] } });
+  const nothingToPlayer = expectNoEvent(player, 'map.changed', 800);
+  const nothingToDm = expectNoEvent(dm, 'map.changed', 800);
+  expect((await dmRest.put(`${tokens(preparedId)}/lich`).send({ name: 'Archlich' })).status).toBe(200);
+  expect((await dmRest.delete(`${tokens(preparedId)}/ghoul`)).status).toBe(200);
+  await nothingToPlayer;
+  await nothingToDm;
+});
+
+it('sends the table only the map a token left when it is moved onto a map the DM has not switched to', async () => {
+  await prisma.map.update({ where: { id: shownId }, data: { tokens: [token('scout'), token('guard')] } });
+  const seen: string[] = [];
+  player.on('map.changed', (event: MapChanged) => seen.push(event.mapId));
+  const toPlayer = waitForEvent<MapChanged>(player, 'map.changed');
+  const moved = await dmRest.post(`${tokens(shownId)}/move`).send({ tokenIds: ['scout'], targetMapId: preparedId });
+  expect(moved.status).toBe(200);
+  expect(names(await toPlayer)).toEqual(['guard']);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  expect(seen).not.toContain(preparedId);
+});
+
 // A player may change a token they control as often as the request limit
 // lets them, and each re-send builds the map for every member, with sight on
 // a lit map. The map goes at most once in a short window, read as it stands

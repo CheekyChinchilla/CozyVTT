@@ -94,6 +94,7 @@ const page = vi.hoisted(() => ({
   campaign: {
     campaign: { id: 'campaign-1', name: 'Test', status: 'ACTIVE', ownerId: 'dm', memberships: [], characters: [] },
     currentMap: { id: 'map-1', name: 'Map', tokens: [] },
+    viewedMap: { id: 'map-1', name: 'Map', tokens: [] },
     loading: false,
     error: null,
     userRole: 'DM',
@@ -157,6 +158,8 @@ vi.mock('@/components/campaign/MapManager', () => ({
 }));
 
 const nothing = vi.hoisted(() => () => ({ default: () => null }));
+// The banner over a map being prepared: none here, no map is.
+vi.mock('@/components/campaign/PreparingBanner', nothing);
 vi.mock('@/components/campaign/TokenManager', nothing);
 vi.mock('@/components/campaign/SpiritLayerControls', nothing);
 vi.mock('@/components/campaign/AtmospherePanel', nothing);

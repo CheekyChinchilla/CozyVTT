@@ -46,6 +46,11 @@ interface CharacterSheetViewerModalProps {
    * otherwise.
    */
   publicName?: string;
+  /**
+   * Rolls from this sheet go to the DM alone: it was opened from a token on
+   * a map the table is not on.
+   */
+  secretRolls?: boolean;
   onClose: () => void;
   /**
    * Called with the character as stored, each time the sheet loads it again
@@ -62,6 +67,7 @@ export default function CharacterSheetViewerModal({
   membership,
   campaign,
   publicName,
+  secretRolls = false,
   onClose,
   onCharacterChanged,
 }: CharacterSheetViewerModalProps) {
@@ -162,7 +168,7 @@ export default function CharacterSheetViewerModal({
   // Named so the panel heads the entry with the character whose sheet this
   // is, not with whoever happens to be reading it.
   const handleRoll = (expression: string, purpose: string) =>
-    tableRoll({ expression, purpose, characterName: publicName ?? character.name });
+    tableRoll({ expression, purpose, characterName: publicName ?? character.name, ...(secretRolls ? { secret: true } : {}) });
 
   // Passed to the sheet views only when this viewer may roll and there is a
   // table to roll at; without it the stats render as plain text. The

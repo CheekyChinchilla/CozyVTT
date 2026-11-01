@@ -14,7 +14,7 @@ import CreatureLibrary from '../CreatureLibrary';
 import type { CreatureTemplate } from '@/types';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: null }, currentMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: null }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: null }) }));
 vi.mock('@/components/assets/AssetPicker', () => ({ default: () => null }));

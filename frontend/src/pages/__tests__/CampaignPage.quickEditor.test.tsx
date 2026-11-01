@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { Token } from '@/types';
 
-const editor = vi.hoisted(() => ({ onTokenUpdate: null as ((t: Token) => void) | null }));
+const editor = vi.hoisted(() => ({ onTokenUpdate: null as ((t: Token) => void) | null, mapId: null as string | null }));
 // The page subscribes to many socket events; each method is a harmless stub.
 const anySocket = vi.hoisted(() => new Proxy({}, { get: () => () => undefined }));
 const tokens = vi.hoisted(() => ({
@@ -37,7 +37,9 @@ vi.mock('@/contexts/CampaignContext', () => ({
   CampaignProvider: ({ children }: { children?: unknown }) => <>{children as never}</>,
   useCampaign: () => ({
     campaign: { id: 'campaign-1', name: 'Test', status: 'ACTIVE', ownerId: 'dm', memberships: [], characters: [] },
-    currentMap: { id: 'map-1', name: 'Map', tokens: [] },
+    // The table on another map than the one on screen, which the editor saves to.
+    currentMap: { id: 'map-table', name: 'Village', tokens: [] },
+    viewedMap: { id: 'map-1', name: 'Map', tokens: [] },
     loading: false,
     error: null,
     userRole: 'DM',
@@ -56,6 +58,8 @@ vi.mock('@/hooks/useOnRejoin', () => ({ useOnRejoin: () => undefined }));
 vi.mock('@/hooks/useAccessRevoked', () => ({ useAccessRevoked: () => undefined }));
 
 const nothing = vi.hoisted(() => () => ({ default: () => null }));
+// The banner over a map being prepared: none here, no map is.
+vi.mock('@/components/campaign/PreparingBanner', nothing);
 vi.mock('@/components/campaign/CampaignInfo', nothing);
 vi.mock('@/components/campaign/CampaignRoster', nothing);
 vi.mock('@/components/campaign/MapManager', nothing);
@@ -85,8 +89,9 @@ vi.mock('@/components/campaign/TokenRoster', () => ({
 // The editor: shows which token it holds, closes, and keeps the callback a
 // finished save calls, so the test can answer a save after the editor moved on.
 vi.mock('@/components/campaign/NpcQuickEditor', () => ({
-  default: ({ token, onClose, onTokenUpdate }: { token: Token; onClose: () => void; onTokenUpdate: (t: Token) => void }) => {
+  default: ({ token, mapId, onClose, onTokenUpdate }: { token: Token; mapId: string; onClose: () => void; onTokenUpdate: (t: Token) => void }) => {
     editor.onTokenUpdate = onTokenUpdate;
+    editor.mapId = mapId;
     return (
       <div role="dialog" aria-label={`Quick edit ${token.name}`}>
         <button onClick={onClose}>Close editor</button>
@@ -103,6 +108,14 @@ beforeEach(() => {
 
 const open = (name: string) => fireEvent.click(screen.getByRole('button', { name: `Edit ${name}` }));
 const editorFor = (name: string) => screen.queryByRole('dialog', { name: `Quick edit ${name}` });
+
+describe('the token quick editor', () => {
+  it('saves to the map on screen', () => {
+    render(<CampaignPage />);
+    open('Goblin A');
+    expect(editor.mapId).toBe('map-1');
+  });
+});
 
 describe('the token quick editor and saves that finish late', () => {
   it('stays closed when a save finishes after it was closed', () => {

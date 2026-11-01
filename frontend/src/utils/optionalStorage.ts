@@ -23,3 +23,32 @@ export const optionalStorage = {
     }
   },
 };
+
+/**
+ * The same for this tab's sessionStorage, for what belongs to one tab and
+ * should survive its reload: a map the DM is preparing there, which a second
+ * tab of theirs does not share.
+ */
+export const optionalSessionStorage = {
+  getItem(key: string): string | null {
+    try {
+      return window.sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem(key: string, value: string): void {
+    try {
+      window.sessionStorage.setItem(key, value);
+    } catch {
+      // Refused or full: it lasts as long as the page.
+    }
+  },
+  removeItem(key: string): void {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Refused: nothing was kept.
+    }
+  },
+};

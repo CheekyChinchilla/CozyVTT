@@ -65,7 +65,7 @@ interface TokenRowProps {
 }
 
 function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
   const memberships = campaign?.memberships;
   const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -75,7 +75,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
 
 
   const handleDuplicate = useCallback(async () => {
-    if (!currentMap) return;
+    if (!viewedMap) return;
     setIsDuplicating(true);
     try {
       // The roster subscribes ignoring movement, so this row's `token` prop
@@ -84,7 +84,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
       const position = clampTokenPosition(
         { x: livePosition.x + 1, y: livePosition.y + 1 },
         token.size,
-        currentMap
+        viewedMap
       );
       const result = await api.addToken(campaignId, mapId, {
         ...tokenCopyRequest(token, position),
@@ -94,7 +94,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
         conditions: [],
       });
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, mapId);
     } catch (err) {
       // A copy is a new token, so an older one whose fields predate validation
       // is refused: say which, so the DM can fix it in Edit Token.
@@ -102,7 +102,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     } finally {
       setIsDuplicating(false);
     }
-  }, [token, campaignId, mapId, currentMap, showToast, memberships]);
+  }, [token, campaignId, mapId, viewedMap, showToast, memberships]);
 
   const handleToggleVisible = useCallback(async () => {
     try {
@@ -126,7 +126,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     setIsDeleting(true);
     try {
       await api.deleteToken(campaignId, mapId, token.id);
-      useGameStore.getState().removeToken(token.id);
+      useGameStore.getState().removeToken(token.id, mapId);
     } catch (err) {
       showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
       setIsDeleting(false);
@@ -288,13 +288,13 @@ function TokenGroup({ label, tokens, campaignId, mapId, onEditToken, defaultOpen
 // ============================================
 
 export default function TokenRoster({ onEditToken }: TokenRosterProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
   // Movement-ignoring subscription: the roster renders names/flags/HP, not
   // coordinates, so it stays static while tokens are dragged around the map.
   const tokens = useTokenListIgnoringMovement();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  if (!currentMap || !campaign) return null;
+  if (!viewedMap || !campaign) return null;
 
   const players  = tokens.filter((t) => getEffectiveType(t) === TokenType.PLAYER);
   const npcs     = tokens.filter((t) => getEffectiveType(t) === TokenType.NPC);
@@ -327,7 +327,7 @@ export default function TokenRoster({ onEditToken }: TokenRosterProps) {
             label="Players"
             tokens={players}
             campaignId={campaign.id}
-            mapId={currentMap.id}
+            mapId={viewedMap.id}
             onEditToken={onEditToken}
             defaultOpen={true}
           />
@@ -335,7 +335,7 @@ export default function TokenRoster({ onEditToken }: TokenRosterProps) {
             label="NPCs"
             tokens={npcs}
             campaignId={campaign.id}
-            mapId={currentMap.id}
+            mapId={viewedMap.id}
             onEditToken={onEditToken}
             defaultOpen={true}
           />
@@ -343,7 +343,7 @@ export default function TokenRoster({ onEditToken }: TokenRosterProps) {
             label="Objects"
             tokens={objects}
             campaignId={campaign.id}
-            mapId={currentMap.id}
+            mapId={viewedMap.id}
             onEditToken={onEditToken}
             defaultOpen={false}
           />

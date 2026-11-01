@@ -27,6 +27,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', name: 'Test', status: 'ACTIVE', ownerId: 'dm', memberships: [], characters: [] },
     currentMap: { id: 'map-1', name: 'Map', tokens: [] },
+    viewedMap: { id: 'map-1', name: 'Map', tokens: [] },
     loading: false,
     error: null,
     userRole: 'PLAYER',
@@ -45,6 +46,8 @@ vi.mock('@/hooks/useOnRejoin', () => ({ useOnRejoin: () => undefined }));
 vi.mock('@/hooks/useAccessRevoked', () => ({ useAccessRevoked: () => undefined }));
 
 const nothing = vi.hoisted(() => () => ({ default: () => null }));
+// The banner over a map being prepared: none here, no map is.
+vi.mock('@/components/campaign/PreparingBanner', nothing);
 vi.mock('@/components/campaign/CampaignInfo', nothing);
 vi.mock('@/components/campaign/CampaignRoster', nothing);
 vi.mock('@/components/campaign/AtmospherePlayer', nothing);

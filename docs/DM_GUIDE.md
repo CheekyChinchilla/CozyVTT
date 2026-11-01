@@ -144,7 +144,7 @@ Before you can use a map in your campaign, it needs to live in the **Asset Libra
 2. Click **Upload Asset**
 3. Choose your image file (JPEG, PNG, and WebP work great), at most 16,384 pixels on each side. An animated WebP map has limits on its frames as well (see [Asset Types](USER_GUIDE.md#asset-types) in the User Guide)
 4. Set the type to **Map**
-5. Set the scope to **Campaign** (shared with everyone in that campaign, who can browse it in the asset library straight away) or **Personal** (private to you until the players are shown something that uses it)
+5. Set the scope to **Campaign** (shared with the campaign: its players and spectators see a map picture in the asset library only while the table is on a map using it) or **Personal** (private to you until the players are shown something that uses it)
 6. Give it a descriptive name — you'll thank yourself later when you have twenty maps
 7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern")
 8. Click **Upload**
@@ -165,7 +165,7 @@ Once your map is in the asset library:
 | Choice | Who can see the picture | When you leave the campaign or delete your account |
 |---|---|---|
 | **Personal** | You, in your own library. Players see it only once you switch to the map, and whoever is the campaign's DM sees it on every map. | It stays yours, so the table loses it. Once you leave the campaign, nobody in it can load it, the new DM included: maps using it show "Failed to load map image" until the DM picks another picture in **Edit Map**. If you delete your account after handing the DM seat over, the file is kept, owned by no one: when this campaign is the only one using it, it becomes the campaign's own and the table goes on seeing it (if you are still in the campaign); otherwise nobody in the campaign can load it, and only an administrator can open it. |
-| **Campaign** | Everyone in the campaign, in the campaign's library, at once, before you switch to the map too. | It stays with the campaign, for the table and whoever runs it next. |
+| **Campaign** | You and whoever is the campaign's DM, in the campaign's library. Players and spectators see it there only once you switch to a map using it, and no longer once the table moves on. | It stays with the campaign, for the table and whoever runs it next. |
 
 Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
 
@@ -189,17 +189,44 @@ A map made before version 1.5.1 may be larger than this. It still opens, and Edi
 
 ### Switching Maps
 
-Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map on screen, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again.
+Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map the table is on, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again. **Set Active** always takes your own screen with the table, so if you were preparing another map (below), you stop preparing it.
 
 *GIF pending — Switching maps, showing player view update.*
 
 Plan your map order loosely in advance (forest → cave entrance → dungeon interior), but don't worry about locking anything in. You can switch maps freely during a session.
 
+### Preparing a map while the table plays
+
+You can work on any map of the campaign on your own screen while your players stay on theirs: draw its walls, place lights and creatures, hide tokens, paint fog and draw on it, then bring the table there when it is ready.
+
+1. Open the **Map Library** and click **Open to prepare** on the map you want. Every card but the active map's has it.
+2. The Map Library closes and the map opens on your screen. A banner over it reads, for example, "Preparing **Crypt**. The table is on **Village**." The map's card in the Map Library says **Preparing**.
+3. Work on it as on any map. Your players are sent nothing of it: not its picture, its tokens, its walls, lights and fog, its drawings or its name, and nothing tells them you are preparing a map. One thing of yours does show: a token picture you upload into the campaign's library for a creature there is in their Asset Library at once (see **Prepare ahead** below).
+4. When you are done, either:
+   - click **Back to the table** to see the table's map again. The map you prepared stays as you left it; or
+   - click **Bring everyone here** to make it the active map, as **Set Active** does. You are asked which of the tokens on the table's map to bring along, and everyone, you included, is then on the new map.
+
+While you prepare a map:
+
+| What | How it works then |
+|---|---|
+| The table's map | Your players keep playing on it. Their token moves, pings and drawings are not shown on your screen; **Back to the table** loads the table's map again, as it is by then |
+| **Preview Player View** | Off, greyed out and marked **Off while you prepare a map**. Your players have never seen this map, so there is nothing to preview. After **Back to the table** it is offered again, and starts off |
+| Rolls from its tokens | A roll from a token's **Roll...**, from its sheet, or from its row in the initiative tracker goes to you alone, as a secret roll, so the creature's name never reaches the dice log |
+| The initiative tracker | Shows the table's fight. **Add Combatant** lists the tokens of the map you are preparing; your players are not sent a combatant you add there until the table comes to that map |
+| The campaign's own controls | Still change every player's screen, as **What reaches the table?** on the banner says: the **Spirit Layer** (opening it, its style, who is in the realm), **Atmosphere**, the vibe and the session controls. Anything you do to the map itself (its walls, lights, fog, tokens, drawings and settings) is for the map you are preparing |
+| Reloading the page | Brings you back to the map you were preparing, in that tab only. Another tab of yours stays on the table's map, unless you made it by duplicating this one, which copies what it was showing |
+| Two of your tabs on one prepared map | Each shows the other's walls, lights, fog and drawings as you make them, but not an **Edit Map** save, a token's switches or a placement; open the map again in the other tab to see those |
+| Your phone's **Back** | Takes you back to the table, as **Back to the table** does |
+| Another tab, or a handover of the DM seat | Making the map you are preparing active from anywhere ends preparing and shows it with the table. If someone else becomes the DM, or the map is deleted, your screen goes back to the table's map and a message says why |
+
+A map picture you upload while preparing stays out of your players' Asset Library until the table is on a map using it (see **Prepare ahead** below).
+
 ### Map Best Practices
 
 - **Resolution matters** — Maps look best at 70–100 pixels per grid square. Going higher increases load time without visible benefit at normal zoom levels.
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
-- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign**, so a map you prepare stays a surprise (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, so a map picture you upload as **Campaign** from the Asset Library can be seen there before you switch to the map, as can a token image uploaded from inside the campaign. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
+- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play, or prepare the next one during play with **Open to prepare** (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)). Players cannot see a map until you switch to it: its picture, walls, lights and tokens stay yours alone while you prepare it. A map picture stays out of your players' Asset Library until the table is on a map using it, whether it is in your **Personal** library or the campaign's, and leaves it again when the table moves on. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Token images are not hidden: one uploaded into the campaign's library, for a creature you mean to bring in later, can be seen there at once, and neither is a picture in the **Global** library, which is everyone's. Your instance's administrators can open every picture on it, a prepared map's included
 - **Keep backups** — Export important maps so you can recover them if needed
 - **Your campaign's library** — In the Asset Library you can delete or move any asset in your campaign's library, the ones your players uploaded included. Only the player who uploaded one can move it to **Personal**, since that is their own library and would take it out of the campaign
 - **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
@@ -749,7 +776,7 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 
 **Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking; if something still uses the document, a second window says where and removes it only if you choose **Delete anyway**. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
-A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers. **Edit** shows in the reader only for someone who can edit that document: who can is who can delete it (see [Editing](USER_GUIDE.md#editing) in the user guide).
+A picture in the campaign's library, uploaded with **Campaign**, that you embed in a handout by its address as the User Guide shows, shows to every member of the campaign in that handout, even a map picture of a map the table is not on: sharing the handout is showing the picture. That holds for a handout you wrote or uploaded yourself, written in the campaign or shared with it, while you are the campaign's DM; after the DM seat is handed over, it holds for the new DM's handouts and no longer for yours. A picture in your **Personal** library is not shown this way, and nor is a global document someone else wrote. Only the first 1 MB of a document is read for its pictures, and its first 200 addresses, far more than a handout holds: a picture named after those does not count. Take a picture out of the handout, or stop sharing it, and players see it only while the table is on a map using it again. A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers. **Edit** shows in the reader only for someone who can edit that document: who can is who can delete it (see [Editing](USER_GUIDE.md#editing) in the user guide).
 
 As the DM you can edit any of the campaign's own documents, whoever wrote them, for example a co-DM who has since left. A DM who hands the seat on and leaves the campaign can no longer edit the documents they wrote there. A document shared in from someone's own library stays theirs to edit.
 
@@ -930,6 +957,7 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | The spirit tokens button in the map's toolbar | The map's **More**: **Show spirit tokens** |
 | **Draw** | **Draw**, in the map's toolbar: its tools open in a strip across the foot of the map, with the map above it to draw on. **Clear…** offers every drawing or one member's, and asks before it clears |
 | **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
+| The banner over a map you are preparing | The same, across the top of the map: on a phone upright its words take one row and **Back to the table**, **Bring everyone here** and **What reaches the table?** the next; on a phone on its side it is one row, with the buttons reading **Back**, **Bring everyone** and an info button. The phone's **Back** goes back to the table |
 
 A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** included, so a tablet propped up for the table stays in the players' view.
 
@@ -1010,7 +1038,7 @@ You can roll for a combatant, or look something up on their sheet, straight from
 - **Double-click a player character's row** to open their sheet at once; on the name, the menu its first click opened closes as the sheet opens. Double-clicking a creature does nothing.
 - **From the keyboard**, press **Tab** until the combatant's name has the focus and press **Enter** to open the same menu.
 
-This works for combatants on the map you are showing. One whose token is on another map offers nothing until you switch to that map. Players get the same menu: any character's sheet, and rolls for their own character.
+This works for combatants on the map on your screen. One whose token is on another map offers nothing until you switch to that map, or open it to prepare; rolls for a combatant on a map the table is not on go to you alone. Players get the same menu: any character's sheet, and rolls for their own character.
 
 ### Pinging a Location
 
@@ -1240,14 +1268,12 @@ any lights, all placed for you. If the file brings lights, the map starts with
 dynamic lighting on; otherwise it starts off, like any new map.
 
 **The picture goes into the campaign's library.** Import UVTT files the
-map's picture as a **Campaign** asset, so everyone in the campaign can browse it
-in the Asset Library as soon as the import finishes, even though the map itself
-stays yours until you switch to it. There is no option to import it as
-Personal. To keep a surprise map's picture hidden, open it in the Asset Library
-straight after importing (it has the map's name), and under **Move to…** choose
-**Personal**, then **Move to Personal**. The map keeps its picture, and your
-players can see it once you switch to that map. Until you move it, anyone
-browsing the library can see it.
+map's picture as a **Campaign** asset, with the map's name. Your players and
+spectators do not see it in the Asset Library until you switch to that map,
+as with any map picture, so an imported map stays a surprise. There is no
+option to import it as Personal; moving it to **Personal** afterwards (under
+**Move to…** in the Asset Library) changes only what happens to it if you
+leave the campaign (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign)).
 
 **Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it), and at most 16,384 pixels on each side. An animated WebP also has the frame limits an uploaded map has (see [Asset Types](USER_GUIDE.md#asset-types) in the User Guide). A file whose picture is over a limit is refused with a message saying which, and nothing is imported. It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. A file holding more than a million points, doors, lights and settings in all, far more than any map uses even with its furniture walls left in the file, is refused straight away. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
 

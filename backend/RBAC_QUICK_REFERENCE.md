@@ -473,15 +473,78 @@ for a player only while it is the campaign's current map (`canReadMap`): the
 artwork and token art of a prepared map stay the DM's until they switch to it.
 The list and detail
 responses select the public fields only; `filePath` and `thumbnailPath` are the
-server's. A map's spirit-layer image is listed to a member, and served, only
-when that member may see the spirit plane there (`getSpiritVisibility`), which
-is what the map itself does with it.
+server's.
+
+### A campaign's map pictures: hidden from players until the table is there
+
+A member of a campaign who is not its DM (a player or a spectator) is listed
+and served a `CAMPAIGN` asset of that campaign unless `mapPictureHidden` in
+`services/permissions.ts` keeps it from them. It keeps:
+
+- an asset a map of the campaign names as its `imageUrl`, `baseLayerUrl` or
+  `spiritLayerUrl` (read with `extractAssetId`), and
+- any `MAP` asset of the campaign, used by a map or not,
+
+unless one of these shows it to them:
+
+- the campaign's current map: as its picture or base layer, or as its spirit
+  layer while they may see the spirit plane there (`getSpiritVisibility`,
+  which is what the map itself does with it);
+- another table they sit at: the current map of another campaign they are a
+  member of, whether they play in it or run it, with the same spirit rule (a
+  DM sees their own plane), while the asset's uploader is a member of that
+  campaign too. Only a table's current map counts: a map of a campaign they
+  run that its table is not on keeps nothing, so a picture is not kept by
+  putting it on a map of one's own. The uploader's presence is the rule
+  `assetUsedInUserCampaign` already applies to non-members, and it is what
+  stops a campaign of one's own from opening someone else's picture;
+- a document of the asset's campaign's list (linked to it by
+  `CampaignDocument`, or a `CAMPAIGN` document written or uploaded in it)
+  whose text the campaign's DM now controls, as they uploaded it, and whose
+  text names the asset (`/api/assets/<kind>/<id>`, its folder in any case,
+  read by `services/sharedDocumentPictures.ts` from the plain text or
+  Markdown file; a mention counts as an embed). That is the DM choosing to
+  show the picture in a handout. A document a former DM wrote while they
+  held the seat (which they may still rewrite as a member), one any other
+  member got there, a global document someone else uploaded that the DM
+  linked, and a document shared with another campaign count for nothing.
+  The read is bounded: only the first 1 MiB of a file is read, at most 200
+  addresses are kept from it, at most 50,000 in all (the least recently used
+  go first), one read of a document is shared, and a missing file is
+  reported once.
+
+An asset they uploaded themselves is never kept from them. Token art, audio,
+documents and every other asset are left alone, even on a prepared map: a
+token picture uploaded for the next scene is listed to players at once.
+
+The rule is final for a member: when it keeps an asset, nothing else a member
+can point at opens it (a character's picture, a token, a template). A player
+may point their character's picture at a map's while the table is there, and
+the hide must still hold once the table leaves. Only maps, which the DM alone
+sets, and the DM's shared documents count.
+
+One predicate (`campaignMapPictures` and `mapPictureHidden`) feeds both
+`GET /api/assets` (with or without `campaignId`, and with `usable=true`),
+through `mapPictureAssetIdsHiddenFrom`, and `canReadAsset`'s member branch, so
+a member is listed an asset exactly when its read answers 200
+(`mapPicturesHidden.e2e.test.ts`, and `mapPicturesAcrossTables.e2e.test.ts`
+for several tables, handouts and the spirit plane). Every file route goes through
+`canReadAsset` and follows. Nothing is re-sent when the DM switches maps: each
+read is decided from `currentMapId`, committed before `map.changed` goes out.
+
+A platform admin reads every asset, a prepared map's pictures included. With
+no `campaignId` an admin is listed every asset on the instance, and with one
+every asset of that campaign. Only `usable=true` without `campaignId` (what
+the pickers send) holds an admin to a member's rule, as `canReferenceAsset`
+does.
 
 The asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
 `/documents/:id`, `/audio/:id` and `/:id/download`) decide read access from the
 asset's **scope**; `/avatars/:userId` serves a user's avatar to anyone signed
 in. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
-campaign's members, and `USER` by its uploader. A `CAMPAIGN` asset with no
+campaign's members, except a map's picture, which a member who is not the DM
+reads only while a map using it is current (above), and `USER` by its
+uploader. A `CAMPAIGN` asset with no
 campaign recorded (the foreign key nulls it when a campaign row goes) is read
 as a `USER` one, so a way of removing campaigns that forgets to turn their
 assets personal first cannot open them to everyone.

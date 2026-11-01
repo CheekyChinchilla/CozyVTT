@@ -22,7 +22,10 @@ const emitMapChange = vi.fn();
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', memberships: [] },
-    currentMap: { id: 'map-1', width: 20, height: 20 },
+    // The table is on another map than the one on screen (the DM prepares
+    // map-1), so a request naming the table's map is caught.
+    currentMap: { id: 'map-table', width: 20, height: 20 },
+    viewedMap: { id: 'map-1', width: 20, height: 20 },
   }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({
@@ -43,7 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.deleteToken.mockResolvedValue({ message: 'ok' });
   api.updateToken.mockResolvedValue({ token: goblin });
-  useGameStore.getState().setTokens([goblin]);
+  useGameStore.getState().setTokens([goblin], 'map-1');
 });
 
 describe('removing a token from the roster', () => {

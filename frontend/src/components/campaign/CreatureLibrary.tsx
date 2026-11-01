@@ -108,7 +108,7 @@ interface CreatureLibraryProps {
 // ============================================
 
 export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
 
   // ── Search & filter state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -265,12 +265,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   // ── Place creature on map ──
   const handlePlace = useCallback(async (creature: CreatureTemplate) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setPlacingId(creature.id);
 
     const position = {
-      x: Math.floor(currentMap.width / 2),
-      y: Math.floor(currentMap.height / 2),
+      x: Math.floor(viewedMap.width / 2),
+      y: Math.floor(viewedMap.height / 2),
     };
 
     // HP from the creature's stat block; creatures saved before HP was tracked
@@ -299,16 +299,16 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
       const result = await api.addToken(
         campaign.id,
-        currentMap.id,
+        viewedMap.id,
         tokenPayload
       );
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, viewedMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place creature on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap]);
+  }, [campaign, viewedMap]);
 
   // ── Duplicate creature ──
   const handleDuplicate = useCallback(async (creatureId: string) => {

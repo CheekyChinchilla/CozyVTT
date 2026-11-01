@@ -34,7 +34,13 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', name: 'Lost Mine', currentMapId: null },
     currentMap: null,
+    viewedMap: null,
     setCurrentMap: () => {},
+    isPreparing: false,
+    updateMap: () => {},
+    showTableMap: () => {},
+    openToPrepare: () => Promise.resolve(true),
+    mayChangeViewedMap: () => Promise.resolve(true),
     upsertCampaignMap: () => {},
     removeCampaignMap: () => {},
   }),

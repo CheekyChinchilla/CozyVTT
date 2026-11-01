@@ -27,6 +27,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 
 // Campaign components
 import CampaignInfo from '@/components/campaign/CampaignInfo';
+import PreparingBanner from '@/components/campaign/PreparingBanner';
 import CampaignRoster from '@/components/campaign/CampaignRoster';
 // Lazy-loaded — MapCanvas is by far the largest component in the app; splitting
 // it into its own chunk keeps the CampaignPage shell fast to load and paints
@@ -62,7 +63,7 @@ import { useAccessRevoked } from '@/hooks/useAccessRevoked';
 
 function CampaignPageContent() {
   const navigate = useNavigate();
-  const { campaign, currentMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap, catchUpAfterReconnect } = useCampaign();
+  const { campaign, viewedMap, loading, error, userRole, updateCampaignStatus, setActiveSession, refreshCurrentMap, catchUpAfterReconnect } = useCampaign();
   const { user } = useAuth();
 
   /**
@@ -237,15 +238,21 @@ function CampaignPageContent() {
   // arrangement remounts none of them.
   const tableParts: Record<TablePart, ReactNode> = {
     map: (
-      <Suspense
-        fallback={
-          <div className="w-full h-full flex items-center justify-center" aria-live="polite" aria-label="Loading map">
-            <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-hidden="true" />
-          </div>
-        }
-      >
-        <MapCanvas onEditToken={setQuickEditToken} onShowShortcuts={() => setIsShortcutsOpen(true)} />
-      </Suspense>
+      // The banner over a map the DM is preparing, then the map below it.
+      <div className="flex h-full w-full flex-col">
+        <PreparingBanner />
+        <div className="min-h-0 flex-1">
+          <Suspense
+            fallback={
+              <div className="w-full h-full flex items-center justify-center" aria-live="polite" aria-label="Loading map">
+                <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-hidden="true" />
+              </div>
+            }
+          >
+            <MapCanvas onEditToken={setQuickEditToken} onShowShortcuts={() => setIsShortcutsOpen(true)} />
+          </Suspense>
+        </div>
+      </div>
     ),
     session: <SessionPanels />,
     party: (
@@ -343,18 +350,18 @@ function CampaignPageContent() {
       )}
 
       {/* NPC Quick Editor — DM only */}
-      {userRole === 'DM' && quickEditToken && campaign && currentMap && (
+      {userRole === 'DM' && quickEditToken && campaign && viewedMap && (
         <NpcQuickEditor
           token={quickEditToken}
           campaignId={campaign.id}
-          mapId={currentMap.id}
+          mapId={viewedMap.id}
           onClose={() => setQuickEditToken(null)}
           onTokenUpdate={(updated) => {
             // A stat block saves when the editor closes, so its answer often
             // arrives after the DM closed the editor or opened another token.
             // Update the editor only while it still shows this token.
             setQuickEditToken((open) => (open?.id === updated.id ? updated : open));
-            useGameStore.getState().replaceToken(updated);
+            useGameStore.getState().replaceToken(updated, viewedMap.id);
           }}
         />
       )}
