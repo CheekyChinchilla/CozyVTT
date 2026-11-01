@@ -30,6 +30,7 @@ _Nothing at present._
 
 - `after the next release` **On a wider screen, an editor's two notes under the portrait can be drawn over each other,** when the message for a refused picture and **Saves as personal token** show together (the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors).
 - `after the next release` **Some sheet editor controls do not work for a screen reader or the keyboard.** The buttons that remove a D&D 5e attack, spell or inventory item, and most of the Pathfinder 2e editor's delete buttons, have no name; a Flexible sheet's delete buttons stay invisible when the keyboard reaches them; and its list ticks have no name or state.
+- `next release` **A D&D 5e attack's damage and a Pathfinder 2e strike's damage can be clicked to roll on the sheet whatever they hold,** so text the dice cannot roll, such as `1d8 slashing` or `1d8+4 S`, fails at the server. The **Roll...** pickers and a Call of Cthulhu weapon already leave such damage out (`AttacksList.tsx`, `StrikesList.tsx`).
 
 ### Tokens
 
@@ -197,15 +198,6 @@ _Nothing at present._
   upstream, or write the backup with a writer that has no such cost.
   **Do** if a large instance's backups grow slow; nothing is wrong at the
   sizes seen so far.
-
-- `next release` **One dice grammar for both sides.** The parser is now one file
-  kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
-  (checked by `visionParity.test.ts`), and the Dice panel checks expressions
-  and rolls a paused table's dice with it. One character-set check is left,
-  `frontend/src/utils/diceExpression.ts`, which decides whether a value on a
-  character sheet is offered as a roll and accepts things the parser refuses,
-  such as `2d6+` and `dddd`. **Do** by having it call the parser, after checking
-  what each sheet's rolls send through it.
 
 - **Two backend suites still stub `file-type`.** The backend tests load the
   real library (`backend/jest.config.js` compiles it to CommonJS), and

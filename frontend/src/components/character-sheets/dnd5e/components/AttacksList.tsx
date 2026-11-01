@@ -90,6 +90,10 @@ const AttackRow: React.FC<{
         </div>
 
         {/* Damage — click separately to roll damage only */}
+        {/* TODO(sheets): any damage text is offered as a roll here and in the
+            further damage lines below, so text the dice parser refuses
+            ("1d8 slashing") fails at the server. Right: offer it only when
+            isValidDiceExpression accepts it, as the roll picker does. */}
         <div
           className={onRollDamage && attack.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
           onClick={onRollDamage && attack.damageRoll ? handleDamageClick : undefined}

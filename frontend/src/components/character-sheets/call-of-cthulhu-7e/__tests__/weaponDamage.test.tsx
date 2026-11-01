@@ -39,6 +39,20 @@ it('offers no roll for damage the dice cannot read', () => {
   expect(damage.closest('td')).not.toHaveAttribute('title');
 });
 
+// Its characters are all dice characters, but the parser refuses it.
+it('offers no roll for damage the parser refuses', () => {
+  const onRoll = vi.fn();
+  render(
+    <WeaponsList
+      weapons={[{ name: 'Knife', skill: 'Brawl', skillValue: 25, damage: '1d4+', range: 'Touch', attacks: 1 }]}
+      damageBonus="0"
+      onRoll={onRoll}
+    />
+  );
+  fireEvent.click(screen.getByText('1d4+'));
+  expect(onRoll).not.toHaveBeenCalled();
+});
+
 it('says in the editor which skill a weapon rolls at, where the sheet has it', () => {
   render(
     <WeaponsList

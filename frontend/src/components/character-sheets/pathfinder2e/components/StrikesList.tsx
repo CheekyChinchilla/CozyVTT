@@ -127,6 +127,10 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
               </div>
 
               {/* Damage — click separately */}
+              {/* TODO(sheets): any damage text is offered as a roll here, so text
+                  the dice parser refuses ("1d8+4 S") fails at the server. Right:
+                  offer it only when isValidDiceExpression accepts it, as the roll
+                  picker does. */}
               <div
                 className={onRollDamage && strike.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
                 onClick={onRollDamage && strike.damageRoll ? (e) => { e.stopPropagation(); onRollDamage(strike.damageRoll!, `${strike.name} Damage`); } : undefined}

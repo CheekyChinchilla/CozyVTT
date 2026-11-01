@@ -87,31 +87,31 @@ describe('spendRoll', () => {
  */
 describe('hitDieExpression', () => {
   it('uses `die` when the sheet has one', () => {
-    expect(hitDieExpression({ class: 'fighter', die: 'd10', maximum: 5, remaining: 3 })).toBe('d10');
+    expect(hitDieExpression({ class: 'fighter', die: 'd10', maximum: 5, remaining: 3 }, 2)).toBe('d10');
   });
 
   it('allows a compound hit die, which is the point of the field', () => {
-    expect(hitDieExpression({ class: 'brawler', die: '2d6', maximum: 4, remaining: 4 })).toBe('2d6');
-    expect(hitDieExpression({ class: 'homebrew', die: '1d10+1', maximum: 2, remaining: 2 })).toBe('1d10+1');
+    expect(hitDieExpression({ class: 'brawler', die: '2d6', maximum: 4, remaining: 4 }, 2)).toBe('2d6');
+    expect(hitDieExpression({ class: 'homebrew', die: '1d10+1', maximum: 2, remaining: 2 }, 2)).toBe('1d10+1');
   });
 
   it('falls back to the older pool string, taking one die out of it', () => {
-    expect(hitDieExpression({ class: 'fighter', total: '5d10', remaining: 3 })).toBe('1d10');
-    expect(hitDieExpression({ class: 'wizard', total: 'd6', remaining: 1 })).toBe('1d6');
+    expect(hitDieExpression({ class: 'fighter', total: '5d10', remaining: 3 }, 2)).toBe('1d10');
+    expect(hitDieExpression({ class: 'wizard', total: 'd6', remaining: 1 }, 2)).toBe('1d6');
   });
 
   it('prefers `die` over a stale pool string', () => {
-    expect(hitDieExpression({ class: 'fighter', die: '2d6', total: '5d10', remaining: 3 })).toBe('2d6');
+    expect(hitDieExpression({ class: 'fighter', die: '2d6', total: '5d10', remaining: 3 }, 2)).toBe('2d6');
   });
 
   it('refuses a `die` the dice parser would reject, rather than rolling nonsense', () => {
-    expect(hitDieExpression({ class: 'x', die: 'not dice', maximum: 1, remaining: 1 })).toBeNull();
-    expect(hitDieExpression({ class: 'x', die: '', remaining: 1 })).toBeNull();
+    expect(hitDieExpression({ class: 'x', die: 'not dice', maximum: 1, remaining: 1 }, 2)).toBeNull();
+    expect(hitDieExpression({ class: 'x', die: '', remaining: 1 }, 2)).toBeNull();
   });
 
   it('has nothing to offer when neither field describes a die', () => {
-    expect(hitDieExpression({ class: 'x', total: '', remaining: 3 })).toBeNull();
-    expect(hitDieExpression({ class: 'x', remaining: 3 })).toBeNull();
+    expect(hitDieExpression({ class: 'x', total: '', remaining: 3 }, 2)).toBeNull();
+    expect(hitDieExpression({ class: 'x', remaining: 3 }, 2)).toBeNull();
   });
 });
 
@@ -144,23 +144,40 @@ describe('hitDiceMaximum', () => {
 
 describe('canSpendHitDie', () => {
   it('allows a spend when dice remain and the total is a die', () => {
-    expect(canSpendHitDie({ class: 'fighter', total: '5d10', remaining: 3 })).toBe(true);
+    expect(canSpendHitDie({ class: 'fighter', total: '5d10', remaining: 3 }, 2)).toBe(true);
   });
 
   it('allows a spend from the newer fields, compound die included', () => {
-    expect(canSpendHitDie({ class: 'brawler', die: '2d6', maximum: 4, remaining: 4 })).toBe(true);
+    expect(canSpendHitDie({ class: 'brawler', die: '2d6', maximum: 4, remaining: 4 }, 2)).toBe(true);
   });
 
   it('refuses a die the parser rejects', () => {
-    expect(canSpendHitDie({ class: 'x', die: 'nonsense', maximum: 4, remaining: 4 })).toBe(false);
+    expect(canSpendHitDie({ class: 'x', die: 'nonsense', maximum: 4, remaining: 4 }, 2)).toBe(false);
+  });
+
+  // The die must roll on its own as well as with Constitution added: a die
+  // that ends in a sign rolls only once the modifier follows it, and then not
+  // as the die plus Constitution (`d10/+2` halves the die).
+  it.each(['d10/', '1d10-', 'd10*', '+', '1d10++', 'dddd'])('refuses %j, which rolls only with Constitution after it, if at all', (die) => {
+    for (const con of [2, 0, -1]) {
+      expect(canSpendHitDie({ class: 'x', die, maximum: 4, remaining: 4 }, con)).toBe(false);
+    }
+  });
+
+  // A + left at the end is dropped, so it still rolls the die plus Constitution.
+  it('drops one + at the end of a die', () => {
+    const hd = { class: 'fighter', die: '1d10+', maximum: 4, remaining: 4 };
+    expect(hitDieExpression(hd, 2)).toBe('1d10');
+    expect(hitDieExpression({ ...hd, die: '1d10 + ' }, 2)).toBe('1d10');
+    expect(canSpendHitDie(hd, -1)).toBe(true);
   });
 
   it('refuses when none remain', () => {
-    expect(canSpendHitDie({ class: 'fighter', total: '5d10', remaining: 0 })).toBe(false);
+    expect(canSpendHitDie({ class: 'fighter', total: '5d10', remaining: 0 }, 2)).toBe(false);
   });
 
   it('refuses when the total is not a die, however many remain', () => {
-    expect(canSpendHitDie({ class: 'fighter', total: '', remaining: 5 })).toBe(false);
-    expect(canSpendHitDie({ class: 'fighter', total: 'five', remaining: 5 })).toBe(false);
+    expect(canSpendHitDie({ class: 'fighter', total: '', remaining: 5 }, 2)).toBe(false);
+    expect(canSpendHitDie({ class: 'fighter', total: 'five', remaining: 5 }, 2)).toBe(false);
   });
 });

@@ -9,7 +9,8 @@ import { getDiceRolls } from '@/services/dice.service';
 import api from '@/services/api';
 import { mayDisplayRoll, visibleRolls } from '@/utils/secretRolls';
 import type { DiceRolledEvent, DiceRolledSecretEvent, DiceMacro } from '@/types';
-import { rollDice as rollExpression, parseDiceExpression, DiceParserError } from '@/utils/dice-parser';
+import { rollDice as rollExpression } from '@/utils/dice-parser';
+import { diceExpressionProblem } from '@/utils/diceExpression';
 import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -38,7 +39,7 @@ function rollKey(roll: DiceRolledEvent): string {
  * A roll worked out in the browser, for a paused table: no server, no
  * database, no DM visibility. It uses the server's own parser (the same
  * file, byte for byte), so it reads every expression as a running table
- * would. Call it with an expression `validateExpression` has passed.
+ * would. Call it with an expression `diceExpressionProblem` has passed.
  */
 function rollLocally(
   expression: string,
@@ -378,20 +379,6 @@ export default function DiceRoller() {
   }, [socket]);
 
   // ============================================
-  // Input Validation
-  // ============================================
-
-  /** Why the server would refuse this expression, in its words, or null. */
-  const validateExpression = (expr: string): string | null => {
-    try {
-      parseDiceExpression(expr);
-      return null;
-    } catch (err) {
-      return err instanceof DiceParserError ? `Invalid dice expression: ${err.message}` : 'Invalid dice expression';
-    }
-  };
-
-  // ============================================
   // Roll Handlers
   // ============================================
 
@@ -405,7 +392,7 @@ export default function DiceRoller() {
     // When session is paused, roll entirely client-side — no server, no DB, no DM visibility
     if (isPaused) {
       if (!user) return;
-      const validationError = validateExpression(expr);
+      const validationError = diceExpressionProblem(expr);
       if (validationError) { setError(validationError); return; }
       setError(null);
       setIsRolling(true);
@@ -425,7 +412,7 @@ export default function DiceRoller() {
       return;
     }
 
-    const validationError = validateExpression(expr);
+    const validationError = diceExpressionProblem(expr);
     if (validationError) {
       setError(validationError);
       return;
