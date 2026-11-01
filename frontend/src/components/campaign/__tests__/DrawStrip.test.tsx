@@ -6,11 +6,12 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import DrawStrip from '../DrawStrip';
 import type { DrawControlsProps } from '../DrawControls';
 import { DEFAULT_DRAW_SETTINGS } from '../map/tools/useDrawTool';
 import { SHORT_SCREEN_QUERY } from '@/constants/layout';
+import { layScrollRow, readScrollCue } from '@/test/scrollCue';
 
 function strip(extra: Partial<DrawControlsProps> = {}) {
   const props: DrawControlsProps = {
@@ -79,6 +80,52 @@ describe('the strip', () => {
     const { props } = strip();
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(props.onClose).toHaveBeenCalled();
+  });
+});
+
+describe("the tools' row", () => {
+  // Nine 44 px tools and their gaps are 428 px; a 360 px phone shows about
+  // 336 px of them, ending at Text label, with no scrollbar to say there are
+  // more, so Eraser and Laser pointer went unseen.
+  const row = () => screen.getByRole('group', { name: 'Tools' });
+
+  it('fades and marks the end past which more tools lie, and neither end where all fit', () => {
+    strip();
+    layScrollRow(row(), { width: 336, shown: 336 });
+    expect(readScrollCue(row())).toEqual({ fade: [], marks: [] });
+
+    layScrollRow(row(), { width: 428, shown: 336, left: 0 });
+    let { fade, marks } = readScrollCue(row());
+    expect(fade).toHaveLength(1);
+    expect(fade[0]).toContain('to_left');
+    expect(marks).toEqual(['right']);
+
+    layScrollRow(row(), { width: 428, shown: 336, left: 40 });
+    ({ fade, marks } = readScrollCue(row()));
+    expect(fade[0]).toContain('calc');
+    expect(marks).toEqual(['left', 'right']);
+
+    layScrollRow(row(), { width: 428, shown: 336, left: 92 });
+    ({ fade, marks } = readScrollCue(row()));
+    expect(fade[0]).toContain('to_right');
+    expect(fade[0]).not.toContain('calc');
+    expect(marks).toEqual(['left']);
+  });
+
+  it('draws the fade at every width the strip is drawn, the compact layout only', () => {
+    strip();
+    layScrollRow(row(), { width: 428, shown: 336 });
+    expect(readScrollCue(row()).fade[0]).not.toMatch(/^max-lg:/);
+  });
+
+  it('follows the tools offered, so the eraser alone carries no sign', async () => {
+    const { props, rerender } = strip();
+    layScrollRow(row(), { width: 428, shown: 336 });
+    expect(readScrollCue(row()).marks).toEqual(['right']);
+
+    Object.defineProperty(row(), 'scrollWidth', { get: () => 44, configurable: true });
+    rerender(<DrawStrip {...props} onlyErase kind="eraser" />);
+    await waitFor(() => expect(readScrollCue(row())).toEqual({ fade: [], marks: [] }));
   });
 });
 
@@ -323,7 +370,8 @@ describe('the strip’s height', () => {
   it('keeps the tools under the hint on a tall screen', () => {
     strip();
     expect(body()).toContainElement(screen.getByRole('group', { name: 'Tools' }));
-    // A scroller in a column may shrink below its buttons; this one does not.
-    expect(classes(screen.getByRole('group', { name: 'Tools' }))).toContain('shrink-0');
+    // A scroller in a column may shrink below its buttons; this one does
+    // not. It sits in the column in a box that also holds its chevrons.
+    expect(classes(screen.getByRole('group', { name: 'Tools' }).parentElement!)).toContain('shrink-0');
   });
 });
