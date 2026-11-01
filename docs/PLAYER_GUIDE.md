@@ -163,7 +163,7 @@ The top bar shows:
 
 ### On a phone
 
-On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the map fills the screen. Above it a one-line header has the arrow back to your dashboard, the campaign's name and **Live** or **Paused**. Along the bottom a bar of buttons opens everything the side panels hold:
+On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the map fills the screen. Above it a one-line header has the arrow back to your dashboard, the campaign's name and **Live**, **Paused** or **Inactive** (a coloured dot on a phone turned on its side). Along the bottom a bar of buttons opens everything the side panels hold:
 
 | Button | What it opens |
 |---|---|
@@ -271,7 +271,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it. A roll you make from your sheet, the roster or the map's **Roll...** menu lands there too; if one doesn't go through, a message says why.
 
 **Rolling custom expressions:**
-Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. Supported notation:
+Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. On a phone the two boxes are under **More options**, below the expression. Supported notation:
 
 | Expression | What it does |
 |-----------|-------------|
@@ -292,7 +292,7 @@ One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers 
 homebrew subsystem your table invented, a recurring `2d6+3` for a house rule,
 `4d6kh3` for rolling up a new character, an attack the sheet can't describe.
 Rather than retyping those every session, save them: press **Saved** under the
-dice buttons, give the roll a name and an expression, and it becomes a button of
+dice buttons (on a phone, at the end of their row, which scrolls sideways), give the roll a name and an expression, and it becomes a button of
 its own. Click it and it rolls, with its name as the roll's purpose, so the
 **Dice** panel shows "Longsword" and not just `1d20+5`. Whatever is in the
 **Character** box goes with it, as for a typed roll.
@@ -312,7 +312,7 @@ that never works.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
 
-**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel, which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
+**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel (on a phone, at the foot of the Dice sheet), which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
@@ -565,7 +565,7 @@ If a creature is somewhere you haven't explored, you won't see a ring for it —
 
 **Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
 
-**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token and the panel in the bottom-left names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
+**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
 
 ### Pointing at the Map
 
@@ -587,7 +587,7 @@ If you ping repeatedly in quick succession, some will be quietly ignored — tha
 
 ### Drawing and pointing
 
-**Draw** (the pencil, after **Ping** in the map's toolbar) opens the drawing tools in the top right corner of the map, with the pen chosen. Sketch a plan, circle a door, label a room: everyone at the table sees it as you draw, and it stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** to put the tools away.
+**Draw** (the pencil, after **Ping** in the map's toolbar) opens the drawing tools in the top right corner of the map, with the pen chosen; on a phone they open in a strip across the foot of the map. Sketch a plan, circle a door, label a room: everyone at the table sees it as you draw, and it stays on the map until it is erased. Click **Draw** again, the **×** on the panel (**Done** on a phone's strip), or press **Esc** to put the tools away.
 
 | Tool | How |
 |---|---|

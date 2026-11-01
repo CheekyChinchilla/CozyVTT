@@ -188,11 +188,11 @@ The campaign page is your command center during play. On a computer, or a tablet
 - **Center Canvas** — The battle map where tokens live and adventures happen
 - **Right Sidebar** — a tabbed panel with **Chat**, **Dice**, **Initiative**, **Notes** and **Session** (vibe, session controls and past sessions); a badge on the Chat tab shows unread messages while you're on another tab. When the panel is too narrow for every name, the tabs other than the open one show only their icon; point at one to see its name
 
-You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. On a phone or a tablet a divider takes your finger anywhere in a strip 44 pixels wide around it, so you need not hit the thin line itself. A menu or a picker open over that strip takes your tap itself. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
+You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. On a touch screen, such as a tablet held sideways, a divider takes your finger anywhere in a strip 44 pixels wide around it, so you need not hit the thin line itself. A menu or a picker open over that strip takes your tap itself. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
 
 **In a window narrower than 1,024 pixels**, such as a phone, most tablets held upright, or a laptop with two windows side by side, the page uses its compact layout, described in the next section.
 
-**On a tablet** in landscape, 1,024 pixels wide or more, the table opens as on a computer and works by touch: slide a token with your finger, tap a token for its details, press and hold a token, a character or a combatant for its menu, and pinch to zoom (see [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). The page is as tall as the browser shows it, so on a phone or a tablet its bottom stays above the browser's toolbar.
+**On a tablet** in landscape, 1,024 pixels wide or more, the table opens as on a computer and works by touch: slide a token with your finger, tap a token for its details, press and hold a token, a door, a character or a combatant for its menu, and pinch to zoom (see [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). The page is as tall as the browser shows it, so on a phone or a tablet its bottom stays above the browser's toolbar.
 
 ### The campaign page on a phone or tablet
 
@@ -215,9 +215,9 @@ The bar along the bottom:
 
 Each opens as a sheet that rises over the map. **Chat**, **Dice**, **Initiative** and **Party** open at half the screen's height, so the map above stays in view and you can still pinch, pan and tap it. Tap the bar at the top of a sheet, or drag it up, to make the sheet full height, and tap or drag it down again to make it half. To close a sheet, tap its **✕**, tap its button again or **Map**, drag it down by the bar at its top, press **Esc**, or use the phone's **Back**. Tapping another button switches to its sheet. **Notes**, **Session** and **More** open at full height.
 
-In the **Chat** sheet **To**, the message box and **Send** share one line, and each message starts with its sender and time on its own first line, so several short messages show at once. Whispers, the DM's messages, system messages and a message marked **Not sent** keep their colours and icons. The count of messages shown, **Load More** and, for the DM, **Clear old join and leave messages** are at the top of the chat: scroll up to reach them.
+In the **Chat** sheet **To**, the message box and **Send** share one line, and each message is one block that starts with its sender and time, with the text running on after them, so several short messages show at once. Whispers, the DM's messages, system messages and a message marked **Not sent** keep their colours and icons. The count of messages shown, **Load More** and, for the DM, **Clear old join and leave messages** are at the top of the chat: scroll up to reach them.
 
-In the **Dice** sheet each roll takes two lines, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top, and **Secret** (show or hide secret rolls) and, for the DM, **Clear** are under the dice buttons.
+In the **Dice** sheet each roll takes two lines, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top. Under the list the dice buttons and your saved rolls are one row that scrolls sideways, and **Roll** sits beside the expression. **Character** and **Purpose** are under **More options**, which while it is closed names whichever of the two still holds text. **Secret** (show or hide secret rolls, once the list holds one) and, for the DM, **Clear** are at the foot of the sheet.
 
 The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** opens its tools in a strip across the bottom of the map, with the map above it to draw on. A token's details show at the bottom of the map when you tap it.
 
@@ -227,7 +227,7 @@ Menus open as a list from the bottom of the screen: press and hold a token, a do
 
 **On a tablet** the sheets and the bar are at most 672 pixels wide, in the middle of the screen. Turning a tablet between upright and sideways switches between this layout and the three columns without losing anything: a message you were typing, a token you were carrying, the zoom, **Preview Player View** and any window you had open stay as they were.
 
-**In a narrow browser window on a computer** the compact layout works with the mouse and the keyboard: click where you would tap, and **Enter** and **Esc** work as on the three-column page. Make the window 1,024 pixels wide or more for the three columns.
+**In a narrow browser window on a computer** the compact layout works with the mouse and the keyboard: click where you would tap, and the keys work as on the three-column page; **Esc** also closes the open sheet. Make the window 1,024 pixels wide or more for the three columns.
 
 ---
 
@@ -284,7 +284,7 @@ Each token has:
 - **Size** — How many grid squares the token occupies (default 1×1)
 - **Display Mode** — **Pog** (circular), **Top-Down** (overhead art), or **Full-Art** (full rectangular image)
 - **Disposition** — Hostile (red), Friendly (teal), or Neutral (amber) — affects a creature's placeholder color and ring
-- **Conditions** — Two-letter amber badges above the token for status effects (**PO**isoned, **ST**unned, and so on). Hover any token to read its conditions in full
+- **Conditions** — Two-letter amber badges above the token for status effects (**PO**isoned, **ST**unned, and so on). Hover any token, or tap it on a touch screen, to read its conditions in full
 - **Layer** — The material plane or the spirit layer; a spirit-layer token is seen only by players in the spirit realm
 - **Darkvision** — How far it sees without light, in grid squares
 - **Hidden** or **Obscured** — Hidden tokens are not sent to players at all; an obscured one shows only as a grey shape with a question mark
@@ -712,7 +712,7 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 | **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
 | **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging. On a touch screen, two quick taps on empty ground ping too, while no tool is up |
-| **Draw** | Opens the drawing tools: a pen, lines, arrows, rectangles, ellipses, polygons, text labels, an eraser and a laser pointer, in a colour and width you choose. The table sees what you draw as you draw it. The DM always has it; a player has it while the DM lets players draw, except while the session is paused or has ended; while they may not draw, it offers only the **Eraser** and **Clear mine**, and only while the map holds drawings of theirs; a spectator does not have it (see [Drawing and pointing](PLAYER_GUIDE.md#drawing-and-pointing) and, for the DM, [Drawing on the map](DM_GUIDE.md#drawing-on-the-map)) |
+| **Draw** | Opens the drawing tools: a pen, lines, arrows, rectangles, ellipses, polygons, text labels, an eraser and a laser pointer, in a colour and width you choose. The table sees what you draw as you draw it. The DM always has it; a player has it while the DM lets players draw, except while the session is paused or has ended; while they may not draw, it offers only the **Eraser** and **Clear mine**, and only while the map holds drawings of theirs; a spectator does not have it, and nobody has it on a map with no picture or one whose picture failed to load (see [Drawing and pointing](PLAYER_GUIDE.md#drawing-and-pointing) and, for the DM, [Drawing on the map](DM_GUIDE.md#drawing-on-the-map)) |
 
 To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.
 
