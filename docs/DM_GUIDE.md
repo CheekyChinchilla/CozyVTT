@@ -884,8 +884,6 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 
 *GIF pending — DM changing the vibe and player view updating.*
 
----
-
 ### Keyboard Shortcuts
 
 Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo:
@@ -934,6 +932,8 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
 
 A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** included, so a tablet propped up for the table stays in the players' view.
+
+---
 
 ## Combat and Initiative
 

@@ -15,13 +15,18 @@ No technical knowledge required. Let's go.
    - [On a phone](#on-a-phone)
    - [Leaving a campaign](#leaving-a-campaign)
 5. [Chat and Dice](#chat-and-dice)
+   - [Rolling from your sheet](#rolling-from-your-sheet)
 6. [Moving Your Token](#moving-your-token)
+   - [On a touch screen](#on-a-touch-screen)
 7. [Measuring and Spell Areas](#measuring-and-spell-areas)
+   - [Pointing at the Map](#pointing-at-the-map)
+   - [Drawing and pointing](#drawing-and-pointing)
 8. [The Initiative Tracker](#the-initiative-tracker)
 9. [The Vibe Tracker](#the-vibe-tracker)
 10. [Managing Your Characters](#managing-your-characters)
 11. [Your Profile](#your-profile)
 12. [Quick Reference](#quick-reference)
+    - [Keyboard Shortcuts](#keyboard-shortcuts)
 
 ---
 
@@ -460,6 +465,46 @@ Press **Esc** to drop the placement, and again to put the tool away.
 
 Shapes cover whole squares wherever the grid allows it. A cone's spreading edges are at an angle so they'll still clip across squares — that's the shape, not a bug. Judge the edge cases the way you would at the table, and if it matters, ask your DM.
 
+### Pointing at the Map
+
+Saying "no, the *other* door" never works. Instead, click the map, put your mouse where you mean and press **Tab**. A dot appears with rings radiating out of it, in your colour and labelled with your name, and everyone at the table sees it in the same spot for a couple of seconds.
+
+A few things worth knowing:
+
+- **Your mouse has to be over the map's picture.** Tab does nothing if the cursor is over the chat panel, the sidebar or the empty space around the map.
+- **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
+- **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
+- **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
+- Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
+
+If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
+
+**Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
+
+**Double tap to ping.** On a touch screen, two quick taps on empty ground ping the spot where the second lands. The taps must come within half a second of each other and land within 20 pixels of each other. The first tap still does what a tap does, such as clearing the selection, so there is no wait. A third quick tap starts again: three taps ping once, four twice. It works only while no tool is up: with **Ping**, **Draw**, the **Ruler** or **AoE Shape** up, a tap is that tool's. Two taps on a token, or on a door, do what they always do and ping nothing; to point at a creature, use **Ping**, or press and hold it if it has no menu for you. A stylus double taps the same way; a mouse's double-click pings nothing.
+
+### Drawing and pointing
+
+**Draw** (the pencil, after **Ping** in the map's toolbar) opens the drawing tools in the top right corner of the map, with the pen chosen; on a phone they open in a strip across the foot of the map. Sketch a plan, circle a door, label a room: everyone at the table sees it as you draw, and it stays on the map until it is erased. Click **Draw** again, the **×** on the panel (**Done** on a phone's strip), or press **Esc** to put the tools away.
+
+| Tool | How |
+|---|---|
+| **Pen** | Drag to draw freehand. A click makes a dot. |
+| **Line**, **Arrow** | Drag from one end to the other. |
+| **Rectangle**, **Ellipse** | Drag from one corner of the box to the other. |
+| **Polygon** | Click or tap each corner, then the first corner again, or **Done**, to close it. |
+| **Text label** | Click or tap where it goes, type it and press **Enter**. |
+| **Eraser** | Click or tap one of your own drawings to erase it. |
+| **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. |
+
+Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the DM can erase anyone's.
+
+While the tools are up, a click draws, so it does not pick up your token. Put them away to move it. With a mouse the right button moves the map; on a touch screen, two fingers do.
+
+You can draw while your DM lets players draw (**Players may draw**, on unless they turn it off), except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
+
+Drawings are the topmost layer of the map: they show over the tokens, the fog and the dark, so you can plan over ground you have not seen yet ("we'll head this way"). The laser pointer shows over everything too, as a ping does.
+
 ---
 
 ## The Initiative Tracker
@@ -486,6 +531,14 @@ The DM controls when initiative advances — after your turn, they'll click **Ne
 
 **Sheets and rolls from the tracker.** Click or tap a character's name in the tracker, or right-click it, and choose **View Character Sheet** to read their sheet, or, on your own character, **Roll...** for the same rolls as right-clicking your token on the map. Double-clicking a character's name opens their sheet straight away. From the keyboard, press **Tab** until the name has the focus and press **Enter** for the menu. Creatures have nothing to open here, and neither does a character whose token is on a map the DM hasn't switched to.
 
+**Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
+
+If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all, and neither is one on a map the DM hasn't switched to or on the other plane.
+
+**Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
+
+**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
+
 ### Rolling Your Own Initiative
 
 Once the DM has added your token to the tracker, you roll for yourself — you don't have to wait for the DM to do it for you. There are two ways, and they do the same thing:
@@ -496,6 +549,10 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
 Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload. If your token's identity is obscured, the roll comes in under your token's name for you and as *Unknown creature* for everyone else; the history keeps it as *Unknown creature*, so that is how it reads after a reload.
+
+**The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your DM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
+
+Your DM can still roll for you (and re-roll, or type a value in by hand) — handy if you're away from the keyboard when combat kicks off.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 
@@ -556,58 +613,6 @@ The eleven buttons are the ones the rules name, not a limit. If your game has a 
 **More than one damage roll.** A spear is 1d6 in one hand and 1d8 in two, and a spell may hit harder at higher levels. Use **Other Damage Rolls** to add each one with a note saying when it applies — "Two-handed", "At 5th level". Each gets its own line on your sheet that you can click to roll, so you're not doing arithmetic mid-fight.
 
 If you already wrote a second damage die into a weapon's notes, it stays exactly as you typed it — nothing rewrites your sheet. Move it into its own row whenever you like and it becomes rollable.
-
-**The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your DM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
-
-Your DM can still roll for you (and re-roll, or type a value in by hand) — handy if you're away from the keyboard when combat kicks off.
-
-**Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
-
-If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all, and neither is one on a map the DM hasn't switched to or on the other plane.
-
-**Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
-
-**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
-
-### Pointing at the Map
-
-Saying "no, the *other* door" never works. Instead, click the map, put your mouse where you mean and press **Tab**. A dot appears with rings radiating out of it, in your colour and labelled with your name, and everyone at the table sees it in the same spot for a couple of seconds.
-
-A few things worth knowing:
-
-- **Your mouse has to be over the map's picture.** Tab does nothing if the cursor is over the chat panel, the sidebar or the empty space around the map.
-- **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
-- **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
-- **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
-- Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
-
-If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
-
-**Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
-
-**Double tap to ping.** On a touch screen, two quick taps on empty ground ping the spot where the second lands. The taps must come within half a second of each other and land within 20 pixels of each other. The first tap still does what a tap does, such as clearing the selection, so there is no wait. A third quick tap starts again: three taps ping once, four twice. It works only while no tool is up: with **Ping**, **Draw**, the **Ruler** or **AoE Shape** up, a tap is that tool's. Two taps on a token, or on a door, do what they always do and ping nothing; to point at a creature, use **Ping**, or press and hold it if it has no menu for you. A stylus double taps the same way; a mouse's double-click pings nothing.
-
-### Drawing and pointing
-
-**Draw** (the pencil, after **Ping** in the map's toolbar) opens the drawing tools in the top right corner of the map, with the pen chosen; on a phone they open in a strip across the foot of the map. Sketch a plan, circle a door, label a room: everyone at the table sees it as you draw, and it stays on the map until it is erased. Click **Draw** again, the **×** on the panel (**Done** on a phone's strip), or press **Esc** to put the tools away.
-
-| Tool | How |
-|---|---|
-| **Pen** | Drag to draw freehand. A click makes a dot. |
-| **Line**, **Arrow** | Drag from one end to the other. |
-| **Rectangle**, **Ellipse** | Drag from one corner of the box to the other. |
-| **Polygon** | Click or tap each corner, then the first corner again, or **Done**, to close it. |
-| **Text label** | Click or tap where it goes, type it and press **Enter**. |
-| **Eraser** | Click or tap one of your own drawings to erase it. |
-| **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. |
-
-Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the DM can erase anyone's.
-
-While the tools are up, a click draws, so it does not pick up your token. Put them away to move it. With a mouse the right button moves the map; on a touch screen, two fingers do.
-
-You can draw while your DM lets players draw (**Players may draw**, on unless they turn it off), except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
-
-Drawings are the topmost layer of the map: they show over the tokens, the fog and the dark, so you can plan over ground you have not seen yet ("we'll head this way"). The laser pointer shows over everything too, as a ping does.
 
 ---
 
