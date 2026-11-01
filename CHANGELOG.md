@@ -197,6 +197,10 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A backup no longer holds a file that makes the restore refuse it.** A file copied by hand into `backend/uploads` with two dots in a row or a backslash in its name went into the backup, and the Admin Panel then refused to restore that backup at all, with "The archive has an unsafe file path, which a backup never has". A backup now leaves such a file out and the backend log names it; rename the file if you want it backed up. A backup made before the upgrade with such a file in it can still be restored from the command line, as [Via the Admin Panel](docs/DEPLOYMENT.md#via-the-admin-panel) shows.
 
+### Security
+
+- **A condition named `constructor` or `__proto__` on a token no longer breaks the map.** The DM could type one in **Edit Token**, and a player could put one on a token they control with a single request sent to the server directly. The map then drew its tokens out of place on the DM's screen and on every screen showing that token, until the page was reloaded. Such a condition now shows its first two letters, `CO` or `__`, as any condition of your own does.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3
