@@ -144,6 +144,8 @@ export const tokenMoveLimiter = new RateLimiter(); // Max 150 drag frames (token
 export const mapEditLimiter = new RateLimiter();   // Max MAP_EDITS_PER_SECOND wall/light edits/second per user
 /** Wall and light edits one user may send a second, the eight edit events together. */
 export const MAP_EDITS_PER_SECOND = 40;
+/** What an edit past that ceiling is answered, when it came with an acknowledgement. */
+export const TOO_MANY_MAP_EDITS_MESSAGE = 'Too many wall and light edits at once. Wait a moment, then try again.';
 // Map pings are a deliberate human gesture, so the ceiling is low compared to
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
 // toast for pressing the ping key too often is worse than nothing happening.
