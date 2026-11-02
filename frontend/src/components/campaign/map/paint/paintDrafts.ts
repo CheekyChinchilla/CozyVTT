@@ -276,7 +276,10 @@ function newTabId(): string {
 /**
  * This tab's id, kept in `storage`, and where `locks` is given, a lock held
  * on it for as long as the page is open: one already held belongs to the
- * tab this one was duplicated from, so this one takes another id.
+ * tab this one was duplicated from, so this one takes another id. The lock
+ * is taken as the id or the tabs open are first asked for, which only
+ * drafts do: a page that keeps none, such as a player's, holds no lock (a
+ * page holding one may be kept out of the browser's back-forward cache).
  */
 export function makePaintTab(storage: Pick<Storage, 'getItem' | 'setItem'>, locks: LockManager | undefined): PaintTab {
   let id: string | null = null;
@@ -287,14 +290,18 @@ export function makePaintTab(storage: Pick<Storage, 'getItem' | 'setItem'>, lock
       return lock ? new Promise<void>(() => undefined) : undefined;
     }).catch(() => resolve(true));
   });
-  const claimed = (async () => {
-    if (!locks) return;
-    if (await hold(locks, ownId())) return;
-    id = newTabId();
-    storage.setItem(TAB_STORAGE, id);
-    await hold(locks, id);
-  })();
-  function ownId(): string {
+  let claimed: Promise<void> | null = null;
+  const claim = (): Promise<void> => {
+    claimed ??= (async () => {
+      if (!locks) return;
+      if (await hold(locks, storedId())) return;
+      id = newTabId();
+      storage.setItem(TAB_STORAGE, id);
+      await hold(locks, id);
+    })();
+    return claimed;
+  };
+  function storedId(): string {
     if (!id) {
       id = storage.getItem(TAB_STORAGE) ?? newTabId();
       storage.setItem(TAB_STORAGE, id);
@@ -302,10 +309,13 @@ export function makePaintTab(storage: Pick<Storage, 'getItem' | 'setItem'>, lock
     return id;
   }
   return {
-    id: ownId,
+    id() {
+      void claim();
+      return storedId();
+    },
     async open() {
       if (!locks) return null;
-      await claimed;
+      await claim();
       try {
         const { held = [] } = await locks.query();
         return new Set(held.flatMap((lock) => (lock.name?.startsWith(TAB_LOCK) ? [lock.name.slice(TAB_LOCK.length)] : [])));

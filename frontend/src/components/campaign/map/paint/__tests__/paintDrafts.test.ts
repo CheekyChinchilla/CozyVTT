@@ -239,6 +239,17 @@ describe('a tab', () => {
     expect(open).toEqual(new Set([id, copy.id()]));
   });
 
+  it('takes no lock until its id or the tabs open are asked for: a page that keeps no draft, such as a player\'s, takes none', async () => {
+    const manager = locks();
+    const tab = makePaintTab(storage(), manager);
+    await Promise.resolve();
+    expect(manager.names).toEqual([]);
+    const id = tab.id();
+    await Promise.resolve();
+    expect(manager.names).toEqual([`cozyvtt-paint-tab:${id}`]);
+    expect(await tab.open()).toEqual(new Set([id]));
+  });
+
   it('cannot tell which tabs are open without Web Locks', async () => {
     expect(await makePaintTab(storage(), undefined).open()).toBeNull();
   });
