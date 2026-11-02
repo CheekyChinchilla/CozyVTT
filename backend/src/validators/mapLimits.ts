@@ -37,6 +37,13 @@ export const MAX_FOG_CELLS = MAP_LIMITS.maxSide * MAP_LIMITS.maxSide;
 export const MAX_EXPLORATION_REPORT_CELLS = 20000;
 
 /**
+ * The most bytes one live-table message may hold, as the server reads it.
+ * A longer one never reaches its handler, so a fog operation or a report of
+ * explored ground that would be longer is sent in parts.
+ */
+export const MAX_SOCKET_MESSAGE_BYTES = 1000000;
+
+/**
  * The furthest any wall end or light may be from the map's corner, in
  * pixels, either way: the far side of the largest map at the largest grid
  * size (500 squares of 500 pixels).

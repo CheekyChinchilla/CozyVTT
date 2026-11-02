@@ -17,6 +17,7 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { ExplorationRevealSchema } from '../../validators/walls';
+import { MAX_EXPLORATION_REPORT_CELLS, MAX_FOG_CELLS } from '../../validators/mapLimits';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
@@ -30,11 +31,20 @@ const MAP_SELECT = {
 } as const;
 
 /**
- * Reports a second, per user. The page reports at most every 300 ms per tab,
- * so two tabs of one player send under seven; a dropped report's cells are
- * never remembered, since the page does not send them again.
+ * The reports one sight of the largest map is sent in: a page reports what
+ * its sight covers in parts of at most MAX_EXPLORATION_REPORT_CELLS.
  */
-export const REVEALS_PER_SECOND = 40;
+const REPORTS_PER_SIGHT = Math.ceil(MAX_FOG_CELLS / MAX_EXPLORATION_REPORT_CELLS);
+
+/**
+ * Reports a second, per user, all their tabs together. A page reports at
+ * most every 300 ms per tab, a sight of the largest map in REPORTS_PER_SIGHT
+ * parts (13), so this is five times one tab's first sight of it: four tabs
+ * or devices of one player seeing it at once send 52, and a few more with
+ * their next reports. A dropped report's cells are never remembered, since
+ * the page does not send them again.
+ */
+export const REVEALS_PER_SECOND = 5 * REPORTS_PER_SIGHT;
 
 /** At most one write of a player's memory of a map in this long. */
 const REVEAL_WRITE_MS = 1000;

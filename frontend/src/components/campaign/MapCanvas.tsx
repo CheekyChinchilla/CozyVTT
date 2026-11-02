@@ -64,6 +64,7 @@ import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp, isTo
 import { cachedTokenImage } from './map/layers/drawTokens';
 import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
+import { explorationReports } from './map/fogSends';
 import { useFogTool } from './map/tools/useFogTool';
 import { useLightTool } from './map/tools/useLightTool';
 import { useMeasureTools } from './map/tools/useMeasureTools';
@@ -1920,9 +1921,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
           const fresh = seen ? diffNew(exploredCells, seen) : [];
           if (fresh.length > 0) {
-            // TODO(play): a report over MAX_EXPLORATION_REPORT_CELLS (20,000) is refused whole and none of it stored; send it in parts.
             addExplored(fresh);
-            socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh, userId: exploringAs });
+            // In parts the server takes: one sight over a large open map sees
+            // more than a report may name.
+            const sock = socket?.getSocket();
+            for (const cells of explorationReports(fresh)) {
+              sock?.emit('exploration:reveal', { mapId: currentMap.id, cells, userId: exploringAs });
+            }
           }
         }
       }
