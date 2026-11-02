@@ -23,7 +23,7 @@ import { GameSystem } from '@/types/gameSystem';
 
 describe('condition abbreviations', () => {
   it('gives every condition a distinct code', () => {
-    const codes = Object.values(CONDITION_ABBREVIATIONS);
+    const codes = [...CONDITION_ABBREVIATIONS.values()];
     expect(new Set(codes).size).toBe(codes.length);
   });
 
@@ -43,7 +43,7 @@ describe('condition abbreviations', () => {
   it('has a code for every listed condition and effect, and no codes for anything else', () => {
     const names = [...DND5E_CONDITIONS, ...DND5E_EFFECTS, ...COC7E_CONDITIONS.map((c) => c.label)];
     const listed = [...new Set(names.map((c) => c.toLowerCase()))].sort();
-    const coded = Object.keys(CONDITION_ABBREVIATIONS).sort();
+    const coded = [...CONDITION_ABBREVIATIONS.keys()].sort();
     expect(coded).toEqual(listed);
   });
 
@@ -116,12 +116,22 @@ describe('condition abbreviations', () => {
     expect(conditionAbbreviation('marked')).toBe('MA');
   });
 
+  it('gives a condition named like a property every object has its own two letters', () => {
+    // The table was read as a plain object, so "constructor" found Object
+    // itself and the badge drew a function's text.
+    for (const name of ['constructor', 'Constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const badge = conditionAbbreviation(name);
+      expect(typeof badge).toBe('string');
+      expect(badge).toBe(name.slice(0, 2).toUpperCase());
+    }
+  });
+
   it('does not throw on empty input', () => {
     expect(conditionAbbreviation('')).toBe('?');
   });
 
   it('always returns at most two characters', () => {
-    const samples = [...Object.keys(CONDITION_ABBREVIATIONS), 'Cursed', 'X', 'Something Long'];
+    const samples = [...CONDITION_ABBREVIATIONS.keys(), 'Cursed', 'X', 'Something Long'];
     for (const s of samples) {
       expect(conditionAbbreviation(s).length).toBeLessThanOrEqual(2);
     }

@@ -421,6 +421,17 @@ describe('drawTokens', () => {
     expect(ctx.calls.find((c) => c.method === 'fillText')?.args[0]).toBe('G');
   });
 
+  it('badges a condition named like a property every object has by its first two letters', () => {
+    // The badge table was read as a plain object, so these found Object and
+    // its prototype, neither of them text.
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({
+      tokens: [makeToken('a', { name: 'Goblin', conditions: ['constructor', '__proto__', 'Prone'] })],
+    }), viewport3x3);
+    const texts = ctx.calls.filter((c) => c.method === 'fillText').map((c) => c.args[0]);
+    expect(texts).toEqual(['G', 'CO', '__', 'PR']);
+  });
+
   // ── Turn highlight ───────────────────────────────────────────────────────
   // A plain NPC token with no disposition, HP, conditions or hover draws no
   // strokes at all, so stroke count isolates the turn ring: 2 (casing + core).

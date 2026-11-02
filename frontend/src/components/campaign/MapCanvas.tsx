@@ -111,7 +111,7 @@ import { mapControlItems, mapControlsTitle, gridColorLabel, rulerColorLabel, typ
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
-import { applyViewport, clearLayer, effectiveDpr, sizeBackingStore } from './map/layerCanvas';
+import { applyViewport, clearLayer, drawSaved, effectiveDpr, sizeBackingStore } from './map/layerCanvas';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
@@ -1688,69 +1688,68 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       mapHeight: currentMap.height,
     };
 
-    ctx.save();
-    applyViewport(ctx, viewport, dpr);
+    drawSaved(ctx, () => {
+      applyViewport(ctx, viewport, dpr);
 
-    const renderIsDM = isDM && !previewing;
-    // isInSpiritRealm is true if the campaign-wide toggle is on OR this
-    // specific non-DM player has personally crossed into the spirit realm. A
-    // preview is in it when the previewed viewer is.
-    const spiritActive = campaign?.spiritLayerEnabled ?? false;
-    const isInSpiritRealm = previewing
-      ? previewedPlane === 'spirit'
-      : spiritActive || (userRole !== 'DM' && playerSpiritVisible);
+      const renderIsDM = isDM && !previewing;
+      // isInSpiritRealm is true if the campaign-wide toggle is on OR this
+      // specific non-DM player has personally crossed into the spirit realm. A
+      // preview is in it when the previewed viewer is.
+      const spiritActive = campaign?.spiritLayerEnabled ?? false;
+      const isInSpiritRealm = previewing
+        ? previewedPlane === 'spirit'
+        : spiritActive || (userRole !== 'DM' && playerSpiritVisible);
 
-    // 1. Map image (Material Plane)
-    drawMapImage(ctx, {
-      mapImage,
-      spiritActive,
-      isDM: renderIsDM,
-      dmViewBothPlanes,
-    }, viewport);
-
-    // The part of the map on screen, which the drawings are culled to.
-    const visible = canvasSize.width > 0 && canvasSize.height > 0
-      ? {
-        minX: -mapControls.panOffset.x / mapControls.zoom,
-        minY: -mapControls.panOffset.y / mapControls.zoom,
-        maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
-        maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
-      }
-      : null;
-    // 1b. The ground layer's drawings, under the grid. Only the DM may draw
-    //     there, and nothing does yet: the place is kept for a DM's map art.
-    drawDrawings(ctx, { drawings: mapDrawings.drawings, layer: 'GROUND', showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
-
-    // 2. Grid overlay
-    if (showGrid) {
-      drawGrid(ctx, { gridColor }, viewport);
-    }
-
-    // 3. The DM's translucent fog, under the spirit layer and tokens so they
-    //    stay visible through it. A player's fog is opaque and has to cover
-    //    walls, doors and light glows too, so it is drawn on the overlay.
-    if (renderIsDM) {
-      drawFog(ctx, {
-        isDM: true,
-        fogState: effectiveFogState,
-        revealedCells: null,
-        revealOpacity: revealOpacityRef.current,
-      }, viewport);
-    }
-
-    // 4. Spirit layer image (the Ethereal Plane)
-    if (spiritLayerImage) {
-      drawSpiritLayer(ctx, {
-        spiritLayerImage,
-        spiritLayerOpacity,
+      // 1. Map image (Material Plane)
+      drawMapImage(ctx, {
+        mapImage,
         spiritActive,
-        isInSpiritRealm,
         isDM: renderIsDM,
         dmViewBothPlanes,
       }, viewport);
-    }
 
-    ctx.restore();
+      // The part of the map on screen, which the drawings are culled to.
+      const visible = canvasSize.width > 0 && canvasSize.height > 0
+        ? {
+          minX: -mapControls.panOffset.x / mapControls.zoom,
+          minY: -mapControls.panOffset.y / mapControls.zoom,
+          maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+          maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+        }
+        : null;
+      // 1b. The ground layer's drawings, under the grid. Only the DM may draw
+      //     there, and nothing does yet: the place is kept for a DM's map art.
+      drawDrawings(ctx, { drawings: mapDrawings.drawings, layer: 'GROUND', showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+
+      // 2. Grid overlay
+      if (showGrid) {
+        drawGrid(ctx, { gridColor }, viewport);
+      }
+
+      // 3. The DM's translucent fog, under the spirit layer and tokens so they
+      //    stay visible through it. A player's fog is opaque and has to cover
+      //    walls, doors and light glows too, so it is drawn on the overlay.
+      if (renderIsDM) {
+        drawFog(ctx, {
+          isDM: true,
+          fogState: effectiveFogState,
+          revealedCells: null,
+          revealOpacity: revealOpacityRef.current,
+        }, viewport);
+      }
+
+      // 4. Spirit layer image (the Ethereal Plane)
+      if (spiritLayerImage) {
+        drawSpiritLayer(ctx, {
+          spiritLayerImage,
+          spiritLayerOpacity,
+          spiritActive,
+          isInSpiritRealm,
+          isDM: renderIsDM,
+          dmViewBothPlanes,
+        }, viewport);
+      }
+    });
   }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef, canvasSize.width, canvasSize.height, mapDrawings.drawings, drawingCache]);
 
   /**
@@ -1773,54 +1772,53 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       mapHeight: currentMap.height,
     };
 
-    ctx.save();
-    applyViewport(ctx, viewport, dpr);
+    drawSaved(ctx, () => {
+      applyViewport(ctx, viewport, dpr);
 
-    const renderIsDM = isDM && !previewing;
+      const renderIsDM = isDM && !previewing;
 
-    // In Player Preview only the tokens that player would have are drawn:
-    // their own, and what the visibility rule says they see. Hidden and
-    // off-plane tokens, which the server never sends a player, are dropped.
-    let drawn = tokens;
-    if (previewing) {
-      const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
-    }
+      // In Player Preview only the tokens that player would have are drawn:
+      // their own, and what the visibility rule says they see. Hidden and
+      // off-plane tokens, which the server never sends a player, are dropped.
+      let drawn = tokens;
+      if (previewing) {
+        const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
+        drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
+      }
 
-    // 5. Tokens (+ drag ghost)
-    const held = previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken;
-    drawTokens(ctx, {
-      tokens: drawn,
-      tokenImages,
-      animatingTokens,
-      heldAt,
-      now: Date.now(),
-      // In a preview the ghost is the token as the viewer is sent it, or
-      // nothing when the viewer would not have it at all.
-      draggedToken: held,
-      heldDrawnAt: held
-        ? heldDrawnAt(
-          tokens.find((t) => t.id === held.id) ?? held,
-          carrierSquare && dragOffset ? { square: carrierSquare, offset: dragOffset } : null,
-          currentMap,
-        )
-        : null,
-      hoverTokenId: hoverToken?.id ?? null,
-      revealedCells: viewerRevealed,
-      isDM: renderIsDM,
-      dmShowSpiritTokens,
-      dmViewBothPlanes,
-      spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
-      characterHpCache,
-      isOwnToken: viewerOwn,
-      currentTurnTokenId,
-      // Held at mid-breath under reduced motion, where no pulse loop runs.
-      pulsePhase: prefersReducedMotion ? 0.5 : pulsePhaseAt(Date.now()),
-      peekTokenId,
-      selectedTokenId,
-    }, viewport);
-
-    ctx.restore();
+      // 5. Tokens (+ drag ghost)
+      const held = previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken;
+      drawTokens(ctx, {
+        tokens: drawn,
+        tokenImages,
+        animatingTokens,
+        heldAt,
+        now: Date.now(),
+        // In a preview the ghost is the token as the viewer is sent it, or
+        // nothing when the viewer would not have it at all.
+        draggedToken: held,
+        heldDrawnAt: held
+          ? heldDrawnAt(
+            tokens.find((t) => t.id === held.id) ?? held,
+            carrierSquare && dragOffset ? { square: carrierSquare, offset: dragOffset } : null,
+            currentMap,
+          )
+          : null,
+        hoverTokenId: hoverToken?.id ?? null,
+        revealedCells: viewerRevealed,
+        isDM: renderIsDM,
+        dmShowSpiritTokens,
+        dmViewBothPlanes,
+        spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
+        characterHpCache,
+        isOwnToken: viewerOwn,
+        currentTurnTokenId,
+        // Held at mid-breath under reduced motion, where no pulse loop runs.
+        pulsePhase: prefersReducedMotion ? 0.5 : pulsePhaseAt(Date.now()),
+        peekTokenId,
+        selectedTokenId,
+      }, viewport);
+    });
   }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, carrierSquare, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, selectedTokenId, isDM, previewControls]);
 
   /**
@@ -1844,233 +1842,231 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       mapHeight: currentMap.height,
     };
 
-    ctx.save();
-    applyViewport(ctx, viewport, dpr);
+    drawSaved(ctx, () => {
+      applyViewport(ctx, viewport, dpr);
 
-    const renderIsDM = isDM && !previewing;
+      const renderIsDM = isDM && !previewing;
 
-    // 6. Dynamic lighting — raycast visibility darkness over tokens.
-    //    DM always sees all; "Preview player view" simulates player vision.
-    //    The vision polygons also feed the walls layer's door LOS filter.
-    const lightingEnabled = currentMap.lightingEnabled ?? false;
-    // Whether this viewer can make out a point, by the shared visibility rule.
-    // Everything is seen until lighting says otherwise.
-    let canSee: (x: number, y: number) => boolean = () => true;
-    if (lightingEnabled && !renderIsDM) {
-      const myTokens = tokens.filter(viewerOwn);
-      const rule = ruleFor(myTokens, viewport);
-      canSee = rule.canSee;
-      drawDynamicLighting(ctx, {
-        myTokens,
-        enabledLights: rule.enabledLights,
-        tokenVision: rule.vision.tokenVision,
-        tokenSight: rule.vision.tokenSight,
-        lightVision: rule.vision.lightVision,
-        globalIllumination: rule.globalIllumination,
-        lightingCanvas: lightingOffscreenRef,
-        coverageCanvas: lightCoverageOffscreenRef,
-        lightCanvas: lightOnlyOffscreenRef,
-        explored: explorationEnabled ? exploredRaster : null,
-        terrainCanvas: terrainCanvasRef.current,
-        memoryMaskCanvas: memoryMaskOffscreenRef,
-        memoryCanvas: memoryOffscreenRef,
-        dpr,
-        compositeCache: lightingCompositeRef,
-      }, viewport);
+      // 6. Dynamic lighting — raycast visibility darkness over tokens.
+      //    DM always sees all; "Preview player view" simulates player vision.
+      //    The vision polygons also feed the walls layer's door LOS filter.
+      const lightingEnabled = currentMap.lightingEnabled ?? false;
+      // Whether this viewer can make out a point, by the shared visibility rule.
+      // Everything is seen until lighting says otherwise.
+      let canSee: (x: number, y: number) => boolean = () => true;
+      if (lightingEnabled && !renderIsDM) {
+        const myTokens = tokens.filter(viewerOwn);
+        const rule = ruleFor(myTokens, viewport);
+        canSee = rule.canSee;
+        drawDynamicLighting(ctx, {
+          myTokens,
+          enabledLights: rule.enabledLights,
+          tokenVision: rule.vision.tokenVision,
+          tokenSight: rule.vision.tokenSight,
+          lightVision: rule.vision.lightVision,
+          globalIllumination: rule.globalIllumination,
+          lightingCanvas: lightingOffscreenRef,
+          coverageCanvas: lightCoverageOffscreenRef,
+          lightCanvas: lightOnlyOffscreenRef,
+          explored: explorationEnabled ? exploredRaster : null,
+          terrainCanvas: terrainCanvasRef.current,
+          memoryMaskCanvas: memoryMaskOffscreenRef,
+          memoryCanvas: memoryOffscreenRef,
+          dpr,
+          compositeCache: lightingCompositeRef,
+        }, viewport);
 
-      // Report what this viewer has just seen, at most every 300 ms, from the
-      // coverage mask, which is this frame's whether it was drawn now or kept
-      // from an earlier frame, to whoever's memory this is: the player's
-      // own, or the player the DM is previewing. A preview writes too, so a
-      // token the DM moves for an absent player still remembers its ground.
-      // The party and an uncontrolled token explore as nobody, and write
-      // nothing.
-      const now = Date.now();
-      if (exploringAs !== null && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
-        && now - lastExploredReportRef.current >= 300) {
-        lastExploredReportRef.current = now;
-        const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
-        const fresh = seen ? diffNew(exploredCells, seen) : [];
-        if (fresh.length > 0) {
-          // TODO(play): a report over MAX_EXPLORATION_REPORT_CELLS (20,000) is refused whole and none of it stored; send it in parts.
-          addExplored(fresh);
-          socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh, userId: exploringAs });
+        // Report what this viewer has just seen, at most every 300 ms, from the
+        // coverage mask, which is this frame's whether it was drawn now or kept
+        // from an earlier frame, to whoever's memory this is: the player's
+        // own, or the player the DM is previewing. A preview writes too, so a
+        // token the DM moves for an absent player still remembers its ground.
+        // The party and an uncontrolled token explore as nobody, and write
+        // nothing.
+        const now = Date.now();
+        if (exploringAs !== null && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
+          && now - lastExploredReportRef.current >= 300) {
+          lastExploredReportRef.current = now;
+          const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
+          const fresh = seen ? diffNew(exploredCells, seen) : [];
+          if (fresh.length > 0) {
+            // TODO(play): a report over MAX_EXPLORATION_REPORT_CELLS (20,000) is refused whole and none of it stored; send it in parts.
+            addExplored(fresh);
+            socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh, userId: exploringAs });
+          }
         }
       }
-    }
 
-    // 7. DM light source markers, in the DM's own view only: a preview is a
-    //    player's view, and a marker would give away every light on the map
-    if (isDM) {
-      drawLightIcons(ctx, {
-        lights: lightSources,
-        selectedLightId,
-        lightMode,
-        isDM: renderIsDM,
-      }, viewport);
-    }
-
-    // 8. Wall segments — DM sees all (+ endpoint nodes while a wall tool is
-    //    active); players see doors (LOS-filtered under dynamic lighting)
-    drawWalls(ctx, {
-      wallSegments,
-      isDM: renderIsDM,
-      wallColor,
-      hoveredWallId,
-      selectedWallIds,
-      hoveredDoorId,
-      showEndpoints: wallMode !== null,
-      dragEndpoint: wallDragEndpointRef.current?.point ?? null,
-      selectedEndpoint,
-      lightingEnabled,
-      canSee,
-    }, viewport);
-
-    // 9. DM wall-tool overlays
-    if (isDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
-      drawWallDrawOverlay(ctx, {
-        wallInProgress,
-        hoverMapPx: hoverMapPxRef.current,
-        hoverCoords,
-        wallType,
-        snapPoint,
-        findWallAtPoint,
-      }, viewport);
-    }
-    if (isDM && wallMode === 'wall-split' && splitHoverPoint) {
-      drawSplitPreview(ctx, splitHoverPoint, viewport);
-    }
-    if (isDM && wallMode === 'wall-erase') {
-      drawEraseOverlay(ctx, {
-        hoverMapPx: hoverMapPxRef.current,
-        eraseRadius: WALL_ERASE_RADIUS,
-        erasedIds: wallErasedIdsRef.current,
-        wallSegments,
-      }, viewport);
-    }
-    if (isDM && wallMode === 'wall-brush') {
-      drawBrushOverlay(ctx, {
-        points: wallBrushPointsRef.current,
-        brushSize,
-        hoverMapPx: hoverMapPxRef.current,
-      }, viewport);
-    }
-    if (isDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
-      drawPolygonOverlay(ctx, {
-        points: polygonPoints,
-        hoverMapPx: hoverMapPxRef.current,
-        closeRadius: POLYGON_CLOSE_RADIUS,
-        snapPoint,
-      }, viewport);
-    }
-
-    // 10. Measurement overlays
-    // A finger's or a pen's pinned end, else the pointer's square; with
-    // neither, a start a finger has just tapped is drawn alone, as a dot.
-    const rulerTarget = rulerEnd ?? hoverCoords ?? (rulerStartByTouch ? effectiveRulerOrigin : null);
-    if (showRuler && effectiveRulerOrigin && rulerTarget) {
-      drawRuler(ctx, {
-        origin: effectiveRulerOrigin,
-        target: rulerTarget,
-        color: rulerColor,
-        feetPerSquare: currentMap.feetPerSquare ?? 5,
-        diagonalRule: (currentMap.diagonalRule ?? 'flat') as 'flat' | 'alternating',
-      }, viewport);
-    }
-    if (showAoE) {
-      drawAoEOverlay(ctx, {
-        config: aoeConfig,
-        anchor: aoeAnchor,
-        // Only offer the cursor as a stand-in anchor while it is actually over
-        // the map — hoverCoords is the bounds-checked one. Without this an
-        // un-pinned template draws out in the margin beside the map, which the
-        // old grid-coordinate anchor ruled out for free.
-        hoverMapPx: hoverCoords ? hoverMapPxRef.current : null,
-        // Not bounds-checked: aiming a pinned template at something off the
-        // edge of the map is legitimate.
-        aimMapPx: aoeAimRef.current,
-        hoverExact: aoeAltHeldRef.current || !aoeSnap,
-        feetPerSquare: currentMap.feetPerSquare ?? 5,
-        coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
-      }, viewport);
-    }
-
-    // 11. Fog selection box — world space, so the snapped rectangle stays
-    //     locked to the grid through pan and zoom.
-    if (fogMode && isDM && fogState) {
-      drawFogSelection(ctx, {
-        mode: fogMode,
-        fog: fogState,
-        anchor: fogDragAnchorRef.current,
-        cursor: fogDragCurrent,
-      }, viewport);
-    }
-
-    // 11b. Wall selection — the dragged box and a ring around what is held,
-    //      so a gathered selection reads as one thing before it is moved.
-    if (wallMode === 'wall-select' && isDM) {
-      drawWallSelection(ctx, viewport, {
-        marquee: wallMarquee,
-        selectedWallIds,
-        wallSegments,
-      });
-    }
-
-    // 12. Map pings — drawn last in world space, above the lighting darkness
-    //     so a ping into an unlit corner is still visible. (The turn ring
-    //     makes the opposite trade on purpose: it lives on the token layer
-    //     so a hidden token's ring stays hidden.)
-    // Manual fog for a player covers everything drawn so far on this layer
-    // and the layers beneath: artwork, tokens, walls, doors and light glows.
-    // Nothing under an unrevealed cell shows, except the cells the player's
-    // own tokens stand on. Pings stay above it: a ping is a deliberate
-    // signal from someone at the table, not a discovery.
-    if (!renderIsDM) {
-      drawFog(ctx, {
-        isDM: false,
-        fogState: null,
-        revealedCells: viewerRevealed,
-        exemptCells: ownTokenCells,
-        revealOpacity: revealOpacityRef.current,
-      }, viewport);
-    }
-
-    // 13. The drawings, the topmost layer of the map: over the tokens, a
-    //     player's fog and the lit darkness, so a table can plan over
-    //     ground it cannot see. A drawing for the DM alone shows in the
-    //     DM's own view only, never in a preview. They are kept as pixels
-    //     and copied on, drawn again only when they or the view change, so
-    //     a repaint for a ping or a stroke on its way strokes none of them.
-    //     Then the strokes on their way, and the laser pointer and the
-    //     pings on top.
-    const visible = canvasSize.width > 0 && canvasSize.height > 0
-      ? {
-        minX: -mapControls.panOffset.x / mapControls.zoom,
-        minY: -mapControls.panOffset.y / mapControls.zoom,
-        maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
-        maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+      // 7. DM light source markers, in the DM's own view only: a preview is a
+      //    player's view, and a marker would give away every light on the map
+      if (isDM) {
+        drawLightIcons(ctx, {
+          lights: lightSources,
+          selectedLightId,
+          lightMode,
+          isDM: renderIsDM,
+        }, viewport);
       }
-      : null;
-    drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
-    const previewNow = Date.now();
-    const ownStroke = drawTool.inProgress();
-    const shownPreviews = [...mapDrawings.previews.current.values(), ...(ownStroke ? [ownStroke] : [])];
-    if (shownPreviews.length > 0) {
-      drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: false }, viewport);
-    }
 
-    // The laser pointer goes over everything, with the pings: pointing is
-    // a signal from someone at the table, as a ping is.
-    if (shownPreviews.length > 0) {
-      drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: true }, viewport);
-    }
+      // 8. Wall segments — DM sees all (+ endpoint nodes while a wall tool is
+      //    active); players see doors (LOS-filtered under dynamic lighting)
+      drawWalls(ctx, {
+        wallSegments,
+        isDM: renderIsDM,
+        wallColor,
+        hoveredWallId,
+        selectedWallIds,
+        hoveredDoorId,
+        showEndpoints: wallMode !== null,
+        dragEndpoint: wallDragEndpointRef.current?.point ?? null,
+        selectedEndpoint,
+        lightingEnabled,
+        canSee,
+      }, viewport);
 
-    if (pings.length > 0) {
-      drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
-    }
+      // 9. DM wall-tool overlays
+      if (isDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
+        drawWallDrawOverlay(ctx, {
+          wallInProgress,
+          hoverMapPx: hoverMapPxRef.current,
+          hoverCoords,
+          wallType,
+          snapPoint,
+          findWallAtPoint,
+        }, viewport);
+      }
+      if (isDM && wallMode === 'wall-split' && splitHoverPoint) {
+        drawSplitPreview(ctx, splitHoverPoint, viewport);
+      }
+      if (isDM && wallMode === 'wall-erase') {
+        drawEraseOverlay(ctx, {
+          hoverMapPx: hoverMapPxRef.current,
+          eraseRadius: WALL_ERASE_RADIUS,
+          erasedIds: wallErasedIdsRef.current,
+          wallSegments,
+        }, viewport);
+      }
+      if (isDM && wallMode === 'wall-brush') {
+        drawBrushOverlay(ctx, {
+          points: wallBrushPointsRef.current,
+          brushSize,
+          hoverMapPx: hoverMapPxRef.current,
+        }, viewport);
+      }
+      if (isDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
+        drawPolygonOverlay(ctx, {
+          points: polygonPoints,
+          hoverMapPx: hoverMapPxRef.current,
+          closeRadius: POLYGON_CLOSE_RADIUS,
+          snapPoint,
+        }, viewport);
+      }
 
-    // Restore context state (back to screen-space)
-    ctx.restore();
+      // 10. Measurement overlays
+      // A finger's or a pen's pinned end, else the pointer's square; with
+      // neither, a start a finger has just tapped is drawn alone, as a dot.
+      const rulerTarget = rulerEnd ?? hoverCoords ?? (rulerStartByTouch ? effectiveRulerOrigin : null);
+      if (showRuler && effectiveRulerOrigin && rulerTarget) {
+        drawRuler(ctx, {
+          origin: effectiveRulerOrigin,
+          target: rulerTarget,
+          color: rulerColor,
+          feetPerSquare: currentMap.feetPerSquare ?? 5,
+          diagonalRule: (currentMap.diagonalRule ?? 'flat') as 'flat' | 'alternating',
+        }, viewport);
+      }
+      if (showAoE) {
+        drawAoEOverlay(ctx, {
+          config: aoeConfig,
+          anchor: aoeAnchor,
+          // Only offer the cursor as a stand-in anchor while it is actually over
+          // the map — hoverCoords is the bounds-checked one. Without this an
+          // un-pinned template draws out in the margin beside the map, which the
+          // old grid-coordinate anchor ruled out for free.
+          hoverMapPx: hoverCoords ? hoverMapPxRef.current : null,
+          // Not bounds-checked: aiming a pinned template at something off the
+          // edge of the map is legitimate.
+          aimMapPx: aoeAimRef.current,
+          hoverExact: aoeAltHeldRef.current || !aoeSnap,
+          feetPerSquare: currentMap.feetPerSquare ?? 5,
+          coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
+        }, viewport);
+      }
+
+      // 11. Fog selection box — world space, so the snapped rectangle stays
+      //     locked to the grid through pan and zoom.
+      if (fogMode && isDM && fogState) {
+        drawFogSelection(ctx, {
+          mode: fogMode,
+          fog: fogState,
+          anchor: fogDragAnchorRef.current,
+          cursor: fogDragCurrent,
+        }, viewport);
+      }
+
+      // 11b. Wall selection — the dragged box and a ring around what is held,
+      //      so a gathered selection reads as one thing before it is moved.
+      if (wallMode === 'wall-select' && isDM) {
+        drawWallSelection(ctx, viewport, {
+          marquee: wallMarquee,
+          selectedWallIds,
+          wallSegments,
+        });
+      }
+
+      // 12. Map pings — drawn last in world space, above the lighting darkness
+      //     so a ping into an unlit corner is still visible. (The turn ring
+      //     makes the opposite trade on purpose: it lives on the token layer
+      //     so a hidden token's ring stays hidden.)
+      // Manual fog for a player covers everything drawn so far on this layer
+      // and the layers beneath: artwork, tokens, walls, doors and light glows.
+      // Nothing under an unrevealed cell shows, except the cells the player's
+      // own tokens stand on. Pings stay above it: a ping is a deliberate
+      // signal from someone at the table, not a discovery.
+      if (!renderIsDM) {
+        drawFog(ctx, {
+          isDM: false,
+          fogState: null,
+          revealedCells: viewerRevealed,
+          exemptCells: ownTokenCells,
+          revealOpacity: revealOpacityRef.current,
+        }, viewport);
+      }
+
+      // 13. The drawings, the topmost layer of the map: over the tokens, a
+      //     player's fog and the lit darkness, so a table can plan over
+      //     ground it cannot see. A drawing for the DM alone shows in the
+      //     DM's own view only, never in a preview. They are kept as pixels
+      //     and copied on, drawn again only when they or the view change, so
+      //     a repaint for a ping or a stroke on its way strokes none of them.
+      //     Then the strokes on their way, and the laser pointer and the
+      //     pings on top.
+      const visible = canvasSize.width > 0 && canvasSize.height > 0
+        ? {
+          minX: -mapControls.panOffset.x / mapControls.zoom,
+          minY: -mapControls.panOffset.y / mapControls.zoom,
+          maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+          maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+        }
+        : null;
+      drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+      const previewNow = Date.now();
+      const ownStroke = drawTool.inProgress();
+      const shownPreviews = [...mapDrawings.previews.current.values(), ...(ownStroke ? [ownStroke] : [])];
+      if (shownPreviews.length > 0) {
+        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: false }, viewport);
+      }
+
+      // The laser pointer goes over everything, with the pings: pointing is
+      // a signal from someone at the table, as a ping is.
+      if (shownPreviews.length > 0) {
+        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: true }, viewport);
+      }
+
+      if (pings.length > 0) {
+        drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
+      }
+    });
   }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef, mapDrawings.previews, mapDrawings.drawings, drawingCache, canvasSize.width, canvasSize.height, drawTool]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────

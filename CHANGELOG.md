@@ -187,6 +187,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Tab no longer pings beside the map's picture.** With the pointer over the map area but off its picture, as on the space around a map zoomed out to fit, **Tab** sent the table a ping out there. It now pings only on the picture, as the **Ping** button and a press and hold do.
 
+- **Edit Token offers no 51st condition.** A token can carry 50 conditions and effects, but at 50 a listed condition it did not carry could still be pressed, and the server refused it, so it went back off with a message. The listed ones the token does not carry are now greyed out at 50, as the **+** button for a typed condition already was, and a note above them says "A token carries at most 50 conditions and effects. Take one off to add another." The ones it carries still come off.
+
 - **A token someone is carrying goes back to its square when they are removed from the campaign.** If the DM removed a player while the player was carrying a token, everyone else went on seeing the token where the player's pointer had last taken it, until the map was opened again or the DM moved it. It now goes back to its square on every screen, as it already did when the carrier's tab closed.
 
 - **The remove button is no longer shown beside the campaign's owner.** A DM who had been handed the seat saw it beside the owner, who sits at the table as a player, on the **Members** tab of **Campaign Settings**, and pressing it ended in "Cannot remove the campaign owner from their own campaign". The owner's row now has no remove button.
@@ -208,6 +210,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 ### Security
 
 - **Players no longer see map pictures before the table goes there.** In 1.5.4 everyone in a campaign could browse and open every map picture in its library, so a player's or a spectator's Asset Library showed the picture of a map the DM was preparing and every map picture uploaded ahead of time. A map picture in a campaign's library, and any picture, base layer or spirit layer of one of its maps, now shows and opens for the campaign's players and spectators only while a table they sit at is on a map using it, and leaves their library when that table moves on. A picture in the campaign's library embedded in a handout the DM wrote or uploaded and shared with the campaign shows to its members as the handout does, so handouts keep their pictures. A picture they uploaded themselves stays theirs. Token pictures, sounds and documents are listed as before, even one uploaded for a later scene. The DM sees everything as before, and so do the instance's administrators. A player who put a map's picture in their own notes, or chose it as a character's picture, may stop seeing it there once the table leaves that map; a browser that has shown it before can go on showing it from its cache.
+
+- **A condition named `constructor` or `__proto__` on a token no longer breaks the map.** The DM could type one in **Edit Token**, and a player could put one on a token they control with a single request sent to the server directly. The map then drew its tokens out of place on the DM's screen and on every screen showing that token, until the page was reloaded. Such a condition now shows its first two letters, `CO` or `__`, as any condition of your own does.
 
 ## [1.5.4] - 2026-10-25
 

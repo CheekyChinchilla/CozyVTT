@@ -116,8 +116,12 @@ export function effectsOffered(gameSystem: GameSystem | null): readonly string[]
  * Two-letter codes, one per listed condition and effect (D&D 5e and Call of
  * Cthulhu, which share Unconscious). Every value here is unique; a test
  * enforces that, since a collision would quietly bring back the original bug.
+ *
+ * A Map, so a name finds only an entry of its own: a condition typed as
+ * "constructor" found Object itself in a plain object's lookup, and the badge
+ * drew a function's text.
  */
-export const CONDITION_ABBREVIATIONS: Readonly<Record<string, string>> = {
+export const CONDITION_ABBREVIATIONS: ReadonlyMap<string, string> = new Map(Object.entries({
   blinded: 'BL',
   charmed: 'CH',
   deafened: 'DF',
@@ -146,7 +150,7 @@ export const CONDITION_ABBREVIATIONS: Readonly<Record<string, string>> = {
   "hunter's mark": 'HM',
   raging: 'RG',
   slowed: 'SL',
-};
+}));
 
 /**
  * The name a condition or an effect is known by, however it was typed or
@@ -169,10 +173,7 @@ export function conditionKey(name: string): string {
  */
 export function conditionAbbreviation(condition: string): string {
   if (!condition) return '?';
-  // TODO(ui): the lookup reaches Object.prototype, so a condition typed as
-  // "constructor" or "toString" badges the text of a built-in function.
-  // Look only at the table's own keys (Object.prototype.hasOwnProperty).
-  const known = CONDITION_ABBREVIATIONS[conditionKey(condition)];
+  const known = CONDITION_ABBREVIATIONS.get(conditionKey(condition));
   if (known) return known;
   return condition.trim().slice(0, 2).toUpperCase();
 }

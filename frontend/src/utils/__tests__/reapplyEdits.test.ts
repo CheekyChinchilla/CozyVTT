@@ -144,6 +144,12 @@ describe('describePath', () => {
     expect(describePath(['hitDice', 0, 'remaining'], { hitDice: [{ remaining: 1 }] })).toBe('Hit dice › Entry 1 › Remaining');
     expect(describePath(['characteristics', 'STR', 'regular'], {})).toBe('Characteristics › STR › Regular');
   });
+
+  // The word table was read as a plain object, so a field named like a
+  // property every object has found Object's function.
+  it('names a field called constructor in words, as any other', () => {
+    expect(describePath(['constructor', 'toString'], {})).toBe('Constructor › To string');
+  });
 });
 
 describe('describeValue', () => {

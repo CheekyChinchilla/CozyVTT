@@ -13,6 +13,7 @@ import {
   MAX_BACKING_PIXELS,
   applyViewport,
   clearLayer,
+  drawSaved,
   effectiveDpr,
   sizeBackingStore,
   withinBackingLimit,
@@ -191,5 +192,14 @@ describe('withinBackingLimit', () => {
     const { width, height } = withinBackingLimit(250_000, 250_000);
     expect(width * height).toBeLessThanOrEqual(MAX_BACKING_PIXELS);
     expect(width).toBe(4096);
+  });
+});
+
+describe('drawSaved', () => {
+  it('restores the context after a layer that throws, and passes the error on', () => {
+    const calls: string[] = [];
+    const ctx = { save: () => calls.push('save'), restore: () => calls.push('restore') } as unknown as CanvasRenderingContext2D;
+    expect(() => drawSaved(ctx, () => { calls.push('draw'); throw new Error('no badge'); })).toThrow('no badge');
+    expect(calls).toEqual(['save', 'draw', 'restore']);
   });
 });
