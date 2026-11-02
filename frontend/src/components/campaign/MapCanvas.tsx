@@ -409,7 +409,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   });
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
-  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
+  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, index: wallHistoryIndex, stepBack: stepWallHistoryBack, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
   // Every wall and light edit this page sends carries an id, so the server's
   // echo of it can be told from anyone else's change (map/ownEdits.ts).
   const [ownEdits] = useState(() => createOwnEdits());
@@ -464,6 +464,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Right-mouse button panning while a DM tool is active (left-click is reserved for tools)
   const rightPanActiveRef = useRef(false);
   const { toast, showToast, hideToast } = useToast();
+  // Why a wall or light tool drew nothing, or took back what the server refused.
+  const refuseMapEdit = useCallback((message: string) => showToast(message, 'error'), [showToast]);
   /** DM "Preview player view" toggle — when true, DM sees lighting as players do. */
   const [dmPreviewPlayerView, setDmPreviewPlayerView] = useState(false);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
@@ -613,7 +615,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     draggingLightRef,
   } = useLightTool({
     isDM, previewing, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
-    socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
+    socket, ownEdits, mapControls, rightPanActiveRef, markDirty, refuse: refuseMapEdit,
   });
 
   // The fog boxes (map/tools/useFogTool.ts).
@@ -745,8 +747,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     carryIntoDrags,
   } = useWallTool({
     isDM, currentMap, wallMode, setWallMode, wallSegments,
-    pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
-    socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty,
+    pushWallHistory, replaceWallHistory, carryWallHistory, undoWalls, redoWalls, wallHistoryIndex, stepWallHistoryBack, canUndoWalls, canRedoWalls,
+    socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty, refuse: refuseMapEdit,
   });
 
   // Player's own token on the current map — used as ruler origin for non-DM users

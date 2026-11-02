@@ -11,7 +11,9 @@ import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetSta
 import type { LightSource } from '@/types/walls';
 import type { LightToolMode, LightPlacementDefaults } from '@/components/campaign/DmLightControls';
 import { randomId } from '@/utils/uuid';
+import { TOO_MANY_LIGHTS_MESSAGE } from '@/constants/mapLimits';
 import type { OwnEdits } from '../ownEdits';
+import { atLightCap, refusalIn } from '../wallLightCaps';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
 
@@ -32,11 +34,13 @@ interface UseLightToolArgs {
   /** Set while the right button pans the map under a DM tool. */
   rightPanActiveRef: RefObject<boolean>;
   markDirty: (...layers: MapLayer[]) => void;
+  /** Tell the DM why a light was not placed, or was taken back. */
+  refuse: (message: string) => void;
 }
 
 export function useLightTool({
   isDM, previewing, mapId, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
-  socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
+  socket, ownEdits, mapControls, rightPanActiveRef, markDirty, refuse,
 }: UseLightToolArgs) {
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [lightPlacementDefaults, setLightPlacementDefaults] = useState<LightPlacementDefaults>({
@@ -45,6 +49,9 @@ export function useLightTool({
   // Drag-to-move state for lights in select mode: the light, and where it
   // stood when it was picked up, to put it back if the drag is cancelled.
   const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
+  // An answer from the server changes the lights only while its map is on screen.
+  const mapIdRef = useRef(mapId);
+  mapIdRef.current = mapId;
 
   // A new map has none of the last one's lights to have selected or in hand.
   useEffect(() => {
@@ -57,6 +64,10 @@ export function useLightTool({
     down({ mapPx }: PointerAt) {
       if (!(lightMode && isDM)) return false;
       if (lightMode === 'light-place') {
+        if (atLightCap(lightSources.length)) {
+          refuse(TOO_MANY_LIGHTS_MESSAGE);
+          return true;
+        }
         const newLight: LightSource = {
           id: randomId(),
           x: Math.round(mapPx.x),
@@ -66,13 +77,18 @@ export function useLightTool({
           color: lightPlacementDefaults.color,
           enabled: true,
         };
-        // TODO(ui): past MAP_LIMITS.maxLightSources the server refuses light:add and this
-        // light stays drawn; refuse at the cap before drawing.
+        // Drawn at once and sent; a refusal takes it back and says why.
         setLightSources((prev) => [...prev, newLight]);
         setSelectedLightId(newLight.id);
         const socketInstance = socket?.getSocket();
         if (socketInstance && mapId) {
-          socketInstance.emit('light:add', ownEdits.tag({ mapId, light: newLight }));
+          socketInstance.emit('light:add', ownEdits.tag({ mapId, light: newLight }), (reply) => {
+            const why = refusalIn(reply);
+            if (why === null || mapIdRef.current !== mapId) return;
+            setLightSources((prev) => prev.filter((l) => l.id !== newLight.id));
+            setSelectedLightId((selected) => (selected === newLight.id ? null : selected));
+            refuse(why);
+          });
         }
         return true;
       }
