@@ -65,13 +65,17 @@ CALLS = (
     (r"\bbroadcastTo(?:Campaign|User)\(", r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*" + NAME),
     (r"\bemitMoveToVisibleSockets\(", r"emitMoveToVisibleSockets\(\s*" + NAME),
     (r"\b(?:emitToMapReaders|tellMapReaders)(?:As)?\(", r"(?:emitToMapReaders|tellMapReaders)(?:As)?\(\s*[^'\"()]*" + NAME),
+    # A whole state, sent to one socket so that only the newest waits for it
+    # (websocket/outgoingQueue.ts): the socket first, then the event.
+    (r"\bemitNewestState\(", r"emitNewestState\(\s*[^,()]+,\s*" + NAME),
 )
 
 # The helpers whose call sites are read above. Inside them the event is a
 # parameter passed on, by design, so a call there that names no event is not
 # a declaration this table misses.
 FORWARDERS = ('broadcastToCampaign', 'broadcastToUser', 'emitMoveToVisibleSockets',
-              'emitToMapReaders', 'emitToMapReadersAs', 'tellMapReaders', 'tellMapReadersAs')
+              'emitToMapReaders', 'emitToMapReadersAs', 'tellMapReaders', 'tellMapReadersAs',
+              'emitNewestState')
 
 
 def sources():
@@ -395,7 +399,11 @@ def sent_to(plain, m, handlers=()):
     helper = re.match(r'\.?([A-Za-z]+)', m.group(0)).group(1)
     if helper in HELPER_RECIPIENTS:
         return HELPER_RECIPIENTS[helper]
-    on = receiver(plain, m.start())
+    if helper == 'emitNewestState':
+        # The socket it is sent to is the call's first argument.
+        on = re.match(r'emitNewestState\(\s*([^,()]+?)\s*,', m.group(0)).group(1)
+    else:
+        on = receiver(plain, m.start())
     if on == 'socket':
         return 'the sender' if any(start <= m.start() <= end for start, end in handlers) else 'one socket'
     if on.startswith('socket.to(') or on.startswith('socket.broadcast'):
