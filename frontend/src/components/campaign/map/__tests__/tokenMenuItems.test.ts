@@ -23,7 +23,7 @@ const spy = () => vi.fn<(...args: unknown[]) => void>();
 
 function actions(): Record<keyof TokenMenuActions, Mock<(...args: unknown[]) => void>> {
   return {
-    viewSheet: spy(), rollCharacter: spy(), rotate: spy(), rollCreature: spy(), edit: spy(),
+    viewSheet: spy(), rollCharacter: spy(), grantTemporaryHp: spy(), rotate: spy(), rollCreature: spy(), edit: spy(),
     addToInitiative: spy(), duplicate: spy(), saveAsTemplate: spy(), setVisible: spy(), setObscured: spy(),
     setLayer: spy(), moveToMap: spy(), remove: spy(),
   };
@@ -34,6 +34,7 @@ function context(extra: Partial<TokenMenuContext> = {}): TokenMenuContext {
     role: CampaignRole.DM,
     mayViewSheet: false,
     mayRoll: false,
+    mayGrantTemporaryHp: false,
     mayRotate: true,
     mapId: 'map-a',
     maps: [{ id: 'map-a', name: 'Map A' }, { id: 'map-b', name: 'Map B' }, { id: 'map-c', name: 'Map C' }],
@@ -123,6 +124,32 @@ describe("the DM's items", () => {
 
   it('leaves the DM items out for anyone else, even with every permission', () => {
     expect(labels(tokenMenuItems(token(), context({ role: CampaignRole.PLAYER })))).toEqual(['Rotate Left', 'Rotate Right']);
+  });
+});
+
+// Granted to the character's sheet on a character's token, and to the
+// token's own hit points on a creature's (utils/temporaryHp decides who).
+describe('Temporary HP...', () => {
+  it("follows a character's rolls, for a player on their own character", () => {
+    const pc = token({ characterId: 'char-1', type: TokenType.PLAYER });
+    expect(labels(tokenMenuItems(pc, context({ role: CampaignRole.PLAYER, mayViewSheet: true, mayRoll: true, mayGrantTemporaryHp: true }))))
+      .toEqual(['View Character Sheet', 'Roll...', 'Temporary HP...', 'Rotate Left', 'Rotate Right']);
+  });
+
+  it("follows a creature's Roll... for the DM", () => {
+    expect(labels(tokenMenuItems(token(), context({ mayGrantTemporaryHp: true }))))
+      .toEqual(['Rotate Left', 'Rotate Right', 'Roll...', 'Temporary HP...', ...DM_ITEMS]);
+  });
+
+  it("is never a player's on a creature, whatever the context says", () => {
+    expect(labels(tokenMenuItems(token(), context({ role: CampaignRole.PLAYER, mayGrantTemporaryHp: true, mayRotate: false })))).toEqual([]);
+  });
+
+  it('grants them to the token the menu is open on', () => {
+    const ctx = context({ mayGrantTemporaryHp: true });
+    const wolf = token();
+    commandOf(tokenMenuItems(wolf, ctx), 'temporary-hp').run?.();
+    expect(ctx.actions.grantTemporaryHp).toHaveBeenCalledWith(wolf);
   });
 });
 
@@ -250,9 +277,11 @@ describe('whether there is a menu', () => {
       for (const mayViewSheet of [false, true]) {
         for (const mayRoll of [false, true]) {
           for (const mayRotate of [false, true]) {
-            for (const t of tokens) {
-              const { actions: _actions, ...view } = context({ role, mayViewSheet, mayRoll, mayRotate });
-              expect(tokenMenuHasItems(t, view)).toBe(tokenMenuItems(t, context({ role, mayViewSheet, mayRoll, mayRotate })).length > 0);
+            for (const mayGrantTemporaryHp of [false, true]) {
+              for (const t of tokens) {
+                const { actions: _actions, ...view } = context({ role, mayViewSheet, mayRoll, mayRotate, mayGrantTemporaryHp });
+                expect(tokenMenuHasItems(t, view)).toBe(tokenMenuItems(t, context({ role, mayViewSheet, mayRoll, mayRotate, mayGrantTemporaryHp })).length > 0);
+              }
             }
           }
         }

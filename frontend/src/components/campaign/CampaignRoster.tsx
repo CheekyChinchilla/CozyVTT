@@ -18,13 +18,15 @@ import { showRowWhileDraggedByGrip } from '@/utils/rowDrag';
 import { api } from '@/services/api';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
-import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin, GripVertical } from 'lucide-react';
+import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin, GripVertical, ShieldPlus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CharacterHpInfo } from '@/utils/characterHp';
 import CharacterSheetViewerModal from '../character/CharacterSheetViewerModal';
 import CharacterSheetEditorModal from '../character/CharacterSheetEditorModal';
 import CharacterContextMenu from './CharacterContextMenu';
 import CharacterRollPicker from './CharacterRollPicker';
+import TemporaryHpDialog from './TemporaryHpDialog';
+import { characterTemporaryHp } from '@/utils/temporaryHp';
 import Toast, { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import type { CampaignRole, GameSystem, Character, RosterMember, User, CampaignMembership } from '@/types';
@@ -58,6 +60,8 @@ export default function CampaignRoster() {
   const [contextMenu, setContextMenu] = useState<CharacterMenu | null>(null);
   const menuOpenings = useRef(0);
   const [rollPicker, setRollPicker] = useState<{ x: number; y: number; characterId: string } | null>(null);
+  // The character whose Temporary HP... dialog is open.
+  const [temporaryHpFor, setTemporaryHpFor] = useState<string | null>(null);
   // The character Remove from Campaign asks about. Kept apart from the menu,
   // which closes as soon as the item is chosen.
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
@@ -233,6 +237,16 @@ export default function CampaignRoster() {
     }
   };
 
+  /**
+   * What Temporary HP... would grant this viewer on a roster character, with
+   * the hit points the roster shows, or null (utils/temporaryHp).
+   */
+  const temporaryHpOf = (characterId: string, viewer: User, membership: CampaignMembership) => {
+    const character = roster.flatMap((member) => member.characters).find((c) => c.id === characterId);
+    if (!character) return null;
+    return characterTemporaryHp(character, characterHpCache[character.id] ?? character.hp, { userId: viewer.id, role: membership.role });
+  };
+
   /** What a character's menu offers this viewer, in order. */
   const characterMenuItems = (menu: CharacterMenu, viewer: User, membership: CampaignMembership): FlatMenuItem[] => {
     const owner = { userId: menu.characterUserId };
@@ -245,6 +259,15 @@ export default function CampaignRoster() {
         kind: 'command', id: 'roll', icon: Dices, label: 'Roll...',
         run: () => {
           setRollPicker({ x: menu.x, y: menu.y, characterId: menu.characterId });
+          handleCloseContextMenu();
+        },
+      });
+    }
+    if (temporaryHpOf(menu.characterId, viewer, membership)) {
+      items.push({
+        kind: 'command', id: 'temporary-hp', icon: ShieldPlus, label: 'Temporary HP...',
+        run: () => {
+          setTemporaryHpFor(menu.characterId);
           handleCloseContextMenu();
         },
       });
@@ -447,6 +470,22 @@ export default function CampaignRoster() {
           onClose={() => setRollPicker(null)}
         />
       )}
+
+      {/* Temporary HP..., from a character's menu */}
+      {temporaryHpFor && user && userMembership && (() => {
+        const target = temporaryHpOf(temporaryHpFor, user, userMembership);
+        const name = roster.flatMap((member) => member.characters).find((c) => c.id === temporaryHpFor)?.name;
+        if (!target || target.kind !== 'character' || name === undefined) return null;
+        return (
+          <TemporaryHpDialog
+            name={name}
+            current={target.current}
+            system={target.system}
+            onTake={(temporary) => socket?.emitCharacterTemporaryHp({ characterId: target.characterId, temporary })}
+            onClose={() => setTemporaryHpFor(null)}
+          />
+        );
+      })()}
 
       {/* Character Editor Modal */}
       {editorCharacter && (

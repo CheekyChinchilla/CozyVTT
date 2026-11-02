@@ -9,6 +9,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { campaignHasCharacter as campaignHasTokenCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
+import { tokenTemporaryHp, type TemporaryHpTarget } from '@/utils/temporaryHp';
 import { useTableRoll } from '@/hooks/useTableRoll';
 import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
@@ -117,6 +118,7 @@ import CharacterSheetViewerModal from '@/components/character/CharacterSheetView
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
 import RemoveTokenDialog from '@/components/campaign/RemoveTokenDialog';
+import TemporaryHpDialog from '@/components/campaign/TemporaryHpDialog';
 import { tokenDisplayName, tokenPublicName, characterRollPublicName, UNKNOWN_CREATURE } from '@/utils/tokenDisplayName';
 import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
@@ -375,6 +377,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     { characterId: string; tokenId: string; canRollInitiative: boolean; at: { x: number; y: number } } | null
   >(null);
   const [npcRollPicker, setNpcRollPicker] = useState<{ tokenId: string; at: { x: number; y: number } } | null>(null);
+  // The token whose Temporary HP... dialog is open.
+  const [temporaryHpTokenId, setTemporaryHpTokenId] = useState<string | null>(null);
   /**
    * Where the token menu was last opened. A roll picker its Roll... opens
    * stands there; the items themselves carry no position.
@@ -718,6 +722,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     setDoorContextMenu(null);
     setRollPicker(null);
     setNpcRollPicker(null);
+    setTemporaryHpTokenId(null);
   }, [currentMap?.id, closeTokenMenu]);
   /**
    * Let go of a held token this page has been told is gone from the map it
@@ -3121,6 +3126,29 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const canRotateToken = canMoveToken;
 
+  /** What Temporary HP... grants to on `token`, for this viewer, or null (utils/temporaryHp). */
+  const temporaryHpOf = (token: Token): TemporaryHpTarget | null =>
+    tokenTemporaryHp(token, campaign, characterHpCache, { userId: user?.id, role: userRole });
+
+  /**
+   * Give temporary hit points from Temporary HP...: a character's on its
+   * sheet, over the socket, and a creature's to its token.
+   */
+  const takeTemporaryHp = async (target: TemporaryHpTarget, temporary: number) => {
+    if (target.kind === 'character') {
+      socket?.emitCharacterTemporaryHp({ characterId: target.characterId, temporary });
+      return;
+    }
+    if (!campaign?.id || !currentMap?.id) return;
+    const hp = { ...target.hp, temp: temporary };
+    try {
+      await api.updateToken(campaign.id, currentMap.id, target.tokenId, { hp });
+      useGameStore.getState().patchToken(target.tokenId, { hp }, currentMap.id);
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Could not give the token temporary hit points', 'error');
+    }
+  };
+
   /**
    * This viewer, what they may do with `token`, and the table, as the token
    * menu reads them (map/tokenMenuItems.ts). The DM always has the token
@@ -3132,6 +3160,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     role: userRole,
     mayViewSheet: campaignHasTokenCharacter(campaign, token.characterId),
     mayRoll: canRollForToken(token),
+    mayGrantTemporaryHp: temporaryHpOf(token) !== null,
     mayRotate: canRotateToken(token),
     mapId: currentMap?.id ?? null,
     maps: campaign?.maps ?? [],
@@ -3361,6 +3390,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         characterId: token.characterId, tokenId: token.id, canRollInitiative: canRollInitiativeFor(token), at: menuPointRef.current,
       });
     },
+    grantTemporaryHp: (token) => setTemporaryHpTokenId(token.id),
     rotate: (token, step) => { void rotateToken(token.id, step); },
     rollCreature: (token) => setNpcRollPicker({ tokenId: token.id, at: menuPointRef.current }),
     edit: (token) => onEditToken?.(token),
@@ -4777,6 +4807,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           }
         }}
       />
+
+      {/* Temporary HP..., from the token menu. It goes when the token, or the right to grant them, does. */}
+      {temporaryHpTokenId && (() => {
+        const token = tokens.find((t) => t.id === temporaryHpTokenId);
+        const target = token ? temporaryHpOf(token) : null;
+        if (!token || !target) return null;
+        return (
+          <TemporaryHpDialog
+            name={tokenDisplayName(token)}
+            current={target.kind === 'character' ? target.current : target.hp.temp}
+            system={target.system}
+            onTake={(temporary) => { void takeTemporaryHp(target, temporary); }}
+            onClose={() => setTemporaryHpTokenId(null)}
+          />
+        );
+      })()}
 
       {/* Character Sheet Viewer (opened from token context menu) */}
       {viewingSheet && campaign && (() => {

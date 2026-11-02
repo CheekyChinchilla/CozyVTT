@@ -1571,6 +1571,12 @@ export interface CharacterHpUpdateEvent {
   delta: number;
 }
 
+/** `character.hp.temporary`: the character takes `temporary`, from 1 to 99,999, in place of any it has. */
+export interface CharacterTemporaryHpEvent {
+  characterId: string;
+  temporary: number;
+}
+
 export interface CharacterHpUpdatedBroadcast {
   characterId: string;
   hp: { current: number; max: number; temp: number };

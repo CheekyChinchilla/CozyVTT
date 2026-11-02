@@ -141,7 +141,7 @@ On a computer, or a tablet held sideways, the page has three main areas, describ
 - The **Campaign Roster** showing all players and their characters
 - A small dot beside each person shows whether they're **in session** right now — green if they're connected, grey if not. Handy for telling "thinking" apart from "their internet fell over"
 - A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character. The minus buttons are damage, so in D&D 5e and Pathfinder 2e your temporary hit points go first
-- Click a character to read its sheet. Right-click one for a menu (on a touch screen, press and hold it): **View Character Sheet** for anyone's character, and for your own **Roll...**, **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
+- Click a character to read its sheet. Right-click one for a menu (on a touch screen, press and hold it): **View Character Sheet** for anyone's character, and for your own **Roll...**, **Temporary HP...** (see [Temporary hit points](#temporary-hit-points)), **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
 - If you're curious about your fellow adventurers, it's all here
 - **Your role** at the bottom of the **Campaign Info** panel, and under it **Leave Campaign**, which takes you out of the campaign after asking (see [Leaving a campaign](#leaving-a-campaign))
 
@@ -418,6 +418,14 @@ If your token ends up underneath another one anyway — your DM can place tokens
 Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are holding a token: the card follows the square under your cursor, so you can see who is already standing where you are about to land. On a touch screen, which has no hover, tap a token instead: the card shows the token you selected, and taps on the map under it still reach the map. Close it with **✕**; it shows again the next time you tap a token.
 
 You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. A grey token with a question mark is something you can see but cannot make out: the DM has obscured it, and your browser is not sent its name, picture, conditions, hit points or who controls it until they reveal it. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
+
+### Temporary hit points
+
+When a spell or a feature gives your character temporary hit points, right-click your token (on a touch screen, press and hold it), or your character in the **Campaign Roster**, and choose **Temporary HP...**. Type how many and press **Grant**.
+
+Temporary hit points don't add together. If your character already has some, the window asks which to keep: **Keep 10** leaves the ones you have, **Take 12** swaps them for the new ones. Damage takes them first, healing never brings them back, and everyone at the table sees them on your roster card and your token's bar.
+
+It's offered in D&D 5e and Pathfinder 2e, on your own character, while your sheet has hit points. A Call of Cthulhu sheet keeps no temporary hit points (its rules give one only while First Aid keeps a dying investigator stable), so it isn't there. You can't give them to another player's character, or to a creature you control; ask your DM.
 
 ### Why parts of the map are dark
 

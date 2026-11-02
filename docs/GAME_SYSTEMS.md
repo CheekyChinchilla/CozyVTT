@@ -255,6 +255,27 @@ not Dexterity — the Alert feat, Jack of All Trades, Remarkable Athlete,
 subclasses that swap the ability. Those are too open-ended to enumerate, and
 inventing a toggle per feature would be the same mistake as inventing CoC's dice.
 
+### Hit points: damage, healing and temporary hit points
+
+The rules live in `frontend/src/utils/rules/hitPoints.ts` (duplicated at
+`backend/src/utils/rules/hitPoints.ts`; the parity test in
+`backend/src/utils/rules/__tests__/hitPoints.test.ts` fails on drift). The
+server applies them to a character's sheet (the roster's damage buttons,
+`character.hp.temporary`) and the token editor and the token menu to a
+creature's token. Checked against the D&D 5e Basic Rules and the Pathfinder 2e
+Core Rulebook.
+
+| System | Damage | Healing | Temporary hit points granted to a creature that has some |
+|---|---|---|---|
+| **D&D 5e** | Off temporary hit points first, the rest off current | Current only, up to the maximum | Never added together: the creature keeps the ones it has or takes the new ones (`grantTemporaryHitPoints`), so **Temporary HP...** offers **Keep N** and **Take M** |
+| **Pathfinder 2e** | As D&D 5e | As D&D 5e | As D&D 5e: temporary hit points come from one source at a time |
+| **Call of Cthulhu 7e** | Off current | Current only | None to grant: the rules give a temporary hit point only to a dying investigator stabilised with First Aid, which the sheet does not track, so the sheet keeps no pool and **Temporary HP...** is not offered |
+| Flexible / unknown | As D&D 5e on a token | As D&D 5e on a token | No rule to follow: **Temporary HP...** is not offered |
+
+A grant gives 1 to 99,999 (`MAX_TEMPORARY_HIT_POINTS`, which also bounds a
+token's temporary hit points). Keeping the ones a creature has changes nothing,
+so only taking the new ones is sent.
+
 ### Where creature code branches on system
 
 Four places, all plain conditionals:
