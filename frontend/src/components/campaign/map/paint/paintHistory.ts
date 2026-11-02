@@ -2,11 +2,13 @@
 // Paint's undo and redo, by tiles.
 //
 // A 4,096 by 4,096 picture is 64 MiB, so a copy of it for every step would
-// run a phone out of memory within a few strokes. Before a change lands,
-// only the 256 by 256 tiles its box touches are kept as they were, and a
-// store keeps them as small as it can (the browser's, as PNGs: a few hundred
-// bytes for a tile of one colour). Undo puts a step's tiles back, keeping
-// what they held so redo can put that back in turn.
+// run a phone out of memory within a few strokes. Only the 256 by 256 tiles
+// a change touches are kept as they were, each as the change first reaches
+// it (a stroke's, as it is drawn: begin() and cover()), so landing the
+// change keeps nothing more and stays quick. A store keeps them as small as
+// it can (the browser's packs them as PNGs while the page is idle: a few
+// hundred bytes for a tile of one colour). Undo puts a step's tiles back,
+// keeping what they held so redo can put that back in turn.
 //
 // The steps are held within a byte budget and a count. The oldest goes
 // first, never the newest, so the last change can always be undone; a new
@@ -15,7 +17,9 @@
 //
 // Putting tiles back can wait on the browser (a PNG is decoded first), so
 // undo and redo run one at a time, and a change made meanwhile waits until
-// they are done: an undo never paints over a stroke made after it.
+// they are done: an undo never paints over a stroke made after it. A tile
+// a change reached while an undo was under way, or that another change has
+// landed on since it was kept, is kept again as the change lands.
 // ============================================
 
 import { errorSummary } from '@/utils/errors';
@@ -90,12 +94,23 @@ export interface PaintHistoryCounts {
   tiles: number;
 }
 
-export interface PaintHistory {
+/** A change on its way, such as a stroke being drawn. */
+export interface PaintStep {
+  /** Keep the tiles `box` touches that this change has not kept yet, as they are now. */
+  cover(box: PaintBox): void;
   /**
-   * Make a change to the pixels in `box`: its tiles are kept first, then
-   * `apply` draws it. At once, unless an undo or a redo is under way, which
-   * it waits for; the promise settles once it is made.
+   * Make the change: `apply` draws it, at once unless an undo or a redo is
+   * under way, which it waits for. The promise settles once it is made.
    */
+  land(apply: () => void): Promise<void>;
+  /** The change is not made: let go of what it kept. */
+  drop(): void;
+}
+
+export interface PaintHistory {
+  /** Start a change whose tiles are kept as it goes (PaintStep.cover). */
+  begin(): PaintStep;
+  /** Make a change to the pixels in `box` in one go: begin, cover `box`, land. */
   change(box: PaintBox, apply: () => void): Promise<void>;
   /** Undo the last change. True when there was one. */
   undo(): Promise<boolean>;
@@ -121,6 +136,8 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
   const redoable: Step<K>[] = [];
   let queue: Promise<void> = Promise.resolve();
   let waiting = 0;
+  /** Counts every change landed, undo and redo: a tile kept at another count may have changed since. */
+  let epoch = 0;
 
   const keep = (tiles: readonly TileRect[]): Step<K> => ({ tiles: tiles.map((tile) => ({ tile, kept: store.capture(tile) })) });
   const release = (step: Step<K>) => {
@@ -145,13 +162,57 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
     }
   };
 
-  const make = (box: PaintBox, apply: () => void) => {
-    const step = keep(tilesTouching(box, width, height));
-    apply();
-    while (redoable.length > 0) release(redoable.pop()!);
-    undone.push(step);
-    trim();
-    onChange?.();
+  const begin = (): PaintStep => {
+    /** The tiles kept so far, by column and row, with the count each was kept at. */
+    const kept = new Map<string, { tile: TileRect; kept: K; at: number }>();
+    /** Tiles reached while an undo or a redo was under way, kept as the change lands. */
+    const reached = new Map<string, TileRect>();
+    let over = false;
+    const keyOf = (tile: TileRect) => `${tile.tx},${tile.ty}`;
+    const keepNow = (tile: TileRect) => {
+      kept.set(keyOf(tile), { tile, kept: store.capture(tile), at: epoch });
+    };
+    return {
+      cover(box) {
+        if (over) return;
+        for (const tile of tilesTouching(box, width, height)) {
+          const key = keyOf(tile);
+          if (kept.has(key)) continue;
+          if (waiting > 0) reached.set(key, tile);
+          else keepNow(tile);
+        }
+      },
+      land(apply) {
+        const make = () => {
+          if (over) return;
+          over = true;
+          for (const [key, tile] of reached) if (!kept.has(key)) keepNow(tile);
+          for (const entry of [...kept.values()]) {
+            if (entry.at === epoch) continue;
+            store.release(entry.kept);
+            keepNow(entry.tile);
+          }
+          apply();
+          epoch += 1;
+          while (redoable.length > 0) release(redoable.pop()!);
+          undone.push({ tiles: [...kept.values()].map(({ tile, kept: k }) => ({ tile, kept: k })) });
+          trim();
+          onChange?.();
+        };
+        if (waiting === 0) {
+          make();
+          return Promise.resolve();
+        }
+        return enqueue(make);
+      },
+      drop() {
+        if (over) return;
+        over = true;
+        for (const entry of kept.values()) store.release(entry.kept);
+        kept.clear();
+        reached.clear();
+      },
+    };
   };
 
   /** Run `job` after everything before it, one at a time. */
@@ -183,6 +244,7 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
     } finally {
       release(step);
     }
+    epoch += 1;
     to.push(now);
     trim();
     return true;
@@ -196,12 +258,11 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
   };
 
   return {
+    begin,
     change(box, apply) {
-      if (waiting === 0) {
-        make(box, apply);
-        return Promise.resolve();
-      }
-      return enqueue(() => make(box, apply));
+      const step = begin();
+      step.cover(box);
+      return step.land(apply);
     },
     undo: () => turn(undone, redoable),
     redo: () => turn(redoable, undone),

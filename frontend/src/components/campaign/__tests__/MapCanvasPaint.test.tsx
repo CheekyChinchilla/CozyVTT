@@ -447,6 +447,51 @@ describe('the brush', () => {
   });
 });
 
+describe('the lift', () => {
+  it('copies each tile as the stroke first reaches it, and on the lift only paints: no tile copied or packed then', async () => {
+    const packed = vi.fn();
+    Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
+      configurable: true, writable: true, value(done: BlobCallback) { packed(); done(new Blob(['tile'], { type: 'image/png' })); },
+    });
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    /** Tiles copied off the picture: drawImage of it onto any canvas but the map's own layers. */
+    const copies = () => [...recorded.entries()]
+      .filter(([c]) => c !== canvas && c !== terrain())
+      .flatMap(([, calls]) => calls.filter((k) => k.method === 'drawImage' && k.args[0] === canvas)).length;
+    mouse.down(input(), { clientX: 100, clientY: 100 });
+    expect(copies()).toBe(1);
+    mouse.move(input(), { clientX: 400, clientY: 100 }, 1);
+    expect(copies()).toBe(2);
+    mouse.move(input(), { clientX: 600, clientY: 100 }, 1);
+    expect(copies()).toBe(3);
+    mouse.move(input(), { clientX: 610, clientY: 110 }, 1);
+    expect(copies()).toBe(3);
+    const packedBefore = packed.mock.calls.length;
+
+    mouse.up(input(), { clientX: 610, clientY: 110 });
+    expect(copies()).toBe(3);
+    expect(packed.mock.calls.length).toBe(packedBefore);
+    expect(strokesOn(canvas)).toHaveLength(1);
+    // Packed afterwards, while the page is idle.
+    await waitFor(() => expect(packed).toHaveBeenCalledTimes(3));
+  });
+
+  it('copies nothing for a stroke dropped by a second finger, and keeps nothing of it', async () => {
+    await showMap();
+    await paintOn();
+    const one = contact('touch', 1);
+    const two = contact('touch', 2, false);
+    one.down(input(), { clientX: 100, clientY: 100 });
+    one.move(input(), { clientX: 400, clientY: 100 });
+    two.down(input(), { clientX: 600, clientY: 600 });
+    one.up(input(), { clientX: 400, clientY: 100 });
+    two.up(input(), { clientX: 600, clientY: 600 });
+    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeDisabled();
+  });
+});
+
 describe('undo and redo', () => {
   it('put back the tiles a stroke touched, by Ctrl+Z and Ctrl+Y and the panel\'s buttons', async () => {
     await showMap();
@@ -456,8 +501,10 @@ describe('undo and redo', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeEnabled();
     // The two tiles across the stroke, 0 to 512 by 0 to 256, kept before it.
-    const tiles = [...recorded.keys()].find((c) => c.width === 256 && c.height === 256);
-    expect(callsOn(tiles).filter((c) => c.method === 'drawImage').map((c) => c.args.slice(1, 5))).toEqual([[0, 0, 256, 256], [256, 0, 256, 256]]);
+    const kept = [...recorded.entries()]
+      .filter(([c]) => c !== canvas)
+      .flatMap(([, calls]) => calls.filter((c) => c.method === 'drawImage' && c.args[0] === canvas).map((c) => c.args.slice(1, 5)));
+    expect(kept).toEqual([[0, 0, 256, 256], [256, 0, 256, 256]]);
 
     take(canvas!);
     await act(async () => { press('z', { ctrlKey: true }); });

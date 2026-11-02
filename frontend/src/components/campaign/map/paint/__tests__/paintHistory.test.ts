@@ -208,6 +208,87 @@ describe('undo and redo', () => {
     expect(p.px[0]).toBe(0);
   });
 
+  it('keep each tile of a change once, as the change first reaches it, and nothing more when it lands', async () => {
+    const p = picture(600, 600);
+    const store = bufferStore(p);
+    const history = createPaintHistory(store, { width: p.width, height: p.height, budgetBytes: 10_000_000, maxSteps: 50 });
+    const step = history.begin();
+    step.cover({ x0: 10, y0: 10, x1: 20, y1: 20 });
+    expect(store.captured).toBe(1);
+    step.cover({ x0: 15, y0: 15, x1: 300, y1: 25 });
+    expect(store.captured).toBe(2);
+    step.cover({ x0: 100, y0: 100, x1: 290, y1: 200 });
+    expect(store.captured).toBe(2);
+    await step.land(() => paint(p, { x0: 10, y0: 10, x1: 300, y1: 25 }, 8));
+    expect(store.captured).toBe(2);
+    expect(p.px[12 * 600 + 280]).toBe(8);
+    await history.undo();
+    expect(p.px.every((v) => v === 0)).toBe(true);
+  });
+
+  it('keep a change\'s tiles when it lands if an undo was under way as it reached them, so they are as the undo left them', async () => {
+    const p = picture(300, 300);
+    const base = bufferStore(p);
+    let finishRestore: () => void = () => undefined;
+    let holding = true;
+    const slow: TileStore<{ t: TileRect; copy: Uint8Array }> = {
+      ...base,
+      capture: (t) => base.capture(t),
+      restore: (t, kept) => {
+        if (!holding) {
+          base.restore(t, kept);
+          return undefined;
+        }
+        return new Promise<void>((resolve) => { finishRestore = () => { base.restore(t, kept); resolve(); }; });
+      },
+    };
+    const history = createPaintHistory(slow, { width: p.width, height: p.height, budgetBytes: 10_000_000, maxSteps: 50 });
+    const box = { x0: 0, y0: 0, x1: 10, y1: 10 };
+    history.change(box, () => paint(p, box, 4));
+    const undoing = history.undo();
+    await settle();
+    const step = history.begin();
+    step.cover(box);
+    const captured = base.captured;
+    const landing = step.land(() => paint(p, box, 6));
+    finishRestore();
+    await undoing;
+    await landing;
+    expect(base.captured).toBeGreaterThan(captured);
+    expect(p.px[0]).toBe(6);
+    holding = false;
+    await history.undo();
+    expect(p.px[0]).toBe(0);
+  });
+
+  it('keep again a tile another change landed on since it was kept', async () => {
+    const p = picture(300, 300);
+    const history = createPaintHistory(bufferStore(p), { width: p.width, height: p.height, budgetBytes: 10_000_000, maxSteps: 50 });
+    const box = { x0: 0, y0: 0, x1: 10, y1: 10 };
+    const slowStroke = history.begin();
+    slowStroke.cover(box);
+    await history.change(box, () => paint(p, box, 5));
+    await slowStroke.land(() => paint(p, box, 7));
+    expect(p.px[0]).toBe(7);
+    await history.undo();
+    expect(p.px[0]).toBe(5);
+    await history.undo();
+    expect(p.px[0]).toBe(0);
+  });
+
+  it('let go of what a change dropped had kept, and land nothing of it', async () => {
+    const p = picture(600, 600);
+    const store = bufferStore(p);
+    const history = createPaintHistory(store, { width: p.width, height: p.height, budgetBytes: 10_000_000, maxSteps: 50 });
+    const step = history.begin();
+    step.cover({ x0: 0, y0: 0, x1: 300, y1: 10 });
+    step.drop();
+    expect(store.released).toBe(2);
+    await step.land(() => paint(p, { x0: 0, y0: 0, x1: 10, y1: 10 }, 3));
+    expect(p.px[0]).toBe(0);
+    expect(history.canUndo()).toBe(false);
+  });
+
   it('let go of every kept tile when cleared', async () => {
     const p = picture(300, 300);
     const store = bufferStore(p);

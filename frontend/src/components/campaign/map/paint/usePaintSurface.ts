@@ -7,7 +7,9 @@
 // gathered in map pixels and drawn on the overlay as it goes, then painted
 // into the picture on the lift; a second finger, the browser taking the
 // pointer or Esc drops it, and nothing is painted. Undo and redo keep the
-// tiles a stroke touches (paintHistory.ts), never the whole picture.
+// tiles a stroke touches (paintHistory.ts), never the whole picture, each
+// copied as the stroke first reaches it and packed while the page is idle
+// (canvasTileStore.ts), so the lift only paints the stroke in.
 //
 // The canvas is kept, keyed by the map's id, while Paint is on and while
 // what was painted is not saved, so Paint turned off keeps the work on
@@ -29,7 +31,7 @@ import type { MapControls, MapTool, PointerAt } from '../tools/types';
 import type { MapLayer } from '../useRenderLoop';
 import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
-import { createPaintHistory, type PaintHistory, type PaintHistoryCounts } from './paintHistory';
+import { createPaintHistory, type PaintHistory, type PaintHistoryCounts, type PaintStep } from './paintHistory';
 import { createCanvasTileStore, type CanvasTileStore } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
@@ -53,7 +55,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   width: 6,
 };
 
-/** The most the undo tiles may take, packed; the oldest steps go first past it. */
+/** The most the undo tiles may take, packed or still copies waiting to be; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
 /** The most steps that may be undone, within the budget. */
 export const PAINT_UNDO_STEPS = 50;
@@ -107,6 +109,8 @@ interface Stroke {
   /** Picture pixels. */
   width: number;
   points: PaintPoint[];
+  /** The undo step its tiles are kept in, as it reaches them. */
+  step: PaintStep;
 }
 
 export interface PaintSurfaceOptions {
@@ -157,11 +161,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const dispose = useCallback(() => {
     const s = surfaceRef.current;
     if (!s) return;
+    strokeRef.current?.step.drop();
+    strokeRef.current = null;
     s.history.clear();
     s.store.dispose();
     releaseCanvas(s.canvas);
     show(null);
-    strokeRef.current = null;
     waitingRef.current = [];
     markDirty('terrain', 'overlay');
   }, [show, markDirty]);
@@ -232,6 +237,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * to save, the canvas is let go of once the map's own picture is back.
    */
   const close = useCallback(() => {
+    strokeRef.current?.step.drop();
     strokeRef.current = null;
     setOn(false);
     onRef.current = false;
@@ -291,13 +297,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     };
   }, []);
 
-  /** Paint a lifted stroke into the picture, after any undo under way. */
+  /** Paint a lifted stroke into the picture, after any undo under way; its tiles are kept already. */
   const commit = useCallback((stroke: Stroke) => {
     const s = surfaceRef.current;
-    if (!s || s.mapId !== stroke.mapId) return;
+    if (!s || s.mapId !== stroke.mapId) {
+      stroke.step.drop();
+      return;
+    }
     const points = toPicture(stroke.points, s.sx, s.sy);
     waitingRef.current.push(stroke);
-    void s.history.change(strokeBox(points, stroke.width), () => {
+    void stroke.step.land(() => {
       strokePaint(s.ctx, points, stroke.width, stroke.colour);
       s.revision += 1;
     }).finally(() => {
@@ -311,6 +320,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const step = useCallback((direction: 'undo' | 'redo') => {
     const s = surfaceRef.current;
     if (!s) return;
+    strokeRef.current?.step.drop();
     strokeRef.current = null;
     void s.history[direction]().then((done) => {
       if (!done || surfaceRef.current !== s) return;
@@ -322,10 +332,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const undo = useCallback(() => step('undo'), [step]);
   const redo = useCallback(() => step('redo'), [step]);
 
-  /** Drop the stroke under way, painting nothing. */
+  /** Drop the stroke under way, painting nothing, and let go of the tiles it kept. */
   const dropStroke = useCallback((): boolean => {
-    if (!strokeRef.current) return false;
+    const stroke = strokeRef.current;
+    if (!stroke) return false;
     strokeRef.current = null;
+    stroke.step.drop();
     markDirty('overlay');
     return true;
   }, [markDirty]);
@@ -344,7 +356,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const s = surfaceRef.current;
       if (!onRef.current || !s || !map || s.mapId !== map.id) return false;
       const look = settingsRef.current;
-      strokeRef.current = { mapId: s.mapId, colour: look.colour, width: look.width, points: [[at.mapPx.x, at.mapPx.y]] };
+      strokeRef.current?.step.drop();
+      const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+      const step = s.history.begin();
+      step.cover(strokeBox(toPicture([point], s.sx, s.sy), look.width));
+      strokeRef.current = { mapId: s.mapId, colour: look.colour, width: look.width, points: [point], step };
       markDirty('overlay');
       return true;
     },
@@ -353,7 +369,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const stroke = strokeRef.current;
       if (stroke) {
         const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
-        if (!stillPoint(stroke.points[stroke.points.length - 1], point)) stroke.points.push(point);
+        const last = stroke.points[stroke.points.length - 1];
+        if (!stillPoint(last, point)) {
+          stroke.points.push(point);
+          // The tiles this piece of the stroke reaches, kept as they are before it lands.
+          const s = surfaceRef.current;
+          if (s) stroke.step.cover(strokeBox(toPicture([last, point], s.sx, s.sy), stroke.width));
+        }
         markDirty('overlay');
         return true;
       }

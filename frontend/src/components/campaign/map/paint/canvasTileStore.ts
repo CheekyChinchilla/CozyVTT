@@ -1,25 +1,26 @@
 // ============================================
-// Paint's undo tiles as the browser keeps them: each one copied off the
-// picture onto a small canvas and packed as a PNG, a few hundred bytes for
-// a tile of one colour, a few tens of kilobytes for a busy one.
+// Paint's undo tiles as the browser keeps them.
 //
-// The copy is a drawImage onto a canvas the tile's size, which the GPU
-// does, so the picture's canvas is never read back pixel by pixel and stays
-// quick to draw on the map. A canvas hands toBlob a copy of its pixels as
-// it is asked, so the one small canvas is used again for the next tile at
-// once; until a PNG is made, its tile's copy waits in the browser, which
-// packingBytes() counts.
+// A tile is copied off the picture onto a small canvas of its own as a
+// stroke first reaches it: a drawImage, which is quick, and leaves the
+// picture's canvas unread pixel by pixel, so it stays quick to draw on the
+// map. Packing it as a PNG is not quick (Safari makes the PNG there and
+// then, a few milliseconds a tile), so it waits for the page to be idle and
+// goes one tile a slice; the copy's canvas is then used again for the next
+// tile. A PNG is a few hundred bytes for a tile of one colour, a few tens of
+// kilobytes for a busy one; until then a tile counts as its copy, four
+// bytes a pixel. A tile is put back from its copy while it has one, at
+// once, else from its PNG, decoded first.
 // ============================================
 
 import type { TileRect, TileStore } from './paintHistory';
 import { pictureToPng, releaseCanvas, type MakeCanvas } from './blankPicture';
 
-/** A tile as kept: its PNG once packed. */
+/** A tile as kept: its copy until packed, then its PNG. */
 export interface PackedTile {
+  copy: HTMLCanvasElement | null;
   png: Blob | null;
-  /** The PNG on its way, until it is made. */
-  packing: Promise<Blob | null> | null;
-  /** The bytes of the tile's copy while it waits to be packed. */
+  /** The bytes of the copy. */
   rawBytes: number;
   released: boolean;
 }
@@ -27,15 +28,28 @@ export interface PackedTile {
 export interface CanvasTileStore extends TileStore<PackedTile> {
   /** The bytes of tiles copied and not yet packed. */
   packingBytes(): number;
-  /** Let go of the small canvas. */
+  /** Let go of every copy and the canvases kept for the next. */
   dispose(): void;
 }
+
+/** Runs `run` when the page is next idle. */
+export type IdleSchedule = (run: () => void) => void;
+
+/** requestIdleCallback where the browser has it (Safari has not), else a short timeout. */
+export const whenIdle: IdleSchedule = (run) => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(() => run(), { timeout: 500 });
+  else setTimeout(run, 16);
+};
 
 export interface CanvasTileStoreOptions {
   /** Told each time a tile is packed, so the history can hold to its budget. */
   onPacked: () => void;
   make?: MakeCanvas;
+  schedule?: IdleSchedule;
 }
+
+/** How many copies' canvases are kept, emptied, for the next tiles. */
+const SPARE_CANVASES = 8;
 
 /** A PNG decoded, to draw: by createImageBitmap, or a picture where a browser has none. */
 async function decode(png: Blob): Promise<{ image: CanvasImageSource; done: () => void }> {
@@ -55,71 +69,130 @@ async function decode(png: Blob): Promise<{ image: CanvasImageSource; done: () =
   return { image, done: () => URL.revokeObjectURL(url) };
 }
 
+/** Draw `image` over the tile's place on `picture`, replacing what is there. */
+function putBack(picture: HTMLCanvasElement, tile: TileRect, image: CanvasImageSource): void {
+  const ctx = picture.getContext('2d');
+  if (!ctx) return;
+  ctx.save();
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(tile.x, tile.y, tile.w, tile.h);
+    ctx.drawImage(image, tile.x, tile.y);
+  } finally {
+    ctx.restore();
+  }
+}
+
 /** The tile store for a picture held in `picture`, which every capture and restore works on. */
 export function createCanvasTileStore(picture: HTMLCanvasElement, options: CanvasTileStoreOptions): CanvasTileStore {
   const make = options.make ?? (() => document.createElement('canvas'));
-  let scratch: HTMLCanvasElement | null = null;
-  let waiting = 0;
+  const schedule = options.schedule ?? whenIdle;
+  const spare: HTMLCanvasElement[] = [];
+  /** Tiles copied and waiting to be packed, oldest first. */
+  const waiting: PackedTile[] = [];
+  /** Every tile with a copy still, packed or not, so dispose can let go of them. */
+  const copied = new Set<PackedTile>();
+  let packing: PackedTile | null = null;
+  let asked = false;
+  let disposed = false;
+
+  const letGo = (canvas: HTMLCanvasElement) => {
+    if (!disposed && spare.length < SPARE_CANVASES) spare.push(canvas);
+    else releaseCanvas(canvas);
+  };
+  const dropCopy = (kept: PackedTile) => {
+    if (kept.copy) letGo(kept.copy);
+    kept.copy = null;
+    copied.delete(kept);
+  };
+
+  /** Pack the next tile waiting, in the next idle slice. */
+  const pump = () => {
+    if (asked || packing || disposed) return;
+    while (waiting.length > 0 && waiting[0].released) waiting.shift();
+    if (waiting.length === 0) return;
+    asked = true;
+    schedule(() => {
+      asked = false;
+      while (waiting.length > 0 && waiting[0].released) waiting.shift();
+      const next = waiting.shift();
+      if (!next?.copy || disposed) {
+        pump();
+        return;
+      }
+      packing = next;
+      void pictureToPng(next.copy).then((png) => {
+        packing = null;
+        if (next.released || disposed) {
+          dropCopy(next);
+        } else if (png) {
+          next.png = png;
+          dropCopy(next);
+          options.onPacked();
+        }
+        // One that could not be packed keeps its copy, to be put back from.
+        pump();
+      });
+    });
+  };
 
   return {
     capture(tile: TileRect): PackedTile {
-      scratch ??= make();
-      if (scratch.width !== tile.w) scratch.width = tile.w;
-      if (scratch.height !== tile.h) scratch.height = tile.h;
-      const kept: PackedTile = { png: null, packing: null, rawBytes: tile.w * tile.h * 4, released: false };
-      const ctx = scratch.getContext('2d');
-      if (!ctx) return kept;
-      ctx.clearRect(0, 0, tile.w, tile.h);
-      ctx.drawImage(picture, tile.x, tile.y, tile.w, tile.h, 0, 0, tile.w, tile.h);
-      waiting += kept.rawBytes;
-      kept.packing = pictureToPng(scratch).then((png) => {
-        waiting -= kept.rawBytes;
-        kept.packing = null;
-        if (kept.released) return null;
-        kept.png = png;
-        options.onPacked();
-        return png;
-      });
+      const copy = spare.pop() ?? make();
+      if (copy.width !== tile.w) copy.width = tile.w;
+      if (copy.height !== tile.h) copy.height = tile.h;
+      const kept: PackedTile = { copy, png: null, rawBytes: tile.w * tile.h * 4, released: false };
+      const ctx = copy.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, tile.w, tile.h);
+        ctx.drawImage(picture, tile.x, tile.y, tile.w, tile.h, 0, 0, tile.w, tile.h);
+      }
+      copied.add(kept);
+      waiting.push(kept);
+      pump();
       return kept;
     },
 
     async restore(tile: TileRect, kept: PackedTile): Promise<void> {
-      const png = kept.png ?? (kept.packing ? await kept.packing : null);
-      if (!png) {
-        console.warn('[paint] A tile kept for undo could not be packed; undo leaves it as it is.');
+      if (kept.copy) {
+        putBack(picture, tile, kept.copy);
         return;
       }
-      const { image, done } = await decode(png);
-      const ctx = picture.getContext('2d');
-      if (!ctx) {
-        done();
+      if (!kept.png) {
+        console.warn('[paint] A tile kept for undo is gone; undo leaves it as it is.');
         return;
       }
-      ctx.save();
+      const { image, done } = await decode(kept.png);
       try {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.clearRect(tile.x, tile.y, tile.w, tile.h);
-        ctx.drawImage(image, tile.x, tile.y);
+        putBack(picture, tile, image);
       } finally {
-        ctx.restore();
         done();
       }
     },
 
-    bytes: (kept: PackedTile) => kept.png?.size ?? 0,
+    bytes: (kept: PackedTile) => (kept.png ? kept.png.size : kept.copy ? kept.rawBytes : 0),
 
     release(kept: PackedTile) {
       kept.released = true;
       kept.png = null;
+      // A copy being packed goes when its PNG is made.
+      if (packing !== kept) dropCopy(kept);
     },
 
-    packingBytes: () => waiting,
+    packingBytes: () => [...copied].reduce((n, kept) => n + (kept.png || kept.released ? 0 : kept.rawBytes), 0),
 
     dispose() {
-      if (scratch) releaseCanvas(scratch);
-      scratch = null;
+      disposed = true;
+      for (const kept of copied) {
+        if (kept.copy) releaseCanvas(kept.copy);
+        kept.copy = null;
+      }
+      copied.clear();
+      waiting.length = 0;
+      for (const canvas of spare) releaseCanvas(canvas);
+      spare.length = 0;
     },
   };
 }
