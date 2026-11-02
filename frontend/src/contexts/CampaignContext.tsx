@@ -792,7 +792,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
 
   const mayChangeViewedMap = useCallback(async (change: ViewedMapChange): Promise<boolean> => {
     for (const guard of [...guards.current]) {
-      if (!(await guard.mayLeave(change))) return false;
+      // A guard that fails to answer keeps the map on screen, as a no does.
+      let may = false;
+      try {
+        may = await guard.mayLeave(change);
+      } catch (err) {
+        console.error('[CampaignContext] A guard on the map on screen failed to answer:', errorSummary(err));
+      }
+      if (!may) return false;
     }
     return true;
   }, []);
