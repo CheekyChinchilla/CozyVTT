@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CoordinateSchema } from './maps';
-import { MAP_LIMITS, MAX_EXPLORATION_REPORT_CELLS, MAX_FOG_CELLS } from './mapLimits';
+import { MAP_LIMITS, MAX_EXPLORATION_REPORT_CELLS, MAX_FOG_CELLS, TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE } from './mapLimits';
 
 /** What an add answers when the id it names is already on the map. */
 export const DUPLICATE_WALL_ID_MESSAGE = 'A wall segment with that id is already on this map';
@@ -37,12 +37,8 @@ export const MAX_WALL_SEGMENTS = MAP_LIMITS.maxWallSegments;
 /** Most light sources one map holds. */
 export const MAX_LIGHT_SOURCES = MAP_LIMITS.maxLightSources;
 
-/**
- * What a wall or light past the map's cap answers, from a whole list and
- * from an add, over the socket and the REST routes alike.
- */
-export const TOO_MANY_WALLS_MESSAGE = `Maximum ${MAX_WALL_SEGMENTS} wall segments per map`;
-export const TOO_MANY_LIGHTS_MESSAGE = `Maximum ${MAX_LIGHT_SOURCES} light sources per map`;
+// What a wall or light past the map's cap answers (validators/mapLimits.ts).
+export { TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE };
 
 export const WallSegmentsArraySchema = z
   .array(WallSegmentSchema)
