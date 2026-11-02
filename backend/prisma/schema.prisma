@@ -642,10 +642,42 @@ model Asset {
   /// to read a document that is otherwise private to its uploader.
   campaignLinks CampaignDocument[]
 
+  /// When a document's text was last read for the assets it names
+  /// (DocumentPicture). Null on every other asset, and on a document stored
+  /// before this was kept, until the server has read it
+  /// (services/sharedDocumentPictures.ts).
+  picturesReadAt   DateTime?
+  /// The assets this document's text names by their address.
+  picturesNamed    DocumentPicture[] @relation("DocumentNames")
+  /// The documents whose text names this asset by its address.
+  namedInDocuments DocumentPicture[] @relation("NamedInDocument")
+
   @@index([campaignId])
   @@index([type])
   @@index([scope])
   @@index([uploadedById])
+  /// The documents not read yet, found without reading every document.
+  @@index([type, picturesReadAt])
+}
+
+/// One asset a plain text or Markdown document names by its address
+/// (`/api/assets/<kind>/<id>`), as read from the document's text when it is
+/// uploaded, written or saved. What a shared handout shows players
+/// (services/sharedDocumentPictures.ts), and what keeps a picture from a
+/// delete that is not forced (services/assetUsage.ts), are read from here,
+/// never from the files.
+model DocumentPicture {
+  /// The document. Deleting it removes what it names.
+  documentId String
+  document   Asset  @relation("DocumentNames", fields: [documentId], references: [id], onDelete: Cascade)
+
+  /// The asset it names. Deleting that asset removes the row as well.
+  pictureId String
+  picture   Asset  @relation("NamedInDocument", fields: [pictureId], references: [id], onDelete: Cascade)
+
+  /// A document names an asset once or not at all.
+  @@id([documentId, pictureId])
+  @@index([pictureId])
 }
 
 // ============================================

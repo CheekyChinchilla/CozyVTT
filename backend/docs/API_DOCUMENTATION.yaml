@@ -6654,7 +6654,8 @@ paths:
           of that campaign too; or a plain text or Markdown document of the
           asset's campaign (shared with it, or written or uploaded in it)
           that its current DM uploaded, whose first 1 MiB names the asset
-          (`/api/assets/<kind>/<id>`, among its first 200 such addresses).
+          (`/api/assets/<kind>/<id>`, among its first 200 such addresses),
+          as read when the document was uploaded, written or saved.
           One they uploaded is always readable. For such a member this is final: no
           other use of the asset (a character's picture, a token, a
           template) opens it;
