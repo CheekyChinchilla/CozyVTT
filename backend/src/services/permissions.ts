@@ -430,6 +430,12 @@ async function picturesAtTables(tables: Tables): Promise<Map<string, Set<string>
  * maps naming `onlyAssetId`, with the spirit planes they see. The spirit
  * planes are read only where a map is read.
  */
+// TODO(assets): with no asset named, this reads every map of every campaign
+// the user is a member of, on every asset list by a member who is not the
+// DM somewhere; maps per campaign are not capped, and a map may name an
+// asset that does not exist. picturesOnTables needs only the current maps,
+// and `named` only the maps naming one of the campaigns' MAP assets: read
+// those alone.
 async function tablesOf(userId: string, onlyAssetId?: string): Promise<Tables> {
   const memberships = await prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } });
   const campaignIds = memberships.map((m) => m.campaignId);
