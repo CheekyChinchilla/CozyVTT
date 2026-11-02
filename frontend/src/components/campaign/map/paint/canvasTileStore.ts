@@ -3,11 +3,11 @@
 //
 // The picture's canvas is made to be read often (willReadFrequently), which
 // keeps its pixels where the page reads them fastest, so a tile is read
-// straight off it, at once, in every browser. A tile is read as a change
-// first reaches it and packed there and then (qoi.ts: about a kilobyte for
-// a tile of one colour, about five for a painted one, in a fraction of a
-// millisecond), so no tile is held as raw pixels and the
-// lift has nothing left to do. Packed alike in every browser, a tile counts
+// straight off it, in under a millisecond in WebKit and Chromium alike. A
+// tile is read as a change first reaches it and packed there and then
+// (qoi.ts: about a kilobyte for a tile of one colour, about five for a
+// painted one, in a fraction of a millisecond), so no tile is held as raw
+// pixels and the lift has nothing left to do. Packed alike in every browser, a tile counts
 // the same against undo's budget in each. It is put back by unpacking it
 // into a buffer kept for its size and writing that over the tile: at once,
 // whatever the context's transform, alpha or compositing, and exactly for
