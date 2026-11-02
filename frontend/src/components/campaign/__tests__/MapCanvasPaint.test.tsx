@@ -29,7 +29,7 @@ import { contact, mouse } from '@/test/pointer';
 import { usePaintStore } from '@/stores/paintStore';
 import { memoryDraftStore, type MemoryDraftStore } from '@/test/memoryDraftStore';
 import { draftKey, draftTime, DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_FULL, DRAFTS_UNAVAILABLE } from '../map/paint/paintDrafts';
-import { qoiEncode } from '../map/paint/qoi';
+import { qoiDecodeInto, qoiEncode } from '../map/paint/qoi';
 import { viewedMapGuards } from '@/test/viewedMapContext';
 import { leavePageWith } from '@/services/pageLeave';
 import { onSheetEntry } from '@/components/campaign/compact/sheetHistory';
@@ -1455,6 +1455,103 @@ describe('drafts', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
     expect(within(restoreQuestion()!).getByText(/was painted on an older picture of this map/)).toBeInTheDocument();
     expect(within(restoreQuestion()!).getByRole('button', { name: 'Restore it over this picture' })).toBeInTheDocument();
+  });
+
+  /** The canvas holding the picture being painted, of a map 30 squares wide: 1,500 by 1,000 pixels. */
+  const widerCanvas = () => [...recorded.keys()].find((c) => c.width === 1500 && c.height === 1000);
+
+  it('puts back a draft painted before Edit Map widened the map where the picture, stretched, has it', async () => {
+    // Painted while the map was 20 squares wide: its picture 1,000 pixels.
+    const map = mapWith({ width: 30 });
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore it over this picture' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    const tilesDrawn = callsOn(widerCanvas()).filter((c) => c.method === 'drawImage' && c.args[0] instanceof HTMLCanvasElement).map((c) => c.args.slice(1));
+    expect(tilesDrawn).toEqual([[0, 0, 384, 256], [384, 0, 384, 256]]);
+    expect(callsOn(widerCanvas()).filter((c) => c.method === 'putImageData')).toEqual([]);
+  });
+
+  it('takes a restore back with Undo, to the picture as it was', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+    take(pictureCanvas()!);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
+    await waitFor(() => expect(putBack()).toEqual([[0, 0], [256, 0]]));
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Redo' })).toBeEnabled();
+  });
+
+  it('keeps in the draft only what was painted: the rest of each tile, as the picture had it, is kept as nothing', async () => {
+    const FLOOR = [200, 180, 150, 255];
+    const WOOD = [74, 52, 35, 255];
+    await showMap();
+    await paintOn();
+    // The picture's pixels: floor, and once the stroke is painted, its top row of wood.
+    let painted = false;
+    Object.assign(pictureCanvas()!.getContext('2d')!, {
+      getImageData: (_x: number, _y: number, w: number, h: number) => {
+        const data = new Uint8ClampedArray(w * h * 4);
+        for (let i = 0; i < data.length; i += 4) data.set(painted && i < w * 4 ? WOOD : FLOOR, i);
+        return { width: w, height: h, data };
+      },
+    });
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    painted = true;
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    const unpacked = new Uint8ClampedArray(256 * 256 * 4);
+    expect(qoiDecodeInto(drafts().kept.get(key)!.get('0,0')!.packed, unpacked)).toBe(true);
+    expect([...unpacked.subarray(0, 4)]).toEqual(WOOD);
+    expect([...unpacked.subarray(100 * 256 * 4, 100 * 256 * 4 + 4)]).toEqual([0, 0, 0, 0]);
+  });
+
+  it('keeps in the draft of what is painted during a save only that: the paint the save took is the picture now', async () => {
+    const FLOOR = [200, 180, 150, 255];
+    const WOOD = [74, 52, 35, 255];
+    const GRASS = [121, 160, 80, 255];
+    await showMap();
+    await paintOn();
+    // The picture's pixels: floor; the first stroke paints the top row wood, the second the next row grass.
+    let painted = 0;
+    Object.assign(pictureCanvas()!.getContext('2d')!, {
+      getImageData: (_x: number, _y: number, w: number, h: number) => {
+        const data = new Uint8ClampedArray(w * h * 4);
+        for (let i = 0; i < data.length; i += 4) {
+          const row = Math.floor(i / (w * 4));
+          data.set(row === 0 && painted >= 1 ? WOOD : row === 1 && painted >= 2 ? GRASS : FLOOR, i);
+        }
+        return { width: w, height: h, data };
+      },
+    });
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    painted = 1;
+    // The upload takes its time; the DM paints on meanwhile.
+    let uploaded = () => undefined as void;
+    h.uploadAsset.mockImplementationOnce(() => new Promise((resolve) => {
+      uploaded = () => resolve({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: ['drawn-map'] } });
+    }));
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(h.uploadAsset).toHaveBeenCalled());
+    drag({ clientX: 100, clientY: 100 }, { clientX: 120, clientY: 110 });
+    painted = 2;
+    await act(async () => { uploaded(); });
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
+    await settle();
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    const unpacked = new Uint8ClampedArray(256 * 256 * 4);
+    expect(qoiDecodeInto(drafts().kept.get(key)!.get('0,0')!.packed, unpacked)).toBe(true);
+    expect([...unpacked.subarray(0, 4)]).toEqual([0, 0, 0, 0]);
+    expect([...unpacked.subarray(256 * 4, 256 * 4 + 4)]).toEqual(GRASS);
   });
 
   it('is cleared by Save, and by Discard', async () => {

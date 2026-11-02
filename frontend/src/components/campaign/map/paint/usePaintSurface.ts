@@ -69,7 +69,7 @@ import { pictureToPng } from './blankPicture';
 import { extractAssetId } from '@/utils/assetUrl';
 import {
   DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_UNAVAILABLE, draftKey, draftsFailedMessage, newestDraft, packDraftTiles, paintTab, putDraftTiles,
-  type DraftHeader, type DraftStore, type DraftTile, type PaintTab,
+  draftTileBox, type DraftHeader, type DraftStore, type DraftTile, type PaintTab, type PictureSize,
 } from './paintDrafts';
 
 /** The tools Paint offers. */
@@ -177,6 +177,11 @@ interface Surface {
   savingAssetId: string | null;
   /** The tiles painted since the picture was made or last saved, by `column,row`. */
   changed: Map<string, TileRect>;
+  /**
+   * Those tiles as the picture saved had them, packed, each kept as a change
+   * first reached it: what a draft leaves out, so it holds only the paint.
+   */
+  asSaved: Map<string, Uint8Array<ArrayBuffer>>;
   /** Of those, the ones changed since the draft was last written. */
   unwritten: Map<string, TileRect>;
   /** The next draft write begins the draft anew, dropping any tiles kept from before. */
@@ -194,8 +199,8 @@ export interface PaintLeftover {
   canvas: HTMLCanvasElement;
 }
 
-/** How Paint opens: on the picture as it is, or with a draft's tiles put back. */
-type OpenWith = 'fresh' | { draft: DraftTile[]; from: string };
+/** How Paint opens: on the picture as it is, or with a draft's tiles, of a picture `size` in size, put back. */
+type OpenWith = 'fresh' | { draft: DraftTile[]; from: string; size: PictureSize };
 
 /** A draft offered back as Paint opens, and whether it was painted on another picture than the map's now. */
 export interface DraftOffer {
@@ -395,7 +400,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!key || !user || !campaign) return;
     let tiles: DraftTile[];
     try {
-      tiles = packDraftTiles(s.ctx, [...s.unwritten.values()]);
+      tiles = packDraftTiles(s.ctx, [...s.unwritten.values()], (t) => s.asSaved.get(`${t.tx},${t.ty}`));
     } catch (err) {
       console.warn('[paint] Could not read the picture for its draft:', errorSummary(err));
       return;
@@ -607,12 +612,23 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       ctx.fillStyle = DRAWN_MAP_BACKGROUND;
       ctx.fillRect(0, 0, width, height);
     }
-    const store = createCanvasTileStore(ctx);
+    // Each tile as the picture saved had it, as a change first reaches it:
+    // every change keeps its tiles before it is made, the fill's included.
+    const remember = (tile: TileRect, kept: KeptTile): KeptTile => {
+      const at = `${tile.tx},${tile.ty}`;
+      const into = made?.asSaved;
+      if (into && kept.packed && !into.has(at)) into.set(at, kept.packed);
+      return kept;
+    };
+    const tileStore = createCanvasTileStore(ctx);
+    const store: CanvasTileStore = {
+      ...tileStore,
+      capture: (tile) => remember(tile, tileStore.capture(tile)),
+      keep: (tile, pixels) => remember(tile, tileStore.keep(tile, pixels)),
+    };
     // The eraser's colour: the picture's own, read off its top-left pixel.
     const second = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
     setSettings((prev) => ({ ...prev, second }));
-    // A draft's tiles, put back over the picture: paint not saved.
-    const restored = how !== undefined && how !== 'fresh' ? putDraftTiles(ctx, how.draft, width, height) : [];
     let made: Surface | null = null;
     const history: PaintHistory<KeptTile> = createPaintHistory(store, {
       width,
@@ -628,26 +644,48 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (made) touched(made, tiles);
       },
     });
-    made = {
-      mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: restored.length > 0 ? 1 : 0, saved: 0,
+    const surface: Surface = {
+      mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: 0, saved: 0,
       // The address of the pixels drawn in; a map started blank, its own.
       baseUrl: ownPicture ? ownPicture.url : map.imageUrl ?? '',
       savingAssetId: null,
-      changed: new Map(restored.map((tile) => [`${tile.tx},${tile.ty}`, tile])),
+      changed: new Map(),
+      asSaved: new Map(),
+      unwritten: new Map(),
       // A draft restored is written again as this tab's own, whole, and the
       // one it came from dropped once that has landed. A draft left from
       // before and not restored is not mixed into this one.
-      unwritten: new Map(restored.map((tile) => [`${tile.tx},${tile.ty}`, tile])),
       draftFresh: true,
       takenFrom: how !== undefined && how !== 'fresh' ? how.from : null,
     };
-    show(made);
-    if (restored.length > 0) scheduleDraft();
+    made = surface;
+    show(surface);
+    // A draft's painting, put back over the picture as one change, which
+    // Undo takes back: paint not saved, in the draft as the tiles it reached.
+    if (how !== undefined && how !== 'fresh') {
+      const step = history.begin();
+      for (const tile of how.draft) {
+        const box = draftTileBox(tile, how.size, { width, height });
+        if (box) step.cover(box);
+      }
+      // A history just made has no undo under way: the change lands at once.
+      let put = 0;
+      void step.land(() => {
+        put = putDraftTiles(ctx, how.draft, how.size, { width, height }, make);
+        if (put > 0) surface.revision += 1;
+      });
+      // Nothing of the draft could be read: nothing to undo, or to keep.
+      if (put === 0) {
+        history.clear();
+        surface.changed.clear();
+        surface.unwritten.clear();
+      }
+    }
     setOn(true);
     onRef.current = true;
     markDirty('terrain', 'overlay');
     return true;
-  }, [map, isDM, opensOn, ownPicture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound, scheduleDraft]);
+  }, [map, isDM, opensOn, ownPicture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound]);
 
   /**
    * Paint off. Paint not saved stays on screen, to go on with; with nothing
@@ -933,7 +971,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     // The tiles painted until the picture is taken go with this save, and
     // come back if it fails; those painted while it is under way stay for
     // the draft after it.
-    let taken: { changed: Map<string, TileRect>; unwritten: Map<string, TileRect> } | null = null;
+    let taken: { changed: Map<string, TileRect>; unwritten: Map<string, TileRect>; asSaved: Map<string, Uint8Array<ArrayBuffer>> } | null = null;
     try {
       await s.history.settled();
       // The map as the server has it now: a picture changed elsewhere,
@@ -947,8 +985,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         return false;
       }
       const asOf = s.revision;
-      taken = { changed: s.changed, unwritten: s.unwritten };
+      // The picture is taken for the PNG now (savePaint makes it first, at
+      // once): a tile changed from here on is kept as it is in the picture
+      // saved, so a draft after the save holds only what was painted since.
+      taken = { changed: s.changed, unwritten: s.unwritten, asSaved: s.asSaved };
       s.changed = new Map();
+      s.asSaved = new Map();
       s.unwritten = new Map();
       const { map: saved, asset } = await savePaint({
         previous,
@@ -980,6 +1022,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       if (taken) {
         for (const [at, tile] of taken.changed) s.changed.set(at, tile);
         for (const [at, tile] of taken.unwritten) s.unwritten.set(at, tile);
+        // Nothing was saved: the tiles as kept before the save stand.
+        for (const [at, packed] of taken.asSaved) s.asSaved.set(at, packed);
       }
       refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
       return false;
@@ -1078,7 +1122,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       refuse('Your draft could not be read from this browser.');
       return;
     }
-    open({ draft: tiles, from: offered.header.key });
+    open({ draft: tiles, from: offered.header.key, size: { width: offered.header.width, height: offered.header.height } });
   }, [offer, map, dropDraft, open, inDraftQueue, refuse]);
 
   /** The eyedropper: the colour of the pixel at map pixel `point` becomes the colour, and the tool before comes back. */
