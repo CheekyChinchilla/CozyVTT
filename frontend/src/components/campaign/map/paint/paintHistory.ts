@@ -69,7 +69,7 @@ export interface TileStore<K> {
   capture(tile: TileRect): K;
   /** Put kept pixels back over what the tile holds now. */
   restore(tile: TileRect, kept: K): void | Promise<void>;
-  /** The bytes kept pixels take now; nothing for a tile not yet packed. */
+  /** The bytes kept pixels count against the budget now: the browser's store counts a tile once it is packed. */
   bytes(kept: K): number;
   /** Let go of kept pixels. */
   release(kept: K): void;
@@ -95,9 +95,11 @@ export interface PaintHistoryCounts {
 }
 
 /** A change on its way, such as a stroke being drawn. */
-export interface PaintStep {
+export interface PaintStep<K = unknown> {
   /** Keep the tiles `box` touches that this change has not kept yet, as they are now. */
   cover(box: PaintBox): void;
+  /** Keep a tile the caller has already kept, as the fill does with the pixels it read. */
+  keep(tile: TileRect, kept: K): void;
   /**
    * Make the change: `apply` draws it, at once unless an undo or a redo is
    * under way, which it waits for. The promise settles once it is made.
@@ -107,9 +109,9 @@ export interface PaintStep {
   drop(): void;
 }
 
-export interface PaintHistory {
+export interface PaintHistory<K = unknown> {
   /** Start a change whose tiles are kept as it goes (PaintStep.cover). */
-  begin(): PaintStep;
+  begin(): PaintStep<K>;
   /** Make a change to the pixels in `box` in one go: begin, cover `box`, land. */
   change(box: PaintBox, apply: () => void): Promise<void>;
   /** Undo the last change. True when there was one. */
@@ -132,7 +134,7 @@ interface Step<K> {
   tiles: Array<{ tile: TileRect; kept: K }>;
 }
 
-export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistoryOptions): PaintHistory {
+export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistoryOptions): PaintHistory<K> {
   const { width, height, budgetBytes, maxSteps, onChange } = options;
   const undone: Step<K>[] = [];
   const redoable: Step<K>[] = [];
@@ -164,7 +166,7 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
     }
   };
 
-  const begin = (): PaintStep => {
+  const begin = (): PaintStep<K> => {
     /** The tiles kept so far, by column and row, with the count each was kept at. */
     const kept = new Map<string, { tile: TileRect; kept: K; at: number }>();
     /** Tiles reached while an undo or a redo was under way, kept as the change lands. */
@@ -183,6 +185,14 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
           if (waiting > 0) reached.set(key, tile);
           else keepNow(tile);
         }
+      },
+      keep(tile, k) {
+        const key = keyOf(tile);
+        if (over || kept.has(key)) {
+          store.release(k);
+          return;
+        }
+        kept.set(key, { tile, kept: k, at: epoch });
       },
       land(apply) {
         const make = () => {

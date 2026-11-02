@@ -237,7 +237,7 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 
 While Paint is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
 
-Undo keeps up to 50 changes, as memory allows: it keeps only the part of the picture each one changed, so a stroke across the whole map or a large fill takes more, and the oldest go first.
+Undo keeps up to 50 changes. It keeps only the part of the picture each change touched, packed small, so even strokes across the whole map leave at least 30 to take back; on a picture with a great deal of fine detail the oldest may go sooner.
 
 **Saving.** What you paint is on your screen only until you click **Save** in the Paint panel. Until then it stays on the map when you put Paint away, and goes if you reload the page or show another map. **Save** puts the picture in the campaign's Asset Library as a new **Drawn map** picture and makes it the map's picture; the map's size and grid do not change, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
 

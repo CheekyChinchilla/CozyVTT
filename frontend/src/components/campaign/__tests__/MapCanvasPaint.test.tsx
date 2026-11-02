@@ -255,7 +255,10 @@ beforeEach(() => {
     usePaintStore.setState({ mapId: null, unsaved: false, openOnMapId: null });
   });
   h.set({ userRole: 'DM' });
-  // A tile's PNG, made at once, and its decoding.
+  // A tile's PNG, made there and then, and a picture's for Save, and their decoding.
+  Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
+    configurable: true, writable: true, value: () => 'data:image/png;base64,iVBORw0KGgo=',
+  });
   Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
     configurable: true, writable: true, value(done: BlobCallback) { done(new Blob(['tile'], { type: 'image/png' })); },
   });
@@ -743,10 +746,8 @@ describe('Save', () => {
 
 describe('the lift', () => {
   it('copies each tile as the stroke first reaches it, and on the lift only paints: no tile copied or packed then', async () => {
-    const packed = vi.fn();
-    Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
-      configurable: true, writable: true, value(done: BlobCallback) { packed(); done(new Blob(['tile'], { type: 'image/png' })); },
-    });
+    const packed = vi.fn(() => 'data:image/png;base64,iVBORw0KGgo=');
+    Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', { configurable: true, writable: true, value: packed });
     await showMap();
     await paintOn();
     const canvas = pictureCanvas();
@@ -800,20 +801,24 @@ describe('undo and redo', () => {
       .flatMap(([, calls]) => calls.filter((c) => c.method === 'drawImage' && c.args[0] === canvas).map((c) => c.args.slice(1, 5)));
     expect(kept).toEqual([[0, 0, 256, 256], [256, 0, 256, 256]]);
 
+    /** Where tiles were put back: from their raw bytes, or cleared for their PNG. */
+    const putBack = () => callsOn(canvas)
+      .filter((c) => c.method === 'putImageData' || c.method === 'clearRect')
+      .map((c) => (c.method === 'putImageData' ? c.args.slice(1, 3) : c.args.slice(0, 2)));
     take(canvas!);
     await act(async () => { press('z', { ctrlKey: true }); });
-    await waitFor(() => expect(callsOn(canvas).filter((c) => c.method === 'clearRect').map((c) => c.args)).toEqual([[0, 0, 256, 256], [256, 0, 256, 256]]));
+    await waitFor(() => expect(putBack()).toEqual([[0, 0], [256, 0]]));
     expect(screen.getByRole('button', { name: 'Redo' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
 
     take(canvas!);
     await act(async () => { press('y', { ctrlKey: true }); });
-    await waitFor(() => expect(callsOn(canvas).filter((c) => c.method === 'clearRect')).toHaveLength(2));
+    await waitFor(() => expect(putBack()).toHaveLength(2));
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
 
     take(canvas!);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
-    await waitFor(() => expect(callsOn(canvas).filter((c) => c.method === 'clearRect')).toHaveLength(2));
+    await waitFor(() => expect(putBack()).toHaveLength(2));
   });
 });
 
