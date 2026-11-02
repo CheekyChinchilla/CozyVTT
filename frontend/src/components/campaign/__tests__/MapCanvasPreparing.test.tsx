@@ -90,6 +90,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         setCurrentMap: h.setCurrentMap,
         receiveTableMap: h.receiveTableMap,
         updateMap: h.updateMap,
+        registerViewedMapGuard: () => () => undefined,
         userRole: 'DM',
         campaign,
         updateCampaignSpiritLayer: noop,

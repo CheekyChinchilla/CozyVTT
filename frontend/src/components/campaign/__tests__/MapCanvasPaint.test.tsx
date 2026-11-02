@@ -30,6 +30,10 @@ import { usePaintStore } from '@/stores/paintStore';
 import { memoryDraftStore, type MemoryDraftStore } from '@/test/memoryDraftStore';
 import { draftKey, draftTime, DRAFT_INTERVAL_MS, DRAFTS_UNAVAILABLE } from '../map/paint/paintDrafts';
 import { qoiEncode } from '../map/paint/qoi';
+import { viewedMapGuards } from '@/test/viewedMapContext';
+import { leavePageWith } from '@/services/pageLeave';
+import { hasUnsavedWork, reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
+import type { ViewedMapChange } from '@/contexts/CampaignContext';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -1292,5 +1296,236 @@ describe('drafts', () => {
     await showMap();
     expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
     expect(restoreQuestion()).toBeNull();
+  });
+});
+
+/**
+ * Paint not saved is asked about before anything takes it off the screen:
+ * the campaign's map changes (Open to prepare, Back to the table, Set
+ * Active, Bring everyone here, deleting the map), and leaving the page.
+ * Each asks the same question: Save my painting, Discard my painting, or
+ * Not now, which Esc is too.
+ */
+describe('paint not saved, asked about before it is left', () => {
+  const question = () => screen.queryByRole('dialog', { name: 'Save your painting?' });
+  const guard = () => {
+    expect(viewedMapGuards.size).toBe(1);
+    return [...viewedMapGuards][0];
+  };
+  async function painted() {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+  }
+  /** Ask the map's guard about a change, keeping its answer. */
+  function askAbout(kind: ViewedMapChange['kind']) {
+    const answer: { value?: boolean } = {};
+    act(() => { void Promise.resolve(guard().mayLeave({ kind, toMapId: 'map-b' })).then((leave) => { answer.value = leave; }); });
+    return answer;
+  }
+  const choose = async (name: string) => {
+    await act(async () => { fireEvent.click(within(question()!).getByRole('button', { name })); });
+    await act(async () => { await Promise.resolve(); });
+  };
+
+  it.each([
+    ['open-other', 'Save it before you open another map?'],
+    ['back-to-table', 'Save it before you go back to the table?'],
+    ['set-active', 'Save it before the table moves to another map?'],
+    ['bring-everyone', 'Your painting of Map A is not saved, so your players would not see it. Save it before you bring them here?'],
+    ['delete', 'Save it before the map is deleted?'],
+  ] as const)('%s asks the three-way question; Not now keeps the paint and stops the change', async (kind, words) => {
+    await painted();
+    const answer = askAbout(kind);
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    expect(within(question()!).getByText(new RegExp(words.replace(/[.?]/g, '\\$&')))).toBeInTheDocument();
+    expect(within(question()!).getAllByRole('button').map((b) => b.textContent)).toEqual(expect.arrayContaining(['Save my painting', 'Discard my painting', 'Not now']));
+    await choose('Not now');
+    expect(answer.value).toBe(false);
+    await waitFor(() => expect(question()).toBeNull());
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('asks nothing, and lets the change go, with nothing to save', async () => {
+    await showMap();
+    await paintOn();
+    const answer = askAbout('open-other');
+    await act(async () => { await Promise.resolve(); });
+    expect(answer.value).toBe(true);
+    expect(question()).toBeNull();
+  });
+
+  it('Save my painting saves, then lets the change go', async () => {
+    await painted();
+    const answer = askAbout('back-to-table');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Save my painting');
+    await waitFor(() => expect(answer.value).toBe(true));
+    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' });
+    expect(usePaintStore.getState().unsaved).toBe(false);
+    await waitFor(() => expect(question()).toBeNull());
+  });
+
+  it('a save refused keeps the paint, and the change does not happen', async () => {
+    await painted();
+    h.uploadAsset.mockRejectedValue(new Error('refused'));
+    const answer = askAbout('set-active');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Save my painting');
+    await waitFor(() => expect(answer.value).toBe(false));
+    expect(usePaintStore.getState().unsaved).toBe(true);
+  });
+
+  it('Discard my painting lets it go, with its draft, and lets the change go', async () => {
+    await painted();
+    const canvas = pictureCanvas();
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    expect(drafts().headers.size).toBe(1);
+    const answer = askAbout('open-other');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Discard my painting');
+    expect(answer.value).toBe(true);
+    expect(canvas?.width).toBe(0);
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    expect(drafts().headers.size).toBe(0);
+  });
+
+  it('takes Esc as Not now', async () => {
+    await painted();
+    const answer = askAbout('open-other');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await act(async () => { fireEvent.keyDown(question()!, { key: 'Escape' }); });
+    await waitFor(() => expect(answer.value).toBe(false));
+    expect(usePaintStore.getState().unsaved).toBe(true);
+  });
+
+  it('holds the map on screen while paint is not saved, so the table moving on from elsewhere leaves it', async () => {
+    await showMap();
+    await paintOn();
+    expect(guard().holds?.()).toBe(false);
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(guard().holds?.()).toBe(true);
+  });
+
+  it('asks one question at a time: one asked meanwhile waits, and after a discard asks nothing', async () => {
+    await painted();
+    const first = askAbout('open-other');
+    const second = askAbout('back-to-table');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    expect(screen.getAllByRole('dialog', { name: 'Save your painting?' })).toHaveLength(1);
+    await choose('Discard my painting');
+    await waitFor(() => expect(second.value).toBe(true));
+    expect(first.value).toBe(true);
+    await waitFor(() => expect(question()).toBeNull());
+  });
+
+  it('waits for a save under way, and asks nothing when it saved everything', async () => {
+    await painted();
+    let land: (() => void) | null = null;
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => new Promise((resolve) => {
+      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` });
+    }));
+    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    await waitFor(() => expect(land).not.toBeNull());
+    const answer = askAbout('open-other');
+    await act(async () => { await Promise.resolve(); });
+    expect(question()).toBeNull();
+    expect(answer.value).toBeUndefined();
+    await act(async () => { land!(); });
+    await waitFor(() => expect(answer.value).toBe(true));
+    expect(question()).toBeNull();
+  });
+
+  it('asks before the page is left by its own way out, keeps the session and the page through a lost sign-in, and holds the browser\'s Back and a reload', async () => {
+    await showMap();
+    await paintOn();
+    expect(hasUnsavedWork()).toBe(false);
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(hasUnsavedWork()).toBe(true);
+    expect((window.history.state as Record<string, unknown> | null)?.cozyvttSheet).toBe(true);
+    const reload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(reload);
+    expect(reload.defaultPrevented).toBe(true);
+
+    const left = vi.fn();
+    act(() => { leavePageWith(left); });
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    expect(within(question()!).getByText(/Save it before you leave this page\?/)).toBeInTheDocument();
+    await choose('Not now');
+    expect(left).not.toHaveBeenCalled();
+    act(() => { leavePageWith(left); });
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Discard my painting');
+    await waitFor(() => expect(left).toHaveBeenCalled());
+    expect(hasUnsavedWork()).toBe(false);
+  });
+});
+
+describe('paint not saved through a lost sign-in', () => {
+  it('stays, and the panel says to sign in again before saving', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { reportSignedOut(); });
+    try {
+      const panel = screen.getByRole('region', { name: 'Paint' });
+      expect(within(panel).getByText('You\'ve been signed out.')).toBeInTheDocument();
+      expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    } finally {
+      act(() => { reportSignedIn(); });
+    }
+  });
+});
+
+/**
+ * Paint not saved on a map that leaves the screen without asking: the map
+ * deleted from elsewhere, or the viewer no longer the DM. The painting is
+ * kept as a draft and offered as a picture to download, never let go of
+ * unsaid.
+ */
+describe('paint not saved, its map gone without asking', () => {
+  const offer = () => screen.queryByRole('dialog', { name: 'Your painting was not saved' });
+
+  it('is offered as a picture to download, and kept as a draft', async () => {
+    const saved: Blob[] = [];
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: (blob: Blob) => { saved.push(blob); return 'blob:painting'; } });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: () => undefined });
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    // Deleted from another tab while it was being prepared: the page shows the table's map.
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    expect(within(offer()!).getByText(/Map A is no longer on your screen, so your painting of it was not saved/)).toBeInTheDocument();
+    expect(drafts().writes).toHaveLength(1);
+    expect(canvas?.width).toBe(1000);
+    await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Download my painting' })); });
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].type).toBe('image/png');
+    await waitFor(() => expect(offer()).toBeNull());
+    expect(canvas?.width).toBe(0);
+  });
+
+  it('says why when the viewer is no longer the DM, and Discard drops it and its draft', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ userRole: 'PLAYER' }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    expect(within(offer()!).getByText(/You are no longer the DM, so your painting of Map A cannot be saved/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
+    await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Discard my painting' })); });
+    await waitFor(() => expect(offer()).toBeNull());
+    expect(drafts().headers.size).toBe(0);
+  });
+
+  it('is not offered when everything was saved', async () => {
+    await showMap();
+    await paintOn();
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await act(async () => { await Promise.resolve(); });
+    expect(offer()).toBeNull();
   });
 });

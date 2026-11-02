@@ -13,6 +13,7 @@ import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { labelFontSize } from './map/drawingGeometry';
+import SignedOutNotice from '@/components/common/SignedOutNotice';
 
 /** Each tool's name, as its button is called, its key and its icon. */
 const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
@@ -65,6 +66,8 @@ export interface PaintControlsProps {
   /** Save the picture as the map's. */
   onSave: () => void;
   saving: boolean;
+  /** The browser was signed out while there was paint not saved. */
+  signedOut?: boolean;
   onClose: () => void;
 }
 
@@ -75,7 +78,7 @@ const toolButton = (on: boolean) =>
 
 const actionButton = 'touch-target inline-flex items-center justify-center gap-1 px-2 h-8 rounded border text-[11px] bg-stone-700/60 text-stone-300 border-stone-600/50 hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed';
 
-export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onClose }: PaintControlsProps) {
+export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, signedOut = false, onClose }: PaintControlsProps) {
   const [slot, setSlot] = useState<Slot>('colour');
   const chosen = settings[slot];
   const custom = !PAINT_COLOURS.some((c) => c.value === chosen);
@@ -259,6 +262,7 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
       {unsaved && !saving && (
         <p className="text-[11px] leading-snug text-amber-200/80">Not saved yet: on your screen only. Done keeps it on the map until you save.</p>
       )}
+      {signedOut && unsaved && <SignedOutNotice />}
     </section>
   );
 }

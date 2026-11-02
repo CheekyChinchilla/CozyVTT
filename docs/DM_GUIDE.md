@@ -251,6 +251,18 @@ Undo keeps up to 50 changes. It keeps only the part of the picture each change t
 
 If the map's picture was saved or changed since the draft was written, the question says the painting "was painted on an older picture of this map", and **Restore it over this picture** puts the parts you painted over the newer picture. **Save**, **Discard my painting** and deleting the map in the Map Library clear the draft, and a draft of a map deleted from another device is dropped the next time you open the campaign. A draft is kept in that browser only, for you and that map: another browser or device has its own, and clearing the browser's site data clears it too. If the browser cannot keep drafts (some private windows, or a full disk), Paint says "This browser cannot keep a draft of your painting, so save it often: what is not saved is lost if the page closes." once, and you paint on as before.
 
+**Asked before paint not saved goes.** With paint not saved on the map, Paint asks "Save your painting?" before anything takes it off your screen: **Open to prepare** on another map, **Back to the table** (and your phone's **Back** while you prepare a map), **Set Active**, **Bring everyone here**, deleting the map in the Map Library, the header's way back to the dashboard, and your browser's **Back**, on a computer or a phone.
+
+| Answer | What happens |
+|---|---|
+| **Save my painting** | It is saved, then what you asked for happens. If the save is refused, nothing else happens and your paint stays |
+| **Discard my painting** | Your paint and its draft are dropped, then what you asked for happens |
+| **Not now** (or `Esc`) | Nothing happens, and your paint stays |
+
+Reloading the page, closing the tab or typing another address gets your browser's own question instead, in the browser's words; if the browser does not ask, the draft keeps your painting. While you have paint not saved, CozyVTT keeps you signed in, and if you are signed out anyway the page stays where it is and the Paint panel says so: sign in again in a new tab, then click **Save**.
+
+If the table is moved to another map from somewhere else (another tab of yours, say) while you have paint not saved on its map, your screen stays on that map, as a map you are preparing, with your paint. If the map leaves your screen without asking (it is deleted from another tab or device, or someone else becomes the DM), CozyVTT says "Your painting was not saved" and offers **Download my painting**, which saves it on your device as a PNG picture, or **Discard my painting**.
+
 **Painting during play.** **Paint** works on the map the table is on as well as on one you are preparing, so you can add a side passage while your players play. They see none of your strokes, and keep moving their tokens meanwhile: a token moved while you paint moves on your screen too, and your stroke and your paint not yet saved stay as they are. When you click **Save**, their picture changes where they are, without moving their view or dropping a token they are holding.
 
 A save can be refused: the picture must be within your server's size limit for a map picture (`MAX_MAP_SIZE_MB`, 50 MB unless your administrator changed it), and a painted picture of a large map with much detail can pass it, which the message says with both sizes.
@@ -291,8 +303,8 @@ While you prepare a map:
 | The campaign's own controls | Still change every player's screen, as **What reaches the table?** on the banner says: the **Spirit Layer** (opening it, its style, who is in the realm), **Atmosphere**, the vibe and the session controls. Anything you do to the map itself (its walls, lights, fog, tokens, drawings and settings) is for the map you are preparing |
 | Reloading the page | Brings you back to the map you were preparing, in that tab only. Another tab of yours stays on the table's map, unless you made it by duplicating this one, which copies what it was showing |
 | Two of your tabs on one prepared map | Each shows the other's walls, lights, fog and drawings as you make them, but not an **Edit Map** save, a token's switches or a placement; open the map again in the other tab to see those |
-| Your phone's **Back** | Takes you back to the table, as **Back to the table** does |
-| Another tab, or a handover of the DM seat | Making the map you are preparing active from anywhere ends preparing and shows it with the table. If someone else becomes the DM, or the map is deleted, your screen goes back to the table's map and a message says why |
+| Your phone's **Back** | Takes you back to the table, as **Back to the table** does, asking first about paint not saved (see [Drawing a map](#drawing-a-map)) |
+| Another tab, or a handover of the DM seat | Making the map you are preparing active from anywhere ends preparing and shows it with the table. If someone else becomes the DM, or the map is deleted, your screen goes back to the table's map and a message says why; paint not saved on it is offered to you as a picture to download |
 
 A map picture you upload while preparing stays out of your players' Asset Library until the table is on a map using it (see **Prepare ahead** below).
 
