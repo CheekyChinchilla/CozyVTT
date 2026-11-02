@@ -153,6 +153,42 @@ describe('the colours and the width, in a pop-over', () => {
   });
 });
 
+describe('the pop-over on a phone, and by keyboard', () => {
+  const toggle = () => screen.getByRole('button', { name: /^Colour and width/ });
+  const over = () => screen.queryByRole('group', { name: 'Colour and width' });
+
+  it('fits the room above the strip, scrolling within it, and lies wide on a phone on its side', () => {
+    strip();
+    fireEvent.click(toggle());
+    const box = classes(over()!);
+    // The dock is the map's size: the strip takes at most half of it, so
+    // half less a margin is always free above it.
+    expect(box).toEqual(expect.arrayContaining(['max-h-[calc(50cqh-1rem)]', 'overflow-y-auto']));
+    expect(box).toEqual(expect.arrayContaining(['short:flex-row', 'short:w-[min(40rem,calc(100cqw-2rem))]']));
+  });
+
+  it('takes the keyboard as it opens, and Esc closes it, back on its button, and puts nothing else away', () => {
+    const { props } = strip();
+    fireEvent.click(toggle());
+    expect(over()!).toContainElement(document.activeElement as HTMLElement);
+    const kept = fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(kept).toBe(false);
+    expect(over()).toBeNull();
+    expect(document.activeElement).toBe(toggle());
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes on a press anywhere else, such as the map, and stays for a press inside it', () => {
+    render(<div data-testid="map" />);
+    strip();
+    fireEvent.click(toggle());
+    fireEvent.pointerDown(screen.getByRole('slider', { name: 'Width' }));
+    expect(over()).not.toBeNull();
+    fireEvent.pointerDown(screen.getByTestId('map'));
+    expect(over()).toBeNull();
+  });
+});
+
 describe("each tool's own settings", () => {
   it('offers a rectangle or an ellipse outlined, filled or both, and Snap to grid', () => {
     const { props } = strip({}, { tool: 'ellipse' });
