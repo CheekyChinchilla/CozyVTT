@@ -46,6 +46,8 @@ import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
 import {
   parseUploadMetadata,
+  tagsAllowedOn,
+  DRAWN_MAP_TAG_REFUSAL,
   shortenFileName,
   downloadNameOf,
   MAX_ASSET_NAME_LENGTH,
@@ -445,6 +447,13 @@ router.post(
           await deleteFile(req.file.path);
         }
         return res.status(400).json({ error: 'Validation Error', message: metadata.message });
+      }
+      // The tag Paint deletes a picture on the word of is its own upload's alone.
+      if (!tagsAllowedOn(metadata.value.tags, type, assetScope)) {
+        if (req.file?.path) {
+          await deleteFile(req.file.path);
+        }
+        return res.status(400).json({ error: 'Validation Error', message: DRAWN_MAP_TAG_REFUSAL });
       }
       req.uploadMetadata = metadata.value;
 

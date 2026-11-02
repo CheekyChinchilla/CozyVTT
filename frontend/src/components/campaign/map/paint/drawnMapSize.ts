@@ -1,6 +1,7 @@
 // ============================================
-// A map drawn in CozyVTT: what its picture is tagged, the colour it starts
-// as, and how large it is made.
+// A map drawn in CozyVTT: the colour it starts as, and how large it is
+// made. What its picture is tagged is DRAWN_MAP_TAG, in the asset limits
+// the server shares (constants/assetLimits.ts).
 //
 // The picture is its squares times the pixels per square it is drawn at.
 // Paint holds it in one canvas, which must stay within the largest canvas
@@ -14,12 +15,6 @@
 import { MAP_LIMITS } from '@/constants/mapLimits';
 import { PICTURE_SIZE_LIMITS } from '@/constants/pictureSizeLimits';
 import { MAX_BACKING_PIXELS } from '../layerCanvas';
-
-/**
- * The tag every picture Paint makes carries, which is how a map's picture is
- * known to be one Paint may change. Matched exactly, case included.
- */
-export const DRAWN_MAP_TAG = 'drawn-map';
 
 /** A new drawn map's colour, parchment. */
 export const DRAWN_MAP_BACKGROUND = '#e8dcc4';

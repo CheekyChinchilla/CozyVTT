@@ -22,7 +22,7 @@ import { randomUUID } from 'crypto';
 import unzipper from 'unzipper';
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport } from '../campaignExporter';
-import { ASSET_LIMITS } from '../../validators/assetLimits';
+import { ASSET_LIMITS, DRAWN_MAP_TAG } from '../../validators/assetLimits';
 import { IMPORT_LIMITS } from '../../validators/campaignImport';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip } from '../../__tests__/helpers/zipFixtures';
@@ -131,6 +131,17 @@ describe('an archive made by hand', () => {
     const result = await importCampaign(await archiveOf([['untidy', { tags: ['  crypt ', '', '   ', 'crypt', 'drawn-map,undead', 'Crypt'] }]]), userId);
 
     expect(await importedTags(result.campaignId)).toEqual({ 'untidy.png': ['crypt', 'drawn-map', 'undead', 'Crypt'] });
+  });
+
+  // The tag Paint takes as proof a picture is its own to replace and delete:
+  // only the server's own upload of a drawn picture may carry it.
+  it(`leaves out ${DRAWN_MAP_TAG}, in any case, and keeps the rest`, async () => {
+    const result = await importCampaign(
+      await archiveOf([['crypt', { type: 'MAP', tags: [DRAWN_MAP_TAG, DRAWN_MAP_TAG.toUpperCase(), `${DRAWN_MAP_TAG},Undercroft`, 'drawn-map'] }]]),
+      userId
+    );
+
+    expect(await importedTags(result.campaignId)).toEqual({ 'crypt.png': ['Undercroft', 'drawn-map'] });
   });
 
   it('leaves out a tag that is too long or is not text, and keeps the rest', async () => {

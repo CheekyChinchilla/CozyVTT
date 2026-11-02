@@ -755,6 +755,17 @@ describe('the dice limits', () => {
   });
 });
 
+describe('the refusal of the tag kept for drawn maps', () => {
+  it.each([
+    'backend/src/validators/assets.ts',
+    'frontend/src/components/assets/AssetUploadModal.tsx',
+  ])('is the mirrored asset limits file\'s in %s, with no wording of its own', (file) => {
+    const source = read(file);
+    expect(source).toContain('DRAWN_MAP_TAG_REFUSAL');
+    expect(source).not.toMatch(/is kept for maps drawn in CozyVTT/);
+  });
+});
+
 describe('the files each kind of asset may be uploaded as', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/uploadTypes.ts')).toBe(read('backend/src/validators/uploadTypes.ts'));

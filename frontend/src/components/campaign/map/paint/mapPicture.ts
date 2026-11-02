@@ -5,7 +5,7 @@
 // never on an uploaded one. The map names only its picture's address, so
 // the picture's asset is asked for, once a session (an asset's tags do not
 // change after it is uploaded): a map picture of this campaign tagged
-// drawn-map is a drawn one. A picture the server no longer has counts as
+// DRAWN_MAP_TAG is a drawn one. A picture the server no longer has counts as
 // none, so Paint is how such a map gets a picture again.
 // ============================================
 
@@ -14,7 +14,7 @@ import { api } from '@/services/api';
 import type { Asset } from '@/types';
 import { extractAssetId } from '@/utils/assetUrl';
 import { apiErrorStatus, errorSummary } from '@/utils/errors';
-import { DRAWN_MAP_TAG } from './drawnMapSize';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 
 /**
  * What a map's picture is, for Paint: none at all; drawn in CozyVTT;
@@ -22,7 +22,7 @@ import { DRAWN_MAP_TAG } from './drawnMapSize';
  */
 export type MapPictureKind = 'none' | 'drawn' | 'uploaded' | 'gone' | 'unknown';
 
-/** A map picture of this campaign carrying exactly the drawn-map tag. */
+/** A map picture of this campaign carrying exactly DRAWN_MAP_TAG. */
 export function isDrawnPicture(
   asset: { type: string; campaignId: string | null; tags: readonly string[] } | null | undefined,
   campaignId: string | undefined,

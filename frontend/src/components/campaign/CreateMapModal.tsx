@@ -306,7 +306,7 @@ export default function CreateMapModal({
 
   /**
    * Draw a map: make the blank picture, upload it into the campaign's
-   * library tagged drawn-map, then create the map at the pixels per square
+   * library tagged DRAWN_MAP_TAG, then create the map at the pixels per square
    * it is painted at. The picture is one pixel a square, which the map
    * stretches over its grid: one the painted size would be made, sent and
    * decoded for nothing until something is painted, and Paint makes its
