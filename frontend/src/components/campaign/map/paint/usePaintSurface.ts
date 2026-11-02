@@ -915,6 +915,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     if (!s) return;
     clearDraft(s.mapId);
+    setAsking(false);
     setOn(false);
     onRef.current = false;
     dispose();

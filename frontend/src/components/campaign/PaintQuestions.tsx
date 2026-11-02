@@ -2,8 +2,9 @@
  * PaintQuestions
  * What Paint asks the DM about paint not saved: before something takes it
  * off the screen (Save my painting, Discard my painting, or Not now, which
- * Esc is too), and, when its map left the screen without asking, what to do
- * with the painting left behind (Download my painting, or Discard my
+ * Esc is too; before the map is deleted, Discard or Not now), and, when its
+ * map left the screen without asking, what to do with the painting left
+ * behind (Download my painting, where the keyboard starts, or Discard my
  * painting: a choice must be made, so Esc does nothing there).
  */
 
@@ -21,6 +22,20 @@ export function PaintLeaveQuestion({ leaving, mapName, answering, onAnswer }: {
   answering: boolean;
   onAnswer: (answer: PaintLeaveAnswer) => void;
 }) {
+  if (leaving === 'delete') {
+    return (
+      <ConfirmDialog
+        isOpen
+        title="Discard your painting?"
+        message={leavingQuestion(mapName, leaving)}
+        confirmLabel="Discard my painting"
+        cancelLabel="Not now"
+        variant="danger"
+        onConfirm={() => onAnswer('discard')}
+        onCancel={() => onAnswer('later')}
+      />
+    );
+  }
   return (
     <ConfirmDialog
       isOpen={leaving !== null}
@@ -65,7 +80,7 @@ export function PaintLeftoverQuestion({ leftover, onDownload, onDiscard }: {
           <button type="button" onClick={onDiscard} className={DISCARD_LINK}>
             Discard my painting
           </button>
-          <Button type="button" icon={Download} onClick={onDownload}>
+          <Button type="button" icon={Download} onClick={onDownload} data-autofocus="">
             Download my painting
           </Button>
         </>
