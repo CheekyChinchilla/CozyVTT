@@ -241,6 +241,19 @@ describe('exploration:reveal, seen by the DM and on a player\'s behalf', () => {
     dm.disconnect();
   });
 
+  // The page reports as the DM only for the player Player Preview shows. A
+  // report of the DM's own, which a script could direct at every map of the
+  // campaign, would write and send a whole map's memory each time.
+  it("takes no report of the DM's own memory, named or not, and sends nothing for it", async () => {
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const quiet = expectNoEvent(dm, 'exploration:state', 1500);
+    dm.emit('exploration:reveal', { mapId, cells: [1, 2] });
+    dm.emit('exploration:reveal', { mapId, cells: [3], userId: dmId });
+    await quiet;
+    expect(await prisma.mapExploration.count({ where: { mapId, userId: dmId } })).toBe(0);
+    dm.disconnect();
+  });
+
   it('refuses a player naming another user, and stores nothing', async () => {
     const p2 = await server.connectAndAuth(p2Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(p2, 'error');
