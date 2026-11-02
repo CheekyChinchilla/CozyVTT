@@ -17,6 +17,7 @@ import {
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { storedFilePath } from '../utils/storedPath';
+import { inBackgroundAfter } from '../utils/backgroundWork';
 import { canReadAssetById, canReferenceAsset, isMapPicture, isTokenPicture, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES, TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES, TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
@@ -254,18 +255,15 @@ function resendSoonIfCurrent(campaignId: string, mapId: string): void {
   const key = `${campaignId}:${mapId}`;
   if (pendingTokenResends.has(key)) return;
   pendingTokenResends.add(key);
-  const timer = setTimeout(() => {
+  inBackgroundAfter('the map re-sent after a token change', TOKEN_RESEND_MS, async () => {
     pendingTokenResends.delete(key);
-    void (async () => {
-      try {
-        const map = await prisma.map.findUnique({ where: { id: mapId } });
-        if (map && map.campaignId === campaignId) await resendIfCurrent(campaignId, map);
-      } catch (err) {
-        logger.warn('Map not re-sent to the table after a token change; the change stands', { err, mapId });
-      }
-    })();
-  }, TOKEN_RESEND_MS);
-  timer.unref?.();
+    try {
+      const map = await prisma.map.findUnique({ where: { id: mapId } });
+      if (map && map.campaignId === campaignId) await resendIfCurrent(campaignId, map);
+    } catch (err) {
+      logger.warn('Map not re-sent to the table after a token change; the change stands', { err, mapId });
+    }
+  });
 }
 
 // The token shape lives in websocket/shared.ts — see the note there on why this

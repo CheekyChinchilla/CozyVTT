@@ -26,7 +26,7 @@ import fs from 'fs/promises';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
@@ -49,10 +49,6 @@ afterAll(async () => {
   try {
     await cleanupUsers([adminId]);
   } finally {
-    // The shared afterAll in helpers/jest.afterEnv.ts is declared first, so it
-    // has already let the clients go, and the clean-up above opened this one
-    // again.
-    await prisma.$disconnect();
     fsSync.rmSync(BACKUP_DIR, { recursive: true, force: true });
   }
 });

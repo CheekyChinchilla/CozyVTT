@@ -21,8 +21,9 @@ const ESM_ONLY = [
 
 module.exports = {
   preset: 'ts-jest',
-  // Node's, removing each file's temporary uploads folder after the file's
-  // last hook; see the file.
+  // Node's, which ends each file after its last hook (letting the work the
+  // server started finish, then the database clients go) and removes its
+  // temporary uploads folder; see the file.
   testEnvironment: '<rootDir>/src/__tests__/helpers/jest.environment.ts',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],

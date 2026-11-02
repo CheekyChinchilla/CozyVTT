@@ -16,6 +16,7 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { createWsTestServer, expectNoEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { backgroundWork } from '../../utils/backgroundWork';
 
 jest.setTimeout(30000);
 
@@ -137,6 +138,20 @@ describe('exploration:reveal', () => {
     }
     first.disconnect();
     second.disconnect();
+  });
+
+  // So a shutdown, and the end of a test file, let it be written first.
+  it('counts a report waiting to be written as work under way until it is written', async () => {
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    player.emit('exploration:reveal', { mapId, cells: [7] });
+    await sleep(200);
+    player.emit('exploration:reveal', { mapId, cells: [8] });
+    await sleep(150);
+
+    expect(backgroundWork.underWay).toContain('explored ground written');
+    await backgroundWork.finished();
+    expect(await remembered()).toEqual([7, 8]);
+    player.disconnect();
   });
 
   it('forgets reports still waiting to be written when the DM resets the map', async () => {

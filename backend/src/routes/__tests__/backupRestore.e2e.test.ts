@@ -250,10 +250,6 @@ afterAll(async () => {
   try {
     await cleanupUsers([adminId, userId]);
   } finally {
-    // The shared afterAll in helpers/jest.afterEnv.ts is declared first, so it
-    // has already let the clients go, and the clean-up above opened this one
-    // again.
-    await prisma.$disconnect();
     await fs.rm(SCRATCH, { recursive: true, force: true });
   }
 });

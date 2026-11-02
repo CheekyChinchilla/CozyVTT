@@ -17,7 +17,10 @@
  *
  * The personal files of an account just deleted are removed after the answer
  * has gone out; a shutdown lets that finish too, for up to FILE_WAIT_MS, since
- * the database is needed to decide which files may go.
+ * the database is needed to decide which files may go. The rest of the work
+ * started without anyone waiting for it (utils/backgroundWork.ts), such as
+ * explored ground written a second after a player saw it, is let finish for
+ * up to BACKGROUND_WAIT_MS before the database is closed under it.
  *
  * Also here: an error nothing caught, thrown or rejected, which ends the
  * process (onProcessFailure).
@@ -25,6 +28,12 @@
 
 import winston from 'winston';
 import logger from './logger';
+
+/** Work a shutdown lets finish: how many pieces are under way, and when none is. */
+export interface Settling {
+  readonly count: number;
+  finished(): Promise<void>;
+}
 
 /** What a shutdown closes, in this order. */
 export interface ShutdownTargets {
@@ -37,11 +46,16 @@ export interface ShutdownTargets {
   prisma: { $disconnect(): Promise<void> };
   sessionPool: { end(): Promise<void> };
   /** Backups being written, which the shutdown lets finish before it closes the database. */
-  backups?: { readonly count: number; finished(): Promise<void> };
+  backups?: Settling;
   /** A restore running, which the shutdown lets end before it closes the database. */
-  restores?: { readonly count: number; finished(): Promise<void> };
+  restores?: Settling;
   /** Files of deleted accounts being removed, which the shutdown lets finish before it closes the database. */
-  files?: { readonly count: number; finished(): Promise<void> };
+  files?: Settling;
+  /**
+   * Other work started without anyone waiting for it, which the shutdown lets
+   * finish before it closes the database; `underWay` names what is left.
+   */
+  background?: Settling & { readonly underWay: string[] };
 }
 
 export interface ShutdownOptions {
@@ -53,6 +67,8 @@ export interface ShutdownOptions {
   backupWaitMs?: number;
   /** How long it waits, within the grace, for the files of deleted accounts being removed. */
   fileWaitMs?: number;
+  /** How long it waits, within the grace, for the other work started without anyone waiting for it. */
+  backgroundWaitMs?: number;
 }
 
 /**
@@ -67,6 +83,18 @@ export const SHUTDOWN_GRACE_MS = 8_000;
  * written, before Docker would stop the container.
  */
 export const FILE_WAIT_MS = 4_000;
+
+/**
+ * The longest a shutdown waits for the other work started without anyone
+ * waiting for it, none of which waits more than a second to start. It comes
+ * after the files' wait, and both fit within the grace above.
+ */
+export const BACKGROUND_WAIT_MS = 2_000;
+
+/** The line a shutdown logs when that work is still under way after `waitMs`. */
+export function backgroundLeftMessage(waitMs: number): string {
+  return `Work started before the shutdown was still under way after ${waitMs / 1000} seconds; stopping without it`;
+}
 
 /**
  * The longest a shutdown waits for a backup being written: the ten minutes
@@ -117,6 +145,7 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
   const graceMs = options.graceMs ?? SHUTDOWN_GRACE_MS;
   const backupWaitMs = options.backupWaitMs ?? BACKUP_WAIT_MS;
   const fileWaitMs = options.fileWaitMs ?? FILE_WAIT_MS;
+  const backgroundWaitMs = options.backgroundWaitMs ?? BACKGROUND_WAIT_MS;
   let running: Promise<void> | null = null;
 
   return (signal) => {
@@ -180,6 +209,17 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
         clearTimeout(timer);
         if (!finished) {
           say('warn', `The files of a deleted account were still being removed after ${fileWaitMs / 1000} seconds; the ones not reached stay as assets with no owner, which an administrator can delete`);
+        }
+      }
+      if (targets.background && targets.background.count > 0) {
+        let timer: NodeJS.Timeout | undefined;
+        const finished = await Promise.race([
+          targets.background.finished().then(() => true),
+          new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), backgroundWaitMs); }),
+        ]);
+        clearTimeout(timer);
+        if (!finished) {
+          say('warn', backgroundLeftMessage(backgroundWaitMs), { underWay: targets.background.underWay });
         }
       }
       await step('disconnect from the database', () => targets.prisma.$disconnect());

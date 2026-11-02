@@ -23,7 +23,7 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { createShutdown, onShutdownSignals, onProcessFailure, SHUTDOWN_GRACE_MS, BACKUP_WAIT_MS, FILE_WAIT_MS, type ShutdownTargets } from '../shutdown';
+import { createShutdown, onShutdownSignals, onProcessFailure, SHUTDOWN_GRACE_MS, BACKUP_WAIT_MS, FILE_WAIT_MS, BACKGROUND_WAIT_MS, type ShutdownTargets } from '../shutdown';
 import logger from '../logger';
 
 function targets(order: string[] = []) {
@@ -292,6 +292,104 @@ describe('a shutdown while the files of a deleted account are being removed', ()
 
   it('waits for less time than the whole shutdown is given', () => {
     expect(FILE_WAIT_MS).toBeLessThan(SHUTDOWN_GRACE_MS);
+  });
+});
+
+/** Work started after an answer, under way until `finish` is called. */
+function workUnderWay() {
+  let finish = () => {};
+  const done = new Promise<void>((resolve) => { finish = resolve; });
+  let count = 1;
+  const background = {
+    get count() { return count; },
+    get underWay() { return count > 0 ? ['the map re-sent after a token change'] : []; },
+    finished: () => done,
+  };
+  return { background, finish: () => { count = 0; finish(); } };
+}
+
+// A map re-sent to the table a moment after a token change, or explored
+// ground written a second after it was seen, used to meet a database the
+// shutdown had closed.
+describe('a shutdown while work started after an answer is under way', () => {
+  it('closes the database only once that work has finished', async () => {
+    const order: string[] = [];
+    const t = targets(order);
+    const { background, finish } = workUnderWay();
+    const exit = jest.fn();
+    const withWork = { ...t, background };
+    const done = createShutdown(withWork, { exit })('SIGTERM');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(t.io.close).toHaveBeenCalledTimes(1);
+    expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+
+    order.push('background');
+    finish();
+    await done;
+    expect(order).toEqual(['io', 'background', 'prisma', 'sessionPool']);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  it('waits for it after the files of a deleted account', async () => {
+    const order: string[] = [];
+    const t = targets(order);
+    const { files, finish: filesDone } = filesBeingRemoved();
+    const { background, finish: workDone } = workUnderWay();
+    const exit = jest.fn();
+    const done = createShutdown({ ...t, files, background }, { exit })('SIGTERM');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    order.push('files');
+    filesDone();
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+    order.push('background');
+    workDone();
+    await done;
+    expect(order).toEqual(['io', 'files', 'background', 'prisma', 'sessionPool']);
+  });
+
+  it('waits no longer than its bound, says so in the log, and closes the rest', async () => {
+    jest.useFakeTimers();
+    const warned = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    try {
+      const t = targets();
+      const { background } = workUnderWay();
+      const exit = jest.fn();
+      const done = createShutdown({ ...t, background }, { exit, backgroundWaitMs: 1500, graceMs: 8000 })('SIGTERM');
+
+      await jest.advanceTimersByTimeAsync(1499);
+      expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await done;
+      expect(t.prisma.$disconnect).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(0);
+      expect(warned).toHaveBeenCalledWith(
+        'Work started before the shutdown was still under way after 1.5 seconds; stopping without it',
+        { underWay: ['the map re-sent after a token change'] }
+      );
+    } finally {
+      warned.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not wait when none is under way', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = targets();
+      const exit = jest.fn();
+      const background = { count: 0, underWay: [], finished: () => new Promise<void>(() => {}) };
+      await createShutdown({ ...t, background }, { exit })('SIGTERM');
+      expect(exit).toHaveBeenCalledWith(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('waits, after the files, for less time than the whole shutdown is given', () => {
+    expect(FILE_WAIT_MS + BACKGROUND_WAIT_MS).toBeLessThan(SHUTDOWN_GRACE_MS);
   });
 });
 

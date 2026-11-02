@@ -573,11 +573,24 @@ Some of those deserve a note:
   builds its own Prisma clients and jest reuses workers across files, so a
   full run once crept up to PostgreSQL's default ceiling of a hundred
   connections and unrelated suites failed with "too many clients already".
-  Two files under `src/__tests__/helpers/` (`jest.setup.ts`,
-  `jest.afterEnv.ts`) cap each pool and disconnect each file's clients when
-  it ends; if you see that error again, look there first, not at the code.
-  That disconnect runs before a file's own top-level `afterAll`, so a file
-  that cleans up the database there ends it with `prisma.$disconnect()`.
+  Files under `src/__tests__/helpers/` (`jest.setup.ts`, `testFileEnd.ts`)
+  cap each pool and disconnect each file's clients when it ends; if you see
+  that error again, look there first, not at the code. The disconnect runs
+  after every hook of the file, so a file's own `afterAll` may clean up the
+  database without disconnecting.
+- **A file ends only once the work the server started has finished.** Some
+  work runs after its request has been answered: the map sent to the table
+  again 100 ms after a token change, explored ground written a second after
+  it was seen. Such work goes through `src/utils/backgroundWork.ts`, which
+  counts it, and both a shutdown and the end of every test file wait for it
+  before closing the database. Started any other way, it can run after Jest
+  has torn the file down and fail the whole run with "You are trying to
+  `require` a file after the Jest environment has been torn down". A file
+  whose work is still under way 5 seconds after its last hook fails, naming
+  the work, and so does one whose clients still have a query running 5
+  seconds after that. Work asked for while fake timers are on starts only if
+  the test advances them past it: switching them off in an `afterEach` does
+  not start it, and the file fails.
 - **A test that needs the server to survive a request runs it as a process of
   its own.** An uncaught exception inside Jest fails the test and nothing
   else, so it cannot show that a request would end the real server.

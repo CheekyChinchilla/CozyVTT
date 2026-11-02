@@ -24,6 +24,7 @@ import { emitToMapReaders } from '../utils';
 import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState, fogFits, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
+import { inBackgroundAfter, type WaitingWork } from '../../utils/backgroundWork';
 
 const MAP_SELECT = {
   campaignId: true, explorationEnabled: true, width: true, height: true, gridSize: true,
@@ -60,7 +61,7 @@ interface QueuedReveal {
   userId: string;
   cells: Set<number>;
   lastWrite: number;
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: WaitingWork | null;
   writing: boolean;
 }
 const queuedReveals = new Map<string, QueuedReveal>();
@@ -79,8 +80,7 @@ function queueReveal(io: Server, campaignId: string, mapId: string, userId: stri
 function scheduleRevealWrite(io: Server, key: string, queued: QueuedReveal): void {
   if (queued.timer || queued.writing || queued.cells.size === 0) return;
   const wait = Math.max(0, queued.lastWrite + REVEAL_WRITE_MS - Date.now());
-  queued.timer = setTimeout(() => void writeQueuedReveal(io, key, queued), wait);
-  queued.timer.unref?.();
+  queued.timer = inBackgroundAfter('explored ground written', wait, () => writeQueuedReveal(io, key, queued));
 }
 
 async function writeQueuedReveal(io: Server, key: string, queued: QueuedReveal): Promise<void> {
@@ -143,7 +143,7 @@ async function writeQueuedReveal(io: Server, key: string, queued: QueuedReveal):
 function forgetQueuedReveals(mapId: string): void {
   for (const [key, queued] of queuedReveals) {
     if (queued.mapId !== mapId) continue;
-    if (queued.timer) clearTimeout(queued.timer);
+    queued.timer?.cancel();
     queued.timer = null;
     queued.cells.clear();
     if (!queued.writing) queuedReveals.delete(key);

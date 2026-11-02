@@ -16,6 +16,7 @@ import { generateSecret, generateSync } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import * as sessionStore from '../../services/sessionStore';
+import { backgroundWork } from '../../utils/backgroundWork';
 
 const app = createTestApp();
 const created: string[] = [];
@@ -72,4 +73,24 @@ it('does not touch the table for a wrong password', async () => {
 
   expect((await request(app).post('/api/auth/login').send({ email: user.email, password: 'wrong-password' })).status).toBe(401);
   expect(capped).not.toHaveBeenCalled();
+});
+
+// Removing the oldest sessions is housekeeping the answer does not wait for.
+// A shutdown, and the end of a test file, let it finish.
+it('answers before the cap is applied, and counts the cap as work under way until it is', async () => {
+  const user = await createTestUser({ displayName: 'Bookkeeping later' });
+  created.push(user.id);
+  let release = () => {};
+  capped.mockImplementationOnce(() => new Promise<number>((resolve) => { release = () => resolve(0); }));
+
+  try {
+    const res = await request(app).post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
+    expect(res.status).toBe(200);
+    expect(capped).toHaveBeenCalledWith(user.id, sidOf(res));
+    expect(backgroundWork.underWay).toContain('the oldest sign-ins past the cap removed');
+  } finally {
+    release();
+  }
+  await backgroundWork.finished();
+  expect(backgroundWork.underWay).toEqual([]);
 });

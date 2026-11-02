@@ -19,6 +19,7 @@ import { setupTokenHint } from './services/setupToken';
 import { backupsInProgress } from './services/backupsInProgress';
 import { personalFilesBeingRemoved } from './services/accountDeletion';
 import { makeDummyPasswordHash } from './services/auth';
+import { backgroundWork } from './utils/backgroundWork';
 
 // An error nothing caught is written to the log before the process ends.
 onProcessFailure();
@@ -40,9 +41,9 @@ const io = initializeWebSocket(httpServer);
 
 // Docker's stop, a service manager's stop and Ctrl+C all end the backend
 // here, which lets a backup being written finish, then closes the sockets,
-// lets the removal of a deleted account's files finish, and closes the
-// database and the session store.
-onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress, restores: restoresInProgress, files: personalFilesBeingRemoved }));
+// lets the removal of a deleted account's files and the other work started
+// in the background finish, and closes the database and the session store.
+onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress, restores: restoresInProgress, files: personalFilesBeingRemoved, background: backgroundWork }));
 
 // ============================================
 // START SERVER
