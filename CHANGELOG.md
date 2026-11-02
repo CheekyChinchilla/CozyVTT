@@ -36,6 +36,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 #### What to do afterwards, if it applies to you
 
 - **Reload any CozyVTT page left open through the upgrade.** Until you do, it shows a whisper to you as an ordinary message; only you and its sender are sent it.
+- **If you have put a symbolic link in `backend/uploads`, such as one to a folder on another disk, back up what it points to on its own.** A backup leaves the link out, and the backend log names it (see [Via the Admin Panel](docs/DEPLOYMENT.md#via-the-admin-panel)). A backup made before the upgrade did not hold those files either.
 
 ### Added
 
