@@ -1,12 +1,13 @@
 // ============================================
 // The menus over the page, as the map needs to know them
 //
-// A menu opened elsewhere closes the map's. The map's token and door menus
-// close on a click anywhere in the window. A right-click or a long-press
-// sends no click, so one that opened the roster's or the initiative
-// tracker's menu left the map's open beside it. A menu says it has opened
-// (`menuOpened`), and the map's menus, while one is open, close when it does
-// (`whenMenuOpens`).
+// A menu's opening closes the others. The map's token and door menus close
+// on a click anywhere in the window, and the character menu on a mousedown
+// outside it. A right-click or a long-press sends no click, and a long-press
+// no mousedown, so one that opened the roster's or the initiative tracker's
+// menu left the map's open beside it, and one on the map left theirs. A menu
+// says it has opened (`menuOpened`), and every open menu, from after its own
+// opening, closes when another does (`whenMenuOpens`).
 //
 // Whether a menu is on the screen. A tap on the map while a menu is open
 // closes the menu, which is all it was for, so it is not the first of a

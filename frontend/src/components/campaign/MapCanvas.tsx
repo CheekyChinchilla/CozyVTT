@@ -141,7 +141,7 @@ import FloatingLayer from '@/components/ui/FloatingLayer';
 import { useCompactLayout } from '@/contexts/LayoutContext';
 import ActionSheet, { headedMenu } from '@/components/campaign/compact/ActionSheet';
 import { TokenSheetPicture, tokenSheetLine } from '@/components/campaign/compact/tokenSheetHeader';
-import { anyMenuShown, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
+import { anyMenuShown, menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
 import { mapImageState, pictureFor, PICTURE_DECODE_WAIT_MS, type LoadedPicture } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
@@ -3676,10 +3676,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   }, [doorContextMenu, compact]);
 
   // A menu opened elsewhere, the roster's or the tracker's, closes these: the
-  // right-click or long-press that opened it sent no click.
+  // right-click or long-press that opened it sent no click. And their opening
+  // closes one of those, which a long-press here, sending no mousedown, would
+  // leave open beside them.
   const mapMenuOpen = contextMenu !== null || doorContextMenu !== null;
   useEffect(() => {
     if (!mapMenuOpen) return;
+    menuOpened();
     return whenMenuOpens(() => {
       closeTokenMenu();
       setDoorContextMenu(null);

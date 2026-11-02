@@ -1018,6 +1018,25 @@ describe('when a menu opens beside the map', () => {
     expect(openCharacterMenu()).not.toBeNull();
     expect(openMenu()).toBeNull();
   });
+
+  // The other way round: a long-press on the map brings no mousedown, which
+  // is what closes the roster's menu.
+  it("closes a roster character's menu as a long-press opens the token menu", async () => {
+    render(<><MapCanvas /><CampaignRoster /></>);
+    show(goblin());
+    const row = await screen.findByText('Brannoc');
+    fireEvent.contextMenu(row, point);
+    expect(openCharacterMenu()).not.toBeNull();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finger = contact('touch', 1);
+    finger.down(surface(), at(0, 19));
+    act(() => { vi.advanceTimersByTime(500); });
+    finger.up(surface(), at(0, 19));
+
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(openCharacterMenu()).toBeNull();
+  });
 });
 
 // The menu holds the token or the door it was opened on, and its items act

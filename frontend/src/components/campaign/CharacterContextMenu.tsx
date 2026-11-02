@@ -9,10 +9,10 @@
  * press anywhere else and its own Escape, are off there.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { MENU_ROW_CLASSES, commandLook, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
 import FloatingLayer from '@/components/ui/FloatingLayer';
-import { menuOpened, menuShown } from '@/components/ui/openMenus';
+import { menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import { useCompactLayout } from '@/contexts/LayoutContext';
 import ActionSheet from '@/components/campaign/compact/ActionSheet';
 
@@ -67,6 +67,12 @@ export default function CharacterContextMenu({
     menuOpened();
     return menuShown();
   }, [drawn]);
+  // And another menu's opening closes this one: a long-press that opens the
+  // map's, or the other list's, brings no mousedown here. It listens from
+  // after its own opening was told, and stays listening while the list hands
+  // it a new onClose on each render, as the roster and the tracker do.
+  const closeOnOtherMenu = useEffectEvent(() => onClose());
+  useEffect(() => (drawn ? whenMenuOpens(() => closeOnOtherMenu()) : undefined), [drawn]);
 
   // Once placed, and so visible: a hidden button cannot take the cursor.
   const placed = pos !== null;
@@ -75,9 +81,6 @@ export default function CharacterContextMenu({
   }, [autoFocus, placed]);
 
   // Close on click outside
-  // TODO(play): a long-press on the map, or on another row, while this menu is open opens a second menu beside it:
-  // its lift brings no mousedown here (map/clickSwallow.ts swallows iOS's, Android sends none). Close this menu when
-  // another opens, as the map's menus do through whenMenuOpens, with each menu passing over its own opening.
   useEffect(() => {
     if (compact) return;
     const handleClickOutside = (event: MouseEvent) => {
