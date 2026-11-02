@@ -658,7 +658,13 @@ Some of those deserve a note:
   `DrawingLayer` enums in `schema.prisma`, when the upload types file
   (`backend/src/validators/uploadTypes.ts`, copied as
   `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
-  differs between the two,
+  differs between the two, when the largest side a picture may have
+  (`backend/src/validators/pictureSizeLimits.ts`, copied as
+  `frontend/src/constants/pictureSizeLimits.ts` for **Draw a map**) differs
+  between the two or from the side the server checks pictures against, when
+  the password fields the U+0000 refusal leaves alone (`PASSWORD_FIELDS` in
+  `backend/src/middleware/nulCharacter.ts`) are not every password field a
+  route reads from its body,
   when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when

@@ -531,10 +531,11 @@ documents and every other asset are left alone, even on a prepared map: a
 token picture uploaded for the next scene is listed to players at once.
 
 The rule is final for a member: when it keeps an asset, nothing else a member
-can point at opens it (a character's picture, a token, a template). A player
-may point their character's picture at a map's while the table is there, and
-the hide must still hold once the table leaves. Only maps, which the DM alone
-sets, and the DM's shared documents count.
+can point at opens it (a character's picture, a token, a template). A
+character's picture set to a map's before pictures had to be token pictures
+(`isTokenPicture` lets a record keep an address it already stores) must still
+be hidden once the table leaves. Only maps, which the DM alone sets, and the
+DM's shared documents count.
 
 One predicate (`campaignMapPictures` and `mapPictureHidden`) feeds both
 `GET /api/assets` (with or without `campaignId`, and with `usable=true`),
