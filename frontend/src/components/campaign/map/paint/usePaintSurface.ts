@@ -218,7 +218,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     setSurface(next);
   }, []);
 
-  /** Let go of the picture and every undo tile, now. */
+  /**
+   * Canvases let go of, whose pixels are freed once the page has rendered
+   * without them: until then the map may still be drawn from one, and a
+   * canvas 0 pixels wide cannot be drawn.
+   */
+  const toRelease = useRef<HTMLCanvasElement[]>([]);
+
+  /** Let go of the picture and every undo tile. */
   const dispose = useCallback(() => {
     const s = surfaceRef.current;
     if (!s) return;
@@ -229,7 +236,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     shapeRef.current = null;
     s.history.clear();
     s.store.dispose();
-    releaseCanvas(s.canvas);
+    toRelease.current.push(s.canvas);
     show(null);
     waitingRef.current = [];
     markDirty('terrain', 'overlay');
@@ -344,7 +351,21 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   useEffect(() => {
     disposeRef.current = dispose;
   }, [dispose]);
-  useEffect(() => () => disposeRef.current(), []);
+  useEffect(() => () => {
+    disposeRef.current();
+    for (const canvas of toRelease.current) releaseCanvas(canvas);
+    toRelease.current = [];
+  }, []);
+  // The pixels of a canvas let go of, once this render no longer draws with it.
+  const drawnCanvas = surface?.canvas ?? null;
+  useEffect(() => {
+    if (toRelease.current.length === 0) return;
+    toRelease.current = toRelease.current.filter((canvas) => {
+      if (canvas === drawnCanvas) return true;
+      releaseCanvas(canvas);
+      return false;
+    });
+  });
 
   // What the rest of the page reads.
   const unsaved = unsavedOf(surface);

@@ -708,6 +708,29 @@ describe('Save', () => {
     expect(usePaintStore.getState().unsaved).toBe(true);
   });
 
+  it('never has the map drawn from a canvas whose pixels are let go of, as Esc after a Save hands back the picture', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await save();
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
+    // The width of each canvas the terrain is drawn from, as it is drawn.
+    const widths: number[] = [];
+    const ctx = terrain().getContext('2d')!;
+    Object.assign(ctx, { drawImage: (source: CanvasImageSource) => { if (source instanceof HTMLCanvasElement) widths.push(source.width); } });
+    press('Escape');
+    // A draw before the picture is back: from Paint's canvas.
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom In' }));
+    await nextFrame();
+    // The saved picture loads again, and Paint's canvas goes.
+    pictures[pictures.length - 1].load();
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom Out' }));
+    await nextFrame();
+    await nextFrame();
+    expect(widths.length).toBeGreaterThan(0);
+    expect(widths.filter((w) => w === 0)).toEqual([]);
+  });
+
   it('deletes nothing for a map that had no picture', async () => {
     await showMap(mapWith({ imageUrl: '' }), { load: false });
     await paintOn();
