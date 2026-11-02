@@ -142,6 +142,12 @@ interface Surface {
   /** Counts every change, undo and redo; differs from `saved` while there is paint to save. */
   revision: number;
   saved: number;
+  /**
+   * The address of the picture the canvas holds: the one it was made from,
+   * then each one saved. A map whose picture is now another was changed
+   * elsewhere (Edit Map, another tab or device).
+   */
+  baseUrl: string;
 }
 
 /** A line, a rectangle or an ellipse being dragged: in map pixels, its outline too. */
@@ -167,6 +173,8 @@ export interface PaintSurfaceOptions {
   campaignId: string | undefined;
   /** Told of a save: the map as pointed at its new picture, and the picture. */
   onSaved: (map: CampaignMap, picture: Asset) => void;
+  /** Told of the map as Save read it, when it differs from the page's: the page shows that one. */
+  onMapRead: (map: CampaignMap) => void;
   /** Its picture as loaded: null for a map with none, and while the page has let go of it (holdsPicture). */
   picture: HTMLImageElement | null;
   /** The page's own picture is drawn again, or has failed to load, or the map has none: nothing is loading. */
@@ -186,7 +194,7 @@ const colourIn = (canvas: HTMLCanvasElement, store: CanvasTileStore, x: number, 
   readColour({ canvas, getImageData: (px, py, w, h) => store.read({ tx: 0, ty: 0, x: px, y: py, w, h }) }, x, y);
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
-  const { map, picture, pictureSettled, campaignId, onSaved, isDM, mapControls, markDirty, refuse, make } = options;
+  const { map, picture, pictureSettled, campaignId, onSaved, onMapRead, isDM, mapControls, markDirty, refuse, make } = options;
   const [on, setOn] = useState(false);
   const onRef = useRef(false);
   const [surface, setSurface] = useState<Surface | null>(null);
@@ -202,6 +210,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   /** Strokes and shapes lifted while an undo was under way, shown until they are painted. */
   const waitingRef = useRef<PaintPreview[]>([]);
   const [saving, setSaving] = useState(false);
+  /** The question about paint not saved over a picture changed elsewhere is open. */
+  const [asking, setAsking] = useState(false);
   const savingRef = useRef(false);
   /**
    * The map as last rendered, for the scale: Edit Map can change its size
@@ -269,7 +279,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const open = useCallback((): boolean => {
     if (!map || !isDM) return false;
     const held = surfaceRef.current;
-    if (held && held.mapId === map.id) {
+    // Paint held over a picture changed elsewhere: asked about first.
+    if (held && held.mapId === map.id && (map.imageUrl ?? '') !== held.baseUrl && unsavedOf(held)) {
+      setAsking(true);
+      return false;
+    }
+    if (held && held.mapId === map.id && (map.imageUrl ?? '') === held.baseUrl) {
       setOn(true);
       onRef.current = true;
       return true;
@@ -318,7 +333,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (history && import.meta.env.MODE !== 'test') console.debug('[paint] undo', history.counts(), 'packing', store.packingBytes());
       },
     });
-    show({ mapId: map.id, canvas, ctx, history, store, revision: 0, saved: 0 });
+    show({ mapId: map.id, canvas, ctx, history, store, revision: 0, saved: 0, baseUrl: map.imageUrl ?? '' });
     setOn(true);
     onRef.current = true;
     markDirty('terrain', 'overlay');
@@ -388,6 +403,24 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
 
   // What the rest of the page reads.
   const unsaved = unsavedOf(surface);
+  // The map's picture was changed elsewhere since the canvas was made or
+  // last saved: the canvas is no longer what the map shows.
+  const stale = surface !== null && map !== null && surface.mapId === map.id && (map.imageUrl ?? '') !== surface.baseUrl;
+  // Paint not saved over a picture changed elsewhere: kept, and the DM is
+  // asked what to do with it, here and each time Paint is pressed until
+  // they say. With nothing to save, the canvas simply goes.
+  const stranded = stale && unsaved;
+  useEffect(() => {
+    if (!stale) return;
+    strokeRef.current?.step.drop();
+    shapeRef.current?.step.drop();
+    strokeRef.current = null;
+    shapeRef.current = null;
+    setOn(false);
+    onRef.current = false;
+    if (stranded) setAsking(true);
+    else dispose();
+  }, [stale, stranded, dispose]);
   // With nothing to save, the canvas goes once the map's own picture is
   // drawn again (or has failed to load), or at once on a map with none.
   useEffect(() => {
@@ -558,15 +591,24 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * has landed. What is painted while the save is under way stays not
    * saved: the picture saved is the one as Save was pressed.
    */
-  const save = useCallback(async () => {
+  const save = useCallback(async (overwrite = false) => {
     const s = surfaceRef.current;
     if (!s || !map || !campaignId || savingRef.current || s.mapId !== map.id) return;
     savingRef.current = true;
     setSaving(true);
     try {
       await s.history.settled();
+      // The map as the server has it now: a picture changed elsewhere,
+      // which this page may not have been told of (a map being prepared
+      // hears nothing of another tab's save), is asked about first.
+      const latest = await mapService.getMap(campaignId, s.mapId);
+      const previous = latest.imageUrl ?? '';
+      if (previous !== s.baseUrl && !overwrite) {
+        if ((map.imageUrl ?? '') !== previous) onMapRead(latest);
+        setAsking(true);
+        return;
+      }
       const asOf = s.revision;
-      const previous = map.imageUrl ?? '';
       const { map: saved, asset } = await savePaint({
         previous,
         makePng: () => pictureToPng(s.canvas),
@@ -577,8 +619,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       });
       if (surfaceRef.current === s) {
         s.saved = asOf;
+        s.baseUrl = saved.imageUrl ?? '';
         bump();
       }
+      setAsking(false);
       onSaved(saved, asset);
     } catch (err) {
       refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
@@ -586,7 +630,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [map, campaignId, bump, onSaved, refuse]);
+  }, [map, campaignId, bump, onSaved, onMapRead, refuse]);
+
+  /** The DM's answer about paint not saved over a picture changed elsewhere. */
+  const answer = useCallback((choice: 'save' | 'discard' | 'later') => {
+    setAsking(false);
+    if (choice === 'save') void save(true);
+    else if (choice === 'discard') dispose();
+  }, [save, dispose]);
 
   /** The eyedropper: the colour of the pixel at map pixel `point` becomes the colour, and the tool before comes back. */
   const pickAt = useCallback((point: PaintPoint) => {
@@ -797,12 +848,17 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     on,
     open,
     close,
-    /** The picture to draw the map with: the one being painted, while there is one for the map on screen. */
-    source: surface && map && surface.mapId === map.id ? surface.canvas : null,
+    /** The picture to draw the map with: the one being painted, while there is one for the map on screen and it is still the map's. */
+    source: surface && map && surface.mapId === map.id && !stale ? surface.canvas : null,
     /** Picture pixels to a map pixel across: a text box is shown as tall as it is painted. */
     scale: surface && map ? surface.canvas.width / (map.width * map.gridSize) : 1,
-    /** Paint is on, or holds paint not saved: the page lets go of the map's own decoded picture meanwhile. */
-    holdsPicture: surface !== null && (on || unsaved),
+    /** Paint is on, or holds paint not saved over the map's picture: the page lets go of its own decoded picture meanwhile. */
+    holdsPicture: surface !== null && !stale && (on || unsaved),
+    /** Paint not saved is held over a picture changed elsewhere: Paint stays offered, to ask about it. */
+    stranded,
+    /** The question about it is open. */
+    asking,
+    answer,
     tool,
     key,
     inProgress,

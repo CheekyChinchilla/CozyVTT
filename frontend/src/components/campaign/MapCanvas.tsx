@@ -137,6 +137,7 @@ import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
 import DrawControls, { type DrawControlsProps, type MemberDrawings } from '@/components/campaign/DrawControls';
 import DrawStrip from '@/components/campaign/DrawStrip';
 import PaintControls from '@/components/campaign/PaintControls';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
 import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
@@ -695,10 +696,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       updateMap(saved.id, saved);
       showToast('Saved. Players on this map see the new picture.', 'success');
     },
+    // Save found the map's picture changed where this page was not told: show the map as it is.
+    onMapRead: (latest) => updateMap(latest.id, latest),
     refuse: (message) => showToast(message, 'error'),
   });
+  // Paint held over a picture changed elsewhere keeps the button, which asks about it.
   const paintOffered = isDM && !!currentMap
-    && (pictureKind === 'none' || pictureKind === 'gone' || (pictureKind === 'drawn' && (imageLoaded || paint.source !== null)));
+    && (paint.stranded || pictureKind === 'none' || pictureKind === 'gone' || (pictureKind === 'drawn' && (imageLoaded || paint.source !== null)));
   // What the map's picture is drawn from: the picture being painted while
   // there is one for this map, else the picture as loaded.
   const terrainSource: CanvasImageSource | null = paint.source ?? mapImage;
@@ -5053,6 +5057,26 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           </div>
         </FloatingLayer>
       )}
+
+      {/* Paint not saved over a picture changed elsewhere: what to do with it. */}
+      <ConfirmDialog
+        isOpen={paint.asking}
+        title="This map's picture changed"
+        message={`The picture of ${currentMap?.name ?? 'this map'} was changed elsewhere, in Edit Map or another tab or device, while you had paint here not saved. Save your painting over the new picture, or discard it?`}
+        confirmLabel="Save my painting over it"
+        cancelLabel="Not now"
+        variant="warning"
+        onConfirm={() => paint.answer('save')}
+        onCancel={() => paint.answer('later')}
+      >
+        <button
+          type="button"
+          onClick={() => paint.answer('discard')}
+          className="touch-target text-sm text-danger-ink underline underline-offset-2 hover:no-underline"
+        >
+          Discard my painting
+        </button>
+      </ConfirmDialog>
 
       <RemoveTokenDialog
         token={removingToken}
