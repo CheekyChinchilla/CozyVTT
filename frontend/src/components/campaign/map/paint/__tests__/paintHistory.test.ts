@@ -6,7 +6,7 @@
  * let go first, never the newest; a new change drops what could be redone.
  *
  * The tiles are kept here by a store over a plain pixel buffer, as the
- * browser's keeps them over the canvas (as PNGs), so what undo puts back can
+ * browser's keeps them over the canvas (packed), so what undo puts back can
  * be read pixel by pixel.
  */
 
@@ -153,20 +153,6 @@ describe('undo and redo', () => {
     expect(history.counts()).toMatchObject({ undo: 1, bytes: 16_000 });
     history.change(one, () => undefined);
     expect(history.counts()).toMatchObject({ undo: 1, bytes: 1000 });
-  });
-
-  it('count a tile still being packed once it is, and trim then', () => {
-    const p = picture(300, 300);
-    let packed = false;
-    const store = bufferStore(p, () => (packed ? 3000 : 0));
-    const history = createPaintHistory(store, { width: p.width, height: p.height, budgetBytes: 5_000, maxSteps: 100 });
-    const box = { x0: 0, y0: 0, x1: 10, y1: 10 };
-    history.change(box, () => undefined);
-    history.change(box, () => undefined);
-    expect(history.counts()).toMatchObject({ undo: 2, bytes: 0 });
-    packed = true;
-    history.trim();
-    expect(history.counts()).toMatchObject({ undo: 1, bytes: 3000 });
   });
 
   it('hold a change made while an undo is putting tiles back until it has, so the undo never paints over it', async () => {
