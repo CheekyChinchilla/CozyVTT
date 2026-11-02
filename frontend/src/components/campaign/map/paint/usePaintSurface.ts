@@ -36,15 +36,21 @@ import { createCanvasTileStore, type CanvasTileStore } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
+import { readColour } from './pixelColour';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { usePaintStore } from '@/stores/paintStore';
 
-/** The tools Paint offers; the brush for now. */
-export type PaintTool = 'brush';
+/** The tools Paint offers. */
+export type PaintTool = 'brush' | 'eraser';
 
 export interface PaintSettings {
   tool: PaintTool;
   colour: string;
+  /**
+   * The second colour, which the eraser paints, as MS Paint's does: the
+   * colour of the picture's top-left pixel as Paint opens on it.
+   */
+  second: string;
   /** Picture pixels, 1 to 64. */
   width: number;
 }
@@ -52,8 +58,12 @@ export interface PaintSettings {
 export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   tool: 'brush',
   colour: DRAWING_LIMITS.namedColors[7],
+  second: DRAWN_MAP_BACKGROUND,
   width: 6,
 };
+
+/** The tool each letter key chooses while Paint is on. */
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser']]);
 
 /** The most the undo tiles may take, packed or still copies waiting to be; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -211,6 +221,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       ctx.fillStyle = DRAWN_MAP_BACKGROUND;
       ctx.fillRect(0, 0, width, height);
     }
+    // The eraser's colour: the picture's own, read off its top-left pixel.
+    const second = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
+    setSettings((prev) => ({ ...prev, second }));
     // The history is made after the store, which tells it of each tile packed.
     let history: PaintHistory | null = null;
     const store = createCanvasTileStore(canvas, { onPacked: () => history?.trim(), make });
@@ -360,7 +373,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
       const step = s.history.begin();
       step.cover(strokeBox(toPicture([point], s.sx, s.sy), look.width));
-      strokeRef.current = { mapId: s.mapId, colour: look.colour, width: look.width, points: [point], step };
+      // The eraser is a brush of the second colour.
+      const colour = look.tool === 'eraser' ? look.second : look.colour;
+      strokeRef.current = { mapId: s.mapId, colour, width: look.width, points: [point], step };
       markDirty('overlay');
       return true;
     },
@@ -405,7 +420,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
 
   /**
    * A key while Paint is on: Ctrl+Z and Ctrl+Y (or Ctrl+Shift+Z) undo and
-   * redo a stroke; on the map, [ and ] change the width and B is the brush.
+   * redo a stroke; on the map, [ and ] change the width and a tool's letter
+   * (B, E) chooses it.
    * Every other key a map tool takes (the arrows, Delete, Backspace, Enter,
    * Ctrl+A, comma and full stop) is Paint's too, and does nothing, so no
    * token or wall moves, turns or goes while it is on. True when the key
@@ -436,8 +452,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return true;
     }
     if (action && action.kind !== 'shortcuts') return true;
-    if (onMap && !ctrl && !e.altKey && letter === 'b') {
-      setSettings((prev) => ({ ...prev, tool: 'brush' }));
+    const chosen = onMap && !ctrl && !e.altKey ? TOOL_KEYS.get(letter) : undefined;
+    if (chosen) {
+      setSettings((prev) => ({ ...prev, tool: chosen }));
       return true;
     }
     return false;

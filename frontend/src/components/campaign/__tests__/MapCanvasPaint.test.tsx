@@ -447,6 +447,38 @@ describe('the brush', () => {
   });
 });
 
+describe('the eraser', () => {
+  /** The style the picture's last stroke was drawn in. */
+  const lastStrokeStyle = () => pictureCanvas()?.getContext('2d')?.strokeStyle;
+
+  it('paints the second colour, the map\'s own at first, in the brush\'s place', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
+    expect(lastStrokeStyle()).toBe('#1a1a1a');
+    fireEvent.click(screen.getByRole('button', { name: 'Eraser' }));
+    expect(screen.getByRole('button', { name: 'Eraser' })).toHaveAttribute('aria-pressed', 'true');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
+    // A picture whose top-left pixel holds nothing erases to parchment.
+    expect(lastStrokeStyle()).toBe('#e8dcc4');
+  });
+
+  it('paints the second colour chosen, and the brush keeps its own', async () => {
+    await showMap();
+    await paintOn();
+    const panel = screen.getByRole('region', { name: 'Paint' });
+    fireEvent.click(within(panel).getByRole('button', { name: /^Second colour/ }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Stone' }));
+    expect(within(panel).getByRole('button', { name: /^Second colour/ })).toHaveAccessibleName('Second colour: Stone');
+    press('e');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
+    expect(lastStrokeStyle()).toBe('#9b958a');
+    press('b');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
+    expect(lastStrokeStyle()).toBe('#1a1a1a');
+  });
+});
+
 describe('the lift', () => {
   it('copies each tile as the stroke first reaches it, and on the lift only paints: no tile copied or packed then', async () => {
     const packed = vi.fn();

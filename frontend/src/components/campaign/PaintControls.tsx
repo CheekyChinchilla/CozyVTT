@@ -1,11 +1,13 @@
 /**
  * PaintControls
- * Paint's panel, while the DM paints a drawn map: the tool, its colour and
- * width, Undo and Redo, and Done. It sets no place of its own: it takes the
- * place of the DM's tool stack while Paint is on.
+ * Paint's panel, while the DM paints a drawn map: the tool, the colour and
+ * the second colour (MS Paint's two), the width, Undo and Redo, and Done.
+ * It sets no place of its own: it heads the DM's tool stack while Paint is
+ * on.
  */
 
-import { Paintbrush, Redo2, Undo2, X } from 'lucide-react';
+import { useState } from 'react';
+import { Eraser, Paintbrush, Redo2, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
@@ -13,11 +15,23 @@ import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 /** Each tool's name, as its button is called, its key and its icon. */
 const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
   brush: { label: 'Brush', key: 'B', icon: Paintbrush },
+  eraser: { label: 'Eraser', key: 'E', icon: Eraser },
 };
 
 const HINTS: Record<PaintTool, string> = {
   brush: 'Drag to paint, or tap for a dot. Two fingers, or the right mouse button, move the map.',
+  eraser: 'Drag to paint the second colour over what is there, as MS Paint\'s eraser does.',
 };
+
+/** A colour's name as the palette gives it, or its #rrggbb. */
+const nameOf = (value: string) => PAINT_COLOURS.find((c) => c.value === value)?.name ?? value;
+
+/** Which of the two colours the palette sets. */
+type Slot = 'colour' | 'second';
+const SLOTS: ReadonlyArray<{ slot: Slot; label: string }> = [
+  { slot: 'colour', label: 'Colour' },
+  { slot: 'second', label: 'Second colour' },
+];
 
 export interface PaintControlsProps {
   settings: PaintSettings;
@@ -39,7 +53,9 @@ const toolButton = (on: boolean) =>
 const actionButton = 'touch-target inline-flex items-center justify-center gap-1 px-2 h-8 rounded border text-[11px] bg-stone-700/60 text-stone-300 border-stone-600/50 hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed';
 
 export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onClose }: PaintControlsProps) {
-  const custom = !PAINT_COLOURS.some((c) => c.value === settings.colour);
+  const [slot, setSlot] = useState<Slot>('colour');
+  const chosen = settings[slot];
+  const custom = !PAINT_COLOURS.some((c) => c.value === chosen);
   return (
     <section
       aria-label="Paint"
@@ -86,20 +102,38 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
       <p className="text-[11px] leading-snug text-stone-400">{HINTS[settings.tool]}</p>
 
       <div>
-        <span className="text-[10px] text-stone-400 block mb-1">Colour</span>
+        {/* The two colours; the palette sets the one chosen here. */}
+        <div className="flex items-center gap-1 mb-1">
+          {SLOTS.map(({ slot: which, label }) => (
+            <button
+              key={which}
+              type="button"
+              aria-label={`${label}: ${nameOf(settings[which])}`}
+              aria-pressed={slot === which}
+              title={`${label}: the palette sets it while it is chosen`}
+              onClick={() => setSlot(which)}
+              className={`touch-target inline-flex items-center gap-1.5 px-1.5 h-7 rounded border text-[10px] ${
+                slot === which ? 'border-amber-400/60 bg-amber-400/15 text-amber-100' : 'border-stone-600/50 text-stone-400'
+              }`}
+            >
+              <span className="block w-4 h-4 rounded-sm border border-stone-500" style={{ backgroundColor: settings[which] }} />
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-1">
           {PAINT_COLOURS.map((colour) => (
             <button
               key={colour.value}
               type="button"
               aria-label={colour.name}
-              aria-pressed={settings.colour === colour.value}
+              aria-pressed={chosen === colour.value}
               title={colour.name}
-              onClick={() => onSettingsChange({ colour: colour.value })}
+              onClick={() => onSettingsChange({ [slot]: colour.value })}
               className="touch-target inline-flex items-center justify-center w-6 h-6"
             >
               <span
-                className={`block w-5 h-5 rounded-full border-2 ${settings.colour === colour.value ? 'border-amber-300 scale-110' : 'border-stone-500'}`}
+                className={`block w-5 h-5 rounded-full border-2 ${chosen === colour.value ? 'border-amber-300 scale-110' : 'border-stone-500'}`}
                 style={{ backgroundColor: colour.value }}
               />
             </button>
@@ -108,10 +142,10 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
             <input
               type="color"
               aria-label="Another colour"
-              value={settings.colour}
+              value={chosen}
               onChange={(e) => {
                 const colour = pickedColour(e.target.value);
-                if (colour) onSettingsChange({ colour });
+                if (colour) onSettingsChange({ [slot]: colour });
               }}
               className="w-5 h-5 cursor-pointer border-0 bg-transparent p-0"
             />
