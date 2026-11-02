@@ -9,10 +9,10 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  DRAFT_CHUNK, DRAFTS_FULL, DraftsUnavailable, draftKey, draftsFailedMessage, draftTime, dropDrafts, indexedDbDraftStore, isDraftHeader,
+  DRAFT_CHUNK, DRAFTS_FULL, DraftsUnavailable, draftKey, draftsFailedMessage, draftTileBox, draftTime, dropDrafts, indexedDbDraftStore, isDraftHeader,
   makePaintTab, newestDraft, packDraftTiles, paintDraftStore, putDraftTiles, type DraftHeader, type DraftStore, type PaintTab,
 } from '../paintDrafts';
-import { qoiEncode } from '../qoi';
+import { qoiDecodeInto, qoiEncode } from '../qoi';
 import { memoryDraftStore } from '@/test/memoryDraftStore';
 import { fakeIndexedDb, type FakeIndexedDb } from '@/test/fakeIndexedDb';
 import { tilesTouching } from '../paintHistory';
@@ -40,27 +40,100 @@ function pixelContext(width: number, height: number) {
 }
 
 const at = (ctx: { data: Uint8ClampedArray }, width: number, x: number, y: number) => [...ctx.data.subarray((y * width + x) * 4, (y * width + x) * 4 + 4)];
+/** Fill a box of a picture `width` wide with one colour. */
+function fill(ctx: { data: Uint8ClampedArray }, width: number, box: { x0: number; y0: number; x1: number; y1: number }, colour: number[]) {
+  for (let y = box.y0; y < box.y1; y += 1) for (let x = box.x0; x < box.x1; x += 1) ctx.data.set(colour, (y * width + x) * 4);
+}
+const FLOOR = [200, 180, 150, 255];
+const WOOD = [74, 52, 35, 255];
+const GRASS = [121, 160, 80, 255];
+const DOOR = [10, 10, 10, 255];
+const NOTHING = [0, 0, 0, 0];
 
 describe('a draft\'s tiles', () => {
   it('put back the pixels they were packed from, in their places, the edge tiles cut', () => {
     const from = pixelContext(600, 300);
-    for (let i = 0; i < from.data.length; i += 4) from.data.set([i % 251, (i >> 8) % 253, 40, 255], i);
+    const { data } = from;
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = i % 251;
+      data[i + 1] = (i >> 8) % 253;
+      data[i + 2] = 40;
+      data[i + 3] = 255;
+    }
     const tiles = packDraftTiles(from, tilesTouching({ x0: 0, y0: 0, x1: 600, y1: 300 }, 600, 300));
     expect(tiles.map((t) => `${t.tx},${t.ty}`)).toEqual(['0,0', '1,0', '2,0', '0,1', '1,1', '2,1']);
 
     const to = pixelContext(600, 300);
-    const put = putDraftTiles(to, tiles, 600, 300);
-    expect(put).toHaveLength(6);
-    expect(to.data).toEqual(from.data);
+    const size = { width: 600, height: 300 };
+    expect(putDraftTiles(to, tiles, size, size)).toBe(6);
+    // The first byte that differs, if any: comparing them one by one as values is slow.
+    expect(to.data.findIndex((value, i) => value !== data[i])).toBe(-1);
     expect(at(to, 600, 599, 299)).toEqual(at(from, 600, 599, 299));
   });
 
-  it('leave out a tile that no longer fits its place, in a picture of another size', () => {
+  it('hold only what was painted where the tile as saved is known: the rest is kept as nothing', () => {
+    const picture = pixelContext(256, 256);
+    fill(picture, 256, { x0: 0, y0: 0, x1: 256, y1: 256 }, FLOOR);
+    const [tile] = tilesTouching({ x0: 0, y0: 0, x1: 256, y1: 256 }, 256, 256);
+    // Kept as undo keeps it, before the first stroke.
+    const saved = qoiEncode(picture.getImageData(0, 0, 256, 256).data);
+    fill(picture, 256, { x0: 10, y0: 10, x1: 20, y1: 20 }, WOOD);
+    const [packed] = packDraftTiles(picture, [tile], () => saved);
+    const unpacked = { data: new Uint8ClampedArray(256 * 256 * 4) };
+    expect(qoiDecodeInto(packed.packed, unpacked.data)).toBe(true);
+    expect(at(unpacked, 256, 15, 15)).toEqual(WOOD);
+    expect(at(unpacked, 256, 100, 100)).toEqual(NOTHING);
+    // Without the tile as saved, all of it.
+    const [whole] = packDraftTiles(picture, [tile]);
+    expect(qoiDecodeInto(whole.packed, unpacked.data)).toBe(true);
+    expect(at(unpacked, 256, 100, 100)).toEqual(FLOOR);
+  });
+
+  it('put back only what was painted over a newer picture, which keeps what it has around the paint', () => {
+    const picture = pixelContext(256, 256);
+    fill(picture, 256, { x0: 0, y0: 0, x1: 256, y1: 256 }, FLOOR);
+    const saved = qoiEncode(picture.getImageData(0, 0, 256, 256).data);
+    fill(picture, 256, { x0: 10, y0: 10, x1: 20, y1: 20 }, WOOD);
+    const tiles = packDraftTiles(picture, tilesTouching({ x0: 0, y0: 0, x1: 256, y1: 256 }, 256, 256), () => saved);
+    // Saved meanwhile from another tab: grass, and a door in the same tile.
+    const newer = pixelContext(256, 256);
+    fill(newer, 256, { x0: 0, y0: 0, x1: 256, y1: 256 }, GRASS);
+    fill(newer, 256, { x0: 100, y0: 100, x1: 110, y1: 110 }, DOOR);
+    const size = { width: 256, height: 256 };
+    expect(putDraftTiles(newer, tiles, size, size)).toBe(1);
+    expect(at(newer, 256, 15, 15)).toEqual(WOOD);
+    expect(at(newer, 256, 105, 105)).toEqual(DOOR);
+    expect(at(newer, 256, 200, 200)).toEqual(GRASS);
+  });
+
+  it('stretch each tile with the picture onto one of another size, as Edit Map stretches the picture, through canvases let go of after', () => {
+    const from = pixelContext(1000, 300);
+    const tiles = packDraftTiles(from, tilesTouching({ x0: 0, y0: 0, x1: 1000, y1: 300 }, 1000, 300));
+    const drawn: unknown[][] = [];
+    const to = Object.assign(pixelContext(1500, 300), { drawImage: (...args: unknown[]) => { drawn.push(args); } });
+    const made: HTMLCanvasElement[] = [];
+    const make = () => {
+      const canvas = document.createElement('canvas');
+      Object.defineProperty(canvas, 'getContext', { value: () => pixelContext(256, 256) });
+      made.push(canvas);
+      return canvas;
+    };
+    expect(putDraftTiles(to, tiles, { width: 1000, height: 300 }, { width: 1500, height: 300 }, make)).toBe(8);
+    // A map 20 squares wide given 10 more in Edit Map: half as wide again, the height kept.
+    expect(drawn.map((args) => args.slice(1))).toEqual([
+      [0, 0, 384, 256], [384, 0, 384, 256], [768, 0, 384, 256], [1152, 0, 348, 256],
+      [0, 256, 384, 44], [384, 256, 384, 44], [768, 256, 384, 44], [1152, 256, 348, 44],
+    ]);
+    expect(draftTileBox({ tx: 3, ty: 1 }, { width: 1000, height: 300 }, { width: 1500, height: 300 })).toEqual({ x0: 1152, y0: 256, x1: 1500, y1: 300 });
+    expect(made.map((c) => [c.width, c.height])).toEqual([[0, 0], [0, 0], [0, 0], [0, 0]]);
+  });
+
+  it('leave out a tile past its picture\'s edge, or one that does not unpack to its size', () => {
     const from = pixelContext(600, 300);
-    const tiles = packDraftTiles(from, tilesTouching({ x0: 0, y0: 0, x1: 600, y1: 300 }, 600, 300));
-    const smaller = pixelContext(500, 300);
-    // Tile 1,0 was 256 wide and is now 244; tile 2,0 is off the picture.
-    expect(putDraftTiles(smaller, tiles, 500, 300).map((t) => `${t.tx},${t.ty}`)).toEqual(['0,0', '0,1']);
+    const [first, second] = packDraftTiles(from, tilesTouching({ x0: 0, y0: 0, x1: 512, y1: 256 }, 600, 300));
+    const size = { width: 600, height: 300 };
+    expect(putDraftTiles(pixelContext(600, 300), [first, { ...second, tx: 5 }, { ...second, packed: first.packed.slice(0, 3) }], size, size)).toBe(1);
+    expect(draftTileBox({ tx: 5, ty: 0 }, size, size)).toBeNull();
   });
 });
 

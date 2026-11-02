@@ -245,11 +245,11 @@ Undo keeps up to 50 changes. It keeps only the part of the picture each change t
 
 | Answer | What happens |
 |---|---|
-| **Restore my painting** | Paint opens with your painting put back, not yet saved. **Undo** starts from there |
+| **Restore my painting** | Paint opens with your painting put back, not yet saved. **Undo** takes the restore back |
 | **Discard it** | The draft is dropped and Paint opens on the picture as it was saved |
 | **Not now** (or `Esc`) | Nothing changes: the draft stays and Paint stays off, until you click **Paint** again |
 
-If the map's picture was saved or changed since the draft was written, the question says the painting "was painted on an older picture of this map", and **Restore it over this picture** puts the parts you painted over the newer picture. **Save**, **Discard my painting** and deleting the map in the Map Library clear the draft, and a draft of a map deleted from another device is dropped the next time you open the campaign.
+If the map's picture was saved or changed since the draft was written, or **Edit Map** changed the map's squares or grid size, the question says the painting "was painted on an older picture of this map". **Restore it over this picture** puts back what you painted, and only that, over the picture the map has now: what the newer picture holds around your strokes stays as it is. If the map's size changed, your painting is stretched with the picture, so it lands where you painted it on the map. **Undo** takes the restore back. **Save**, **Discard my painting** and deleting the map in the Map Library clear the draft, and a draft of a map deleted from another device is dropped the next time you open the campaign.
 
 A draft is kept in that browser only, for you and that map, and for each tab: two tabs painting one map keep a draft each, and neither touches the other's. **Paint** offers the newest draft of the map from that tab, or from a tab you have closed since; a tab still open keeps its own. (Over plain `http://`, unless the server is on the same computer, a browser cannot tell which tabs are open, so it offers the newest draft of any tab.) Another browser or device has its own drafts. Clearing the browser's site data clears them too, and Safari (on a Mac, an iPhone or an iPad) may clear what a site keeps after seven days in which you have not used it, so do not leave a painting unsaved for a week. If the browser cannot keep drafts (some private windows), Paint says "This browser cannot keep a draft of your painting, so save it often: what is not saved is lost if the page closes." once, and you paint on as before; if it is out of room it says "This browser has no room left to keep a draft of your painting" instead.
 

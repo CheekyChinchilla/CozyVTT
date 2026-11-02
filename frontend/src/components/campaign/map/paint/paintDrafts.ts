@@ -5,11 +5,14 @@
 // background would take paint not saved with it, so Paint keeps a draft in
 // the browser's IndexedDB: at least every DRAFT_INTERVAL_MS while there is
 // something new, and at once when the page is hidden or the picture is let
-// go of. A draft is the picture it was made from (its address) and the
-// tiles painted on it since (PAINT_TILE pixels a side, packed as the undo
-// tiles are, qoi.ts), one record a tile overwritten in place, so it is never
-// larger than the picture packed and each write carries only the tiles
-// changed since the one before, in transactions of DRAFT_CHUNK tiles.
+// go of. A draft is the picture it was made from (its address and size) and
+// the tiles painted on it since (PAINT_TILE pixels a side, packed as the
+// undo tiles are, qoi.ts), each holding only what was painted: a pixel as
+// the picture had it is kept as nothing. It is one record a tile overwritten
+// in place, so it is never larger than the picture packed and each write
+// carries only the tiles changed since the one before, in transactions of
+// DRAFT_CHUNK tiles. Put back, it paints only what was painted over the
+// picture as it is then, stretched with it where the map's size changed.
 //
 // Drafts are kept per user, campaign, map and tab, so two tabs painting one
 // map never cut each other's. A tab is told apart by an id it keeps in
@@ -25,8 +28,9 @@
 // private window, storage full) says so once, and Paint carries on.
 // ============================================
 
-import { PAINT_TILE, type TileRect } from './paintHistory';
+import { PAINT_TILE, type PaintBox, type TileRect } from './paintHistory';
 import { qoiDecodeInto, qoiEncode } from './qoi';
+import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { optionalSessionStorage } from '@/utils/optionalStorage';
 
 /** The longest Paint goes without writing what is new to its draft. */
@@ -105,27 +109,127 @@ export function draftTime(savedAt: number, now: number = Date.now()): string {
     : `${at.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${time}`;
 }
 
-/** The tiles' pixels as the picture `ctx` holds them now, packed for a draft. */
-export function packDraftTiles(ctx: CanvasRenderingContext2D, tiles: readonly TileRect[]): DraftTile[] {
-  return tiles.map((t) => ({ tx: t.tx, ty: t.ty, packed: qoiEncode(ctx.getImageData(t.x, t.y, t.w, t.h).data) }));
+/** A picture's size, in pixels. */
+export interface PictureSize {
+  width: number;
+  height: number;
+}
+
+/** A tile's place in a picture of `size`, cut at its edge; null past it. */
+function tileIn(tx: number, ty: number, size: PictureSize): TileRect | null {
+  const x = tx * PAINT_TILE;
+  const y = ty * PAINT_TILE;
+  if (tx < 0 || ty < 0 || x >= size.width || y >= size.height) return null;
+  return { tx, ty, x, y, w: Math.min(PAINT_TILE, size.width - x), h: Math.min(PAINT_TILE, size.height - y) };
+}
+
+/** Reused between tiles: a tile as the picture saved had it, unpacked. */
+let unpacked = new Uint8ClampedArray(0);
+
+/**
+ * The tiles' pixels as the picture `ctx` holds them now, packed for a draft.
+ * Where `saved` has a tile as the picture saved had it (packed as undo's
+ * tiles are), each pixel still as it was there is kept as nothing, all four
+ * bytes 0: a draft holds only what was painted. A picture Paint holds is
+ * opaque, so no painted pixel is ever nothing.
+ */
+export function packDraftTiles(
+  ctx: CanvasRenderingContext2D,
+  tiles: readonly TileRect[],
+  saved?: (tile: TileRect) => Uint8Array | undefined,
+): DraftTile[] {
+  return tiles.map((t) => {
+    const pixels = ctx.getImageData(t.x, t.y, t.w, t.h).data;
+    const before = saved?.(t);
+    if (before) {
+      if (unpacked.length !== pixels.length) unpacked = new Uint8ClampedArray(pixels.length);
+      if (qoiDecodeInto(before, unpacked)) {
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i] === unpacked[i] && pixels[i + 1] === unpacked[i + 1] && pixels[i + 2] === unpacked[i + 2] && pixels[i + 3] === unpacked[i + 3]) {
+            pixels[i] = 0;
+            pixels[i + 1] = 0;
+            pixels[i + 2] = 0;
+            pixels[i + 3] = 0;
+          }
+        }
+      }
+    }
+    return { tx: t.tx, ty: t.ty, packed: qoiEncode(pixels) };
+  });
 }
 
 /**
- * Put a draft's tiles back into a `width` by `height` picture, answering the
- * tiles put. A tile that does not fit its place (the picture is another size
- * now) is left out.
+ * Where a draft's tile, of a picture `from` in size, goes on one `to` in
+ * size: stretched with the picture, as the map's picture is when Edit Map
+ * changes its squares or grid. Null for a tile past its picture's edge.
  */
-export function putDraftTiles(ctx: CanvasRenderingContext2D, tiles: readonly DraftTile[], width: number, height: number): TileRect[] {
-  const put: TileRect[] = [];
-  for (const { tx, ty, packed } of tiles) {
-    const x = tx * PAINT_TILE;
-    const y = ty * PAINT_TILE;
-    if (tx < 0 || ty < 0 || x >= width || y >= height) continue;
-    const rect: TileRect = { tx, ty, x, y, w: Math.min(PAINT_TILE, width - x), h: Math.min(PAINT_TILE, height - y) };
-    const pixels = ctx.createImageData(rect.w, rect.h);
-    if (!qoiDecodeInto(packed, pixels.data)) continue;
-    ctx.putImageData(pixels, x, y);
-    put.push(rect);
+export function draftTileBox(tile: Pick<DraftTile, 'tx' | 'ty'>, from: PictureSize, to: PictureSize): PaintBox | null {
+  const rect = tileIn(tile.tx, tile.ty, from);
+  if (!rect) return null;
+  const sx = to.width / from.width;
+  const sy = to.height / from.height;
+  return { x0: rect.x * sx, y0: rect.y * sy, x1: (rect.x + rect.w) * sx, y1: (rect.y + rect.h) * sy };
+}
+
+/**
+ * Put back what a draft painted, from tiles of a picture `from` in size,
+ * into one `to` in size, over whatever it holds there now: the pixels kept
+ * as nothing are left as they are. On a picture of the same size each pixel
+ * goes back exactly; on one of another size each tile is stretched to its
+ * place (draftTileBox), through a canvas of its own (`make`). Answers how
+ * many tiles were put back: one that does not unpack to its size, or lies
+ * past its picture's edge, is left out.
+ */
+export function putDraftTiles(
+  ctx: CanvasRenderingContext2D,
+  tiles: readonly DraftTile[],
+  from: PictureSize,
+  to: PictureSize,
+  make: MakeCanvas = () => document.createElement('canvas'),
+): number {
+  const same = from.width === to.width && from.height === to.height;
+  /** A canvas for each size of tile stretched, let go of once all are put. */
+  const through = new Map<string, { canvas: HTMLCanvasElement; tctx: CanvasRenderingContext2D }>();
+  let put = 0;
+  try {
+    for (const tile of tiles) {
+      const rect = tileIn(tile.tx, tile.ty, from);
+      const box = draftTileBox(tile, from, to);
+      if (!rect || !box) continue;
+      const painted = ctx.createImageData(rect.w, rect.h);
+      if (!qoiDecodeInto(tile.packed, painted.data)) continue;
+      if (same) {
+        const now = ctx.getImageData(rect.x, rect.y, rect.w, rect.h);
+        for (let i = 0; i < painted.data.length; i += 4) {
+          if (painted.data[i + 3] === 0) continue;
+          now.data[i] = painted.data[i];
+          now.data[i + 1] = painted.data[i + 1];
+          now.data[i + 2] = painted.data[i + 2];
+          now.data[i + 3] = painted.data[i + 3];
+        }
+        ctx.putImageData(now, rect.x, rect.y);
+      } else {
+        const size = `${rect.w}x${rect.h}`;
+        let made = through.get(size);
+        if (!made) {
+          const canvas = make();
+          canvas.width = rect.w;
+          canvas.height = rect.h;
+          const tctx = canvas.getContext('2d');
+          if (!tctx) {
+            releaseCanvas(canvas);
+            continue;
+          }
+          made = { canvas, tctx };
+          through.set(size, made);
+        }
+        made.tctx.putImageData(painted, 0, 0);
+        ctx.drawImage(made.canvas, box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0);
+      }
+      put += 1;
+    }
+  } finally {
+    for (const { canvas } of through.values()) releaseCanvas(canvas);
   }
   return put;
 }
