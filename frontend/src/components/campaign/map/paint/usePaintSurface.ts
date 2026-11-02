@@ -137,9 +137,6 @@ interface Surface {
   mapId: string;
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
-  /** Picture pixels to a map pixel, across and down. */
-  sx: number;
-  sy: number;
   history: PaintHistory<KeptTile>;
   store: CanvasTileStore;
   /** Counts every change, undo and redo; differs from `saved` while there is paint to save. */
@@ -206,6 +203,20 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const waitingRef = useRef<PaintPreview[]>([]);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  /**
+   * The map as last rendered, for the scale: Edit Map can change its size
+   * while Paint holds its picture, which is then stretched over the new size.
+   */
+  const mapRef = useRef(map);
+  useEffect(() => {
+    mapRef.current = map;
+  });
+  /** Picture pixels to a map pixel, across and down, from the map's size now. */
+  const xy = useCallback((s: Surface): [number, number] => {
+    const m = mapRef.current;
+    if (!m || m.id !== s.mapId) return [1, 1];
+    return [s.canvas.width / (m.width * m.gridSize), s.canvas.height / (m.height * m.gridSize)];
+  }, []);
   /** Bumped when the history changes, so the panel's Undo and Redo follow. */
   const [, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -264,8 +275,6 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return true;
     }
     if (held) dispose();
-    const mapW = map.width * map.gridSize;
-    const mapH = map.height * map.gridSize;
     const size = drawnPictureSize(map.width, map.height, map.gridSize);
     if (!size.fits) {
       refuse(PAINT_TOO_LARGE);
@@ -309,7 +318,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (history && import.meta.env.MODE !== 'test') console.debug('[paint] undo', history.counts(), 'packing', store.packingBytes());
       },
     });
-    show({ mapId: map.id, canvas, ctx, sx: width / mapW, sy: height / mapH, history, store, revision: 0, saved: 0 });
+    show({ mapId: map.id, canvas, ctx, history, store, revision: 0, saved: 0 });
     setOn(true);
     onRef.current = true;
     markDirty('terrain', 'overlay');
@@ -435,11 +444,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       stroke.step.drop();
       return;
     }
-    const points = toPicture(stroke.points, s.sx, s.sy);
-    land(stroke.step, { kind: 'stroke', points: stroke.points, width: stroke.width / s.sx, colour: stroke.colour }, () => {
+    const points = toPicture(stroke.points, ...xy(s));
+    land(stroke.step, { kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour }, () => {
       strokePaint(s.ctx, points, stroke.width, stroke.colour);
     });
-  }, [land]);
+  }, [land, xy]);
 
   /**
    * Fill the area at map pixel `point` with the colour, tile by tile
@@ -469,7 +478,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
           step.keep(tile, s.store.adopt(tile, s.store.copy(pixels)));
         },
         write: (tile, pixels) => s.ctx.putImageData(pixels, tile.x, tile.y),
-      }, point[0] * s.sx, point[1] * s.sy, hexToRgba(look.colour), Math.round(look.tolerance * 2.55));
+      }, point[0] * xy(s)[0], point[1] * xy(s)[1], hexToRgba(look.colour), Math.round(look.tolerance * 2.55));
     } catch (err) {
       console.warn('[paint] A fill could not read the picture:', errorSummary(err));
       refuse(FILL_TOO_LARGE);
@@ -485,7 +494,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       bump();
       markDirty('terrain');
     });
-  }, [bump, markDirty, refuse]);
+  }, [bump, markDirty, refuse, xy]);
 
   const closeText = useCallback(() => {
     textRef.current = null;
@@ -513,7 +522,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const look = settingsRef.current;
     const size = labelFontSize(look.width);
     const font = textFont(size);
-    const [x, y] = toPicture([open.at], s.sx, s.sy)[0];
+    const [x, y] = toPicture([open.at], ...xy(s))[0];
     const loaded = typeof document !== 'undefined' && document.fonts ? document.fonts.load(font).catch(() => undefined) : Promise.resolve();
     void loaded.then(() => {
       if (surfaceRef.current !== s) return;
@@ -537,7 +546,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         }
       });
     });
-  }, [closeText, land]);
+  }, [closeText, land, xy]);
 
   const commitTextRef = useRef(commitText);
   useEffect(() => {
@@ -583,10 +592,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const pickAt = useCallback((point: PaintPoint) => {
     const s = surfaceRef.current;
     if (!s) return;
-    const [x, y] = toPicture([point], s.sx, s.sy)[0];
+    const [x, y] = toPicture([point], ...xy(s))[0];
     const colour = colourIn(s.canvas, s.store, x, y);
     setSettings((prev) => ({ ...prev, ...(colour ? { colour } : {}), tool: lastToolRef.current }));
-  }, []);
+  }, [xy]);
 
   /** Paint a lifted shape into the picture, as a stroke is. */
   const commitShape = useCallback((under: ShapeUnderWay) => {
@@ -595,9 +604,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       under.step.drop();
       return;
     }
-    const shape = scaleShape(under.shape, s.sx, s.sy);
+    const shape = scaleShape(under.shape, ...xy(s));
     land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape));
-  }, [land]);
+  }, [land, xy]);
 
   const step = useCallback((direction: 'undo' | 'redo') => {
     const s = surfaceRef.current;
@@ -648,13 +657,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         shapeRef.current = {
           mapId: s.mapId,
           step: s.history.begin(),
-          shape: { kind: look.tool, from, to: from, width: look.width / s.sx, colour: look.colour, second: look.second, style: look.style },
+          shape: { kind: look.tool, from, to: from, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: look.style },
         };
         markDirty('overlay');
         return true;
       }
       const step = s.history.begin();
-      step.cover(strokeBox(toPicture([point], s.sx, s.sy), look.width));
+      step.cover(strokeBox(toPicture([point], ...xy(s)), look.width));
       // The eraser is a brush of the second colour.
       const colour = look.tool === 'eraser' ? look.second : look.colour;
       strokeRef.current = { mapId: s.mapId, colour, width: look.width, points: [point], step };
@@ -672,7 +681,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         under.shape = { ...under.shape, to };
         // The tiles the shape reaches as it grows, kept as they are before it lands.
         const s = surfaceRef.current;
-        if (s) under.step.cover(shapeBox(scaleShape(under.shape, s.sx, s.sy)));
+        if (s) under.step.cover(shapeBox(scaleShape(under.shape, ...xy(s))));
         markDirty('overlay');
         return true;
       }
@@ -684,7 +693,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
           stroke.points.push(point);
           // The tiles this piece of the stroke reaches, kept as they are before it lands.
           const s = surfaceRef.current;
-          if (s) stroke.step.cover(strokeBox(toPicture([last, point], s.sx, s.sy), stroke.width));
+          if (s) stroke.step.cover(strokeBox(toPicture([last, point], ...xy(s)), stroke.width));
         }
         markDirty('overlay');
         return true;
@@ -778,10 +787,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!s) return [];
     const shown: PaintPreview[] = [...waitingRef.current];
     const stroke = strokeRef.current;
-    if (stroke) shown.push({ kind: 'stroke', points: stroke.points, width: stroke.width / s.sx, colour: stroke.colour });
+    if (stroke) shown.push({ kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour });
     if (shapeRef.current) shown.push({ kind: 'shape', shape: shapeRef.current.shape });
     return shown;
-  }, []);
+  }, [xy]);
 
   return {
     /** Paint is on. */
@@ -791,7 +800,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     /** The picture to draw the map with: the one being painted, while there is one for the map on screen. */
     source: surface && map && surface.mapId === map.id ? surface.canvas : null,
     /** Picture pixels to a map pixel across: a text box is shown as tall as it is painted. */
-    scale: surface?.sx ?? 1,
+    scale: surface && map ? surface.canvas.width / (map.width * map.gridSize) : 1,
     /** Paint is on, or holds paint not saved: the page lets go of the map's own decoded picture meanwhile. */
     holdsPicture: surface !== null && (on || unsaved),
     tool,
