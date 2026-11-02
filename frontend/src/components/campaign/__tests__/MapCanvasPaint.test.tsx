@@ -28,7 +28,7 @@ import { recordDrawing, nextFrame, pictures, type Call } from '@/test/recordingC
 import { contact, mouse } from '@/test/pointer';
 import { usePaintStore } from '@/stores/paintStore';
 import { memoryDraftStore, type MemoryDraftStore } from '@/test/memoryDraftStore';
-import { draftKey, draftTime, DRAFT_INTERVAL_MS, DRAFTS_UNAVAILABLE } from '../map/paint/paintDrafts';
+import { draftKey, draftTime, DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_FULL, DRAFTS_UNAVAILABLE } from '../map/paint/paintDrafts';
 import { qoiEncode } from '../map/paint/qoi';
 import { viewedMapGuards } from '@/test/viewedMapContext';
 import { leavePageWith } from '@/services/pageLeave';
@@ -75,6 +75,9 @@ const h = vi.hoisted(() => {
     getMap: vi.fn(),
     /** The draft store Paint is given; a fresh one each test. */
     drafts: { store: null as unknown },
+    /** This tab, as drafts tell tabs apart, and the other tabs open now (null: the browser cannot tell). */
+    tab: { id: () => 'this-tab', open: (): Promise<Set<string> | null> => Promise.resolve(h.openTabs) },
+    openTabs: null as Set<string> | null,
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => version,
     set(patch: Partial<typeof state>) {
@@ -89,6 +92,7 @@ vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => 
 vi.mock('../map/paint/paintDrafts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../map/paint/paintDrafts')>()),
   paintDraftStore: () => h.drafts.store,
+  paintTab: () => h.tab,
 }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
@@ -261,6 +265,7 @@ const drafts = () => h.drafts.store as MemoryDraftStore;
 
 beforeEach(() => {
   h.drafts.store = memoryDraftStore();
+  h.openTabs = null;
   h.sent.length = 0;
   h.handlers.clear();
   h.getAsset.mockReset().mockResolvedValue(drawnAsset());
@@ -1133,15 +1138,19 @@ describe('on the table\'s map', () => {
  * offered back when Paint opens on the map again.
  */
 describe('drafts', () => {
-  const key = draftKey('me', 'campaign-1', 'map-a');
+  /** This tab's draft of map-a. */
+  const key = draftKey('me', 'campaign-1', 'map-a', 'this-tab');
+  /** The draft a tab closed since left of map-a. */
+  const closedKey = draftKey('me', 'campaign-1', 'map-a', 'closed-tab');
   /** Let the draft's write, queued behind any before it, land. */
   const settle = () => act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
   const restoreQuestion = () => screen.queryByRole('dialog', { name: 'Restore your painting?' });
-  /** A draft kept for map-a, of the two tiles at the top left, as a reload would find it. */
-  function keepDraft(baseUrl: string, savedAt = Date.now()) {
+  /** A draft kept for map-a by a tab (closed, unless said), of the two tiles at the top left, as a reload would find it. */
+  function keepDraft(baseUrl: string, savedAt = Date.now(), tabId = 'closed-tab') {
     const blank = qoiEncode(new Uint8ClampedArray(256 * 256 * 4));
-    drafts().headers.set(key, { key, userId: 'me', campaignId: 'campaign-1', mapId: 'map-a', baseUrl, width: 1000, height: 1000, savedAt });
-    drafts().kept.set(key, new Map([['0,0', { tx: 0, ty: 0, packed: blank }], ['1,0', { tx: 1, ty: 0, packed: blank }]]));
+    const at = draftKey('me', 'campaign-1', 'map-a', tabId);
+    drafts().headers.set(at, { key: at, userId: 'me', campaignId: 'campaign-1', mapId: 'map-a', tabId, baseUrl, width: 1000, height: 1000, savedAt });
+    drafts().kept.set(at, new Map([['0,0', { tx: 0, ty: 0, packed: blank }], ['1,0', { tx: 1, ty: 0, packed: blank }]]));
   }
   const putBack = () => callsOn(pictureCanvas()).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
 
@@ -1196,7 +1205,85 @@ describe('drafts', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
     expect(putBack()).toEqual([[0, 0], [256, 0]]);
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    await waitFor(() => expect(restoreQuestion()).toBeNull());
+  });
+
+  it('takes a closed tab\'s draft over: written whole as this tab\'s own, the closed tab\'s then dropped', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().writes).toEqual([{ key, tiles: ['0,0', '1,0'], fresh: true, baseUrl: map.imageUrl }]);
+    expect(drafts().headers.has(closedKey)).toBe(false);
+  });
+
+  it('keeps two tabs\' drafts of one map apart: another tab still open is neither offered nor cut', async () => {
+    h.openTabs = new Set(['this-tab', 'open-tab']);
+    keepDraft('', Date.now(), 'open-tab');
+    const openKey = draftKey('me', 'campaign-1', 'map-a', 'open-tab');
+    await showMap();
+    await paintOn();
     expect(restoreQuestion()).toBeNull();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(drafts().writes.map((w) => w.key)).toEqual([key]);
+    expect([...drafts().kept.get(openKey)!.keys()]).toEqual(['0,0', '1,0']);
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    await settle();
+    expect(drafts().headers.has(key)).toBe(false);
+    expect(drafts().headers.has(openKey)).toBe(true);
+  });
+
+  it('writes the whole painting again when a write finds its draft gone, cleared from elsewhere', async () => {
+    await showMap();
+    await paintOn();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    // Another tab's Discard, or the browser's site data cleared.
+    drafts().headers.delete(key);
+    drafts().kept.delete(key);
+    drag({ clientX: 600, clientY: 600 }, { clientX: 620, clientY: 610 });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().writes.map((w) => [w.tiles, w.fresh])).toEqual([[['0,0', '1,0'], true], [['2,2'], false], [['0,0', '1,0', '2,2'], true]]);
+    expect([...drafts().kept.get(key)!.keys()].sort()).toEqual(['0,0', '1,0', '2,2']);
+  });
+
+  it('opens Paint without a draft when the store does not answer, and keeps none', async () => {
+    drafts().hanging = true;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    h.set({ currentMap: mapWith() });
+    render(<MapCanvas />);
+    pictures[0]?.load();
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    await act(async () => {
+      vi.advanceTimersByTime(DRAFT_LOOKUP_MS);
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('says when the browser is out of room for drafts', async () => {
+    drafts().failing = 'full';
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(screen.getByText(DRAFTS_FULL)).toBeInTheDocument();
   });
 
   it('Discard drops the draft and opens Paint on the picture as saved', async () => {
@@ -1206,7 +1293,7 @@ describe('drafts', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Discard it' })); });
     await settle();
-    expect(drafts().headers.has(key)).toBe(false);
+    expect(drafts().headers.has(closedKey)).toBe(false);
     expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
     expect(putBack()).toEqual([]);
     expect(usePaintStore.getState().unsaved).toBe(false);
@@ -1219,7 +1306,7 @@ describe('drafts', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
     fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(restoreQuestion()).toBeNull());
-    expect(drafts().headers.has(key)).toBe(true);
+    expect(drafts().headers.has(closedKey)).toBe(true);
     expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
     expect(restoreQuestion()).toBeInTheDocument();
@@ -1263,7 +1350,7 @@ describe('drafts', () => {
   });
 
   it('in a browser that keeps none, says so once there is paint to keep, and painting goes on', async () => {
-    drafts().failing = true;
+    drafts().failing = 'unavailable';
     await showMap();
     await paintOn();
     await settle();
@@ -1283,7 +1370,7 @@ describe('drafts', () => {
   });
 
   it('of a map no longer in the campaign, deleted from another device, is dropped as the DM opens the campaign', async () => {
-    const header = (mapId: string, userId = 'me') => ({ key: draftKey(userId, 'campaign-1', mapId), userId, campaignId: 'campaign-1', mapId, baseUrl: '', width: 10, height: 10, savedAt: 0 });
+    const header = (mapId: string, userId = 'me') => ({ key: draftKey(userId, 'campaign-1', mapId, 'closed-tab'), userId, campaignId: 'campaign-1', mapId, tabId: 'closed-tab', baseUrl: '', width: 10, height: 10, savedAt: 0 });
     await drafts().put(header('map-gone'), [], true);
     await drafts().put(header('map-b'), [], true);
     await drafts().put(header('map-gone', 'someone-else'), [], true);

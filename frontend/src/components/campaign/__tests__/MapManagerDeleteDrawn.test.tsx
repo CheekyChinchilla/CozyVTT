@@ -171,7 +171,7 @@ describe('deleting a drawn map', () => {
 
   it('drops every draft of the map\'s painting kept in this browser, and keeps the other maps\'', async () => {
     const store = drafts.store as MemoryDraftStore;
-    const header = (userId: string, mapId: string) => ({ key: draftKey(userId, 'campaign-1', mapId), userId, campaignId: 'campaign-1', mapId, baseUrl: '', width: 10, height: 10, savedAt: 0 });
+    const header = (userId: string, mapId: string) => ({ key: draftKey(userId, 'campaign-1', mapId, 'a-tab'), userId, campaignId: 'campaign-1', mapId, tabId: 'a-tab', baseUrl: '', width: 10, height: 10, savedAt: 0 });
     await store.put(header('me', 'crypt'), [], true);
     await store.put(header('a-former-dm', 'crypt'), [], true);
     await store.put(header('me', 'cave'), [], true);
