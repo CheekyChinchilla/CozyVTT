@@ -479,6 +479,79 @@ describe('the eraser', () => {
   });
 });
 
+describe('lines, rectangles and ellipses', () => {
+  const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+  const last = (calls: Call[]) => calls[calls.length - 1];
+
+  it('paint a line from the press to the lift, drawn on the overlay as it goes', async () => {
+    await showMap();
+    await paintOn();
+    choose('Line');
+    take(input());
+    mouse.down(input(), { clientX: 100, clientY: 100 });
+    mouse.move(input(), { clientX: 300, clientY: 180 }, 1);
+    await nextFrame();
+    expect(take(input()).some((c) => c.method === 'lineTo')).toBe(true);
+    expect(callsOfPicture('stroke')).toEqual([]);
+    mouse.up(input(), { clientX: 300, clientY: 180 });
+    expect(last(callsOfPicture('moveTo'))?.args).toEqual([100, 100]);
+    expect(last(callsOfPicture('lineTo'))?.args).toEqual([300, 180]);
+  });
+
+  it('hold a line to 15 degree steps with the toggle, or with Shift', async () => {
+    await showMap();
+    await paintOn();
+    choose('Line');
+    fireEvent.click(screen.getByRole('checkbox', { name: '15 degree steps' }));
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 110 });
+    const [x, y] = last(callsOfPicture('lineTo'))!.args as [number, number];
+    expect(x).toBeCloseTo(300.25, 1);
+    expect(y).toBeCloseTo(100, 5);
+    fireEvent.click(screen.getByRole('checkbox', { name: '15 degree steps' }));
+    mouse.down(input(), { clientX: 100, clientY: 100 }, 0, { shiftKey: true });
+    mouse.move(input(), { clientX: 200, clientY: 195 }, 1, { shiftKey: true });
+    mouse.up(input(), { clientX: 200, clientY: 195 });
+    const [x2, y2] = last(callsOfPicture('lineTo'))!.args as [number, number];
+    expect(x2 - 100).toBeCloseTo(y2 - 100, 5);
+  });
+
+  it('put a rectangle\'s corners on the grid with Snap to grid, outlined in the colour', async () => {
+    await showMap();
+    await paintOn();
+    choose('Rectangle');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Snap to grid' }));
+    drag({ clientX: 52, clientY: 47 }, { clientX: 148, clientY: 104 });
+    expect(last(callsOfPicture('rect'))?.args).toEqual([50, 50, 100, 50]);
+    expect(callsOfPicture('stroke')).toHaveLength(1);
+    expect(callsOfPicture('fill')).toHaveLength(0);
+  });
+
+  it('fill an ellipse with the second colour inside an outline of the colour', async () => {
+    await showMap();
+    await paintOn();
+    choose('Ellipse');
+    fireEvent.click(screen.getByRole('radio', { name: 'Outline and fill' }));
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(last(callsOfPicture('ellipse'))?.args).toEqual([200, 150, 100, 50, 0, 0, Math.PI * 2]);
+    expect(callsOfPicture('fill')).toHaveLength(1);
+    expect(callsOfPicture('stroke')).toHaveLength(1);
+  });
+
+  it('paint nothing for a press that never moved, and choose themselves by L, R and O', async () => {
+    await showMap();
+    await paintOn();
+    for (const [key, tool] of [['l', 'Line'], ['r', 'Rectangle'], ['o', 'Ellipse']]) {
+      press(key);
+      expect(screen.getByRole('button', { name: tool })).toHaveAttribute('aria-pressed', 'true');
+      mouse.down(input(), { clientX: 120, clientY: 120 });
+      mouse.up(input(), { clientX: 120, clientY: 120 });
+    }
+    expect(callsOfPicture('stroke')).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeDisabled();
+  });
+});
+
 describe('the lift', () => {
   it('copies each tile as the stroke first reaches it, and on the lift only paints: no tile copied or packed then', async () => {
     const packed = vi.fn();

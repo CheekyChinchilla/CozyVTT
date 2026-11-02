@@ -37,11 +37,17 @@ import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
 import { readColour } from './pixelColour';
+import { drawShape, scaleShape, shapeBox, stepAngle, type PaintPreview, type PaintShape, type PaintShapeKind, type ShapeStyle } from './paintShapes';
+import { snapToGrid } from '../drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { usePaintStore } from '@/stores/paintStore';
 
 /** The tools Paint offers. */
-export type PaintTool = 'brush' | 'eraser';
+export type PaintTool = 'brush' | 'eraser' | PaintShapeKind;
+
+/** The tools dragged from corner to corner (paintShapes.ts). */
+const SHAPE_TOOLS: ReadonlySet<PaintTool> = new Set<PaintShapeKind>(['line', 'rect', 'ellipse']);
+const isShapeTool = (tool: PaintTool): tool is PaintShapeKind => SHAPE_TOOLS.has(tool);
 
 export interface PaintSettings {
   tool: PaintTool;
@@ -53,6 +59,12 @@ export interface PaintSettings {
   second: string;
   /** Picture pixels, 1 to 64. */
   width: number;
+  /** A rectangle or an ellipse: outlined, filled, or both. */
+  style: ShapeStyle;
+  /** A line in 15 degree steps (Shift does it for one line). */
+  straight: boolean;
+  /** Shapes' corners and lines' ends on the grid's corners and the middles of its squares. */
+  snap: boolean;
 }
 
 export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
@@ -60,10 +72,13 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   colour: DRAWING_LIMITS.namedColors[7],
   second: DRAWN_MAP_BACKGROUND,
   width: 6,
+  style: 'outline',
+  straight: false,
+  snap: false,
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse']]);
 
 /** The most the undo tiles may take, packed or still copies waiting to be; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -74,12 +89,6 @@ export const PAINT_UNDO_STEPS = 50;
 export const PAINT_TOO_LARGE = `This map is too large to paint: it has more than ${MOST_DRAWN_SQUARES.toLocaleString('en-US')} squares. Choose fewer squares in Edit Map.`;
 export const PAINT_NO_CANVAS = 'This browser could not open a picture that large to paint.';
 
-/** A stroke as it is drawn on the overlay: in map pixels, its width too. */
-export interface PaintStrokeShown {
-  points: readonly PaintPoint[];
-  width: number;
-  colour: string;
-}
 
 /** What a measurement of Paint's memory reads, in development builds. */
 export interface PaintStats {
@@ -111,6 +120,13 @@ interface Surface {
   /** Counts every change, undo and redo; differs from `saved` while there is paint to save. */
   revision: number;
   saved: number;
+}
+
+/** A line, a rectangle or an ellipse being dragged: in map pixels, its outline too. */
+interface ShapeUnderWay {
+  mapId: string;
+  shape: PaintShape;
+  step: PaintStep;
 }
 
 interface Stroke {
@@ -149,8 +165,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const [settings, setSettings] = useState<PaintSettings>(DEFAULT_PAINT_SETTINGS);
   const settingsRef = useRef(settings);
   const strokeRef = useRef<Stroke | null>(null);
-  /** Strokes lifted while an undo was under way, shown until they are painted. */
-  const waitingRef = useRef<Stroke[]>([]);
+  const shapeRef = useRef<ShapeUnderWay | null>(null);
+  /** Strokes and shapes lifted while an undo was under way, shown until they are painted. */
+  const waitingRef = useRef<PaintPreview[]>([]);
   /** Bumped when the history changes, so the panel's Undo and Redo follow. */
   const [, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -171,8 +188,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const dispose = useCallback(() => {
     const s = surfaceRef.current;
     if (!s) return;
-    strokeRef.current?.step.drop();
+    (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
+    shapeRef.current = null;
     s.history.clear();
     s.store.dispose();
     releaseCanvas(s.canvas);
@@ -250,11 +268,23 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * to save, the canvas is let go of once the map's own picture is back.
    */
   const close = useCallback(() => {
-    strokeRef.current?.step.drop();
+    (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
+    shapeRef.current = null;
     setOn(false);
     onRef.current = false;
     markDirty('overlay');
+  }, [markDirty]);
+
+  /** Drop the stroke or shape under way, painting nothing, and let go of the tiles it kept. */
+  const dropStroke = useCallback((): boolean => {
+    const under = strokeRef.current ?? shapeRef.current;
+    if (!under) return false;
+    strokeRef.current = null;
+    shapeRef.current = null;
+    under.step.drop();
+    markDirty('overlay');
+    return true;
   }, [markDirty]);
 
   // Another map, or no longer the DM: the picture goes. (Asking first about
@@ -310,6 +340,25 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     };
   }, []);
 
+  /**
+   * Land a change whose tiles are kept already, after any undo under way,
+   * showing `preview` on the overlay until it is painted.
+   */
+  const land = useCallback((step: PaintStep, preview: PaintPreview, apply: () => void) => {
+    const s = surfaceRef.current;
+    if (!s) return;
+    waitingRef.current.push(preview);
+    void step.land(() => {
+      apply();
+      s.revision += 1;
+    }).finally(() => {
+      waitingRef.current = waitingRef.current.filter((w) => w !== preview);
+      bump();
+      markDirty('terrain', 'overlay');
+    });
+    markDirty('terrain', 'overlay');
+  }, [bump, markDirty]);
+
   /** Paint a lifted stroke into the picture, after any undo under way; its tiles are kept already. */
   const commit = useCallback((stroke: Stroke) => {
     const s = surfaceRef.current;
@@ -318,42 +367,36 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return;
     }
     const points = toPicture(stroke.points, s.sx, s.sy);
-    waitingRef.current.push(stroke);
-    void stroke.step.land(() => {
+    land(stroke.step, { kind: 'stroke', points: stroke.points, width: stroke.width / s.sx, colour: stroke.colour }, () => {
       strokePaint(s.ctx, points, stroke.width, stroke.colour);
-      s.revision += 1;
-    }).finally(() => {
-      waitingRef.current = waitingRef.current.filter((w) => w !== stroke);
-      bump();
-      markDirty('terrain', 'overlay');
     });
-    markDirty('terrain', 'overlay');
-  }, [bump, markDirty]);
+  }, [land]);
+
+  /** Paint a lifted shape into the picture, as a stroke is. */
+  const commitShape = useCallback((under: ShapeUnderWay) => {
+    const s = surfaceRef.current;
+    if (!s || s.mapId !== under.mapId) {
+      under.step.drop();
+      return;
+    }
+    const shape = scaleShape(under.shape, s.sx, s.sy);
+    land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape));
+  }, [land]);
 
   const step = useCallback((direction: 'undo' | 'redo') => {
     const s = surfaceRef.current;
     if (!s) return;
-    strokeRef.current?.step.drop();
-    strokeRef.current = null;
+    dropStroke();
     void s.history[direction]().then((done) => {
       if (!done || surfaceRef.current !== s) return;
       s.revision += 1;
       bump();
       markDirty('terrain', 'overlay');
     });
-  }, [bump, markDirty]);
+  }, [bump, markDirty, dropStroke]);
   const undo = useCallback(() => step('undo'), [step]);
   const redo = useCallback(() => step('redo'), [step]);
 
-  /** Drop the stroke under way, painting nothing, and let go of the tiles it kept. */
-  const dropStroke = useCallback((): boolean => {
-    const stroke = strokeRef.current;
-    if (!stroke) return false;
-    strokeRef.current = null;
-    stroke.step.drop();
-    markDirty('overlay');
-    return true;
-  }, [markDirty]);
 
   // The window losing focus drops a stroke, as the browser taking the pointer does.
   useEffect(() => {
@@ -369,8 +412,18 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const s = surfaceRef.current;
       if (!onRef.current || !s || !map || s.mapId !== map.id) return false;
       const look = settingsRef.current;
-      strokeRef.current?.step.drop();
+      dropStroke();
       const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+      if (isShapeTool(look.tool)) {
+        const from = look.snap ? snapToGrid(point, map.gridSize) : point;
+        shapeRef.current = {
+          mapId: s.mapId,
+          step: s.history.begin(),
+          shape: { kind: look.tool, from, to: from, width: look.width / s.sx, colour: look.colour, second: look.second, style: look.style },
+        };
+        markDirty('overlay');
+        return true;
+      }
       const step = s.history.begin();
       step.cover(strokeBox(toPicture([point], s.sx, s.sy), look.width));
       // The eraser is a brush of the second colour.
@@ -381,6 +434,19 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     },
     move(at: PointerAt) {
       if (!onRef.current) return false;
+      const under = shapeRef.current;
+      if (under) {
+        const look = settingsRef.current;
+        const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+        let to: PaintPoint = look.snap && map ? snapToGrid(point, map.gridSize) : point;
+        if (under.shape.kind === 'line' && (look.straight || at.e.shiftKey)) to = stepAngle(under.shape.from, to);
+        under.shape = { ...under.shape, to };
+        // The tiles the shape reaches as it grows, kept as they are before it lands.
+        const s = surfaceRef.current;
+        if (s) under.step.cover(shapeBox(scaleShape(under.shape, s.sx, s.sy)));
+        markDirty('overlay');
+        return true;
+      }
       const stroke = strokeRef.current;
       if (stroke) {
         const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
@@ -400,6 +466,19 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return true;
     },
     up() {
+      const under = shapeRef.current;
+      if (under) {
+        shapeRef.current = null;
+        const { from, to } = under.shape;
+        // A shape of no size paints nothing.
+        if (from[0] === to[0] && from[1] === to[1]) {
+          under.step.drop();
+          markDirty('overlay');
+          return;
+        }
+        commitShape(under);
+        return;
+      }
       const stroke = strokeRef.current;
       if (!stroke) return;
       strokeRef.current = null;
@@ -460,12 +539,15 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     return false;
   };
 
-  /** The strokes under way, in map pixels, for the overlay. */
-  const inProgress = useCallback((): PaintStrokeShown[] => {
+  /** The strokes and shapes under way, in map pixels, for the overlay. */
+  const inProgress = useCallback((): PaintPreview[] => {
     const s = surfaceRef.current;
     if (!s) return [];
-    const shown = [...waitingRef.current, ...(strokeRef.current ? [strokeRef.current] : [])];
-    return shown.map((stroke) => ({ points: stroke.points, width: stroke.width / s.sx, colour: stroke.colour }));
+    const shown: PaintPreview[] = [...waitingRef.current];
+    const stroke = strokeRef.current;
+    if (stroke) shown.push({ kind: 'stroke', points: stroke.points, width: stroke.width / s.sx, colour: stroke.colour });
+    if (shapeRef.current) shown.push({ kind: 'shape', shape: shapeRef.current.shape });
+    return shown;
   }, []);
 
   return {
