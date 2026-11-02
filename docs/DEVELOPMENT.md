@@ -658,7 +658,10 @@ Some of those deserve a note:
   `DrawingLayer` enums in `schema.prisma`, when the upload types file
   (`backend/src/validators/uploadTypes.ts`, copied as
   `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
-  differs between the two, when the largest side a picture may have
+  differs between the two, when the account limits file
+  (`backend/src/validators/accountLimits.ts`, copied as
+  `frontend/src/constants/accountLimits.ts` for Profile, Sign Up and the
+  setup wizard) differs between the two, when the largest side a picture may have
   (`backend/src/validators/pictureSizeLimits.ts`, copied as
   `frontend/src/constants/pictureSizeLimits.ts` for **Draw a map**) differs
   between the two or from the side the server checks pictures against, when
