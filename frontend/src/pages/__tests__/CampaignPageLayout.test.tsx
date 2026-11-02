@@ -246,6 +246,25 @@ describe('the desktop arrangement, from 1,024 px wide', () => {
     expect(bar()).toBeNull();
   });
 
+  it("asks whatever holds work on the page before the header's way to the dashboard, and stays on a no", async () => {
+    const navigate = vi.spyOn(page, 'navigate');
+    const { registerLeaveGuard } = await import('@/services/pageLeave');
+    let allow = false;
+    const remove = registerLeaveGuard(() => Promise.resolve(allow));
+    try {
+      await openPage();
+      fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+      await act(async () => { await Promise.resolve(); });
+      expect(navigate).not.toHaveBeenCalled();
+      allow = true;
+      fireEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith('/dashboard', { replace: false }));
+    } finally {
+      remove();
+      navigate.mockRestore();
+    }
+  });
+
   // On a phone or a tablet the browser's toolbar comes and goes, and `100vh`
   // is the height with it gone, so the bottom of a page that tall sat under
   // the toolbar. The dynamic viewport height follows the toolbar. jsdom lays

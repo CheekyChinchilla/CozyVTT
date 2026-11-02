@@ -13,7 +13,6 @@
 // ============================================
 
 import type { ReactNode, Ref } from 'react';
-import { useNavigate } from 'react-router';
 import { ChevronLeft, PauseCircle } from 'lucide-react';
 import ConnectionStatus from '@/components/ConnectionStatus';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -21,7 +20,7 @@ import { SESSION_STATUS_LABELS } from '@/components/campaign/sessionStatus';
 import { CampaignStatus } from '@/types';
 import type { Campaign } from '@/types';
 import { cn } from '@/utils/cn';
-import { onSheetEntry } from './sheetHistory';
+import { useLeavePage } from '@/hooks/useLeaveGuard';
 
 export interface CompactHeaderProps {
   campaign: Campaign;
@@ -58,7 +57,7 @@ function SessionState({ status, small }: { status: Campaign['status']; small: bo
 }
 
 export default function CompactHeader({ campaign, bar, ref }: CompactHeaderProps) {
-  const navigate = useNavigate();
+  const leavePage = useLeavePage();
   const { status } = useWebSocket();
 
   return (
@@ -71,9 +70,10 @@ export default function CompactHeader({ campaign, bar, ref }: CompactHeaderProps
     >
       <button
         type="button"
-        // In place of an open sheet's history entry, so Back from the
-        // dashboard comes straight back here (sheetHistory.ts).
-        onClick={() => navigate('/dashboard', { replace: onSheetEntry() })}
+        // Asking first about work the page holds, such as Paint not saved,
+        // and in place of an open sheet's history entry, so Back from the
+        // dashboard comes straight back here (useLeavePage).
+        onClick={() => leavePage('/dashboard')}
         aria-label="Back to the dashboard"
         title="Dashboard"
         className="inline-flex size-11 shrink-0 items-center justify-center rounded-cozy text-ink transition-colors hover:bg-ink/10 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
