@@ -285,6 +285,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     ? 'Failed to load map image'
     : null;
   const imageState = mapImageState(currentMap, imageLoaded, imageError);
+  // The picture drawn, with the address it was loaded from: while a new
+  // picture for the map loads, or after it failed, the one before it.
+  const shownPicture = mapImage !== null ? loadedPicture : null;
 
   // Spirit layer image
   const [spiritLayerImage, setSpiritLayerImage] = useState<HTMLImageElement | null>(null);
@@ -691,7 +694,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Never offered on an uploaded picture.
   const pictureKind = useMapPictureKind(currentMap, campaign?.id, isDM);
   const paint = usePaintSurface({
-    map: currentMap, picture: mapImage, pictureSettled: imageState !== 'loading', isDM, mapControls, markDirty,
+    map: currentMap, picture: shownPicture, pictureKind, pictureFailed: imageError !== null, isDM, mapControls, markDirty,
     campaignId: campaign?.id,
     // The map on screen takes its new picture: a map being prepared hears
     // of it from nothing else, and the server sends the table's map again.
@@ -723,9 +726,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     const maps = new Set(campaignMaps.map((m) => m.id));
     void dropDrafts(paintDraftStore(), (draft) => draft.userId === userId && draft.campaignId === campaignId && !maps.has(draft.mapId));
   }, [isDM, campaign?.id, user?.id, campaignMaps]);
-  // Paint held over a picture changed elsewhere keeps the button, which asks about it.
-  const paintOffered = isDM && !!currentMap
-    && (paint.stranded || pictureKind === 'none' || pictureKind === 'gone' || (pictureKind === 'drawn' && (imageLoaded || paint.source !== null)));
+  // Paint is offered where it opens (map/paint/usePaintSurface.ts).
+  const paintOffered = paint.offered;
   // What the map's picture is drawn from: the picture being painted while
   // there is one for this map, else the picture as loaded.
   const terrainSource: CanvasImageSource | null = paint.source ?? mapImage;
