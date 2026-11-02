@@ -4,13 +4,16 @@
 // The picture's canvas is made to be read often (willReadFrequently), which
 // keeps its pixels where the page reads them fastest, so a tile is read
 // straight off it, at once, in every browser. A tile is read as a change
-// first reaches it and packed there and then (qoi.ts: a few hundred bytes
-// for a tile of one colour, a few kilobytes for a painted one, in a
-// fraction of a millisecond), so no tile is held as raw pixels and the
+// first reaches it and packed there and then (qoi.ts: about a kilobyte for
+// a tile of one colour, about five for a painted one, in a fraction of a
+// millisecond), so no tile is held as raw pixels and the
 // lift has nothing left to do. Packed alike in every browser, a tile counts
 // the same against undo's budget in each. It is put back by unpacking it
 // into a buffer kept for its size and writing that over the tile: at once,
-// and exactly, whatever the context's transform, alpha or compositing.
+// whatever the context's transform, alpha or compositing, and exactly for
+// the opaque pixels Paint's picture holds (a browser keeps a translucent
+// pixel premultiplied, which reading it back may round). A tile whose bytes
+// do not make it up exactly is left as it is.
 // ============================================
 
 import type { TileRect, TileStore } from './paintHistory';
@@ -57,7 +60,10 @@ export function createCanvasTileStore(ctx: CanvasRenderingContext2D): CanvasTile
         buffer = ctx.createImageData(tile.w, tile.h);
         buffers.set(size, buffer);
       }
-      qoiDecodeInto(kept.packed, buffer.data);
+      if (!qoiDecodeInto(kept.packed, buffer.data)) {
+        console.warn('[paint] A tile kept for undo does not fit its place; undo leaves it as it is.');
+        return;
+      }
       ctx.putImageData(buffer, tile.x, tile.y);
     },
 
