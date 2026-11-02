@@ -1200,7 +1200,7 @@ SRD creatures stored before hit points were tracked are updated in place with `h
 
 ### `GET /api/assets`
 
-List assets accessible to the authenticated user (Global + their own User scope + Campaign scope for their campaigns). In a campaign where you are a player or a spectator, its map pictures are left out except those of the map the table is on and those you uploaded; the same pictures answer `404` when read.
+List assets accessible to the authenticated user (Global + their own User scope + Campaign scope for their campaigns). In a campaign where you are a player or a spectator, its map pictures are left out except those you uploaded, those embedded in a plain text or Markdown handout the campaign's DM wrote or uploaded and shared with the campaign, and those the current map of a table you sit at shows you: this campaign's, or another of your campaigns' while the picture's uploader is a member of it too. The same pictures answer `404` when read.
 
 **Query params:**
 - `type` — filter by `MAP`, `TOKEN`, `AUDIO`, `AVATAR`, `DOCUMENT`. With no `type`, documents are left out: they have their own page in the app, and a rulebook does not belong among map thumbnails
