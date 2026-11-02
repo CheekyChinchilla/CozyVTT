@@ -10,9 +10,10 @@
 //
 // A tile is read as the fill reaches it, filled as far as the fill goes
 // inside it, written back and let go of; where a run of the fill touches
-// the tile's edge, the next tile is given that run to go on from. A tile
-// the fill comes back to is read again, and a mask of one bit a pixel,
-// kept for each tile reached, stops anything being filled twice. So one
+// the tile's edge, the next tile is given that run to go on from. A mask
+// of one bit a pixel, kept for each tile reached, stops anything being
+// filled twice, and a tile the fill comes back to is read again only if
+// some of what it is given to go on from is not filled yet. So one
 // tile's pixels are held at a time, and each tile changed is handed over
 // as it was, once, before its first change, for undo.
 // ============================================
@@ -116,22 +117,26 @@ export function floodFillTiled<P extends Pixels>(tiles: FillTiles<P>, x: number,
       mask = new Uint8Array(Math.ceil((w * h) / 8));
       masks.set(key, mask);
     }
+    const filled = (i: number) => (mask[i >> 3] & (1 << (i & 7))) !== 0;
+    // Pixels inside this tile to fill from, in its own coordinates, two numbers each: none filled already.
+    const stack: number[] = [];
+    for (const span of given) {
+      for (let gx = Math.max(span.x0, tile.x); gx <= Math.min(span.x1, tile.x + w - 1); gx += 1) {
+        if (!filled((span.y - tile.y) * w + gx - tile.x)) stack.push(gx - tile.x, span.y - tile.y);
+      }
+    }
+    // All filled: the tile is not read again.
+    if (stack.length === 0) continue;
     const pixels = key === firstKey && firstRead ? firstRead : tiles.read(tile);
     if (key === firstKey) firstRead = null;
     const data = pixels.data;
     let wrote = false;
-    const filled = (i: number) => (mask[i >> 3] & (1 << (i & 7))) !== 0;
     const matches = (i: number) => {
       if (filled(i)) return false;
       const o = i * 4;
       return Math.abs(data[o] - seed[0]) <= tolerance && Math.abs(data[o + 1] - seed[1]) <= tolerance
         && Math.abs(data[o + 2] - seed[2]) <= tolerance && Math.abs(data[o + 3] - seed[3]) <= tolerance;
     };
-    // Pixels inside this tile to fill from, in its own coordinates, two numbers each.
-    const stack: number[] = [];
-    for (const span of given) {
-      for (let gx = Math.max(span.x0, tile.x); gx <= Math.min(span.x1, tile.x + w - 1); gx += 1) stack.push(gx - tile.x, span.y - tile.y);
-    }
     while (stack.length > 0) {
       const ly = stack.pop()!;
       let lx = stack.pop()!;
