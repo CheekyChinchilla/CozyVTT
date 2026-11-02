@@ -29,7 +29,7 @@ const map = { id: 'map-a', width: 20, height: 20, gridSize: 50, imageUrl: '' } a
 
 function Harness({ onPaint, seen }: { onPaint: (p: PaintSurface) => void; seen: Array<number | null> }) {
   const paint = usePaintSurface({
-    map, campaignId: 'campaign-1', onSaved: () => undefined, picture: null, pictureSettled: true, isDM: true,
+    map, campaignId: 'campaign-1', onSaved: () => undefined, onMapRead: () => undefined, picture: null, pictureSettled: true, isDM: true,
     mapControls: controls, markDirty: () => undefined, refuse: () => undefined, make: makeCanvas,
   });
   onPaint(paint);

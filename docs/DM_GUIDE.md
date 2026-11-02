@@ -245,6 +245,8 @@ A save can be refused: the picture must be within your server's size limit for a
 
 Each save deletes the picture the map had before, if it was a drawn one, so saves do not pile up in the Asset Library. A picture something else still uses (another map, a token, a character's or a creature's picture) is kept, and a picture you uploaded is never deleted this way. A handout or note that shows a drawn picture by its address loses it at the next save; use an uploaded picture there.
 
+**If the picture changes elsewhere.** If the map's picture is changed somewhere else while you have paint here not saved (in **Edit Map**, or by a save from another tab or device), your screen shows the new picture and asks what to do with your painting: **Save my painting over it**, **Discard my painting**, or **Not now**, which keeps it; **Paint** then asks again when you press it. **Save** checks the map first, so a picture saved meanwhile from another tab is never replaced without asking. With nothing unsaved, Paint simply gives way to the new picture.
+
 **Deleting a drawn map.** The **Delete Map** question in the Map Library offers **Also delete its picture from the Asset Library**, unticked, for a map you drew (never for one whose picture you uploaded). Tick it and the picture goes with the map, unless something else still uses it: then it stays, and the Map Library says so. Left unticked, the picture stays in the Asset Library for you to delete there.
 
 ### Switching Maps

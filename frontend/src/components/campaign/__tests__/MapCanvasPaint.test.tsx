@@ -63,6 +63,7 @@ const h = vi.hoisted(() => {
     uploadAsset: vi.fn(),
     deleteAsset: vi.fn(),
     updateMap: vi.fn(),
+    getMap: vi.fn(),
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => version,
     set(patch: Partial<typeof state>) {
@@ -136,7 +137,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/services/map.service', () => ({
-  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: vi.fn() },
+  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: h.getMap },
 }));
 
 vi.mock('@/services/api', () => {
@@ -248,6 +249,7 @@ beforeEach(() => {
   h.addToken.mockReset().mockResolvedValue({ token: token('placed', 1, 1) });
   h.uploadAsset.mockReset().mockResolvedValue({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: ['drawn-map'] } });
   h.deleteAsset.mockReset().mockResolvedValue({ message: 'deleted' });
+  h.getMap.mockReset().mockImplementation(() => Promise.resolve(h.state.currentMap));
   h.updateMap.mockReset().mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
     Promise.resolve({ ...(h.state.currentMap as object), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` }));
   act(() => {
@@ -709,6 +711,102 @@ describe('text and the eyedropper', () => {
     expect(read).toContainEqual([410, 220, 1, 1]);
     expect(within(panel()).getByRole('button', { name: /^Colour:/ })).toHaveAccessibleName('Colour: Dark wood');
     expect(within(panel()).getByRole('button', { name: 'Rectangle' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('a picture changed elsewhere', () => {
+  const changePictureTo = (imageUrl: string) => {
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), imageUrl } }); });
+  };
+  const question = () => screen.queryByRole('dialog', { name: 'This map\'s picture changed' });
+
+  it('with paint not saved, shows the new picture and asks; Discard lets the paint go', async () => {
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    // Edit Map gives the map an uploaded picture.
+    h.getAsset.mockImplementation((id: string) => Promise.resolve(id === 'uploaded-1' ? drawnAsset(['dungeon']) : drawnAsset()));
+    changePictureTo('/api/assets/maps/uploaded-1');
+    await act(async () => { await Promise.resolve(); });
+    expect(question()).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    // The page loads the new picture, and draws it, not the paint.
+    const fresh = pictures[pictures.length - 1];
+    expect(fresh.src).toBe('/api/assets/maps/uploaded-1');
+    fresh.load();
+    take(terrain());
+    await nextFrame();
+    const drawn = take(terrain()).filter((c) => c.method === 'drawImage').map((c) => c.args[0]);
+    expect(drawn).toContain(fresh);
+    expect(drawn).not.toContain(canvas);
+    fireEvent.click(within(question()!).getByRole('button', { name: 'Discard my painting' }));
+    await waitFor(() => expect(question()).toBeNull());
+    expect(usePaintStore.getState()).toMatchObject({ mapId: null, unsaved: false });
+    expect(canvas?.width).toBe(0);
+  });
+
+  it('Save my painting over it saves, and deletes no uploaded picture', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    h.getAsset.mockImplementation((id: string) => Promise.resolve(id === 'uploaded-2' ? drawnAsset(['dungeon']) : drawnAsset()));
+    changePictureTo('/api/assets/maps/uploaded-2');
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { fireEvent.click(within(question()!).getByRole('button', { name: 'Save my painting over it' })); });
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' }));
+    expect(h.deleteAsset).not.toHaveBeenCalled();
+    expect(usePaintStore.getState().unsaved).toBe(false);
+  });
+
+  it('Not now keeps the paint, and Paint, still offered, asks again', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    h.getAsset.mockImplementation((id: string) => Promise.resolve(id === 'uploaded-3' ? drawnAsset(['dungeon']) : drawnAsset()));
+    changePictureTo('/api/assets/maps/uploaded-3');
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(within(question()!).getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(question()).toBeNull());
+    expect(usePaintStore.getState().unsaved).toBe(true);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    expect(question()).toBeInTheDocument();
+  });
+
+  it('with nothing to save, simply gives way to the new picture', async () => {
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    changePictureTo('/api/assets/maps/other-drawn');
+    await act(async () => { await Promise.resolve(); });
+    expect(question()).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Paint', pressed: true })).toBeNull();
+    expect(canvas?.width).toBe(0);
+  });
+
+  it('keeps the paint through the map sent again with its picture unchanged', async () => {
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), name: 'Renamed' } }); });
+    await act(async () => { await Promise.resolve(); });
+    expect(question()).toBeNull();
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    take(terrain());
+    await nextFrame();
+    expect(take(terrain()).some((c) => c.method === 'drawImage' && c.args[0] === canvas)).toBe(true);
+  });
+
+  it('is found at Save, though this page was not told of it, and asked about before anything is uploaded', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    // Another tab saved this map, which is being prepared: no map.changed came.
+    h.getMap.mockResolvedValue({ ...(h.state.currentMap as CampaignMap), imageUrl: '/api/assets/maps/from-another-tab' });
+    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    expect(await screen.findByRole('dialog', { name: 'This map\'s picture changed' })).toBeInTheDocument();
+    expect(h.uploadAsset).not.toHaveBeenCalled();
   });
 });
 
