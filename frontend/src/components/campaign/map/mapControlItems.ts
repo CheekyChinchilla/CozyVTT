@@ -5,8 +5,9 @@
 // zoom buttons and their readout, Ping, Draw and Map controls. Map controls
 // opens the rest of what the toolbar holds for the viewer as an action
 // sheet: Fit to Screen, the grid and its colour, and on a map the ruler and
-// its colour and the AoE shape; for the DM also, on a map, Tools, which shows
-// and hides the DM's tool stack (Fog, Walls and Lights), and the spirit
+// its colour and the AoE shape; for the DM also, on a map, Paint where it is
+// offered (on a map drawn in CozyVTT or one with no picture), Tools, which
+// shows and hides the DM's tool stack (Fog, Walls and Lights), and the spirit
 // tokens. Each row says what pressing it does now, since a row has no
 // pressed state to show. A colour's row keeps the sheet open, so presses go
 // round the colours; the others close it.
@@ -18,7 +19,7 @@
 // Pure: no React, no DOM.
 // ============================================
 
-import { Ghost, Grid3x3, Maximize2, Palette, Ruler, Wrench, Zap } from 'lucide-react';
+import { Ghost, Grid3x3, Maximize2, Paintbrush, Palette, Ruler, Wrench, Zap } from 'lucide-react';
 import type { MenuAction, MenuItem } from '@/components/ui/menu';
 
 export type GridColor = 'black' | 'white';
@@ -45,6 +46,8 @@ export interface MapControlsView {
   spiritTokensShown: boolean;
   /** For the DM: the tool stack shows. */
   toolsShown: boolean;
+  /** For the DM: Paint is offered on this map, or on; null where it is not offered. */
+  paint: 'offered' | 'on' | null;
 }
 
 /** What each row does. */
@@ -57,6 +60,7 @@ export interface MapControlsActions {
   toggleAoE: () => void;
   toggleSpiritTokens: () => void;
   toggleTools: () => void;
+  togglePaint: () => void;
 }
 
 const row = (id: string, label: string, icon: MenuAction['icon'], run: () => void, extra: Partial<MenuAction> = {}): MenuAction => ({
@@ -80,6 +84,9 @@ export function mapControlItems(view: MapControlsView, actions: MapControlsActio
 
   if (view.isDM) {
     items.push({ kind: 'separator', id: 'dm' });
+    if (view.hasMap && view.paint) {
+      items.push(row('paint', view.paint === 'on' ? 'Put Paint away' : 'Paint', Paintbrush, actions.togglePaint, { title: 'Paint the map\'s picture, on your screen until it is saved' }));
+    }
     // The stack is drawn only on a map.
     if (view.hasMap) items.push(row('tools', view.toolsShown ? 'Hide tools' : 'Show tools', Wrench, actions.toggleTools, { title: 'Fog, Walls and Lights' }));
     items.push(row('spirit-tokens', view.spiritTokensShown ? 'Hide spirit tokens' : 'Show spirit tokens', Ghost, actions.toggleSpiritTokens, { tone: 'spirit' }));
@@ -89,7 +96,7 @@ export function mapControlItems(view: MapControlsView, actions: MapControlsActio
 
 /** What each row is about, as Map controls' tooltip names it; the colours' rows go with theirs. */
 const TOPICS: Record<string, string> = {
-  fit: 'fit', grid: 'grid', ruler: 'ruler', aoe: 'AoE shape', tools: 'tools', 'spirit-tokens': 'spirit tokens',
+  fit: 'fit', grid: 'grid', ruler: 'ruler', aoe: 'AoE shape', paint: 'Paint', tools: 'tools', 'spirit-tokens': 'spirit tokens',
 };
 
 /** Map controls' tooltip: what its rows are about, in their order. */

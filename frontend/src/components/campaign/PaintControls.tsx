@@ -3,7 +3,8 @@
  * Paint's panel, while the DM paints a drawn map: the tool, the colour and
  * the second colour, the width, Undo and Redo, and Done.
  * It sets no place of its own: it heads the DM's tool stack while Paint is
- * on.
+ * on. On the compact layout PaintStrip offers the same, from the tools,
+ * hints and colours written here.
  */
 
 import { useState } from 'react';
@@ -16,7 +17,7 @@ import { labelFontSize } from './map/drawingGeometry';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
 
 /** Each tool's name, as its button is called, its key and its icon. */
-const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
+export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
   brush: { label: 'Brush', key: 'B', icon: Paintbrush },
   eraser: { label: 'Eraser', key: 'E', icon: Eraser },
   line: { label: 'Line', key: 'L', icon: Minus },
@@ -27,7 +28,7 @@ const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintb
   eyedropper: { label: 'Eyedropper', key: 'I', icon: Pipette },
 };
 
-const HINTS: Record<PaintTool, string> = {
+export const HINTS: Record<PaintTool, string> = {
   brush: 'Drag to paint, or tap for a dot. Two fingers, or the right mouse button, move the map.',
   eraser: 'Drag to paint the second colour over what is there.',
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
@@ -38,18 +39,18 @@ const HINTS: Record<PaintTool, string> = {
   eyedropper: 'Click or tap the picture to take its colour there; the tool before comes back.',
 };
 
-const STYLES: ReadonlyArray<{ style: ShapeStyle; label: string }> = [
+export const STYLES: ReadonlyArray<{ style: ShapeStyle; label: string }> = [
   { style: 'outline', label: 'Outline' },
   { style: 'fill', label: 'Filled' },
   { style: 'both', label: 'Outline and fill' },
 ];
 
 /** A colour's name as the palette gives it, or its #rrggbb. */
-const nameOf = (value: string) => PAINT_COLOURS.find((c) => c.value === value)?.name ?? value;
+export const nameOf = (value: string) => PAINT_COLOURS.find((c) => c.value === value)?.name ?? value;
 
 /** Which of the two colours the palette sets. */
-type Slot = 'colour' | 'second';
-const SLOTS: ReadonlyArray<{ slot: Slot; label: string }> = [
+export type Slot = 'colour' | 'second';
+export const SLOTS: ReadonlyArray<{ slot: Slot; label: string }> = [
   { slot: 'colour', label: 'Colour' },
   { slot: 'second', label: 'Second colour' },
 ];
