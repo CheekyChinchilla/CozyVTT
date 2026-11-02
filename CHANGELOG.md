@@ -185,6 +185,10 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **On a screen narrower than 1,024 pixels, the Creature Library's and Token Templates' forms open in place of the list.** **Create Custom**, **New Template** and **Edit** opened their form under the list, which on a phone left the list next to no room and the form scrolling in a box of its own. On a phone, most tablets held upright and a window narrower than 1,024 pixels, the form now takes the list's place, with **Back to the list** at its top; **Back to the list**, **Cancel** or saving returns to the list. On a wider screen the form opens under the list as before. See [Creating Custom Creatures](docs/DM_GUIDE.md#creating-custom-creatures).
 
+- **A screen reader names the ✕ that closes a form in the Creature Library and Token Templates.** The ✕ at the top of the **Create Custom Creature**, **Edit Creature**, **New Token Template** and **Edit Template** forms was read as a bare "button". It is now read as "Close form".
+
+- **Create Custom in the Creature Library opens an empty form while a creature is being edited.** Pressing **Create Custom** with a creature's **Edit Creature** form open left that form open. It now opens an empty **Create Custom Creature** form, as **New Template** does in Token Templates.
+
 - **Every map card in the Map Library can be deleted on a phone.** On a phone the library showed two map cards to a row, too narrow for a card's **Set Active**, **Edit**, **Export** and **Delete** buttons, so **Delete map** ran past the card's edge and could not be pressed. Below 640 pixels each card now has a row of its own.
 
 - **Buttons that show only an icon on a phone now have a name a screen reader reads.** Below 640 pixels wide some buttons show only their icon, and a screen reader lost their words there as well, so it said only "button": the dashboard's **Manage**, **View Library**, **View Documents**, **Browse** and **Import**, the Asset Library's **Upload Asset** and its **All Assets**, **Global**, **Personal** and **Campaign** buttons, **New Template** on Character Templates, and **Write one** and **Read** on Documents. They look as before, and a screen reader now reads their words.
@@ -196,6 +200,14 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **The initiative tracker opens a combatant's character sheet whatever map their token is on.** A combatant whose token the DM had moved to another map with **Move to Map…** offered nothing when clicked or right-clicked in the tracker. **View Character Sheet** now opens their sheet wherever the token stands, a map being prepared included, and while the DM prepares another map it opens the sheets of the combatants at the table. **Roll...** is still offered only for a combatant on the map on screen. For players nothing changes: their tracker offers a character's sheet only for a combatant whose token their map shows them, as before, so on a map with lighting a character out of their sight is listed with no sheet to open.
 
 - **A token's or a door's menu, and a Roll... picker opened from a token's menu, close when the map changes.** One left open while the DM switched maps stayed open over the new map and still acted on the old map's token or door, **Roll Initiative** included. They now close as the map changes.
+
+- **A door's menu stays on the screen.** Right-clicking a door near the right or the bottom edge of the screen opened its menu partly off the screen. It now opens to the left of the pointer, or above it, where it would not fit, as a token's menu does.
+
+- **A token's menu opens with Move to Map… shut.** If **Move to Map…** was left open in one token's menu, the next token's menu could open with its list of maps already showing. Each token's menu now opens with the list shut.
+
+- **A token's menu shows one divider above Remove from Map in a campaign with one map.** With no other map to move a token to, the DM's token menu drew two dividers together above **Remove from Map**, where **Move to Map…** would be. It now draws one.
+
+- **A screen reader and voice control call Preview Player View by the words it shows.** The button was named "Toggle DM player view preview" for them, so a voice command for **Preview Player View**, or for **DM View** while the preview is on, found nothing. It is now named **Preview Player View** or **DM View**, as it reads on the screen.
 
 - **Tab no longer pings beside the map's picture.** With the pointer over the map area but off its picture, as on the space around a map zoomed out to fit, **Tab** sent the table a ping out there. It now pings only on the picture, as the **Ping** button and a press and hold do.
 

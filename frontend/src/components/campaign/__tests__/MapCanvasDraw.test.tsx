@@ -287,7 +287,7 @@ describe('the drawings on the map', () => {
 
     // The preview shows drawings over its fog, as a player sees them, and
     // none for the DM alone.
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle DM player view preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
     await nextFrame();
     top = composite(layers()[2]);
 
@@ -1092,7 +1092,7 @@ describe('the eraser', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }), memberships: [{ userId: 'p1', role: 'PLAYER', user: { displayName: 'Mara' } }] });
     render(<MapCanvas />);
     fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'secret', audience: 'DM', points: [[100, 100], [300, 100]] })] });
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle DM player view preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
     draw('Eraser');
 
     mouse.down(surface(), px(200, 100));

@@ -396,7 +396,7 @@ describe('on a map being prepared', () => {
 
   it('offers no Player Preview, and says why', () => {
     render(<MapCanvas />);
-    const button = screen.getByRole('button', { name: 'Toggle DM player view preview' });
+    const button = screen.getByRole('button', { name: 'Preview Player View' });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('title', 'Preview Player View is off while you prepare a map the table is not on');
     // Said in words too: a touch screen shows no title.
@@ -430,6 +430,6 @@ describe("on the table's map", () => {
 
   it('offers Player Preview', () => {
     render(<MapCanvas />);
-    expect(screen.getByRole('button', { name: 'Toggle DM player view preview' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Preview Player View' })).toBeEnabled();
   });
 });

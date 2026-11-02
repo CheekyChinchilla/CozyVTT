@@ -13,7 +13,7 @@
  * which closes itself: the popover's placing and closers are off there.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Dices, X, ChevronDown } from 'lucide-react';
 import { api } from '@/services/api';
 import type { Character } from '@/types';
@@ -26,7 +26,8 @@ import { resolveCharacterInitiative } from '@/utils/rules/initiative';
 import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 import CustomRollFooter from './CustomRollFooter';
 import FloatingLayer from '@/components/ui/FloatingLayer';
-import { menuShown } from '@/components/ui/openMenus';
+import { flipOntoScreen } from '@/components/ui/menu';
+import { menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import { useCompactLayout } from '@/contexts/LayoutContext';
 import { BottomSheet } from '@/components/campaign/compact/BottomSheet';
 
@@ -166,16 +167,19 @@ export default function CharacterRollPicker({
   useEffect(() => {
     if (compact || !pickerRef.current) return;
     const rect = pickerRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const x = anchorX + rect.width > vw ? Math.max(0, anchorX - rect.width) : anchorX;
-    const y = anchorY + rect.height > vh ? Math.max(0, anchorY - rect.height) : anchorY;
-    setPos({ x, y });
+    setPos(flipOntoScreen({ x: anchorX, y: anchorY }, rect, { width: window.innerWidth, height: window.innerHeight }));
   }, [rolls, anchorX, anchorY, compact]);
 
   // A menu on the screen while it is open, so the tap on the map that
-  // closes it is not the first of a double tap to ping.
-  useEffect(() => menuShown(), []);
+  // closes it is not the first of a double tap to ping. Its opening closes
+  // any other menu, and another's opening closes it, from after its own: a
+  // long-press that opens one brings no mousedown here (openMenus.ts).
+  useEffect(() => {
+    menuOpened();
+    return menuShown();
+  }, []);
+  const closeOnOtherMenu = useEffectEvent(() => onClose());
+  useEffect(() => whenMenuOpens(() => closeOnOtherMenu()), []);
 
   // Close on click outside
   useEffect(() => {

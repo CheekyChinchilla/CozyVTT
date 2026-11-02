@@ -35,14 +35,10 @@ _Nothing at present._
 
 - `after the next release` **A player whose move is refused a square can learn the name of a creature under fog there.** The refusal says "<name> is already standing there." for any creature on the square, one the player's fog covers included. It should name only a token the player's screen draws, and an unseen one as "Someone" (`MapCanvas.tsx`).
 - `after the next release` **In Player Preview a right-click on a hidden creature's square opens the DM's menu for it,** on the screen the players may be watching. It should find only a token the preview draws, as a click on it does (`MapCanvas.tsx`).
-- `next release` **The token menu keeps Move to Map… open from one token to the next, and shows two dividers together when there is no other map** (`MapCanvas.tsx`, `map/tokenMenuItems.ts`).
-- `next release` **The door menu can open partly off the screen** near its right or bottom edge; it should flip to stay on screen, as the token menu does (`MapCanvas.tsx`).
 - `after the next release` Suspected: **a drop refused when it arrives with its pick-up is not put back on the mover's screen.** One connection's `token.move.start` and `token.move.end` are handled side by side, so the end can be read before the drag is recorded (`handlers/tokens.ts`).
 
 ### Campaigns and assets
 
-- `next release` **On a wide screen, Create Custom in the Creature Library can open the creature being edited.** With a creature's edit form open, **Create Custom** leaves it open as **Edit Creature**; it should open an empty form, as **New Template** does in Token Templates (`CreatureLibrary.tsx`).
-- `next release` **The close ✕ of the Creature Library's and Token Templates' forms has no name for a screen reader** (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
 - `after the next release` **Remove from Campaign in the Campaign Roster does not name the character,** asking "Are you sure you want to remove this character from the campaign?" (`CampaignRoster.tsx`).
 
 ### Play and connection
@@ -54,7 +50,6 @@ _Nothing at present._
 
 - `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
 - `next release` **Three map controls are hard to read or wrongly worded.** The Fog of War panel's **Confirm?** is white on light green, about 2 to 1; the Lights panel says "Global illumination" where Edit Map says "Global Illumination"; and the **Alternating** diagonal rule in Create Map and Edit Map reads "5/10/5/10 ft" whatever the grid scale (`DmFogControls.tsx`, `MapCanvas.tsx`, `CreateMapModal.tsx`, `EditMapModal.tsx`).
-- `next release` **Preview Player View is named "Toggle DM player view preview" for a screen reader,** so a voice command for the words the button shows finds nothing (`MapCanvas.tsx`).
 - `after the next release` **With a mouse, the AoE Shape panel covers the foot of the first toolbar buttons,** by about 20 pixels over **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen** (`MapCanvas.tsx`).
 
 ---

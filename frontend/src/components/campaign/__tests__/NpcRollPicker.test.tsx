@@ -6,10 +6,10 @@
  * named; the helper is tested on its own, and this pins the call sites.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import NpcRollPicker from '../NpcRollPicker';
-import { anyMenuShown } from '@/components/ui/openMenus';
+import { anyMenuShown, menuOpened, whenMenuOpens } from '@/components/ui/openMenus';
 import type { NpcStatBlock, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 
@@ -145,6 +145,22 @@ describe('where it is drawn', () => {
   });
 });
 
+// Placed as the map's menus are (components/ui/menu.ts flipOntoScreen): the
+// screen is jsdom's, 1,024 by 768, and the picker measures 300 by 400.
+describe('near the edge of the screen', () => {
+  const originalRect = HTMLDivElement.prototype.getBoundingClientRect;
+  afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = originalRect; });
+
+  it('flips to the left of and above the point', () => {
+    HTMLDivElement.prototype.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 300, bottom: 400, width: 300, height: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
+
+    const picker = screen.getByText('Roll for Goblin Boss').closest<HTMLElement>('.fixed')!;
+    expect([picker.style.left, picker.style.top]).toEqual(['600px', '200px']);
+  });
+});
+
 // The map asks, so a tap on it that closes the picker is not the first of a
 // double tap to ping.
 describe('while it is open', () => {
@@ -153,5 +169,26 @@ describe('while it is open', () => {
     expect(anyMenuShown()).toBe(true);
     unmount();
     expect(anyMenuShown()).toBe(false);
+  });
+});
+
+// A long-press that opens another menu, the map's or a list's, brings no
+// mousedown here; and this one's opening closes theirs the same way.
+describe('beside another menu', () => {
+  it('says it has opened, and closes when another menu opens, not on its own opening', () => {
+    const told = vi.fn();
+    const stop = whenMenuOpens(told);
+    const onClose = vi.fn();
+    try {
+      render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+      expect(told).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+
+    act(() => { menuOpened(); });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

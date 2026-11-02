@@ -95,6 +95,25 @@ export const MENU_ROW_CLASSES = {
   text: 'px-4 py-2 text-sm text-stone-gray/70 italic select-none',
 };
 
+/**
+ * Where a popover of `size` opened at page point `at` stands on a screen of
+ * `screen`: at the point, or flipped to the left of it where it would run
+ * off the right edge and above it where it would run off the bottom, never
+ * past the left or the top. Every popover menu at a point is placed by it:
+ * the map's token and door menus, the character menu of the roster and the
+ * initiative tracker, and the Roll... pickers.
+ */
+export function flipOntoScreen(
+  at: { x: number; y: number },
+  size: { width: number; height: number },
+  screen: { width: number; height: number },
+): { x: number; y: number } {
+  return {
+    x: at.x + size.width > screen.width ? Math.max(0, at.x - size.width) : at.x,
+    y: at.y + size.height > screen.height ? Math.max(0, at.y - size.height) : at.y,
+  };
+}
+
 /** Each tone's text colour, and the background it takes under the pointer. */
 export const MENU_TONES: Record<MenuTone, { text: string; hover: string }> = {
   plain: { text: 'text-stone-gray', hover: 'hover:bg-moss-green/10' },

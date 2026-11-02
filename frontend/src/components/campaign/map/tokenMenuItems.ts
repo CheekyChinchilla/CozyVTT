@@ -151,12 +151,11 @@ export function tokenMenuItems(token: Token, ctx: TokenMenuContext): MenuItem[] 
     ));
   }
 
-  // TODO(ui): with no other map to move to, this rule and the next stand
-  // together above Remove from Map, a double line; this one belongs only
-  // above Move to Map….
-  items.push({ kind: 'separator', id: 'separator-moves' });
+  // The rule above Move to Map… goes with it: with no other map to move to,
+  // the rule above Remove from Map is the only one.
   const otherMaps = ctx.maps.filter((m) => m.id !== mapId);
   if (otherMaps.length > 0) {
+    items.push({ kind: 'separator', id: 'separator-moves' });
     items.push({
       kind: 'command',
       id: 'move-to-map',

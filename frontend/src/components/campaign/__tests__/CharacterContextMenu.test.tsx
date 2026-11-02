@@ -7,11 +7,12 @@
  * dividers took a press on an item that lay over one.
  */
 
-import { it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { it, expect, vi, afterEach } from 'vitest';
+import { useEffect } from 'react';
+import { act, render, screen } from '@testing-library/react';
 import { FileText, Trash2 } from 'lucide-react';
 import CharacterContextMenu from '../CharacterContextMenu';
-import { anyMenuShown, whenMenuOpens } from '@/components/ui/openMenus';
+import { anyMenuShown, menuOpened, whenMenuOpens } from '@/components/ui/openMenus';
 
 it('makes every item tall enough for a finger on a touch screen', () => {
   render(
@@ -92,6 +93,53 @@ it('says it has opened when it is drawn, and not when it has no items to draw', 
   }
 });
 
+// A long-press that opens another menu, the map's or the other list's,
+// brings no mousedown here to close this one.
+it('closes when another menu opens, and not on its own opening', () => {
+  const onClose = vi.fn();
+  render(
+    <CharacterContextMenu
+      x={10}
+      y={10}
+      onClose={onClose}
+      items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
+    />,
+  );
+  expect(onClose).not.toHaveBeenCalled();
+
+  act(() => { menuOpened(); });
+
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+// The roster and the tracker hand it a new onClose each time they render, and
+// a menu can open in the same render; it must still close.
+it('closes when another menu opens in a render that hands it a new onClose', () => {
+  const closed = vi.fn();
+  /** Says a menu has opened each time `opening` goes up, as the map's menus do. */
+  function Opener({ opening }: { opening: number }) {
+    useEffect(() => { if (opening > 0) menuOpened(); }, [opening]);
+    return null;
+  }
+  const both = (opening: number) => (
+    <>
+      <Opener opening={opening} />
+      <CharacterContextMenu
+        x={10}
+        y={10}
+        onClose={() => closed()}
+        items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
+      />
+    </>
+  );
+  const { rerender } = render(both(0));
+  expect(closed).not.toHaveBeenCalled();
+
+  rerender(both(1));
+
+  expect(closed).toHaveBeenCalledTimes(1);
+});
+
 // The map asks, so a tap on it that closes this menu is not the first of a
 // double tap to ping.
 it('is a menu on the screen while it is drawn, and not with no items to draw', () => {
@@ -110,4 +158,25 @@ it('is a menu on the screen while it is drawn, and not with no items to draw', (
   expect(anyMenuShown()).toBe(true);
   drawn.unmount();
   expect(anyMenuShown()).toBe(false);
+});
+
+// Placed as the map's menus are (components/ui/menu.ts flipOntoScreen): the
+// screen is jsdom's, 1,024 by 768, and the menu measures 220 by 160.
+const originalRect = HTMLDivElement.prototype.getBoundingClientRect;
+afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = originalRect; });
+
+it('flips to the left of and above a point near the right and bottom edges', () => {
+  HTMLDivElement.prototype.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, right: 220, bottom: 160, width: 220, height: 160, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  render(
+    <CharacterContextMenu
+      x={1000}
+      y={700}
+      onClose={vi.fn()}
+      items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
+    />,
+  );
+
+  const menu = screen.getByRole('button', { name: 'View Character Sheet' }).parentElement!;
+  expect([menu.style.left, menu.style.top]).toEqual(['780px', '540px']);
 });

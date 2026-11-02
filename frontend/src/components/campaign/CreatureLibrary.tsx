@@ -507,13 +507,11 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
         {/* Action buttons */}
         <div className="flex gap-2">
-          {/* TODO(ui): while a creature's edit form is open on a wide screen,
-              Create Custom leaves it open as Edit Creature, since
-              editingCreature is not cleared. It should open an empty form,
-              as New Template does in Token Templates. */}
+          {/* An empty form, in place of a creature's edit form that a wide
+              screen may show under the list, as New Template does. */}
           <button
             ref={formCreateButtonRef}
-            onClick={(e) => { setShowCreateForm(true); formOpened(e.currentTarget); }}
+            onClick={(e) => { setEditingCreature(null); setShowCreateForm(true); formOpened(e.currentTarget); }}
             className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
           >
             <Plus className="w-3 h-3" /> Create Custom
@@ -1163,9 +1161,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
         </h3>
         {/* As a step, Back to the list above the form does this. */}
         {!asStep && (
-          // TODO(ui): this X has no accessible name, so a screen reader
-          // announces a bare "button". It should be named, as "Close form".
-          <button onClick={onCancel} className="text-stone-gray hover:text-stone-gray/80 p-0.5">
+          <button onClick={onCancel} aria-label="Close form" className="text-stone-gray hover:text-stone-gray/80 p-0.5">
             <X className="w-4 h-4" />
           </button>
         )}

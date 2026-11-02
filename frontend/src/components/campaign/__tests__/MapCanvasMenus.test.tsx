@@ -425,15 +425,13 @@ describe("the DM's token menu", () => {
     ]);
   });
 
-  // The rule above Move to Map… stays when there is no other map to move to,
-  // so two rules stand together above Remove from Map.
-  it('with no other map: no Move to Map…, its rule still drawn', () => {
+  it('with no other map: no Move to Map…, and one rule above Remove from Map', () => {
     h.set({ maps: [{ id: 'map-a', name: 'Map A' }] });
     render(<MapCanvas />);
     show(goblin());
     rightClick(0, 19);
 
-    expect(rows().slice(-4)).toEqual(['Send to Spirit Realm (spirit, dims)', '---', '---', 'Remove from Map (danger)']);
+    expect(rows().slice(-3)).toEqual(['Send to Spirit Realm (spirit, dims)', '---', 'Remove from Map (danger)']);
   });
 
   it('while the session is paused, the same, the turns included', () => {
@@ -459,7 +457,7 @@ describe('the token menu in Player Preview', () => {
   it("is the DM's, on a token the preview draws and on a hidden one", () => {
     render(<MapCanvas />);
     show(hero('char-alice', 'alice'), goblin({ visible: false, position: { x: 3, y: 10 } }));
-    fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
     rightClick(2, 19);
     expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...DM_ITEMS]);
@@ -568,6 +566,18 @@ describe('Move to Map…', () => {
     expect(rows().slice(-6)).toEqual(['---', 'Move to Map…▶ (accent, opens a submenu)', '› Map B', '› Map C', '---', 'Remove from Map (danger)']);
 
     fireEvent.click(opener);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+  });
+
+  it("opens with its submenu shut on a right-click on another token while it is open", () => {
+    render(<MapCanvas />);
+    show(goblin(), token('tok-wolf', 'Wolf', 4, 19));
+    rightClick(0, 19);
+    fireEvent.click(screen.getByText('Move to Map…'));
+    expect(rows()).toContain('› Map B');
+
+    rightClick(4, 19);
+
     expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
   });
 
@@ -777,8 +787,9 @@ describe('where a roll picker from the token menu opens', () => {
     expect(placeOf(screen.getByPlaceholderText('e.g. 2d6+3').closest<HTMLElement>('div.fixed')!)).toEqual(['125px', '75px']);
   });
 
-  // A picker is not modal, and a choice from a menu Enter opened gives the
-  // keys back to the map, so another token's menu can be used beside it.
+  // A choice from a menu Enter opened gives the keys back to the map, and
+  // another token's menu opened with Enter closes an open picker, as a
+  // right-click's press or a long-press does.
   /** Select `id`, open its menu with Enter, and choose `label`. */
   async function chooseByKeyboard(id: string, label: string) {
     act(() => { useGameStore.getState().selectToken(id); });
@@ -788,28 +799,26 @@ describe('where a roll picker from the token menu opens', () => {
     await choose(label);
   }
 
-  it("keeps a creature's open picker where it opened while another token's menu is used", async () => {
+  it("closes a creature's open picker as another token's menu opens", async () => {
     render(<MapCanvas onEditToken={vi.fn()} />);
     show(goblin({ position: { x: 2, y: 18 } }), token('tok-wolf', 'Wolf', 10, 5));
     await chooseByKeyboard('tok-goblin', 'Roll...');
-    const picker = screen.getByPlaceholderText('e.g. 2d6+3').closest<HTMLElement>('div.fixed')!;
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(placeOf(screen.getByPlaceholderText('e.g. 2d6+3').closest<HTMLElement>('div.fixed')!)).toEqual(['125px', '75px']);
 
     await chooseByKeyboard('tok-wolf', 'Edit Token');
 
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(screen.queryByPlaceholderText('e.g. 2d6+3')).toBeNull();
   });
 
-  it("keeps a character's open picker where it opened while another token's menu is used", async () => {
+  it("closes a character's open picker as another token's menu opens", async () => {
     render(<MapCanvas onEditToken={vi.fn()} />);
     show(hero('char-alice', 'alice', { position: { x: 2, y: 18 } }), token('tok-wolf', 'Wolf', 10, 5));
     await chooseByKeyboard('tok-hero', 'Roll...');
-    const picker = pickerAround('Loading rolls…');
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(placeOf(pickerAround('Loading rolls…'))).toEqual(['125px', '75px']);
 
     await chooseByKeyboard('tok-wolf', 'Hide from Players');
 
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(screen.queryByText('Loading rolls…')).toBeNull();
   });
 });
 
@@ -829,7 +838,7 @@ describe('the door menu', () => {
     rightClickDoor();
 
     expect(theMenu().className).toBe(MENU);
-    expect(theMenu().getAttribute('style')).toBe('left: 150px; top: 104px;');
+    expect(theMenu().getAttribute('style')).toBe('left: 150px; top: 104px; visibility: visible;');
     expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
   });
 
@@ -905,6 +914,34 @@ describe('the door menu', () => {
 
     expect(openMenu()).toBeNull();
   });
+
+  // The screen is jsdom's, 1,024 by 768; the menu measures 180 by 120.
+  describe('near the edge of the screen', () => {
+    const original = HTMLDivElement.prototype.getBoundingClientRect;
+    beforeEach(() => {
+      HTMLDivElement.prototype.getBoundingClientRect = function (this: HTMLDivElement) {
+        if (this.parentElement !== document.body || this.className !== MENU) return original.call(this);
+        return { left: 0, top: 0, right: 180, bottom: 120, width: 180, height: 120, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+      };
+    });
+    afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = original; });
+
+    it('flips to the left of and above the point, as the token menu does, to stay on the screen', () => {
+      h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'd1', x1: 900, y1: 700, x2: 1000, y2: 700, type: 'door-closed' }] }) });
+      render(<MapCanvas />);
+      fireEvent.contextMenu(surface(), { clientX: 950, clientY: 704 });
+
+      expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
+      expect(theMenu().getAttribute('style')).toBe('left: 770px; top: 584px; visibility: visible;');
+    });
+
+    it('stays at the point where it fits', () => {
+      renderWithDoor('door-closed');
+      rightClickDoor();
+
+      expect(theMenu().getAttribute('style')).toBe('left: 150px; top: 104px; visibility: visible;');
+    });
+  });
 });
 
 // The page draws the map in a column of its panel group, and the panel
@@ -979,6 +1016,62 @@ describe('when a menu opens beside the map', () => {
 
     expect(openCharacterMenu()).not.toBeNull();
     expect(openMenu()).toBeNull();
+  });
+
+  // A Roll... picker, opened from either menu, closes the same way.
+  it("closes a roster character's Roll... picker as a long-press opens the token menu", async () => {
+    render(<><MapCanvas /><CampaignRoster /></>);
+    show(goblin());
+    const row = await screen.findByText('Brannoc');
+    fireEvent.contextMenu(row, point);
+    await choose('Roll...');
+    expect(screen.getByText('Loading rolls…')).toBeInTheDocument();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finger = contact('touch', 1);
+    finger.down(surface(), at(0, 19));
+    act(() => { vi.advanceTimersByTime(500); });
+    finger.up(surface(), at(0, 19));
+
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(screen.queryByText('Loading rolls…')).toBeNull();
+  });
+
+  it("closes the token menu's Roll... picker as a long-press opens a roster character's menu", async () => {
+    render(<><MapCanvas /><CampaignRoster /></>);
+    show(goblin());
+    const row = await screen.findByText('Brannoc');
+    rightClick(0, 19);
+    await choose('Roll...');
+    expect(screen.getByText('Roll for Goblin Scout')).toBeInTheDocument();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finger = contact('touch', 1);
+    finger.down(row, point);
+    act(() => { vi.advanceTimersByTime(500); });
+    finger.up(row, point);
+
+    expect(openCharacterMenu()).not.toBeNull();
+    expect(screen.queryByText('Roll for Goblin Scout')).toBeNull();
+  });
+
+  // The other way round: a long-press on the map brings no mousedown, which
+  // is what closes the roster's menu.
+  it("closes a roster character's menu as a long-press opens the token menu", async () => {
+    render(<><MapCanvas /><CampaignRoster /></>);
+    show(goblin());
+    const row = await screen.findByText('Brannoc');
+    fireEvent.contextMenu(row, point);
+    expect(openCharacterMenu()).not.toBeNull();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finger = contact('touch', 1);
+    finger.down(surface(), at(0, 19));
+    act(() => { vi.advanceTimersByTime(500); });
+    finger.up(surface(), at(0, 19));
+
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(openCharacterMenu()).toBeNull();
   });
 });
 

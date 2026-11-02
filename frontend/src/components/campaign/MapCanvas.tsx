@@ -133,6 +133,7 @@ import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
 import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
 import MapMenuRows from '@/components/campaign/MapMenuRows';
+import { flipOntoScreen } from '@/components/ui/menu';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
@@ -140,7 +141,7 @@ import FloatingLayer from '@/components/ui/FloatingLayer';
 import { useCompactLayout } from '@/contexts/LayoutContext';
 import ActionSheet, { headedMenu } from '@/components/campaign/compact/ActionSheet';
 import { TokenSheetPicture, tokenSheetLine } from '@/components/campaign/compact/tokenSheetHeader';
-import { anyMenuShown, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
+import { anyMenuShown, menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
 import { mapImageState, pictureFor, PICTURE_DECODE_WAIT_MS, type LoadedPicture } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
@@ -354,6 +355,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     x: number; // viewport x
     y: number; // viewport y
   } | null>(null);
+  const doorMenuRef = useRef<HTMLDivElement>(null);
+  const [doorMenuPos, setDoorMenuPos] = useState<{ x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isMovingTokenLayer, setIsMovingTokenLayer] = useState(false);
@@ -3558,8 +3561,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (token && tokenMenuHasItems(token, tokenMenuView(token))) {
       rememberMenuPoint(clientX, clientY);
       if (drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
-      // TODO(ui): a right-click on another token while Move to Map… is open opens its menu with the
-      // maps already listed; a new menu opens with its submenu shut, as Enter's does (openTokenMenuAt).
+      // A new menu opens with its submenu shut, as Enter's does, whatever was open in the last.
+      setTokenMenuSubmenu(null);
       setContextMenu({ token, x: clientX, y: clientY });
       return true;
     }
@@ -3673,10 +3676,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   }, [doorContextMenu, compact]);
 
   // A menu opened elsewhere, the roster's or the tracker's, closes these: the
-  // right-click or long-press that opened it sent no click.
+  // right-click or long-press that opened it sent no click. And their opening
+  // closes one of those, which a long-press here, sending no mousedown, would
+  // leave open beside them.
   const mapMenuOpen = contextMenu !== null || doorContextMenu !== null;
   useEffect(() => {
     if (!mapMenuOpen) return;
+    menuOpened();
     return whenMenuOpens(() => {
       closeTokenMenu();
       setDoorContextMenu(null);
@@ -3701,10 +3707,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       return;
     }
     const rect = contextMenuRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let adjustedX = contextMenu.x + rect.width > vw ? Math.max(0, contextMenu.x - rect.width) : contextMenu.x;
-    let adjustedY = contextMenu.y + rect.height > vh ? Math.max(0, contextMenu.y - rect.height) : contextMenu.y;
+    let { x: adjustedX, y: adjustedY } = flipOntoScreen(contextMenu, rect, { width: window.innerWidth, height: window.innerHeight });
     // A menu opened by Enter sits at a token, which may be near any edge of
     // the map: it is held inside the map on all four.
     const area = contextMenu.fromKeyboard ? canvasRef.current?.getBoundingClientRect() : undefined;
@@ -3716,6 +3719,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // `compact`: a menu open as the layout turns from the compact one, which
     // drew it as an action sheet, is placed as the popover and shown.
   }, [contextMenu, tokenMenuSubmenu, compact]);
+  // The door menu is placed as the token menu is, flipped to stay on the screen.
+  useEffect(() => {
+    if (!doorContextMenu || !doorMenuRef.current) {
+      setDoorMenuPos(null);
+      return;
+    }
+    const rect = doorMenuRef.current.getBoundingClientRect();
+    setDoorMenuPos(flipOntoScreen(doorContextMenu, rect, { width: window.innerWidth, height: window.innerHeight }));
+  }, [doorContextMenu, compact]);
 
   // A menu opened from the keyboard puts the cursor on its first item once
   // it is placed, and so visible: a hidden button cannot take focus.
@@ -3949,12 +3961,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
         }`}
         title={previewHint}
-        // TODO(ui): this name does not hold the words the button shows ("Preview Player View",
-        // "DM View"), so a voice command for them finds nothing; name it by what it shows,
-        // with aria-pressed for the preview being on.
-        aria-label="Toggle DM player view preview"
       >
-        {dmPreviewPlayerView && !isPreparing ? '👁 DM View' : '🎭 Preview Player View'}
+        {/* Named by the words it shows, which say what a press does, so a
+            voice command for them finds it. */}
+        {dmPreviewPlayerView && !isPreparing
+          ? <><span aria-hidden="true">👁</span> DM View</>
+          : <><span aria-hidden="true">🎭</span> Preview Player View</>}
       </button>
       {/* Said as well as greyed out: a touch screen shows no tooltip. */}
       {isPreparing && (
@@ -4929,9 +4941,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
       {/* Door Context Menu — right-click on a door segment, its items from
           map/doorMenuItems.ts. Same flex-column sizing as the token menu
-          above, and drawn on the body as it is; see the note there.
-          TODO(play): placed at the pointer and never moved, so near the right or bottom edge of the
-          screen it runs off it; place it as the token menu is placed, flipped to stay on screen. */}
+          above, drawn on the body and placed as it is; see the notes there. */}
       {doorContextMenu && compact && (() => {
         const menu = headedMenu(doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } }), 'Door');
         return (
@@ -4947,8 +4957,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       {doorContextMenu && !compact && (
         <FloatingLayer>
           <div
+            ref={doorMenuRef}
             className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
-            style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
+            style={{
+              left: `${doorMenuPos ? doorMenuPos.x : doorContextMenu.x}px`,
+              top: `${doorMenuPos ? doorMenuPos.y : doorContextMenu.y}px`,
+              visibility: doorMenuPos ? 'visible' : 'hidden',
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             <MapMenuRows

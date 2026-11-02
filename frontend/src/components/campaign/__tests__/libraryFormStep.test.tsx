@@ -235,10 +235,10 @@ describe('the Creature Library on a wide screen', () => {
     expect(classes(form('Create Custom Creature'))).not.toContain('flex-1');
   });
 
-  it("keeps the form's own X, which closes it", async () => {
+  it("keeps the form's own X, named Close form, which closes it", async () => {
     await openCreatureLibrary();
     await userEvent.click(screen.getByRole('button', { name: 'Create Custom' }));
-    await userEvent.click(within(headingRow('Create Custom Creature')).getByRole('button'));
+    await userEvent.click(within(headingRow('Create Custom Creature')).getByRole('button', { name: 'Close form' }));
 
     expect(screen.queryByRole('heading', { name: 'Create Custom Creature' })).toBeNull();
   });
@@ -263,6 +263,20 @@ describe('the Creature Library on a wide screen', () => {
 
     expect(screen.getByRole('heading', { name: 'Edit Creature' })).toBeVisible();
     expect(screen.queryByTitle('Edit creature')).toBeNull();
+  });
+
+  // As New Template does in Token Templates.
+  it('opens an empty form on Create Custom while a creature is being edited', async () => {
+    await openCreatureLibrary();
+    await userEvent.click(screen.getByText('Boss Bat'));
+    await userEvent.click(screen.getByTitle('Edit creature'));
+    expect(screen.getByPlaceholderText('e.g. Goblin Boss')).toHaveValue('Boss Bat');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create Custom' }));
+
+    expect(screen.getByRole('heading', { name: 'Create Custom Creature' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Edit Creature' })).toBeNull();
+    expect(screen.getByPlaceholderText('e.g. Goblin Boss')).toHaveValue('');
   });
 });
 
@@ -330,13 +344,13 @@ describe('Token Templates on a wide screen', () => {
     expect(screen.queryByTitle('Edit template')).toBeNull();
   });
 
-  it("keeps the form its border, its height cap and its own X, which closes it", async () => {
+  it("keeps the form its border, its height cap and its own X, named Close form, which closes it", async () => {
     await openTemplates();
     await userEvent.click(screen.getByRole('button', { name: 'New Template' }));
 
     expect(classes(form('New Token Template'))).toEqual(expect.arrayContaining(['border-t', 'max-h-[60vh]', 'overflow-y-auto']));
     expect(classes(form('New Token Template'))).not.toContain('flex-1');
-    await userEvent.click(within(headingRow('New Token Template')).getByRole('button'));
+    await userEvent.click(within(headingRow('New Token Template')).getByRole('button', { name: 'Close form' }));
     expect(screen.queryByRole('heading', { name: 'New Token Template' })).toBeNull();
   });
 
