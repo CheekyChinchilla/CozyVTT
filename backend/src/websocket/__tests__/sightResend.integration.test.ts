@@ -14,6 +14,8 @@ import type { Socket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { toJson } from '../../utils/prisma-json';
 import { createWsTestServer, expectNoEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import { resendSightAfterChange } from '../shared';
+import { backgroundWork } from '../../utils/backgroundWork';
 
 jest.setTimeout(20000);
 
@@ -112,4 +114,20 @@ it('shows a creature behind a door once the door opens', async () => {
   expect(await shown).toEqual(expect.arrayContaining(['hero', 'goblin']));
   player.disconnect();
   dm.disconnect();
+});
+
+// So a shutdown, and the end of a test file, let it run first.
+it('counts a re-send waiting for its time as work under way, once for a burst, until it has gone', async () => {
+  const mapId = await litMap('Counted', true);
+  const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+  const sent = mapWhere(player, (ids) => ids.includes('hero'));
+
+  resendSightAfterChange(server.io, campaignId, mapId);
+  resendSightAfterChange(server.io, campaignId, mapId);
+  expect(backgroundWork.underWay.filter((what) => what === 'sight re-sent after a light or wall change')).toHaveLength(1);
+
+  await backgroundWork.finished();
+  expect(backgroundWork.count).toBe(0);
+  await sent;
+  player.disconnect();
 });

@@ -20,6 +20,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { tellTableMemberLeft } from '../../services/campaignMembers';
+import * as backgroundWork from '../../utils/backgroundWork';
 
 jest.setTimeout(20000);
 
@@ -93,12 +94,17 @@ it('sends the token back where it stands when its carrier disconnects', async ()
   player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
   expect(await frame).toMatchObject({ tokenId: 'hero', x: 9, y: 9, dragging: true });
 
+  // Started by the disconnect, after any answer: a shutdown, and the end
+  // of a test file, let it finish.
+  const started = jest.spyOn(backgroundWork, 'inBackground');
   const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
   player.disconnect();
 
   const moved = await back;
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
   expect(moved.dragging).toBeFalsy();
+  expect(started).toHaveBeenCalledWith('a token let go when its carrier left', expect.any(Function));
+  started.mockRestore();
 });
 
 // Removed by the DM, or leaving, mid-hold: the connection stays open but

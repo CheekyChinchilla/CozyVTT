@@ -16,6 +16,7 @@ import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
 import { canReadMap } from '../services/permissions';
 import logger from '../utils/logger';
+import { inBackgroundAfter, type WaitingWork } from '../utils/backgroundWork';
 import { MAP_LIMITS, MAX_FOG_CELLS } from '../validators/maps';
 
 /**
@@ -557,27 +558,22 @@ export async function broadcastMapData(
  * logged and nothing else.
  */
 const SIGHT_RESEND_MS = 150;
-const pendingSightResends = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingSightResends = new Map<string, WaitingWork>();
 
 export function resendSightAfterChange(io: Server, campaignId: string, mapId: string): void {
   const key = `${campaignId}:${mapId}`;
-  const pending = pendingSightResends.get(key);
-  if (pending) clearTimeout(pending);
-  const timer = setTimeout(() => {
+  pendingSightResends.get(key)?.cancel();
+  pendingSightResends.set(key, inBackgroundAfter('sight re-sent after a light or wall change', SIGHT_RESEND_MS, async () => {
     pendingSightResends.delete(key);
-    void (async () => {
-      try {
-        const [map, campaign] = await Promise.all([
-          prisma.map.findUnique({ where: { id: mapId } }),
-          prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
-        ]);
-        if (!map || map.campaignId !== campaignId || !map.lightingEnabled || campaign?.currentMapId !== mapId) return;
-        await broadcastMapData(io, campaignId, map, 'players');
-      } catch (err) {
-        logger.warn('Players not sent their sight after a light or wall change; the change stands', { err, mapId });
-      }
-    })();
-  }, SIGHT_RESEND_MS);
-  timer.unref?.();
-  pendingSightResends.set(key, timer);
+    try {
+      const [map, campaign] = await Promise.all([
+        prisma.map.findUnique({ where: { id: mapId } }),
+        prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
+      ]);
+      if (!map || map.campaignId !== campaignId || !map.lightingEnabled || campaign?.currentMapId !== mapId) return;
+      await broadcastMapData(io, campaignId, map, 'players');
+    } catch (err) {
+      logger.warn('Players not sent their sight after a light or wall change; the change stands', { err, mapId });
+    }
+  }));
 }

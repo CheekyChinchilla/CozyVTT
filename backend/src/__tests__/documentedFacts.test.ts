@@ -12,6 +12,7 @@ import { isSmtpConfigured } from '../services/email';
 import { createApp } from '../app';
 import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../routes/admin';
 import { appLayers } from './helpers/routeInventory';
+import { BACKGROUND_WAIT_MS, backgroundLeftMessage } from '../utils/shutdown';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -272,6 +273,15 @@ describe('what a backup leaves out of the uploads folder, in the deployment guid
 
   it('says a name a restore refuses is left out, with the line the backend logs for it', () => {
     expect(guide).toContain(`\`${NAME_LEFT_OUT_OF_BACKUP}\``);
+  });
+});
+
+describe('what stopping the backend waits for, in the deployment guide', () => {
+  const guide = section('docs/DEPLOYMENT.md', '### Stopping and Starting', '\n## ');
+
+  it('gives the wait for work still going on after a change, with the line the backend logs past it', () => {
+    expect(guide).toContain(`stopping waits up to ${BACKGROUND_WAIT_MS / 1000} seconds for it`);
+    expect(guide).toContain(`\`${backgroundLeftMessage(BACKGROUND_WAIT_MS)}\``);
   });
 });
 

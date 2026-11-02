@@ -187,14 +187,18 @@ src/
 │   ├── throttle.ts       Paces live drags: the first call at once, the last one after the
 │   │                     wait, timed on a clock that cannot be set back
 │   ├── serialQueue.ts    Work run one piece at a time across the server (the UVTT queue)
+│   ├── backgroundWork.ts Work started without its request or event waiting for it (a map
+│   │                     re-sent after a token change, explored ground written, a log line),
+│   │                     counted until it ends; a shutdown and the end of every test file
+│   │                     let it finish before they close the database
 │   ├── keeperNotes.ts    Keeps a Call of Cthulhu sheet's Keeper's Notes to its campaign's DM
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   ├── byteRange.ts      HTTP Range header reading for audio streaming
 │   ├── shutdown.ts       SIGTERM/SIGINT: stop taking requests, let an Admin Panel backup or
 │   │                     restore finish (up to 10 minutes, services/backupsInProgress.ts,
-│   │                     services/restoreState.ts) and a deleted
-│   │                     account's file removal (up to 4 seconds), close sockets,
-│   │                     database and session store, then exit; an error nothing caught is
+│   │                     services/restoreState.ts), a deleted account's file removal
+│   │                     (up to 4 seconds) and the background work (up to 2 seconds),
+│   │                     close sockets, database and session store, then exit; an error nothing caught is
 │   │                     logged before the process exits 1
 │   └── logger.ts         Winston logger configuration
 └── types/             Shared TypeScript interfaces

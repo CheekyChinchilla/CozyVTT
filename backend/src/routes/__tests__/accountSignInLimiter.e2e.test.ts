@@ -28,6 +28,7 @@ import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { hashPassword } from '../../services/auth';
 import { issueResetToken, RESET_LINK_TTL_MS } from '../../services/passwordResetTokens';
+import * as backgroundWork from '../../utils/backgroundWork';
 
 jest.setTimeout(60000);
 
@@ -74,6 +75,8 @@ afterAll(async () => {
 it('locks an account after ten wrong passwords from ten addresses, for every address, and tells the admins', async () => {
   const target = await user();
   const bystander = await user();
+  // Written after the answer: a shutdown, and the end of a test file, let it finish.
+  const started = jest.spyOn(backgroundWork, 'inBackground');
 
   for (let i = 0; i < 10; i += 1) expect((await signIn(target.email, 'wrong-password')).status).toBe(401);
 
@@ -85,6 +88,9 @@ it('locks an account after ten wrong passwords from ten addresses, for every add
   // Another account is not affected, from a fresh address or one that guessed.
   expect((await signIn(bystander.email, TEST_PASSWORD)).status).toBe(200);
 
+  expect(started).toHaveBeenCalledWith('the activity log line for a sign-in locked', expect.any(Function));
+  started.mockRestore();
+  await backgroundWork.backgroundWork.finished();
   const logged = await prisma.systemLog.findMany({ where: { message: { contains: target.email } } });
   expect(logged).toHaveLength(1);
   expect(logged[0].level).toBe('WARNING');

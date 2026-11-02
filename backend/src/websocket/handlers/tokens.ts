@@ -19,6 +19,7 @@ import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked, clampTokenPosition } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { bestEffort, campaignSockets, stillInCampaign } from '../utils';
+import { inBackground } from '../../utils/backgroundWork';
 
 /** How one member is sent a dragged token. */
 interface FrameRecipient {
@@ -263,7 +264,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     const held = [...drags.entries()];
     drags.clear();
     for (const [tokenId, drag] of held) {
-      void bestEffort('token drag release', async () => {
+      inBackground('a token let go when its carrier left', () => bestEffort('token drag release', async () => {
         const audience = await drag.deciding;
         const map = await prisma.map.findUnique({
           where: { id: drag.mapId },
@@ -296,7 +297,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
             s.emit('token:disappeared', { tokenId, mapId: drag.mapId });
           }
         }
-      });
+      }));
     }
   }
   // For the helpers that take the socket out of its campaign
