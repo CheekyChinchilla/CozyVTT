@@ -224,17 +224,20 @@ export default function AssetUploadModal({
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
-      // Paint's tag marks a picture it may change and a save may delete;
-      // a picture uploaded here never carries it, in any case.
-      if (tagInput.trim().toLowerCase() === DRAWN_MAP_TAG) {
-        setTagKept(true);
-        setTagInput('');
-        return;
+      // The server splits tags at their commas, so each piece is a tag of its
+      // own, and is one here. Paint's tag marks a picture it may change and a
+      // save may delete; a picture uploaded here never carries it, in any case.
+      const pieces = tagInput.split(',').map((piece) => piece.trim()).filter((piece) => piece.length > 0);
+      const kept = pieces.some((piece) => piece.toLowerCase() === DRAWN_MAP_TAG);
+      const next = [...tags];
+      for (const piece of pieces) {
+        if (piece.toLowerCase() === DRAWN_MAP_TAG || next.includes(piece) || next.length >= ASSET_LIMITS.maxTags) continue;
+        next.push(piece);
       }
-      setTagKept(false);
-      if (!tags.includes(tagInput.trim()) && !atTagLimit) {
-        setTags([...tags, tagInput.trim()]);
-      }
+      // The notice stays until a tag is added after it.
+      if (kept) setTagKept(true);
+      else if (next.length > tags.length) setTagKept(false);
+      setTags(next);
       setTagInput('');
     }
   };
