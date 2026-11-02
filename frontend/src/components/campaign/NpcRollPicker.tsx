@@ -9,7 +9,7 @@
  * which closes itself: the popover's placing and closers are off there.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Dices, X, ChevronDown } from 'lucide-react';
 import type { Token } from '@/types';
 import type { RollOption, CharacterRolls } from '@/utils/characterRolls';
@@ -17,7 +17,7 @@ import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { flipOntoScreen } from '@/components/ui/menu';
-import { menuShown } from '@/components/ui/openMenus';
+import { menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import { useCompactLayout } from '@/contexts/LayoutContext';
 import { BottomSheet } from '@/components/campaign/compact/BottomSheet';
 import { tokenPublicName } from '@/utils/tokenDisplayName';
@@ -125,8 +125,15 @@ export default function NpcRollPicker({
   }, [anchorX, anchorY, hasAnyRolls, compact]);
 
   // A menu on the screen while it is open, so the tap on the map that
-  // closes it is not the first of a double tap to ping.
-  useEffect(() => menuShown(), []);
+  // closes it is not the first of a double tap to ping. Its opening closes
+  // any other menu, and another's opening closes it, from after its own: a
+  // long-press that opens one brings no mousedown here (openMenus.ts).
+  useEffect(() => {
+    menuOpened();
+    return menuShown();
+  }, []);
+  const closeOnOtherMenu = useEffectEvent(() => onClose());
+  useEffect(() => whenMenuOpens(() => closeOnOtherMenu()), []);
 
   // Close on click outside
   useEffect(() => {

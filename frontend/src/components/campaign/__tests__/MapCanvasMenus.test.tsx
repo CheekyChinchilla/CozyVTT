@@ -787,8 +787,9 @@ describe('where a roll picker from the token menu opens', () => {
     expect(placeOf(screen.getByPlaceholderText('e.g. 2d6+3').closest<HTMLElement>('div.fixed')!)).toEqual(['125px', '75px']);
   });
 
-  // A picker is not modal, and a choice from a menu Enter opened gives the
-  // keys back to the map, so another token's menu can be used beside it.
+  // A choice from a menu Enter opened gives the keys back to the map, and
+  // another token's menu opened with Enter closes an open picker, as a
+  // right-click's press or a long-press does.
   /** Select `id`, open its menu with Enter, and choose `label`. */
   async function chooseByKeyboard(id: string, label: string) {
     act(() => { useGameStore.getState().selectToken(id); });
@@ -798,28 +799,26 @@ describe('where a roll picker from the token menu opens', () => {
     await choose(label);
   }
 
-  it("keeps a creature's open picker where it opened while another token's menu is used", async () => {
+  it("closes a creature's open picker as another token's menu opens", async () => {
     render(<MapCanvas onEditToken={vi.fn()} />);
     show(goblin({ position: { x: 2, y: 18 } }), token('tok-wolf', 'Wolf', 10, 5));
     await chooseByKeyboard('tok-goblin', 'Roll...');
-    const picker = screen.getByPlaceholderText('e.g. 2d6+3').closest<HTMLElement>('div.fixed')!;
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(placeOf(screen.getByPlaceholderText('e.g. 2d6+3').closest<HTMLElement>('div.fixed')!)).toEqual(['125px', '75px']);
 
     await chooseByKeyboard('tok-wolf', 'Edit Token');
 
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(screen.queryByPlaceholderText('e.g. 2d6+3')).toBeNull();
   });
 
-  it("keeps a character's open picker where it opened while another token's menu is used", async () => {
+  it("closes a character's open picker as another token's menu opens", async () => {
     render(<MapCanvas onEditToken={vi.fn()} />);
     show(hero('char-alice', 'alice', { position: { x: 2, y: 18 } }), token('tok-wolf', 'Wolf', 10, 5));
     await chooseByKeyboard('tok-hero', 'Roll...');
-    const picker = pickerAround('Loading rolls…');
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(placeOf(pickerAround('Loading rolls…'))).toEqual(['125px', '75px']);
 
     await chooseByKeyboard('tok-wolf', 'Hide from Players');
 
-    expect(placeOf(picker)).toEqual(['125px', '75px']);
+    expect(screen.queryByText('Loading rolls…')).toBeNull();
   });
 });
 
@@ -1017,6 +1016,43 @@ describe('when a menu opens beside the map', () => {
 
     expect(openCharacterMenu()).not.toBeNull();
     expect(openMenu()).toBeNull();
+  });
+
+  // A Roll... picker, opened from either menu, closes the same way.
+  it("closes a roster character's Roll... picker as a long-press opens the token menu", async () => {
+    render(<><MapCanvas /><CampaignRoster /></>);
+    show(goblin());
+    const row = await screen.findByText('Brannoc');
+    fireEvent.contextMenu(row, point);
+    await choose('Roll...');
+    expect(screen.getByText('Loading rolls…')).toBeInTheDocument();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finger = contact('touch', 1);
+    finger.down(surface(), at(0, 19));
+    act(() => { vi.advanceTimersByTime(500); });
+    finger.up(surface(), at(0, 19));
+
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(screen.queryByText('Loading rolls…')).toBeNull();
+  });
+
+  it("closes the token menu's Roll... picker as a long-press opens a roster character's menu", async () => {
+    render(<><MapCanvas /><CampaignRoster /></>);
+    show(goblin());
+    const row = await screen.findByText('Brannoc');
+    rightClick(0, 19);
+    await choose('Roll...');
+    expect(screen.getByText('Roll for Goblin Scout')).toBeInTheDocument();
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const finger = contact('touch', 1);
+    finger.down(row, point);
+    act(() => { vi.advanceTimersByTime(500); });
+    finger.up(row, point);
+
+    expect(openCharacterMenu()).not.toBeNull();
+    expect(screen.queryByText('Roll for Goblin Scout')).toBeNull();
   });
 
   // The other way round: a long-press on the map brings no mousedown, which

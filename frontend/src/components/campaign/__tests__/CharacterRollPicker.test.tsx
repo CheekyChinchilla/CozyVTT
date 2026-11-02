@@ -8,9 +8,9 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import CharacterRollPicker from '../CharacterRollPicker';
-import { anyMenuShown } from '@/components/ui/openMenus';
+import { anyMenuShown, menuOpened, whenMenuOpens } from '@/components/ui/openMenus';
 import type { Character, CharacterData, GameSystem } from '@/types';
 
 const seelah: Character = {
@@ -141,5 +141,26 @@ describe('while it is open', () => {
     expect(anyMenuShown()).toBe(true);
     unmount();
     expect(anyMenuShown()).toBe(false);
+  });
+});
+
+// A long-press that opens another menu, the map's or a list's, brings no
+// mousedown here; and this one's opening closes theirs the same way.
+describe('beside another menu', () => {
+  it('says it has opened, and closes when another menu opens, not on its own opening', () => {
+    const told = vi.fn();
+    const stop = whenMenuOpens(told);
+    const onClose = vi.fn();
+    try {
+      render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+      expect(told).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+
+    act(() => { menuOpened(); });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
