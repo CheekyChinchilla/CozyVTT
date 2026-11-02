@@ -19,6 +19,8 @@ describe('describeAssetUse', () => {
     [use({ kind: 'tokenTemplate', name: 'Torch' }), 'Token template "Torch" (Lost Mine)'],
     [use({ kind: 'campaignSetting', name: 'Lost Mine' }), 'Ambient sound of the campaign "Lost Mine"'],
     [use({ kind: 'vibePeriod', name: 'Dawn' }), 'Sound of the time of day "Dawn" (Lost Mine)'],
+    [use({ kind: 'document', name: 'The road to Thornwall' }), 'Document "The road to Thornwall" (Lost Mine)'],
+    [use({ kind: 'document', name: 'House rules', campaignId: null, campaignName: null }), 'Document "House rules"'],
   ])('describes %j', (entry, text) => {
     expect(describeAssetUse(entry)).toBe(text);
   });
@@ -28,6 +30,7 @@ describe('describeAssetUse', () => {
     expect(describeAssetUse(use({ ...hidden, count: 1 }))).toBe('1 map you cannot see');
     expect(describeAssetUse(use({ ...hidden, kind: 'tokenTemplate', count: 4 }))).toBe('4 token templates you cannot see');
     expect(describeAssetUse(use({ ...hidden, kind: 'vibePeriod', count: 2 }))).toBe('2 time-of-day sounds you cannot see');
+    expect(describeAssetUse(use({ ...hidden, kind: 'document', count: 3 }))).toBe('3 documents you cannot see');
   });
 });
 
@@ -43,6 +46,7 @@ describe('apiAssetInUse', () => {
         'not an entry',
         { kind: 'token', name: null, campaignId: null, campaignName: null, count: 2 },
         { kind: 'vibePeriod', name: 'Dawn', campaignId: 'c1', campaignName: 'Mine', count: 1 },
+        { kind: 'document', name: 'Handout', campaignId: 'c1', campaignName: 'Mine', count: 1 },
       ],
       omitted: 5,
     }));
@@ -51,6 +55,7 @@ describe('apiAssetInUse', () => {
         { kind: 'map', name: 'Cave', campaignId: 'c1', campaignName: 'Mine', count: 1 },
         { kind: 'token', name: null, campaignId: null, campaignName: null, count: 2 },
         { kind: 'vibePeriod', name: 'Dawn', campaignId: 'c1', campaignName: 'Mine', count: 1 },
+        { kind: 'document', name: 'Handout', campaignId: 'c1', campaignName: 'Mine', count: 1 },
       ],
       omitted: 5,
     });
