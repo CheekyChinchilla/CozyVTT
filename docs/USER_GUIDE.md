@@ -235,14 +235,14 @@ Menus open as a list from the bottom of the screen: press and hold a token, a do
 
 ### Adding Maps
 
-Maps are the battlegrounds, taverns, and dungeons your players will explore. Before a session, upload your map images to the **Asset Library** (see [The Asset Library](#the-asset-library)), then add them to your campaign.
+Maps are the battlegrounds, taverns, and dungeons your players will explore. Before a session, upload your map images to the **Asset Library** (see [The Asset Library](#the-asset-library)), then add them to your campaign, or draw a map in CozyVTT.
 
 As the DM, click **Map Library** (the map icon) in the campaign header.
 
 *Screenshot pending — Map Library panel.*
 
 From here you can:
-- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); or **Import UVTT** from a mapping tool
+- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); **Draw a map** in the same window, which starts a blank map of the size and colour you choose (see [Drawing a map](DM_GUIDE.md#drawing-a-map)); or **Import UVTT** from a mapping tool
 - **Set Active** to switch to a different map — this updates the view for all connected players immediately
 - **Edit** a map's settings, export it, or delete it
 

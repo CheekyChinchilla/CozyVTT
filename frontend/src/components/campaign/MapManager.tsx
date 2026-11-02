@@ -22,7 +22,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useTableSwitch } from '@/hooks/useTableSwitch';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
-import type { CampaignMap } from '@/types';
+import type { Asset, CampaignMap } from '@/types';
 import CreateMapModal from './CreateMapModal';
 import TokenTransferConfirmation from './TokenTransferConfirmation';
 import EditMapModal from './EditMapModal';
@@ -284,9 +284,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- CRUD handlers ----
 
-  const handleCreated = (map: CampaignMap) => {
+  const handleCreated = (map: CampaignMap, drawnPicture?: Asset) => {
     setMaps((prev) => [map, ...prev]);
     upsertCampaignMap(map);
+    // A drawn map opens on this screen to paint, the players staying where they are.
+    if (drawnPicture) void handleOpenToPrepare(map);
   };
 
   const handleUpdated = (updated: CampaignMap) => {

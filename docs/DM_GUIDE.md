@@ -157,7 +157,7 @@ Once your map is in the asset library:
 
 1. Inside your campaign, click **Map Library** (the map icon) in the header
 2. The Map Library panel opens
-3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings
+3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings. Or click **Draw a map** at the top of that window to draw one in CozyVTT (see [Drawing a map](#drawing-a-map))
 4. The map is now available to switch to at any time
 
 **Where an Upload New picture goes.** The upload window offers two places for the map picture, and for the spirit layer picture, with a line under each saying what it means. **Personal** is selected at first.
@@ -179,13 +179,38 @@ You can change a map's **Width**, **Height** and **Grid Size** later with the **
 | Grid Size (pixels per square) | 10 | 500 |
 | Feet per square (**Grid Scale**) | 1 | 100 |
 
-Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
+Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it. A map you draw in CozyVTT has a limit of its own besides (see [Drawing a map](#drawing-a-map)).
 
 A map holds up to **1,000 tokens**. Adding one more, or moving tokens onto a map that would take it past 1,000, is refused with a message; a map that already had more before version 1.5.1 keeps them, and you can still move, edit and remove them.
 
 A map made before version 1.5.1 may be larger than this. It still opens, and Edit Map still saves changes that leave its size alone, but fog of war and explored areas cannot be turned on for a map with more than 250,000 squares (500 by 500). Turning either on there says so, and a map that already had fog on shows none. To use fog on it, make it 500 squares or fewer on each side in Edit Map.
 
 *Screenshot pending — Map Library panel with multiple maps.*
+
+### Drawing a map
+
+No map ready for the scene? Draw one in CozyVTT: a room or a clearing sketched while your players wait, or a dungeon drawn with care before the session. A drawn map is a map like any other: tokens, walls, lights, fog of war, export and import work on it as on an uploaded one.
+
+**Making one**
+
+1. Open the **Map Library** and click **Create Map**.
+2. Click **Draw a map** at the top of the window.
+3. Fill in the map's name, its **Width** and **Height** in grid squares, its **Detail (pixels per square)** (70 at first), the **Grid Settings**, and a **Background colour**: parchment at first, one of the colours offered, or any colour with **Another colour**.
+4. Click **Create Map**. CozyVTT makes a blank picture of that size and colour, puts it in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
+
+If the picture cannot be made, the window says why and nothing is created: "This browser could not make a picture that large" means the device ran short, so choose fewer squares or fewer pixels a square.
+
+**How large a drawn map can be.** Its picture is the squares times the pixels per square. So that it can be painted on any device, a phone or a tablet included, the picture is kept within 16,777,216 pixels (4,096 by 4,096) and within 16,384 pixels on each side. Where the squares you ask for would make it larger, the window draws it at fewer pixels a square and says so, for example "Drawn at 40 px a square so it can be edited on any device.", and the map's **Grid Size** is that number. It never goes below 10 pixels a square, so a drawn map has at most 167,772 squares; a larger one is refused with a message and **Create Map** stays greyed out.
+
+| Squares | Drawn at |
+|---|---|
+| 20 by 20 | 70 pixels a square, as asked |
+| 59 by 59 | 69 |
+| 100 by 100 | 40 |
+| 409 by 409, or 500 by 335 | 10 |
+| 410 by 410, or 500 by 336 | Refused |
+
+**Its picture in the Asset Library.** Each drawn map's picture is in the campaign's library, named **Drawn map** and tagged `drawn-map`. As with every map picture, your players do not see it there until the table is on its map.
 
 ### Switching Maps
 

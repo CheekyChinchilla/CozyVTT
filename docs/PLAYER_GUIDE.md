@@ -146,7 +146,7 @@ On a computer, or a tablet held sideways, the page has three main areas, describ
 - **Your role** at the bottom of the **Campaign Info** panel, and under it **Leave Campaign**, which takes you out of the campaign after asking (see [Leaving a campaign](#leaving-a-campaign))
 
 ### Center — The Map
-This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet or a phone, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)).
+This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet or a phone, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)). The map may be a picture your DM uploaded or one they drew in CozyVTT; it works the same either way.
 
 ### Right Sidebar — Your Tools
 A tabbed panel — click a tab to switch between:
