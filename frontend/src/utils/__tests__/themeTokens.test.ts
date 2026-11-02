@@ -18,7 +18,7 @@ import indexCss from '../../index.css?raw';
 /**
  * Exempt:
  *  - the map's tool panels, deliberately dark panels floating over the map:
- *    the DM's Fog, Walls and Lights, their stack, and the drawing tools
+ *    the DM's Fog, Walls and Lights, their stack, the drawing tools and Paint's
  *  - each sheet's header colour presets (`colorPresets.ts`)
  */
 const EXEMPT = [
@@ -27,6 +27,7 @@ const EXEMPT = [
   '/src/components/campaign/DmFogControls.tsx',
   '/src/components/campaign/DmToolPanelContainer.tsx',
   '/src/components/campaign/DrawControls.tsx',
+  '/src/components/campaign/PaintControls.tsx',
 ];
 const HEADER_COLOURS = /\/character-sheets\/[^/]+\/colorPresets\.ts$/;
 

@@ -1,13 +1,15 @@
 /**
  * A map made with Draw a map opens on the DM's screen at once, as Open to
- * prepare opens one, and the Map Library gets out of its way: the players
- * stay where they are. A map made from a picture stays in the library, as
+ * prepare opens one, with Paint on, and the Map Library gets out of its
+ * way: the players stay where they are. Its picture is known to be drawn
+ * without asking. A map made from a picture stays in the library, as
  * before.
  */
 
 import { it, expect, vi, beforeEach, describe } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { Asset, CampaignMap } from '@/types';
+import { usePaintStore } from '@/stores/paintStore';
 
 const h = vi.hoisted(() => ({
   openToPrepare: vi.fn(),
@@ -60,6 +62,7 @@ const drawnPicture = { id: 'drawn-1', type: 'MAP', scope: 'CAMPAIGN', campaignId
 beforeEach(() => {
   h.openToPrepare.mockReset().mockResolvedValue(true);
   h.upsertCampaignMap.mockReset();
+  usePaintStore.setState({ openOnMapId: null });
 });
 
 async function make(onClose = vi.fn()) {
@@ -76,6 +79,7 @@ describe('a map just made', () => {
     expect(h.upsertCampaignMap).toHaveBeenCalledWith(crypt);
     expect(h.openToPrepare).toHaveBeenCalledWith('crypt');
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(usePaintStore.getState().openOnMapId).toBe('crypt');
   });
 
   it('stays in the library when it was made from a picture', async () => {
@@ -84,6 +88,7 @@ describe('a map just made', () => {
     expect(h.upsertCampaignMap).toHaveBeenCalled();
     expect(h.openToPrepare).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+    expect(usePaintStore.getState().openOnMapId).toBeNull();
     expect(await screen.findByRole('heading', { name: 'Crypt' })).toBeInTheDocument();
   });
 });

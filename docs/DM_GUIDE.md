@@ -196,7 +196,7 @@ No map ready for the scene? Draw one in CozyVTT: a room or a clearing sketched w
 1. Open the **Map Library** and click **Create Map**.
 2. Click **Draw a map** at the top of the window.
 3. Fill in the map's name, its **Width** and **Height** in grid squares, its **Detail (pixels per square)** (70 at first), the **Grid Settings**, and a **Background colour**: parchment at first, one of the colours offered, or any colour with **Another colour**.
-4. Click **Create Map**. CozyVTT makes a blank picture of that size and colour, puts it in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
+4. Click **Create Map**. CozyVTT makes a blank picture of that size and colour, puts it in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)), with **Paint** on (below). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
 
 If the picture cannot be made, the window says why and nothing is created: "This browser could not make a picture that large" means the device ran short, so choose fewer squares or fewer pixels a square.
 
@@ -211,6 +211,22 @@ If the picture cannot be made, the window says why and nothing is created: "This
 | 410 by 410, or 500 by 336 | Refused |
 
 **Its picture in the Asset Library.** Each drawn map's picture is in the campaign's library, named **Drawn map** and tagged `drawn-map`. As with every map picture, your players do not see it there until the table is on its map.
+
+**Painting it**
+
+**Paint**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
+
+1. Click **Paint**. Its panel opens at the top of your tool panels, and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
+2. Choose a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Set the **Width**, from 1 to 64 pixels.
+3. With the **Brush**, drag to paint, or click or tap for a dot. The stroke shows as you drag, and goes into the picture when you let go.
+4. **Undo stroke** and **Redo stroke** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take a stroke back and put it back.
+5. Click **Done painting** (the **×** on the panel), press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
+
+While Paint is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
+
+Undo keeps up to 50 strokes, as memory allows: it keeps only the part of the picture each stroke changed, so a stroke across the whole map takes more, and the oldest go first.
+
+What you paint is on your screen only, and saving it as the map's picture is still to come: until then it stays on the map when you put Paint away, and goes when you reload the page or show another map.
 
 ### Switching Maps
 
@@ -848,7 +864,7 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 
 ### Drawing on the map
 
-Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
+Draw is for marking up any map, and the whole table sees it live; to change a map's own picture, on a map you drew, use **Paint** (see [Drawing a map](#drawing-a-map)). Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
 
 | Tool | How |
 |---|---|
@@ -950,7 +966,7 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 
 ### Keyboard Shortcuts
 
-Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo:
+Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo, and for **Paint** (see [Drawing a map](#drawing-a-map)):
 
 | Action | Shortcut |
 |--------|---------|
@@ -962,8 +978,12 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Finish a wall line | `Double-click` |
 | Undo the last wall change | `Ctrl + Z` |
 | Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
+| Paint with the brush, while **Paint** is on | `B` |
+| Make the brush narrower or wider, while **Paint** is on | `[` `]` |
+| Undo the last stroke, while **Paint** is on | `Ctrl + Z` |
+| Redo a stroke, while **Paint** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
 
-On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token.
+On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Paint** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, and the arrows, `Delete` and `Backspace` do nothing.
 
 ### On a touch screen
 
@@ -976,6 +996,7 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 | Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
 | Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
 | Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
+| Paint a map you drew | One finger paints and a tap makes a dot; two fingers move and zoom the map, and a second finger landing while you paint drops that stroke. A stylus paints as a finger does. See [Drawing a map](#drawing-a-map). |
 | Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag, and a double tap pings nothing either. To finish a wall line, tap **Done** in the Walls panel. Put the tool away to open a menu by holding, or to ping by a double tap. |
 
 A stylus never opens a menu by holding; use a finger.

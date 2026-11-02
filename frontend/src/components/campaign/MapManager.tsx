@@ -30,6 +30,8 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { extractAssetId } from '@/utils/assetUrl';
+import { rememberPictureAsset } from './map/paint/mapPicture';
+import { usePaintStore } from '@/stores/paintStore';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
   uvttImportDecision,
@@ -287,8 +289,13 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const handleCreated = (map: CampaignMap, drawnPicture?: Asset) => {
     setMaps((prev) => [map, ...prev]);
     upsertCampaignMap(map);
-    // A drawn map opens on this screen to paint, the players staying where they are.
-    if (drawnPicture) void handleOpenToPrepare(map);
+    // A drawn map opens on this screen with Paint on, the players staying
+    // where they are; its picture is known to be drawn without asking.
+    if (drawnPicture) {
+      rememberPictureAsset(drawnPicture);
+      usePaintStore.getState().openWhenShown(map.id);
+      void handleOpenToPrepare(map);
+    }
   };
 
   const handleUpdated = (updated: CampaignMap) => {
