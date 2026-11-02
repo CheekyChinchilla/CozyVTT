@@ -11,6 +11,7 @@ import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
 import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
 import { ASSET_LIMITS } from '@/constants/assetLimits';
+import { DRAWN_MAP_TAG } from '@/components/campaign/map/paint/drawnMapSize';
 import { assetNameFrom } from '@/utils/assetName';
 import { UPLOAD_EXTENSIONS } from '@/constants/uploadTypes';
 
@@ -83,6 +84,8 @@ export default function AssetUploadModal({
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  /** The last tag refused for being Paint's own. */
+  const [tagKept, setTagKept] = useState(false);
 
   // Campaign selection state
   const [allCampaigns, setAllCampaigns] = useState<Campaign[] | null>(null);
@@ -221,6 +224,14 @@ export default function AssetUploadModal({
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
+      // Paint's tag marks a picture it may change and a save may delete;
+      // a picture uploaded here never carries it, in any case.
+      if (tagInput.trim().toLowerCase() === DRAWN_MAP_TAG) {
+        setTagKept(true);
+        setTagInput('');
+        return;
+      }
+      setTagKept(false);
       if (!tags.includes(tagInput.trim()) && !atTagLimit) {
         setTags([...tags, tagInput.trim()]);
       }
@@ -592,6 +603,11 @@ export default function AssetUploadModal({
                 placeholder="Type a tag and press Enter..."
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
+              {tagKept && (
+                <p className="text-xs text-warm-gray mt-1">
+                  The tag {DRAWN_MAP_TAG} is kept for maps drawn in CozyVTT.
+                </p>
+              )}
               {atTagLimit && (
                 <p className="text-xs text-warm-gray mt-1">
                   An asset can have at most {ASSET_LIMITS.maxTags} tags.

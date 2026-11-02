@@ -146,7 +146,7 @@ Before you can use a map in your campaign, it needs to live in the **Asset Libra
 4. Set the type to **Map**
 5. Set the scope to **Campaign** (shared with the campaign: its players and spectators see a map picture in the asset library only while the table is on a map using it) or **Personal** (private to you until the players are shown something that uses it)
 6. Give it a descriptive name — you'll thank yourself later when you have twenty maps
-7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern")
+7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern"). The tag `drawn-map` is kept for maps drawn in CozyVTT, and the window does not add it
 8. Click **Upload**
 
 *GIF pending — Uploading a map to the asset library.*
