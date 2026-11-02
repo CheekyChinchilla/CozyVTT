@@ -187,6 +187,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A screen reader names the ✕ that closes a form in the Creature Library and Token Templates.** The ✕ at the top of the **Create Custom Creature**, **Edit Creature**, **New Token Template** and **Edit Template** forms was read as a bare "button". It is now read as "Close form".
 
+- **Create Custom in the Creature Library opens an empty form while a creature is being edited.** Pressing **Create Custom** with a creature's **Edit Creature** form open left that form open. It now opens an empty **Create Custom Creature** form, as **New Template** does in Token Templates.
+
 - **Every map card in the Map Library can be deleted on a phone.** On a phone the library showed two map cards to a row, too narrow for a card's **Set Active**, **Edit**, **Export** and **Delete** buttons, so **Delete map** ran past the card's edge and could not be pressed. Below 640 pixels each card now has a row of its own.
 
 - **Buttons that show only an icon on a phone now have a name a screen reader reads.** Below 640 pixels wide some buttons show only their icon, and a screen reader lost their words there as well, so it said only "button": the dashboard's **Manage**, **View Library**, **View Documents**, **Browse** and **Import**, the Asset Library's **Upload Asset** and its **All Assets**, **Global**, **Personal** and **Campaign** buttons, **New Template** on Character Templates, and **Write one** and **Read** on Documents. They look as before, and a screen reader now reads their words.

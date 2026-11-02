@@ -507,13 +507,11 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
         {/* Action buttons */}
         <div className="flex gap-2">
-          {/* TODO(ui): while a creature's edit form is open on a wide screen,
-              Create Custom leaves it open as Edit Creature, since
-              editingCreature is not cleared. It should open an empty form,
-              as New Template does in Token Templates. */}
+          {/* An empty form, in place of a creature's edit form that a wide
+              screen may show under the list, as New Template does. */}
           <button
             ref={formCreateButtonRef}
-            onClick={(e) => { setShowCreateForm(true); formOpened(e.currentTarget); }}
+            onClick={(e) => { setEditingCreature(null); setShowCreateForm(true); formOpened(e.currentTarget); }}
             className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
           >
             <Plus className="w-3 h-3" /> Create Custom

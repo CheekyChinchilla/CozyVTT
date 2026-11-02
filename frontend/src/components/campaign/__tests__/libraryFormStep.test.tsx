@@ -264,6 +264,20 @@ describe('the Creature Library on a wide screen', () => {
     expect(screen.getByRole('heading', { name: 'Edit Creature' })).toBeVisible();
     expect(screen.queryByTitle('Edit creature')).toBeNull();
   });
+
+  // As New Template does in Token Templates.
+  it('opens an empty form on Create Custom while a creature is being edited', async () => {
+    await openCreatureLibrary();
+    await userEvent.click(screen.getByText('Boss Bat'));
+    await userEvent.click(screen.getByTitle('Edit creature'));
+    expect(screen.getByPlaceholderText('e.g. Goblin Boss')).toHaveValue('Boss Bat');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create Custom' }));
+
+    expect(screen.getByRole('heading', { name: 'Create Custom Creature' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Edit Creature' })).toBeNull();
+    expect(screen.getByPlaceholderText('e.g. Goblin Boss')).toHaveValue('');
+  });
 });
 
 describe('Token Templates on a narrow screen', () => {

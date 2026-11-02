@@ -39,7 +39,6 @@ _Nothing at present._
 
 ### Campaigns and assets
 
-- `next release` **On a wide screen, Create Custom in the Creature Library can open the creature being edited.** With a creature's edit form open, **Create Custom** leaves it open as **Edit Creature**; it should open an empty form, as **New Template** does in Token Templates (`CreatureLibrary.tsx`).
 - `after the next release` **Remove from Campaign in the Campaign Roster does not name the character,** asking "Are you sure you want to remove this character from the campaign?" (`CampaignRoster.tsx`).
 
 ### Play and connection
