@@ -11,7 +11,9 @@
  * - the eight tools in one row that scrolls sideways, with the shared scroll
  *   cue (on a short screen, a phone on its side, in the header's row);
  * - Colour and width, a button naming both, which opens a pop-over over the
- *   strip with the two colours, the palette, Another colour and the width;
+ *   strip with the two colours, the palette, Another colour and the width,
+ *   which takes the keyboard as it opens and closes on Esc or a press
+ *   anywhere else;
  * - the tool's own settings: a shape outlined, filled or both, 15 degree
  *   steps, Snap to grid, the fill's tolerance;
  * - Download picture, the picture as it is now as a PNG;
@@ -20,7 +22,7 @@
  * It shares the panel's tools, hints and colours, so the two cannot drift.
  */
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Download, Loader2, Redo2, Undo2 } from 'lucide-react';
 import ToolStrip, { CHIP, HEADER_BUTTON, squareButton } from '@/components/campaign/compact/ToolStrip';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
@@ -36,6 +38,26 @@ const SLIDER = 'h-11 w-full accent-brand';
 
 export default function PaintStrip({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose }: PaintControlsProps) {
   const [overOpen, setOverOpen] = useState(false);
+  const overRef = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  /** Close the pop-over, the keyboard back on its button. */
+  const closeOver = () => {
+    setOverOpen(false);
+    toggleRef.current?.focus({ preventScroll: true });
+  };
+  // Open, it has the keyboard, and a press anywhere else (the map, the
+  // strip) closes it.
+  useEffect(() => {
+    if (!overOpen) return undefined;
+    overRef.current?.querySelector<HTMLElement>('button, input')?.focus({ preventScroll: true });
+    const away = (e: PointerEvent) => {
+      const target = e.target;
+      if (target instanceof Node && (overRef.current?.contains(target) || toggleRef.current?.contains(target))) return;
+      setOverOpen(false);
+    };
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  }, [overOpen]);
   const [slot, setSlot] = useState<Slot>('colour');
   const overId = useId();
   const chosen = settings[slot];
@@ -89,32 +111,60 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
   );
 
   // The colours and the width, opened over the strip, outside its
-  // scrolling part, which would cut them off.
+  // scrolling part, which would cut them off. It is never taller than the
+  // room the strip leaves above it (the strip takes at most half the map),
+  // scrolling within that; on a phone on its side, where that room is
+  // short, the two colours and the width sit beside the palette.
   const popOver = overOpen && (
     <div
+      ref={overRef}
       id={overId}
       role="group"
       aria-label="Colour and width"
-      className="absolute bottom-full left-[max(1rem,env(safe-area-inset-left))] z-10 mb-2 flex w-[min(22rem,calc(100cqw-2rem))] flex-col gap-2 rounded-cozy border border-brand/20 bg-surface-light p-2 shadow-2xl"
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        closeOver();
+      }}
+      className="absolute bottom-full left-[max(1rem,env(safe-area-inset-left))] z-10 mb-2 flex max-h-[calc(50cqh-1rem)] w-[min(22rem,calc(100cqw-2rem))] flex-col gap-2 overflow-y-auto overscroll-contain rounded-cozy border border-brand/20 bg-surface-light p-2 shadow-2xl short:w-[min(40rem,calc(100cqw-2rem))] short:flex-row short:items-start"
     >
-      {/* The two colours; the palette sets the one chosen here. */}
-      <div className="flex flex-wrap gap-1">
-        {SLOTS.map(({ slot: which, label }) => (
-          <button
-            key={which}
-            type="button"
-            aria-label={`${label}: ${nameOf(settings[which])}`}
-            aria-pressed={slot === which}
-            onClick={() => setSlot(which)}
-            className={cn(
-              'inline-flex min-h-11 items-center gap-2 rounded-cozy border px-2 text-sm',
-              slot === which ? 'border-brand bg-brand/15 text-brand-ink' : 'border-ink/15 bg-paper text-ink'
-            )}
-          >
-            <span aria-hidden="true" className="block size-5 rounded-sm border border-ink/30" style={{ backgroundColor: settings[which] }} />
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-col gap-2 short:w-60 short:shrink-0">
+        {/* The two colours; the palette sets the one chosen here. */}
+        <div className="flex flex-wrap gap-1">
+          {SLOTS.map(({ slot: which, label }) => (
+            <button
+              key={which}
+              type="button"
+              aria-label={`${label}: ${nameOf(settings[which])}`}
+              aria-pressed={slot === which}
+              onClick={() => setSlot(which)}
+              className={cn(
+                'inline-flex min-h-11 items-center gap-2 rounded-cozy border px-2 text-sm',
+                slot === which ? 'border-brand bg-brand/15 text-brand-ink' : 'border-ink/15 bg-paper text-ink'
+              )}
+            >
+              <span aria-hidden="true" className="block size-5 rounded-sm border border-ink/30" style={{ backgroundColor: settings[which] }} />
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="flex flex-col gap-0.5">
+          <span className="flex justify-between text-xs text-ink-muted">
+            <span>Width</span>
+            <span>{settings.width} px{tool === 'text' ? ` (letters ${labelFontSize(settings.width)} px tall)` : ''}</span>
+          </span>
+          <input
+            type="range"
+            aria-label="Width"
+            min={DRAWING_LIMITS.minWidth}
+            max={DRAWING_LIMITS.maxWidth}
+            step={1}
+            value={settings.width}
+            onChange={(e) => onSettingsChange({ width: Number(e.target.value) })}
+            className={SLIDER}
+          />
+        </label>
       </div>
       <div className="flex flex-wrap gap-1">
         {PAINT_COLOURS.map((colour) => (
@@ -156,22 +206,6 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           />
         </label>
       </div>
-      <label className="flex flex-col gap-0.5">
-        <span className="flex justify-between text-xs text-ink-muted">
-          <span>Width</span>
-          <span>{settings.width} px{tool === 'text' ? ` (letters ${labelFontSize(settings.width)} px tall)` : ''}</span>
-        </span>
-        <input
-          type="range"
-          aria-label="Width"
-          min={DRAWING_LIMITS.minWidth}
-          max={DRAWING_LIMITS.maxWidth}
-          step={1}
-          value={settings.width}
-          onChange={(e) => onSettingsChange({ width: Number(e.target.value) })}
-          className={SLIDER}
-        />
-      </label>
     </div>
   );
 
@@ -186,6 +220,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
     >
       <div className="flex items-center gap-3 pr-2">
         <button
+          ref={toggleRef}
           type="button"
           onClick={() => setOverOpen((open) => !open)}
           aria-expanded={overOpen}
