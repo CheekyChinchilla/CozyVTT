@@ -119,6 +119,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Edit Map shows the grid preview beside the grid's settings.** The lighting and fog switches sat in the dialog's two columns and pushed the preview to the foot of the right-hand one, far from the size, grid and scale it shows. The preview is beside those settings again, and **Enable Dynamic Lighting**, **Global Illumination**, **Remember Explored Areas** and **Fog of War** have a **Lighting and Fog** section of their own under them.
 
+- **Each Confirm? in the Fog of War panel stays readable.** After a first press of **Reveal all**, its **Confirm?** was white on light green, about 2 to 1, and every **Confirm?**, on **Hide all** and **Reset explored areas** too, faded to half its strength as it pulsed. **Reveal all**'s is now dark text on the green, as the other two are on amber, and a ring round each button pulses in place of its words.
+
 - **Esc closes only the roll picker or the menu it is pressed in.** Pressing **Esc** to close a **Roll...** picker, from a token or from the initiative tracker, or a character's menu in the roster or the tracker, also reached the map and put the area template, or a wall, fog or light tool, away. It now closes just the picker or the menu.
 
 - **A wall line you had started no longer waits, unseen, in another tool.** If you clicked with the Walls panel's **Draw** and then chose another wall, fog or light tool, the half-drawn line was kept but not shown: the next **Esc** or **Ctrl+Z** there let go of it and seemed to do nothing, and choosing **Draw** again carried the line on from its last point. Choosing another tool now drops it, as it already dropped a half-drawn polygon. The walls its clicks placed stay.
