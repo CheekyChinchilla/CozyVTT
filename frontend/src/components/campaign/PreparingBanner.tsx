@@ -42,6 +42,16 @@ export function preparingEndedMessage(ended: PreparingEnded): string {
     : "You are no longer the DM, so you are back on the table's map.";
 }
 
+/**
+ * Whether the banner holds the phone's Back: on the compact layout while a
+ * map is being prepared, where Back goes back to the table, asking whatever
+ * holds the map first. Elsewhere Paint holds Back itself, while it has paint
+ * not saved; each reads this, so Back is never held twice or by no one.
+ */
+export function preparingHoldsBack(compact: boolean, isPreparing: boolean): boolean {
+  return compact && isPreparing;
+}
+
 /** Put the keyboard on the map, which takes its keys. */
 function focusTheMap() {
   document.querySelector<HTMLElement>('[role="application"][aria-label="Map"]')?.focus({ preventScroll: true });
@@ -74,7 +84,7 @@ export default function PreparingBanner() {
   goBackRef.current = goBack;
 
   useEffect(() => {
-    if (!compact || !isPreparing) return;
+    if (!preparingHoldsBack(compact, isPreparing)) return;
     const entry = dialogOpened(() => { void goBackRef.current(); }, nextOpening());
     return () => entry.release();
   }, [compact, isPreparing]);

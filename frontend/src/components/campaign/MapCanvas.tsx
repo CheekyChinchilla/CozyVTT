@@ -141,6 +141,7 @@ import DrawStrip from '@/components/campaign/DrawStrip';
 import PaintControls from '@/components/campaign/PaintControls';
 import PaintStrip from '@/components/campaign/PaintStrip';
 import { PaintLeaveQuestion, PaintLeftoverQuestion } from '@/components/campaign/PaintQuestions';
+import { preparingHoldsBack } from '@/components/campaign/PreparingBanner';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
@@ -713,7 +714,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Paint not saved is asked about before anything takes it off the screen
   // (map/paint/usePaintGuards.ts). The phone's Back while preparing a map
   // goes back to the table, which asks it through the campaign page.
-  const paintGuards = usePaintGuards(paint, { registerViewedMapGuard, holdBack: !(compact && isPreparing) });
+  const paintGuards = usePaintGuards(paint, { registerViewedMapGuard, holdBack: !preparingHoldsBack(compact, isPreparing) });
   // Drafts of painting on maps since deleted, from another device or tab,
   // are dropped as the DM opens the campaign: they have no map to go back to.
   const draftsPruned = useRef<string | null>(null);
