@@ -425,15 +425,13 @@ describe("the DM's token menu", () => {
     ]);
   });
 
-  // The rule above Move to Map… stays when there is no other map to move to,
-  // so two rules stand together above Remove from Map.
-  it('with no other map: no Move to Map…, its rule still drawn', () => {
+  it('with no other map: no Move to Map…, and one rule above Remove from Map', () => {
     h.set({ maps: [{ id: 'map-a', name: 'Map A' }] });
     render(<MapCanvas />);
     show(goblin());
     rightClick(0, 19);
 
-    expect(rows().slice(-4)).toEqual(['Send to Spirit Realm (spirit, dims)', '---', '---', 'Remove from Map (danger)']);
+    expect(rows().slice(-3)).toEqual(['Send to Spirit Realm (spirit, dims)', '---', 'Remove from Map (danger)']);
   });
 
   it('while the session is paused, the same, the turns included', () => {

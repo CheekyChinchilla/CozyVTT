@@ -117,9 +117,9 @@ describe("the DM's items", () => {
     expect(labels(items)).toEqual(expect.arrayContaining(['Reveal to Players', 'Reveal Identity', 'Return to Material Plane']));
   });
 
-  it('keeps the rule before the moves when there is no other map', () => {
-    expect(labels(tokenMenuItems(token(), context({ maps: [{ id: 'map-a', name: 'Map A' }] }))).slice(-4))
-      .toEqual(['Send to Spirit Realm', '---', '---', 'Remove from Map']);
+  it('draws one rule above Remove from Map when there is no other map to move to', () => {
+    expect(labels(tokenMenuItems(token(), context({ maps: [{ id: 'map-a', name: 'Map A' }] }))).slice(-3))
+      .toEqual(['Send to Spirit Realm', '---', 'Remove from Map']);
   });
 
   it('leaves the DM items out for anyone else, even with every permission', () => {
