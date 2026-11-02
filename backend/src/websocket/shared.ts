@@ -18,6 +18,7 @@ import { canReadMap } from '../services/permissions';
 import logger from '../utils/logger';
 import { inBackgroundAfter, type WaitingWork } from '../utils/backgroundWork';
 import { MAP_LIMITS, MAX_FOG_CELLS } from '../validators/maps';
+import { emitNewestState } from './outgoingQueue';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -291,6 +292,12 @@ export const SOCKET_CEILINGS = {
   },
   'drawing:clear_mine': drawingClears,
   'drawing:clear': drawingClears,
+  // A check that the connection still answers, which the web client never
+  // sends; each is answered with a `pong` to the sender.
+  ping: {
+    windows: [{ limit: 10, windowMs: SECOND }],
+    refusal: 'Too many connection checks (ping) at once. Wait a moment, then try again.',
+  },
 } satisfies Record<string, SocketCeiling>;
 
 export type CeilingEvent = keyof typeof SOCKET_CEILINGS;
@@ -305,6 +312,49 @@ export type CeilingEvent = keyof typeof SOCKET_CEILINGS;
 export const MAX_SOCKETS_PER_USER = 40;
 export const TOO_MANY_SOCKETS =
   `Too many CozyVTT tabs or devices are open on this account at once (the most is ${MAX_SOCKETS_PER_USER}). Close one, then reload this page.`;
+
+/**
+ * The most events one socket may send in a second, every event together.
+ * The ceilings above are each event's own, per user; this is the one place
+ * every event passes, so a flood of any of them, or of events no handler
+ * takes, stops here. A page at a fast table sends under 80 a second from
+ * one socket (busyTable.integration.test.ts).
+ */
+export const SOCKET_EVENTS_PER_SECOND = 500;
+/**
+ * The events a page sends to join a campaign and load its map, after every
+ * reconnect, when socket.io sends at once whatever the page emitted while
+ * the connection was down. The budget never drops them: a page that lost one
+ * stays unjoined or without its walls. Each has a small ceiling of its own
+ * (SOCKET_CEILINGS, stateRequestAllowed).
+ */
+export const REJOIN_EVENTS: ReadonlySet<string> = new Set([
+  'authenticate', 'walls:request', 'lights:request', 'fog:request_state', 'exploration:request', 'drawings:request',
+  'presence.request', 'initiative.request_state',
+]);
+/** What a socket past it is told, once in REFUSAL_NOTICE_MS. */
+export const TOO_MANY_SOCKET_EVENTS =
+  'Too many messages at once from this page, so some were dropped. Reload the page if the table stops keeping up.';
+
+/** One socket's events in the current second, for SOCKET_EVENTS_PER_SECOND. */
+export interface EventBudget {
+  windowStart: number;
+  sent: number;
+}
+
+/**
+ * Whether a socket may send one more event now, counting it. Counted in
+ * windows of a second from the first event of each: a fixed count, so a
+ * flood costs the check nothing more than one event does.
+ */
+export function withinSocketBudget(budget: EventBudget, now = Date.now()): boolean {
+  if (now - budget.windowStart >= SECOND) {
+    budget.windowStart = now;
+    budget.sent = 0;
+  }
+  budget.sent += 1;
+  return budget.sent <= SOCKET_EVENTS_PER_SECOND;
+}
 
 const ceilingLimiter = new RateLimiter();
 /** One refusal notice per socket and event in this long; the rest are refused quietly. */
@@ -449,15 +499,15 @@ export async function broadcastFogState(io: Server, campaignId: string, mapId: s
     const role = (s as unknown as AuthenticatedSocket).role;
     if (!canReadMap(role, mapId, campaign?.currentMapId)) continue;
     if (role === 'DM') {
-      s.emit('fog:updated', { mapId, fogState: fog });
+      emitNewestState(s, 'fog:updated', { mapId, fogState: fog }, mapId);
     } else {
-      s.emit('fog:cells', {
+      emitNewestState(s, 'fog:cells', {
         mapId,
         revealedCells: revealedCellIndices(fog),
         fogCols: fog.fogCols,
         fogRows: fog.fogRows,
         cellPx: fog.cellPx,
-      });
+      }, mapId);
     }
   }
 }
@@ -485,7 +535,7 @@ export async function broadcastExplorationState(
     const member = s as unknown as AuthenticatedSocket;
     const own = member.userId === userId && canReadMap(member.role, mapId, campaign?.currentMapId);
     if (own || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
-      s.emit('exploration:state', { mapId, userId, cells });
+      emitNewestState(s, 'exploration:state', { mapId, userId, cells }, `${mapId}:${userId}`);
     }
   }
 }

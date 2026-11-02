@@ -22,6 +22,7 @@ import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
 import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState, fogFits, FogTooLargeError } from '../shared';
+import { emitNewestState } from '../outgoingQueue';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { inBackgroundAfter, type WaitingWork } from '../../utils/backgroundWork';
@@ -243,7 +244,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         select: { explored: true },
       });
       const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
-      socket.emit('exploration:state', { mapId, userId, cells: revealedCellIndices(explored) });
+      emitNewestState(socket, 'exploration:state', { mapId, userId, cells: revealedCellIndices(explored) }, `${mapId}:${userId}`);
     } catch (error) {
       if (error instanceof FogTooLargeError) {
         socket.emit('error', { message: error.message });

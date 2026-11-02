@@ -63,7 +63,9 @@ every `.emit(` (on a socket, a room or the server) alongside the
 the token move handlers' `emitMoveToVisibleSockets`, which takes the event
 name as its first argument, and `emitToMapReaders` and the map routes'
 `tellMapReaders`, with their per-role forms `emitToMapReadersAs` and
-`tellMapReadersAs`, whose event name is their first quoted argument —
+`tellMapReadersAs`, whose event name is their first quoted argument, and
+`emitNewestState`, which sends one socket a whole state and takes the socket
+and then the event —
 a route pushing an event through a helper reaches a client just as surely as a
 handler emitting one, and while the scan covered only handlers the table called
 itself complete while omitting seven such events. The connection's own

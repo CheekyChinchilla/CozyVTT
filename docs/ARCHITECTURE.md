@@ -155,8 +155,10 @@ src/
 │   │                  shared with it, and the origin check at the handshake
 │   ├── events.ts      Connection orchestrator: auth, disconnect, ping, and
 │   │                  registration of every per-domain handler module
-│   ├── shared.ts      Rate limiters and the per-user socket ceilings, the
-│   │                  Token shape, fog helpers
+│   ├── shared.ts      Rate limiters and the per-user socket ceilings, each
+│   │                  socket's budget of events a second, the Token shape, fog helpers
+│   ├── outgoingQueue.ts  What waits to be sent to each connection and each
+│   │                  account, the bounds on it, and the newest whole state
 │   ├── ack.ts         The answer to an event sent with an acknowledgement:
 │   │                  { ok: true, ... } or { ok: false, error }
 │   ├── auth.ts        Socket session + campaign-membership authentication
