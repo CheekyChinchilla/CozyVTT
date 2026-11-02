@@ -3,7 +3,7 @@
  * CozyVTT, or of a map with no picture.
  *
  * Paint is offered only to the DM, on a map whose picture is a campaign map
- * picture tagged drawn-map, or which has no picture; never on an uploaded
+ * picture tagged DRAWN_MAP_TAG, or which has no picture; never on an uploaded
  * one. While it is on it owns the map: every press is a stroke, and the
  * keys the other tools take are its own, so no token is picked up, turned
  * or moved, no wall drawn, deleted or undone, nothing pinged, drawn or
@@ -172,6 +172,7 @@ vi.mock('@/services/api', () => {
 
 import MapCanvas from '../MapCanvas';
 import { useGameStore } from '@/stores/gameStore';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 
 const { recorded, take } = recordDrawing();
 
@@ -200,7 +201,7 @@ function mapWith(extra: Partial<CampaignMap> = {}): CampaignMap {
   } as unknown as CampaignMap;
 }
 
-const drawnAsset = (tags = ['drawn-map']) => ({ asset: { id: 'drawn', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags } });
+const drawnAsset = (tags = [DRAWN_MAP_TAG]) => ({ asset: { id: 'drawn', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags } });
 
 /** A one-square token; grid y counts up from the bottom row, 0, to the top, 19. */
 function token(id: string, x: number, y: number): Token {
@@ -271,7 +272,7 @@ beforeEach(() => {
   h.getAsset.mockReset().mockResolvedValue(drawnAsset());
   h.updateToken.mockReset().mockResolvedValue({});
   h.addToken.mockReset().mockResolvedValue({ token: token('placed', 1, 1) });
-  h.uploadAsset.mockReset().mockResolvedValue({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: ['drawn-map'] } });
+  h.uploadAsset.mockReset().mockResolvedValue({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] } });
   h.deleteAsset.mockReset().mockResolvedValue({ message: 'deleted' });
   h.getMap.mockReset().mockImplementation(() => Promise.resolve(h.state.currentMap));
   h.updateMap.mockReset().mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
@@ -298,7 +299,7 @@ describe('where Paint is offered', () => {
 
   it.each([
     ['an uploaded picture', drawnAsset(['dungeon'])],
-    ['a picture tagged in another case', drawnAsset(['Drawn-Map'])],
+    ['a picture tagged in another case', drawnAsset([DRAWN_MAP_TAG.toUpperCase()])],
     ['another campaign\'s picture', { asset: { ...drawnAsset().asset, campaignId: 'campaign-2' } }],
   ])('never on %s', async (_what, answer) => {
     h.getAsset.mockResolvedValue(answer);

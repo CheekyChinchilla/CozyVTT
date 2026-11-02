@@ -476,7 +476,7 @@ The Asset Library is where all your campaign media lives — maps, token images,
 
 A PNG that is animated is refused for now, for every kind of picture.
 
-A map drawn in CozyVTT keeps its picture in the campaign's library too, named **Drawn map** and tagged `drawn-map`, one for each drawn map: each save of it replaces the one before (see [Drawing a map](DM_GUIDE.md#drawing-a-map)).
+A map drawn in CozyVTT keeps its picture in the campaign's library too, named **Drawn map** and tagged `cozyvtt-drawn-map`, one for each drawn map: each save of it replaces the one before (see [Drawing a map](DM_GUIDE.md#drawing-a-map)).
 
 A map, token or avatar picture can be at most 16,384 pixels wide and 16,384 pixels tall (a WebP at most 16,383, the most the format allows). An animated GIF or WebP also has limits, because every player's browser unpacks every frame of it:
 

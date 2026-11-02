@@ -5937,7 +5937,10 @@ paths:
                   description: >-
                     Comma-separated tags; each is trimmed, empty ones are
                     dropped and a repeated one is kept once. At most 50 tags of
-                    at most 50 characters each.
+                    at most 50 characters each. `cozyvtt-drawn-map`, in any
+                    case, marks a picture Paint made, which Paint may change
+                    and a later save deletes: it is taken only on a MAP of
+                    CAMPAIGN scope, which only the campaign's DM may upload.
       responses:
         '201':
           description: Asset uploaded.
@@ -5975,7 +5978,9 @@ paths:
             `description` over 1,000 ("The asset description must be 1000
             characters or fewer"), more than 50 tags ("An asset can have at
             most 50 tags") or a tag over 50 characters ("Each tag must be 50
-            characters or fewer"); or `name`, `description` or `tags` sent
+            characters or fewer"); the tag `cozyvtt-drawn-map` on anything
+            but a CAMPAIGN MAP ("The tag cozyvtt-drawn-map is kept for maps
+            drawn in CozyVTT."); or `name`, `description` or `tags` sent
             more than once ("Send the name once, as text.", and so on; this
             answered 500 before); or a field or the file's name holding
             U+0000 ("Text cannot contain the null character (U+0000).";

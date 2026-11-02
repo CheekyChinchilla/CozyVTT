@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AssetUploadModal from '../AssetUploadModal';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 import { AssetType } from '@/types';
 import type { Campaign } from '@/types';
 
@@ -182,37 +183,47 @@ describe('the name, description and tags', () => {
     expect(screen.getByText('An asset can have at most 50 tags.')).toBeInTheDocument();
   });
 
-  // A drawn-map picture is one Paint may change and a save may delete, so
-  // a picture uploaded here never carries the tag, whatever its case.
-  it('keeps the drawn-map tag for maps drawn in CozyVTT', async () => {
+  // A picture tagged DRAWN_MAP_TAG is one Paint may change and a save may
+  // delete, so a picture uploaded here never carries the tag, whatever its case.
+  it(`keeps the ${DRAWN_MAP_TAG} tag for maps drawn in CozyVTT`, async () => {
     open();
     const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
-    for (const tag of ['drawn-map', 'Drawn-Map', ' DRAWN-MAP ']) {
+    for (const tag of [DRAWN_MAP_TAG, 'CozyVTT-Drawn-Map', ` ${DRAWN_MAP_TAG.toUpperCase()} `]) {
       fireEvent.change(tagBox, { target: { value: tag } });
       fireEvent.keyDown(tagBox, { key: 'Enter' });
     }
-    expect(screen.getByText('The tag drawn-map is kept for maps drawn in CozyVTT.')).toBeInTheDocument();
+    expect(screen.getByText(`The tag ${DRAWN_MAP_TAG} is kept for maps drawn in CozyVTT.`)).toBeInTheDocument();
     fireEvent.change(tagBox, { target: { value: 'dungeon' } });
     fireEvent.keyDown(tagBox, { key: 'Enter' });
-    expect(screen.queryByText(/^drawn-map$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(`^${DRAWN_MAP_TAG}$`, 'i'))).not.toBeInTheDocument();
     expect(screen.getByText('dungeon')).toBeInTheDocument();
   });
 
+  // Any other spelling a DM may type, drawn-map among them, is an ordinary tag.
+  it('takes drawn-map as an ordinary tag', async () => {
+    open();
+    const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
+    fireEvent.change(tagBox, { target: { value: 'drawn-map' } });
+    fireEvent.keyDown(tagBox, { key: 'Enter' });
+    expect(screen.getByText('drawn-map')).toBeInTheDocument();
+    expect(screen.queryByText(/is kept for maps drawn in CozyVTT/)).not.toBeInTheDocument();
+  });
+
   // The server splits tags at their commas, so a piece of a typed list is
-  // a tag of its own: each is one chip, and drawn-map is refused as a piece too.
-  it('adds each piece of a comma list as a tag of its own, never drawn-map, and sends no drawn-map', async () => {
+  // a tag of its own: each is one chip, and DRAWN_MAP_TAG is refused as a piece too.
+  it(`adds each piece of a comma list as a tag of its own, never ${DRAWN_MAP_TAG}, and sends none`, async () => {
     uploadAsset.mockReset();
     uploadAsset.mockResolvedValue({ asset: { id: 'new' } });
     open();
     const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
-    for (const typed of ['dungeon,drawn-map', 'Drawn-Map, cave', ' , ']) {
+    for (const typed of [`dungeon,${DRAWN_MAP_TAG}`, `${DRAWN_MAP_TAG.toUpperCase()}, cave`, ' , ']) {
       fireEvent.change(tagBox, { target: { value: typed } });
       fireEvent.keyDown(tagBox, { key: 'Enter' });
     }
     expect(screen.getByText('dungeon')).toBeInTheDocument();
     expect(screen.getByText('cave')).toBeInTheDocument();
-    expect(screen.queryByText(/drawn-map,|,\s*drawn-map|^drawn-map$/i)).not.toBeInTheDocument();
-    expect(screen.getByText('The tag drawn-map is kept for maps drawn in CozyVTT.')).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(`${DRAWN_MAP_TAG},|,\\s*${DRAWN_MAP_TAG}|^${DRAWN_MAP_TAG}$`, 'i'))).not.toBeInTheDocument();
+    expect(screen.getByText(`The tag ${DRAWN_MAP_TAG} is kept for maps drawn in CozyVTT.`)).toBeInTheDocument();
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [new File(['png'], 'Cave.png', { type: 'image/png' })] } });
     fireEvent.click(screen.getByRole('button', { name: /^upload$/i }));
