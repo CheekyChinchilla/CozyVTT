@@ -1035,3 +1035,75 @@ describe('Paint owns the map', () => {
     expect(h.addToken).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Painting the map the table is on, while the players play. They are sent
+ * nothing until Save, and the map sent again meanwhile (a token moved, the
+ * DM's own save coming back) leaves the paint and the stroke under way as
+ * they are.
+ */
+describe('on the table\'s map', () => {
+  const question = () => screen.queryByRole('dialog', { name: 'This map\'s picture changed' });
+  /** The server sending the table's map again, as it does after a token's REST change or a save. */
+  const sendMap = (map: CampaignMap) => {
+    act(() => {
+      for (const handler of h.handlers.get('map.changed') ?? []) handler({ mapId: map.id, mapData: map } as never);
+    });
+  };
+
+  it('sends the table nothing while the DM paints, fills and undoes', async () => {
+    await showMap();
+    await paintOn();
+    h.sent.length = 0;
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    press('f');
+    fireEvent.pointerDown(input(), { pointerId: 9, pointerType: 'mouse', button: 0, buttons: 1, isPrimary: true, clientX: 700, clientY: 700 });
+    fireEvent.pointerUp(input(), { pointerId: 9, pointerType: 'mouse', button: 0, buttons: 0, isPrimary: true, clientX: 700, clientY: 700 });
+    await act(async () => { press('z', { ctrlKey: true }); });
+    expect(h.sent).toEqual([]);
+    expect(h.updateMap).not.toHaveBeenCalled();
+    expect(h.uploadAsset).not.toHaveBeenCalled();
+  });
+
+  it('keeps the stroke under way and the paint not saved when the map is sent again with a token moved', async () => {
+    const goblin = token('goblin', 2, 15);
+    await showMap(mapWith({ tokens: [goblin] }));
+    act(() => { useGameStore.getState().setTokens([goblin], 'map-a'); });
+    await paintOn();
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    mouse.down(input(), { clientX: 500, clientY: 500 });
+    mouse.move(input(), { clientX: 600, clientY: 520 }, 1);
+    // A player moved the goblin: the server sends the table's map again.
+    sendMap({ ...(h.state.currentMap as CampaignMap), tokens: [{ ...goblin, position: { x: 4, y: 15 } }] });
+    mouse.move(input(), { clientX: 700, clientY: 540 }, 1);
+    mouse.up(input(), { clientX: 700, clientY: 540 });
+    expect(strokesOn(canvas)).toHaveLength(2);
+    expect(pictureCanvas()).toBe(canvas);
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(useGameStore.getState().tokens.goblin?.position).toEqual({ x: 4, y: 15 });
+    expect(question()).toBeNull();
+  });
+
+  it('takes its own save sent back before the save has answered as the picture saved: Paint stays on, nothing asked', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    // The server tells every page of the new picture before it answers the save.
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => {
+      const saved = { ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` };
+      sendMap(saved);
+      return Promise.resolve(saved);
+    });
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    expect(question()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    // And painting goes on, on the picture saved.
+    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+});
