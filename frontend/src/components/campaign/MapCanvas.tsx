@@ -1002,8 +1002,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    * picture for the map on screen takes the old one's place only once it
    * has loaded and decoded, in one frame, so every screen keeps the map and
    * its tokens meanwhile; if it does not load, the old one stays and the
-   * error shows over it. A map with nothing drawn yet shows its picture as
-   * soon as it has loaded.
+   * error shows over it. Paint's copy, while it stands in the picture's
+   * place, counts as a picture shown. A map with nothing drawn yet shows its
+   * picture as soon as it has loaded.
    */
   const pictureMapId = currentMap?.id;
   const pictureUrl = currentMap?.imageUrl;
@@ -1011,6 +1012,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // decoded one, so a large picture is held once; it is loaded again when
   // Paint lets go (map/paint/usePaintSurface.ts).
   const pictureHeld = paint.holdsPicture;
+  // Paint's copy, on screen in the picture's place until the picture is
+  // back: a picture loaded meanwhile is decoded ahead too.
+  const paintSourceRef = useRef(paint.source);
+  paintSourceRef.current = paint.source;
   useEffect(() => {
     setFailedPicture(null);
     if (!pictureMapId || !pictureUrl || pictureHeld) {
@@ -1031,7 +1036,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       setLoadedPicture({ mapId: pictureMapId, url: pictureUrl, image: img });
     };
     img.onload = () => {
-      if (mapImageRef.current === null) {
+      if (mapImageRef.current === null && paintSourceRef.current === null) {
         show();
         return;
       }

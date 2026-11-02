@@ -467,6 +467,7 @@ describe('the brush', () => {
     expect(pictures).toHaveLength(2);
     expect(canvas?.width).toBe(1000);
     pictures[1].load();
+    await pictures[1].decoded();
     expect([canvas?.width, canvas?.height]).toEqual([0, 0]);
     expect(usePaintStore.getState()).toMatchObject({ mapId: null, unsaved: false });
 
@@ -482,6 +483,18 @@ describe('the brush', () => {
     await nextFrame();
     expect(take(terrain()).some((c) => c.method === 'drawImage' && c.args[0] === canvas)).toBe(true);
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('keeps its copy on screen until the map\'s own picture, loaded again, is decoded', async () => {
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
+    pictures[1].load();
+    // Decoded ahead, off the page's first draw of it.
+    expect(canvas?.width).toBe(1000);
+    await pictures[1].decoded();
+    expect([canvas?.width, canvas?.height]).toEqual([0, 0]);
   });
 
   it('lets go of a picture with nothing painted when the map\'s own fails to load again, and says so', async () => {
@@ -1323,6 +1336,7 @@ describe('drafts', () => {
     await settle();
     fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
     pictures[pictures.length - 1].load();
+    await pictures[pictures.length - 1].decoded();
     await waitFor(() => expect(usePaintStore.getState().mapId).toBeNull());
   }
 
