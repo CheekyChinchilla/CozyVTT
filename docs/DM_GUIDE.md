@@ -217,8 +217,14 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 **Paint**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
 
 1. Click **Paint**. Its panel opens at the top of your tool panels, and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
-2. Choose a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Set the **Width**, from 1 to 64 pixels.
-3. With the **Brush**, drag to paint, or click or tap for a dot. The stroke shows as you drag, and goes into the picture when you let go.
+2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Paint has two colours: **Colour** and **Second colour** above the colours say which one the palette sets. Set the **Width**, from 1 to 64 pixels.
+3. Paint with the tool. A stroke shows as you drag, and goes into the picture when you let go.
+
+| Tool | Key | How |
+|---|---|---|
+| **Brush** | `B` | Drag to paint in the colour, or click or tap for a dot. |
+| **Eraser** | `E` | Drag to paint the second colour over what is there. The second colour starts as the colour of the picture's top-left corner: the map's own colour on a new drawn map. |
+
 4. **Undo stroke** and **Redo stroke** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take a stroke back and put it back.
 5. Click **Done painting** (the **×** on the panel), press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
 
@@ -979,6 +985,7 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Undo the last wall change | `Ctrl + Z` |
 | Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
 | Paint with the brush, while **Paint** is on | `B` |
+| Paint with the eraser, in the second colour, while **Paint** is on | `E` |
 | Make the brush narrower or wider, while **Paint** is on | `[` `]` |
 | Undo the last stroke, while **Paint** is on | `Ctrl + Z` |
 | Redo a stroke, while **Paint** is on | `Ctrl + Y` `Ctrl + Shift + Z` |

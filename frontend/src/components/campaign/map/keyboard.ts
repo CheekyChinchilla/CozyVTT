@@ -162,6 +162,7 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['Ctrl + Z'], does: 'Undo the last wall change', who: 'dm' },
   { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a wall change', who: 'dm' },
   { keys: ['B'], does: 'Paint with the brush, while Paint is on', who: 'dm' },
+  { keys: ['E'], does: 'Paint with the eraser, in the second colour, while Paint is on', who: 'dm' },
   { keys: ['[', ']'], does: 'Make the brush narrower or wider, while Paint is on', who: 'dm' },
   { keys: ['Ctrl + Z'], does: 'Undo the last stroke, while Paint is on', who: 'dm' },
   { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a stroke, while Paint is on', who: 'dm' },
