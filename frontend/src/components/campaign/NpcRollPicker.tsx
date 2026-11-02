@@ -16,6 +16,7 @@ import type { RollOption, CharacterRolls } from '@/utils/characterRolls';
 import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
 import FloatingLayer from '@/components/ui/FloatingLayer';
+import { flipOntoScreen } from '@/components/ui/menu';
 import { menuShown } from '@/components/ui/openMenus';
 import { useCompactLayout } from '@/contexts/LayoutContext';
 import { BottomSheet } from '@/components/campaign/compact/BottomSheet';
@@ -120,11 +121,7 @@ export default function NpcRollPicker({
   useEffect(() => {
     if (compact || !pickerRef.current) return;
     const rect = pickerRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const x = anchorX + rect.width  > vw ? Math.max(0, anchorX - rect.width)  : anchorX;
-    const y = anchorY + rect.height > vh ? Math.max(0, anchorY - rect.height) : anchorY;
-    setPos({ x, y });
+    setPos(flipOntoScreen({ x: anchorX, y: anchorY }, rect, { width: window.innerWidth, height: window.innerHeight }));
   }, [anchorX, anchorY, hasAnyRolls, compact]);
 
   // A menu on the screen while it is open, so the tap on the map that

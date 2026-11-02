@@ -7,7 +7,7 @@
  * dividers took a press on an item that lay over one.
  */
 
-import { it, expect, vi } from 'vitest';
+import { it, expect, vi, afterEach } from 'vitest';
 import { useEffect } from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { FileText, Trash2 } from 'lucide-react';
@@ -158,4 +158,25 @@ it('is a menu on the screen while it is drawn, and not with no items to draw', (
   expect(anyMenuShown()).toBe(true);
   drawn.unmount();
   expect(anyMenuShown()).toBe(false);
+});
+
+// Placed as the map's menus are (components/ui/menu.ts flipOntoScreen): the
+// screen is jsdom's, 1,024 by 768, and the menu measures 220 by 160.
+const originalRect = HTMLDivElement.prototype.getBoundingClientRect;
+afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = originalRect; });
+
+it('flips to the left of and above a point near the right and bottom edges', () => {
+  HTMLDivElement.prototype.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, right: 220, bottom: 160, width: 220, height: 160, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  render(
+    <CharacterContextMenu
+      x={1000}
+      y={700}
+      onClose={vi.fn()}
+      items={[{ kind: 'command', id: 'view', icon: FileText, label: 'View Character Sheet', run: vi.fn() }]}
+    />,
+  );
+
+  const menu = screen.getByRole('button', { name: 'View Character Sheet' }).parentElement!;
+  expect([menu.style.left, menu.style.top]).toEqual(['780px', '540px']);
 });

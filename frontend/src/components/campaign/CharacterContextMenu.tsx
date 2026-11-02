@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { MENU_ROW_CLASSES, commandLook, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
+import { MENU_ROW_CLASSES, commandLook, flipOntoScreen, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import { useCompactLayout } from '@/contexts/LayoutContext';
@@ -47,11 +47,7 @@ export default function CharacterContextMenu({
   useEffect(() => {
     if (!menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const adjustedX = x + rect.width > vw ? Math.max(0, x - rect.width) : x;
-    const adjustedY = y + rect.height > vh ? Math.max(0, y - rect.height) : y;
-    setPos({ x: adjustedX, y: adjustedY });
+    setPos(flipOntoScreen({ x, y }, rect, { width: window.innerWidth, height: window.innerHeight }));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- measured as the menu opens at its point, and on a change of layout
   }, [compact]);
 

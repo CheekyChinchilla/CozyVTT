@@ -6,7 +6,7 @@
  * named; the helper is tested on its own, and this pins the call sites.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import NpcRollPicker from '../NpcRollPicker';
 import { anyMenuShown } from '@/components/ui/openMenus';
@@ -142,6 +142,22 @@ describe('where it is drawn', () => {
     expect(picker).not.toBeNull();
     expect(picker?.closest('[data-group]')).toBeNull();
     expect(picker?.parentElement).toBe(document.body);
+  });
+});
+
+// Placed as the map's menus are (components/ui/menu.ts flipOntoScreen): the
+// screen is jsdom's, 1,024 by 768, and the picker measures 300 by 400.
+describe('near the edge of the screen', () => {
+  const originalRect = HTMLDivElement.prototype.getBoundingClientRect;
+  afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = originalRect; });
+
+  it('flips to the left of and above the point', () => {
+    HTMLDivElement.prototype.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 300, bottom: 400, width: 300, height: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
+
+    const picker = screen.getByText('Roll for Goblin Boss').closest<HTMLElement>('.fixed')!;
+    expect([picker.style.left, picker.style.top]).toEqual(['600px', '200px']);
   });
 });
 

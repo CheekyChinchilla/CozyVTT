@@ -99,7 +99,9 @@ export const MENU_ROW_CLASSES = {
  * Where a popover of `size` opened at page point `at` stands on a screen of
  * `screen`: at the point, or flipped to the left of it where it would run
  * off the right edge and above it where it would run off the bottom, never
- * past the left or the top. The map's token and door menus are placed by it.
+ * past the left or the top. Every popover menu at a point is placed by it:
+ * the map's token and door menus, the character menu of the roster and the
+ * initiative tracker, and the Roll... pickers.
  */
 export function flipOntoScreen(
   at: { x: number; y: number },
