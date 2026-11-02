@@ -163,7 +163,10 @@ describe('the name Global Illumination', () => {
 
   it('is spelled Global Illumination wherever a page shows it', () => {
     expect(Object.keys(sources)).toContain('/src/components/campaign/DmLightControls.tsx');
-    const others = Object.entries(sources).flatMap(([file, source]) =>
+    // Only a source with the word in it can show it: the rest are not parsed.
+    const naming = Object.entries(sources).filter(([, source]) => /illumination/i.test(source));
+    expect(naming.map(([file]) => file)).toContain('/src/components/campaign/DmLightControls.tsx');
+    const others = naming.flatMap(([file, source]) =>
       shownText(file, source).flatMap((text) =>
         [...text.matchAll(/global illumination/gi)].filter((m) => m[0] !== 'Global Illumination').map((m) => `${file}: ${m[0]}`)));
     expect(others).toEqual([]);
