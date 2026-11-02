@@ -33,6 +33,20 @@ export function drawingOrder(a: Drawing, b: Drawing): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/**
+ * Snap to grid, as Draw and Paint have it: the nearer of the nearest corner
+ * of the grid and the middle of the square the point is in, on a grid of
+ * `gridSize` map pixels, in whole pixels.
+ */
+export function snapToGrid(p: readonly [number, number], gridSize: number): [number, number] {
+  const g = gridSize;
+  const corner = [Math.round(p[0] / g) * g, Math.round(p[1] / g) * g];
+  const middle = [Math.floor(p[0] / g) * g + g / 2, Math.floor(p[1] / g) * g + g / 2];
+  const nearer = Math.hypot(p[0] - corner[0], p[1] - corner[1]) <= Math.hypot(p[0] - middle[0], p[1] - middle[1]) ? corner : middle;
+  // A corner at 0 from the left of it is 0, not -0.
+  return [Math.round(nearer[0]) || 0, Math.round(nearer[1]) || 0];
+}
+
 /** A label's letters are four times its width tall, in map pixels. */
 export function labelFontSize(width: number): number {
   return width * 4;

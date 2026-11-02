@@ -146,7 +146,7 @@ Before you can use a map in your campaign, it needs to live in the **Asset Libra
 4. Set the type to **Map**
 5. Set the scope to **Campaign** (shared with the campaign: its players and spectators see a map picture in the asset library only while the table is on a map using it) or **Personal** (private to you until the players are shown something that uses it)
 6. Give it a descriptive name — you'll thank yourself later when you have twenty maps
-7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern")
+7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern"). The tag `drawn-map` is kept for maps drawn in CozyVTT, and the window does not add it
 8. Click **Upload**
 
 *GIF pending — Uploading a map to the asset library.*
@@ -157,7 +157,7 @@ Once your map is in the asset library:
 
 1. Inside your campaign, click **Map Library** (the map icon) in the header
 2. The Map Library panel opens
-3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings
+3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings. Or click **Draw a map** at the top of that window to draw one in CozyVTT (see [Drawing a map](#drawing-a-map))
 4. The map is now available to switch to at any time
 
 **Where an Upload New picture goes.** The upload window offers two places for the map picture, and for the spirit layer picture, with a line under each saying what it means. **Personal** is selected at first.
@@ -179,13 +179,75 @@ You can change a map's **Width**, **Height** and **Grid Size** later with the **
 | Grid Size (pixels per square) | 10 | 500 |
 | Feet per square (**Grid Scale**) | 1 | 100 |
 
-Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
+Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it. A map you draw in CozyVTT has a limit of its own besides (see [Drawing a map](#drawing-a-map)).
 
 A map holds up to **1,000 tokens**. Adding one more, or moving tokens onto a map that would take it past 1,000, is refused with a message; a map that already had more before version 1.5.1 keeps them, and you can still move, edit and remove them.
 
 A map made before version 1.5.1 may be larger than this. It still opens, and Edit Map still saves changes that leave its size alone, but fog of war and explored areas cannot be turned on for a map with more than 250,000 squares (500 by 500). Turning either on there says so, and a map that already had fog on shows none. To use fog on it, make it 500 squares or fewer on each side in Edit Map.
 
 *Screenshot pending — Map Library panel with multiple maps.*
+
+### Drawing a map
+
+No map ready for the scene? Draw one in CozyVTT: a room or a clearing sketched while your players wait, or a dungeon drawn with care before the session. A drawn map is a map like any other: tokens, walls, lights, fog of war, export and import work on it as on an uploaded one.
+
+**Making one**
+
+1. Open the **Map Library** and click **Create Map**.
+2. Click **Draw a map** at the top of the window.
+3. Fill in the map's name, its **Width** and **Height** in grid squares, its **Detail (pixels per square)** (70 at first), the **Grid Settings**, and a **Background colour**: parchment at first, one of the colours offered, or any colour with **Another colour**.
+4. Click **Create Map**. CozyVTT puts a blank picture of that colour in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)), with **Paint** on (below). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
+
+If the picture cannot be made, the window says so and nothing is created: "This browser could not make the map's picture" means the device ran short, so choose fewer squares and try again.
+
+**How large a drawn map can be.** It is painted at its squares times its pixels per square. So that it can be painted on any device, a phone or a tablet included, that is kept within 16,777,216 pixels (4,096 by 4,096) and within 16,384 pixels on each side. Where the squares you ask for would make it larger, the window draws it at fewer pixels a square and says so, for example "Drawn at 40 px a square so it can be edited on any device.", and the map's **Grid Size** is that number. It never goes below 10 pixels a square, so a drawn map has at most 167,772 squares; a larger one is refused with a message and **Create Map** stays greyed out.
+
+| Squares | Drawn at |
+|---|---|
+| 20 by 20 | 70 pixels a square, as asked |
+| 59 by 59 | 69 |
+| 100 by 100 | 40 |
+| 409 by 409, or 500 by 335 | 10 |
+| 410 by 410, or 500 by 336 | Refused |
+
+**Its picture in the Asset Library.** Each drawn map's picture is in the campaign's library, named **Drawn map** and tagged `drawn-map`. Until what you paint is saved, it is one pixel a square of the map's colour, which the map stretches over its grid, so a new drawn map takes almost no room. So **Save** a drawn map at least once before you export it to Universal VTT: until then the export carries that one-pixel-a-square picture, and another tabletop shows a picture as many pixels across as the map has squares. As with every map picture, your players do not see it there until the table is on its map.
+
+**Painting it**
+
+**Paint**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
+
+1. Click **Paint**. Its panel opens at the top of your tool panels, and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
+2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Paint has two colours, as MS Paint does: **Colour** and **Second colour** above the colours say which one the palette sets. Set the **Width**, from 1 to 64 pixels.
+3. Paint with the tool. A stroke shows as you drag, and goes into the picture when you let go.
+
+| Tool | Key | How |
+|---|---|---|
+| **Brush** | `B` | Drag to paint in the colour, or click or tap for a dot. |
+| **Eraser** | `E` | Drag to paint the second colour over what is there, as MS Paint's eraser does. The second colour starts as the colour of the picture's top-left corner: the map's own colour on a new drawn map. |
+| **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
+| **Rectangle**, **Ellipse** | `R`, `O` | Drag from one corner to the other. Choose **Outline** (in the colour), **Filled** (with the colour) or **Outline and fill** (outlined in the colour, filled with the second colour). |
+| **Fill** | `F` | Click or tap an area to fill it with the colour, as MS Paint's bucket does: it spreads side to side and up and down, not across corners. **Tolerance** (10% to start) takes in colours that far from the one clicked, so the soft edge of a stroke fills too; at 0% only the exact colour fills. On a touch screen a finger's drag moves the map under it. If the device runs short of memory for a very large area, the fill stops with "This device could not fill an area that large.", and **Undo** takes back any part it filled. |
+| **Text** | `T` | Click or tap where a line of text goes, type it, and press `Enter`; `Esc` drops it. It is painted in the colour, its letters four times the **Width** tall, in the app's own type. A finger's drag moves the map under it. |
+| **Eyedropper** | `I` | Click or tap the picture to make its colour there the colour, and go back to the tool you had. |
+
+**Snap to grid**, for a line, a rectangle and an ellipse, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
+
+4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape or a fill and put it back.
+5. Click **Done painting** (the **×** on the panel), press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
+
+While Paint is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
+
+Undo keeps up to 50 changes. It keeps only the part of the picture each change touched, packed small, so even strokes across the whole map leave at least 30 to take back; on a picture with a great deal of fine detail the oldest may go sooner.
+
+**Saving.** What you paint is on your screen only until you click **Save** in the Paint panel. Until then it stays on the map when you put Paint away, and goes if you reload the page or show another map. **Save** puts the picture in the campaign's Asset Library as a new **Drawn map** picture and makes it the map's picture; the map's size and grid do not change, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
+
+A save can be refused: the picture must be within your server's size limit for a map picture (`MAX_MAP_SIZE_MB`, 50 MB unless your administrator changed it), and a painted picture of a large map with much detail can pass it, which the message says with both sizes.
+
+Each save deletes the picture the map had before, if it was a drawn one, so saves do not pile up in the Asset Library. A picture something else still uses (another map, a token, a character's or a creature's picture) is kept, and a picture you uploaded is never deleted this way. A handout or note that shows a drawn picture by its address loses it at the next save; use an uploaded picture there.
+
+**If the picture changes elsewhere.** If the map's picture is changed somewhere else while you have paint here not saved (in **Edit Map**, or by a save from another tab or device), your screen shows the new picture and asks what to do with your painting: **Save my painting over it**, **Discard my painting**, or **Not now**, which keeps it; **Paint** then asks again when you press it. **Save** checks the map first, so a picture saved meanwhile from another tab is never replaced without asking. With nothing unsaved, Paint simply gives way to the new picture.
+
+**Deleting a drawn map.** The **Delete Map** question in the Map Library offers **Also delete its picture from the Asset Library**, unticked, for a map you drew (never for one whose picture you uploaded). Tick it and the picture goes with the map, unless something else still uses it: then it stays, and the Map Library says so. Left unticked, the picture stays in the Asset Library for you to delete there.
 
 ### Switching Maps
 
@@ -229,7 +291,7 @@ A map picture you upload while preparing stays out of your players' Asset Librar
 - **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play, or prepare the next one during play with **Open to prepare** (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)). Players cannot see a map until you switch to it: its picture, walls, lights and tokens stay yours alone while you prepare it. A map picture stays out of your players' Asset Library until the table is on a map using it, whether it is in your **Personal** library or the campaign's, and leaves it again when the table moves on. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Token images are not hidden: one uploaded into the campaign's library, for a creature you mean to bring in later, can be seen there at once, and neither is a picture in the **Global** library, which is everyone's. Your instance's administrators can open every picture on it, a prepared map's included
 - **Keep backups** — Export important maps so you can recover them if needed
 - **Your campaign's library** — In the Asset Library you can delete or move any asset in your campaign's library, the ones your players uploaded included. Only the player who uploaded one can move it to **Personal**, since that is their own library and would take it out of the campaign
-- **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
+- **Deleting art a map uses** — Saving a drawn map deletes the drawn picture it replaces, unless something else uses it (see [Drawing a map](#drawing-a-map)); nothing else deletes art without asking. Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
 
 ---
 
@@ -823,7 +885,7 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 
 ### Drawing on the map
 
-Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
+Draw is for marking up any map, and the whole table sees it live; to change a map's own picture, on a map you drew, use **Paint** (see [Drawing a map](#drawing-a-map)). Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
 
 | Tool | How |
 |---|---|
@@ -925,7 +987,7 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 
 ### Keyboard Shortcuts
 
-Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo:
+Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo, and for **Paint** (see [Drawing a map](#drawing-a-map)):
 
 | Action | Shortcut |
 |--------|---------|
@@ -937,8 +999,20 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Finish a wall line | `Double-click` |
 | Undo the last wall change | `Ctrl + Z` |
 | Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
+| Paint with the brush, while **Paint** is on | `B` |
+| Paint with the eraser, in the second colour, while **Paint** is on | `E` |
+| Paint a line, while **Paint** is on | `L` |
+| Paint a rectangle, while **Paint** is on | `R` |
+| Paint an ellipse, while **Paint** is on | `O` |
+| Fill an area, while **Paint** is on | `F` |
+| Paint a line of text, while **Paint** is on | `T` |
+| Take a colour from the picture, while **Paint** is on | `I` |
+| Keep a painted line to 15 degree steps | `Shift + drag` |
+| Make the brush narrower or wider, while **Paint** is on | `[` `]` |
+| Undo the last change to the picture, while **Paint** is on | `Ctrl + Z` |
+| Redo a change to the picture, while **Paint** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
 
-On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token.
+On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Paint** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, and the arrows, `Delete` and `Backspace` do nothing.
 
 ### On a touch screen
 
@@ -951,6 +1025,7 @@ On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#o
 | Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
 | Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
 | Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
+| Paint a map you drew | One finger paints and a tap makes a dot; two fingers move and zoom the map, and a second finger landing while you paint drops that stroke. A stylus paints as a finger does. See [Drawing a map](#drawing-a-map). |
 | Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag, and a double tap pings nothing either. To finish a wall line, tap **Done** in the Walls panel. Put the tool away to open a menu by holding, or to ping by a double tap. |
 
 A stylus never opens a menu by holding; use a finger.

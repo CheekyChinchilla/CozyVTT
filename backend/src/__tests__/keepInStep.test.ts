@@ -216,6 +216,8 @@ import { Prisma, type MapDrawing } from '@prisma/client';
 import { drawingForArchive } from '../services/mapDrawings';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
 import { PASSWORD_FIELDS } from '../middleware/nulCharacter';
+import { PICTURE_LIMITS } from '../utils/pictureLimits';
+import { PICTURE_SIZE_LIMITS } from '../validators/pictureSizeLimits';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -631,6 +633,19 @@ describe('sight on the map', () => {
 
   it('finds walls near a point with the same file in the browser and on the server', () => {
     expect(read('frontend/src/utils/spatialIndex.ts')).toBe(read('backend/src/utils/spatialIndex.ts'));
+  });
+});
+
+// A map drawn in CozyVTT is made no wider or taller than the server keeps,
+// so its picture is never refused on Save.
+describe('the largest side a picture may have', () => {
+  it('is the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/pictureSizeLimits.ts')).toBe(read('backend/src/validators/pictureSizeLimits.ts'));
+  });
+
+  it('is the one the server checks pictures against', () => {
+    expect(PICTURE_LIMITS.maxSide).toBe(PICTURE_SIZE_LIMITS.maxSide);
+    expect(read('backend/src/utils/pictureLimits.ts')).toContain('maxSide: PICTURE_SIZE_LIMITS.maxSide,');
   });
 });
 

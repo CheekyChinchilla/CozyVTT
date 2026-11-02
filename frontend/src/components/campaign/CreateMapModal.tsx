@@ -1,6 +1,8 @@
 // ============================================
 // CreateMapModal Component
-// Modal for DMs to create a new campaign map
+// Modal for DMs to create a new campaign map: from a picture, or drawn in
+// CozyVTT (Draw a map), which starts as a blank picture of the size and
+// colour chosen (map/paint/drawnMapSize.ts)
 // ============================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -15,13 +17,24 @@ import { MAP_LIMITS } from '@/constants/mapLimits';
 import { withinMapLimits, feetPerSquareWithinLimits } from '@/utils/mapSize';
 import { diagonalStepCosts } from '@/utils/geometry';
 import { Button, Modal } from '@/components/ui';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
+import { DRAWN_MAP_BACKGROUND, DRAWN_MAP_GRID_SIZE, drawnPictureSize, drawnSizeNote } from './map/paint/drawnMapSize';
+import { blankPicture, pictureToPng, releaseCanvas } from './map/paint/blankPicture';
+import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
+import { DrawnPictureRefused, uploadDrawnPicture } from '@/services/drawnPicture';
 
 interface CreateMapModalProps {
   isOpen: boolean;
   campaignId: string;
   onClose: () => void;
-  onCreated: (map: CampaignMap) => void;
+  /** The map made, and for a drawn map the picture uploaded for it. */
+  onCreated: (map: CampaignMap, drawnPicture?: Asset) => void;
 }
+
+/** What a browser that made no PNG of the blank picture is told. */
+const NO_PICTURE_MADE = "This browser could not make the map's picture. Choose fewer squares and try again.";
+
+const count = (n: number) => n.toLocaleString('en-US');
 
 // ============================================
 // MapPreviewCanvas
@@ -158,6 +171,8 @@ function DimensionField({
   const clamp = (v: number) => Math.max(min, Math.min(max, v));
   return (
     <div>
+      {/* TODO(ui): this label is tied to neither the number box nor the slider, so a
+          screen reader names the box nothing; give the box an id and the label htmlFor. */}
       <label className="block text-xs text-stone-gray/70 mb-1">{label}</label>
       <input
         type="number"
@@ -190,6 +205,13 @@ export default function CreateMapModal({
   onClose,
   onCreated,
 }: CreateMapModalProps) {
+  // From a picture, or drawn in CozyVTT.
+  const [making, setMaking] = useState<'picture' | 'drawing'>('picture');
+  const drawing = making === 'drawing';
+  // A drawn map's pixels per square and colour.
+  const [detail, setDetail] = useState(DRAWN_MAP_GRID_SIZE);
+  const [background, setBackground] = useState(DRAWN_MAP_BACKGROUND);
+
   // Asset selection
   const [mapAssetId, setMapAssetId] = useState<string | null>(null);
   const [spiritAssetId, setSpiritAssetId] = useState<string | null>(null);
@@ -219,6 +241,9 @@ export default function CreateMapModal({
   // Reset all state when the modal closes
   useEffect(() => {
     if (!isOpen) {
+      setMaking('picture');
+      setDetail(DRAWN_MAP_GRID_SIZE);
+      setBackground(DRAWN_MAP_BACKGROUND);
       setMapAssetId(null);
       setSpiritAssetId(null);
       setName('');
@@ -271,11 +296,67 @@ export default function CreateMapModal({
     setSpiritAssetId(asset?.id ?? null);
   };
 
-  const canSubmit = !!mapAssetId && name.trim().length > 0 && !isSubmitting;
+  // The picture a drawn map is made with, and what the window says of it.
+  const drawnSize = drawnPictureSize(width, height, detail);
+  const drawnNote = drawnSizeNote(drawnSize);
+
+  const canSubmit = (drawing ? drawnSize.fits : !!mapAssetId) && name.trim().length > 0 && !isSubmitting;
 
   const handleClose = useCallback(() => onClose(), [onClose]);
 
+  /**
+   * Draw a map: make the blank picture, upload it into the campaign's
+   * library tagged drawn-map, then create the map at the pixels per square
+   * it is painted at. The picture is one pixel a square, which the map
+   * stretches over its grid: one the painted size would be made, sent and
+   * decoded for nothing until something is painted, and Paint makes its
+   * own at the map's size. A map the server refuses takes its picture with
+   * it.
+   */
+  const handleDraw = async () => {
+    if (!canSubmit || !drawnSize.fits) return;
+    setIsSubmitting(true);
+    setError(null);
+    let uploaded: Asset | null = null;
+    try {
+      const canvas = blankPicture(width, height, background);
+      const png = canvas ? await pictureToPng(canvas) : null;
+      if (canvas) releaseCanvas(canvas);
+      if (!png) {
+        setError(NO_PICTURE_MADE);
+        return;
+      }
+      uploaded = await uploadDrawnPicture(png, campaignId);
+      const map = await mapService.createMap(campaignId, {
+        name: name.trim(),
+        imageUrl: uploaded.id,
+        width,
+        height,
+        gridSize: drawnSize.pixelsPerSquare,
+        feetPerSquare,
+        diagonalRule,
+      });
+      onCreated(map, uploaded);
+      onClose();
+    } catch (err: unknown) {
+      if (uploaded) {
+        const left = uploaded.id;
+        // Without force: a picture something else has come to use stays.
+        void api.deleteAsset(left).catch((cleanup: unknown) => {
+          console.warn('[CreateMapModal] Could not delete the picture of a map not made:', errorSummary(cleanup));
+        });
+      }
+      setError(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Failed to create map. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
+    if (drawing) {
+      await handleDraw();
+      return;
+    }
     if (!canSubmit || !mapAssetId) return;
     setIsSubmitting(true);
     setError(null);
@@ -320,10 +401,30 @@ export default function CreateMapModal({
                 </div>
               )}
 
+              {/* A picture, or a map drawn here. */}
+              <div role="group" aria-label="How to make the map" className="flex gap-2 flex-wrap">
+                {([['picture', 'Use a picture'], ['drawing', 'Draw a map']] as const).map(([way, label]) => (
+                  <button
+                    key={way}
+                    type="button"
+                    aria-pressed={making === way}
+                    onClick={() => setMaking(way)}
+                    className={`touch-target px-3 py-1.5 rounded-lg text-sm transition-colors border ${
+                      making === way
+                        ? 'bg-moss-green text-brand-text border-moss-green'
+                        : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               {/* Map Image. Upload New offers the DM's personal library,
                   selected at first, or the campaign's. Either way players
                   see the picture only once a map using it is on screen; a
                   campaign picture stays with the table if the DM leaves. */}
+              {!drawing && (<>
               <AssetPicker
                 label="Map Image"
                 required
@@ -345,6 +446,7 @@ export default function CreateMapModal({
                 onSelect={handleSpiritAssetSelect}
                 campaignOption={campaignId}
               />
+              </>)}
 
               {/* Map Name */}
               <div>
@@ -387,18 +489,81 @@ export default function CreateMapModal({
                         min={MAP_LIMITS.minSide}
                         max={MAP_LIMITS.maxSide}
                       />
-                      <DimensionField
-                        label="Grid Size (px/square)"
-                        value={gridSize}
-                        onChange={setGridSize}
-                        min={MAP_LIMITS.minGridSize}
-                        max={MAP_LIMITS.maxGridSize}
-                      />
+                      {drawing ? (
+                        <DimensionField
+                          label="Detail (pixels per square)"
+                          value={detail}
+                          onChange={setDetail}
+                          min={MAP_LIMITS.minGridSize}
+                          max={MAP_LIMITS.maxGridSize}
+                        />
+                      ) : (
+                        <DimensionField
+                          label="Grid Size (px/square)"
+                          value={gridSize}
+                          onChange={setGridSize}
+                          min={MAP_LIMITS.minGridSize}
+                          max={MAP_LIMITS.maxGridSize}
+                        />
+                      )}
                     </div>
-                    <p className="text-xs text-stone-gray/50 mt-2">
-                      Canvas will be {width * gridSize}×{height * gridSize}px
-                    </p>
+                    {drawing ? (
+                      <>
+                        {drawnSize.fits && (
+                          <p className="text-xs text-stone-gray/50 mt-2">
+                            It is painted at {count(drawnSize.width)} × {count(drawnSize.height)} px.
+                          </p>
+                        )}
+                        {drawnNote && (
+                          <p className={`text-xs mt-1 ${drawnSize.fits ? 'text-info-ink' : 'text-danger-ink'}`}>{drawnNote}</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-stone-gray/50 mt-2">
+                        Canvas will be {width * gridSize}×{height * gridSize}px
+                      </p>
+                    )}
                   </div>
+
+                  {/* A drawn map's colour, which the eraser paints too. */}
+                  {drawing && (
+                    <div>
+                      <span className="block text-sm font-medium text-stone-gray mb-2">Background colour</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PAINT_COLOURS.map((colour) => (
+                          <button
+                            key={colour.value}
+                            type="button"
+                            aria-label={colour.name}
+                            aria-pressed={background === colour.value}
+                            title={colour.name}
+                            onClick={() => setBackground(colour.value)}
+                            className="touch-target inline-flex items-center justify-center w-7 h-7"
+                          >
+                            <span
+                              className={`block w-6 h-6 rounded-full border-2 ${background === colour.value ? 'border-brand scale-110' : 'border-stone-gray/40'}`}
+                              style={{ backgroundColor: colour.value }}
+                            />
+                          </button>
+                        ))}
+                        <label
+                          className={`touch-target inline-flex items-center justify-center w-7 h-7 rounded-full ${PAINT_COLOURS.some((c) => c.value === background) ? '' : 'ring-2 ring-brand'}`}
+                          title="Another colour"
+                        >
+                          <input
+                            type="color"
+                            aria-label="Another colour"
+                            value={background}
+                            onChange={(e) => {
+                              const colour = pickedColour(e.target.value);
+                              if (colour) setBackground(colour);
+                            }}
+                            className="w-6 h-6 cursor-pointer border-0 bg-transparent p-0"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Grid Settings */}
                   <div className="border border-moss-green/20 rounded-lg p-4 space-y-4 bg-moss-green/5">
@@ -490,7 +655,20 @@ export default function CreateMapModal({
                   </div>
                 </div>
 
-                {/* ── Right: Grid Preview + Zoom ── */}
+                {/* ── Right: Grid Preview + Zoom, or the drawn map's shape and colour ── */}
+                {drawing ? (
+                  <div className="space-y-3">
+                    <span className="block text-sm font-medium text-stone-gray">Preview</span>
+                    <div
+                      aria-hidden="true"
+                      className="w-full max-h-72 rounded-sm border border-moss-green/30 mx-auto"
+                      style={{ aspectRatio: `${width} / ${height}`, backgroundColor: background, maxWidth: `calc(18rem * ${width / height})` }}
+                    />
+                    <p className="text-xs text-stone-gray/50 text-center leading-relaxed">
+                      The map opens on your screen only, with Paint on, while your players stay where they are.
+                    </p>
+                  </div>
+                ) : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="block text-sm font-medium text-stone-gray">Grid Preview</label>
@@ -574,6 +752,7 @@ export default function CreateMapModal({
                     </p>
                   )}
                 </div>
+                )}
               </div>
             </div>
 
