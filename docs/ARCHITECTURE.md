@@ -1102,7 +1102,9 @@ animated map picture may hold 200 million pixels across its frames, a token
 picture 50 million, and every member at the table draws a token's picture.
 A copy the server makes of a record it
 already holds (duplicating a creature, copying a character, moving a token
-to another map) names nothing new and is not asked.
+to another map) names nothing new and is not asked. A campaign import drops
+a token's, a creature's or a token template's picture that names an asset it
+did not import as TOKEN, and says so in the import's warnings.
 
 ### Decoding pictures
 

@@ -797,6 +797,8 @@ export async function importCampaign(
     const remapAsset = (ref: string | null | undefined): string | null => (ref ? (assetRefMap.get(ref) ?? null) : null);
     const mapPictureIds = new Set(assets.filter((a) => a.type === 'MAP').map((a) => a.oldId));
     const isMapPicture = (ref: string): boolean => mapPictureIds.has(ref);
+    const tokenPictureIds = new Set(assets.filter((a) => a.type === 'TOKEN').map((a) => a.oldId));
+    const isTokenPicture = (ref: string): boolean => tokenPictureIds.has(ref);
 
     // The same presets a new campaign gets, so an archive with no atmosphere
     // settings imports with the atmosphere the allowlists accept.
@@ -895,7 +897,7 @@ export async function importCampaign(
               report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);
               continue;
             }
-            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, isMapPicture, report });
+            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, isMapPicture, isTokenPicture, report });
             if (!prepared) continue;
 
             const mapId = randomUUID();
@@ -930,7 +932,7 @@ export async function importCampaign(
               { max: IMPORT_LIMITS.MAX_CREATURES, one: 'creature', many: 'creatures' });
             if (Array.isArray(creaturesRaw)) {
               creatureCount = await inBatches(creaturesRaw, (raw) => {
-                const row = prepareCreature(raw, { remapAsset, report });
+                const row = prepareCreature(raw, { remapAsset, isTokenPicture, report });
                 return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
               }, (data: Prisma.CreatureTemplateCreateManyInput[]) => tx.creatureTemplate.createMany({ data }));
             }
@@ -944,7 +946,7 @@ export async function importCampaign(
               { max: IMPORT_LIMITS.MAX_TOKEN_TEMPLATES, one: 'token template', many: 'token templates' });
             if (Array.isArray(templatesRaw)) {
               tokenTemplateCount = await inBatches(templatesRaw, (raw) => {
-                const row = prepareTokenTemplate(raw, { remapAsset, report });
+                const row = prepareTokenTemplate(raw, { remapAsset, isTokenPicture, report });
                 return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
               }, (data: Prisma.TokenTemplateCreateManyInput[]) => tx.tokenTemplate.createMany({ data }));
             }

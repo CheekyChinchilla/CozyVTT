@@ -146,6 +146,8 @@ export interface MapContext {
   remapAsset: (ref: string | null | undefined) => string | null;
   /** Whether the asset the archive names `ref` was imported as a map picture. */
   isMapPicture: (ref: string) => boolean;
+  /** Whether the asset the archive names `ref` was imported as a token picture. */
+  isTokenPicture: (ref: string) => boolean;
   report: ImportReport;
 }
 
@@ -277,7 +279,7 @@ function prepareTokens(
     );
   }
 
-  const tally = { names: 0, notes: 0, statBlocks: 0, statBlocksDropped: 0, moved: 0 };
+  const tally = { names: 0, notes: 0, statBlocks: 0, statBlocksDropped: 0, moved: 0, pictures: 0 };
   const tokens: PlacedToken[] = [];
   for (const entry of listed) {
     let fitted = fitToSchema(ImportTokenSchema, entry);
@@ -303,10 +305,19 @@ function prepareTokens(
     const position = clampTokenPosition(square, token.size, map);
     if (position.x !== token.position.x || position.y !== token.position.y) tally.moved++;
 
+    // A token's picture can only be a token picture, as on the token routes.
+    // One the archive names that came in as a map picture or a sound stays
+    // in the campaign's library as that, and the token arrives without it.
+    let imageUrl = ctx.remapAsset(token.imageUrl) || '';
+    if (imageUrl && token.imageUrl && !ctx.isTokenPicture(token.imageUrl)) {
+      imageUrl = '';
+      tally.pictures++;
+    }
+
     tokens.push({
       ...token,
       id: randomUUID(),
-      imageUrl: ctx.remapAsset(token.imageUrl) || '',
+      imageUrl,
       position,
       characterId: null,
       controlledBy: null,
@@ -320,6 +331,10 @@ function prepareTokens(
     say(`left the stat block off ${count(tally.statBlocksDropped, 'token')}, which the app cannot store; ${tally.statBlocksDropped === 1 ? 'the token was' : 'the tokens were'} kept.`);
   }
   if (tally.moved) say(`moved ${count(tally.moved, 'token')} onto whole squares inside the map.`);
+  if (tally.pictures) {
+    const one = tally.pictures === 1;
+    say(`left out the ${one ? 'picture' : 'pictures'} of ${count(tally.pictures, 'token')}, which ${one ? 'was' : 'were'} not uploaded as ${one ? 'a token picture' : 'token pictures'}.`);
+  }
   return tokens;
 }
 
@@ -469,7 +484,23 @@ export function importedGameSystem(value: unknown, whose: string, report: Import
 
 export interface LibraryContext {
   remapAsset: (ref: string | null | undefined) => string | null;
+  /** Whether the asset the archive names `ref` was imported as a token picture. */
+  isTokenPicture: (ref: string) => boolean;
   report: ImportReport;
+}
+
+/**
+ * A creature's or template's picture, as the routes take one: only a token
+ * picture. Any other the archive names stays in the campaign's library as
+ * what it was uploaded as, and the item arrives without it.
+ */
+function libraryPicture(ref: string | null | undefined, ctx: LibraryContext, whose: string): string | null {
+  const address = ctx.remapAsset(ref);
+  if (address && ref && !ctx.isTokenPicture(ref)) {
+    ctx.report.warn(`${whose}: left out its picture, which was not uploaded as a token picture.`);
+    return null;
+  }
+  return address;
 }
 
 /** The fields of a creature or template, in words, for the report. */
@@ -513,7 +544,7 @@ export function prepareCreature(raw: unknown, ctx: LibraryContext): CreatureRow 
     challengeRating: c.challengeRating || null,
     creatureType: c.creatureType || null,
     alignment: c.alignment || null,
-    imageUrl: ctx.remapAsset(c.imageAssetRef),
+    imageUrl: libraryPicture(c.imageAssetRef, ctx, whose),
     statBlock: c.statBlock as Prisma.InputJsonValue,
     size: (c.size || { width: 1, height: 1 }) as Prisma.InputJsonValue,
     disposition: c.disposition || 'hostile',
@@ -547,7 +578,7 @@ export function prepareTokenTemplate(raw: unknown, ctx: LibraryContext): TokenTe
   if (droppedStatBlock) ctx.report.warn(`${whose}: left off its stat block, which the app cannot store; the template was kept.`);
   return {
     name: t.name,
-    imageUrl: ctx.remapAsset(t.imageAssetRef),
+    imageUrl: libraryPicture(t.imageAssetRef, ctx, whose),
     type: t.type || 'object',
     disposition: t.disposition || null,
     displayMode: t.displayMode || 'pog',

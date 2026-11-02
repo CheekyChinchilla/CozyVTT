@@ -9829,6 +9829,12 @@ paths:
         is still imported, and `warnings` says so (`Map "<name>": left out
         its picture, which was not uploaded as a map picture.`, and the same
         for its spirit layer picture).
+        A token's, a creature's and a token template's picture keep only an
+        asset imported as TOKEN: one naming a MAP or AUDIO asset is dropped,
+        the asset is still imported, and `warnings` says so (`Map "<name>":
+        left out the pictures of 2 tokens, which were not uploaded as token
+        pictures.`, `Creature "<name>": left out its picture, which was not
+        uploaded as a token picture.`, and the same for a `Token template`).
         Each asset keeps the `tags` its entry gives, held to what
         `POST /api/assets/upload` stores: each trimmed and split at commas,
         empty ones dropped, each kept once. A tag that is not text or is over
