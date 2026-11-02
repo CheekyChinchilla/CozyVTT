@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { Circle, Eraser, Minus, Paintbrush, Redo2, Square, Undo2, X } from 'lucide-react';
+import { Circle, Eraser, Minus, PaintBucket, Paintbrush, Redo2, Square, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
@@ -20,6 +20,7 @@ const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintb
   line: { label: 'Line', key: 'L', icon: Minus },
   rect: { label: 'Rectangle', key: 'R', icon: Square },
   ellipse: { label: 'Ellipse', key: 'O', icon: Circle },
+  fill: { label: 'Fill', key: 'F', icon: PaintBucket },
 };
 
 const HINTS: Record<PaintTool, string> = {
@@ -28,6 +29,7 @@ const HINTS: Record<PaintTool, string> = {
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
   rect: 'Drag from one corner to the other.',
   ellipse: 'Drag across the box it fills.',
+  fill: 'Click or tap an area to fill it with the colour. A finger\'s drag moves the map.',
 };
 
 const STYLES: ReadonlyArray<{ style: ShapeStyle; label: string }> = [
@@ -105,10 +107,10 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
           );
         })}
         <span className="flex-1" />
-        <button type="button" onClick={onUndo} disabled={!canUndo} aria-label="Undo stroke" title="Undo (Ctrl+Z)" className={actionButton}>
+        <button type="button" onClick={onUndo} disabled={!canUndo} aria-label="Undo" title="Undo (Ctrl+Z)" className={actionButton}>
           <Undo2 className="w-3.5 h-3.5" />
         </button>
-        <button type="button" onClick={onRedo} disabled={!canRedo} aria-label="Redo stroke" title="Redo (Ctrl+Y)" className={actionButton}>
+        <button type="button" onClick={onRedo} disabled={!canRedo} aria-label="Redo" title="Redo (Ctrl+Y)" className={actionButton}>
           <Redo2 className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -215,6 +217,26 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
             Snap to grid
           </label>
         </div>
+      )}
+
+      {settings.tool === 'fill' && (
+        <label className="flex flex-col gap-0.5">
+          <span className="flex justify-between text-[10px] text-stone-400">
+            <span>Tolerance</span>
+            <span>{settings.tolerance}%</span>
+          </span>
+          <input
+            type="range"
+            aria-label="Tolerance"
+            min={0}
+            max={100}
+            step={1}
+            value={settings.tolerance}
+            onChange={(e) => onSettingsChange({ tolerance: Number(e.target.value) })}
+            className="w-full accent-amber-400 touch-target"
+          />
+          <span className="text-[10px] text-stone-400">Higher takes in colours further from the one clicked, such as a stroke's soft edge.</span>
+        </label>
       )}
 
       {unsaved && (

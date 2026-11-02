@@ -548,7 +548,47 @@ describe('lines, rectangles and ellipses', () => {
       mouse.up(input(), { clientX: 120, clientY: 120 });
     }
     expect(callsOfPicture('stroke')).toEqual([]);
-    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+});
+
+describe('the fill bucket', () => {
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+
+  it('fills the area clicked with the colour, putting back only the box it changed, which undo keeps', async () => {
+    await showMap();
+    await paintOn();
+    choose('Fill');
+    expect(screen.getByRole('slider', { name: 'Tolerance' })).toHaveValue('10');
+    const canvas = pictureCanvas();
+    take(canvas!);
+    mouse.down(input(), { clientX: 300, clientY: 300 });
+    mouse.up(input(), { clientX: 300, clientY: 300 });
+    const calls = take(canvas!);
+    expect(calls.find((c) => c.method === 'getImageData')?.args).toEqual([0, 0, 1000, 1000]);
+    // The stand-in picture is one empty colour throughout, so all of it is filled.
+    const put = calls.find((c) => c.method === 'putImageData');
+    expect(put?.args.slice(1)).toEqual([0, 0, 0, 0, 1000, 1000]);
+    const filled = put?.args[0] as ImageData;
+    expect([...filled.data.subarray(0, 4)]).toEqual([26, 26, 26, 255]);
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  });
+
+  it('pans for a finger\'s drag, and fills on a tap', async () => {
+    await showMap();
+    await paintOn();
+    press('f');
+    expect(screen.getByRole('button', { name: 'Fill' })).toHaveAttribute('aria-pressed', 'true');
+    const canvas = pictureCanvas();
+    take(canvas!);
+    const finger = contact('touch', 4);
+    finger.down(input(), { clientX: 300, clientY: 300 });
+    finger.move(input(), { clientX: 360, clientY: 340 });
+    finger.up(input(), { clientX: 360, clientY: 340 });
+    expect(take(canvas!).some((c) => c.method === 'getImageData')).toBe(false);
+    finger.down(input(), { clientX: 300, clientY: 300 });
+    finger.up(input(), { clientX: 300, clientY: 300 });
+    expect(take(canvas!).some((c) => c.method === 'putImageData')).toBe(true);
   });
 });
 
@@ -593,7 +633,7 @@ describe('the lift', () => {
     two.down(input(), { clientX: 600, clientY: 600 });
     one.up(input(), { clientX: 400, clientY: 100 });
     two.up(input(), { clientX: 600, clientY: 600 });
-    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
   });
 });
 
@@ -602,9 +642,9 @@ describe('undo and redo', () => {
     await showMap();
     await paintOn();
     const canvas = pictureCanvas();
-    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
     // The two tiles across the stroke, 0 to 512 by 0 to 256, kept before it.
     const kept = [...recorded.entries()]
       .filter(([c]) => c !== canvas)
@@ -614,16 +654,16 @@ describe('undo and redo', () => {
     take(canvas!);
     await act(async () => { press('z', { ctrlKey: true }); });
     await waitFor(() => expect(callsOn(canvas).filter((c) => c.method === 'clearRect').map((c) => c.args)).toEqual([[0, 0, 256, 256], [256, 0, 256, 256]]));
-    expect(screen.getByRole('button', { name: 'Redo stroke' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Redo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
 
     take(canvas!);
     await act(async () => { press('y', { ctrlKey: true }); });
     await waitFor(() => expect(callsOn(canvas).filter((c) => c.method === 'clearRect')).toHaveLength(2));
-    expect(screen.getByRole('button', { name: 'Undo stroke' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
 
     take(canvas!);
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo stroke' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
     await waitFor(() => expect(callsOn(canvas).filter((c) => c.method === 'clearRect')).toHaveLength(2));
   });
 });

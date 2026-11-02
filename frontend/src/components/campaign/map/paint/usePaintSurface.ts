@@ -36,14 +36,18 @@ import { createCanvasTileStore, type CanvasTileStore } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
-import { readColour } from './pixelColour';
+import { hexToRgba, readColour } from './pixelColour';
+import { floodFill } from './floodFill';
 import { drawShape, scaleShape, shapeBox, stepAngle, type PaintPreview, type PaintShape, type PaintShapeKind, type ShapeStyle } from './paintShapes';
 import { snapToGrid } from '../drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { usePaintStore } from '@/stores/paintStore';
 
 /** The tools Paint offers. */
-export type PaintTool = 'brush' | 'eraser' | PaintShapeKind;
+export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'fill';
+
+/** The tools that act on a tap or a click: a finger's drag pans under them. */
+const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['fill']);
 
 /** The tools dragged from corner to corner (paintShapes.ts). */
 const SHAPE_TOOLS: ReadonlySet<PaintTool> = new Set<PaintShapeKind>(['line', 'rect', 'ellipse']);
@@ -65,6 +69,8 @@ export interface PaintSettings {
   straight: boolean;
   /** Shapes' corners and lines' ends on the grid's corners and the middles of its squares. */
   snap: boolean;
+  /** How far, in percent, a colour may be from the one clicked for the fill to take it in. */
+  tolerance: number;
 }
 
 export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
@@ -75,10 +81,11 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   style: 'outline',
   straight: false,
   snap: false,
+  tolerance: 10,
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['f', 'fill']]);
 
 /** The most the undo tiles may take, packed or still copies waiting to be; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -372,6 +379,31 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     });
   }, [land]);
 
+  /**
+   * Fill the area at map pixel `point` with the colour: the picture's pixels
+   * are read, filled (floodFill.ts), and only the box that changed is put
+   * back, its tiles kept first. Not while an undo is putting tiles back:
+   * the pixels read would be the ones it is replacing.
+   */
+  const fillAt = useCallback((point: PaintPoint) => {
+    const s = surfaceRef.current;
+    if (!s || s.history.busy()) return;
+    const look = settingsRef.current;
+    const { width, height } = s.canvas;
+    const pixels = s.ctx.getImageData(0, 0, width, height);
+    const box = floodFill(pixels, point[0] * s.sx, point[1] * s.sy, hexToRgba(look.colour), Math.round(look.tolerance * 2.55));
+    if (!box) return;
+    const step = s.history.begin();
+    step.cover(box);
+    void step.land(() => {
+      s.ctx.putImageData(pixels, 0, 0, box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0);
+      s.revision += 1;
+    }).finally(() => {
+      bump();
+      markDirty('terrain');
+    });
+  }, [bump, markDirty]);
+
   /** Paint a lifted shape into the picture, as a stroke is. */
   const commitShape = useCallback((under: ShapeUnderWay) => {
     const s = surfaceRef.current;
@@ -414,6 +446,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const look = settingsRef.current;
       dropStroke();
       const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+      if (TAP_TOOLS.has(look.tool)) {
+        // A finger's drag moves the map; a tap or a click acts.
+        if (at.via === 'drag') mapControls.startDrag(at.e);
+        else if (look.tool === 'fill') fillAt(point);
+        return true;
+      }
       if (isShapeTool(look.tool)) {
         const from = look.snap ? snapToGrid(point, map.gridSize) : point;
         shapeRef.current = {
