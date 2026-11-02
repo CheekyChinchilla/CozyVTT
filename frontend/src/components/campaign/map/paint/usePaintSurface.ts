@@ -921,19 +921,34 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     dispose();
   }, [clearDraft, dispose]);
 
+  /** Hand the browser the picture `canvas` holds now as a PNG, named after its map; false when no PNG could be made. */
+  const savePicture = useCallback(async (canvas: HTMLCanvasElement, mapName: string): Promise<boolean> => {
+    const png = await pictureToPng(canvas);
+    if (!png) {
+      refuse(PNG_NOT_MADE);
+      return false;
+    }
+    saveBlob(`${mapName.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Painting'}.png`, png);
+    return true;
+  }, [refuse]);
+
+  /**
+   * Download the picture being painted, as it is now, painted or not: the
+   * way to keep paint that cannot be saved (a picture over the server's
+   * limit, the campaign gone, a sign-in that must change first).
+   */
+  const download = useCallback(async () => {
+    const s = surfaceRef.current;
+    if (s) await savePicture(s.canvas, mapRef.current?.id === s.mapId ? mapRef.current.name : s.mapName);
+  }, [savePicture]);
+
   /** The painting left behind by a map gone without asking: downloaded as a PNG, then let go of. */
   const downloadLeftover = useCallback(async () => {
     const left = leftoverRef.current;
-    if (!left) return;
-    const png = await pictureToPng(left.canvas);
-    if (!png) {
-      refuse(PNG_NOT_MADE);
-      return;
-    }
-    saveBlob(`${left.mapName.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Painting'}.png`, png);
+    if (!left || !(await savePicture(left.canvas, left.mapName))) return;
     setLeftover(null);
     toRelease.current.push(left.canvas);
-  }, [refuse]);
+  }, [savePicture]);
   /** The painting left behind, let go of with its draft. */
   const discardLeftover = useCallback(() => {
     const left = leftoverRef.current;
@@ -1222,6 +1237,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     /** Settles once a save under way has, at once with none. */
     whenSaved: (): Promise<unknown> => saveRun.current ?? Promise.resolve(),
     discard,
+    download,
     /** Paint not saved left behind by a map gone without asking, and what the DM may do with it. */
     leftover,
     downloadLeftover,

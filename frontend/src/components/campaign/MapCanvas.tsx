@@ -4592,6 +4592,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               unsaved={paint.unsaved}
               onSave={() => { void paint.save(); }}
               saving={paint.saving}
+              onDownload={() => { void paint.download(); }}
               signedOut={paintGuards.signedOut}
               onClose={paint.close}
             />
@@ -4986,6 +4987,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 unsaved={paint.unsaved}
                 onSave={() => { void paint.save(); }}
                 saving={paint.saving}
+                onDownload={() => { void paint.download(); }}
                 signedOut={paintGuards.signedOut}
                 onClose={paint.close}
               />

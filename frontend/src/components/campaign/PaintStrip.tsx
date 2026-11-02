@@ -14,13 +14,14 @@
  *   strip with the two colours, the palette, Another colour and the width;
  * - the tool's own settings: a shape outlined, filled or both, 15 degree
  *   steps, Snap to grid, the fill's tolerance;
+ * - Download picture, the picture as it is now as a PNG;
  * - whether there is paint not saved, and a lost sign-in.
  *
  * It shares the panel's tools, hints and colours, so the two cannot drift.
  */
 
 import { useId, useState } from 'react';
-import { Loader2, Redo2, Undo2 } from 'lucide-react';
+import { Download, Loader2, Redo2, Undo2 } from 'lucide-react';
 import ToolStrip, { CHIP, HEADER_BUTTON, squareButton } from '@/components/campaign/compact/ToolStrip';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
@@ -33,7 +34,7 @@ import { HINTS, nameOf, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot
 /** A slider a finger can take. */
 const SLIDER = 'h-11 w-full accent-brand';
 
-export default function PaintStrip({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, signedOut = false, onClose }: PaintControlsProps) {
+export default function PaintStrip({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose }: PaintControlsProps) {
   const [overOpen, setOverOpen] = useState(false);
   const [slot, setSlot] = useState<Slot>('colour');
   const overId = useId();
@@ -250,6 +251,18 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           />
         </label>
       )}
+
+      <div className="pr-2">
+        <button
+          type="button"
+          onClick={onDownload}
+          title="Save the picture as it is now on this device, as a PNG: a way to keep paint that cannot be saved to the map"
+          className={cn(HEADER_BUTTON, 'gap-2 border border-ink/15 bg-paper text-ink hover:bg-ink/5')}
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          Download picture
+        </button>
+      </div>
 
       {unsaved && !saving && (
         <p className="pr-2 text-sm leading-snug text-ink-muted">Not saved yet: on your screen only. Done keeps it on the map until you save.</p>
