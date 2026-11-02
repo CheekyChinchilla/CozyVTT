@@ -39,15 +39,24 @@ import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from '.
 import { hexToRgba, readColour } from './pixelColour';
 import { floodFill } from './floodFill';
 import { drawShape, scaleShape, shapeBox, stepAngle, type PaintPreview, type PaintShape, type PaintShapeKind, type ShapeStyle } from './paintShapes';
-import { snapToGrid } from '../drawingGeometry';
+import { labelFontSize, snapToGrid } from '../drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { usePaintStore } from '@/stores/paintStore';
 
 /** The tools Paint offers. */
-export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'fill';
+export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'fill' | 'text' | 'eyedropper';
 
 /** The tools that act on a tap or a click: a finger's drag pans under them. */
-const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['fill']);
+const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['fill', 'text', 'eyedropper']);
+
+/** Text's letters: as tall as Draw's labels for the width, in the app's own type. */
+const textFont = (size: number) => `600 ${size}px 'Inter', system-ui, sans-serif`;
+
+/** A line of text being written, at its top-left corner in map pixels. */
+export interface PaintTextBox {
+  at: PaintPoint;
+  draft: string;
+}
 
 /** The tools dragged from corner to corner (paintShapes.ts). */
 const SHAPE_TOOLS: ReadonlySet<PaintTool> = new Set<PaintShapeKind>(['line', 'rect', 'ellipse']);
@@ -85,7 +94,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['f', 'fill']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
 
 /** The most the undo tiles may take, packed or still copies waiting to be; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -173,6 +182,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const settingsRef = useRef(settings);
   const strokeRef = useRef<Stroke | null>(null);
   const shapeRef = useRef<ShapeUnderWay | null>(null);
+  const [textBox, setTextBox] = useState<PaintTextBox | null>(null);
+  const textRef = useRef<(PaintTextBox & { mapId: string }) | null>(null);
+  /** The tool before the eyedropper, which a pick goes back to. */
+  const lastToolRef = useRef<PaintTool>(DEFAULT_PAINT_SETTINGS.tool);
   /** Strokes and shapes lifted while an undo was under way, shown until they are painted. */
   const waitingRef = useRef<PaintPreview[]>([]);
   /** Bumped when the history changes, so the panel's Undo and Redo follow. */
@@ -181,6 +194,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
 
   useEffect(() => {
     settingsRef.current = settings;
+    if (settings.tool !== 'eyedropper') lastToolRef.current = settings.tool;
   }, [settings]);
   useEffect(() => {
     onRef.current = on;
@@ -195,6 +209,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const dispose = useCallback(() => {
     const s = surfaceRef.current;
     if (!s) return;
+    textRef.current = null;
+    setTextBox(null);
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
@@ -275,6 +291,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * to save, the canvas is let go of once the map's own picture is back.
    */
   const close = useCallback(() => {
+    // A line of text being written is painted, as the next press would.
+    if (textRef.current) commitTextRef.current();
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
@@ -351,10 +369,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * Land a change whose tiles are kept already, after any undo under way,
    * showing `preview` on the overlay until it is painted.
    */
-  const land = useCallback((step: PaintStep, preview: PaintPreview, apply: () => void) => {
+  const land = useCallback((step: PaintStep, preview: PaintPreview | null, apply: () => void) => {
     const s = surfaceRef.current;
     if (!s) return;
-    waitingRef.current.push(preview);
+    if (preview) waitingRef.current.push(preview);
     void step.land(() => {
       apply();
       s.revision += 1;
@@ -404,6 +422,72 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     });
   }, [bump, markDirty]);
 
+  const closeText = useCallback(() => {
+    textRef.current = null;
+    setTextBox(null);
+  }, []);
+
+  const setTextDraft = useCallback((draft: string) => {
+    const open = textRef.current;
+    if (!open) return;
+    textRef.current = { ...open, draft };
+    setTextBox({ at: open.at, draft });
+  }, []);
+
+  /**
+   * Paint the line of text being written, if it has any words, once the
+   * app's type has loaded, in the colour, as tall as Draw's labels for the
+   * width. Its box closes at once.
+   */
+  const commitText = useCallback(() => {
+    const open = textRef.current;
+    closeText();
+    const text = open?.draft.trim();
+    const s = surfaceRef.current;
+    if (!open || !text || !s || s.mapId !== open.mapId) return;
+    const look = settingsRef.current;
+    const size = labelFontSize(look.width);
+    const font = textFont(size);
+    const [x, y] = toPicture([open.at], s.sx, s.sy)[0];
+    const loaded = typeof document !== 'undefined' && document.fonts ? document.fonts.load(font).catch(() => undefined) : Promise.resolve();
+    void loaded.then(() => {
+      if (surfaceRef.current !== s) return;
+      s.ctx.save();
+      s.ctx.font = font;
+      const width = s.ctx.measureText(text).width;
+      s.ctx.restore();
+      const step = s.history.begin();
+      step.cover({ x0: x - 2, y0: y - 2, x1: x + width + 2, y1: y + size * 1.4 + 2 });
+      land(step, null, () => {
+        s.ctx.save();
+        try {
+          s.ctx.globalAlpha = 1;
+          s.ctx.globalCompositeOperation = 'source-over';
+          s.ctx.font = font;
+          s.ctx.fillStyle = look.colour;
+          s.ctx.textBaseline = 'top';
+          s.ctx.fillText(text, x, y);
+        } finally {
+          s.ctx.restore();
+        }
+      });
+    });
+  }, [closeText, land]);
+
+  const commitTextRef = useRef(commitText);
+  useEffect(() => {
+    commitTextRef.current = commitText;
+  }, [commitText]);
+
+  /** The eyedropper: the colour of the pixel at map pixel `point` becomes the colour, and the tool before comes back. */
+  const pickAt = useCallback((point: PaintPoint) => {
+    const s = surfaceRef.current;
+    if (!s) return;
+    const [x, y] = toPicture([point], s.sx, s.sy)[0];
+    const colour = readColour(s.ctx, x, y);
+    setSettings((prev) => ({ ...prev, ...(colour ? { colour } : {}), tool: lastToolRef.current }));
+  }, []);
+
   /** Paint a lifted shape into the picture, as a stroke is. */
   const commitShape = useCallback((under: ShapeUnderWay) => {
     const s = surfaceRef.current;
@@ -448,8 +532,15 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
       if (TAP_TOOLS.has(look.tool)) {
         // A finger's drag moves the map; a tap or a click acts.
+        // A line of text being written is painted as the next press lands.
+        if (textRef.current) commitText();
         if (at.via === 'drag') mapControls.startDrag(at.e);
         else if (look.tool === 'fill') fillAt(point);
+        else if (look.tool === 'eyedropper') pickAt(point);
+        else if (look.tool === 'text') {
+          textRef.current = { at: point, draft: '', mapId: s.mapId };
+          setTextBox({ at: point, draft: '' });
+        }
         return true;
       }
       if (isShapeTool(look.tool)) {
@@ -527,6 +618,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     },
     escape() {
       if (dropStroke()) return true;
+      if (textRef.current) {
+        closeText();
+        return true;
+      }
       if (onRef.current) {
         close();
         return true;
@@ -595,6 +690,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     close,
     /** The picture to draw the map with: the one being painted, while there is one for the map on screen. */
     source: surface && map && surface.mapId === map.id ? surface.canvas : null,
+    /** Picture pixels to a map pixel across: a text box is shown as tall as it is painted. */
+    scale: surface?.sx ?? 1,
     /** Paint is on, or holds paint not saved: the page lets go of the map's own decoded picture meanwhile. */
     holdsPicture: surface !== null && (on || unsaved),
     tool,
@@ -602,6 +699,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     inProgress,
     settings,
     setSettings,
+    /** The line of text being written, and its box's actions. */
+    textBox,
+    setTextDraft,
+    commitText,
+    cancelText: closeText,
+    /** Whether a text box is open now, for the canvas, which keeps the focus off the map while it is. */
+    textOpen: () => textRef.current !== null,
     undo,
     redo,
     canUndo: surface?.history.canUndo() ?? false,

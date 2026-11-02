@@ -3947,6 +3947,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   useLayoutEffect(() => {
     if (labelAt) labelBoxRef.current?.focus({ preventScroll: true });
   }, [labelAt]);
+  // And Paint's text box, likewise.
+  const paintTextRef = useRef<HTMLInputElement>(null);
+  const paintTextAt = paint.textBox?.at;
+  useLayoutEffect(() => {
+    if (paintTextAt) paintTextRef.current?.focus({ preventScroll: true });
+  }, [paintTextAt]);
 
   // The rows of Map controls on the compact layout, which its tooltip names.
   const mapControlRows = mapControlItems({
@@ -4257,7 +4263,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           onContextMenu={handleContextMenu}
           // While a label's box is open the press on the map that follows
           // a pointer's down must not take the keys back from it.
-          onMouseDown={(e) => { if (drawTool.textOpen()) e.preventDefault(); }}
+          onMouseDown={(e) => { if (drawTool.textOpen() || paint.textOpen()) e.preventDefault(); }}
         />
       </div>
 
@@ -4705,6 +4711,43 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             fontWeight: 600,
             fontFamily: "'Inter', system-ui, sans-serif",
             color: drawSettings.color,
+          }}
+        />
+      )}
+
+      {/* Paint's line of text being written, in a box at its point on the map. */}
+      {paint.textBox && currentMap && (
+        <input
+          ref={paintTextRef}
+          aria-label="Text to paint"
+          value={paint.textBox.draft}
+          maxLength={DRAWING_LIMITS.maxTextLength}
+          enterKeyHint="done"
+          autoComplete="off"
+          onChange={(e) => paint.setTextDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              paint.commitText();
+              focusMap();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              paint.cancelText();
+              focusMap();
+            }
+          }}
+          onBlur={() => paint.commitText()}
+          className="absolute z-20 m-0 p-0 min-w-24 bg-parchment/40 border border-dashed border-brand rounded-sm outline-hidden"
+          style={{
+            left: paint.textBox.at[0] * mapControls.zoom + mapControls.panOffset.x,
+            top: paint.textBox.at[1] * mapControls.zoom + mapControls.panOffset.y,
+            // As tall as it is painted, and at least 16 pixels on a touch screen, below which iOS zooms the page to type.
+            fontSize: Math.max(coarsePointer ? 16 : 8, (labelFontSize(paint.settings.width) / paint.scale) * mapControls.zoom),
+            lineHeight: 1.25,
+            fontWeight: 600,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            color: paint.settings.colour,
           }}
         />
       )}
