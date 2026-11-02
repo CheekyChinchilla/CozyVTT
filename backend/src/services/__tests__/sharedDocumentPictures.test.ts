@@ -315,6 +315,45 @@ describe('a campaign with many handouts', () => {
   });
 });
 
+describe('a document of another campaign the DM runs', () => {
+  // That campaign's later DM could rewrite it, and add the address of any
+  // picture of this campaign they were once shown.
+  it('counts for nothing in this one, even linked to it by the DM', async () => {
+    const otherCampaign = (await createTestCampaign(dmId, { name: 'Scan other table' })).id;
+    try {
+      await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: otherCampaign, role: 'DM', characterIds: [] } });
+      const [picture] = await pictures(1);
+      const docId = await campaignDocument(address(picture), { inCampaign: otherCampaign });
+      await prisma.campaignDocument.create({ data: { campaignId, assetId: docId, linkedById: dmId } });
+      await recordDocumentPictures(docId, new Set([picture]));
+      const found = await picturesInSharedDocuments([campaignId], new Set([picture]));
+      expect(found.get(campaignId)?.has(picture) ?? false).toBe(false);
+    } finally {
+      await prisma.campaignDocument.deleteMany({ where: { campaignId } });
+      await prisma.asset.deleteMany({ where: { campaignId: otherCampaign } });
+      await cleanupCampaigns([otherCampaign]);
+    }
+  });
+
+  it("still counts the DM's own document linked to it", async () => {
+    const [picture] = await pictures(1);
+    const filename = `own-${randomUUID()}.md`;
+    const filePath = path.join(DIR, filename);
+    fs.writeFileSync(filePath, address(picture));
+    const doc = await prisma.asset.create({
+      data: {
+        type: 'DOCUMENT', scope: 'USER', campaignId: null, uploadedById: dmId, filename, originalName: filename,
+        mimeType: 'text/markdown', fileSize: 60, filePath, name: filename,
+      },
+    });
+    docIds.push(doc.id);
+    await prisma.campaignDocument.create({ data: { campaignId, assetId: doc.id, linkedById: dmId } });
+    await recordDocumentPictures(doc.id, new Set([picture]));
+    const found = await picturesInSharedDocuments([campaignId], new Set([picture]));
+    expect(found.get(campaignId)?.has(picture)).toBe(true);
+  });
+});
+
 describe('a global document someone else uploaded', () => {
   it('counts for nothing, even linked by the DM', async () => {
     const [picture] = await pictures(1);

@@ -519,7 +519,9 @@ unless one of these shows it to them:
   show the picture in a handout. A document a former DM wrote while they
   held the seat (which they may still rewrite as a member), one any other
   member got there, a global document someone else uploaded that the DM
-  linked, and a document shared with another campaign count for nothing.
+  linked, a document shared with another campaign, and a `CAMPAIGN`
+  document of another campaign linked to this one (whose later DM could
+  rewrite it) count for nothing.
   What a document names is read from its text when it is uploaded, written
   or saved, only its first 1 MiB and at most 200 addresses, each naming an
   asset that exists, and kept in `DocumentPicture`

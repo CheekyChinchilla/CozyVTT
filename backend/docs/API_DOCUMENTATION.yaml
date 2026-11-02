@@ -6651,9 +6651,11 @@ paths:
           spirit layer while the spirit plane is open to them); the current
           map of another campaign they are a member of, played in or run,
           with the same spirit rule, while the asset's uploader is a member
-          of that campaign too; or a plain text or Markdown document of the
-          asset's campaign (shared with it, or written or uploaded in it)
-          that its current DM uploaded, whose first 1 MiB names the asset
+          of that campaign too; or a plain text or Markdown document that
+          the asset's campaign's current DM uploaded, written or uploaded in
+          that campaign or shared with it from their own library or the
+          global one (not a document of another campaign), whose first 1 MiB
+          names the asset
           (`/api/assets/<kind>/<id>`, among its first 200 such addresses),
           as read when the document was uploaded, written or saved.
           One they uploaded is always readable. For such a member this is final: no
