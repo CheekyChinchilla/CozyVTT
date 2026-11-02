@@ -1385,12 +1385,15 @@ session, so revoking it takes effect immediately.
 
 While a map, a token, a character, a character template, a creature, a token
 template, a campaign's atmosphere track or the sound of one of a campaign's
-times of day still uses the asset, the route
+times of day still uses the asset, or a text or Markdown document names it by
+its address and its writer, the asset's uploader or a member of its campaign,
+can read the asset now, the route
 answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
 nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
 what the caller may see: an admin sees everything, anyone else sees only the
 campaigns they are the DM of, their own characters and shared character
-templates, and the rest is counted without names.
+templates, and documents of their own, global ones and those of campaigns they
+run, and the rest is counted without names.
 
 ---
 

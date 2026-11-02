@@ -6076,15 +6076,21 @@ paths:
         While a map (its image, base layer or spirit layer), a token on a map,
         a character's token picture, a character template, a creature, a token
         template, a campaign's atmosphere track or the sound of one of a
-        campaign's times of day still names the asset, the route answers
-        **409** with `code: ASSET_IN_USE` and the list of uses,
+        campaign's times of day still names the asset, or a plain text or
+        Markdown document names it by its address in its first 1 MiB (as
+        read when the document was uploaded, written or saved) whose uploader,
+        the asset's own uploader or a member of its campaign, can read the
+        asset now, the route
+        answers **409** with `code: ASSET_IN_USE` and the list of uses,
         and deletes nothing. Those records are not told when an asset goes, so
         deleting one anyway leaves them pointing at nothing. Send
         `force=true` to delete it regardless; any other value of `force` is
         ignored. Permissions are checked first, so only someone who may delete
         the asset is told where it is used. An admin sees every record by name;
         anyone else sees a name and campaign only for what is in a campaign
-        they are the DM of, a character they own, or a character template. The
+        they are the DM of, a character they own, or a character template,
+        and a document by name where it is their own, a global one, or one
+        written in or shared with a campaign they run. The
         rest is counted per kind with `name` and `campaignName` null. Only an
         address that names this asset counts: one that merely contains its id
         (a longer id, a query string) is not a use. Profile pictures are not
@@ -6169,7 +6175,9 @@ paths:
                       one map, character, template, creature or campaign, a
                       map's tokens together (`count`), or a campaign's
                       time-of-day period whose sound it is (`vibePeriod`, named
-                      by the period, since 1.5.2), or, where the caller may
+                      by the period, since 1.5.2), a document whose text
+                      names it (`document`, with its campaign when it was
+                      written in one), or, where the caller may
                       not see the record, every use of one kind folded into a
                       single entry with `name`, `campaignId` and `campaignName`
                       null.
@@ -6178,11 +6186,11 @@ paths:
                       properties:
                         kind:
                           type: string
-                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting, vibePeriod]
+                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting, vibePeriod, document]
                         name:
                           type: string
                           nullable: true
-                          description: The map, character, template, creature or campaign, or the time-of-day period for `vibePeriod`.
+                          description: The map, character, template, creature, campaign or document, or the time-of-day period for `vibePeriod`.
                         campaignId:
                           type: string
                           nullable: true

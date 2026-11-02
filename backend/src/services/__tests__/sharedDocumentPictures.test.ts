@@ -354,6 +354,30 @@ describe('a document of another campaign the DM runs', () => {
   });
 });
 
+describe("a document from before that no campaign's handouts hold", () => {
+  it("is read by a delete's check, which asks for any, and not by a player's request", async () => {
+    const [picture] = await pictures(1);
+    const filename = `unshared-${randomUUID()}.md`;
+    const filePath = path.join(DIR, filename);
+    fs.writeFileSync(filePath, address(picture));
+    const doc = await prisma.asset.create({
+      data: {
+        type: 'DOCUMENT', scope: 'USER', campaignId: null, uploadedById: dmId, filename, originalName: filename,
+        mimeType: 'text/markdown', fileSize: 60, filePath, name: filename,
+      },
+    });
+    docIds.push(doc.id);
+    const unread = async () => (await prisma.asset.findUniqueOrThrow({ where: { id: doc.id }, select: { picturesReadAt: true } })).picturesReadAt === null;
+
+    await readAll();
+    expect(await unread()).toBe(true);
+    // Newest first; other suites' documents from before may come ahead of it.
+    for (let i = 0; i < 100 && (await unread()); i += 1) await readSomeUnreadDocuments({ campaignIds: [campaignId], othersToo: true });
+    expect(await unread()).toBe(false);
+    expect(await named(doc.id)).toEqual(new Set([picture]));
+  });
+});
+
 describe('a global document someone else uploaded', () => {
   it('counts for nothing, even linked by the DM', async () => {
     const [picture] = await pictures(1);
