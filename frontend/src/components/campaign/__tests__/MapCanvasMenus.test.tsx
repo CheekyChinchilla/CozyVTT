@@ -829,7 +829,7 @@ describe('the door menu', () => {
     rightClickDoor();
 
     expect(theMenu().className).toBe(MENU);
-    expect(theMenu().getAttribute('style')).toBe('left: 150px; top: 104px;');
+    expect(theMenu().getAttribute('style')).toBe('left: 150px; top: 104px; visibility: visible;');
     expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
   });
 
@@ -904,6 +904,34 @@ describe('the door menu', () => {
     fireEvent.click(document.body);
 
     expect(openMenu()).toBeNull();
+  });
+
+  // The screen is jsdom's, 1,024 by 768; the menu measures 180 by 120.
+  describe('near the edge of the screen', () => {
+    const original = HTMLDivElement.prototype.getBoundingClientRect;
+    beforeEach(() => {
+      HTMLDivElement.prototype.getBoundingClientRect = function (this: HTMLDivElement) {
+        if (this.parentElement !== document.body || this.className !== MENU) return original.call(this);
+        return { left: 0, top: 0, right: 180, bottom: 120, width: 180, height: 120, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+      };
+    });
+    afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = original; });
+
+    it('flips to the left of and above the point, as the token menu does, to stay on the screen', () => {
+      h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'd1', x1: 900, y1: 700, x2: 1000, y2: 700, type: 'door-closed' }] }) });
+      render(<MapCanvas />);
+      fireEvent.contextMenu(surface(), { clientX: 950, clientY: 704 });
+
+      expect(rows()).toEqual(['# 🚪 Closed Door', 'Open Door (brand)', 'Lock Door (danger)']);
+      expect(theMenu().getAttribute('style')).toBe('left: 770px; top: 584px; visibility: visible;');
+    });
+
+    it('stays at the point where it fits', () => {
+      renderWithDoor('door-closed');
+      rightClickDoor();
+
+      expect(theMenu().getAttribute('style')).toBe('left: 150px; top: 104px; visibility: visible;');
+    });
   });
 });
 
