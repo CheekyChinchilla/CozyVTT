@@ -1577,6 +1577,29 @@ describe('drafts', () => {
     expect(drafts().headers.has(closedKey)).toBe(true);
   });
 
+  it('opens nothing when the map on screen changes while a draft being restored is read', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    // The draft's tiles are read slowly: behind a large write, say.
+    const tiles = drafts().tiles;
+    let finish = () => undefined as void;
+    const reading = new Promise<void>((resolve) => { finish = resolve; });
+    drafts().tiles = async (key) => {
+      await reading;
+      return tiles(key);
+    };
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
+    // The table moved from elsewhere meanwhile.
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await act(async () => { finish(); });
+    await settle();
+    expect(screen.queryByText(/is no longer on your screen/)).toBeNull();
+    expect(pictureCanvas()).toBeUndefined();
+    expect(drafts().headers.has(closedKey)).toBe(true);
+  });
+
   it('says so when the draft was painted on a picture changed since', async () => {
     keepDraft('/api/assets/maps/an-older-picture');
     await showMap();
