@@ -12,10 +12,11 @@
 
 import { promises as fs } from 'fs';
 import { openPicture } from './sharpInput';
+import { PICTURE_SIZE_LIMITS } from '../validators/pictureSizeLimits';
 
 export const PICTURE_LIMITS = {
   /** The most pixels a picture, or each frame of one, may be on each side. */
-  maxSide: 16_384,
+  maxSide: PICTURE_SIZE_LIMITS.maxSide,
   /** The most frames an animated picture may have. */
   maxFrames: 1_000,
   /** The most pixels an animated picture may hold across all its frames: width by height by frames. */
