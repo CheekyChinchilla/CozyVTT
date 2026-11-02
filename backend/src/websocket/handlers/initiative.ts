@@ -6,7 +6,6 @@
 // ============================================
 
 import { Server } from 'socket.io';
-import type { Prisma } from '@prisma/client';
 import { AuthenticatedSocket, type AuthenticatedFields } from '../auth';
 import { prisma } from '../../config/database';
 import { rollDice, parseDiceExpression, DiceParserError } from '../../utils/dice-parser';
@@ -18,7 +17,7 @@ import {
 import logger from '../../utils/logger';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
-import { filterTokensByLighting, filterTokensByRole, getSpiritVisibilityBatch, viewerIdFor } from '../../utils/spirit-layer';
+import { filterTokensByRole, getSpiritVisibilityBatch, tokensSentTo, type MapTokenSight } from '../../utils/spirit-layer';
 import { canControlToken, canReadMap, canRollDice } from '../../services/permissions';
 import {
   getState as getCombatState,
@@ -71,34 +70,19 @@ async function recipientsSentToken(
   });
 }
 
-/** What a map's lighting reads, to decide which of its tokens a player sees. */
-interface SightMap {
-  tokens: Prisma.JsonValue;
-  lightingEnabled: boolean;
-  globalIllumination: boolean;
-  wallSegments: unknown;
-  lights: unknown;
-  width: number;
-  height: number;
-  gridSize: number;
-}
-
 /**
  * A player's or a spectator's copy of the table map's tokens, with a token's
- * character named only where the map sends them that token: on a lit map,
- * one in their sight (filterTokensByLighting, as filterMapData applies it),
- * and on any other map, every one the role filter keeps. The order still
- * lists a combatant out of their sight, so its name and picture stay; its
+ * character named only where the map sends them that token (tokensSentTo,
+ * which the map's own copy asks too): on a lit map, one in their sight, and
+ * on any other map, every one the role filter keeps. The order still lists
+ * a combatant out of their sight, so its name and picture stay; its
  * character goes, so the order tells them no more than the map does.
  */
-function tokensForOrder(map: SightMap | undefined, role: string, spiritVisible: boolean, userId: string): CombatantSource[] {
+function tokensForOrder(map: MapTokenSight | undefined, role: string, spiritVisible: boolean, userId: string): CombatantSource[] {
   if (!map) return [];
   const forRole = filterTokensByRole(readTokens(map.tokens), role, spiritVisible, userId);
-  if (!map.lightingEnabled) return forRole;
-  const inSight = new Set(filterTokensByLighting(
-    forRole, viewerIdFor(role, userId), map.wallSegments, map.width, map.height, map.gridSize, true, map.lights, map.globalIllumination
-  ).map((t) => t.id));
-  return forRole.map((t) => (inSight.has(t.id) ? t : { ...t, characterId: null }));
+  const sent = new Set(tokensSentTo(map, role, spiritVisible, userId).map((t) => t.id));
+  return forRole.map((t) => (sent.has(t.id) ? t : { ...t, characterId: null }));
 }
 
 /**
