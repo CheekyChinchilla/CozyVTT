@@ -14,7 +14,7 @@
 // ============================================
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLeavePage } from '@/hooks/useLeaveGuard';
 import {
   ArrowLeft,
   Sun,
@@ -63,7 +63,7 @@ export default function DesktopTable({
   onOpenDocuments,
   onOpenShortcuts,
 }: DesktopTableProps) {
-  const navigate = useNavigate();
+  const leavePage = useLeavePage();
   const { userRole } = useCampaign();
   const mapSlot = useTableSlot('map');
   const partySlot = useTableSlot('party');
@@ -104,7 +104,8 @@ export default function DesktopTable({
       <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
         <div className="flex min-w-0 items-center gap-3">
           <Button
-            onClick={() => navigate('/dashboard')}
+            // Asking first about work the page holds, such as Paint not saved.
+            onClick={() => leavePage('/dashboard')}
             variant="secondary" className="flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />

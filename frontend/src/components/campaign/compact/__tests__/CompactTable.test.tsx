@@ -15,6 +15,7 @@ import { SHORT_SCREEN_QUERY, SIDEWAYS_QUERY } from '@/constants/layout';
 import { CampaignStatus } from '@/types';
 import type { Campaign } from '@/types';
 import type { SessionToolKey } from '@/components/campaign/SessionToolbar';
+import { registerLeaveGuard } from '@/services/pageLeave';
 
 const page = vi.hoisted(() => ({ role: 'PLAYER' as string | null, navigate: vi.fn(), status: 'connected' }));
 
@@ -103,6 +104,22 @@ describe('the compact arrangement', () => {
     table();
     fireEvent.click(screen.getByRole('button', { name: 'Back to the dashboard' }));
     expect(page.navigate).toHaveBeenCalledWith('/dashboard', { replace: false });
+  });
+
+  it('asks whatever holds work on the page first, and stays when it says no', async () => {
+    table();
+    let allow = false;
+    const remove = registerLeaveGuard(() => Promise.resolve(allow));
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Back to the dashboard' }));
+      await act(async () => { await Promise.resolve(); });
+      expect(page.navigate).not.toHaveBeenCalled();
+      allow = true;
+      fireEvent.click(screen.getByRole('button', { name: 'Back to the dashboard' }));
+      await waitFor(() => expect(page.navigate).toHaveBeenCalledWith('/dashboard', { replace: false }));
+    } finally {
+      remove();
+    }
   });
 
   // A sheet open as the page was left kept its history entry, so Back from
