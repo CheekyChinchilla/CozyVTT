@@ -32,6 +32,7 @@ import { draftKey, draftTime, DRAFT_INTERVAL_MS, DRAFTS_UNAVAILABLE } from '../m
 import { qoiEncode } from '../map/paint/qoi';
 import { viewedMapGuards } from '@/test/viewedMapContext';
 import { leavePageWith } from '@/services/pageLeave';
+import { onSheetEntry } from '@/components/campaign/compact/sheetHistory';
 import { hasUnsavedWork, reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import type { ViewedMapChange } from '@/contexts/CampaignContext';
 import { LayoutProvider } from '@/contexts/LayoutContext';
@@ -1476,6 +1477,48 @@ describe('paint not saved through a lost sign-in', () => {
     } finally {
       act(() => { reportSignedIn(); });
     }
+  });
+});
+
+/**
+ * Leaving the page, with the history as the browser and the router keep
+ * it: Discard drops the paint in its own click, and Save once it lands, and
+ * the page must still be left, by Back past the page or by the header's way.
+ */
+describe('paint not saved, the page left after answering', () => {
+  const question = () => screen.queryByRole('dialog', { name: 'Save your painting?' });
+  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+  /** The header's way out, moving as BrowserRouter does. */
+  const header = () => leavePageWith(() => {
+    if (onSheetEntry()) window.history.replaceState({}, '', '/characters');
+    else window.history.pushState({}, '', '/characters');
+  });
+
+  it.each([
+    ['Back', 'Discard my painting'],
+    ['Back', 'Save my painting'],
+    ['the header', 'Discard my painting'],
+    ['the header', 'Save my painting'],
+  ])('leaves by %s on %s', async (way, answer) => {
+    // The history left by the tests before, settled first: a page they
+    // left with paint not saved took its entry back off.
+    await settle();
+    window.history.pushState({}, '', '/dashboard');
+    window.history.pushState({}, '', '/campaigns/c1');
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    if (way === 'Back') {
+      act(() => { window.history.back(); });
+      await settle();
+    } else {
+      act(() => { header(); });
+    }
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await act(async () => { fireEvent.click(within(question()!).getByRole('button', { name: answer })); });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    await settle();
+    expect(window.location.pathname).toBe(way === 'Back' ? '/dashboard' : '/characters');
   });
 });
 
