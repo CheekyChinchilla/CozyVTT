@@ -357,6 +357,17 @@ describe('the brush', () => {
     expect(take(terrain()).some((c) => c.method === 'drawImage' && c.args[0] === canvas)).toBe(true);
   });
 
+  it('lands where the pointer is after the map\'s grid size changes, as Edit Map may change it while Paint is on', async () => {
+    await showMap();
+    await paintOn();
+    // The picture, 1,000 pixels, is now stretched over 20 squares of 100.
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), gridSize: 100 } }); });
+    drag({ clientX: 1000, clientY: 1000 }, { clientX: 1200, clientY: 1000 });
+    const painted = callsOn(pictureCanvas());
+    expect(painted.find((c) => c.method === 'moveTo')?.args).toEqual([500, 500]);
+    expect(painted.filter((c) => c.method === 'lineTo').map((c) => c.args)).toContainEqual([600, 500]);
+  });
+
   it('paints a dot for a tap of a finger', async () => {
     await showMap();
     await paintOn();
