@@ -99,6 +99,21 @@ export function clearLayer(ctx: CanvasRenderingContext2D): void {
 }
 
 /**
+ * The context as a new one is, every pixel cleared and its saves, clip,
+ * transform and settings gone: ctx.reset() where the browser has it, or the
+ * canvas's width set again, which does the same.
+ */
+export function resetLayer(ctx: CanvasRenderingContext2D): void {
+  if (typeof ctx.reset === 'function') {
+    ctx.reset();
+    return;
+  }
+  const { canvas } = ctx;
+  const { width } = canvas;
+  canvas.width = width;
+}
+
+/**
  * A layer's drawing between a save and a restore that always runs, so an
  * error part-way leaves the context's state as it was before (its alpha, its
  * compositing, its fill) and the layer's next frame starts clean. The error
