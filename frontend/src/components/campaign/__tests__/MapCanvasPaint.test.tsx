@@ -1303,6 +1303,62 @@ describe('drafts', () => {
     expect(drafts().headers.has(closedKey)).toBe(false);
   });
 
+  /** Restore the closed tab's draft of map-a, kept on the picture shown. */
+  async function restoreClosedTabs() {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+  }
+  /** Save, put Paint away, and let the picture saved load, so nothing of Paint's is held. */
+  async function saveAndPutAway() {
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
+    pictures[pictures.length - 1].load();
+    await waitFor(() => expect(usePaintStore.getState().mapId).toBeNull());
+  }
+
+  it('offers nothing once a closed tab\'s draft taken over is saved: its draft written and the closed tab\'s dropped first', async () => {
+    await restoreClosedTabs();
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(drafts().headers.has(closedKey)).toBe(false);
+    expect(drafts().headers.has(key)).toBe(true);
+    await saveAndPutAway();
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('offers nothing once a closed tab\'s draft taken over is saved at once, before its own draft is written', async () => {
+    await restoreClosedTabs();
+    await saveAndPutAway();
+    expect(drafts().headers.size).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('does not bring back a closed tab\'s draft taken over and discarded at once', async () => {
+    await restoreClosedTabs();
+    const guard = [...viewedMapGuards][0];
+    act(() => { void guard.mayLeave({ kind: 'open-other', toMapId: 'map-b' }); });
+    const leaving = await screen.findByRole('dialog', { name: 'Save your painting?' });
+    await act(async () => { fireEvent.click(within(leaving).getByRole('button', { name: 'Discard my painting' })); });
+    await settle();
+    expect(drafts().headers.size).toBe(0);
+    pictures[pictures.length - 1].load();
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps two tabs\' drafts of one map apart: another tab still open is neither offered nor cut', async () => {
     h.openTabs = new Set(['this-tab', 'open-tab']);
     keepDraft('', Date.now(), 'open-tab');
