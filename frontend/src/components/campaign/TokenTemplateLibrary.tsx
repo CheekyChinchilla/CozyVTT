@@ -738,9 +738,7 @@ function TemplateForm({ campaignId, editingTemplate, asStep, headingRef, onCreat
         </h3>
         {/* As a step, Back to the list above the form does this. */}
         {!asStep && (
-          // TODO(ui): this X has no accessible name, so a screen reader
-          // announces a bare "button". It should be named, as "Close form".
-          <button onClick={onCancel} className="text-stone-gray hover:text-stone-gray/80 p-0.5">
+          <button onClick={onCancel} aria-label="Close form" className="text-stone-gray hover:text-stone-gray/80 p-0.5">
             <X className="w-4 h-4" />
           </button>
         )}
