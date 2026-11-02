@@ -43,6 +43,7 @@ const h = vi.hoisted(() => {
   const state = {
     userRole: 'DM' as string,
     currentMap: null as unknown,
+    isPreparing: false,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<[string, unknown]> = [];
@@ -105,6 +106,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
       return {
         currentMap: h.state.currentMap,
         viewedMap: h.state.currentMap,
+        isPreparing: h.state.isPreparing,
         setCurrentMap: noop,
         ...mapActions,
         userRole: h.state.userRole,
@@ -280,7 +282,7 @@ beforeEach(() => {
     useGameStore.getState().clearGameState();
     usePaintStore.setState({ mapId: null, unsaved: false, openOnMapId: null });
   });
-  h.set({ userRole: 'DM' });
+  h.set({ userRole: 'DM', isPreparing: false });
   // The picture's PNG, for Save.
   Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
     configurable: true, writable: true, value(done: BlobCallback) { done(new Blob(['picture'], { type: 'image/png' })); },
@@ -1943,6 +1945,32 @@ describe('paint not saved, asked about before it is left', () => {
     await choose('Discard my painting');
     await waitFor(() => expect(left).toHaveBeenCalled());
     expect(hasUnsavedWork()).toBe(false);
+  });
+});
+
+describe('Save', () => {
+  const save = async () => {
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+  };
+
+  it('says the players on the table\'s map see the new picture', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await save();
+    expect(screen.getByText('Saved. Players on this map see the new picture.')).toBeInTheDocument();
+  });
+
+  it('says the players see it when brought there, on a map being prepared, where no player is', async () => {
+    h.set({ isPreparing: true });
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await save();
+    expect(screen.getByText('Saved. Players see it when you bring them here.')).toBeInTheDocument();
   });
 });
 
