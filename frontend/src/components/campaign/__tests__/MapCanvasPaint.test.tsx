@@ -393,11 +393,15 @@ describe('the brush', () => {
     expect(within(panel).getByText('4 px')).toBeInTheDocument();
   });
 
-  it('keeps paint not saved on the map after Done, and lets go of a picture with nothing painted', async () => {
+  it('keeps paint not saved on the map after Done, and lets go of a picture with nothing painted once the map\'s own is back', async () => {
     await showMap();
     await paintOn();
     let canvas = pictureCanvas();
     fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
+    // Paint's copy stays on screen while the map's own picture loads again.
+    expect(pictures).toHaveLength(2);
+    expect(canvas?.width).toBe(1000);
+    pictures[1].load();
     expect([canvas?.width, canvas?.height]).toEqual([0, 0]);
     expect(usePaintStore.getState()).toMatchObject({ mapId: null, unsaved: false });
 
@@ -407,10 +411,39 @@ describe('the brush', () => {
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
     fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
     expect(canvas?.width).toBe(1000);
+    // Nothing is loaded again: the paint is what the map shows.
+    expect(pictures).toHaveLength(2);
     take(terrain());
     await nextFrame();
     expect(take(terrain()).some((c) => c.method === 'drawImage' && c.args[0] === canvas)).toBe(true);
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('lets go of a picture with nothing painted when the map\'s own fails to load again, and says so', async () => {
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    press('Escape');
+    expect(canvas?.width).toBe(1000);
+    pictures[1].fail();
+    expect(canvas?.width).toBe(0);
+    expect(screen.getByText('Failed to load map image')).toBeInTheDocument();
+  });
+
+  it('lets go of the map\'s decoded picture while it holds its copy, and draws only the copy', async () => {
+    await showMap();
+    const picture = pictures[0];
+    await paintOn();
+    take(terrain());
+    await nextFrame();
+    const drawn = take(terrain()).filter((c) => c.method === 'drawImage').map((c) => c.args[0]);
+    expect(drawn).toContain(pictureCanvas());
+    expect(drawn).not.toContain(picture);
+    // Asked for again only when Paint is put away: the page no longer holds it.
+    expect(pictures).toHaveLength(1);
+    press('Escape');
+    expect(pictures).toHaveLength(2);
+    expect(pictures[1].src).toBe(picture.src);
   });
 });
 

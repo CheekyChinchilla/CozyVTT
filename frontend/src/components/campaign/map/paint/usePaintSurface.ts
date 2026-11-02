@@ -11,8 +11,11 @@
 //
 // The canvas is kept, keyed by the map's id, while Paint is on and while
 // what was painted is not saved, so Paint turned off keeps the work on
-// screen. It is let go of (its pixels freed at once) when nothing is left to
-// save, when another map is shown, and when the viewer is no longer the DM.
+// screen. Meanwhile the page lets go of the map's own decoded picture
+// (holdsPicture), so the picture is held once, not twice. With nothing left
+// to save, the canvas stays on screen until the map's picture has loaded
+// again, then is let go of (its pixels freed at once); at once when another
+// map is shown, and when the viewer is no longer the DM.
 //
 // Paint is the first of the map's tools: while it is on it takes every left
 // press, and the keys the other tools take (key()). It owns the map's input
@@ -109,8 +112,10 @@ interface Stroke {
 export interface PaintSurfaceOptions {
   /** The map on screen. */
   map: Pick<CampaignMap, 'id' | 'width' | 'height' | 'gridSize'> | null;
-  /** Its picture as loaded, or null for a map with none. */
+  /** Its picture as loaded: null for a map with none, and while the page has let go of it (holdsPicture). */
   picture: HTMLImageElement | null;
+  /** The page's own picture is drawn again, or has failed to load, or the map has none: nothing is loading. */
+  pictureSettled: boolean;
   isDM: boolean;
   mapControls: MapControls;
   markDirty: (...layers: MapLayer[]) => void;
@@ -122,7 +127,7 @@ export interface PaintSurfaceOptions {
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
-  const { map, picture, isDM, mapControls, markDirty, refuse, make } = options;
+  const { map, picture, pictureSettled, isDM, mapControls, markDirty, refuse, make } = options;
   const [on, setOn] = useState(false);
   const onRef = useRef(false);
   const [surface, setSurface] = useState<Surface | null>(null);
@@ -222,14 +227,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     return true;
   }, [map, isDM, picture, refuse, make, dispose, show, bump, markDirty]);
 
-  /** Paint off. Paint not saved stays on screen, to go on with; with nothing to save, the picture is let go of. */
+  /**
+   * Paint off. Paint not saved stays on screen, to go on with; with nothing
+   * to save, the canvas is let go of once the map's own picture is back.
+   */
   const close = useCallback(() => {
     strokeRef.current = null;
     setOn(false);
     onRef.current = false;
-    if (!unsavedOf(surfaceRef.current)) dispose();
     markDirty('overlay');
-  }, [dispose, markDirty]);
+  }, [markDirty]);
 
   // Another map, or no longer the DM: the picture goes. (Asking first about
   // paint not saved is the page's, before the map changes.)
@@ -254,6 +261,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
 
   // What the rest of the page reads.
   const unsaved = unsavedOf(surface);
+  // With nothing to save, the canvas goes once the map's own picture is
+  // drawn again (or has failed to load), or at once on a map with none.
+  useEffect(() => {
+    if (surface && !on && !unsaved && pictureSettled) dispose();
+  }, [surface, on, unsaved, pictureSettled, dispose]);
   const sessionMapId = surface?.mapId ?? null;
   useEffect(() => {
     usePaintStore.getState().setSession(sessionMapId, unsaved);
@@ -424,6 +436,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     close,
     /** The picture to draw the map with: the one being painted, while there is one for the map on screen. */
     source: surface && map && surface.mapId === map.id ? surface.canvas : null,
+    /** Paint is on, or holds paint not saved: the page lets go of the map's own decoded picture meanwhile. */
+    holdsPicture: surface !== null && (on || unsaved),
     tool,
     key,
     inProgress,

@@ -686,11 +686,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Never offered on an uploaded picture.
   const pictureKind = useMapPictureKind(currentMap, campaign?.id, isDM);
   const paint = usePaintSurface({
-    map: currentMap, picture: mapImage, isDM, mapControls, markDirty,
+    map: currentMap, picture: mapImage, pictureSettled: imageState !== 'loading', isDM, mapControls, markDirty,
     refuse: (message) => showToast(message, 'error'),
   });
   const paintOffered = isDM && !!currentMap
-    && (pictureKind === 'none' || pictureKind === 'gone' || (pictureKind === 'drawn' && imageLoaded));
+    && (pictureKind === 'none' || pictureKind === 'gone' || (pictureKind === 'drawn' && (imageLoaded || paint.source !== null)));
   // What the map's picture is drawn from: the picture being painted while
   // there is one for this map, else the picture as loaded.
   const terrainSource: CanvasImageSource | null = paint.source ?? mapImage;
@@ -968,9 +968,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
    */
   const pictureMapId = currentMap?.id;
   const pictureUrl = currentMap?.imageUrl;
+  // While Paint holds its own copy of the picture, the page lets go of the
+  // decoded one, so a large picture is held once; it is loaded again when
+  // Paint lets go (map/paint/usePaintSurface.ts).
+  const pictureHeld = paint.holdsPicture;
   useEffect(() => {
     setFailedPicture(null);
-    if (!pictureMapId || !pictureUrl) {
+    if (!pictureMapId || !pictureUrl || pictureHeld) {
       setLoadedPicture(null);
       return;
     }
@@ -1011,7 +1015,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       img.onload = null;
       img.onerror = null;
     };
-  }, [pictureMapId, pictureUrl]);
+  }, [pictureMapId, pictureUrl, pictureHeld]);
 
   // ============================================
   // Spirit Layer Image Loading
