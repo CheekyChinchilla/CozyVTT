@@ -699,10 +699,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     campaignId: campaign?.id,
     // The map on screen takes its new picture: a map being prepared hears
     // of it from nothing else, and the server sends the table's map again.
+    // No player is on a map being prepared.
     onSaved: (saved, picture) => {
       rememberPictureAsset(picture);
       updateMap(saved.id, saved);
-      showToast('Saved. Players on this map see the new picture.', 'success');
+      showToast(isPreparing ? 'Saved. Players see it when you bring them here.' : 'Saved. Players on this map see the new picture.', 'success');
     },
     // Save found the map's picture changed where this page was not told: show the map as it is.
     onMapRead: (latest) => updateMap(latest.id, latest),
