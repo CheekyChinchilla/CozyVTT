@@ -1167,6 +1167,8 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
+**How many a map holds.** A map holds at most 5,000 wall segments, doors and windows included, and 200 lights. On a full map the tools draw nothing more and say so, "Maximum 5000 wall segments per map" or "Maximum 200 light sources per map"; a door drawn along a wall, a split, a polygon or a brush stroke that would take the map past the limit is refused whole. Moving, changing and deleting walls and lights still work. A wall, a door, a polygon, a brush stroke, a move of walls or a light you place that the server refuses for another reason, such as a map deleted in another tab, is taken back, with the server's message; one that a later change of yours already carried to the server stays. Other refused changes, such as opening a door or moving a light, stay as you made them until the map is opened again, and the message shows in the Dice panel.
+
 ### Polygon Drawing Mode
 
 The **Polygon** tool lets you draw complex wall shapes by clicking corners:

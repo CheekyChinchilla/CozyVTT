@@ -14,12 +14,13 @@ import {
   lightChangeReachesPlayers, lightChangeSentTo, lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo,
   lightsReplacedSentTo, lightsSentTo,
 } from '../../utils/spirit-layer';
-import { mapEditLimiter, MAP_EDITS_PER_SECOND, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
+import { mapEditLimiter, MAP_EDITS_PER_SECOND, TOO_MANY_MAP_EDITS_MESSAGE, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { lightOutsideMap, LIGHT_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { echoedOpId } from '../opId';
+import { ackFrom, refuseRequest } from '../ack';
 
 /** What a light edit reads of the map to check it: whose it is, and its extent. */
 const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
@@ -34,23 +35,30 @@ type Locked = { refused: string } | { done: true };
 
 export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * light:add — DM places a single light source.
+   * light:add — DM places a single light source. Sent with an
+   * acknowledgement, it is answered once, `{ ok: true }` or
+   * `{ ok: false, error }`, as wall:add is.
    */
-  socket.on('light:add', async (data: { mapId: string; light: unknown; opId?: unknown }) => {
+  socket.on('light:add', async (data: { mapId: string; light: unknown; opId?: unknown }, ackArg?: unknown) => {
+    const ack = ackFrom(ackArg);
+    const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can add light sources' });
+        refuse('Only DMs can add light sources');
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) {
+        ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
+        return;
+      }
 
       const { mapId, light } = data;
-      if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
+      if (!mapId) { refuse('mapId required'); return; }
 
       const parsed = LightSourceSchema.safeParse(light);
       if (!parsed.success) {
-        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Invalid light source' });
+        refuse(parsed.error.issues[0]?.message ?? 'Invalid light source');
         return;
       }
 
@@ -69,9 +77,10 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
         return { done: true };
       });
       if ('refused' in outcome) {
-        socket.emit('error', { message: outcome.refused });
+        refuse(outcome.refused);
         return;
       }
+      ack?.({ ok: true });
 
       // A light that is off goes to the DM alone, and players are not sent
       // the map again for it.
@@ -81,7 +90,7 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
       if (lightReachesPlayers(added)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('light:add failed', { err: error });
-      socket.emit('error', { message: 'Failed to add light source' });
+      refuse('Failed to add light source');
     }
   });
 

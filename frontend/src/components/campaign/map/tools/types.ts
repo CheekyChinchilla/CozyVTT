@@ -53,9 +53,13 @@ export interface MapTool {
   escape?(): boolean;
 }
 
-/** The slice of a socket the tools send on; the real one is socket.io's. */
+/**
+ * The slice of a socket the tools send on; the real one is socket.io's. An
+ * edit sent with `answer` is answered once by the server (an
+ * acknowledgement), with what it did.
+ */
 export interface ToolSocket {
-  emit(event: string, data: unknown): unknown;
+  emit(event: string, data: unknown, answer?: (reply: unknown) => void): unknown;
 }
 
 export interface ToolSocketSource {

@@ -52,6 +52,32 @@ describe('useWallHistory', () => {
   });
 });
 
+describe('stepBack', () => {
+  it('puts back the step an undo took, so the walls before it show and undo works again', () => {
+    const { result } = renderHook(() => useWallHistory([]));
+    act(() => { result.current.push([wall('a1')]); });
+    act(() => { result.current.undo(); });
+    expect(result.current.index).toBe(0);
+
+    act(() => { result.current.stepBack(0, 1); });
+
+    expect(result.current.index).toBe(1);
+    expect(result.current.walls).toEqual([wall('a1')]);
+    expect(result.current.canUndo).toBe(true);
+  });
+
+  it('does nothing once another edit has been made since', () => {
+    const { result } = renderHook(() => useWallHistory([]));
+    act(() => { result.current.push([wall('a1')]); });
+    act(() => { result.current.undo(); });
+    act(() => { result.current.push([wall('b1')]); });
+
+    act(() => { result.current.stepBack(0, 1); });
+
+    expect(result.current.walls).toEqual([wall('b1')]);
+  });
+});
+
 describe('carry', () => {
   it("keeps another person's door toggle through undo and redo", () => {
     const door: WallSegment = { ...wall('d1'), type: 'door-closed' };

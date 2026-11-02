@@ -27,6 +27,14 @@ export const MAP_LIMITS = {
 } as const;
 
 /**
+ * What a wall or light past the map's cap answers, from a whole list and
+ * from an add, over the socket and the REST routes alike; the map's wall
+ * and light tools say the same before they send one.
+ */
+export const TOO_MANY_WALLS_MESSAGE = `Maximum ${MAP_LIMITS.maxWallSegments} wall segments per map`;
+export const TOO_MANY_LIGHTS_MESSAGE = `Maximum ${MAP_LIMITS.maxLightSources} light sources per map`;
+
+/**
  * The most fog cells one map may have: one per grid square of the largest
  * map, 500 by 500. Fog and explored areas are stored as one entry per cell,
  * so this bounds what loading either can allocate.

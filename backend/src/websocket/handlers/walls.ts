@@ -15,12 +15,13 @@ import {
   filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeReachesPlayers, wallChangeSentTo,
   wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
-import { mapEditLimiter, MAP_EDITS_PER_SECOND, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
+import { mapEditLimiter, MAP_EDITS_PER_SECOND, TOO_MANY_MAP_EDITS_MESSAGE, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 import { wallOutsideMap, WALL_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { echoedOpId } from '../opId';
+import { ackFrom, refuseRequest } from '../ack';
 
 /** What a wall edit reads of the map to check it: whose it is, and its extent. */
 const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
@@ -85,23 +86,32 @@ async function doorSightFor(
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * wall:add — DM adds a single wall segment.
+   * wall:add — DM adds a single wall segment. Sent with an acknowledgement,
+   * it is answered once, `{ ok: true }` or `{ ok: false, error }`, the edit
+   * ceiling included, so the page can take back a wall it drew and the
+   * server refused.
    */
-  socket.on('wall:add', async (data: { mapId: string; segment: unknown; opId?: unknown }) => {
+  socket.on('wall:add', async (data: { mapId: string; segment: unknown; opId?: unknown }, ackArg?: unknown) => {
+    const ack = ackFrom(ackArg);
+    const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can add wall segments' });
+        refuse('Only DMs can add wall segments');
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) {
+        // Flood ceiling, per user: dropped without a word unless it asked for an answer.
+        ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
+        return;
+      }
 
       const { mapId, segment } = data;
-      if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
+      if (!mapId) { refuse('mapId required'); return; }
 
       const parsed = WallSegmentSchema.safeParse(segment);
       if (!parsed.success) {
-        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Invalid wall segment' });
+        refuse(parsed.error.issues[0]?.message ?? 'Invalid wall segment');
         return;
       }
 
@@ -120,9 +130,11 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return { done: null };
       });
       if ('refused' in outcome) {
-        socket.emit('error', { message: outcome.refused });
+        refuse(outcome.refused);
         return;
       }
+      // Stored: answered now, so a failure to tell the table takes nothing back.
+      ack?.({ ok: true });
 
       await emitToMapReadersAs(io, campaignId, mapId, 'wall:added', (role) => ({
         event: 'wall:added', data: { mapId, segment: wallSentTo(role, added), ...echoedOpId(data) },
@@ -130,7 +142,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:add failed', { err: error });
-      socket.emit('error', { message: 'Failed to add wall segment' });
+      refuse('Failed to add wall segment');
     }
   });
 
@@ -289,23 +301,29 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   });
 
   /**
-   * walls:replace — DM bulk-replaces all wall segments.
+   * walls:replace — DM bulk-replaces all wall segments. Answered through an
+   * acknowledgement as wall:add is.
    */
-  socket.on('walls:replace', async (data: { mapId: string; segments: unknown; opId?: unknown }) => {
+  socket.on('walls:replace', async (data: { mapId: string; segments: unknown; opId?: unknown }, ackArg?: unknown) => {
+    const ack = ackFrom(ackArg);
+    const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) return;
       if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can replace wall segments' });
+        refuse('Only DMs can replace wall segments');
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) {
+        ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
+        return;
+      }
 
       const { mapId, segments } = data;
-      if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
+      if (!mapId) { refuse('mapId required'); return; }
 
       const parsed = WallSegmentsArraySchema.safeParse(segments);
       if (!parsed.success) {
-        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Invalid segments array' });
+        refuse(parsed.error.issues[0]?.message ?? 'Invalid segments array');
         return;
       }
 
@@ -321,9 +339,10 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return { done: map.wallSegments };
       });
       if ('refused' in outcome) {
-        socket.emit('error', { message: outcome.refused });
+        refuse(outcome.refused);
         return;
       }
+      ack?.({ ok: true });
 
       // A player whose walls are as they were, closed doors locked or
       // unlocked, is told nothing, and is not sent the map again.
@@ -334,7 +353,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       if (wallListChangeReachesPlayers(before, next)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('walls:replace failed', { err: error });
-      socket.emit('error', { message: 'Failed to replace wall segments' });
+      refuse('Failed to replace wall segments');
     }
   });
 
