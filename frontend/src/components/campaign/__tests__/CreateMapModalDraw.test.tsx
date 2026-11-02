@@ -3,12 +3,15 @@
  * the DM chooses, which the browser makes as a picture, uploads into the
  * campaign's library tagged drawn-map, and then creates the map with.
  *
- * The picture is drawn at the grid size asked for, or at fewer pixels a
+ * The map is painted at the grid size asked for, or at fewer pixels a
  * square where that would make it larger than a phone or a tablet can
  * edit, which the window says; a map too large even at the smallest grid
- * size cannot be drawn. The map's grid size is the pixels per square the
- * picture is drawn at. A map that the server refuses leaves no picture
- * behind: the upload is deleted again.
+ * size cannot be drawn. The map's grid size is the pixels per square it is
+ * painted at. The picture uploaded at first is one pixel a square of its
+ * colour, which the map stretches over its grid: a picture the painted
+ * size would hold that many megabytes for nothing until painted. A map
+ * that the server refuses leaves no picture behind: the upload is deleted
+ * again.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -99,7 +102,7 @@ describe('Draw a map', () => {
     open();
     expect(screen.getByRole('slider', { name: 'Detail (pixels per square) slider' })).toHaveValue('70');
     expect(screen.getByRole('button', { name: 'Parchment' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('The picture will be 1,400 × 1,400 px.')).toBeInTheDocument();
+    expect(screen.getByText('It is painted at 1,400 × 1,400 px.')).toBeInTheDocument();
     expect(screen.queryByText(/Drawn at/)).toBeNull();
   });
 
@@ -108,7 +111,7 @@ describe('Draw a map', () => {
     setSlider('Width (grid squares) slider', 100);
     setSlider('Height (grid squares) slider', 100);
     expect(screen.getByText('Drawn at 40 px a square so it can be edited on any device.')).toBeInTheDocument();
-    expect(screen.getByText('The picture will be 4,000 × 4,000 px.')).toBeInTheDocument();
+    expect(screen.getByText('It is painted at 4,000 × 4,000 px.')).toBeInTheDocument();
   });
 
   it('refuses a map too large to draw even at the smallest grid size', () => {
@@ -120,7 +123,7 @@ describe('Draw a map', () => {
     expect(screen.getByRole('button', { name: 'Create Map' })).toBeDisabled();
   });
 
-  it('makes the blank picture, uploads it to the campaign tagged drawn-map, then creates the map at its pixels per square', async () => {
+  it('makes the blank picture one pixel a square, uploads it to the campaign tagged drawn-map, then creates the map at the pixels per square it is painted at', async () => {
     const { onCreated, onClose } = open();
     name('  The Crypt ');
     setSlider('Width (grid squares) slider', 100);
@@ -128,10 +131,12 @@ describe('Draw a map', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stone' }));
     await create();
 
-    // One canvas the picture's size, filled with the colour chosen, and let go of after.
-    const drawn = [...canvases].find(([, calls]) => calls.some((c) => c.method === 'fillRect' && c.args[2] === 5700));
-    if (!drawn) throw new Error('no picture was drawn at 5,700 by 2,850');
-    expect(drawn[1]).toContainEqual({ method: 'fillRect', args: [0, 0, 5700, 2850] });
+    // One canvas a pixel a square, filled with the colour chosen, and let go of after;
+    // none the painted size.
+    expect([...canvases.values()].some((calls) => calls.some((c) => c.method === 'fillRect' && c.args[2] === 5700))).toBe(false);
+    const drawn = [...canvases].find(([, calls]) => calls.some((c) => c.method === 'fillRect' && c.args[2] === 100));
+    if (!drawn) throw new Error('no picture was drawn at 100 by 50');
+    expect(drawn[1]).toContainEqual({ method: 'fillRect', args: [0, 0, 100, 50] });
     expect(contexts.get(drawn[0])?.fillStyle).toBe('#9b958a');
     expect([drawn[0].width, drawn[0].height]).toEqual([0, 0]);
 
@@ -168,12 +173,12 @@ describe('Draw a map', () => {
     expect(onCreated).not.toHaveBeenCalled();
   });
 
-  it('uploads nothing when the browser makes no picture that large', async () => {
+  it('uploads nothing when the browser makes no picture', async () => {
     pngMade = null;
     const { onCreated } = open();
     name('Crypt');
     await create();
-    expect(await screen.findByText('This browser could not make a picture that large. Choose fewer squares or fewer pixels a square.')).toBeInTheDocument();
+    expect(await screen.findByText("This browser could not make the map's picture. Choose fewer squares and try again.")).toBeInTheDocument();
     expect(h.uploadAsset).not.toHaveBeenCalled();
     expect(onCreated).not.toHaveBeenCalled();
   });

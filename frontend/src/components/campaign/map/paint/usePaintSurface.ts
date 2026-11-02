@@ -22,8 +22,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CampaignMap } from '@/types';
-import { MAX_BACKING_PIXELS } from '../layerCanvas';
-import { PICTURE_SIZE_LIMITS } from '@/constants/pictureSizeLimits';
 import type { MapControls, MapTool, PointerAt } from '../tools/types';
 import type { MapLayer } from '../useRenderLoop';
 import { mapKeyAction } from '../keyboard';
@@ -31,7 +29,7 @@ import { isArrowKey } from '../selection';
 import { createPaintHistory, type PaintHistory, type PaintHistoryCounts } from './paintHistory';
 import { createCanvasTileStore, type CanvasTileStore } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
-import { DRAWN_MAP_BACKGROUND, drawnPictureSize } from './drawnMapSize';
+import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { usePaintStore } from '@/stores/paintStore';
@@ -58,7 +56,7 @@ export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
 export const PAINT_UNDO_STEPS = 50;
 
 /** Why Paint did not open, said to the DM. */
-export const PAINT_TOO_LARGE = 'This map is too large to paint: its picture would be over 16,777,216 pixels. Choose fewer squares or a smaller grid size in Edit Map.';
+export const PAINT_TOO_LARGE = `This map is too large to paint: it has more than ${MOST_DRAWN_SQUARES.toLocaleString('en-US')} squares. Choose fewer squares in Edit Map.`;
 export const PAINT_NO_CANVAS = 'This browser could not open a picture that large to paint.';
 
 /** A stroke as it is drawn on the overlay: in map pixels, its width too. */
@@ -165,7 +163,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
 
   const unsavedOf = (s: Surface | null) => s !== null && s.revision !== s.saved;
 
-  /** Open Paint on the map on screen: on its picture, or a blank one at its size where it has none. */
+  /**
+   * Open Paint on the map on screen, at its squares times its grid size
+   * (held to the drawn-map size rule), whatever its picture's own size: a
+   * new drawn map's picture is one pixel a square. The picture is drawn in
+   * stretched to that size, or a map with none starts blank.
+   */
   const open = useCallback((): boolean => {
     if (!map || !isDM) return false;
     const held = surfaceRef.current;
@@ -177,23 +180,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (held) dispose();
     const mapW = map.width * map.gridSize;
     const mapH = map.height * map.gridSize;
-    let width: number;
-    let height: number;
-    if (picture) {
-      width = picture.naturalWidth || picture.width;
-      height = picture.naturalHeight || picture.height;
-    } else {
-      const size = drawnPictureSize(map.width, map.height, map.gridSize);
-      if (!size.fits) {
-        refuse(PAINT_TOO_LARGE);
-        return false;
-      }
-      ({ width, height } = size);
-    }
-    if (!(width > 0 && height > 0) || width * height > MAX_BACKING_PIXELS || Math.max(width, height) > PICTURE_SIZE_LIMITS.maxSide) {
+    const size = drawnPictureSize(map.width, map.height, map.gridSize);
+    if (!size.fits) {
       refuse(PAINT_TOO_LARGE);
       return false;
     }
+    const { width, height } = size;
     const canvas = (make ?? (() => document.createElement('canvas')))();
     canvas.width = width;
     canvas.height = height;

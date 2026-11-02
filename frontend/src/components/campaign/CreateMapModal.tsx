@@ -32,7 +32,7 @@ interface CreateMapModalProps {
 }
 
 /** What a browser that made no PNG of the blank picture is told. */
-const NO_PICTURE_MADE = 'This browser could not make a picture that large. Choose fewer squares or fewer pixels a square.';
+const NO_PICTURE_MADE = "This browser could not make the map's picture. Choose fewer squares and try again.";
 
 const count = (n: number) => n.toLocaleString('en-US');
 
@@ -307,7 +307,11 @@ export default function CreateMapModal({
   /**
    * Draw a map: make the blank picture, upload it into the campaign's
    * library tagged drawn-map, then create the map at the pixels per square
-   * it was drawn at. A map the server refuses takes its picture with it.
+   * it is painted at. The picture is one pixel a square, which the map
+   * stretches over its grid: one the painted size would be made, sent and
+   * decoded for nothing until something is painted, and Paint makes its
+   * own at the map's size. A map the server refuses takes its picture with
+   * it.
    */
   const handleDraw = async () => {
     if (!canSubmit || !drawnSize.fits) return;
@@ -315,7 +319,7 @@ export default function CreateMapModal({
     setError(null);
     let uploaded: Asset | null = null;
     try {
-      const canvas = blankPicture(drawnSize.width, drawnSize.height, background);
+      const canvas = blankPicture(width, height, background);
       const png = canvas ? await pictureToPng(canvas) : null;
       if (canvas) releaseCanvas(canvas);
       if (!png) {
@@ -507,7 +511,7 @@ export default function CreateMapModal({
                       <>
                         {drawnSize.fits && (
                           <p className="text-xs text-stone-gray/50 mt-2">
-                            The picture will be {count(drawnSize.width)} × {count(drawnSize.height)} px.
+                            It is painted at {count(drawnSize.width)} × {count(drawnSize.height)} px.
                           </p>
                         )}
                         {drawnNote && (

@@ -292,6 +292,20 @@ describe('where Paint is offered', () => {
     expect(screen.queryByText('This map has no picture.')).toBeNull();
   });
 
+  it('paints at the map\'s squares and grid size, whatever the picture\'s own size: a new drawn map\'s is a pixel a square', async () => {
+    h.set({ currentMap: mapWith() });
+    render(<MapCanvas />);
+    pictures[0].width = 20;
+    pictures[0].height = 20;
+    pictures[0].load();
+    await act(async () => { await Promise.resolve(); });
+    await paintOn();
+    const canvas = pictureCanvas();
+    expect(canvas).toBeDefined();
+    const copied = callsOn(canvas).find((c) => c.method === 'drawImage');
+    expect(copied?.args.slice(1)).toEqual([0, 0, 1000, 1000]);
+  });
+
   it('opens by itself on a map just made with Draw a map, once it is on screen', async () => {
     const map = mapWith();
     act(() => { usePaintStore.getState().openWhenShown(map.id); });

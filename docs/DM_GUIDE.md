@@ -196,11 +196,11 @@ No map ready for the scene? Draw one in CozyVTT: a room or a clearing sketched w
 1. Open the **Map Library** and click **Create Map**.
 2. Click **Draw a map** at the top of the window.
 3. Fill in the map's name, its **Width** and **Height** in grid squares, its **Detail (pixels per square)** (70 at first), the **Grid Settings**, and a **Background colour**: parchment at first, one of the colours offered, or any colour with **Another colour**.
-4. Click **Create Map**. CozyVTT makes a blank picture of that size and colour, puts it in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)), with **Paint** on (below). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
+4. Click **Create Map**. CozyVTT puts a blank picture of that colour in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)), with **Paint** on (below). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
 
-If the picture cannot be made, the window says why and nothing is created: "This browser could not make a picture that large" means the device ran short, so choose fewer squares or fewer pixels a square.
+If the picture cannot be made, the window says so and nothing is created: "This browser could not make the map's picture" means the device ran short, so choose fewer squares and try again.
 
-**How large a drawn map can be.** Its picture is the squares times the pixels per square. So that it can be painted on any device, a phone or a tablet included, the picture is kept within 16,777,216 pixels (4,096 by 4,096) and within 16,384 pixels on each side. Where the squares you ask for would make it larger, the window draws it at fewer pixels a square and says so, for example "Drawn at 40 px a square so it can be edited on any device.", and the map's **Grid Size** is that number. It never goes below 10 pixels a square, so a drawn map has at most 167,772 squares; a larger one is refused with a message and **Create Map** stays greyed out.
+**How large a drawn map can be.** It is painted at its squares times its pixels per square. So that it can be painted on any device, a phone or a tablet included, that is kept within 16,777,216 pixels (4,096 by 4,096) and within 16,384 pixels on each side. Where the squares you ask for would make it larger, the window draws it at fewer pixels a square and says so, for example "Drawn at 40 px a square so it can be edited on any device.", and the map's **Grid Size** is that number. It never goes below 10 pixels a square, so a drawn map has at most 167,772 squares; a larger one is refused with a message and **Create Map** stays greyed out.
 
 | Squares | Drawn at |
 |---|---|
@@ -210,7 +210,7 @@ If the picture cannot be made, the window says why and nothing is created: "This
 | 409 by 409, or 500 by 335 | 10 |
 | 410 by 410, or 500 by 336 | Refused |
 
-**Its picture in the Asset Library.** Each drawn map's picture is in the campaign's library, named **Drawn map** and tagged `drawn-map`. As with every map picture, your players do not see it there until the table is on its map.
+**Its picture in the Asset Library.** Each drawn map's picture is in the campaign's library, named **Drawn map** and tagged `drawn-map`. Until what you paint is saved, it is one pixel a square of the map's colour, which the map stretches over its grid, so a new drawn map takes almost no room. As with every map picture, your players do not see it there until the table is on its map.
 
 **Painting it**
 
