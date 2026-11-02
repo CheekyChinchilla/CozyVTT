@@ -254,6 +254,8 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const [deletePicture, setDeletePicture] = useState<boolean | null>(null);
   /** What a delete left to say: a picture kept because it is in use. */
   const [notice, setNotice] = useState<string | null>(null);
+  /** The map the question about its picture was asked for: a late answer about another map is dropped. */
+  const askedAboutRef = useRef<string | null>(null);
 
   // UVTT import
   const uvttInputRef = useRef<HTMLInputElement>(null);
@@ -328,9 +330,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     setMapToDelete(map);
     setDeletePicture(null);
     setNotice(null);
-    // Only a picture Paint made is offered; the box starts unticked.
+    askedAboutRef.current = map.id;
+    // Only a picture Paint made is offered; the box starts unticked. The
+    // answer counts only while the question is still about this map.
     void pictureIsDrawn(map.imageUrl, campaign?.id).then((drawn) => {
-      if (drawn) setDeletePicture((now) => now ?? false);
+      if (drawn && askedAboutRef.current === map.id) setDeletePicture((now) => now ?? false);
     });
   };
 
@@ -340,6 +344,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     const alsoPicture = deletePicture === true;
     setMapToDelete(null);
     setDeletePicture(null);
+    askedAboutRef.current = null;
     // The map on screen, being prepared: whatever holds it is asked first.
     // Deleting it ends preparing (removeCampaignMap).
     if (map.id === preparedMapId && !(await mayChangeViewedMap({ kind: 'delete', toMapId: activeMapId }))) return;
@@ -622,6 +627,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
         onCancel={() => {
           setMapToDelete(null);
           setDeletePicture(null);
+          askedAboutRef.current = null;
         }}
       >
         {deletePicture !== null && (
