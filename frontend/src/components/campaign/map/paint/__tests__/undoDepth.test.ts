@@ -46,7 +46,7 @@ function paintedTile(w: number, h: number, stroke: number): TilePixels {
       data.set([colour[0], colour[1], colour[2], 255], (y * w + x) * 4);
     }
   }
-  const tile = { width: w, height: h, data, colorSpace: 'srgb' } as TilePixels;
+  const tile = { width: w, height: h, data, colorSpace: 'srgb' } satisfies TilePixels;
   tiles.set(key, tile);
   return tile;
 }

@@ -21,7 +21,7 @@ function pixelsOf(x: number, w: number, h: number): TilePixels {
     const band = Math.floor(i / w) % 64 < 8 + (x / 256);
     data.set(band ? [85, 89, 95, 255] : [232, 220, 196, 255], i * 4);
   }
-  return { width: w, height: h, data, colorSpace: 'srgb' } as TilePixels;
+  return { width: w, height: h, data, colorSpace: 'srgb' } satisfies TilePixels;
 }
 
 function setUp() {
@@ -96,6 +96,18 @@ describe('a kept tile', () => {
     calls.length = 0;
     store.restore(tile(0), kept);
     expect((calls.find((c) => c.method === 'putImageData')!.args[0] as TilePixels).data).toEqual(pixelsOf(0, 256, 256).data);
+  });
+
+  it('whose bytes do not make up the tile is not put back', () => {
+    const { calls, store } = setUp();
+    const kept = store.capture(tile(0));
+    kept.packed = kept.packed!.slice(0, kept.packed!.length - 1);
+    calls.length = 0;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    store.restore(tile(0), kept);
+    expect(calls.some((c) => c.method === 'putImageData')).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('let go of no longer counts, and is not put back', () => {

@@ -94,8 +94,12 @@ export function qoiEncode(data: Uint8ClampedArray): Uint8Array<ArrayBuffer> {
   return out.slice(0, o);
 }
 
-/** Packed pixels unpacked into `data`, which is as long as the pixels packed. */
-export function qoiDecodeInto(packed: Uint8Array, data: Uint8ClampedArray): void {
+/**
+ * Packed pixels unpacked into `data`. True when the bytes make up exactly
+ * as many pixels as `data` holds; false for bytes cut short, bytes left
+ * over, or a run past the end, when what `data` holds is not to be used.
+ */
+export function qoiDecodeInto(packed: Uint8Array, data: Uint8ClampedArray): boolean {
   const seen = new Uint8Array(256);
   const end = data.length - (data.length % 4);
   let r = 0;
@@ -106,6 +110,7 @@ export function qoiDecodeInto(packed: Uint8Array, data: Uint8ClampedArray): void
   let i = 0;
   while (i < end && p < packed.length) {
     const b1 = packed[p++];
+    let count = 1;
     if (b1 === OP_RGB) {
       r = packed[p++];
       g = packed[p++];
@@ -133,23 +138,22 @@ export function qoiDecodeInto(packed: Uint8Array, data: Uint8ClampedArray): void
       b = (b + dg - 8 + (b2 & 15)) & 255;
     } else {
       // A run of the colour before.
-      for (let left = (b1 & 63) + 1; left > 0 && i < end; left -= 1, i += 4) {
-        data[i] = r;
-        data[i + 1] = g;
-        data[i + 2] = b;
-        data[i + 3] = a;
-      }
-      continue;
+      count = (b1 & 63) + 1;
     }
+    // Every colour read is among those seen, a run's too, as the format's own decoder keeps them.
     const h = slot(r, g, b, a) * 4;
     seen[h] = r;
     seen[h + 1] = g;
     seen[h + 2] = b;
     seen[h + 3] = a;
-    data[i] = r;
-    data[i + 1] = g;
-    data[i + 2] = b;
-    data[i + 3] = a;
-    i += 4;
+    for (; count > 0; count -= 1) {
+      if (i >= end) return false;
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+      data[i + 3] = a;
+      i += 4;
+    }
   }
+  return i === end && p === packed.length;
 }
