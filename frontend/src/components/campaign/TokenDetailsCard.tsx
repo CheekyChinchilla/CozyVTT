@@ -45,6 +45,12 @@ interface TokenDetailsCardProps {
    * dock's width on a phone, 352 pixels from a small tablet up.
    */
   docked?: boolean;
+  /**
+   * Shown just above the card, and taking no presses: how far a held token
+   * has come (MapCanvas). In the dock it stands before the card in the
+   * dock's column; in the corner, over the card's top edge.
+   */
+  above?: ReactNode;
 }
 
 /** The card's box in the map's bottom left corner, and in the compact layout's dock. */
@@ -63,7 +69,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove, onClose, docked = false }: TokenDetailsCardProps) {
+export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove, onClose, docked = false, above }: TokenDetailsCardProps) {
   // `undefined` means "not in the turn order": the row is left out rather
   // than shown blank. `null` means it is, but nothing has rolled.
   const initiative = useTokenInitiative(token.id);
@@ -71,91 +77,95 @@ export default function TokenDetailsCard({ token, square, hp, imageSrc, mayMove,
   const conditions = token.conditions ?? [];
 
   return (
-    <div className={`${docked ? DOCKED_BOX : CORNER_BOX}${onClose ? ' pointer-events-none' : ''}`}>
-      <div className="flex items-start gap-3.5">
-        {/* Large enough to actually recognise the art. On the map a token
-            is often only a few dozen pixels at play zoom, which is what
-            made "token images are hard to see" a real complaint. */}
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt=""
-            className="w-18 h-18 rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
-          />
-        ) : (
-          <div
-            className="w-18 h-18 rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
-            style={{ backgroundColor: placeholderColor(token) }}
-            aria-hidden="true"
-          >
-            {(token.name || '?').charAt(0).toUpperCase()}
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-2 mb-1.5">
-            <span className="text-sm font-semibold text-brand-ink truncate">
-              {tokenDisplayName(token)}
-            </span>
-            <span className="text-xs text-stone-gray font-mono shrink-0">
-              ({square.x}, {square.y})
-            </span>
-          </div>
-
-          <div className="space-y-1">
-            {hp && (
-              <Row label="HP">
-                <span className="font-mono">
-                  {hp.current}/{hp.max}
-                  {hp.temp > 0 && <span className="text-info-ink"> +{hp.temp}</span>}
-                </span>
-              </Row>
-            )}
-
-            {conditions.length > 0 && (
-              <Row label="Conditions">
-                <span className="flex flex-wrap gap-1">
-                  {conditions.map((condition) => (
-                    <span
-                      key={condition}
-                      className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[11px] font-medium text-brand-ink capitalize"
-                    >
-                      {condition}
-                    </span>
-                  ))}
-                </span>
-              </Row>
-            )}
-
-            {inTurnOrder && (
-              <Row label="Initiative">
-                <span className="font-mono">
-                  {initiative === null ? '—' : initiative}
-                </span>
-              </Row>
-            )}
-          </div>
-
-          {!mayMove && (
-            <div className="mt-1.5 text-[11px] text-warm-gray italic">
-              Not yours to move
+    <>
+      {above && docked && <div className="self-start">{above}</div>}
+      <div className={`${docked ? DOCKED_BOX : CORNER_BOX}${onClose ? ' pointer-events-none' : ''}`}>
+        {above && !docked && <div className="absolute bottom-full left-0 mb-2 pointer-events-none">{above}</div>}
+        <div className="flex items-start gap-3.5">
+          {/* Large enough to actually recognise the art. On the map a token
+              is often only a few dozen pixels at play zoom, which is what
+              made "token images are hard to see" a real complaint. */}
+          {imageSrc ? (
+            <img
+              src={imageSrc}
+              alt=""
+              className="w-18 h-18 rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
+            />
+          ) : (
+            <div
+              className="w-18 h-18 rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
+              style={{ backgroundColor: placeholderColor(token) }}
+              aria-hidden="true"
+            >
+              {(token.name || '?').charAt(0).toUpperCase()}
             </div>
           )}
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-2 mb-1.5">
+              <span className="text-sm font-semibold text-brand-ink truncate">
+                {tokenDisplayName(token)}
+              </span>
+              <span className="text-xs text-stone-gray font-mono shrink-0">
+                ({square.x}, {square.y})
+              </span>
+            </div>
+
+            <div className="space-y-1">
+              {hp && (
+                <Row label="HP">
+                  <span className="font-mono">
+                    {hp.current}/{hp.max}
+                    {hp.temp > 0 && <span className="text-info-ink"> +{hp.temp}</span>}
+                  </span>
+                </Row>
+              )}
+
+              {conditions.length > 0 && (
+                <Row label="Conditions">
+                  <span className="flex flex-wrap gap-1">
+                    {conditions.map((condition) => (
+                      <span
+                        key={condition}
+                        className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[11px] font-medium text-brand-ink capitalize"
+                      >
+                        {condition}
+                      </span>
+                    ))}
+                  </span>
+                </Row>
+              )}
+
+              {inTurnOrder && (
+                <Row label="Initiative">
+                  <span className="font-mono">
+                    {initiative === null ? '—' : initiative}
+                  </span>
+                </Row>
+              )}
+            </div>
+
+            {!mayMove && (
+              <div className="mt-1.5 text-[11px] text-warm-gray italic">
+                Not yours to move
+              </div>
+            )}
+          </div>
+
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close details"
+              title="Close details"
+              className="pointer-events-auto -mr-2 -mt-1 p-2 shrink-0 touch-target inline-flex items-center justify-center rounded-cozy text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+
         </div>
-
-        {onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close details"
-            title="Close details"
-            className="pointer-events-auto -mr-2 -mt-1 p-2 shrink-0 touch-target inline-flex items-center justify-center rounded-cozy text-stone-gray hover:text-brand-ink hover:bg-moss-green/10 transition-colors"
-          >
-            <X className="w-4 h-4" aria-hidden="true" />
-          </button>
-        )}
-
       </div>
-    </div>
+    </>
   );
 }

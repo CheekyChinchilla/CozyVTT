@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { carriedSquare, heldDrawnAt, releaseHeldToken } from '../tokenHold';
+import { carriedDistance, carriedSquare, heldDrawnAt, releaseHeldToken } from '../tokenHold';
 
 describe('releaseHeldToken', () => {
   it('names the square the token was picked up from, not wherever the cursor went', () => {
@@ -37,5 +37,33 @@ describe('where a held token is drawn', () => {
   ])('keeps a two-square token whole on the map at the %s edge', (_edge, square, offset, drawn) => {
     expect(heldDrawnAt(big, { square, offset }, map)).toEqual(drawn);
     expect(carriedSquare({ square, offset }, big.size, map)).toEqual(drawn);
+  });
+});
+
+// The readout in the map's lower left while a token is held: from the square
+// it was picked up from to the square it would be put down on.
+describe('how far a held token has come', () => {
+  const map = { width: 10, height: 8, feetPerSquare: 5, diagonalRule: 'flat' as const };
+  const one = { position: { x: 3, y: 4 }, size: { width: 1, height: 1 } };
+  const big = { position: { x: 3, y: 4 }, size: { width: 2, height: 2 } };
+
+  it('is nothing while no pointer carries it, as after a tap that took it up', () => {
+    expect(carriedDistance(one, null, map)).toEqual({ squares: 0, feet: 0 });
+  });
+
+  it('runs from its own square to where it would be put down', () => {
+    expect(carriedDistance(one, { square: { x: 6, y: 2 }, offset: { x: 0, y: 0 } }, map)).toEqual({ squares: 3, feet: 15 });
+    // Taken by its top-right square and carried to (7, 2): it would stand on (6, 1).
+    expect(carriedDistance(big, { square: { x: 7, y: 2 }, offset: { x: 1, y: 1 } }, map)).toEqual({ squares: 3, feet: 15 });
+  });
+
+  it("prices diagonals by the map's rule and its Grid Scale", () => {
+    const carrier = { square: { x: 6, y: 1 }, offset: { x: 0, y: 0 } };
+    expect(carriedDistance(one, carrier, { ...map, diagonalRule: 'alternating' })).toEqual({ squares: 3, feet: 20 });
+    expect(carriedDistance(one, carrier, { ...map, feetPerSquare: 10, diagonalRule: 'alternating' })).toEqual({ squares: 3, feet: 40 });
+  });
+
+  it('stops where the token is kept whole on the map', () => {
+    expect(carriedDistance(big, { square: { x: 9, y: 4 }, offset: { x: 0, y: 0 } }, map)).toEqual({ squares: 5, feet: 25 });
   });
 });

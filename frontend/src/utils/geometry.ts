@@ -30,6 +30,38 @@ export function calcGridDistance(
   return Math.max(dx, dy) * feetPerSquare;
 }
 
+/** A distance over the grid: the squares crossed, and the feet they come to. */
+export interface GridMeasure {
+  squares: number;
+  feet: number;
+}
+
+/**
+ * The distance from square `from` to square `to` on a map: the larger of the
+ * two steps in squares, a diagonal counting one, and the feet by the map's
+ * diagonal rule. The ruler measures with it, and so does the readout of how
+ * far a held token has come (map/tokenHold.ts), so the two never disagree.
+ */
+export function gridMeasure(
+  from: Point,
+  to: Point,
+  feetPerSquare: number,
+  diagonalRule: 'flat' | 'alternating'
+): GridMeasure {
+  const dx = Math.abs(to.x - from.x);
+  const dy = Math.abs(to.y - from.y);
+  return { squares: Math.max(dx, dy), feet: calcGridDistance(dx, dy, feetPerSquare, diagonalRule) };
+}
+
+/**
+ * A distance as the ruler and the held token's readout write it,
+ * "15 ft  (3 sq)". The two spaces part the numbers on the ruler's canvas
+ * label; a page shows them as one.
+ */
+export function gridDistanceLabel({ squares, feet }: GridMeasure): string {
+  return `${feet} ft  (${squares} sq)`;
+}
+
 /**
  * Ramer–Douglas–Peucker polyline simplification.
  * Returns the subset of points needed to approximate the input polyline

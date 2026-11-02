@@ -14,9 +14,13 @@
 // taken by a tap stays on its own square when the finger lifts, and while
 // another drag pans the map, until a tap puts it down. Where nothing carries
 // it, it is drawn on its own square, as the store has it.
+//
+// While it is held, the map's lower left shows how far it has come from its
+// own square to where it would be put down, measured as the ruler measures.
 // ============================================
 
-import type { Position, Token, TokenMoveEvent } from '@/types';
+import type { CampaignMap, Position, Token, TokenMoveEvent } from '@/types';
+import { gridMeasure, type GridMeasure } from '@/utils/geometry';
 
 /** The move that puts a held token back where it was picked up. */
 export function releaseHeldToken(token: Pick<Token, 'id' | 'position'>, mapId: string): TokenMoveEvent {
@@ -51,4 +55,17 @@ export function carriedSquare(carrier: Carrier, size: Token['size'], map: { widt
  */
 export function heldDrawnAt(held: Pick<Token, 'position' | 'size'>, carrier: Carrier | null, map: { width: number; height: number }): Position {
   return carrier ? carriedSquare(carrier, held.size, map) : held.position;
+}
+
+/**
+ * How far a held token has come: from its own square, as the store has it,
+ * to where it is drawn (heldDrawnAt), by the map's Grid Scale and diagonal
+ * rule, as the ruler takes them.
+ */
+export function carriedDistance(
+  held: Pick<Token, 'position' | 'size'>,
+  carrier: Carrier | null,
+  map: Pick<CampaignMap, 'width' | 'height' | 'feetPerSquare' | 'diagonalRule'>,
+): GridMeasure {
+  return gridMeasure(held.position, heldDrawnAt(held, carrier, map), map.feetPerSquare, map.diagonalRule);
 }

@@ -87,7 +87,8 @@ import { useWallLightRequest } from './map/useWallLightRequest';
 import { useMapDrawings } from './map/useMapDrawings';
 import { labelFontSize } from './map/drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
-import { releaseHeldToken, carriedSquare, heldDrawnAt } from './map/tokenHold';
+import { releaseHeldToken, carriedSquare, carriedDistance, heldDrawnAt } from './map/tokenHold';
+import { gridDistanceLabel } from '@/utils/geometry';
 import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
@@ -2016,8 +2017,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           origin: effectiveRulerOrigin,
           target: rulerTarget,
           color: rulerColor,
-          feetPerSquare: currentMap.feetPerSquare ?? 5,
-          diagonalRule: (currentMap.diagonalRule ?? 'flat') as 'flat' | 'alternating',
+          feetPerSquare: currentMap.feetPerSquare,
+          diagonalRule: currentMap.diagonalRule,
         }, viewport);
       }
       if (showAoE) {
@@ -4007,6 +4008,31 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       ({hoverCoords.x}, {hoverCoords.y})
     </span>
   );
+  // While a token is held, how far it has come from its square to where it
+  // would be put down, as the ruler measures (map/tokenHold.ts): beside the
+  // square under the pointer, or above the details card where one shows.
+  // Nothing for a token the screen does not draw.
+  const heldDistance = draggedToken && currentMap && drawnIds.has(draggedToken.id)
+    ? carriedDistance(
+      tokens.find((t) => t.id === draggedToken.id) ?? draggedToken,
+      carrierSquare && dragOffset ? { square: carrierSquare, offset: dragOffset } : null,
+      currentMap,
+    )
+    : null;
+  const heldDistanceText = heldDistance && (
+    <span className="text-xs text-stone-gray font-mono font-semibold">Carried {gridDistanceLabel(heldDistance)}</span>
+  );
+  const heldDistanceCard = heldDistanceText && (
+    <div className="glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">{heldDistanceText}</div>
+  );
+  const detailsCardShown = (hoverToken !== null && hoverCoords !== null) || selectionDetails !== null;
+  const cornerPanelShown = hoverCoordsShown || (heldDistance !== null && !detailsCardShown);
+  const cornerPanelText = (
+    <>
+      {hoverCoordsShown && hoverCoordsText}
+      {!detailsCardShown && heldDistanceText}
+    </>
+  );
   /**
    * The token's details: in the map's bottom left corner, or `docked` in
    * the compact layout's dock, across the map's foot.
@@ -4026,6 +4052,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           imageSrc={cachedTokenImage(hoverToken, tokenImages)?.src}
           mayMove={canMoveToken(hoverToken)}
           docked={docked}
+          above={heldDistanceCard}
         />
       )}
 
@@ -4040,6 +4067,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           imageSrc={cachedTokenImage(selectionDetails, tokenImages)?.src}
           mayMove={canMoveToken(selectionDetails)}
           onClose={() => setSelectionDetailsClosedFor(selectionDetails.id)}
+          above={heldDistanceCard}
           docked={docked}
         />
       )}
@@ -4691,10 +4719,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* Hover Coordinates, unless the selection's details sit there */}
-      {hoverCoordsShown && !compact && (
-        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
-          {hoverCoordsText}
+      {/* Hover Coordinates, unless the selection's details sit there, and
+          how far a held token has come */}
+      {cornerPanelShown && !compact && (
+        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs flex items-baseline gap-3">
+          {cornerPanelText}
         </div>
       )}
 
@@ -4722,9 +4751,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   {playerPreviewControls}
                 </div>
               )}
-              {hoverCoordsShown && (
-                <div className="self-start glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
-                  {hoverCoordsText}
+              {cornerPanelShown && (
+                <div className="self-start glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs flex items-baseline gap-3">
+                  {cornerPanelText}
                 </div>
               )}
               {/* Not while the strip is up: the two left a phone little map to draw on. */}
