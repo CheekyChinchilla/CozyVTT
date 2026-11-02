@@ -60,6 +60,9 @@ const h = vi.hoisted(() => {
     getAsset: vi.fn(),
     updateToken: vi.fn(),
     addToken: vi.fn(),
+    uploadAsset: vi.fn(),
+    deleteAsset: vi.fn(),
+    updateMap: vi.fn(),
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => version,
     set(patch: Partial<typeof state>) {
@@ -133,11 +136,14 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/services/map.service', () => ({
-  default: { updateMap: vi.fn().mockResolvedValue({}), getMaps: vi.fn().mockResolvedValue([]), getMap: vi.fn() },
+  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: vi.fn() },
 }));
 
 vi.mock('@/services/api', () => {
-  const named: Record<string, unknown> = { getAsset: h.getAsset, updateToken: h.updateToken, addToken: h.addToken };
+  const named: Record<string, unknown> = {
+    getAsset: h.getAsset, updateToken: h.updateToken, addToken: h.addToken, uploadAsset: h.uploadAsset, deleteAsset: h.deleteAsset,
+    getServerConfig: () => Promise.resolve({}),
+  };
   const client = new Proxy({}, {
     get: (_target, prop: string) => named[prop] ?? vi.fn().mockResolvedValue({}),
   });
@@ -240,6 +246,10 @@ beforeEach(() => {
   h.getAsset.mockReset().mockResolvedValue(drawnAsset());
   h.updateToken.mockReset().mockResolvedValue({});
   h.addToken.mockReset().mockResolvedValue({ token: token('placed', 1, 1) });
+  h.uploadAsset.mockReset().mockResolvedValue({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: ['drawn-map'] } });
+  h.deleteAsset.mockReset().mockResolvedValue({ message: 'deleted' });
+  h.updateMap.mockReset().mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
+    Promise.resolve({ ...(h.state.currentMap as object), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` }));
   act(() => {
     useGameStore.getState().clearGameState();
     usePaintStore.setState({ mapId: null, unsaved: false, openOnMapId: null });
@@ -644,6 +654,67 @@ describe('text and the eyedropper', () => {
     expect(asked).toEqual([[410, 220, 1, 1]]);
     expect(within(panel()).getByRole('button', { name: /^Colour:/ })).toHaveAccessibleName('Colour: Dark wood');
     expect(within(panel()).getByRole('button', { name: 'Rectangle' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('Save', () => {
+  const save = async () => {
+    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+  };
+
+  it('uploads the picture tagged drawn-map, points the map at it, and deletes the drawn picture it had', async () => {
+    const map = mapWith();
+    await showMap(map);
+    await paintOn();
+    expect(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })).toBeDisabled();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await save();
+    await waitFor(() => expect(h.deleteAsset).toHaveBeenCalled());
+    const form = h.uploadAsset.mock.calls[0][0] as FormData;
+    expect(form.get('tags')).toBe('drawn-map');
+    expect(form.get('scope')).toBe('CAMPAIGN');
+    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' });
+    // Without force, the picture it had before.
+    expect(h.deleteAsset.mock.calls).toEqual([[map.imageUrl.split('/').pop()]]);
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: false });
+    expect(screen.queryByText(/Not saved yet/)).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })).toBeDisabled();
+    // The map on screen is the saved one: its own picture comes back once Paint goes.
+    expect((h.state.currentMap as CampaignMap).imageUrl).toBe('/api/assets/maps/saved-1');
+  });
+
+  it('leaves unsaved what is painted while the save is under way', async () => {
+    await showMap();
+    await paintOn();
+    let finishUpload: (value: unknown) => void = () => undefined;
+    h.uploadAsset.mockReturnValue(new Promise((resolve) => { finishUpload = resolve; }));
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await save();
+    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
+    await act(async () => { finishUpload({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', campaignId: 'campaign-1', tags: ['drawn-map'] } }); });
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    expect(usePaintStore.getState().unsaved).toBe(true);
+  });
+
+  it('keeps the paint, and deletes its upload, when the map will not take the picture, and says why', async () => {
+    h.updateMap.mockRejectedValue({ isAxiosError: true, response: { status: 403, data: { message: 'Only the DM can change this map' } } });
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await save();
+    expect(await screen.findByText('Only the DM can change this map')).toBeInTheDocument();
+    expect(h.deleteAsset.mock.calls).toEqual([['saved-1']]);
+    expect(usePaintStore.getState().unsaved).toBe(true);
+  });
+
+  it('deletes nothing for a map that had no picture', async () => {
+    await showMap(mapWith({ imageUrl: '' }), { load: false });
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await save();
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' }));
+    expect(h.deleteAsset).not.toHaveBeenCalled();
   });
 });
 

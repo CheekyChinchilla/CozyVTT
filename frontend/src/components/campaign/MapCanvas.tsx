@@ -74,7 +74,7 @@ import { useWallTool } from './map/tools/useWallTool';
 import { useDrawTool, DEFAULT_DRAW_SETTINGS, type DrawSettings, type DrawToolKind } from './map/tools/useDrawTool';
 import type { MapTool, PointerAt } from './map/tools/types';
 import { usePaintSurface } from './map/paint/usePaintSurface';
-import { useMapPictureKind } from './map/paint/mapPicture';
+import { rememberPictureAsset, useMapPictureKind } from './map/paint/mapPicture';
 import { drawPaintPreview } from './map/paint/paintShapes';
 import { releaseCanvas } from './map/paint/blankPicture';
 import { mapInputOwner } from './map/inputOwner';
@@ -687,6 +687,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const pictureKind = useMapPictureKind(currentMap, campaign?.id, isDM);
   const paint = usePaintSurface({
     map: currentMap, picture: mapImage, pictureSettled: imageState !== 'loading', isDM, mapControls, markDirty,
+    campaignId: campaign?.id,
+    // The map on screen takes its new picture: a map being prepared hears
+    // of it from nothing else, and the server sends the table's map again.
+    onSaved: (saved, picture) => {
+      rememberPictureAsset(picture);
+      updateMap(saved.id, saved);
+      showToast('Saved. Players on this map see the new picture.', 'success');
+    },
     refuse: (message) => showToast(message, 'error'),
   });
   const paintOffered = isDM && !!currentMap
@@ -4551,6 +4559,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               onUndo={paint.undo}
               onRedo={paint.redo}
               unsaved={paint.unsaved}
+              onSave={() => { void paint.save(); }}
+              saving={paint.saving}
               onClose={paint.close}
             />
           )}

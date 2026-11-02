@@ -42,6 +42,14 @@ import { drawShape, scaleShape, shapeBox, stepAngle, type PaintPreview, type Pai
 import { labelFontSize, snapToGrid } from '../drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { usePaintStore } from '@/stores/paintStore';
+import type { Asset } from '@/types';
+import mapService from '@/services/map.service';
+import { api } from '@/services/api';
+import { uploadDrawnPicture, DrawnPictureRefused } from '@/services/drawnPicture';
+import { apiErrorMessage } from '@/utils/errors';
+import { savePaint } from './savePaint';
+import { pictureIsDrawn } from './mapPicture';
+import { pictureToPng } from './blankPicture';
 
 /** The tools Paint offers. */
 export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'fill' | 'text' | 'eyedropper';
@@ -157,7 +165,10 @@ interface Stroke {
 
 export interface PaintSurfaceOptions {
   /** The map on screen. */
-  map: Pick<CampaignMap, 'id' | 'width' | 'height' | 'gridSize'> | null;
+  map: Pick<CampaignMap, 'id' | 'width' | 'height' | 'gridSize' | 'imageUrl'> | null;
+  campaignId: string | undefined;
+  /** Told of a save: the map as pointed at its new picture, and the picture. */
+  onSaved: (map: CampaignMap, picture: Asset) => void;
   /** Its picture as loaded: null for a map with none, and while the page has let go of it (holdsPicture). */
   picture: HTMLImageElement | null;
   /** The page's own picture is drawn again, or has failed to load, or the map has none: nothing is loading. */
@@ -165,7 +176,7 @@ export interface PaintSurfaceOptions {
   isDM: boolean;
   mapControls: MapControls;
   markDirty: (...layers: MapLayer[]) => void;
-  /** Tells the DM why Paint did not open. */
+  /** Tells the DM why Paint did not open, or a save failed. */
   refuse: (message: string) => void;
   make?: MakeCanvas;
 }
@@ -173,7 +184,7 @@ export interface PaintSurfaceOptions {
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
-  const { map, picture, pictureSettled, isDM, mapControls, markDirty, refuse, make } = options;
+  const { map, picture, pictureSettled, campaignId, onSaved, isDM, mapControls, markDirty, refuse, make } = options;
   const [on, setOn] = useState(false);
   const onRef = useRef(false);
   const [surface, setSurface] = useState<Surface | null>(null);
@@ -188,6 +199,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const lastToolRef = useRef<PaintTool>(DEFAULT_PAINT_SETTINGS.tool);
   /** Strokes and shapes lifted while an undo was under way, shown until they are painted. */
   const waitingRef = useRef<PaintPreview[]>([]);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   /** Bumped when the history changes, so the panel's Undo and Redo follow. */
   const [, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -479,6 +492,41 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     commitTextRef.current = commitText;
   }, [commitText]);
 
+  /**
+   * Save the picture as the map's (savePaint.ts), once any undo under way
+   * has landed. What is painted while the save is under way stays not
+   * saved: the picture saved is the one as Save was pressed.
+   */
+  const save = useCallback(async () => {
+    const s = surfaceRef.current;
+    if (!s || !map || !campaignId || savingRef.current || s.mapId !== map.id) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await s.history.settled();
+      const asOf = s.revision;
+      const previous = map.imageUrl ?? '';
+      const { map: saved, asset } = await savePaint({
+        previous,
+        makePng: () => pictureToPng(s.canvas),
+        upload: (png) => uploadDrawnPicture(png, campaignId),
+        pointMapAt: (assetId) => mapService.updateMap(campaignId, s.mapId, { imageUrl: assetId }),
+        previousIsDrawn: () => pictureIsDrawn(previous, campaignId),
+        remove: (assetId) => api.deleteAsset(assetId),
+      });
+      if (surfaceRef.current === s) {
+        s.saved = asOf;
+        bump();
+      }
+      onSaved(saved, asset);
+    } catch (err) {
+      refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }, [map, campaignId, bump, onSaved, refuse]);
+
   /** The eyedropper: the colour of the pixel at map pixel `point` becomes the colour, and the tool before comes back. */
   const pickAt = useCallback((point: PaintPoint) => {
     const s = surfaceRef.current;
@@ -708,6 +756,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     textOpen: () => textRef.current !== null,
     undo,
     redo,
+    save,
+    /** A save is under way. */
+    saving,
     canUndo: surface?.history.canUndo() ?? false,
     canRedo: surface?.history.canRedo() ?? false,
     /** Paint on the map that is not saved. */

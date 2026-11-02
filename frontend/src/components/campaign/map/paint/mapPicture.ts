@@ -58,6 +58,14 @@ function ask(assetId: string): Promise<Answer> {
   return answer;
 }
 
+/** Whether the picture at `url` is one Paint made for this campaign; false for any it cannot tell. */
+export async function pictureIsDrawn(url: string, campaignId: string | undefined): Promise<boolean> {
+  const assetId = url ? extractAssetId(url) : null;
+  if (!assetId) return false;
+  const answer = await ask(assetId);
+  return answer !== null && answer !== 'gone' && isDrawnPicture(answer, campaignId);
+}
+
 /** What the map's picture is, for the DM; 'unknown' for anyone else, who is never offered Paint. */
 export function useMapPictureKind(
   map: { imageUrl?: string | null } | null | undefined,
