@@ -1,13 +1,14 @@
 // ============================================
 // The DM's fog boxes, Reveal and Hide: the box is anchored on mouse down,
-// follows the cursor, and sends one operation for every square it covers when
-// the button is let go.
+// follows the cursor, and sends the squares it covers when the button is let
+// go (map/fogSends.ts).
 // ============================================
 
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { FogState } from '@/types/walls';
 import type { FogToolMode } from '@/components/campaign/DmFogControls';
-import { fogRectFromDrag, fogCellsInRect } from '../fogSelection';
+import { fogRectFromDrag, fogCellsInRect, type FogRect } from '../fogSelection';
+import { fogOperationsForBox } from '../fogSends';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
 
@@ -40,17 +41,19 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
   }, []);
 
   /**
-   * Apply a set of fog cells: optimistic local update plus one server op.
+   * Apply a fog box: optimistic local update, then its operations: one for
+   * an ordinary box, reveal_all or hide_all for the whole map, and parts for
+   * one too long for a single message (map/fogSends.ts).
    *
    * A rectangle drag produces exactly one call here, which is why the old
    * pending-cells buffer and its 80ms flush interval are gone — those existed
    * only to batch the continuous stream a brush stroke produced.
    */
-  const applyFogCells = useCallback((cells: number[]) => {
-    if (!mapId || !fogMode || cells.length === 0) return;
+  const applyFogBox = useCallback((fog: FogState, rect: FogRect) => {
+    if (!mapId || !fogMode) return;
 
     const reveal = fogMode === 'fog-reveal';
-    const operation = { op: reveal ? 'reveal' : 'hide', cells } as const;
+    const cells = fogCellsInRect(fog, rect);
 
     setFogState((prev) => {
       if (!prev) return prev;
@@ -61,9 +64,10 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
       return { ...prev, revealed };
     });
 
-    // TODO(play): an operation over the 1 MB transport limit (a box of about 142,000 squares) is
-    // lost; send reveal_all or hide_all for the whole map, and split any other operation under 1 MB.
-    socket?.getSocket()?.emit('fog:operation', { mapId, operation });
+    const sock = socket?.getSocket();
+    for (const operation of fogOperationsForBox(fog, rect, reveal)) {
+      sock?.emit('fog:operation', { mapId, operation });
+    }
   }, [mapId, fogMode, socket, setFogState]);
 
   /** Finish a fog drag: compute the snapped rectangle once and apply it. */
@@ -75,8 +79,8 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
 
     const rect = fogRectFromDrag(fogState, anchor.x, anchor.y, endX, endY);
     if (!rect) return; // Entirely off the map
-    applyFogCells(fogCellsInRect(fogState, rect));
-  }, [fogState, applyFogCells, setFogDragCurrent]);
+    applyFogBox(fogState, rect);
+  }, [fogState, applyFogBox, setFogDragCurrent]);
 
   /** Abandon a drag without changing anything (Escape, right-click, map change). */
   const cancelFogDrag = useCallback(() => {
