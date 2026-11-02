@@ -31,13 +31,13 @@ import type { MapControls, MapTool, PointerAt } from '../tools/types';
 import type { MapLayer } from '../useRenderLoop';
 import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
-import { createPaintHistory, type PaintHistory, type PaintHistoryCounts, type PaintStep } from './paintHistory';
+import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep } from './paintHistory';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
 import { hexToRgba, readColour } from './pixelColour';
-import { floodFill } from './floodFill';
+import { floodFillTiled } from './floodFill';
 import { drawShape, scaleShape, shapeBox, stepAngle, type PaintPreview, type PaintShape, type PaintShapeKind, type ShapeStyle } from './paintShapes';
 import { labelFontSize, snapToGrid } from '../drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
@@ -46,7 +46,7 @@ import type { Asset } from '@/types';
 import mapService from '@/services/map.service';
 import { api } from '@/services/api';
 import { uploadDrawnPicture, DrawnPictureRefused } from '@/services/drawnPicture';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { savePaint } from './savePaint';
 import { pictureIsDrawn } from './mapPicture';
 import { pictureToPng } from './blankPicture';
@@ -112,6 +112,7 @@ export const PAINT_UNDO_STEPS = 50;
 /** Why Paint did not open, said to the DM. */
 export const PAINT_TOO_LARGE = `This map is too large to paint: it has more than ${MOST_DRAWN_SQUARES.toLocaleString('en-US')} squares. Choose fewer squares in Edit Map.`;
 export const PAINT_NO_CANVAS = 'This browser could not open a picture that large to paint.';
+export const FILL_TOO_LARGE = 'This device could not fill an area that large.';
 
 
 /** What a measurement of Paint's memory reads, in development builds. */
@@ -182,6 +183,10 @@ export interface PaintSurfaceOptions {
 }
 
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
+
+/** The colour of the picture's pixel at (x, y), read through the store's reading canvas, never off the picture itself. */
+const colourIn = (canvas: HTMLCanvasElement, store: CanvasTileStore, x: number, y: number) =>
+  readColour({ canvas, getImageData: (px, py, w, h) => store.read({ tx: 0, ty: 0, x: px, y: py, w, h }) }, x, y);
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
   const { map, picture, pictureSettled, campaignId, onSaved, isDM, mapControls, markDirty, refuse, make } = options;
@@ -282,9 +287,6 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       ctx.fillStyle = DRAWN_MAP_BACKGROUND;
       ctx.fillRect(0, 0, width, height);
     }
-    // The eraser's colour: the picture's own, read off its top-left pixel.
-    const second = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
-    setSettings((prev) => ({ ...prev, second }));
     // The history is made after the store, which tells it of each tile packed.
     let history: PaintHistory<KeptTile> | null = null;
     const store = createCanvasTileStore(canvas, {
@@ -293,6 +295,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // Packing waits while a stroke or a shape is being drawn.
       busy: () => strokeRef.current !== null || shapeRef.current !== null,
     });
+    // The eraser's colour: the picture's own, read off its top-left pixel.
+    const second = colourIn(canvas, store, 0, 0) ?? DRAWN_MAP_BACKGROUND;
+    setSettings((prev) => ({ ...prev, second }));
     history = createPaintHistory(store, {
       width,
       height,
@@ -437,29 +442,50 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   }, [land]);
 
   /**
-   * Fill the area at map pixel `point` with the colour: the picture's pixels
-   * are read, filled (floodFill.ts), and only the box that changed is put
-   * back, its tiles kept first. Not while an undo is putting tiles back:
-   * the pixels read would be the ones it is replacing.
+   * Fill the area at map pixel `point` with the colour, tile by tile
+   * (floodFill.ts): each tile is read through the store's reading canvas as
+   * the fill reaches it, its pixels as they were handed to undo before its
+   * first change, and written back. Not while an undo is putting tiles
+   * back: the pixels read would be the ones it is replacing. A device that
+   * cannot read the picture is told so; a part already filled stays, and
+   * Undo takes it back.
    */
   const fillAt = useCallback((point: PaintPoint) => {
     const s = surfaceRef.current;
     if (!s || s.history.busy()) return;
     const look = settingsRef.current;
     const { width, height } = s.canvas;
-    const pixels = s.ctx.getImageData(0, 0, width, height);
-    const box = floodFill(pixels, point[0] * s.sx, point[1] * s.sy, hexToRgba(look.colour), Math.round(look.tolerance * 2.55));
-    if (!box) return;
     const step = s.history.begin();
-    step.cover(box);
+    let box: PaintBox | null = null;
+    let changedTiles = 0;
+    try {
+      box = floodFillTiled({
+        width,
+        height,
+        tileSize: PAINT_TILE,
+        read: (tile) => s.store.read(tile),
+        changing: (tile, pixels) => {
+          changedTiles += 1;
+          step.keep(tile, s.store.adopt(tile, s.store.copy(pixels)));
+        },
+        write: (tile, pixels) => s.ctx.putImageData(pixels, tile.x, tile.y),
+      }, point[0] * s.sx, point[1] * s.sy, hexToRgba(look.colour), Math.round(look.tolerance * 2.55));
+    } catch (err) {
+      console.warn('[paint] A fill could not read the picture:', errorSummary(err));
+      refuse(FILL_TOO_LARGE);
+    }
+    // Nothing changed: nothing to undo. A fill cut short by a failure keeps what it filled, for Undo.
+    if (!box && changedTiles === 0) {
+      step.drop();
+      return;
+    }
     void step.land(() => {
-      s.ctx.putImageData(pixels, 0, 0, box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0);
       s.revision += 1;
     }).finally(() => {
       bump();
       markDirty('terrain');
     });
-  }, [bump, markDirty]);
+  }, [bump, markDirty, refuse]);
 
   const closeText = useCallback(() => {
     textRef.current = null;
@@ -558,7 +584,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     if (!s) return;
     const [x, y] = toPicture([point], s.sx, s.sy)[0];
-    const colour = readColour(s.ctx, x, y);
+    const colour = colourIn(s.canvas, s.store, x, y);
     setSettings((prev) => ({ ...prev, ...(colour ? { colour } : {}), tool: lastToolRef.current }));
   }, []);
 

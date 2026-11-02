@@ -1,13 +1,20 @@
 /**
- * The fill bucket, on a plain pixel buffer: it fills the area of the colour
- * pressed, side to side and up and down but not corner to corner, takes in
- * colours within its tolerance, stops at anything further off, and answers
- * the box it changed, which is what undo keeps.
+ * The fill bucket, tile by tile, on a plain pixel buffer: it fills the area
+ * of the colour pressed, side to side and up and down but not corner to
+ * corner, takes in colours within its tolerance, stops at anything further
+ * off, and answers the box it changed. It reads a tile only as the fill
+ * reaches it, never the whole picture, and holds one tile's pixels at a
+ * time: each tile is read, filled, written back and let go of, and read
+ * again if the fill comes back to it. Each tile it changes is handed over,
+ * as it was, once, before its first change: that is what undo keeps.
+ *
+ * Tiles here are 3 pixels square, so the small pictures cross many edges.
  */
 
 import { describe, it, expect } from 'vitest';
-import { floodFill, type Pixels } from '../floodFill';
+import { floodFillTiled, type FillTiles, type Pixels } from '../floodFill';
 import { hexToRgba } from '../pixelColour';
+import type { TileRect } from '../paintHistory';
 
 /** A picture `rows` describes, one character a pixel: `.` white, `#` black, `g` near white, `o` grey. */
 function picture(rows: string[]): Pixels {
@@ -37,6 +44,37 @@ function rows(p: Pixels): string[] {
   return out;
 }
 
+/** The picture's tiles, read and written as copies, with what the fill asked of them. */
+function tilesOf(p: Pixels, tileSize = 3) {
+  const reads: string[] = [];
+  const changing: Array<{ key: string; before: string }> = [];
+  let held = 0;
+  let mostHeld = 0;
+  const access: FillTiles = {
+    width: p.width,
+    height: p.height,
+    tileSize,
+    read(t: TileRect) {
+      reads.push(`${t.tx},${t.ty}`);
+      held += 1;
+      mostHeld = Math.max(mostHeld, held);
+      const data = new Uint8ClampedArray(t.w * t.h * 4);
+      for (let y = 0; y < t.h; y += 1) data.set(p.data.subarray(((t.y + y) * p.width + t.x) * 4, ((t.y + y) * p.width + t.x + t.w) * 4), y * t.w * 4);
+      return { width: t.w, height: t.h, data };
+    },
+    changing(t: TileRect, pixels: Pixels) {
+      changing.push({ key: `${t.tx},${t.ty}`, before: [...pixels.data.subarray(0, 4)].join(',') });
+    },
+    write(t: TileRect, pixels: Pixels) {
+      for (let y = 0; y < t.h; y += 1) p.data.set(pixels.data.subarray(y * t.w * 4, (y + 1) * t.w * 4), ((t.y + y) * p.width + t.x) * 4);
+    },
+    done() {
+      held -= 1;
+    },
+  };
+  return { access, reads, changing, mostHeld: () => mostHeld };
+}
+
 const red = hexToRgba('#c80a14');
 
 describe('the fill bucket', () => {
@@ -47,7 +85,7 @@ describe('the fill bucket', () => {
       '#####...',
       '.....#..',
     ]);
-    const box = floodFill(p, 1, 1, red, 0);
+    const box = floodFillTiled(tilesOf(p).access, 1, 1, red, 0);
     expect(rows(p)).toEqual([
       'RRRR#...',
       'RRRR#...',
@@ -57,48 +95,87 @@ describe('the fill bucket', () => {
     expect(box).toEqual({ x0: 0, y0: 0, x1: 4, y1: 2 });
   });
 
-  it('runs round a wall to fill all that touches side to side', () => {
+  it('runs round a wall across tiles to fill all that touches side to side', () => {
     const p = picture([
-      '......',
-      '.####.',
-      '.#..#.',
-      '.####.',
-      '......',
+      '........',
+      '.######.',
+      '.#....#.',
+      '.######.',
+      '........',
     ]);
-    floodFill(p, 0, 0, red, 0);
+    floodFillTiled(tilesOf(p).access, 0, 0, red, 0);
     expect(rows(p)).toEqual([
-      'RRRRRR',
-      'R####R',
-      'R#..#R',
-      'R####R',
-      'RRRRRR',
+      'RRRRRRRR',
+      'R######R',
+      'R#....#R',
+      'R######R',
+      'RRRRRRRR',
     ]);
+  });
+
+  it('follows a winding passage back into tiles it has been through', () => {
+    const p = picture([
+      '.........',
+      '########.',
+      '.........',
+      '.########',
+      '.........',
+    ]);
+    const { access, reads } = tilesOf(p);
+    floodFillTiled(access, 0, 0, red, 0);
+    expect(rows(p)).toEqual([
+      'RRRRRRRRR',
+      '########R',
+      'RRRRRRRRR',
+      'R########',
+      'RRRRRRRRR',
+    ]);
+    // The first tile is read again when the passage comes back to it.
+    expect(reads.filter((k) => k === '0,0').length).toBeGreaterThan(1);
   });
 
   it('takes in colours within its tolerance, and no further', () => {
-    const p = picture([
-      '..gg..',
-      '..oo..',
-    ]);
-    floodFill(p, 0, 0, red, 0);
+    const p = picture(['..gg..', '..oo..']);
+    floodFillTiled(tilesOf(p).access, 0, 0, red, 0);
     expect(rows(p)).toEqual(['RRgg..', 'RRoo..']);
     const q = picture(['..gg..', '..oo..']);
-    floodFill(q, 0, 0, red, 12);
+    floodFillTiled(tilesOf(q).access, 0, 0, red, 12);
     expect(rows(q)).toEqual(['RRRRRR', 'RRooRR']);
   });
 
-  it('changes nothing, and answers no box, where the colour pressed is the fill colour', () => {
+  it('changes nothing, and answers no box, where the colour pressed is the fill colour or off the picture', () => {
     const p = picture(['..', '..']);
-    const white = hexToRgba('#ffffff');
-    expect(floodFill(p, 0, 0, white, 40)).toBeNull();
-    expect(floodFill(p, 5, 5, red, 0)).toBeNull();
+    expect(floodFillTiled(tilesOf(p).access, 0, 0, hexToRgba('#ffffff'), 40)).toBeNull();
+    expect(floodFillTiled(tilesOf(p).access, 5, 5, red, 0)).toBeNull();
+  });
+
+  it('reads only the tiles the fill reaches, one at a time, and hands each it changes over once, as it was', () => {
+    const p = picture([
+      '###.........',
+      '#.#.........',
+      '###.........',
+      '............',
+    ]);
+    const { access, reads, changing, mostHeld } = tilesOf(p);
+    floodFillTiled(access, 1, 1, red, 0);
+    expect(rows(p)[1]).toBe('#R#.........');
+    expect(reads).toEqual(['0,0']);
+    expect(changing).toEqual([{ key: '0,0', before: '0,0,0,255' }]);
+    expect(mostHeld()).toBe(1);
+
+    const q = picture(['......', '......', '......', '......', '......', '......']);
+    const big = tilesOf(q);
+    floodFillTiled(big.access, 4, 4, red, 0);
+    expect(big.changing.map((c) => c.key).sort()).toEqual(['0,0', '0,1', '1,0', '1,1']);
+    expect(big.mostHeld()).toBe(1);
   });
 
   it('fills a large area without running out of stack', () => {
     const width = 2000;
     const height = 2000;
     const p: Pixels = { width, height, data: new Uint8ClampedArray(width * height * 4).fill(255) };
-    expect(floodFill(p, 1000, 1000, red, 0)).toEqual({ x0: 0, y0: 0, x1: 2000, y1: 2000 });
+    expect(floodFillTiled(tilesOf(p, 256).access, 1000, 1000, red, 0)).toEqual({ x0: 0, y0: 0, x1: 2000, y1: 2000 });
     expect([...p.data.subarray(0, 4)]).toEqual([200, 10, 20, 255]);
+    expect([...p.data.subarray(p.data.length - 4)]).toEqual([200, 10, 20, 255]);
   });
 });
