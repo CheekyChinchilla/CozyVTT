@@ -986,7 +986,8 @@ an asset's own `/api/assets/<kind>/:id` address, stored as sent. Anything else, 
 site included, answers `403`, as does an asset the DM may not read unless this campaign already uses
 that exact address. An existing asset that is not a token picture (type `TOKEN`) answers `400` with
 `The token image must be a token picture from the asset library.` Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
-as the full path. Rows written before this normalisation may still hold a bare id, so clients should
+as the full path, and refuses with the same `400` a creature stored before this rule whose picture is
+not a token picture. Rows written before this normalisation may still hold a bare id, so clients should
 tolerate both when reading.
 
 ### `GET /api/campaigns/:id/creatures`

@@ -8985,7 +8985,10 @@ paths:
         `<name> (Custom)`, with `source: custom`, and copies the stat block
         and every other field; an older bare-id
         `imageUrl` is normalised to `/api/assets/tokens/<id>`. A creature
-        belonging to another campaign answers 404.
+        belonging to another campaign answers 404. A creature stored before
+        the token-picture rule whose `imageUrl` names an asset that is not a
+        token picture (type TOKEN) is not copied: 400 (`The token image must
+        be a token picture from the asset library.`).
       operationId: duplicateCreature
       security:
         - cookieAuth: []
@@ -9004,6 +9007,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreatureTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':

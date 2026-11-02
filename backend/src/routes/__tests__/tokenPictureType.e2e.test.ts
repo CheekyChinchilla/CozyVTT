@@ -168,6 +168,13 @@ const WRITES: Array<[string, (address: string) => Promise<{ res: request.Respons
     const res = await dm.post(at('/creatures')).send({ name: 'Imp', statBlock: commoner, imageUrl: a });
     return { res, stored: async () => (res.body.id ? (await prisma.creatureTemplate.findUniqueOrThrow({ where: { id: res.body.id } })).imageUrl : null) };
   }],
+  // A creature stored before the rule may hold another kind of picture; its
+  // copy is a new record, held to the rule as a template's copy is.
+  ['duplicating a creature', async (a) => {
+    const id = await storedCreature(a);
+    const res = await dm.post(at(`/creatures/${id}/duplicate`));
+    return { res, stored: async () => (res.body.id ? (await prisma.creatureTemplate.findUniqueOrThrow({ where: { id: res.body.id } })).imageUrl : null) };
+  }],
   ['editing a creature', async (a) => {
     const id = await storedCreature(null);
     const res = await dm.put(at(`/creatures/${id}`)).send({ imageUrl: a });

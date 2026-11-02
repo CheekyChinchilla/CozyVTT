@@ -405,6 +405,15 @@ router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedReque
       return res.status(404).json({ error: 'Not Found', message: 'Creature template not found' });
     }
 
+    // Duplicating an older SRD row is a chance to normalise its bare id.
+    const imageUrl = normalizeAssetUrl(source.imageUrl, 'tokens');
+    // The copy is a new picture, held to the rule as any other is
+    // (isTokenPicture), as a token template's copy is: a creature stored
+    // before the rule may hold a map picture.
+    if (!(await isTokenPicture(imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
+    }
+
     const duplicate = await prisma.creatureTemplate.create({
       data: {
         id: randomUUID(),
@@ -414,8 +423,7 @@ router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedReque
         challengeRating: source.challengeRating,
         creatureType: source.creatureType,
         alignment: source.alignment,
-        // Duplicating an older SRD row is a chance to normalise its bare id.
-        imageUrl: normalizeAssetUrl(source.imageUrl, 'tokens'),
+        imageUrl,
         statBlock: source.statBlock as object,
         size: source.size as object,
         disposition: source.disposition,
