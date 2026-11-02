@@ -45,9 +45,10 @@
 // - Something holding work the page would lose (Paint not saved) holds the
 //   entry as a dialog, on both layouts, so Back asks first. Told to leave,
 //   its release takes the entry off and then goes Back once more, past the
-//   page, as the Back it asked about would have (once any dialog opened
-//   after it, its own question on a phone, has closed); one that leaves by the
+//   page, as the Back it asked about would have; one that leaves by the
 //   page's own way out releases it in place, for that way out to replace.
+//   Either holds until any dialog opened after it, its own question on a
+//   phone, has closed.
 // ============================================
 
 const MARK = 'cozyvttSheet';
@@ -68,6 +69,12 @@ const openSheets: OpenSheet[] = [];
 
 let openings = 0;
 
+/**
+ * The place of a hold beneath every sheet and dialog, those open already
+ * included: Back reaches it only once none of them is open.
+ */
+export const BENEATH_EVERY_SHEET = 0;
+
 /** A number that grows with each opening of a sheet or a dialog's trap, which keeps its place in the list. */
 export function nextOpening(): number {
   openings += 1;
@@ -79,10 +86,11 @@ let ownBack = false;
 /** Once our own Back has taken the entry off, go Back again, leaving the page. */
 let leaveAfterOwnBack = false;
 /**
- * A hold released to leave while dialogs opened after it, such as its own
- * question, still hold the entry: the page is left once they have closed.
+ * A hold released to leave, or in place, while dialogs opened after it,
+ * such as its own question, still hold the entry: once they have closed,
+ * the page is left, or the entry is left for the page's way out to replace.
  */
-let leaveWhenClear = false;
+let whenClear: SheetRelease | null = null;
 let listening = false;
 
 function onMarkedEntry(): boolean {
@@ -168,13 +176,18 @@ function holdEntry(kind: OpenSheet['kind'], close: () => void, opened: number): 
       const at = openSheets.indexOf(sheet);
       if (at === -1) return;
       openSheets.splice(at, 1);
-      if (how === 'leave') leaveWhenClear = openSheets.every((other) => other.opened > opened);
-      if (openSheets.length > 0 || how === 'inPlace') return;
+      if (openSheets.length > 0) {
+        if (how) whenClear = openSheets.every((other) => other.opened > opened) ? how : null;
+        return;
+      }
+      // The last one: its own way, or the way of a hold released under it.
+      const then = how ?? whenClear;
+      whenClear = null;
+      if (then === 'inPlace') return;
       queueMicrotask(() => {
         if (openSheets.length > 0 || !onMarkedEntry()) return;
         ownBack = true;
-        leaveAfterOwnBack = leaveWhenClear;
-        leaveWhenClear = false;
+        leaveAfterOwnBack = then === 'leave';
         window.history.back();
       });
     },

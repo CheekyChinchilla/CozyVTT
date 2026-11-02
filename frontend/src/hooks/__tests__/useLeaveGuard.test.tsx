@@ -7,8 +7,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, render, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { useLeaveGuard, useLeavePage } from '../useLeaveGuard';
-import { dialogOpened, nextOpening } from '@/components/campaign/compact/sheetHistory';
+import { dialogOpened, nextOpening, sheetOpened } from '@/components/campaign/compact/sheetHistory';
 
 const page = vi.hoisted(() => ({ navigate: vi.fn() }));
 vi.mock('react-router', () => ({ useNavigate: () => page.navigate }));
@@ -42,8 +43,44 @@ function Page({ active, ask, holdBack = true }: { active: boolean; ask: () => Pr
   return null;
 }
 
+/** The router's move, as BrowserRouter makes it. */
+const routerMove = (to: string, options?: { replace?: boolean }) => {
+  if (options?.replace) window.history.replaceState({}, '', to);
+  else window.history.pushState({}, '', to);
+};
+
+/**
+ * A page whose work ends in the same moment as the question's yes, as
+ * Discard my painting drops the paint in its click: the yes and the end of
+ * the work are one update.
+ */
+let answerAndDrop: ((leave: boolean) => void) | null = null;
+function WorkPage({ onPhone = false }: { onPhone?: boolean }) {
+  const [active, setActive] = useState(true);
+  const ask = () => {
+    // On a phone the question's own dialog holds an entry until it closes.
+    const dialog = onPhone ? dialogOpened(() => undefined, nextOpening()) : null;
+    return new Promise<boolean>((resolve) => {
+      answerAndDrop = (leave) => {
+        if (leave) setActive(false);
+        resolve(leave);
+        if (dialog) queueMicrotask(() => dialog.release());
+      };
+    });
+  };
+  useLeaveGuard(active, ask, { holdBack: true });
+  leave = useLeavePage();
+  return null;
+}
+/** Answer in one click, the work dropped with a yes, and let the history settle. */
+async function answerInOneClick(yes: boolean) {
+  act(() => { answerAndDrop?.(yes); });
+  await act(() => new Promise((resolve) => setTimeout(resolve, 40)));
+}
+
 beforeEach(() => {
   page.navigate.mockReset();
+  answerAndDrop = null;
   arriveAt('/campaigns/c1');
 });
 afterEach(async () => {
@@ -151,7 +188,87 @@ describe("the browser's Back", () => {
   });
 });
 
+describe('a yes that ends the work in the same moment, as Discard does', () => {
+  it.each([[false, 'a computer'], [true, 'a phone']])('leaves by Back past the page (on a phone: %s)', async (onPhone) => {
+    render(<WorkPage onPhone={onPhone} />);
+    await pressBack();
+    expect(answerAndDrop).not.toBeNull();
+    await answerInOneClick(true);
+    await waitFor(() => expect(window.location.pathname).toBe('/dashboard'));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 40)));
+    expect(window.location.pathname).toBe('/dashboard');
+  });
+
+  it.each([[false, 'a computer'], [true, 'a phone']])("leaves by the header's way, and stays gone (on a phone: %s)", async (onPhone) => {
+    page.navigate.mockImplementation(routerMove);
+    render(<WorkPage onPhone={onPhone} />);
+    act(() => { leave!('/characters'); });
+    expect(answerAndDrop).not.toBeNull();
+    await answerInOneClick(true);
+    expect(page.navigate).toHaveBeenCalledWith('/characters', { replace: true });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 40)));
+    expect(window.location.pathname).toBe('/characters');
+  });
+
+  it('stays on a no, the entry held for the next Back', async () => {
+    render(<WorkPage />);
+    await pressBack();
+    await answerInOneClick(false);
+    expect(window.location.pathname).toBe('/campaigns/c1');
+    expect(onHeldEntry()).toBe(true);
+  });
+});
+
+describe('asked once', () => {
+  it("for the header's way pressed twice before the question shows", async () => {
+    const q = question();
+    render(<Page active ask={q.ask} />);
+    act(() => { leave!('/dashboard'); leave!('/dashboard'); });
+    await act(async () => { await Promise.resolve(); });
+    expect(q.ask).toHaveBeenCalledTimes(1);
+    await q.answer(false);
+  });
+});
+
+describe('a sheet open before the work began', () => {
+  it('is closed by Back first, as before, and only then is the page asked about', async () => {
+    const closed = vi.fn();
+    const sheet = sheetOpened(closed);
+    const q = question();
+    render(<Page active ask={q.ask} />);
+    await pressBack();
+    expect(closed).toHaveBeenCalledTimes(1);
+    expect(q.ask).not.toHaveBeenCalled();
+    sheet.release();
+    await pressBack();
+    expect(q.ask).toHaveBeenCalledTimes(1);
+    await q.answer(false);
+  });
+});
+
 describe('a reload or a closed tab', () => {
+  it('is listened for only while there is work', () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    try {
+      const { ask } = question();
+      const { rerender } = render(<Page active={false} ask={ask} />);
+      expect(added.mock.calls.filter(([type]) => type === 'beforeunload')).toEqual([]);
+      rerender(<Page active ask={ask} />);
+      expect(added.mock.calls.filter(([type]) => type === 'beforeunload')).toHaveLength(1);
+    } finally {
+      added.mockRestore();
+    }
+  });
+
+  it('sets returnValue as well, which older browsers ask on', () => {
+    const { ask } = question();
+    render(<Page active ask={ask} />);
+    const event = new Event('beforeunload', { cancelable: true }) as Event & { returnValue: unknown };
+    Object.defineProperty(event, 'returnValue', { value: undefined, writable: true });
+    window.dispatchEvent(event);
+    expect(event.returnValue).toBe('');
+  });
+
   it("gets the browser's question while there is work, and none after", () => {
     const { ask } = question();
     const { rerender } = render(<Page active ask={ask} />);
