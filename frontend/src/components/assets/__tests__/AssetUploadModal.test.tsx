@@ -182,6 +182,22 @@ describe('the name, description and tags', () => {
     expect(screen.getByText('An asset can have at most 50 tags.')).toBeInTheDocument();
   });
 
+  // A drawn-map picture is one Paint may change and a save may delete, so
+  // a picture uploaded here never carries the tag, whatever its case.
+  it('keeps the drawn-map tag for maps drawn in CozyVTT', async () => {
+    open();
+    const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
+    for (const tag of ['drawn-map', 'Drawn-Map', ' DRAWN-MAP ']) {
+      fireEvent.change(tagBox, { target: { value: tag } });
+      fireEvent.keyDown(tagBox, { key: 'Enter' });
+    }
+    expect(screen.getByText('The tag drawn-map is kept for maps drawn in CozyVTT.')).toBeInTheDocument();
+    fireEvent.change(tagBox, { target: { value: 'dungeon' } });
+    fireEvent.keyDown(tagBox, { key: 'Enter' });
+    expect(screen.queryByText(/^drawn-map$/i)).not.toBeInTheDocument();
+    expect(screen.getByText('dungeon')).toBeInTheDocument();
+  });
+
   it('names an upload after its file, cut to 200 characters', async () => {
     open();
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
