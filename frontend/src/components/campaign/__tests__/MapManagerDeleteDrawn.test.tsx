@@ -11,6 +11,14 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import type { AxiosAdapter, AxiosInstance, AxiosResponse } from 'axios';
 import MapManager from '../MapManager';
 import { api } from '@/services/api';
+import { memoryDraftStore, type MemoryDraftStore } from '@/test/memoryDraftStore';
+import { draftKey } from '../map/paint/paintDrafts';
+
+const drafts = vi.hoisted(() => ({ store: null as unknown }));
+vi.mock('../map/paint/paintDrafts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../map/paint/paintDrafts')>()),
+  paintDraftStore: () => drafts.store,
+}));
 
 vi.mock('framer-motion', () => {
   const MotionDiv = (props: Record<string, unknown>) => {
@@ -90,6 +98,7 @@ beforeEach(() => {
   tags = ['drawn-map'];
   assetDeleteStatus = 200;
   holdPicture = null;
+  drafts.store = memoryDraftStore();
   requests.length = 0;
   browserAdapter = client.defaults.adapter;
   client.defaults.adapter = network;
@@ -158,5 +167,17 @@ describe('deleting a drawn map', () => {
     await act(async () => { holdPicture?.release(); await Promise.resolve(); await Promise.resolve(); });
     expect(requests).toContain(`get /api/assets/${picture}`);
     expect(box()).toBeNull();
+  });
+
+  it('drops every draft of the map\'s painting kept in this browser, and keeps the other maps\'', async () => {
+    const store = drafts.store as MemoryDraftStore;
+    const header = (userId: string, mapId: string) => ({ key: draftKey(userId, 'campaign-1', mapId, 'a-tab'), userId, campaignId: 'campaign-1', mapId, tabId: 'a-tab', baseUrl: '', width: 10, height: 10, savedAt: 0 });
+    await store.put(header('me', 'crypt'), [], true);
+    await store.put(header('a-former-dm', 'crypt'), [], true);
+    await store.put(header('me', 'cave'), [], true);
+    const dialog = await askToDeleteCrypt();
+    await confirm(dialog);
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    expect([...store.headers.values()].map((h) => h.mapId)).toEqual(['cave']);
   });
 });

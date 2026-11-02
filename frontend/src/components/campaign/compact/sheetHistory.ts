@@ -42,6 +42,13 @@
 //   such as the editor in the character sheet, both take their holds again,
 //   the inner one first (React runs a child's effects before its parent's),
 //   and Back must still close the one on top.
+// - Something holding work the page would lose (Paint not saved) holds the
+//   entry as a dialog, on both layouts, so Back asks first. Told to leave,
+//   its release takes the entry off and then goes Back once more, past the
+//   page, as the Back it asked about would have; one that leaves by the
+//   page's own way out releases it in place, for that way out to replace.
+//   Either holds until any dialog opened after it, its own question on a
+//   phone, has closed.
 // ============================================
 
 const MARK = 'cozyvttSheet';
@@ -62,6 +69,12 @@ const openSheets: OpenSheet[] = [];
 
 let openings = 0;
 
+/**
+ * The place of a hold beneath every sheet and dialog, those open already
+ * included: Back reaches it only once none of them is open.
+ */
+export const BENEATH_EVERY_SHEET = 0;
+
 /** A number that grows with each opening of a sheet or a dialog's trap, which keeps its place in the list. */
 export function nextOpening(): number {
   openings += 1;
@@ -70,6 +83,14 @@ export function nextOpening(): number {
 
 /** The popstate our own history.back() brings, which closes nothing. */
 let ownBack = false;
+/** Once our own Back has taken the entry off, go Back again, leaving the page. */
+let leaveAfterOwnBack = false;
+/**
+ * A hold released to leave, or in place, while dialogs opened after it,
+ * such as its own question, still hold the entry: once they have closed,
+ * the page is left, or the entry is left for the page's way out to replace.
+ */
+let whenClear: SheetRelease | null = null;
 let listening = false;
 
 function onMarkedEntry(): boolean {
@@ -86,6 +107,13 @@ function pushMarkedEntry(): void {
 function onPopState(): void {
   if (ownBack) {
     ownBack = false;
+    if (leaveAfterOwnBack) {
+      leaveAfterOwnBack = false;
+      if (openSheets.length === 0) {
+        window.history.back();
+        return;
+      }
+    }
     // A sheet opened after the close asked to go back, before the browser
     // got there, found the entry still on and put none on; it gets one now.
     if (openSheets.length > 0 && !onMarkedEntry()) pushMarkedEntry();
@@ -118,13 +146,17 @@ export function onSheetEntry(): boolean {
   return onMarkedEntry();
 }
 
+/** How a hold on the entry ends: `leave` goes Back past the page as well; `inPlace` leaves the entry for the page's way out to replace. */
+export type SheetRelease = 'leave' | 'inPlace';
+
 /** An open sheet's hold on the entry. */
 export interface SheetEntry {
   /**
    * The sheet has closed, however it closed. Calling it after Back has
-   * closed the sheet, or a second time, does nothing.
+   * closed the sheet, or a second time, does nothing. With nothing else
+   * open, the entry comes off, unless `how` says otherwise.
    */
-  release: () => void;
+  release: (how?: SheetRelease) => void;
   /** Whether this is the sheet or dialog opened last of those still open. */
   isTop: () => boolean;
 }
@@ -140,14 +172,22 @@ function holdEntry(kind: OpenSheet['kind'], close: () => void, opened: number): 
   if (!onMarkedEntry()) pushMarkedEntry();
 
   return {
-    release: () => {
+    release: (how?: SheetRelease) => {
       const at = openSheets.indexOf(sheet);
       if (at === -1) return;
       openSheets.splice(at, 1);
-      if (openSheets.length > 0) return;
+      if (openSheets.length > 0) {
+        if (how) whenClear = openSheets.every((other) => other.opened > opened) ? how : null;
+        return;
+      }
+      // The last one: its own way, or the way of a hold released under it.
+      const then = how ?? whenClear;
+      whenClear = null;
+      if (then === 'inPlace') return;
       queueMicrotask(() => {
         if (openSheets.length > 0 || !onMarkedEntry()) return;
         ownBack = true;
+        leaveAfterOwnBack = then === 'leave';
         window.history.back();
       });
     },

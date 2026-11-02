@@ -27,6 +27,15 @@ import type { WallSegment } from '@/types/walls';
 import { recordDrawing, nextFrame, pictures, type Call } from '@/test/recordingCanvas';
 import { contact, mouse } from '@/test/pointer';
 import { usePaintStore } from '@/stores/paintStore';
+import { memoryDraftStore, type MemoryDraftStore } from '@/test/memoryDraftStore';
+import { draftKey, draftTime, DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_FULL, DRAFTS_UNAVAILABLE } from '../map/paint/paintDrafts';
+import { qoiEncode } from '../map/paint/qoi';
+import { viewedMapGuards } from '@/test/viewedMapContext';
+import { leavePageWith } from '@/services/pageLeave';
+import { onSheetEntry } from '@/components/campaign/compact/sheetHistory';
+import { hasUnsavedWork, reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
+import type { ViewedMapChange } from '@/contexts/CampaignContext';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -64,6 +73,11 @@ const h = vi.hoisted(() => {
     deleteAsset: vi.fn(),
     updateMap: vi.fn(),
     getMap: vi.fn(),
+    /** The draft store Paint is given; a fresh one each test. */
+    drafts: { store: null as unknown },
+    /** This tab, as drafts tell tabs apart, and the other tabs open now (null: the browser cannot tell). */
+    tab: { id: () => 'this-tab', open: (): Promise<Set<string> | null> => Promise.resolve(h.openTabs) },
+    openTabs: null as Set<string> | null,
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => version,
     set(patch: Partial<typeof state>) {
@@ -75,11 +89,16 @@ const h = vi.hoisted(() => {
 });
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
+vi.mock('../map/paint/paintDrafts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../map/paint/paintDrafts')>()),
+  paintDraftStore: () => h.drafts.store,
+  paintTab: () => h.tab,
+}));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
   const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, (map) => h.set({ currentMap: map }));
   const noop = () => undefined;
-  const campaign = { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, characters: [], status: 'ACTIVE', playersMayDraw: true, memberships: [] };
+  const campaign = { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, characters: [], status: 'ACTIVE', playersMayDraw: true, memberships: [], maps: [{ id: 'map-a' }, { id: 'map-b' }] };
   return {
     useCampaign: () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
@@ -241,7 +260,12 @@ beforeAll(() => {
   Object.defineProperty(window, 'ResizeObserver', { value: RO, configurable: true });
 });
 
+/** The draft store of this test. */
+const drafts = () => h.drafts.store as MemoryDraftStore;
+
 beforeEach(() => {
+  h.drafts.store = memoryDraftStore();
+  h.openTabs = null;
   h.sent.length = 0;
   h.handlers.clear();
   h.getAsset.mockReset().mockResolvedValue(drawnAsset());
@@ -1033,5 +1057,792 @@ describe('Paint owns the map', () => {
     await paintOn();
     await drop();
     expect(h.addToken).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Painting the map the table is on, while the players play. They are sent
+ * nothing until Save, and the map sent again meanwhile (a token moved, the
+ * DM's own save coming back) leaves the paint and the stroke under way as
+ * they are.
+ */
+describe('on the table\'s map', () => {
+  const question = () => screen.queryByRole('dialog', { name: 'This map\'s picture changed' });
+  /** The server sending the table's map again, as it does after a token's REST change or a save. */
+  const sendMap = (map: CampaignMap) => {
+    act(() => {
+      for (const handler of h.handlers.get('map.changed') ?? []) handler({ mapId: map.id, mapData: map } as never);
+    });
+  };
+
+  it('sends the table nothing while the DM paints, fills and undoes', async () => {
+    await showMap();
+    await paintOn();
+    h.sent.length = 0;
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    press('f');
+    fireEvent.pointerDown(input(), { pointerId: 9, pointerType: 'mouse', button: 0, buttons: 1, isPrimary: true, clientX: 700, clientY: 700 });
+    fireEvent.pointerUp(input(), { pointerId: 9, pointerType: 'mouse', button: 0, buttons: 0, isPrimary: true, clientX: 700, clientY: 700 });
+    await act(async () => { press('z', { ctrlKey: true }); });
+    expect(h.sent).toEqual([]);
+    expect(h.updateMap).not.toHaveBeenCalled();
+    expect(h.uploadAsset).not.toHaveBeenCalled();
+  });
+
+  it('keeps the stroke under way and the paint not saved when the map is sent again with a token moved', async () => {
+    const goblin = token('goblin', 2, 15);
+    await showMap(mapWith({ tokens: [goblin] }));
+    act(() => { useGameStore.getState().setTokens([goblin], 'map-a'); });
+    await paintOn();
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    mouse.down(input(), { clientX: 500, clientY: 500 });
+    mouse.move(input(), { clientX: 600, clientY: 520 }, 1);
+    // A player moved the goblin: the server sends the table's map again.
+    sendMap({ ...(h.state.currentMap as CampaignMap), tokens: [{ ...goblin, position: { x: 4, y: 15 } }] });
+    mouse.move(input(), { clientX: 700, clientY: 540 }, 1);
+    mouse.up(input(), { clientX: 700, clientY: 540 });
+    expect(strokesOn(canvas)).toHaveLength(2);
+    expect(pictureCanvas()).toBe(canvas);
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(useGameStore.getState().tokens.goblin?.position).toEqual({ x: 4, y: 15 });
+    expect(question()).toBeNull();
+  });
+
+  it('takes its own save sent back before the save has answered as the picture saved: Paint stays on, nothing asked', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    // The server tells every page of the new picture before it answers the save.
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => {
+      const saved = { ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` };
+      sendMap(saved);
+      return Promise.resolve(saved);
+    });
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    expect(question()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    // And painting goes on, on the picture saved.
+    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+});
+
+/**
+ * Drafts: what is painted and not saved is kept in the browser, the tiles
+ * changed only, so a reload or a closed tab does not take it, and is
+ * offered back when Paint opens on the map again.
+ */
+describe('drafts', () => {
+  /** This tab's draft of map-a. */
+  const key = draftKey('me', 'campaign-1', 'map-a', 'this-tab');
+  /** The draft a tab closed since left of map-a. */
+  const closedKey = draftKey('me', 'campaign-1', 'map-a', 'closed-tab');
+  /** Let the draft's write, queued behind any before it, land. */
+  const settle = () => act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+  const restoreQuestion = () => screen.queryByRole('dialog', { name: 'Restore your painting?' });
+  /** A draft kept for map-a by a tab (closed, unless said), of the two tiles at the top left, as a reload would find it. */
+  function keepDraft(baseUrl: string, savedAt = Date.now(), tabId = 'closed-tab') {
+    const blank = qoiEncode(new Uint8ClampedArray(256 * 256 * 4));
+    const at = draftKey('me', 'campaign-1', 'map-a', tabId);
+    drafts().headers.set(at, { key: at, userId: 'me', campaignId: 'campaign-1', mapId: 'map-a', tabId, baseUrl, width: 1000, height: 1000, savedAt });
+    drafts().kept.set(at, new Map([['0,0', { tx: 0, ty: 0, packed: blank }], ['1,0', { tx: 1, ty: 0, packed: blank }]]));
+  }
+  const putBack = () => callsOn(pictureCanvas()).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
+
+  it('writes the tiles painted within 10 seconds, then only those changed since', async () => {
+    await showMap();
+    await paintOn();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(drafts().writes).toEqual([]);
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().writes).toEqual([{ key, tiles: ['0,0', '1,0'], fresh: true, baseUrl: (h.state.currentMap as CampaignMap).imageUrl }]);
+    drag({ clientX: 600, clientY: 600 }, { clientX: 620, clientY: 610 });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().writes[1]).toMatchObject({ tiles: ['2,2'], fresh: false });
+    expect([...drafts().kept.get(key)!.keys()].sort()).toEqual(['0,0', '1,0', '2,2']);
+  });
+
+  it('writes at once when the page is hidden', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      await settle();
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    }
+    expect(drafts().writes.map((w) => w.tiles)).toEqual([['0,0', '1,0']]);
+  });
+
+  it('writes what is not saved as another map is shown', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await settle();
+    expect(drafts().writes.map((w) => [w.key, w.tiles])).toEqual([[key, ['0,0', '1,0']]]);
+  });
+
+  it('offers the draft back when Paint opens on the map again; Restore puts its tiles back, not saved', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '', new Date(2026, 10, 2, 14, 5).getTime());
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeInTheDocument();
+    expect(within(restoreQuestion()!).getByText(`Restore your unsaved painting from ${draftTime(new Date(2026, 10, 2, 14, 5).getTime())}?`)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    expect(putBack()).toEqual([[0, 0], [256, 0]]);
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    await waitFor(() => expect(restoreQuestion()).toBeNull());
+  });
+
+  it('takes a closed tab\'s draft over: written whole as this tab\'s own, the closed tab\'s then dropped', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().writes).toEqual([{ key, tiles: ['0,0', '1,0'], fresh: true, baseUrl: map.imageUrl }]);
+    expect(drafts().headers.has(closedKey)).toBe(false);
+  });
+
+  it('keeps two tabs\' drafts of one map apart: another tab still open is neither offered nor cut', async () => {
+    h.openTabs = new Set(['this-tab', 'open-tab']);
+    keepDraft('', Date.now(), 'open-tab');
+    const openKey = draftKey('me', 'campaign-1', 'map-a', 'open-tab');
+    await showMap();
+    await paintOn();
+    expect(restoreQuestion()).toBeNull();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(drafts().writes.map((w) => w.key)).toEqual([key]);
+    expect([...drafts().kept.get(openKey)!.keys()]).toEqual(['0,0', '1,0']);
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    await settle();
+    expect(drafts().headers.has(key)).toBe(false);
+    expect(drafts().headers.has(openKey)).toBe(true);
+  });
+
+  it('writes the whole painting again when a write finds its draft gone, cleared from elsewhere', async () => {
+    await showMap();
+    await paintOn();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    // Another tab's Discard, or the browser's site data cleared.
+    drafts().headers.delete(key);
+    drafts().kept.delete(key);
+    drag({ clientX: 600, clientY: 600 }, { clientX: 620, clientY: 610 });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().writes.map((w) => [w.tiles, w.fresh])).toEqual([[['0,0', '1,0'], true], [['2,2'], false], [['0,0', '1,0', '2,2'], true]]);
+    expect([...drafts().kept.get(key)!.keys()].sort()).toEqual(['0,0', '1,0', '2,2']);
+  });
+
+  it('opens Paint without a draft when the store does not answer, and keeps none', async () => {
+    drafts().hanging = true;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    h.set({ currentMap: mapWith() });
+    render(<MapCanvas />);
+    pictures[0]?.load();
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    await act(async () => {
+      vi.advanceTimersByTime(DRAFT_LOOKUP_MS);
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('says when the browser is out of room for drafts', async () => {
+    drafts().failing = 'full';
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(screen.getByText(DRAFTS_FULL)).toBeInTheDocument();
+  });
+
+  it('Discard drops the draft and opens Paint on the picture as saved', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Discard it' })); });
+    await settle();
+    expect(drafts().headers.has(closedKey)).toBe(false);
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(putBack()).toEqual([]);
+    expect(usePaintStore.getState().unsaved).toBe(false);
+  });
+
+  it('Not now keeps the draft, and leaves Paint off until it is pressed again', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(restoreQuestion()).toBeNull());
+    expect(drafts().headers.has(closedKey)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeInTheDocument();
+  });
+
+  it('says so when the draft was painted on a picture changed since', async () => {
+    keepDraft('/api/assets/maps/an-older-picture');
+    await showMap();
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    expect(within(restoreQuestion()!).getByText(/was painted on an older picture of this map/)).toBeInTheDocument();
+    expect(within(restoreQuestion()!).getByRole('button', { name: 'Restore it over this picture' })).toBeInTheDocument();
+  });
+
+  it('is cleared by Save, and by Discard', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    await settle();
+    expect(drafts().headers.has(key)).toBe(true);
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    await settle();
+    expect(drafts().headers.has(key)).toBe(false);
+
+    // Paint on a picture changed elsewhere, discarded when asked.
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(drafts().headers.has(key)).toBe(true);
+    h.getAsset.mockImplementation((id: string) => Promise.resolve(id === 'uploaded-9' ? drawnAsset(['dungeon']) : drawnAsset()));
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), imageUrl: '/api/assets/maps/uploaded-9' } }); });
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'This map\'s picture changed' })).getByRole('button', { name: 'Discard my painting' }));
+    await settle();
+    expect(drafts().headers.has(key)).toBe(false);
+  });
+
+  it('in a browser that keeps none, says so once there is paint to keep, and painting goes on', async () => {
+    drafts().failing = 'unavailable';
+    await showMap();
+    await paintOn();
+    await settle();
+    expect(screen.queryByText(DRAFTS_UNAVAILABLE)).toBeNull();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(screen.getByText(DRAFTS_UNAVAILABLE)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close notification' }));
+    await waitFor(() => expect(screen.queryByText(DRAFTS_UNAVAILABLE)).toBeNull());
+    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 500 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(screen.queryByText(DRAFTS_UNAVAILABLE)).toBeNull();
+    expect(strokesOn(pictureCanvas())).toHaveLength(2);
+    expect(usePaintStore.getState().unsaved).toBe(true);
+  });
+
+  it('of a map no longer in the campaign, deleted from another device, is dropped as the DM opens the campaign', async () => {
+    const header = (mapId: string, userId = 'me') => ({ key: draftKey(userId, 'campaign-1', mapId, 'closed-tab'), userId, campaignId: 'campaign-1', mapId, tabId: 'closed-tab', baseUrl: '', width: 10, height: 10, savedAt: 0 });
+    await drafts().put(header('map-gone'), [], true);
+    await drafts().put(header('map-b'), [], true);
+    await drafts().put(header('map-gone', 'someone-else'), [], true);
+    await showMap();
+    await settle();
+    expect([...drafts().headers.values()].map((d) => `${d.userId} ${d.mapId}`).sort()).toEqual(['me map-b', 'someone-else map-gone']);
+  });
+
+  it('is offered to no one but the DM', async () => {
+    h.set({ userRole: 'PLAYER' });
+    keepDraft('');
+    await showMap();
+    expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
+    expect(restoreQuestion()).toBeNull();
+  });
+});
+
+/**
+ * Paint not saved is asked about before anything takes it off the screen:
+ * the campaign's map changes (Open to prepare, Back to the table, Set
+ * Active, Bring everyone here, deleting the map), and leaving the page.
+ * Each asks the same question: Save my painting, Discard my painting, or
+ * Not now, which Esc is too.
+ */
+describe('paint not saved, asked about before it is left', () => {
+  const question = () => screen.queryByRole('dialog', { name: 'Save your painting?' });
+  const guard = () => {
+    expect(viewedMapGuards.size).toBe(1);
+    return [...viewedMapGuards][0];
+  };
+  async function painted() {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+  }
+  /** Ask the map's guard about a change, keeping its answer. */
+  function askAbout(kind: ViewedMapChange['kind']) {
+    const answer: { value?: boolean } = {};
+    act(() => { void Promise.resolve(guard().mayLeave({ kind, toMapId: 'map-b' })).then((leave) => { answer.value = leave; }); });
+    return answer;
+  }
+  const choose = async (name: string) => {
+    await act(async () => { fireEvent.click(within(question()!).getByRole('button', { name })); });
+    await act(async () => { await Promise.resolve(); });
+  };
+
+  it.each([
+    ['open-other', 'Save it before you open another map?'],
+    ['back-to-table', 'Save it before you go back to the table?'],
+    ['set-active', 'Save it before the table moves to another map?'],
+  ] as const)('%s asks the three-way question; Not now keeps the paint and stops the change', async (kind, words) => {
+    await painted();
+    const answer = askAbout(kind);
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    expect(within(question()!).getByText(new RegExp(words.replace(/[.?]/g, '\\$&')))).toBeInTheDocument();
+    expect(within(question()!).getAllByRole('button').map((b) => b.textContent)).toEqual(expect.arrayContaining(['Save my painting', 'Discard my painting', 'Not now']));
+    await choose('Not now');
+    expect(answer.value).toBe(false);
+    await waitFor(() => expect(question()).toBeNull());
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('asks before the map is deleted only whether to discard it: a picture saved now would go with the map', async () => {
+    const discardQuestion = () => screen.queryByRole('dialog', { name: 'Discard your painting?' });
+    await painted();
+    const answer = askAbout('delete');
+    await waitFor(() => expect(discardQuestion()).toBeInTheDocument());
+    expect(within(discardQuestion()!).getByText('Your painting of Map A is not saved, and goes with the map.')).toBeInTheDocument();
+    expect(within(discardQuestion()!).queryByRole('button', { name: 'Save my painting' })).toBeNull();
+    await act(async () => { fireEvent.click(within(discardQuestion()!).getByRole('button', { name: 'Not now' })); });
+    await waitFor(() => expect(answer.value).toBe(false));
+    const second = askAbout('delete');
+    await waitFor(() => expect(discardQuestion()).toBeInTheDocument());
+    await act(async () => { fireEvent.click(within(discardQuestion()!).getByRole('button', { name: 'Discard my painting' })); });
+    await waitFor(() => expect(second.value).toBe(true));
+    expect(usePaintStore.getState().unsaved).toBe(false);
+  });
+
+  it('asks nothing for Bring everyone here: the map on screen stays, and its paint with it', async () => {
+    await painted();
+    const answer = askAbout('bring-everyone');
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(answer.value).toBe(true);
+    expect(question()).toBeNull();
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('waits for a save under way before Bring everyone here, which then reads the picture saved', async () => {
+    await painted();
+    let land: (() => void) | null = null;
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => new Promise((resolve) => {
+      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` });
+    }));
+    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    await waitFor(() => expect(land).not.toBeNull());
+    const answer = askAbout('bring-everyone');
+    await act(async () => { await Promise.resolve(); });
+    expect(answer.value).toBeUndefined();
+    await act(async () => { land!(); });
+    await waitFor(() => expect(answer.value).toBe(true));
+    expect(question()).toBeNull();
+  });
+
+  it('closes the question about a picture changed elsewhere when the paint is discarded from this one', async () => {
+    await painted();
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), imageUrl: '/api/assets/maps/elsewhere-1' } }); });
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'This map\'s picture changed' })).toBeInTheDocument());
+    askAbout('open-other');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Discard my painting');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'This map\'s picture changed' })).toBeNull());
+  });
+
+  it('asks nothing, and lets the change go, with nothing to save', async () => {
+    await showMap();
+    await paintOn();
+    const answer = askAbout('open-other');
+    await act(async () => { await Promise.resolve(); });
+    expect(answer.value).toBe(true);
+    expect(question()).toBeNull();
+  });
+
+  it('Save my painting saves, then lets the change go', async () => {
+    await painted();
+    const answer = askAbout('back-to-table');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Save my painting');
+    await waitFor(() => expect(answer.value).toBe(true));
+    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' });
+    expect(usePaintStore.getState().unsaved).toBe(false);
+    await waitFor(() => expect(question()).toBeNull());
+  });
+
+  it('a save refused keeps the paint, and the change does not happen', async () => {
+    await painted();
+    h.uploadAsset.mockRejectedValue(new Error('refused'));
+    const answer = askAbout('set-active');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Save my painting');
+    await waitFor(() => expect(answer.value).toBe(false));
+    expect(usePaintStore.getState().unsaved).toBe(true);
+  });
+
+  it('Discard my painting lets it go, with its draft, and lets the change go', async () => {
+    await painted();
+    const canvas = pictureCanvas();
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    expect(drafts().headers.size).toBe(1);
+    const answer = askAbout('open-other');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Discard my painting');
+    expect(answer.value).toBe(true);
+    expect(canvas?.width).toBe(0);
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    expect(drafts().headers.size).toBe(0);
+  });
+
+  it('takes Esc as Not now', async () => {
+    await painted();
+    const answer = askAbout('open-other');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await act(async () => { fireEvent.keyDown(question()!, { key: 'Escape' }); });
+    await waitFor(() => expect(answer.value).toBe(false));
+    expect(usePaintStore.getState().unsaved).toBe(true);
+  });
+
+  it('holds the map on screen while paint is not saved, so the table moving on from elsewhere leaves it', async () => {
+    await showMap();
+    await paintOn();
+    expect(guard().holds?.()).toBe(false);
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(guard().holds?.()).toBe(true);
+  });
+
+  it('asks one question at a time: one asked meanwhile waits, and after a discard asks nothing', async () => {
+    await painted();
+    const first = askAbout('open-other');
+    const second = askAbout('back-to-table');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    expect(screen.getAllByRole('dialog', { name: 'Save your painting?' })).toHaveLength(1);
+    await choose('Discard my painting');
+    await waitFor(() => expect(second.value).toBe(true));
+    expect(first.value).toBe(true);
+    await waitFor(() => expect(question()).toBeNull());
+  });
+
+  it('waits for a save under way, and asks nothing when it saved everything', async () => {
+    await painted();
+    let land: (() => void) | null = null;
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => new Promise((resolve) => {
+      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` });
+    }));
+    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    await waitFor(() => expect(land).not.toBeNull());
+    const answer = askAbout('open-other');
+    await act(async () => { await Promise.resolve(); });
+    expect(question()).toBeNull();
+    expect(answer.value).toBeUndefined();
+    await act(async () => { land!(); });
+    await waitFor(() => expect(answer.value).toBe(true));
+    expect(question()).toBeNull();
+  });
+
+  it('asks before the page is left by its own way out, keeps the session and the page through a lost sign-in, and holds the browser\'s Back and a reload', async () => {
+    await showMap();
+    await paintOn();
+    expect(hasUnsavedWork()).toBe(false);
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    expect(hasUnsavedWork()).toBe(true);
+    expect((window.history.state as Record<string, unknown> | null)?.cozyvttSheet).toBe(true);
+    const reload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(reload);
+    expect(reload.defaultPrevented).toBe(true);
+
+    const left = vi.fn();
+    act(() => { leavePageWith(left); });
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    expect(within(question()!).getByText(/Save it before you leave this page\?/)).toBeInTheDocument();
+    await choose('Not now');
+    expect(left).not.toHaveBeenCalled();
+    act(() => { leavePageWith(left); });
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Discard my painting');
+    await waitFor(() => expect(left).toHaveBeenCalled());
+    expect(hasUnsavedWork()).toBe(false);
+  });
+});
+
+describe('Download picture', () => {
+  it('saves the picture as it is now, painted or not, as a PNG named after the map, and keeps the paint', async () => {
+    const saved: Blob[] = [];
+    const names: string[] = [];
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: (blob: Blob) => { saved.push(blob); return 'blob:picture'; } });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: () => undefined });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { names.push(this.download); });
+    try {
+      await showMap(mapWith({ name: 'Crypt: level 1' }));
+      await paintOn();
+      drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+      await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Download picture' })); });
+      await waitFor(() => expect(saved).toHaveLength(1));
+      expect(saved[0].type).toBe('image/png');
+      expect(names).toEqual(['Crypt level 1.png']);
+      expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    } finally {
+      click.mockRestore();
+    }
+  });
+});
+
+describe('paint not saved through a lost sign-in', () => {
+  it('stays, and the panel says to sign in again before saving', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { reportSignedOut(); });
+    try {
+      const panel = screen.getByRole('region', { name: 'Paint' });
+      expect(within(panel).getByText('You\'ve been signed out.')).toBeInTheDocument();
+      expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    } finally {
+      act(() => { reportSignedIn(); });
+    }
+  });
+});
+
+/**
+ * Leaving the page, with the history as the browser and the router keep
+ * it: Discard drops the paint in its own click, and Save once it lands, and
+ * the page must still be left, by Back past the page or by the header's way.
+ */
+describe('paint not saved, the page left after answering', () => {
+  const question = () => screen.queryByRole('dialog', { name: 'Save your painting?' });
+  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+  /** The header's way out, moving as BrowserRouter does. */
+  const header = () => leavePageWith(() => {
+    if (onSheetEntry()) window.history.replaceState({}, '', '/characters');
+    else window.history.pushState({}, '', '/characters');
+  });
+
+  it.each([
+    ['Back', 'Discard my painting'],
+    ['Back', 'Save my painting'],
+    ['the header', 'Discard my painting'],
+    ['the header', 'Save my painting'],
+  ])('leaves by %s on %s', async (way, answer) => {
+    // The history left by the tests before, settled first: a page they
+    // left with paint not saved took its entry back off.
+    await settle();
+    window.history.pushState({}, '', '/dashboard');
+    window.history.pushState({}, '', '/campaigns/c1');
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    if (way === 'Back') {
+      act(() => { window.history.back(); });
+      await settle();
+    } else {
+      act(() => { header(); });
+    }
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await act(async () => { fireEvent.click(within(question()!).getByRole('button', { name: answer })); });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    await settle();
+    expect(window.location.pathname).toBe(way === 'Back' ? '/dashboard' : '/characters');
+  });
+});
+
+/**
+ * Paint not saved on a map that leaves the screen without asking: the map
+ * deleted from elsewhere, or the viewer no longer the DM. The painting is
+ * kept as a draft and offered as a picture to download, never let go of
+ * unsaid.
+ */
+describe('paint not saved, its map gone without asking', () => {
+  const offer = () => screen.queryByRole('dialog', { name: 'Your painting was not saved' });
+
+  it('is offered as a picture to download, and kept as a draft', async () => {
+    const saved: Blob[] = [];
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: (blob: Blob) => { saved.push(blob); return 'blob:painting'; } });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: () => undefined });
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    // Deleted from another tab while it was being prepared: the page shows the table's map.
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    expect(within(offer()!).getByText(/Map A is no longer on your screen, so your painting of it was not saved/)).toBeInTheDocument();
+    expect(drafts().writes).toHaveLength(1);
+    expect(canvas?.width).toBe(1000);
+    await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Download my painting' })); });
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0].type).toBe('image/png');
+    await waitFor(() => expect(offer()).toBeNull());
+    expect(canvas?.width).toBe(0);
+  });
+
+  it('opens with the keyboard on Download my painting', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(within(offer()!).getByRole('button', { name: 'Download my painting' })));
+  });
+
+  it('is held as paint not saved is, until it is downloaded or discarded: a reload asks, the session is kept, Back stays', async () => {
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    window.history.pushState({}, '', '/dashboard');
+    window.history.pushState({}, '', '/campaigns/c1');
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    const reload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(reload()).toBe(true);
+    expect(hasUnsavedWork()).toBe(true);
+    act(() => { window.history.back(); });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(window.location.pathname).toBe('/campaigns/c1');
+    expect(offer()).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Discard my painting' })); });
+    await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+    expect(reload()).toBe(false);
+  });
+
+  it('says why when the viewer is no longer the DM, and Discard drops it and its draft', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ userRole: 'PLAYER' }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    expect(within(offer()!).getByText(/You are no longer the DM, so your painting of Map A cannot be saved/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
+    await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Discard my painting' })); });
+    await waitFor(() => expect(offer()).toBeNull());
+    expect(drafts().headers.size).toBe(0);
+  });
+
+  it('is not offered when everything was saved', async () => {
+    await showMap();
+    await paintOn();
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await act(async () => { await Promise.resolve(); });
+    expect(offer()).toBeNull();
+  });
+});
+
+/**
+ * On the compact layout Paint is in the map's More, so the band stays one
+ * row, and its tools are a strip at the map's foot (PaintStrip), the map
+ * live above it: the stack has no Paint panel there. A tablet turned across
+ * the layouts keeps the paint, since the map stays mounted.
+ */
+describe('on the compact layout', () => {
+  function Table({ compact }: { compact: boolean }) {
+    return <LayoutProvider compact={compact}><MapCanvas /></LayoutProvider>;
+  }
+  async function showCompact(map = mapWith()) {
+    h.set({ currentMap: map });
+    const view = render(<Table compact />);
+    pictures[0]?.load();
+    await act(async () => { await Promise.resolve(); });
+    return view;
+  }
+  const band = () => screen.getByRole('group', { name: 'Map tools' });
+  const moreSheet = () => screen.getByRole('dialog', { name: 'Map controls' });
+  const pressRow = (label: string) => {
+    if (!screen.queryByRole('dialog', { name: 'Map controls' })) fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+    fireEvent.click(within(moreSheet()).getByRole('button', { name: label }));
+  };
+  const strip = () => screen.queryByRole('region', { name: 'Paint' });
+
+  it('offers Paint in More, not in the band, and opens its strip at the map\'s foot', async () => {
+    await showCompact();
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    });
+    expect(within(band()).queryByRole('button', { name: 'Paint' })).toBeNull();
+    pressRow('Paint');
+    await waitFor(() => expect(strip()).toBeInTheDocument());
+    expect(strip()!.closest('[data-map-dock]')).not.toBeNull();
+    expect(strip()!.querySelector('[role="group"][aria-label="Tools"]')).not.toBeNull();
+    // While it is on, More puts it away.
+    pressRow('Put Paint away');
+    await waitFor(() => expect(strip()).toBeNull());
+  });
+
+  it('paints with one finger under the strip, and Done in the strip puts it away, the paint kept', async () => {
+    await showCompact();
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    });
+    pressRow('Paint');
+    await waitFor(() => expect(strip()).toBeInTheDocument());
+    const finger = contact('touch', 3);
+    finger.down(input(), { clientX: 100, clientY: 100 });
+    finger.move(input(), { clientX: 200, clientY: 140 });
+    finger.move(input(), { clientX: 260, clientY: 160 });
+    finger.up(input(), { clientX: 260, clientY: 160 });
+    expect(strokesOn(pictureCanvas())).toHaveLength(1);
+    fireEvent.click(within(strip()!).getByRole('button', { name: 'Done painting' }));
+    await waitFor(() => expect(strip()).toBeNull());
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('keeps the paint, the picture and Paint on as the layout changes, a tablet turned', async () => {
+    const view = await showCompact();
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    });
+    pressRow('Paint');
+    await waitFor(() => expect(strip()).toBeInTheDocument());
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    view.rerender(<Table compact={false} />);
+    expect(pictureCanvas()).toBe(canvas);
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: 'Paint' }).closest('[data-map-dock]')).toBeNull();
+    view.rerender(<Table compact />);
+    expect(pictureCanvas()).toBe(canvas);
+    expect(strip()!.closest('[data-map-dock]')).not.toBeNull();
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
   });
 });
