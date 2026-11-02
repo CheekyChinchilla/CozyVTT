@@ -35,6 +35,7 @@ import type { MapLayer } from '../useRenderLoop';
 import type { ActivePreview } from '../layers/drawDrawings';
 import type { MapDrawings } from '../useMapDrawings';
 import { drawingAt, hitTolerance } from '../drawingHitTest';
+import { snapToGrid } from '../drawingGeometry';
 import { previewKey } from '../drawingPreviews';
 
 /** What the Draw panel offers, in its order. */
@@ -153,14 +154,7 @@ export function useDrawTool(options: DrawToolOptions) {
   const audience = useCallback((): 'ALL' | 'DM' => (latest.current.isDM && latest.current.settings.dmOnly ? 'DM' : 'ALL'), []);
 
   /** With Snap to grid on, the nearer of the nearest corner of the grid and the middle of the square the point is in. */
-  const snapped = useCallback((p: Pt): Pt => {
-    if (!latest.current.settings.snap) return p;
-    const g = latest.current.gridSize;
-    const corner: Pt = [Math.round(p[0] / g) * g, Math.round(p[1] / g) * g];
-    const middle: Pt = [Math.floor(p[0] / g) * g + g / 2, Math.floor(p[1] / g) * g + g / 2];
-    const nearer = Math.hypot(p[0] - corner[0], p[1] - corner[1]) <= Math.hypot(p[0] - middle[0], p[1] - middle[1]) ? corner : middle;
-    return [Math.round(nearer[0]), Math.round(nearer[1])];
-  }, []);
+  const snapped = useCallback((p: Pt): Pt => (latest.current.settings.snap ? snapToGrid(p, latest.current.gridSize) : p), []);
 
   const frameBase = (s: Stroke): Omit<DrawingPreview, 'points'> => ({
     previewId: s.previewId,
