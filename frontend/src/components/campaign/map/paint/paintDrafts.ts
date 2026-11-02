@@ -350,6 +350,18 @@ export async function newestDraft(store: DraftStore, tab: PaintTab, where: { use
   return newest;
 }
 
+/**
+ * Keep a draft under a key of its own, as a closed tab's: a canvas about to
+ * write over its key never saw it (found after Paint stopped waiting for
+ * it), and it is offered again later. Answers the header it is kept under.
+ */
+export async function keepDraftAside(store: DraftStore, header: DraftHeader): Promise<DraftHeader> {
+  const tabId = newTabId();
+  const aside: DraftHeader = { ...header, tabId, key: draftKey(header.userId, header.campaignId, header.mapId, tabId) };
+  await store.put(aside, await store.tiles(header.key), true);
+  return aside;
+}
+
 // ---- The browser's store
 
 const DB_NAME = 'cozyvtt-paint-drafts';

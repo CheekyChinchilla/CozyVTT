@@ -68,7 +68,7 @@ import { pictureIsDrawn, type MapPictureKind } from './mapPicture';
 import { pictureToPng } from './blankPicture';
 import { extractAssetId } from '@/utils/assetUrl';
 import {
-  DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_UNAVAILABLE, draftKey, draftsFailedMessage, newestDraft, packDraftTiles, paintTab, putDraftTiles,
+  DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_UNAVAILABLE, draftKey, draftsFailedMessage, keepDraftAside, newestDraft, packDraftTiles, paintTab, putDraftTiles,
   draftTileBox, type DraftHeader, type DraftStore, type DraftTile, type PaintTab, type PictureSize,
 } from './paintDrafts';
 
@@ -188,6 +188,8 @@ interface Surface {
   draftFresh: boolean;
   /** Another tab's draft this canvas was restored from, dropped once this tab's own has been written. */
   takenFrom: string | null;
+  /** This tab's draft of the map is this canvas's, written by it or restored from: set by its first write. */
+  ownsDraft: boolean;
 }
 
 /** Paint not saved on a map that left the screen without asking, until the DM says what to do with it. */
@@ -367,6 +369,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const forgetFound = useCallback((key: string) => {
     setFound((now) => (now?.header?.key === key ? { key: now.key, header: null } : now));
   }, []);
+  /** Canvases made, counted: a lookup that answers after one was made on its map is out of date. */
+  const canvasesMade = useRef(0);
   /** The latest writeDraft, for the timer and the page going. */
   const writeDraftRef = useRef<(s: Surface | null) => void>(() => undefined);
   /** Write what is new to the draft within DRAFT_INTERVAL_MS. */
@@ -415,6 +419,20 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       width: s.canvas.width, height: s.canvas.height, savedAt: Date.now(),
     };
     void inDraftQueue(async (store) => {
+      // A canvas's first write goes over this tab's draft of the map only
+      // when the canvas came from it. One it never saw (found after Paint
+      // stopped waiting for it, or older than the draft restored) is kept
+      // aside, and offered once nothing of this canvas is held.
+      const first = !s.ownsDraft;
+      s.ownsDraft = true;
+      if (first && takenFrom !== key) {
+        const unseen = (await store.list()).find((draft) => draft.key === key);
+        if (unseen) {
+          const aside = await keepDraftAside(store, unseen);
+          const shown = `${user}|${campaign}|${s.mapId}`;
+          setFound((now) => (now?.key === shown ? { key: shown, header: aside } : now));
+        }
+      }
       const whole = await store.put(header, tiles, fresh);
       if (takenFrom && takenFrom !== key) {
         await store.remove(takenFrom);
@@ -463,30 +481,45 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     s.takenFrom = null;
   }, [clearDraft, dropDraft]);
   // The newest draft of the map on screen, this tab's or a closed tab's,
-  // looked for as it is shown to the DM. A store that does not answer in
-  // DRAFT_LOOKUP_MS is taken as keeping none, so Paint is never held up.
+  // looked for as it is shown to the DM. A press of Paint waits for it at
+  // most DRAFT_LOOKUP_MS, so Paint is never held up; one found later, behind
+  // a large write still under way for instance, is offered at the next press
+  // while no canvas has been made on the map since (a canvas made meanwhile
+  // keeps such a draft aside as it first writes, and that is offered). A
+  // store that takes as long to answer the lookup itself, once its turn has
+  // come, does not answer at all: drafts are off for the page.
   const mapIdShown = map?.id ?? null;
   const lookupKey = mapIdShown && isDM && userId && campaignId && drafts ? `${userId}|${campaignId}|${mapIdShown}` : null;
   useEffect(() => {
     if (!lookupKey || !mapIdShown || !userId || !campaignId) return undefined;
     let live = true;
-    let late: ReturnType<typeof setTimeout> | null = null;
-    const timedOut = new Promise<'late'>((resolve) => {
-      late = setTimeout(() => resolve('late'), DRAFT_LOOKUP_MS);
-    });
+    const madeBefore = canvasesMade.current;
+    const waited = setTimeout(() => {
+      setFound((now) => (now?.key === lookupKey ? now : { key: lookupKey, header: null }));
+    }, DRAFT_LOOKUP_MS);
     const where = { userId, campaignId, mapId: mapIdShown };
-    void Promise.race([inDraftQueue((store) => newestDraft(store, tabRef.current, where)), timedOut]).then((header) => {
-      if (late !== null) clearTimeout(late);
-      if (!live) return;
+    void inDraftQueue(async (store) => {
+      let stuck: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          newestDraft(store, tabRef.current, where),
+          new Promise<'late'>((resolve) => { stuck = setTimeout(() => resolve('late'), DRAFT_LOOKUP_MS); }),
+        ]);
+      } finally {
+        clearTimeout(stuck);
+      }
+    }).then((header) => {
+      clearTimeout(waited);
       if (header === 'late') {
         console.warn('[paint] The draft store did not answer; no draft is kept on this page.');
         draftsOff.current = true;
       }
+      if (!live || canvasesMade.current !== madeBefore) return;
       setFound({ key: lookupKey, header: header === 'late' ? null : header ?? null });
     });
     return () => {
       live = false;
-      if (late !== null) clearTimeout(late);
+      clearTimeout(waited);
     };
   }, [lookupKey, mapIdShown, userId, campaignId, inDraftQueue]);
   /** Whether the map on screen's draft has been looked for: Paint opens once it has. */
@@ -657,8 +690,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // before and not restored is not mixed into this one.
       draftFresh: true,
       takenFrom: how !== undefined && how !== 'fresh' ? how.from : null,
+      ownsDraft: false,
     };
     made = surface;
+    canvasesMade.current += 1;
     show(surface);
     // A draft's painting, put back over the picture as one change, which
     // Undo takes back: paint not saved, in the draft as the tiles it reached.
