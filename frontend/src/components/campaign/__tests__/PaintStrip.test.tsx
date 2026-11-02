@@ -142,6 +142,8 @@ describe('the colours and the width, in a pop-over', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stone' }));
     expect(props.onSettingsChange).toHaveBeenCalledWith({ second: '#9b958a' });
     expect(screen.queryByRole('group', { name: 'Colour and width' })).toBeNull();
+    // The keyboard goes back to the button that opened it, as Esc puts it.
+    expect(document.activeElement).toBe(toggle());
   });
 
   it('sets the width, staying open', () => {

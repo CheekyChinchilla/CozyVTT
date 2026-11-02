@@ -176,7 +176,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
             title={colour.name}
             onClick={() => {
               onSettingsChange({ [slot]: colour.value });
-              setOverOpen(false);
+              closeOver();
             }}
             className="inline-flex size-11 shrink-0 items-center justify-center rounded-full focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
           >
