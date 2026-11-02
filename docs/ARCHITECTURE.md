@@ -188,9 +188,10 @@ src/
 │   │                     wait, timed on a clock that cannot be set back
 │   ├── serialQueue.ts    Work run one piece at a time across the server (the UVTT queue)
 │   ├── backgroundWork.ts Work started without its request or event waiting for it (a map
-│   │                     re-sent after a token change, explored ground written, a log line),
-│   │                     counted until it ends; a shutdown and the end of every test file
-│   │                     let it finish before they close the database
+│   │                     re-sent after a token change, explored ground written, a log line,
+│   │                     the sign-in session cap, a reset link and its email), counted until
+│   │                     it ends; a shutdown and the end of every test file let it finish
+│   │                     before they close the database
 │   ├── keeperNotes.ts    Keeps a Call of Cthulhu sheet's Keeper's Notes to its campaign's DM
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   ├── byteRange.ts      HTTP Range header reading for audio streaming

@@ -170,7 +170,7 @@ Stopping the backend takes about a second. It finishes the requests it is answer
 
 **Deleting an account removes its files just after the page confirms it.** If the backend is stopped in those seconds it waits up to 4 seconds for the removal to finish. Files it did not reach stay as assets with no owner, which an administrator can find with the **No Uploader (account deleted)** filter on the **Assets** tab of the Admin Panel and delete.
 
-**Some work goes on for a moment after the change that started it, and stopping waits up to 2 seconds for it.** The squares a player explored in the last second are saved, and the map is sent to the table again after a change. Nothing needs doing; if that work is still going after 2 seconds, `docker compose logs backend` says `Work started before the shutdown was still under way after 2 seconds; stopping without it` and the backend stops anyway.
+**Some work goes on for a moment after the change that started it, and stopping waits up to 2 seconds for it.** The squares a player explored in the last second are saved, the map is sent to the table again after a change, and a password reset email asked for a moment before goes out. Nothing needs doing; if that work is still going after 2 seconds, `docker compose logs backend` says `Work started before the shutdown was still under way after 2 seconds; stopping without it` and the backend stops anyway.
 
 ---
 

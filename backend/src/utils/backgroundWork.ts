@@ -2,7 +2,8 @@
  * Work the server starts without the request or event that caused it
  * waiting for it: the map sent to the table again a moment after a token
  * change, explored ground written a second after a player saw it, a line for
- * the admins' activity log after a sign-in is locked.
+ * the admins' activity log after a sign-in is locked, an account's oldest
+ * sessions removed after a sign-in, a password reset link and its email.
  *
  * Each is counted from the moment it is asked for, including the wait before
  * it runs, until it has finished. A shutdown lets it finish before it closes

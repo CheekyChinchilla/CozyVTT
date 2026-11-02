@@ -19,6 +19,7 @@ import { failureLimiter } from '../middleware/failureLimiter';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, mfaAccountLimiter } from '../middleware/authLimiters';
 import { hashingPerAddress, hashingPerAddressWhen } from '../middleware/hashingPerAddress';
 import logger from '../utils/logger';
+import { inBackground } from '../utils/backgroundWork';
 import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
 import { adminMfaDeadline, restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import {
@@ -46,8 +47,12 @@ const invalid = (res: Response, message: string) => res.status(400).json({ error
  */
 function recordSignIn(req: Request, userId: string): void {
   req.session.signedInAt = Date.now();
-  capLoginSessions(userId, req.sessionID).catch((err: unknown) => {
-    logger.error('Failed to cap login sessions', { err, userId });
+  inBackground('the oldest sign-ins past the cap removed', async () => {
+    try {
+      await capLoginSessions(userId, req.sessionID);
+    } catch (err) {
+      logger.error('Failed to cap login sessions', { err, userId });
+    }
   });
 }
 
@@ -449,26 +454,21 @@ async function issueResetLinkFor(user: { id: string; email: string; displayName:
   // Not awaited: waiting for the mail server only for a known address
   // would let the response time tell which addresses have accounts.
   if (isSmtpConfigured()) {
-    sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
-      logger.error('Failed to send password reset email', { err: emailError });
+    inBackground('the password reset email', async () => {
+      try {
+        await sendPasswordResetEmail(user.email, token, user.displayName);
+      } catch (emailError) {
+        logger.error('Failed to send password reset email', { err: emailError });
+      }
     });
   }
 }
 
-/** The reset links being issued after their answer went, by account. */
-const issuingResetLinks = new Map<string, Promise<void>>();
-
-/** Reset links still being issued, which the tests wait for. */
-export const resetLinksBeingIssued = {
-  get count(): number {
-    return issuingResetLinks.size;
-  },
-
-  /** Settles once none is being issued: at once when none is. */
-  async finished(): Promise<void> {
-    while (issuingResetLinks.size > 0) await Promise.all([...issuingResetLinks.values()]);
-  },
-};
+/**
+ * The accounts a reset link is being issued for after their answer went. A
+ * request for one of them finds the link on its way and issues no other.
+ */
+const issuingResetLinks = new Set<string>();
 
 /**
  * POST /api/auth/forgot-password
@@ -491,12 +491,16 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
     // answer either. A failure is logged for the administrator. A request
     // while a link is on its way finds it as it would find one just issued.
     if (user && !issuingResetLinks.has(user.id)) {
-      const issuing = issueResetLinkFor(user)
-        .catch((issueError: unknown) => {
+      issuingResetLinks.add(user.id);
+      inBackground('a password reset link issued', async () => {
+        try {
+          await issueResetLinkFor(user);
+        } catch (issueError) {
           logger.error('Failed to issue a password reset link', { err: issueError, userId: user.id });
-        })
-        .finally(() => issuingResetLinks.delete(user.id));
-      issuingResetLinks.set(user.id, issuing);
+        } finally {
+          issuingResetLinks.delete(user.id);
+        }
+      });
     }
 
     // Always return the same response to prevent email enumeration

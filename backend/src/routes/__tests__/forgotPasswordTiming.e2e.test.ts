@@ -17,10 +17,7 @@ jest.mock('express-rate-limit', () => ({
   default: () => (_req: Request, _res: Response, next: NextFunction) => next(),
 }));
 
-let releaseSend: () => void = () => {};
-const sendPasswordResetEmail = jest.fn(
-  () => new Promise<void>((resolve) => { releaseSend = resolve; })
-);
+const sendPasswordResetEmail = jest.fn((): Promise<void> => Promise.resolve());
 jest.mock('../../services/email', () => ({
   ...jest.requireActual('../../services/email'),
   isSmtpConfigured: () => true,
@@ -32,29 +29,45 @@ import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
 import * as passwordResetTokens from '../../services/passwordResetTokens';
-import { resetLinksBeingIssued } from '../auth';
+import { backgroundWork } from '../../utils/backgroundWork';
 
 const app = createTestApp();
 const created: string[] = [];
 
 afterAll(async () => {
-  releaseSend();
   await cleanupUsers(created);
   await prisma.$disconnect();
 });
 
-it('answers a known address before the email has been sent', async () => {
+/** Resolves once `asked` is true, checking every few milliseconds. */
+async function until(asked: () => boolean): Promise<void> {
+  while (!asked()) await new Promise((resolve) => setTimeout(resolve, 5));
+}
+
+// The issuing and the email both go on after the answer. A shutdown, and the
+// end of a test file, let each finish: a link written and its email cut off
+// sends nothing more for the cooldown's five minutes.
+it('answers a known address before the email has been sent, and counts the send until it has been', async () => {
   const u = await createTestUser({ email: `forgot-timing-${Date.now()}@test.cozyvtt.local` });
   created.push(u.id);
+  let releaseSend = () => {};
+  sendPasswordResetEmail.mockImplementationOnce(() => new Promise<void>((resolve) => { releaseSend = resolve; }));
 
-  // The send never finishes until released, so a route that waits for it
-  // does not answer within the test's time limit.
-  const res = await request(app).post('/api/auth/forgot-password').send({ email: u.email });
+  try {
+    // The send never finishes until released, so a route that waits for it
+    // does not answer within the test's time limit.
+    const res = await request(app).post('/api/auth/forgot-password').send({ email: u.email });
+    expect(res.status).toBe(200);
 
-  expect(res.status).toBe(200);
-  await resetLinksBeingIssued.finished();
-  expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
-  expect(await prisma.passwordResetToken.count({ where: { userId: u.id } })).toBe(1);
+    await until(() => sendPasswordResetEmail.mock.calls.length > 0);
+    expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+    expect(await prisma.passwordResetToken.count({ where: { userId: u.id } })).toBe(1);
+    expect(backgroundWork.underWay).toContain('the password reset email');
+  } finally {
+    releaseSend();
+  }
+  await backgroundWork.finished();
+  expect(backgroundWork.underWay).toEqual([]);
 }, 3000);
 
 // Issuing a link takes several database round trips that an unknown address
@@ -70,10 +83,10 @@ it('answers a known address before its link has been issued', async () => {
     const res = await request(app).post('/api/auth/forgot-password').send({ email: u.email });
     expect(res.status).toBe(200);
     expect(res.body.message).toBe('If an account with that email exists, a password reset link has been sent.');
-    expect(resetLinksBeingIssued.count).toBe(1);
+    expect(backgroundWork.underWay).toContain('a password reset link issued');
   } finally {
     releaseIssue();
-    await resetLinksBeingIssued.finished();
+    await backgroundWork.finished();
     issuing.mockRestore();
   }
 }, 3000);
@@ -86,7 +99,7 @@ it('issues one link for requests that arrive while one is on its way', async () 
   const issued = jest.spyOn(passwordResetTokens, 'issueResetToken');
   try {
     await Promise.all(Array.from({ length: 3 }, () => request(app).post('/api/auth/forgot-password').send({ email: u.email })));
-    await resetLinksBeingIssued.finished();
+    await backgroundWork.finished();
     expect(issued).toHaveBeenCalledTimes(1);
   } finally {
     issued.mockRestore();
