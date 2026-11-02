@@ -6,18 +6,18 @@
 // a change touches are kept as they were, each as the change first reaches
 // it (a stroke's, as it is drawn: begin() and cover()), so landing the
 // change keeps nothing more and stays quick. A store keeps them as small as
-// it can (the browser's packs them as PNGs while the page is idle: a few
-// hundred bytes for a tile of one colour). Undo puts a step's tiles back,
-// keeping what they held so redo can put that back in turn.
+// it can (the browser's packs each as it is kept: a few hundred bytes for a
+// tile of one colour). Undo puts a step's tiles back, keeping what they
+// held so redo can put that back in turn.
 //
 // The steps are held within a byte budget and a count. The oldest goes
 // first, never the newest, so the last change can always be undone; a new
-// change drops what could be redone. A store may still be packing a tile
-// when it is kept, and counts it once packed (`trim` is then asked again).
+// change drops what could be redone. A store that packs a tile after it is
+// kept counts it once packed, and asks for `trim` then.
 //
-// Putting tiles back can wait on the browser (a PNG is decoded first), so
-// undo and redo run one at a time, and a change made meanwhile waits until
-// they are done: an undo never paints over a stroke made after it. A tile
+// A store may take its time putting tiles back, so undo and redo run one
+// at a time, and a change made meanwhile waits until they are done: an
+// undo never paints over a stroke made after it. A tile
 // a change reached while an undo was under way, or that another change has
 // landed on since it was kept, is kept again as the change lands.
 // ============================================
@@ -69,7 +69,7 @@ export interface TileStore<K> {
   capture(tile: TileRect): K;
   /** Put kept pixels back over what the tile holds now. */
   restore(tile: TileRect, kept: K): void | Promise<void>;
-  /** The bytes kept pixels count against the budget now: the browser's store counts a tile once it is packed. */
+  /** The bytes kept pixels count against the budget now: a store that packs later counts a tile once it is packed. */
   bytes(kept: K): number;
   /** Let go of kept pixels. */
   release(kept: K): void;

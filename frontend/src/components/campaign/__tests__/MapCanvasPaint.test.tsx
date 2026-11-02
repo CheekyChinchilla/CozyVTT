@@ -257,14 +257,10 @@ beforeEach(() => {
     usePaintStore.setState({ mapId: null, unsaved: false, openOnMapId: null });
   });
   h.set({ userRole: 'DM' });
-  // A tile's PNG, made there and then, and a picture's for Save, and their decoding.
-  Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
-    configurable: true, writable: true, value: () => 'data:image/png;base64,iVBORw0KGgo=',
-  });
+  // The picture's PNG, for Save.
   Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
-    configurable: true, writable: true, value(done: BlobCallback) { done(new Blob(['tile'], { type: 'image/png' })); },
+    configurable: true, writable: true, value(done: BlobCallback) { done(new Blob(['picture'], { type: 'image/png' })); },
   });
-  vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ close: () => undefined }));
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -319,6 +315,23 @@ describe('where Paint is offered', () => {
     expect(canvas).toBeDefined();
     const copied = callsOn(canvas).find((c) => c.method === 'drawImage');
     expect(copied?.args.slice(1)).toEqual([0, 0, 1000, 1000]);
+  });
+
+  it('holds the picture in a canvas made to be read often, as undo, the fill and the eyedropper read it', async () => {
+    const asked: Array<[HTMLCanvasElement, unknown]> = [];
+    const making = HTMLCanvasElement.prototype.getContext;
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      writable: true,
+      value(this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement['getContext']>) {
+        asked.push([this, args[1]]);
+        return making.apply(this, args);
+      },
+    });
+    await showMap();
+    await paintOn();
+    const canvas = pictureCanvas();
+    expect(asked.find(([c]) => c === canvas)?.[1]).toEqual({ willReadFrequently: true });
   });
 
   it('opens by itself on a map just made with Draw a map, once it is on screen', async () => {
@@ -581,7 +594,7 @@ describe('lines, rectangles and ellipses', () => {
 describe('the fill bucket', () => {
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
 
-  it('fills the area clicked with the colour, tile by tile, never reading the whole picture, and undo keeps it', async () => {
+  it('fills the area clicked with the colour, a tile at a time, never reading the whole picture, and undo keeps it', async () => {
     await showMap();
     await paintOn();
     choose('Fill');
@@ -591,13 +604,14 @@ describe('the fill bucket', () => {
     mouse.down(input(), { clientX: 300, clientY: 300 });
     mouse.up(input(), { clientX: 300, clientY: 300 });
     const calls = take(canvas!);
-    // Nothing is read off the picture itself; each tile is written back.
-    expect(calls.filter((c) => c.method === 'getImageData')).toEqual([]);
+    // The stand-in picture is one empty colour throughout, so every tile of the 1,000 px picture is filled:
+    // each read off the picture once, and written back.
+    const tiles = [0, 256, 512, 768].flatMap((y) => [0, 256, 512, 768].map((x) => [x, y])).sort();
+    const reads = calls.filter((c) => c.method === 'getImageData').map((c) => c.args as number[]);
+    expect(reads.map(([x, y]) => [x, y]).sort()).toEqual(tiles);
+    expect(reads.every(([, , w, h]) => w <= 256 && h <= 256)).toBe(true);
     const puts = calls.filter((c) => c.method === 'putImageData');
-    // The stand-in picture is one empty colour throughout, so every tile of the 1,000 px picture is filled.
-    expect(puts.map((c) => c.args.slice(1)).sort()).toEqual(
-      [0, 256, 512, 768].flatMap((y) => [0, 256, 512, 768].map((x) => [x, y])).sort(),
-    );
+    expect(puts.map((c) => c.args.slice(1)).sort()).toEqual(tiles);
     const filled = puts[0].args[0] as ImageData;
     expect([...filled.data.subarray(0, 4)]).toEqual([26, 26, 26, 255]);
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
@@ -608,18 +622,8 @@ describe('the fill bucket', () => {
     await paintOn();
     choose('Fill');
     const canvas = pictureCanvas();
-    // Every canvas but the picture, those made from now on included, refuses to be read.
-    const refuseReading = (ctx: CanvasRenderingContext2D) => Object.assign(ctx, { getImageData: () => { throw new RangeError('out of memory'); } });
-    for (const other of recorded.keys()) if (other !== canvas) refuseReading(other.getContext('2d')!);
-    const making = HTMLCanvasElement.prototype.getContext;
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-      configurable: true,
-      writable: true,
-      value(this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement['getContext']>) {
-        const ctx = making.apply(this, args) as CanvasRenderingContext2D;
-        return this === canvas ? ctx : refuseReading(ctx);
-      },
-    });
+    // The picture refuses to be read.
+    Object.assign(canvas!.getContext('2d')!, { getImageData: () => { throw new RangeError('out of memory'); } });
     take(canvas!);
     mouse.down(input(), { clientX: 300, clientY: 300 });
     mouse.up(input(), { clientX: 300, clientY: 300 });
@@ -684,31 +688,21 @@ describe('text and the eyedropper', () => {
     expect(callsOn(pictureCanvas()).some((c) => c.method === 'fillText')).toBe(false);
   });
 
-  it('take the colour of the pixel tapped, read without reading the picture itself, and go back to the tool before', async () => {
+  it('take the colour of the pixel tapped, reading that pixel alone, and go back to the tool before', async () => {
     await showMap();
     await paintOn();
     press('r');
     press('i');
     expect(within(panel()).getByRole('button', { name: 'Eyedropper' })).toHaveAttribute('aria-pressed', 'true');
     const canvas = pictureCanvas()!;
-    const darkWood = () => ({ data: new Uint8ClampedArray([74, 52, 35, 255]) });
-    for (const other of recorded.keys()) if (other !== canvas) Object.assign(other.getContext('2d')!, { getImageData: darkWood });
-    const making = HTMLCanvasElement.prototype.getContext;
-    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
-      configurable: true,
-      writable: true,
-      value(this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement['getContext']>) {
-        const ctx = making.apply(this, args) as CanvasRenderingContext2D;
-        return this === canvas ? ctx : Object.assign(ctx, { getImageData: darkWood });
-      },
-    });
-    take(canvas);
+    const read: unknown[][] = [];
+    Object.assign(canvas.getContext('2d')!, { getImageData: (...args: unknown[]) => {
+      read.push(args);
+      return { data: new Uint8ClampedArray([74, 52, 35, 255]) };
+    } });
     mouse.down(input(), { clientX: 410, clientY: 220 });
     mouse.up(input(), { clientX: 410, clientY: 220 });
-    expect(take(canvas).filter((c) => c.method === 'getImageData')).toEqual([]);
-    const read = [...recorded.entries()].filter(([c]) => c !== canvas)
-      .flatMap(([, calls]) => calls.filter((c) => c.method === 'drawImage' && c.args[0] === canvas).map((c) => c.args.slice(1, 5)));
-    expect(read).toContainEqual([410, 220, 1, 1]);
+    expect(read).toEqual([[410, 220, 1, 1]]);
     expect(within(panel()).getByRole('button', { name: /^Colour:/ })).toHaveAccessibleName('Colour: Dark wood');
     expect(within(panel()).getByRole('button', { name: 'Rectangle' })).toHaveAttribute('aria-pressed', 'true');
   });
@@ -811,16 +805,12 @@ describe('a picture changed elsewhere', () => {
 });
 
 describe('the lift', () => {
-  it('copies each tile as the stroke first reaches it, and on the lift only paints: no tile copied or packed then', async () => {
-    const packed = vi.fn(() => 'data:image/png;base64,iVBORw0KGgo=');
-    Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', { configurable: true, writable: true, value: packed });
+  it('reads each tile as the stroke first reaches it, and on the lift only paints: no tile read then', async () => {
     await showMap();
     await paintOn();
     const canvas = pictureCanvas();
-    /** Tiles read off the picture: drawImage of a tile of it onto any canvas but the map's own layers (not the one pixel read as Paint opens). */
-    const copies = () => [...recorded.entries()]
-      .filter(([c]) => c !== canvas && c !== terrain())
-      .flatMap(([, calls]) => calls.filter((k) => k.method === 'drawImage' && k.args[0] === canvas && k.args[3] !== 1)).length;
+    /** Tiles read off the picture (not the one pixel read as Paint opens). */
+    const copies = () => callsOn(canvas).filter((k) => k.method === 'getImageData' && k.args[2] !== 1).length;
     mouse.down(input(), { clientX: 100, clientY: 100 });
     expect(copies()).toBe(1);
     mouse.move(input(), { clientX: 400, clientY: 100 }, 1);
@@ -829,14 +819,10 @@ describe('the lift', () => {
     expect(copies()).toBe(3);
     mouse.move(input(), { clientX: 610, clientY: 110 }, 1);
     expect(copies()).toBe(3);
-    const packedBefore = packed.mock.calls.length;
 
     mouse.up(input(), { clientX: 610, clientY: 110 });
     expect(copies()).toBe(3);
-    expect(packed.mock.calls.length).toBe(packedBefore);
     expect(strokesOn(canvas)).toHaveLength(1);
-    // Packed afterwards, while the page is idle.
-    await waitFor(() => expect(packed).toHaveBeenCalledTimes(3));
   });
 
   it('copies nothing for a stroke dropped by a second finger, and keeps nothing of it', async () => {
@@ -862,15 +848,11 @@ describe('undo and redo', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
     // The two tiles across the stroke, 0 to 512 by 0 to 256, kept before it.
-    const kept = [...recorded.entries()]
-      .filter(([c]) => c !== canvas)
-      .flatMap(([, calls]) => calls.filter((c) => c.method === 'drawImage' && c.args[0] === canvas && c.args[3] !== 1).map((c) => c.args.slice(1, 5)));
+    const kept = callsOn(canvas).filter((c) => c.method === 'getImageData' && c.args[2] !== 1).map((c) => c.args);
     expect(kept).toEqual([[0, 0, 256, 256], [256, 0, 256, 256]]);
 
-    /** Where tiles were put back: from their raw bytes, or cleared for their PNG. */
-    const putBack = () => callsOn(canvas)
-      .filter((c) => c.method === 'putImageData' || c.method === 'clearRect')
-      .map((c) => (c.method === 'putImageData' ? c.args.slice(1, 3) : c.args.slice(0, 2)));
+    /** Where tiles were put back. */
+    const putBack = () => callsOn(canvas).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
     take(canvas!);
     await act(async () => { press('z', { ctrlKey: true }); });
     await waitFor(() => expect(putBack()).toEqual([[0, 0], [256, 0]]));

@@ -5,8 +5,9 @@
  * off, and answers the box it changed. It reads a tile only as the fill
  * reaches it, never the whole picture, and holds one tile's pixels at a
  * time: each tile is read, filled, written back and let go of, and read
- * again if the fill comes back to it. Each tile it changes is handed over,
- * as it was, once, before its first change: that is what undo keeps.
+ * again only if the fill comes back to it with something left to fill.
+ * Each tile it changes is handed over, as it was, once, before its first
+ * change: that is what undo keeps.
  *
  * Tiles here are 3 pixels square, so the small pictures cross many edges.
  */
@@ -168,6 +169,15 @@ describe('the fill bucket', () => {
     floodFillTiled(big.access, 4, 4, red, 0);
     expect(big.changing.map((c) => c.key).sort()).toEqual(['0,0', '0,1', '1,0', '1,1']);
     expect(big.mostHeld()).toBe(1);
+  });
+
+  it('reads no tile again where all it is given to go on from is filled already', () => {
+    // One colour throughout: each tile is filled whole on its first turn, so
+    // the runs its neighbours hand back to it are all filled.
+    const q = picture(['......', '......', '......', '......', '......', '......']);
+    const { access, reads } = tilesOf(q);
+    floodFillTiled(access, 4, 4, red, 0);
+    expect(reads.slice().sort()).toEqual(['0,0', '0,1', '1,0', '1,1']);
   });
 
   it('fills a large area without running out of stack', () => {

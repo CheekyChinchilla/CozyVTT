@@ -8,8 +8,10 @@
 // into the picture on the lift; a second finger, the browser taking the
 // pointer or Esc drops it, and nothing is painted. Undo and redo keep the
 // tiles a stroke touches (paintHistory.ts), never the whole picture, each
-// copied as the stroke first reaches it and packed while the page is idle
-// (canvasTileStore.ts), so the lift only paints the stroke in.
+// read and packed as the stroke first reaches it (canvasTileStore.ts), so
+// the lift only paints the stroke in. The canvas is made to be read often,
+// so the tiles, the fill and the eyedropper read it straight, and quickly,
+// in every browser.
 //
 // The canvas is kept, keyed by the map's id, while Paint is on and while
 // what was painted is not saved, so Paint turned off keeps the work on
@@ -104,7 +106,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
 /** The tool each letter key chooses while Paint is on. */
 const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
 
-/** The most the undo tiles may take, packed or still copies waiting to be; the oldest steps go first past it. */
+/** The most the undo tiles may take, packed; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
 /** The most steps that may be undone, within the budget. */
 export const PAINT_UNDO_STEPS = 50;
@@ -122,8 +124,6 @@ export interface PaintStats {
   /** The picture canvas's pixels, four bytes each. */
   pictureBytes: number;
   undo: PaintHistoryCounts;
-  /** Undo tiles copied and not yet packed. */
-  packingBytes: number;
 }
 
 declare global {
@@ -188,10 +188,6 @@ export interface PaintSurfaceOptions {
 }
 
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
-
-/** The colour of the picture's pixel at (x, y), read through the store's reading canvas, never off the picture itself. */
-const colourIn = (canvas: HTMLCanvasElement, store: CanvasTileStore, x: number, y: number) =>
-  readColour({ canvas, getImageData: (px, py, w, h) => store.read({ tx: 0, ty: 0, x: px, y: py, w, h }) }, x, y);
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
   const { map, picture, pictureSettled, campaignId, onSaved, onMapRead, isDM, mapControls, markDirty, refuse, make } = options;
@@ -299,7 +295,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const canvas = (make ?? (() => document.createElement('canvas')))();
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    // Read often: undo's tiles, the fill and the eyedropper read it straight.
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) {
       releaseCanvas(canvas);
       refuse(PAINT_NO_CANVAS);
@@ -311,18 +308,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       ctx.fillStyle = DRAWN_MAP_BACKGROUND;
       ctx.fillRect(0, 0, width, height);
     }
-    // The history is made after the store, which tells it of each tile packed.
-    let history: PaintHistory<KeptTile> | null = null;
-    const store = createCanvasTileStore(canvas, {
-      onPacked: () => history?.trim(),
-      make,
-      // Packing waits while a stroke or a shape is being drawn.
-      busy: () => strokeRef.current !== null || shapeRef.current !== null,
-    });
+    const store = createCanvasTileStore(ctx);
     // The eraser's colour: the picture's own, read off its top-left pixel.
-    const second = colourIn(canvas, store, 0, 0) ?? DRAWN_MAP_BACKGROUND;
+    const second = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
     setSettings((prev) => ({ ...prev, second }));
-    history = createPaintHistory(store, {
+    const history: PaintHistory<KeptTile> = createPaintHistory(store, {
       width,
       height,
       budgetBytes: PAINT_UNDO_BUDGET_BYTES,
@@ -330,7 +320,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       onChange: () => {
         bump();
         // For measuring memory on the dev server; a production build drops console.debug.
-        if (history && import.meta.env.MODE !== 'test') console.debug('[paint] undo', history.counts(), 'packing', store.packingBytes());
+        if (import.meta.env.MODE !== 'test') console.debug('[paint] undo', history.counts());
       },
     });
     show({ mapId: map.id, canvas, ctx, history, store, revision: 0, saved: 0, baseUrl: map.imageUrl ?? '' });
@@ -443,7 +433,6 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         pictureHeight: s.canvas.height,
         pictureBytes: s.canvas.width * s.canvas.height * 4,
         undo: s.history.counts(),
-        packingBytes: s.store.packingBytes(),
       };
     };
     return () => {
@@ -485,9 +474,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
 
   /**
    * Fill the area at map pixel `point` with the colour, tile by tile
-   * (floodFill.ts): each tile is read through the store's reading canvas as
-   * the fill reaches it, its pixels as they were handed to undo before its
-   * first change, and written back. Not while an undo is putting tiles
+   * (floodFill.ts): each tile is read off the picture as the fill reaches
+   * it, its pixels as they were packed for undo before its first change,
+   * and written back. Not while an undo is putting tiles
    * back: the pixels read would be the ones it is replacing. A device that
    * cannot read the picture is told so; a part already filled stays, and
    * Undo takes it back.
@@ -508,7 +497,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         read: (tile) => s.store.read(tile),
         changing: (tile, pixels) => {
           changedTiles += 1;
-          step.keep(tile, s.store.adopt(tile, s.store.copy(pixels)));
+          step.keep(tile, s.store.keep(tile, pixels));
         },
         write: (tile, pixels) => s.ctx.putImageData(pixels, tile.x, tile.y),
       }, point[0] * xy(s)[0], point[1] * xy(s)[1], hexToRgba(look.colour), Math.round(look.tolerance * 2.55));
@@ -644,7 +633,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     if (!s) return;
     const [x, y] = toPicture([point], ...xy(s))[0];
-    const colour = colourIn(s.canvas, s.store, x, y);
+    const colour = readColour(s.ctx, x, y);
     setSettings((prev) => ({ ...prev, ...(colour ? { colour } : {}), tool: lastToolRef.current }));
   }, [xy]);
 

@@ -1,202 +1,113 @@
 /**
  * How the browser keeps Paint's undo tiles.
  *
- * A tile is read as raw bytes through one small canvas as a change first
- * reaches it, and waits, raw, to be packed as a PNG: on one other reused
- * canvas, a few milliseconds of tiles at a time while the page is idle,
- * never while a stroke is under way. The raw tiles waiting have a cap of
- * their own; a tile kept past it packs the oldest at once, so they never
- * hold more. A tile counts against undo's budget only once packed. It is
- * put back from its raw bytes while it has them, else from its PNG.
- *
- * The canvases here record what is drawn on them; the idle time, the clock,
- * the PNG encoding and decoding are the test's.
+ * A tile is read straight off the picture (whose canvas is made to be read
+ * often) as a change first reaches it, and packed there and then, so no
+ * tile waits raw and the lift has nothing to pack. It counts its packed
+ * bytes against undo's budget from the start. It is put back at once,
+ * exactly as it was, by writing its pixels over the tile.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createCanvasTileStore, PENDING_CAP_BYTES, PACK_SLICE_MS, type TilePixels } from '../canvasTileStore';
+import { describe, it, expect, vi } from 'vitest';
+import { createCanvasTileStore, type TilePixels } from '../canvasTileStore';
 import { recordingContext, type Call } from '@/test/recordingCanvas';
 
 const tile = (tx: number, ty = 0, w = 256, h = 256) => ({ tx, ty, x: tx * 256, y: ty * 256, w, h });
-const TILE_BYTES = 256 * 256 * 4;
 
-let made: Array<{ canvas: HTMLCanvasElement; calls: Call[] }>;
-let idle: Array<() => void>;
-let clock: number;
-let encoded: number;
-let busy: boolean;
-/** What a PNG decodes to here: a canvas, which can be drawn, and let go of. */
-const decoded = Object.assign(document.createElement('canvas'), { close: vi.fn() });
-
-beforeEach(() => {
-  made = [];
-  idle = [];
-  clock = 0;
-  encoded = 0;
-  busy = false;
-  decoded.close.mockReset();
-});
-
-function canvas(): HTMLCanvasElement {
-  const c = document.createElement('canvas');
-  const { ctx, calls } = recordingContext(c);
-  Object.defineProperty(c, 'getContext', { value: () => ctx });
-  made.push({ canvas: c, calls });
-  return c;
+/** A tile's pixels: a floor colour with a band across, which the tile's column shifts. */
+function pixelsOf(x: number, w: number, h: number): TilePixels {
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i += 1) {
+    const band = Math.floor(i / w) % 64 < 8 + (x / 256);
+    data.set(band ? [85, 89, 95, 255] : [232, 220, 196, 255], i * 4);
+  }
+  return { width: w, height: h, data, colorSpace: 'srgb' } as TilePixels;
 }
 
-/** Each PNG takes 2 ms on the test's clock and is 300 bytes, or nothing where `fails`. */
-function setUp(opts: { fails?: boolean; cap?: number } = {}) {
-  const picture = canvas();
+function setUp() {
+  const picture = document.createElement('canvas');
   picture.width = 1024;
   picture.height = 1024;
-  const onPacked = vi.fn();
-  const decode = vi.fn(async () => decoded);
-  const store = createCanvasTileStore(picture, {
-    onPacked,
-    make: canvas,
-    schedule: (run) => { idle.push(run); },
-    now: () => clock,
-    busy: () => busy,
-    capBytes: opts.cap,
-    encode: () => {
-      encoded += 1;
-      clock += 2;
-      return opts.fails ? null : new Uint8Array(300);
-    },
-    decode,
-  });
-  return { picture, pictureCalls: made[0].calls, store, onPacked, decode };
+  const { ctx, calls } = recordingContext(picture);
+  const read = vi.fn((x: number, _y: number, w: number, h: number) => pixelsOf(x, w, h));
+  Object.assign(ctx, { getImageData: (...args: [number, number, number, number]) => {
+    calls.push({ method: 'getImageData', args });
+    return read(...args);
+  } });
+  const made = vi.spyOn(document, 'createElement');
+  const store = createCanvasTileStore(ctx);
+  return { ctx, calls, store, made };
 }
 
-async function idleOnce() {
-  const run = idle.shift();
-  if (!run) throw new Error('nothing waits for idle time');
-  run();
-  await Promise.resolve();
-}
+const of = (calls: Call[], method: string) => calls.filter((c) => c.method === method).map((c) => c.args);
 
 describe('a kept tile', () => {
-  it('is read as raw bytes through one small canvas, however many are kept, and not packed then', () => {
-    const { picture, store } = setUp();
-    const kept = [store.capture(tile(0)), store.capture(tile(1)), store.capture(tile(2, 1, 200, 256))];
-    // The picture, the one canvas tiles are read through: none a tile.
-    expect(made).toHaveLength(2);
-    const reader = made[1];
-    expect(reader.calls.filter((c) => c.method === 'drawImage').map((c) => c.args)).toEqual([
-      [picture, 0, 0, 256, 256, 0, 0, 256, 256],
-      [picture, 256, 0, 256, 256, 0, 0, 256, 256],
-      [picture, 512, 256, 200, 256, 0, 0, 200, 256],
-    ]);
-    expect(reader.calls.filter((c) => c.method === 'getImageData').map((c) => c.args)).toEqual([[0, 0, 256, 256], [0, 0, 256, 256], [0, 0, 200, 256]]);
-    expect(encoded).toBe(0);
-    // Raw, it counts against its own cap and not against undo's budget.
-    expect(kept.map((k) => store.bytes(k))).toEqual([0, 0, 0]);
-    expect(store.packingBytes()).toBe(2 * TILE_BYTES + 200 * 256 * 4);
-  });
-
-  it('is packed while the page is idle, a few milliseconds of tiles a slice on one reused canvas, then counts as its PNG', async () => {
-    const { store, onPacked } = setUp();
-    const kept = Array.from({ length: 6 }, (_, i) => store.capture(tile(i % 4, Math.floor(i / 4))));
-    await idleOnce();
-    // 2 ms a tile: the slice stops once PACK_SLICE_MS has passed.
-    expect(encoded).toBe(Math.ceil(PACK_SLICE_MS / 2));
-    expect(idle).toHaveLength(1);
-    while (idle.length > 0) await idleOnce();
-    expect(encoded).toBe(6);
-    expect(kept.map((k) => store.bytes(k))).toEqual([300, 300, 300, 300, 300, 300]);
-    expect(store.packingBytes()).toBe(0);
-    expect(onPacked).toHaveBeenCalled();
-    // The reader and one packing canvas, whatever was packed.
-    expect(made.length).toBeLessThanOrEqual(3);
-  });
-
-  it('is not packed while a stroke is under way, and is caught up after', async () => {
-    const { store } = setUp();
+  it('is read straight off the picture as it is kept, with no canvas made for it', () => {
+    const { calls, store, made } = setUp();
     store.capture(tile(0));
     store.capture(tile(1));
-    busy = true;
-    await idleOnce();
-    expect(encoded).toBe(0);
-    expect(idle).toHaveLength(1);
-    busy = false;
-    await idleOnce();
-    expect(encoded).toBe(2);
+    store.capture(tile(2, 1, 200, 256));
+    expect(of(calls, 'getImageData')).toEqual([[0, 0, 256, 256], [256, 0, 256, 256], [512, 256, 200, 256]]);
+    expect(made).not.toHaveBeenCalledWith('canvas');
+    made.mockRestore();
   });
 
-  it('past the cap of raw tiles waiting, packs the oldest at once, so they never hold more', () => {
+  it('is packed as it is kept, and counts its packed bytes, a small part of its pixels', () => {
     const { store } = setUp();
-    expect(PENDING_CAP_BYTES).toBe(24 * 1024 * 1024);
-    const most = PENDING_CAP_BYTES / TILE_BYTES;
-    for (let i = 0; i < most; i += 1) store.capture(tile(i % 4, Math.floor(i / 4)));
-    expect(encoded).toBe(0);
-    for (let i = 0; i < 20; i += 1) {
-      store.capture(tile(i % 4, 30));
-      expect(store.packingBytes()).toBeLessThanOrEqual(PENDING_CAP_BYTES);
-    }
-    expect(encoded).toBe(20);
-  });
-
-  it('is put back from its raw bytes at once while it has them, with nothing decoded', async () => {
-    const { pictureCalls, store, decode } = setUp();
     const kept = store.capture(tile(1));
-    pictureCalls.length = 0;
-    const back = store.restore(tile(1), kept);
-    const put = pictureCalls.find((c) => c.method === 'putImageData');
-    expect((put?.args[0] as TilePixels).width).toBe(256);
-    expect(put?.args.slice(1)).toEqual([256, 0]);
-    await back;
-    expect(decode).not.toHaveBeenCalled();
+    const bytes = store.bytes(kept);
+    expect(bytes).toBeGreaterThan(0);
+    expect(bytes).toBeLessThan(256 * 256 * 4 / 50);
   });
 
-  it('is put back by decoding its PNG once packed, over a cleared tile', async () => {
-    const { pictureCalls, store, decode } = setUp();
-    const kept = store.capture(tile(1));
-    while (idle.length > 0) await idleOnce();
-    pictureCalls.length = 0;
-    await store.restore(tile(1), kept);
-    expect(decode).toHaveBeenCalledTimes(1);
-    const drawn = pictureCalls.map((c) => c.method);
-    expect(pictureCalls.find((c) => c.method === 'clearRect')?.args).toEqual([256, 0, 256, 256]);
-    expect(pictureCalls.find((c) => c.method === 'drawImage')?.args).toEqual([decoded, 256, 0]);
-    expect(drawn.indexOf('clearRect')).toBeLessThan(drawn.indexOf('drawImage'));
-    expect(decoded.close).toHaveBeenCalled();
+  it('is put back at once, exactly as it was read, over the tile', () => {
+    const { calls, store } = setUp();
+    const kept = store.capture(tile(1, 2));
+    calls.length = 0;
+    const back = store.restore(tile(1, 2), kept);
+    // Nothing to wait for: it is back before restore returns.
+    expect(back).toBeUndefined();
+    const puts = calls.filter((c) => c.method === 'putImageData');
+    expect(puts).toHaveLength(1);
+    expect(puts[0].args.slice(1)).toEqual([256, 512]);
+    const put = puts[0].args[0] as TilePixels;
+    expect([put.width, put.height]).toEqual([256, 256]);
+    expect(put.data).toEqual(pixelsOf(256, 256, 256).data);
   });
 
-  it('let go of before it is packed is never packed, and no longer counts', async () => {
-    const { store } = setUp();
-    const kept = store.capture(tile(0));
-    store.release(kept);
-    expect(store.packingBytes()).toBe(0);
-    while (idle.length > 0) await idleOnce();
-    expect(encoded).toBe(0);
-  });
-
-  it('that could not be packed keeps its raw bytes, and is put back from them', async () => {
-    const { pictureCalls, store } = setUp({ fails: true });
-    const kept = store.capture(tile(0));
-    while (idle.length > 0) await idleOnce();
-    expect(encoded).toBe(1);
-    pictureCalls.length = 0;
-    await store.restore(tile(0), kept);
-    expect(pictureCalls.some((c) => c.method === 'putImageData')).toBe(true);
+  it('is put back exactly at the picture\'s edge, where a tile is cut short', () => {
+    const { calls, store } = setUp();
+    const edge = tile(3, 3, 120, 40);
+    const kept = store.capture(edge);
+    calls.length = 0;
+    store.restore(edge, kept);
+    const put = calls.find((c) => c.method === 'putImageData')!;
+    expect(put.args.slice(1)).toEqual([768, 768]);
+    expect((put.args[0] as TilePixels).data).toEqual(pixelsOf(768, 120, 40).data);
   });
 
   it('can be handed in already read, as the fill does, without being read again', () => {
-    const { store } = setUp();
+    const { calls, store } = setUp();
     const pixels = store.read(tile(0));
-    const reads = made[1].calls.filter((c) => c.method === 'getImageData').length;
-    store.adopt(tile(0), pixels);
-    expect(made[1].calls.filter((c) => c.method === 'getImageData')).toHaveLength(reads);
-    expect(store.packingBytes()).toBe(TILE_BYTES);
+    const kept = store.keep(tile(0), pixels);
+    expect(of(calls, 'getImageData')).toHaveLength(1);
+    // Packed then: the fill may change the pixels it read after handing them over.
+    pixels.data.fill(0);
+    calls.length = 0;
+    store.restore(tile(0), kept);
+    expect((calls.find((c) => c.method === 'putImageData')!.args[0] as TilePixels).data).toEqual(pixelsOf(0, 256, 256).data);
   });
 
-  it('is let go of with every other when the store is, with its canvases', () => {
-    const { store } = setUp();
-    store.capture(tile(0));
-    store.capture(tile(1));
-    store.dispose();
-    expect(store.packingBytes()).toBe(0);
-    expect(made.slice(1).every((m) => m.canvas.width === 0 && m.canvas.height === 0)).toBe(true);
+  it('let go of no longer counts, and is not put back', () => {
+    const { calls, store } = setUp();
+    const kept = store.capture(tile(0));
+    store.release(kept);
+    expect(store.bytes(kept)).toBe(0);
+    calls.length = 0;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    store.restore(tile(0), kept);
+    expect(calls.some((c) => c.method === 'putImageData')).toBe(false);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
