@@ -4,13 +4,13 @@ import { gridColorLabel, mapControlItems, mapControlsTitle, rulerColorLabel, typ
 
 const VIEW: MapControlsView = {
   isDM: false, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
-  spiritTokensShown: true, toolsShown: false,
+  spiritTokensShown: true, toolsShown: false, paint: null,
 };
 
 function actions(): MapControlsActions {
   return {
     fit: vi.fn(), toggleGrid: vi.fn(), nextGridColor: vi.fn(), toggleRuler: vi.fn(), nextRulerColor: vi.fn(),
-    toggleAoE: vi.fn(), toggleSpiritTokens: vi.fn(), toggleTools: vi.fn(),
+    toggleAoE: vi.fn(), toggleSpiritTokens: vi.fn(), toggleTools: vi.fn(), togglePaint: vi.fn(),
   };
 }
 
@@ -30,6 +30,18 @@ describe('the Map controls rows', () => {
     expect(row(mapControlItems({ ...VIEW, isDM: true }, actions()), 'tools').title).toBe('Fog, Walls and Lights');
     expect(labels(mapControlItems({ ...VIEW, isDM: true, spiritTokensShown: false }, actions())).slice(-1)).toEqual(['Show spirit tokens']);
     expect(row(mapControlItems({ ...VIEW, isDM: true }, actions()), 'spirit-tokens').tone).toBe('spirit');
+  });
+
+  it('gives the DM Paint where it is offered, before Tools, and Put Paint away while it is on', () => {
+    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions())).slice(-4)).toEqual(['---', 'Paint', 'Show tools', 'Hide spirit tokens']);
+    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'on' }, actions()))).toContain('Put Paint away');
+    expect(row(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions()), 'paint').title).toBe('Paint the map\'s picture, on your screen until it is saved');
+    expect(labels(mapControlItems({ ...VIEW, isDM: true }, actions()))).not.toContain('Paint');
+    const run = actions();
+    row(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, run), 'paint').run();
+    expect(run.togglePaint).toHaveBeenCalledTimes(1);
+    expect(mapControlsTitle(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions())))
+      .toBe('Map controls: fit, grid, ruler, AoE shape, Paint, tools and spirit tokens');
   });
 
   it('says what each row does now', () => {

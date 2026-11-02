@@ -216,7 +216,7 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 
 **Paint**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
 
-1. Click **Paint**. Its panel opens at the top of your tool panels, and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
+1. Click **Paint**. Its panel opens at the top of your tool panels (on a phone, **Paint** is in the map's **More**, and its tools are a strip at the foot of the map: see [On a phone](#on-a-phone)), and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
 2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Paint has two colours, as MS Paint does: **Colour** and **Second colour** above the colours say which one the palette sets. Set the **Width**, from 1 to 64 pixels.
 3. Paint with the tool. A stroke shows as you drag, and goes into the picture when you let go.
 
@@ -1067,10 +1067,11 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | The **Fog of War**, **Walls** and **Lights** panels at the top right of the map | The map's **More**, then **Show tools**. The panels show at the top right, folded, as on the desktop; **Hide tools**, in the map's **More** or on the bar above the panels, puts them away and puts down the tool you had up |
 | The spirit tokens button in the map's toolbar | The map's **More**: **Show spirit tokens** |
 | **Draw** | **Draw**, in the map's toolbar: its tools open in a strip across the foot of the map, with the map above it to draw on. **Clear…** offers every drawing or one member's, and asks before it clears |
+| **Paint**, and its panel | The map's **More**: **Paint** (**Put Paint away** while it is on). Its tools open in a strip across the foot of the map, with the map above it to paint on: **Undo**, **Redo**, **Save** and **Done** at its top, the tools in a row that scrolls sideways (an end with more past it fades out under an arrow), and **Colour and width**, which opens the two colours, the palette and the width over the strip. On a phone on its side the tools sit beside **Paint** at the strip's top. Every control is at least 44 pixels |
 | **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
 | The banner over a map you are preparing | The same, across the top of the map: on a phone upright its words take one row and **Back to the table**, **Bring everyone here** and **What reaches the table?** the next; on a phone on its side it is one row, with the buttons reading **Back**, **Bring everyone** and an info button. The phone's **Back** goes back to the table |
 
-A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** included, so a tablet propped up for the table stays in the players' view.
+A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** and **Paint** with what you have painted included, so a tablet propped up for the table stays in the players' view.
 
 ---
 

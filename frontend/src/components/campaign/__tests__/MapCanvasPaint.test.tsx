@@ -34,6 +34,7 @@ import { viewedMapGuards } from '@/test/viewedMapContext';
 import { leavePageWith } from '@/services/pageLeave';
 import { hasUnsavedWork, reportSignedIn, reportSignedOut } from '@/services/unsavedWork';
 import type { ViewedMapChange } from '@/contexts/CampaignContext';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -1527,5 +1528,86 @@ describe('paint not saved, its map gone without asking', () => {
     act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
     await act(async () => { await Promise.resolve(); });
     expect(offer()).toBeNull();
+  });
+});
+
+/**
+ * On the compact layout Paint is in the map's More, so the band stays one
+ * row, and its tools are a strip at the map's foot (PaintStrip), the map
+ * live above it: the stack has no Paint panel there. A tablet turned across
+ * the layouts keeps the paint, since the map stays mounted.
+ */
+describe('on the compact layout', () => {
+  function Table({ compact }: { compact: boolean }) {
+    return <LayoutProvider compact={compact}><MapCanvas /></LayoutProvider>;
+  }
+  async function showCompact(map = mapWith()) {
+    h.set({ currentMap: map });
+    const view = render(<Table compact />);
+    pictures[0]?.load();
+    await act(async () => { await Promise.resolve(); });
+    return view;
+  }
+  const band = () => screen.getByRole('group', { name: 'Map tools' });
+  const moreSheet = () => screen.getByRole('dialog', { name: 'Map controls' });
+  const pressRow = (label: string) => {
+    if (!screen.queryByRole('dialog', { name: 'Map controls' })) fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+    fireEvent.click(within(moreSheet()).getByRole('button', { name: label }));
+  };
+  const strip = () => screen.queryByRole('region', { name: 'Paint' });
+
+  it('offers Paint in More, not in the band, and opens its strip at the map\'s foot', async () => {
+    await showCompact();
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    });
+    expect(within(band()).queryByRole('button', { name: 'Paint' })).toBeNull();
+    pressRow('Paint');
+    await waitFor(() => expect(strip()).toBeInTheDocument());
+    expect(strip()!.closest('[data-map-dock]')).not.toBeNull();
+    expect(strip()!.querySelector('[role="group"][aria-label="Tools"]')).not.toBeNull();
+    // While it is on, More puts it away.
+    pressRow('Put Paint away');
+    await waitFor(() => expect(strip()).toBeNull());
+  });
+
+  it('paints with one finger under the strip, and Done in the strip puts it away, the paint kept', async () => {
+    await showCompact();
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    });
+    pressRow('Paint');
+    await waitFor(() => expect(strip()).toBeInTheDocument());
+    const finger = contact('touch', 3);
+    finger.down(input(), { clientX: 100, clientY: 100 });
+    finger.move(input(), { clientX: 200, clientY: 140 });
+    finger.move(input(), { clientX: 260, clientY: 160 });
+    finger.up(input(), { clientX: 260, clientY: 160 });
+    expect(strokesOn(pictureCanvas())).toHaveLength(1);
+    fireEvent.click(within(strip()!).getByRole('button', { name: 'Done painting' }));
+    await waitFor(() => expect(strip()).toBeNull());
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('keeps the paint, the picture and Paint on as the layout changes, a tablet turned', async () => {
+    const view = await showCompact();
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    });
+    pressRow('Paint');
+    await waitFor(() => expect(strip()).toBeInTheDocument());
+    const canvas = pictureCanvas();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    view.rerender(<Table compact={false} />);
+    expect(pictureCanvas()).toBe(canvas);
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: 'Paint' }).closest('[data-map-dock]')).toBeNull();
+    view.rerender(<Table compact />);
+    expect(pictureCanvas()).toBe(canvas);
+    expect(strip()!.closest('[data-map-dock]')).not.toBeNull();
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
   });
 });

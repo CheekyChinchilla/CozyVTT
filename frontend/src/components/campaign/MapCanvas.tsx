@@ -139,6 +139,7 @@ import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
 import DrawControls, { type DrawControlsProps, type MemberDrawings } from '@/components/campaign/DrawControls';
 import DrawStrip from '@/components/campaign/DrawStrip';
 import PaintControls from '@/components/campaign/PaintControls';
+import PaintStrip from '@/components/campaign/PaintStrip';
 import { PaintLeaveQuestion, PaintLeftoverQuestion } from '@/components/campaign/PaintQuestions';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
@@ -3850,6 +3851,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     toggleAoE: () => { setDrawKind(null); handleToggleAoE(); },
     toggleSpiritTokens: () => setDmShowSpiritTokens((prev) => !prev),
     toggleTools: () => (stackShown ? hideTools() : showTools()),
+    togglePaint: () => togglePaint(),
   };
   // Where the AoE panel and the Put back bar start: null keeps their places
   // under one row of a mouse's buttons. While both show, the AoE panel starts
@@ -4000,6 +4002,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     showAoE,
     spiritTokensShown: dmShowSpiritTokens,
     toolsShown: stackShown,
+    paint: paintOffered ? (paint.on ? 'on' : 'offered') : null,
   }, mapControlActions);
   // The buttons both layouts' toolbars hold: the zoom buttons and their
   // readout, Ping and Draw.
@@ -4389,7 +4392,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <div className="w-px h-6 shrink-0 bg-moss-green/20" />
             {currentMap && !paint.on && pingButton}
             {currentMap && !paint.on && drawButton}
-            {currentMap && paintButton}
+            {/* Paint is in More here, so the row stays one row. */}
             {/* "More", and named for what it holds, its name starting with
                 the word it shows. The word goes on a screen under 384
                 pixels wide, where the row has room for the icon alone. */}
@@ -4568,7 +4571,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           band={topBand}
           // On the compact layout it hides behind Tools, in Map controls,
           // and a drag keeps it under the band, where Map controls is.
-          hidden={compact && !stackShown && !paint.on}
+          hidden={compact && !stackShown}
           onHide={compact ? () => {
             hideTools();
             mapControlsButtonRef.current?.focus({ preventScroll: true });
@@ -4577,7 +4580,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           // Above the dock, Preview and the details card in it, however tall.
           roomBelow={compact && dockHeight !== null ? dockHeight + BAND_GAP : undefined}
         >
-          {paint.on && (
+          {/* On the compact layout Paint's tools are a strip at the map's foot instead. */}
+          {paint.on && !compact && (
             <PaintControls
               settings={paint.settings}
               onSettingsChange={(patch) => paint.setSettings((prev) => ({ ...prev, ...patch }))}
@@ -4593,7 +4597,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             />
           )}
           {drawPanel && !compact && <DrawControls {...drawPanel} />}
-          {/* On a phone Paint's panel is the stack, so the map keeps room to paint on. */}
+          {/* On a phone the stack is put away while Paint is on, so the map keeps room to paint on. */}
           {userRole === 'DM' && !(compact && paint.on) && (<>
           <DmFogControls
             fogMode={fogMode}
@@ -4971,6 +4975,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {!drawPanel && !paint.on && tokenDetails(true)}
             </div>
             {drawPanel && currentMap && <DrawStrip {...drawPanel} />}
+            {paint.on && currentMap && (
+              <PaintStrip
+                settings={paint.settings}
+                onSettingsChange={(patch) => paint.setSettings((prev) => ({ ...prev, ...patch }))}
+                canUndo={paint.canUndo}
+                canRedo={paint.canRedo}
+                onUndo={paint.undo}
+                onRedo={paint.redo}
+                unsaved={paint.unsaved}
+                onSave={() => { void paint.save(); }}
+                saving={paint.saving}
+                signedOut={paintGuards.signedOut}
+                onClose={paint.close}
+              />
+            )}
           </div>
         </div>
       )}
