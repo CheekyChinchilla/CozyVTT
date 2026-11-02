@@ -13,6 +13,7 @@ import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
 import { MAP_LIMITS } from '@/constants/mapLimits';
 import { withinMapLimits, feetPerSquareWithinLimits } from '@/utils/mapSize';
+import { diagonalStepCosts } from '@/utils/geometry';
 import { Button, Modal } from '@/components/ui';
 import { extractAssetId } from '@/utils/assetUrl';
 
@@ -532,11 +533,9 @@ export default function EditMapModal({
                             className="mt-0.5 accent-moss-green"
                           />
                           <div>
-                            {/* TODO(ui): this reads 5/10/5/10 ft whatever the Grid Scale;
-                                at 10 ft a square it is 10/20/10/20 ft. Word it from the
-                                scale, or as "every second diagonal costs double". */}
+                            {/* At the Grid Scale chosen: 10/20/10/20 ft on 10 ft squares. */}
                             <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                              Alternating — 5/10/5/10 ft diagonals
+                              Alternating — {diagonalStepCosts(feetPerSquare, 'alternating').join('/')} ft diagonals
                             </span>
                             <p className="text-xs text-stone-gray/50">Pathfinder 2e default</p>
                           </div>

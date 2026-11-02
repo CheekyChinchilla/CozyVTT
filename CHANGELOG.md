@@ -123,6 +123,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The Lights panel spells Global Illumination as Edit Map does.** Its switch read "Global illumination". It now reads **Global Illumination**, as Edit Map, the panel's own warning and the guides spell it.
 
+- **Create Map and Edit Map describe the Alternating diagonal rule at the map's Grid Scale.** The **Alternating** choice under **Diagonal Movement** read "5/10/5/10 ft diagonals" whatever the **Grid Scale**. It now follows the scale chosen, such as "10/20/10/20 ft diagonals" on 10 ft squares.
+
 - **Esc closes only the roll picker or the menu it is pressed in.** Pressing **Esc** to close a **Roll...** picker, from a token or from the initiative tracker, or a character's menu in the roster or the tracker, also reached the map and put the area template, or a wall, fog or light tool, away. It now closes just the picker or the menu.
 
 - **A wall line you had started no longer waits, unseen, in another tool.** If you clicked with the Walls panel's **Draw** and then chose another wall, fog or light tool, the half-drawn line was kept but not shown: the next **Esc** or **Ctrl+Z** there let go of it and seemed to do nothing, and choosing **Draw** again carried the line on from its last point. Choosing another tool now drops it, as it already dropped a half-drawn polygon. The walls its clicks placed stay.

@@ -166,3 +166,16 @@ describe('Edit Map layout', () => {
     expect(row !== null && Boolean(row.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
   });
 });
+
+// The alternating rule was described as 5/10/5/10 ft diagonals whatever the
+// Grid Scale.
+describe("Edit Map's diagonal rules", () => {
+  it('describes the alternating rule at the Grid Scale chosen', async () => {
+    open({ ...listed, feetPerSquare: 10 } as CampaignMap);
+    expect(await screen.findByText('Alternating — 10/20/10/20 ft diagonals')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('5 ft'));
+
+    expect(screen.getByText('Alternating — 5/10/5/10 ft diagonals')).toBeInTheDocument();
+  });
+});

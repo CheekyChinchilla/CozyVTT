@@ -10,6 +10,7 @@ import {
   gridDistanceLabel,
   douglasPeucker,
   snapPointsToEdges,
+  diagonalStepCosts,
   type Point,
   type EdgeSnapRegion,
 } from '../geometry';
@@ -160,5 +161,18 @@ describe('snapPointsToEdges', () => {
     const gray = (x: number) => (x < 30 ? 0 : 255);
     const pts: Point[] = [{ x: 50, y: 50 }, { x: 60, y: 60 }]; // 20+px from the edge
     expect(snapPointsToEdges(pts, gray, region, 4)).toEqual(pts);
+  });
+});
+
+// Listed beside the alternating rule in Create Map and Edit Map.
+describe('diagonalStepCosts', () => {
+  it('costs every second diagonal two squares under the alternating rule, at the map scale', () => {
+    expect(diagonalStepCosts(5, 'alternating')).toEqual([5, 10, 5, 10]);
+    expect(diagonalStepCosts(10, 'alternating')).toEqual([10, 20, 10, 20]);
+    expect(diagonalStepCosts(3, 'alternating', 6)).toEqual([3, 6, 3, 6, 3, 6]);
+  });
+
+  it('costs each diagonal one square under the flat rule', () => {
+    expect(diagonalStepCosts(5, 'flat')).toEqual([5, 5, 5, 5]);
   });
 });
