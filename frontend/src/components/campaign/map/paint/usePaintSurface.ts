@@ -764,6 +764,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       onRef.current = false;
     }
   }, [mapId, isDM, on, dispose, writeDraft, strand]);
+  // A draft offered for a map no longer on screen, or to a viewer no longer
+  // the DM, is no longer asked about: its answer would act on nothing.
+  useEffect(() => {
+    setOffer((offered) => (offered && (offered.header.mapId !== mapId || !isDM) ? null : offered));
+  }, [mapId, isDM]);
   // And when the map goes from the page.
   const leftoverRef = useRef(leftover);
   useEffect(() => {
