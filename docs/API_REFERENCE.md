@@ -623,6 +623,8 @@ In the web client, a player's rolls while the session is **paused** are made in 
 
 All token template endpoints are scoped under a campaign and require DM role.
 
+An `imageUrl` naming an existing asset must name one uploaded as a token picture (type `TOKEN`), or the request answers `400` with `The token image must be a token picture from the asset library.` An update accepts the address already stored, sent back unchanged; a copy to another campaign is held to the rule.
+
 ### `GET /api/campaigns/:campaignId/token-templates`
 
 List this campaign's token templates, ordered by name, a page at a time.
@@ -758,7 +760,7 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
 }
 ```
 
-The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, U+0000 is taken out of every text and counted in `warnings` by file, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors, lights and drawings left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, U+0000 is taken out of every text and counted in `warnings` by file, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors, lights and drawings left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A token's, creature's or token template's picture that was not uploaded as a token picture is left out the same way. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
@@ -801,6 +803,8 @@ the most one account can. Delete one you no longer need to make room."
 ```
 
 For a character with a game system, `name` is written into the sheet's `characterName` (`investigatorName` in Call of Cthulhu), and your display name into `playerName`, before the sheet is checked; a Flexible sheet (no game system) gets neither. A D&D 5e sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
+
+A `tokenImageUrl` naming an existing asset must name one uploaded as a token picture (type `TOKEN`), whatever folder the address gives, or the request answers `400` with `The token image must be a token picture from the asset library.` `PUT` checks a new one the same way, and accepts the address already stored, sent back unchanged.
 
 ---
 
@@ -942,6 +946,8 @@ into a character or editing it.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.
+  It must be a token picture (type `TOKEN`) as well, or the answer is `400`
+  with `The token image must be a token picture from the asset library.`
 - One account may author at most 500 templates. Past that the request answers
   `400`: "You have already published 500 character templates, the most one
   account can. Delete one you no longer need to make room."
@@ -978,7 +984,8 @@ All creature endpoints are mounted under `/api/campaigns/:campaignId/creatures`.
 **`imageUrl` on create and update** accepts a bare asset id, stored as `/api/assets/tokens/:id`, or
 an asset's own `/api/assets/<kind>/:id` address, stored as sent. Anything else, an address on another
 site included, answers `403`, as does an asset the DM may not read unless this campaign already uses
-that exact address. Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
+that exact address. An existing asset that is not a token picture (type `TOKEN`) answers `400` with
+`The token image must be a token picture from the asset library.` Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
 as the full path. Rows written before this normalisation may still hold a bare id, so clients should
 tolerate both when reading.
 

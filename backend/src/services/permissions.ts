@@ -849,12 +849,6 @@ export async function canReferenceAsset(
     select: { id: true, type: true, scope: true, uploadedById: true, campaignId: true },
   });
   if (!asset) return true;
-  // TODO(assets): the asset's type is not read here, so a token's picture can
-  // name a MAP asset, and an animated map picture of up to 200 million pixels
-  // across its frames goes on a token, past the 50 million a token picture
-  // may be. A token's picture should name only a TOKEN asset, as
-  // isMapPicture holds a map's picture to a MAP asset, with the address
-  // already stored kept as it is.
   // Never as an administrator: an admin may read any file, but a stored
   // reference opens the asset to everyone at the table, as setting a scene's
   // music does (handlers/atmosphere.ts).
@@ -882,12 +876,30 @@ export async function canReferenceAsset(
  * canReferenceAsset, as it shows nothing and grants nothing.
  */
 export async function isMapPicture(address: string | null | undefined, stored?: string | null): Promise<boolean> {
+  return namesPictureOfType(address, 'MAP', stored);
+}
+
+/**
+ * May this address be stored as a token's picture, as far as the kind of
+ * asset goes: only an asset uploaded as a token picture. That is a token's
+ * own, a token template's, a creature's, a character's and a character
+ * template's, since each becomes a token's picture on the map. The token
+ * pickers and the sheet editors offer nothing else, and a map picture may
+ * hold far more pixels than a token picture may. The rest is as for
+ * isMapPicture.
+ */
+export async function isTokenPicture(address: string | null | undefined, stored?: string | null): Promise<boolean> {
+  return namesPictureOfType(address, 'TOKEN', stored);
+}
+
+/** The rule isMapPicture and isTokenPicture share, for the one type each takes. */
+async function namesPictureOfType(address: string | null | undefined, type: AssetType, stored?: string | null): Promise<boolean> {
   if (!address) return true;
   if (stored !== undefined && address === stored) return true;
   const assetId = extractAssetId(address);
   if (!assetId) return true;
   const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { type: true } });
-  return !asset || asset.type === 'MAP';
+  return !asset || asset.type === type;
 }
 
 /** Whether a record of the campaign already stores exactly this picture address. */

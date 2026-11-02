@@ -1092,6 +1092,20 @@ map passes unchanged, so a map stored before the rule keeps its picture. A
 campaign import drops a map's picture or spirit layer that names an asset it
 did not import as MAP, and says so in the import's warnings.
 
+A token's picture may name only an asset uploaded as a token picture
+(`isTokenPicture`, beside it), by the same reading of the asset's type and
+with the same exception for the address already stored. It is asked wherever
+a request names a token's picture: the token routes, the token template and
+creature routes, and a character's and a character template's
+`tokenImageUrl`, since each becomes a token's picture on the map. An
+animated map picture may hold 200 million pixels across its frames, a token
+picture 50 million, and every member at the table draws a token's picture.
+A copy the server makes of a record it
+already holds (duplicating a creature, copying a character, moving a token
+to another map) names nothing new and is not asked. A campaign import drops
+a token's, a creature's or a token template's picture that names an asset it
+did not import as TOKEN, and says so in the import's warnings.
+
 ### Decoding pictures
 
 sharp, over libvips, is what the backend decodes pictures with: a thumbnail

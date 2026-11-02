@@ -38,6 +38,7 @@ let outsiderId: string | undefined;
 let adminId: string | undefined;
 let departedId: string | undefined;
 let ownId: string;
+let ownTokenId: string;
 const assetIds: string[] = [];
 
 async function makeAsset(uploadedById: string, label: string, type: 'TOKEN' | 'MAP' = 'TOKEN') {
@@ -64,9 +65,10 @@ beforeAll(async () => {
     ],
   });
   privateId = await makeAsset(playerId, 'player-private');
-  // A map picture, which a map's picture and spirit layer must be; the token
-  // and template routes take one as well.
+  // A map picture, which a map's picture and spirit layer must be, and a
+  // token picture, which a token's, a template's and a creature's must be.
   ownId = await makeAsset(dmId, 'dm-own', 'MAP');
+  ownTokenId = await makeAsset(dmId, 'dm-own-token');
   mapId = (await prisma.map.create({
     data: {
       campaignId, name: 'Refs', imageUrl: `/api/assets/maps/${ownId}`, baseLayerUrl: `/api/assets/maps/${ownId}`,
@@ -92,13 +94,13 @@ const base = `/api/campaigns/${'CAMPAIGN'}`;
 const url = (p: string) => p.replace('CAMPAIGN', campaignId);
 const commoner = { ac: 10, hpMax: 4, speed: '30 ft.', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 14, cha: 10 }, challengeRating: '0' };
 
-/** Each route that stores a reference, sent the given address. */
-const WRITES: Array<[string, (address: string) => Promise<request.Response>]> = [
-  ['the map update, image', (a) => dm.put(url(`${base}/maps/${mapId}`)).send({ imageUrl: a })],
-  ['the map update, spirit layer', (a) => dm.put(url(`${base}/maps/${mapId}`)).send({ spiritLayerUrl: a })],
-  ['placing a token', (a) => dm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 1, y: 1 }, imageUrl: a })],
-  ['a token template', (a) => dm.post(url(`${base}/token-templates`)).send({ name: 'Imp', imageUrl: a })],
-  ['a creature template', (a) => dm.post(url(`${base}/creatures`)).send({ name: 'Imp', statBlock: commoner, imageUrl: a })],
+/** Each route that stores a reference, sent the given address, with the DM's own asset of the kind it takes. */
+const WRITES: Array<[string, (address: string) => Promise<request.Response>, () => string]> = [
+  ['the map update, image', (a) => dm.put(url(`${base}/maps/${mapId}`)).send({ imageUrl: a }), () => ownId],
+  ['the map update, spirit layer', (a) => dm.put(url(`${base}/maps/${mapId}`)).send({ spiritLayerUrl: a }), () => ownId],
+  ['placing a token', (a) => dm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 1, y: 1 }, imageUrl: a }), () => ownTokenId],
+  ['a token template', (a) => dm.post(url(`${base}/token-templates`)).send({ name: 'Imp', imageUrl: a }), () => ownTokenId],
+  ['a creature template', (a) => dm.post(url(`${base}/creatures`)).send({ name: 'Imp', statBlock: commoner, imageUrl: a }), () => ownTokenId],
 ];
 
 describe('a reference to an asset the DM cannot read', () => {
@@ -110,8 +112,8 @@ describe('a reference to an asset the DM cannot read', () => {
 });
 
 describe("a reference to the DM's own asset", () => {
-  it.each(WRITES)('is stored by %s', async (_route, write) => {
-    expect((await write(`/api/assets/tokens/${ownId}`)).status).toBeLessThan(300);
+  it.each(WRITES)('is stored by %s', async (_route, write, own) => {
+    expect((await write(`/api/assets/tokens/${own()}`)).status).toBeLessThan(300);
   });
 });
 
@@ -226,7 +228,7 @@ describe('a copy naming a picture already used in the campaign', () => {
       expect(await prisma.tokenTemplate.count({ where: { campaignId: elsewhere } })).toBe(0);
 
       const own = await prisma.tokenTemplate.create({
-        data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Mine', imageUrl: `/api/assets/tokens/${ownId}`, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+        data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Mine', imageUrl: `/api/assets/tokens/${ownTokenId}`, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
       });
       expect((await dm.post(url(`${base}/token-templates/${own.id}/copy-to/${elsewhere}`))).status).toBe(201);
     } finally {

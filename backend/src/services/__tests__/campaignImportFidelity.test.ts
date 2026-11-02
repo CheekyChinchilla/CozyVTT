@@ -206,8 +206,8 @@ const map = (fields: Record<string, unknown> = {}) => ({
   name: 'Cellar', imageAssetRef: null, width: 10, height: 10, gridSize: 50, feetPerSquare: 5, tokens: [token()], ...fields,
 });
 
-/** An archive of these maps, and optionally assets, written to disk as the import route saves one. */
-async function archive(maps: object[], assets: Record<string, { entry?: FixtureEntry; info: object }> = {}): Promise<string> {
+/** An archive of these maps, and optionally assets and other files, written to disk as the import route saves one. */
+async function archive(maps: object[], assets: Record<string, { entry?: FixtureEntry; info: object }> = {}, files: FixtureEntry[] = []): Promise<string> {
   const file = path.join(SCRATCH, `${randomUUID()}.cozyvtt`);
   const entries: FixtureEntry[] = [
     {
@@ -222,6 +222,7 @@ async function archive(maps: object[], assets: Record<string, { entry?: FixtureE
     { name: 'assets/asset-manifest.json', data: JSON.stringify(Object.fromEntries(Object.entries(assets).map(([id, a]) => [id, a.info]))) },
     ...Object.values(assets).flatMap((a) => (a.entry ? [a.entry] : [])),
     ...maps.map((m, i) => ({ name: `maps/map-${i}.json`, data: JSON.stringify(m) })),
+    ...files,
   ];
   await writeZip(file, entries);
   return file;
@@ -451,6 +452,55 @@ describe('a map whose picture is not a map picture', () => {
     ]);
     const kept = await prisma.asset.findMany({ where: { campaignId: result.campaignId }, select: { type: true } });
     expect(kept).toEqual([{ type: 'TOKEN' }]);
+  });
+});
+
+describe('a token, creature or template whose picture is not a token picture', () => {
+  // A token's picture can only be a token picture, as on the token,
+  // creature and template routes. An archive naming a map picture for one
+  // keeps the picture as a map picture in the campaign's library, and the
+  // token, creature or template arrives without it.
+  it('arrives without it, and says so', async () => {
+    const MAP_ID = '77777777-7777-4777-8777-777777777777';
+    const TOKEN_ID = '88888888-8888-4888-8888-888888888888';
+    const statBlock = { ac: 10, hpMax: 4, speed: '30 ft.', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } };
+    const result = await importCampaign(
+      await archive(
+        [map({ tokens: [token({ name: 'Drawn', imageUrl: MAP_ID }), token({ name: 'Also drawn', imageUrl: MAP_ID }), token({ name: 'Kept', imageUrl: TOKEN_ID })] })],
+        {
+          [MAP_ID]: {
+            info: { originalName: 'cellar.png', mimeType: 'image/png', type: 'MAP', fileSize: PNG.length },
+            entry: { name: `assets/${MAP_ID}.png`, data: PNG },
+          },
+          [TOKEN_ID]: {
+            info: { originalName: 'goblin.png', mimeType: 'image/png', type: 'TOKEN', fileSize: PNG.length },
+            entry: { name: `assets/${TOKEN_ID}.png`, data: PNG },
+          },
+        },
+        [
+          { name: 'creatures/creatures.json', data: JSON.stringify([{ name: 'Imp', imageAssetRef: MAP_ID, statBlock }, { name: 'Goblin', imageAssetRef: TOKEN_ID, statBlock }]) },
+          { name: 'token-templates/templates.json', data: JSON.stringify([{ name: 'Statue', imageAssetRef: MAP_ID }, { name: 'Guard', imageAssetRef: TOKEN_ID }]) },
+        ]
+      ),
+      userId
+    );
+
+    expect(result.mapCount).toBe(1);
+    const [stored] = await importedMaps(result.campaignId);
+    const tokens = stored.tokens as unknown as StoredToken[];
+    const tokenPicture = (await prisma.asset.findFirstOrThrow({ where: { campaignId: result.campaignId, type: 'TOKEN' } })).id;
+    expect(tokens.map((t) => [t.name, t.imageUrl])).toEqual([['Drawn', ''], ['Also drawn', ''], ['Kept', `/api/assets/tokens/${tokenPicture}`]]);
+    const creatures = await prisma.creatureTemplate.findMany({ where: { campaignId: result.campaignId }, orderBy: { name: 'asc' }, select: { name: true, imageUrl: true } });
+    expect(creatures).toEqual([{ name: 'Goblin', imageUrl: `/api/assets/tokens/${tokenPicture}` }, { name: 'Imp', imageUrl: null }]);
+    const templates = await prisma.tokenTemplate.findMany({ where: { campaignId: result.campaignId }, orderBy: { name: 'asc' }, select: { name: true, imageUrl: true } });
+    expect(templates).toEqual([{ name: 'Guard', imageUrl: `/api/assets/tokens/${tokenPicture}` }, { name: 'Statue', imageUrl: null }]);
+    expect(result.warnings).toEqual([
+      'Map "Cellar": left out the pictures of 2 tokens, which were not uploaded as token pictures.',
+      'Creature "Imp": left out its picture, which was not uploaded as a token picture.',
+      'Token template "Statue": left out its picture, which was not uploaded as a token picture.',
+    ]);
+    const kept = await prisma.asset.findMany({ where: { campaignId: result.campaignId }, select: { type: true }, orderBy: { type: 'asc' } });
+    expect(kept).toEqual([{ type: 'MAP' }, { type: 'TOKEN' }]);
   });
 });
 
