@@ -1415,6 +1415,106 @@ describe('drafts', () => {
     expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('waits for the draft of a map shown behind a write still under way, at most 3 seconds, and keeps drafts on', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    // The painting of map-a is being written, slowly, as a large draft is, when map-b is shown.
+    const put = drafts().put;
+    let finish = () => undefined as void;
+    const writing = new Promise<void>((resolve) => { finish = resolve; });
+    drafts().put = async (...args) => {
+      await writing;
+      return put(...args);
+    };
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    pictures[pictures.length - 1].load();
+    await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    await act(async () => {
+      vi.advanceTimersByTime(DRAFT_LOOKUP_MS);
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    await act(async () => { finish(); });
+    await settle();
+    vi.useRealTimers();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(screen.queryByText(DRAFTS_UNAVAILABLE)).toBeNull();
+    expect(drafts().writes.map((w) => w.key)).toEqual([key, draftKey('me', 'campaign-1', 'map-b', 'this-tab')]);
+  });
+
+  /**
+   * This tab's draft of map-b, from before a reload, holds tile 3,3; map-a is
+   * painted and its draft is being written, slowly, when map-b is shown, and
+   * Paint stops waiting for map-b's lookup after 3 seconds. Answers the
+   * write's end, and map-b's key.
+   */
+  async function lookupBehindASlowWrite() {
+    const mapB = draftKey('me', 'campaign-1', 'map-b', 'this-tab');
+    const blank = qoiEncode(new Uint8ClampedArray(256 * 256 * 4));
+    drafts().headers.set(mapB, { key: mapB, userId: 'me', campaignId: 'campaign-1', mapId: 'map-b', tabId: 'this-tab', baseUrl: '/api/assets/maps/b-before', width: 1000, height: 1000, savedAt: 1 });
+    drafts().kept.set(mapB, new Map([['3,3', { tx: 3, ty: 3, packed: blank }]]));
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    const put = drafts().put;
+    let finish = () => undefined as void;
+    const writing = new Promise<void>((resolve) => { finish = resolve; });
+    drafts().put = async (...args) => {
+      await writing;
+      return put(...args);
+    };
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    pictures[pictures.length - 1].load();
+    await act(async () => {
+      vi.advanceTimersByTime(DRAFT_LOOKUP_MS);
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+    vi.useRealTimers();
+    return { finish: () => act(async () => { finish(); }), mapB };
+  }
+
+  it('offers a draft its lookup found after Paint stopped waiting, at the next press', async () => {
+    const { finish } = await lookupBehindASlowWrite();
+    await finish();
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeInTheDocument();
+  });
+
+  it('keeps aside, and offers later, a draft found only after a canvas was opened on its map: its writes never take it', async () => {
+    const { finish, mapB } = await lookupBehindASlowWrite();
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await finish();
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect([...drafts().kept.get(mapB)!.keys()].sort()).toEqual(['0,0', '1,0']);
+    const aside = [...drafts().headers.values()].filter((d) => d.mapId === 'map-b' && d.key !== mapB);
+    expect(aside.map((d) => [...drafts().kept.get(d.key)!.keys()])).toEqual([['3,3']]);
+    // Once this painting is saved and put away, the one kept aside is offered.
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
+    pictures[pictures.length - 1].load();
+    await pictures[pictures.length - 1].decoded();
+    await waitFor(() => expect(usePaintStore.getState().mapId).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeInTheDocument();
+  });
+
   it('says when the browser is out of room for drafts', async () => {
     drafts().failing = 'full';
     await showMap();
