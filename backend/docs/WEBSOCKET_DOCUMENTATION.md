@@ -795,7 +795,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 | `dice.roll` | 50 a second and 200 a minute; a spectator's roll is counted, then refused before its fields are read. A player's `initiative.roll` counts against the same budget, before anything in it is checked | `error` once, starting "Rate limit exceeded"; a roll sent with an acknowledgement is refused through it, every time, which the web client's dice panel waits out |
 | Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`) | 40 a second between them | dropped silently |
 | `fog:operation` | 10 a second | dropped silently |
-| `exploration:reveal` | 40 a second; what they report is written at most once a second per map and user | dropped silently |
+| `exploration:reveal` | 65 a second, five times the 13 reports one sight of the largest map is sent in, so four tabs of one player seeing it at once are all taken; what they report is written at most once a second per map and user | dropped silently |
 | `map.ping` | 10 every ten seconds | dropped silently |
 | `drawing:preview` (preview frames and the laser pointer) | 60 a second, every stroke and socket together; the draw tool sends at most 20 | dropped silently |
 | The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `drawings:request`, `presence.request`, `initiative.request_state`) | 5 a second, each; a client sends each once per load | dropped silently |

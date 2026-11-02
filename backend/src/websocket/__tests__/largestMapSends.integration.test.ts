@@ -141,7 +141,40 @@ describe("a player's explored ground on the largest map", () => {
     player.disconnect();
   });
 
-  it('takes the whole map in one second of reports', () => {
-    expect(Math.ceil(MAX_FOG_CELLS / MAX_EXPLORATION_REPORT_CELLS)).toBeLessThanOrEqual(REVEALS_PER_SECOND);
+  // One sight of the whole map is 13 reports, and the ceiling counts every
+  // tab of a player together: four tabs or devices seeing at once, as when
+  // the DM turns Global Illumination on, send 52 in a second. A dropped
+  // report's squares are never sent again. Each tab's parts here name squares
+  // of their own, smaller than a page's, so that a dropped one shows.
+  it("remembers every part of four tabs' sights reported in the same second", async () => {
+    await new Promise((resolve) => setTimeout(resolve, 1100)); // a fresh second for the ceiling
+    await prisma.mapExploration.deleteMany({ where: { mapId } });
+    const tabs = await Promise.all(Array.from({ length: 4 }, () => server.connectAndAuth(playerCookie, campaignId)));
+    const parts = Math.ceil(MAX_FOG_CELLS / MAX_EXPLORATION_REPORT_CELLS);
+    const PART = 1000;
+    const total = tabs.length * parts * PART;
+    let latest = 0;
+    const settled = new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 4000);
+      tabs[0].on('exploration:state', (state: { cells: number[] }) => {
+        latest = state.cells.length;
+        if (latest === total) { clearTimeout(timer); resolve(); }
+      });
+    });
+
+    tabs.forEach((tab, t) => {
+      for (let part = 0; part < parts; part += 1) {
+        const from = (t * parts + part) * PART;
+        tab.emit('exploration:reveal', { mapId, cells: Array.from({ length: PART }, (_, i) => from + i) });
+      }
+    });
+
+    await settled;
+    expect(latest).toBe(total);
+    for (const tab of tabs) tab.disconnect();
+  });
+
+  it('takes the whole map from four tabs in one second of reports', () => {
+    expect(4 * Math.ceil(MAX_FOG_CELLS / MAX_EXPLORATION_REPORT_CELLS)).toBeLessThanOrEqual(REVEALS_PER_SECOND);
   });
 });

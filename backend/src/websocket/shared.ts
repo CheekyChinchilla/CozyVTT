@@ -156,8 +156,9 @@ export const drawingPreviewLimiter = new RateLimiter();
 /** Preview frames one user may send a second, every stroke and socket together. */
 export const DRAWING_PREVIEWS_PER_SECOND = 60;
 // Explored-memory reveals arrive as a player's vision moves; a client sends
-// at most a few a second. Over-limit reveals are dropped silently.
-export const explorationRevealLimiter = new RateLimiter(); // Max REVEALS_PER_SECOND (40) reveals/second per user
+// a few a second, and one sight of a large map in parts. Over-limit reveals
+// are dropped silently.
+export const explorationRevealLimiter = new RateLimiter(); // Max REVEALS_PER_SECOND reveals/second per user (handlers/exploration.ts)
 
 /**
  * The key a per-socket flood ceiling is counted under: the user, so that

@@ -198,6 +198,7 @@ import path from 'path';
 import { RESTORE_TRAILER } from '../utils/pgRestore';
 import { sessionSecretProblem } from '../config/sessionSecret';
 import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
+import { REVEALS_PER_SECOND } from '../websocket/handlers/exploration';
 import { THEME_IDS, FONT_IDS } from '../validators/appearance';
 import { sheetTypeMismatches } from './helpers/sheetTypeParity';
 import ts from 'typescript';
@@ -768,6 +769,10 @@ describe('the socket flood ceilings in the WebSocket guide', () => {
 
   it.each(Object.entries(SOCKET_CEILINGS))('%s is stated as the server applies it', (event, ceiling) => {
     expect(stated(event)).toBe(inWords(ceiling.windows));
+  });
+
+  it('exploration:reveal is stated as the server applies it', () => {
+    expect(stated('exploration:reveal')).toBe(inWords([{ limit: REVEALS_PER_SECOND, windowMs: 1000 }]));
   });
 });
 
