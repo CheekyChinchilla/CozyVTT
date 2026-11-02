@@ -130,7 +130,13 @@ function CampaignPageContent() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isCreatureLibraryOpen, setIsCreatureLibraryOpen] = useState(false);
   const [isTokenTemplateLibraryOpen, setIsTokenTemplateLibraryOpen] = useState(false);
-  const [quickEditToken, setQuickEditToken] = useState<Token | null>(null);
+  // The token in the quick editor, with the map it was opened on, which its
+  // saves name: the map on screen can change under it (the table moved from
+  // elsewhere, the map being prepared deleted).
+  const [quickEdit, setQuickEdit] = useState<{ token: Token; mapId: string } | null>(null);
+  const editToken = (token: Token) => {
+    if (viewedMap) setQuickEdit({ token, mapId: viewedMap.id });
+  };
   const compact = useCompactLayout();
 
   // SessionToolbar reports which tool was clicked; the open/close state
@@ -249,7 +255,7 @@ function CampaignPageContent() {
               </div>
             }
           >
-            <MapCanvas onEditToken={setQuickEditToken} onShowShortcuts={() => setIsShortcutsOpen(true)} />
+            <MapCanvas onEditToken={editToken} onShowShortcuts={() => setIsShortcutsOpen(true)} />
           </Suspense>
         </div>
       </div>
@@ -261,7 +267,7 @@ function CampaignPageContent() {
         <CampaignRoster />
         {/* Token Roster — DM only */}
         {userRole === 'DM' && (
-          <TokenRoster onEditToken={setQuickEditToken} />
+          <TokenRoster onEditToken={editToken} />
         )}
       </div>
     ),
@@ -350,18 +356,18 @@ function CampaignPageContent() {
       )}
 
       {/* NPC Quick Editor — DM only */}
-      {userRole === 'DM' && quickEditToken && campaign && viewedMap && (
+      {userRole === 'DM' && quickEdit && campaign && (
         <NpcQuickEditor
-          token={quickEditToken}
+          token={quickEdit.token}
           campaignId={campaign.id}
-          mapId={viewedMap.id}
-          onClose={() => setQuickEditToken(null)}
+          mapId={quickEdit.mapId}
+          onClose={() => setQuickEdit(null)}
           onTokenUpdate={(updated) => {
             // A stat block saves when the editor closes, so its answer often
             // arrives after the DM closed the editor or opened another token.
             // Update the editor only while it still shows this token.
-            setQuickEditToken((open) => (open?.id === updated.id ? updated : open));
-            useGameStore.getState().replaceToken(updated, viewedMap.id);
+            setQuickEdit((open) => (open?.token.id === updated.id ? { ...open, token: updated } : open));
+            useGameStore.getState().replaceToken(updated, quickEdit.mapId);
           }}
         />
       )}
