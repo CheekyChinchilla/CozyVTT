@@ -24,12 +24,13 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Fix first: these lose data
 
-_Nothing at present._
+- `next release` **A DM who has handed the DM seat to someone else can still delete, or move out of the campaign's library, a picture they uploaded that the new DM's maps use.** Whoever uploaded a campaign asset may change it while they are a member (`mayChangeAsset`), so as a player they can delete it with `force=true`, a prepared map's picture included, and every map using it loses its picture; the refusal without `force` tells them a map uses it. A picture one of the campaign's maps uses should be the campaign's DM's alone to delete or move (`routes/assets.ts`).
 
 ### Character sheets
 
 - `after the next release` **On a wider screen, an editor's two notes under the portrait can be drawn over each other,** when the message for a refused picture and **Saves as personal token** show together (the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors).
 - `after the next release` **Some sheet editor controls do not work for a screen reader or the keyboard.** The buttons that remove a D&D 5e attack, spell or inventory item, and most of the Pathfinder 2e editor's delete buttons, have no name; a Flexible sheet's delete buttons stay invisible when the keyboard reaches them; and its list ticks have no name or state.
+- `after the next release` **A D&D 5e attack's other damage roll goes to the Dice panel under two names.** Clicked on the sheet it is sent as the attack's name and the roll's note joined by a dash, and from **Roll...** as "Spear Damage (Two-handed)". Both should take one name from a helper the sheet and the picker share (`AttacksList.tsx`, `utils/characterRolls.ts`).
 
 ### Tokens
 
@@ -45,11 +46,18 @@ _Nothing at present._
 
 - `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
 - `after the next release` **Deleting a campaign from Campaign Settings tells its owner twice** (`CampaignSettingsModal.tsx`).
+- `next release` **The live table answers every `ping`, with no limit,** so a signed-in client that sends them and never reads the answers makes the server hold every answer in memory for it. A `ping` should count against a ceiling, as the events in `SOCKET_CEILINGS` do (`websocket/events.ts`).
 
 ### Maps
 
 - `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
 - `after the next release` **With a mouse, the AoE Shape panel covers the foot of the first toolbar buttons,** by about 20 pixels over **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen** (`MapCanvas.tsx`).
+- `after the next release` **Switching to a map with a spirit layer shows the last map's spirit layer picture on it until its own has loaded.** The spirit picture should be kept with the map it was loaded for, as the map's own picture is, so another map's is never drawn (`MapCanvas.tsx`).
+- `after the next release` **A screen reader names none of Create Map's number boxes.** The labels **Width (grid squares)**, **Height (grid squares)**, **Grid Size (px/square)** and **Detail (pixels per square)** are tied to nothing, so only the slider under each box has a name (`CreateMapModal.tsx`).
+
+### Backups
+
+- `after the next release` **Create Backup reports a backup as made when the Admin Panel's restore would refuse it.** A restore takes a backup of at most 4 GB that unpacks to at most 10 GiB in at most 100,000 files; a larger backup is made and listed as any other, and only the restore refuses it. **Create Backup** should warn, in its answer and the backend log (`routes/admin.ts`).
 
 ---
 
@@ -386,7 +394,9 @@ _Nothing at present._
   drawn at one pixel per point; a token held by a tap loses its hit-point bar,
   badges and rings while held; **Enter** on a token off the edge pans it only
   one square into view; some controls a finger reaches are still under 44
-  pixels (the Fog of War panel, Player Preview's list); the campaign header
+  pixels (the Fog of War panel, Player Preview's list, the edit, delete, save
+  and cancel buttons of the **Saved rolls** window, and **Set Active** and the
+  edit, export and delete buttons on a map's card in the **Map Library**); the campaign header
   takes two rows on an iPad on its side; Create Map's footer can cover its
   Grid Size box on an iPhone; and a sheet's tabs are not announced as tabs.
   Each wants a check on a real device first.
