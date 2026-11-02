@@ -571,6 +571,18 @@ describe('Move to Map…', () => {
     expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
   });
 
+  it("opens with its submenu shut on a right-click on another token while it is open", () => {
+    render(<MapCanvas />);
+    show(goblin(), token('tok-wolf', 'Wolf', 4, 19));
+    rightClick(0, 19);
+    fireEvent.click(screen.getByText('Move to Map…'));
+    expect(rows()).toContain('› Map B');
+
+    rightClick(4, 19);
+
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+  });
+
   it('lists every map while the current one is not known to the campaign', () => {
     h.set({ currentMap: mapNamed('map-x') });
     render(<MapCanvas />);

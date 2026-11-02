@@ -199,6 +199,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A door's menu stays on the screen.** Right-clicking a door near the right or the bottom edge of the screen opened its menu partly off the screen. It now opens to the left of the pointer, or above it, where it would not fit, as a token's menu does.
 
+- **A token's menu opens with Move to Map… shut.** If **Move to Map…** was left open in one token's menu, the next token's menu could open with its list of maps already showing. Each token's menu now opens with the list shut.
+
 - **Tab no longer pings beside the map's picture.** With the pointer over the map area but off its picture, as on the space around a map zoomed out to fit, **Tab** sent the table a ping out there. It now pings only on the picture, as the **Ping** button and a press and hold do.
 
 - **Edit Token offers no 51st condition.** A token can carry 50 conditions and effects, but at 50 a listed condition it did not carry could still be pressed, and the server refused it, so it went back off with a message. The listed ones the token does not carry are now greyed out at 50, as the **+** button for a typed condition already was, and a note above them says "A token carries at most 50 conditions and effects. Take one off to add another." The ones it carries still come off.

@@ -35,7 +35,7 @@ _Nothing at present._
 
 - `after the next release` **A player whose move is refused a square can learn the name of a creature under fog there.** The refusal says "<name> is already standing there." for any creature on the square, one the player's fog covers included. It should name only a token the player's screen draws, and an unseen one as "Someone" (`MapCanvas.tsx`).
 - `after the next release` **In Player Preview a right-click on a hidden creature's square opens the DM's menu for it,** on the screen the players may be watching. It should find only a token the preview draws, as a click on it does (`MapCanvas.tsx`).
-- `next release` **The token menu keeps Move to Map… open from one token to the next, and shows two dividers together when there is no other map** (`MapCanvas.tsx`, `map/tokenMenuItems.ts`).
+- `next release` **The token menu shows two dividers together when there is no other map** (`map/tokenMenuItems.ts`).
 - `after the next release` Suspected: **a drop refused when it arrives with its pick-up is not put back on the mover's screen.** One connection's `token.move.start` and `token.move.end` are handled side by side, so the end can be read before the drag is recorded (`handlers/tokens.ts`).
 
 ### Campaigns and assets
