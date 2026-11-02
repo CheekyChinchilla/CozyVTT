@@ -84,6 +84,11 @@ export interface PaintHistoryOptions {
   maxSteps: number;
   /** Told after every change, undo or redo. */
   onChange?: () => void;
+  /**
+   * Told of the tiles whose pixels a change, an undo or a redo has just
+   * changed, once they are painted: what a draft writes next.
+   */
+  onTouched?: (tiles: readonly TileRect[]) => void;
 }
 
 export interface PaintHistoryCounts {
@@ -132,7 +137,7 @@ interface Step<K> {
 }
 
 export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistoryOptions): PaintHistory<K> {
-  const { width, height, budgetBytes, maxSteps, onChange } = options;
+  const { width, height, budgetBytes, maxSteps, onChange, onTouched } = options;
   const undone: Step<K>[] = [];
   const redoable: Step<K>[] = [];
   let queue: Promise<void> = Promise.resolve();
@@ -204,7 +209,9 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
           apply();
           epoch += 1;
           while (redoable.length > 0) release(redoable.pop()!);
-          undone.push({ tiles: [...kept.values()].map(({ tile, kept: k }) => ({ tile, kept: k })) });
+          const step = { tiles: [...kept.values()].map(({ tile, kept: k }) => ({ tile, kept: k })) };
+          undone.push(step);
+          onTouched?.(step.tiles.map(({ tile }) => tile));
           trim();
           onChange?.();
         };
@@ -253,6 +260,7 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
     } finally {
       release(step);
     }
+    onTouched?.(step.tiles.map(({ tile }) => tile));
     epoch += 1;
     to.push(now);
     trim();

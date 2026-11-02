@@ -77,6 +77,7 @@ import { usePaintSurface } from './map/paint/usePaintSurface';
 import { rememberPictureAsset, useMapPictureKind } from './map/paint/mapPicture';
 import { drawPaintPreview } from './map/paint/paintShapes';
 import { releaseCanvas } from './map/paint/blankPicture';
+import { draftTime, dropDrafts, paintDraftStore } from './map/paint/paintDrafts';
 import { mapInputOwner } from './map/inputOwner';
 import { usePaintStore } from '@/stores/paintStore';
 import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, DOUBLE_TAP_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
@@ -699,7 +700,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // Save found the map's picture changed where this page was not told: show the map as it is.
     onMapRead: (latest) => updateMap(latest.id, latest),
     refuse: (message) => showToast(message, 'error'),
+    warn: (message) => showToast(message, 'warning'),
+    drafts: paintDraftStore(),
+    userId: user?.id,
   });
+  // Drafts of painting on maps since deleted, from another device or tab,
+  // are dropped as the DM opens the campaign: they have no map to go back to.
+  const draftsPruned = useRef<string | null>(null);
+  const campaignMaps = campaign?.maps;
+  useEffect(() => {
+    const campaignId = campaign?.id;
+    const userId = user?.id;
+    if (!isDM || !campaignId || !userId || !Array.isArray(campaignMaps) || draftsPruned.current === campaignId) return;
+    draftsPruned.current = campaignId;
+    const maps = new Set(campaignMaps.map((m) => m.id));
+    void dropDrafts(paintDraftStore(), (draft) => draft.userId === userId && draft.campaignId === campaignId && !maps.has(draft.mapId));
+  }, [isDM, campaign?.id, user?.id, campaignMaps]);
   // Paint held over a picture changed elsewhere keeps the button, which asks about it.
   const paintOffered = isDM && !!currentMap
     && (paint.stranded || pictureKind === 'none' || pictureKind === 'gone' || (pictureKind === 'drawn' && (imageLoaded || paint.source !== null)));
@@ -3907,9 +3923,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     usePaintStore.getState().openWhenShown(null);
     openPaint();
   });
+  // Paint pressed before its draft had been looked for waits here too.
   useEffect(() => {
-    if (openOnMapId !== null && openOnMapId === currentMap?.id && paintOffered && !paint.on) openPaintWhenShown();
-  }, [openOnMapId, currentMap?.id, paintOffered, paint.on]);
+    if (openOnMapId !== null && openOnMapId === currentMap?.id && paintOffered && paint.ready && !paint.on) openPaintWhenShown();
+  }, [openOnMapId, currentMap?.id, paintOffered, paint.ready, paint.on]);
   /**
    * On the compact layout the DM's tool stack shows while Tools is on, and
    * while a tool from it is armed, so a tool armed as the layout turns
@@ -5057,6 +5074,28 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           </div>
         </FloatingLayer>
       )}
+
+      {/* A draft of what was painted here and not saved, offered back as Paint opens. */}
+      <ConfirmDialog
+        isOpen={paint.offer !== null}
+        title="Restore your painting?"
+        message={paint.offer?.older
+          ? `Your unsaved painting from ${draftTime(paint.offer.header.savedAt)} was painted on an older picture of this map. Restore it over this picture, or discard it?`
+          : `Restore your unsaved painting from ${paint.offer ? draftTime(paint.offer.header.savedAt) : ''}?`}
+        confirmLabel={paint.offer?.older ? 'Restore it over this picture' : 'Restore my painting'}
+        cancelLabel="Not now"
+        variant="info"
+        onConfirm={() => { void paint.answerOffer('restore'); }}
+        onCancel={() => { void paint.answerOffer('later'); }}
+      >
+        <button
+          type="button"
+          onClick={() => { void paint.answerOffer('discard'); }}
+          className="touch-target text-sm text-danger-ink underline underline-offset-2 hover:no-underline"
+        >
+          Discard it
+        </button>
+      </ConfirmDialog>
 
       {/* Paint not saved over a picture changed elsewhere: what to do with it. */}
       <ConfirmDialog

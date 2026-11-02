@@ -239,7 +239,17 @@ While Paint is on, it takes the map: a click or a tap paints, so no token is pic
 
 Undo keeps up to 50 changes. It keeps only the part of the picture each change touched, packed small, so even strokes across the whole map leave at least 30 to take back; on a picture with a great deal of fine detail the oldest may go sooner.
 
-**Saving.** What you paint is on your screen only until you click **Save** in the Paint panel. Until then it stays on the map when you put Paint away, and goes if you reload the page or show another map. **Save** puts the picture in the campaign's Asset Library as a new **Drawn map** picture and makes it the map's picture; the map's size and grid do not change, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
+**Saving.** What you paint is on your screen only until you click **Save** in the Paint panel. Until then it stays on the map when you put Paint away, and your browser keeps a draft of it (below). **Save** puts the picture in the campaign's Asset Library as a new **Drawn map** picture and makes it the map's picture; the map's size and grid do not change, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
+
+**Drafts.** While you have paint not saved, your browser keeps a draft of it: at least every 10 seconds, and at once when you switch to another tab or app or your phone's screen goes off. If the page is reloaded or closed, or your phone drops it, open the map again and click **Paint**. It asks "Restore your unsaved painting from 14:05?" (the time the draft was last written, and the day if it was not today):
+
+| Answer | What happens |
+|---|---|
+| **Restore my painting** | Paint opens with your painting put back, not yet saved. **Undo** starts from there |
+| **Discard it** | The draft is dropped and Paint opens on the picture as it was saved |
+| **Not now** (or `Esc`) | Nothing changes: the draft stays and Paint stays off, until you click **Paint** again |
+
+If the map's picture was saved or changed since the draft was written, the question says the painting "was painted on an older picture of this map", and **Restore it over this picture** puts the parts you painted over the newer picture. **Save**, **Discard my painting** and deleting the map in the Map Library clear the draft, and a draft of a map deleted from another device is dropped the next time you open the campaign. A draft is kept in that browser only, for you and that map: another browser or device has its own, and clearing the browser's site data clears it too. If the browser cannot keep drafts (some private windows, or a full disk), Paint says "This browser cannot keep a draft of your painting, so save it often: what is not saved is lost if the page closes." once, and you paint on as before.
 
 **Painting during play.** **Paint** works on the map the table is on as well as on one you are preparing, so you can add a side passage while your players play. They see none of your strokes, and keep moving their tokens meanwhile: a token moved while you paint moves on your screen too, and your stroke and your paint not yet saved stay as they are. When you click **Save**, their picture changes where they are, without moving their view or dropping a token they are holding.
 
