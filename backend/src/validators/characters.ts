@@ -8,6 +8,7 @@
 
 import { z } from 'zod';
 import { GameSystem } from '../game-systems';
+import { MAX_TEMPORARY_HIT_POINTS } from '../utils/rules/hitPoints';
 
 /** POST /api/characters */
 export const CreateCharacterSchema = z.object({
@@ -29,3 +30,22 @@ export const UpdateCharacterSchema = z.object({
   // save goes ahead whatever happened in between.
   updatedAt: z.iso.datetime({ message: 'updatedAt must be the ISO timestamp the character was loaded with' }).optional(),
 });
+
+/** What `character.hp.temporary` answers a payload that is not a character's id and a number, and nothing else. */
+export const TEMPORARY_HP_PAYLOAD_REFUSAL = 'characterId (string) and temporary (number) are required';
+/** What it answers a number of temporary hit points a grant may not give. */
+export const TEMPORARY_HP_AMOUNT_REFUSAL =
+  `temporary must be a whole number of hit points from 1 to ${MAX_TEMPORARY_HIT_POINTS.toLocaleString('en-US')}`;
+
+/** `character.hp.temporary`: the character, and the temporary hit points it takes in place of any it has. */
+export const CharacterTemporaryHpSchema = z.strictObject(
+  {
+    characterId: z.uuid({ error: TEMPORARY_HP_PAYLOAD_REFUSAL }),
+    temporary: z
+      .number({ error: TEMPORARY_HP_AMOUNT_REFUSAL })
+      .int({ error: TEMPORARY_HP_AMOUNT_REFUSAL })
+      .min(1, { error: TEMPORARY_HP_AMOUNT_REFUSAL })
+      .max(MAX_TEMPORARY_HIT_POINTS, { error: TEMPORARY_HP_AMOUNT_REFUSAL }),
+  },
+  { error: TEMPORARY_HP_PAYLOAD_REFUSAL }
+);

@@ -1,9 +1,11 @@
 // ============================================
-// Character handlers: character.hp.update, character.hitdice.spend
+// Character handlers: character.hp.update, character.hp.temporary,
+// character.hitdice.spend
 // Players act on their own characters; the DM may act on any of them.
 // ============================================
 
 import { Server } from 'socket.io';
+import type { Character } from '@prisma/client';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
@@ -12,7 +14,8 @@ import type { DnD5eCharacterData } from '../../validators/game-systems/dnd5e.sch
 import { withinCeiling } from '../shared';
 import { emitCharacterUpdated } from '../utils';
 import { characterInCampaign } from '../../utils/characterCampaign';
-import { applyHitPointChange } from '../../utils/rules/hitPoints';
+import { applyHitPointChange, grantTemporaryHitPoints } from '../../utils/rules/hitPoints';
+import { CharacterTemporaryHpSchema, TEMPORARY_HP_PAYLOAD_REFUSAL } from '../../validators/characters';
 
 /** The largest change of hit points one event may make, either way. */
 const MAX_HP_DELTA = 100_000;
@@ -97,6 +100,59 @@ function spendHitDie(stored: unknown, index: number): { data: CharacterHitDiceDa
   return { data: { ...charData, hitDice } };
 }
 
+/**
+ * The sheet with `temporary` temporary hit points in place of any it had, or
+ * why it cannot be. They never add together (grantTemporaryHitPoints): the
+ * character keeps the ones it has, which changes nothing, or takes these.
+ */
+function takeTemporaryHp(
+  gameSystem: string | null,
+  stored: unknown,
+  temporary: number
+): { data: CharacterHpData; hp: { current: number; max: number; temp: number } } | Refusal {
+  if (gameSystem === 'CALL_OF_CTHULHU_7E') return { error: 'Call of Cthulhu sheets keep no temporary hit points' };
+  const charData = stored as CharacterHpData;
+  const heldTemp = typeof charData?.hp?.temporary === 'number' ? charData.hp.temporary : 0;
+  const grant = grantTemporaryHitPoints(heldTemp, temporary, gameSystem);
+  if (!grant) return { error: 'Temporary hit points are not tracked for this game system' };
+  if (!charData?.hp || typeof charData.hp.maximum !== 'number') {
+    return { error: 'Character does not have HP tracking' };
+  }
+  const max = charData.hp.maximum;
+  const current = typeof charData.hp.current === 'number' ? charData.hp.current : max;
+  return { data: { ...charData, hp: { ...charData.hp, temporary: grant.take } }, hp: { current, max, temp: grant.take } };
+}
+
+/**
+ * The character `characterId` names, when this socket may change it: one of
+ * its campaign's, as the REST routes judge it, and the socket's own unless
+ * it is the DM's; a spectator changes none. Otherwise the refusal is sent,
+ * `notYours` to a player on someone else's character, and the answer is null.
+ */
+async function characterToChange(socket: AuthenticatedSocket, campaignId: string, characterId: string, notYours: string): Promise<Character | null> {
+  const character = await prisma.character.findUnique({ where: { id: characterId } });
+  if (!character) {
+    socket.emit('error', { message: 'Character not found' });
+    return null;
+  }
+  if (!(await characterInCampaign(character, campaignId))) {
+    socket.emit('error', { message: 'Character is not in this campaign' });
+    return null;
+  }
+  // A spectator is watching, not playing: not even a character they own,
+  // since a token bound to it follows the sheet on every screen. The DM
+  // can still cover for them.
+  if (socket.role === 'SPECTATOR') {
+    socket.emit('error', { message: 'Spectators cannot change a character' });
+    return null;
+  }
+  if (character.userId !== socket.userId && socket.role !== 'DM') {
+    socket.emit('error', { message: notYours });
+    return null;
+  }
+  return character;
+}
+
 export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocket): void {
   socket.on('character.hp.update', async (data: { characterId: string; delta: number }) => {
     try {
@@ -122,35 +178,9 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      // Fetch the character
-      const character = await prisma.character.findUnique({
-        where: { id: characterId },
-      });
-
-      if (!character) {
-        socket.emit('error', { message: 'Character not found' });
-        return;
-      }
-
-      // The character is this campaign's, as the REST routes judge it.
-      if (!(await characterInCampaign(character, socket.campaignId))) {
-        socket.emit('error', { message: 'Character is not in this campaign' });
-        return;
-      }
-
-      // A spectator is watching, not playing: not even a character they own,
-      // since a token bound to it follows the sheet on every screen. The DM
-      // can still cover for them.
-      if (socket.role === 'SPECTATOR') {
-        socket.emit('error', { message: 'Spectators cannot change a character' });
-        return;
-      }
-
-      // Permission: character owner or DM
-      if (character.userId !== socket.userId && socket.role !== 'DM') {
-        socket.emit('error', { message: 'You do not have permission to update this character\'s HP' });
-        return;
-      }
+      // The character's owner, or the DM.
+      const character = await characterToChange(socket, socket.campaignId, characterId, 'You do not have permission to update this character\'s HP');
+      if (!character) return;
 
       // Read and written under the row's lock, afresh. Reading before the
       // lock and writing the whole sheet back undid any save that landed in
@@ -183,6 +213,55 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
   });
 
   /**
+   * CHARACTER.HP.TEMPORARY: the character takes `temporary` temporary hit
+   * points in place of any it has. Temporary hit points never add together,
+   * and a character that has some chooses between keeping those, which
+   * changes nothing, and taking the new ones, which is this. Same permission
+   * rule as HP.
+   */
+  socket.on('character.hp.temporary', async (data: unknown) => {
+    try {
+      if (!socket.campaignId) {
+        socket.emit('error', { message: 'Not authenticated to a campaign' });
+        return;
+      }
+
+      if (!withinCeiling(socket, 'character.hp.temporary')) return;
+
+      const parsed = CharacterTemporaryHpSchema.safeParse(data);
+      if (!parsed.success) {
+        socket.emit('error', { message: parsed.error.issues[0]?.message ?? TEMPORARY_HP_PAYLOAD_REFUSAL });
+        return;
+      }
+      const { characterId, temporary } = parsed.data;
+
+      const character = await characterToChange(socket, socket.campaignId, characterId, 'You do not have permission to update this character\'s HP');
+      if (!character) return;
+
+      // Under the row's lock and read afresh, for the reason given for hit
+      // points above.
+      const outcome = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Character" WHERE id = ${characterId} FOR UPDATE`;
+        const fresh = await tx.character.findUnique({ where: { id: characterId }, select: { data: true } });
+        if (!fresh) return { error: 'Character not found' } as const;
+        const taken = takeTemporaryHp(character.gameSystem, fresh.data, temporary);
+        if ('error' in taken) return taken;
+        await tx.character.update({ where: { id: characterId }, data: { data: toJson(taken.data) } });
+        return taken;
+      });
+      if ('error' in outcome) {
+        socket.emit('error', { message: outcome.error });
+        return;
+      }
+
+      io.to(socket.campaignId).emit('character.hp.updated', { characterId, hp: outcome.hp });
+    } catch (error) {
+      logger.error('character.hp.temporary failed', { err: error });
+      socket.emit('error', { message: 'Failed to update character HP' });
+    }
+  });
+
+  /**
    * CHARACTER.HITDICE.SPEND — spend one D&D 5e hit die.
    *
    * The roll itself goes through `dice.roll` like every other roll; this only
@@ -206,27 +285,9 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      const character = await prisma.character.findUnique({ where: { id: characterId } });
-      if (!character) {
-        socket.emit('error', { message: 'Character not found' });
-        return;
-      }
-
-      if (!(await characterInCampaign(character, socket.campaignId))) {
-        socket.emit('error', { message: 'Character is not in this campaign' });
-        return;
-      }
-
-      // As for hit points: a spectator changes nothing, the DM may.
-      if (socket.role === 'SPECTATOR') {
-        socket.emit('error', { message: 'Spectators cannot change a character' });
-        return;
-      }
-
-      if (character.userId !== socket.userId && socket.role !== 'DM') {
-        socket.emit('error', { message: 'You do not have permission to spend this character\'s hit dice' });
-        return;
-      }
+      // As for hit points: the character's owner, or the DM.
+      const character = await characterToChange(socket, socket.campaignId, characterId, 'You do not have permission to spend this character\'s hit dice');
+      if (!character) return;
 
       if (character.gameSystem !== 'DND_5E') {
         socket.emit('error', { message: 'Hit dice are not tracked for this game system' });

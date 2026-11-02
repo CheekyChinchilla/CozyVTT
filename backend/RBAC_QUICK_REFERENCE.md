@@ -69,8 +69,12 @@ it, only while its owner is still a member (`mayReadCharacter` and
 Removing a member, or their leaving, takes their characters out of the
 campaign in the same transaction; a character left naming a campaign by a
 removal from before that is its owner's alone, and its saves are not sent to
-that campaign. The socket's hit point and hit dice events ask the same
-(`characterInCampaign` in `utils/characterCampaign.ts`).
+that campaign. The socket's hit point, temporary hit point and hit dice
+events (`character.hp.update`, `character.hp.temporary`,
+`character.hitdice.spend`) ask the same (`characterInCampaign` in
+`utils/characterCampaign.ts`), through one check they share
+(`characterToChange` in `websocket/handlers/characters.ts`): the character's
+owner, or the DM.
 
 Only the owner assigns a character to a campaign (`POST
 /api/characters/:id/assign` with a `campaignId`). The owner, or the DM of the
@@ -103,8 +107,8 @@ them, or the answer is "You cannot see that door"). Anyone but the
 DM is sent a locked door as `door-closed`, and no light that is off.
 Chat is a socket event (`chat.message`)
 and spectators may send it, whispers included (see
-[Who may read a whisper](#who-may-read-a-whisper)). `character.hp.update`, `character.hitdice.spend`
-and `PUT /api/characters/:id` refuse a spectator outright, even for a
+[Who may read a whisper](#who-may-read-a-whisper)). `character.hp.update`, `character.hp.temporary`,
+`character.hitdice.spend` and `PUT /api/characters/:id` refuse a spectator outright, even for a
 character they own, because a token bound to it follows the sheet on every
 screen. The token-image sync that route runs repaints tokens only where the
 editor may: the owner's change reaches every campaign bound to the character
