@@ -1334,8 +1334,6 @@ describe('paint not saved, asked about before it is left', () => {
     ['open-other', 'Save it before you open another map?'],
     ['back-to-table', 'Save it before you go back to the table?'],
     ['set-active', 'Save it before the table moves to another map?'],
-    ['bring-everyone', 'Your painting of Map A is not saved, so your players would not see it. Save it before you bring them here?'],
-    ['delete', 'Save it before the map is deleted?'],
   ] as const)('%s asks the three-way question; Not now keeps the paint and stops the change', async (kind, words) => {
     await painted();
     const answer = askAbout(kind);
@@ -1346,6 +1344,57 @@ describe('paint not saved, asked about before it is left', () => {
     expect(answer.value).toBe(false);
     await waitFor(() => expect(question()).toBeNull());
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('asks before the map is deleted only whether to discard it: a picture saved now would go with the map', async () => {
+    const discardQuestion = () => screen.queryByRole('dialog', { name: 'Discard your painting?' });
+    await painted();
+    const answer = askAbout('delete');
+    await waitFor(() => expect(discardQuestion()).toBeInTheDocument());
+    expect(within(discardQuestion()!).getByText('Your painting of Map A is not saved, and goes with the map.')).toBeInTheDocument();
+    expect(within(discardQuestion()!).queryByRole('button', { name: 'Save my painting' })).toBeNull();
+    await act(async () => { fireEvent.click(within(discardQuestion()!).getByRole('button', { name: 'Not now' })); });
+    await waitFor(() => expect(answer.value).toBe(false));
+    const second = askAbout('delete');
+    await waitFor(() => expect(discardQuestion()).toBeInTheDocument());
+    await act(async () => { fireEvent.click(within(discardQuestion()!).getByRole('button', { name: 'Discard my painting' })); });
+    await waitFor(() => expect(second.value).toBe(true));
+    expect(usePaintStore.getState().unsaved).toBe(false);
+  });
+
+  it('asks nothing for Bring everyone here: the map on screen stays, and its paint with it', async () => {
+    await painted();
+    const answer = askAbout('bring-everyone');
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(answer.value).toBe(true);
+    expect(question()).toBeNull();
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('waits for a save under way before Bring everyone here, which then reads the picture saved', async () => {
+    await painted();
+    let land: (() => void) | null = null;
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => new Promise((resolve) => {
+      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` });
+    }));
+    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    await waitFor(() => expect(land).not.toBeNull());
+    const answer = askAbout('bring-everyone');
+    await act(async () => { await Promise.resolve(); });
+    expect(answer.value).toBeUndefined();
+    await act(async () => { land!(); });
+    await waitFor(() => expect(answer.value).toBe(true));
+    expect(question()).toBeNull();
+  });
+
+  it('closes the question about a picture changed elsewhere when the paint is discarded from this one', async () => {
+    await painted();
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), imageUrl: '/api/assets/maps/elsewhere-1' } }); });
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'This map\'s picture changed' })).toBeInTheDocument());
+    askAbout('open-other');
+    await waitFor(() => expect(question()).toBeInTheDocument());
+    await choose('Discard my painting');
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'This map\'s picture changed' })).toBeNull());
   });
 
   it('asks nothing, and lets the change go, with nothing to save', async () => {
@@ -1550,6 +1599,40 @@ describe('paint not saved, its map gone without asking', () => {
     expect(saved[0].type).toBe('image/png');
     await waitFor(() => expect(offer()).toBeNull());
     expect(canvas?.width).toBe(0);
+  });
+
+  it('opens with the keyboard on Download my painting', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(within(offer()!).getByRole('button', { name: 'Download my painting' })));
+  });
+
+  it('is held as paint not saved is, until it is downloaded or discarded: a reload asks, the session is kept, Back stays', async () => {
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    window.history.pushState({}, '', '/dashboard');
+    window.history.pushState({}, '', '/campaigns/c1');
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(offer()).toBeInTheDocument());
+    const reload = () => {
+      const event = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(reload()).toBe(true);
+    expect(hasUnsavedWork()).toBe(true);
+    act(() => { window.history.back(); });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 60)));
+    expect(window.location.pathname).toBe('/campaigns/c1');
+    expect(offer()).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Discard my painting' })); });
+    await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+    expect(reload()).toBe(false);
   });
 
   it('says why when the viewer is no longer the DM, and Discard drops it and its draft', async () => {

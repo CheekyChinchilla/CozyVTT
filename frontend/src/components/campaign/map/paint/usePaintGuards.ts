@@ -4,12 +4,17 @@
 // One question, asked the same way whatever is about to happen: Save my
 // painting (saves, then lets it happen if the save landed), Discard my
 // painting (drops the paint and its draft, then lets it happen), or Not now
-// (nothing happens; Esc is Not now too). It is asked
-// - by the campaign page before the map on screen changes or the table
-//   moves (CampaignContext's viewed-map guard: Open to prepare, Back to the
-//   table and the phone's Back while preparing, Set Active, Bring everyone
-//   here, deleting the map), which also holds the map on screen while there
-//   is paint not saved when the table is moved from elsewhere;
+// (nothing happens; Esc is Not now too). Before the map is deleted only
+// Discard and Not now are offered: a picture saved then would go with it.
+// It is asked
+// - by the campaign page before the map on screen changes (CampaignContext's
+//   viewed-map guard: Open to prepare, Back to the table and the phone's
+//   Back while preparing, Set Active on another map, deleting the map),
+//   which also holds the map on screen while there is paint not saved when
+//   the table is moved from elsewhere. Bring everyone here (and Set Active
+//   on the map on screen) asks nothing: the map on screen stays, and its
+//   paint with it; it waits only for a save under way, so the table is
+//   brought to the picture that save makes;
 // - before the page is left (hooks/useLeaveGuard.ts): the headers' way to
 //   the dashboard and the browser's Back; a reload or a closed tab gets the
 //   browser's own question.
@@ -17,8 +22,12 @@
 // while a save is under way, waits for it, then asks only if there is still
 // paint not saved: an answer given once is not asked again.
 //
-// While there is paint not saved the session is kept alive and a lost
-// sign-in keeps the page where it is (useUnsavedWorkGuard).
+// While there is paint not saved, or a painting left behind by a map gone
+// without asking (`leftover`, until it is downloaded or discarded), the
+// session is kept alive, a lost sign-in keeps the page where it is
+// (useUnsavedWorkGuard), and leaving the page is held: with only a
+// painting left behind, its own question is the one on screen, so the page
+// stays.
 // ============================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,7 +37,7 @@ import { useLeaveGuard } from '@/hooks/useLeaveGuard';
 import type { PaintSurface } from './usePaintSurface';
 
 /** What is about to take the paint off the screen: a change of the map on screen, or leaving the page. */
-export type PaintLeaving = ViewedMapChange['kind'] | 'leave';
+export type PaintLeaving = Exclude<ViewedMapChange['kind'], 'bring-everyone'> | 'leave';
 
 /** The DM's answer. */
 export type PaintLeaveAnswer = 'save' | 'discard' | 'later';
@@ -38,15 +47,14 @@ export const LEAVING_WORDS: Record<PaintLeaving, string> = {
   'open-other': 'Save it before you open another map?',
   'back-to-table': 'Save it before you go back to the table?',
   'set-active': 'Save it before the table moves to another map?',
-  'bring-everyone': 'Save it before you bring them here?',
-  delete: 'Save it before the map is deleted?',
+  delete: 'and goes with the map.',
   leave: 'Save it before you leave this page?',
 };
 
 /** The question in full. */
 export function leavingQuestion(mapName: string, leaving: PaintLeaving): string {
-  return leaving === 'bring-everyone'
-    ? `Your painting of ${mapName} is not saved, so your players would not see it. ${LEAVING_WORDS[leaving]}`
+  return leaving === 'delete'
+    ? `Your painting of ${mapName} is not saved, ${LEAVING_WORDS[leaving]}`
     : `Your painting of ${mapName} is not saved. ${LEAVING_WORDS[leaving]}`;
 }
 
@@ -77,7 +85,8 @@ export function usePaintGuards(paint: PaintSurface, { registerViewedMapGuard, ho
   const ask = useCallback((leaving: PaintLeaving): Promise<boolean> => {
     const run = queue.current.then(async () => {
       await paintRef.current.whenSaved();
-      if (!paintRef.current.isUnsaved()) return true;
+      // A painting left behind is asked about by its own question, on screen.
+      if (!paintRef.current.isUnsaved()) return !(leaving === 'leave' && paintRef.current.leftover !== null);
       return new Promise<boolean>((resolve) => {
         const asked = { leaving, resolve };
         questionRef.current = asked;
@@ -106,13 +115,16 @@ export function usePaintGuards(paint: PaintSurface, { registerViewedMapGuard, ho
   }, []);
 
   useEffect(() => registerViewedMapGuard({
-    mayLeave: (change) => ask(change.kind),
+    mayLeave: (change) => (change.kind === 'bring-everyone'
+      ? paintRef.current.whenSaved().then(() => true)
+      : ask(change.kind)),
     holds: () => paintRef.current.isUnsaved(),
   }), [registerViewedMapGuard, ask]);
 
-  const signedOut = useUnsavedWorkGuard(paint.unsaved);
+  const holding = paint.unsaved || paint.leftover !== null;
+  const signedOut = useUnsavedWorkGuard(holding);
   const askToLeave = useCallback(() => ask('leave'), [ask]);
-  useLeaveGuard(paint.unsaved, askToLeave, { holdBack });
+  useLeaveGuard(holding, askToLeave, { holdBack });
 
   return {
     /** What the open question is about, or null. */
