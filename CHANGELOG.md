@@ -32,6 +32,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 - **On a phone, most tablets held upright or a browser window narrower than 1,024 pixels at the usual text size, the campaign page has a layout of its own** (see **Added**), and the **Desktop Required** notice is gone.
 - **A player's Asset Library no longer lists the pictures of maps the table is not on** (see **Security**). Each comes back while the table is on a map using it.
 - **Each map's card in the Map Library, but the active map's, has Open to prepare** beside **Set Active** (see **Added**).
+- **A backup of tens of thousands of uploaded files takes longer to make.** About 18 seconds for 40,000 files in `backend/uploads`, where 1.5.4 took about 9; about a minute for 80,000, and two minutes for 100,000, the most a restore takes.
 
 #### What to do afterwards, if it applies to you
 
