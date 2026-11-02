@@ -38,13 +38,20 @@ const SOURCES = Object.fromEntries(
 /** The portrait's upload hint: a wash over the picture. */
 const PORTRAIT_HINT = /\bbg-black\/50\b/;
 
+/**
+ * A mark shown under a hover, `group-hover:opacity-60`, or with a further
+ * variant before the opacity, as a roll's dice icon has to stay hidden over a
+ * value in its row that does not roll (`group-hover:not-group-has-[…]:opacity-60`).
+ */
+const HOVER_SHOWN = /group-hover:(?:\S*:)?opacity-(\d+)/;
+
 /** Elements in `root` shown only under a hover, whose touch screen form is missing. */
 function hiddenFromTouch(root: Element): string[] {
-  return [...root.querySelectorAll('[class*="group-hover:opacity-"]')]
+  return [...root.querySelectorAll('[class*="group-hover:"]')]
     .map((element) => element.getAttribute('class') ?? '')
-    .filter((cls) => /\bopacity-0\b/.test(cls) && !PORTRAIT_HINT.test(cls))
+    .filter((cls) => HOVER_SHOWN.test(cls) && /\bopacity-0\b/.test(cls) && !PORTRAIT_HINT.test(cls))
     .filter((cls) => {
-      const shown = /group-hover:opacity-(\d+)/.exec(cls)?.[1];
+      const shown = HOVER_SHOWN.exec(cls)?.[1];
       return !cls.split(/\s+/).includes(`[@media(hover:none)]:opacity-${shown}`);
     });
 }
@@ -57,8 +64,8 @@ describe('the sheets\' hover-only marks', () => {
       source
         .split('\n')
         .map((line, i) => ({ line, at: `${file}:${i + 1}` }))
-        .filter(({ line }) => /\bopacity-0\b/.test(line) && /group-hover:opacity-\d+/.test(line) && !PORTRAIT_HINT.test(line))
-        .filter(({ line }) => !line.includes(`[@media(hover:none)]:opacity-${/group-hover:opacity-(\d+)/.exec(line)![1]}`))
+        .filter(({ line }) => /\bopacity-0\b/.test(line) && HOVER_SHOWN.test(line) && !PORTRAIT_HINT.test(line))
+        .filter(({ line }) => !line.includes(`[@media(hover:none)]:opacity-${HOVER_SHOWN.exec(line)![1]}`))
         .map(({ at }) => at)
     );
     expect(missing).toEqual([]);

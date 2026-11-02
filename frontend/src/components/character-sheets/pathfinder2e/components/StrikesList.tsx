@@ -8,7 +8,8 @@
 import React from 'react';
 import { Sword, Target, Zap, Dices } from 'lucide-react';
 import ProficiencyIndicator, { ProficiencyRank } from './ProficiencyIndicator';
-import { rollTarget } from '../../useSheetRolls';
+import { diceExpressionProblem } from '@/utils/diceExpression';
+import { notARoll, rollTarget } from '../../useSheetRolls';
 
 /**
  * A strike, as the schema actually declares it.
@@ -82,11 +83,18 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
           ? (bonus >= 0 ? `1d20+${bonus}` : `1d20${bonus}`)
           : '';
         const attackPurpose = `${strike.name} Strike`;
+        // Damage the dice cannot roll ("1d8+4 S") is shown and not offered as
+        // a roll: its title gives the parser's reason, and a click on it never
+        // falls through to the strike. The click is handed to the table,
+        // which says why it cannot roll it and sends nothing (useTableRoll).
+        const damageRoll = strike.damageRoll ?? '';
+        const damageProblem = onRollDamage && damageRoll !== '' ? diceExpressionProblem(damageRoll) : null;
+        const rollsDamage = !!onRollDamage && damageRoll !== '' && damageProblem === null;
 
         return (
           <div
             key={`${strike.name}-${index}`}
-            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 hover:shadow-md select-none [-webkit-touch-callout:none]' : 'hover:shadow-md'}`}
+            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:not-has-[[data-not-a-roll]:hover]:bg-accent/10 hover:not-has-[[data-not-a-roll]:hover]:border-accent/30 hover:shadow-md select-none [-webkit-touch-callout:none]' : 'hover:shadow-md'}`}
             onClick={isClickable ? () => onRollStrike?.(attackExpr, attackPurpose) : undefined}
             {...(isClickable ? rollTarget(attackExpr, attackPurpose, 'PATHFINDER_2E') : undefined)}
           >
@@ -96,7 +104,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
                 <Icon className={`w-5 h-5 ${isMelee ? 'text-danger-ink' : 'text-accent-ink'}`} />
                 <h4 className="font-bold text-ink text-lg">{strike.name}</h4>
                 <ProficiencyIndicator rank={strike.proficiencyRank} size="sm" />
-                {isClickable && <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
+                {isClickable && <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:not-group-has-[[data-not-a-roll]:hover]:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
               </div>
               <div className="text-right">
                 <div className="text-xs text-ink-muted uppercase tracking-wide">
@@ -127,14 +135,11 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
               </div>
 
               {/* Damage — click separately */}
-              {/* TODO(sheets): any damage text is offered as a roll here, so text
-                  the dice parser refuses ("1d8+4 S") fails at the server. Right:
-                  offer it only when isValidDiceExpression accepts it, as the roll
-                  picker does. */}
               <div
-                className={onRollDamage && strike.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
-                onClick={onRollDamage && strike.damageRoll ? (e) => { e.stopPropagation(); onRollDamage(strike.damageRoll!, `${strike.name} Damage`); } : undefined}
-                title={onRollDamage && strike.damageRoll ? `Click to roll damage: ${strike.damageRoll}` : undefined}
+                className={rollsDamage ? 'cursor-pointer hover:text-danger-ink' : damageProblem ? 'cursor-default' : ''}
+                onClick={onRollDamage && damageRoll !== '' ? (e) => { e.stopPropagation(); onRollDamage(damageRoll, `${strike.name} Damage`); } : undefined}
+                title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
+                {...(damageProblem ? notARoll(damageProblem) : undefined)}
               >
                 <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                   Damage

@@ -46,6 +46,19 @@ export function rollTarget(expression: string, purpose: string, gameSystem: stri
 /** What `rollTarget` gives a row. */
 export type RollTargetProps = ReturnType<typeof rollTarget>;
 
+/**
+ * The attributes of a value in a rolling row that does not roll, such as
+ * damage the dice cannot read: a title of its own giving the dice parser's
+ * reason, in place of the row's, and the mark the row's hover classes look
+ * for (`hover:not-has-[[data-not-a-roll]:hover]:…`, and its dice icon's
+ * `group-hover:not-group-has-[[data-not-a-roll]:hover]:…`), so the row does
+ * not light up while the pointer is on the value. The value adds
+ * `cursor-default` to its classes.
+ */
+export function notARoll(problem: string) {
+  return { 'data-not-a-roll': '', title: problem };
+}
+
 interface OpenMenu { at: RollPoint; expression: string; purpose: string }
 
 /** For the sheet's root element. */
