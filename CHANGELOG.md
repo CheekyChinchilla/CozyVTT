@@ -224,6 +224,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Tab no longer pings beside the map's picture.** With the pointer over the map area but off its picture, as on the space around a map zoomed out to fit, **Tab** sent the table a ping out there. It now pings only on the picture, as the **Ping** button and a press and hold do.
 
+- **Edit Token saves to the map its token is on.** If the map on your screen changed while **Edit Token** was open, as when the table is moved to another map from another tab or device, what you changed went to the new map, which refused it, and the change was lost. It now goes to the map the token was opened on.
+
 - **Edit Token offers no 51st condition.** A token can carry 50 conditions and effects, but at 50 a listed condition it did not carry could still be pressed, and the server refused it, so it went back off with a message. The listed ones the token does not carry are now greyed out at 50, as the **+** button for a typed condition already was, and a note above them says "A token carries at most 50 conditions and effects. Take one off to add another." The ones it carries still come off.
 
 - **A token someone is carrying goes back to its square when they are removed from the campaign.** If the DM removed a player while the player was carrying a token, everyone else went on seeing the token where the player's pointer had last taken it, until the map was opened again or the DM moved it. It now goes back to its square on every screen, as it already did when the carrier's tab closed.
