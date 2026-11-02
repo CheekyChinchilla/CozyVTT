@@ -32,6 +32,7 @@ import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/Slide
 import { extractAssetId } from '@/utils/assetUrl';
 import { pictureIsDrawn, rememberPictureAsset } from './map/paint/mapPicture';
 import { usePaintStore } from '@/stores/paintStore';
+import { dropDrafts, paintDraftStore } from './map/paint/paintDrafts';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
   uvttImportDecision,
@@ -352,6 +353,9 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       await mapService.deleteMap(campaign.id, map.id);
       setMaps((prev) => prev.filter((m) => m.id !== map.id));
       removeCampaignMap(map.id);
+      // A draft of painting on it, kept in this browser, has no map to go back to.
+      const campaignId = campaign.id;
+      void dropDrafts(paintDraftStore(), (draft) => draft.campaignId === campaignId && draft.mapId === map.id);
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to delete map.');
       return;

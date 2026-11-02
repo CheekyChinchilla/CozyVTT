@@ -216,7 +216,7 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 
 **Paint**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
 
-1. Click **Paint**. Its panel opens at the top of your tool panels, and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
+1. Click **Paint**. Its panel opens at the top of your tool panels (on a phone, **Paint** is in the map's **More**, and its tools are a strip at the foot of the map: see [On a phone](#on-a-phone)), and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
 2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Paint has two colours: **Colour** and **Second colour** above the colours say which one the palette sets. Set the **Width**, from 1 to 64 pixels.
 3. Paint with the tool. A stroke shows as you drag, and goes into the picture when you let go.
 
@@ -239,7 +239,37 @@ While Paint is on, it takes the map: a click or a tap paints, so no token is pic
 
 Undo keeps up to 50 changes. It keeps only the part of the picture each change touched, packed small, so even strokes across the whole map leave at least 30 to take back; on a picture with a great deal of fine detail the oldest may go sooner.
 
-**Saving.** What you paint is on your screen only until you click **Save** in the Paint panel. Until then it stays on the map when you put Paint away, and goes if you reload the page or show another map. **Save** puts the picture in the campaign's Asset Library as a new **Drawn map** picture and makes it the map's picture; the map's size and grid do not change, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
+**Saving.** What you paint is on your screen only until you click **Save** in the Paint panel. Until then it stays on the map when you put Paint away, and your browser keeps a draft of it (below). **Save** puts the picture in the campaign's Asset Library as a new **Drawn map** picture and makes it the map's picture; the map's size and grid do not change, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
+
+**Drafts.** While you have paint not saved, your browser keeps a draft of it: at least every 10 seconds, and at once when you switch to another tab or app or your phone's screen goes off. If the page is reloaded or closed, or your phone drops it, open the map again and click **Paint**. It asks "Restore your unsaved painting from 14:05?" (the time the draft was last written, and the day if it was not today):
+
+| Answer | What happens |
+|---|---|
+| **Restore my painting** | Paint opens with your painting put back, not yet saved. **Undo** starts from there |
+| **Discard it** | The draft is dropped and Paint opens on the picture as it was saved |
+| **Not now** (or `Esc`) | Nothing changes: the draft stays and Paint stays off, until you click **Paint** again |
+
+If the map's picture was saved or changed since the draft was written, the question says the painting "was painted on an older picture of this map", and **Restore it over this picture** puts the parts you painted over the newer picture. **Save**, **Discard my painting** and deleting the map in the Map Library clear the draft, and a draft of a map deleted from another device is dropped the next time you open the campaign.
+
+A draft is kept in that browser only, for you and that map, and for each tab: two tabs painting one map keep a draft each, and neither touches the other's. **Paint** offers the newest draft of the map from that tab, or from a tab you have closed since; a tab still open keeps its own. (Over plain `http://`, unless the server is on the same computer, a browser cannot tell which tabs are open, so it offers the newest draft of any tab.) Another browser or device has its own drafts. Clearing the browser's site data clears them too, and Safari (on a Mac, an iPhone or an iPad) may clear what a site keeps after seven days in which you have not used it, so do not leave a painting unsaved for a week. If the browser cannot keep drafts (some private windows), Paint says "This browser cannot keep a draft of your painting, so save it often: what is not saved is lost if the page closes." once, and you paint on as before; if it is out of room it says "This browser has no room left to keep a draft of your painting" instead.
+
+**Asked before paint not saved goes.** With paint not saved on the map, Paint asks "Save your painting?" before anything takes it off your screen: **Open to prepare** on another map, **Back to the table** (and your phone's **Back** while you prepare a map), **Set Active** on another map, the header's way back to the dashboard, and your browser's **Back**, on a computer or a phone. On a phone, **Back** closes any sheet or window that is open first, as it always does, and asks only after that.
+
+| Answer | What happens |
+|---|---|
+| **Save my painting** | It is saved, then what you asked for happens. If the save is refused, nothing else happens and your paint stays |
+| **Discard my painting** | Your paint and its draft are dropped, then what you asked for happens |
+| **Not now** (or `Esc`) | Nothing happens, and your paint stays |
+
+Deleting the map in the Map Library asks "Discard your painting?" with **Discard my painting** and **Not now** only: a picture saved then would go with the map. **Bring everyone here**, and **Set Active** on the map you are on, ask nothing: the map stays on your screen and your paint with it, not yet saved, so your players see the picture as it was last saved until you click **Save** (if a save is under way, they are brought once it has landed).
+
+Reloading the page, closing the tab or typing another address gets your browser's own question instead, in the browser's words; if the browser does not ask, the draft keeps your painting. While you have paint not saved, CozyVTT keeps you signed in, and if you are signed out anyway the page stays where it is and the Paint panel says so: sign in again in a new tab, then click **Save**.
+
+If the table is moved to another map from somewhere else (another tab of yours, say) while you have paint not saved on its map, your screen stays on that map, as a map you are preparing, with your paint. If the map leaves your screen without asking (it is deleted from another tab or device, or someone else becomes the DM), CozyVTT says "Your painting was not saved" and offers **Download my painting**, which saves it on your device as a PNG picture, or **Discard my painting**; until you choose, leaving the page is asked about as with paint not saved.
+
+**Download picture**, in the Paint panel, saves the picture as it is now on your device, as a PNG named after the map, with what you painted and whether or not it is saved. It is the way to keep paint that cannot be saved: a picture over the server's size limit, a campaign deleted while you paint, or a sign-in that must be changed before anything else is saved.
+
+**Painting during play.** **Paint** works on the map the table is on as well as on one you are preparing, so you can add a side passage while your players play. They see none of your strokes, and keep moving their tokens meanwhile: a token moved while you paint moves on your screen too, and your stroke and your paint not yet saved stay as they are. When you click **Save**, their picture changes where they are, without moving their view or dropping a token they are holding.
 
 A save can be refused: the picture must be within your server's size limit for a map picture (`MAX_MAP_SIZE_MB`, 50 MB unless your administrator changed it), and a painted picture of a large map with much detail can pass it, which the message says with both sizes.
 
@@ -279,8 +309,8 @@ While you prepare a map:
 | The campaign's own controls | Still change every player's screen, as **What reaches the table?** on the banner says: the **Spirit Layer** (opening it, its style, who is in the realm), **Atmosphere**, the vibe and the session controls. Anything you do to the map itself (its walls, lights, fog, tokens, drawings and settings) is for the map you are preparing |
 | Reloading the page | Brings you back to the map you were preparing, in that tab only. Another tab of yours stays on the table's map, unless you made it by duplicating this one, which copies what it was showing |
 | Two of your tabs on one prepared map | Each shows the other's walls, lights, fog and drawings as you make them, but not an **Edit Map** save, a token's switches or a placement; open the map again in the other tab to see those |
-| Your phone's **Back** | Takes you back to the table, as **Back to the table** does |
-| Another tab, or a handover of the DM seat | Making the map you are preparing active from anywhere ends preparing and shows it with the table. If someone else becomes the DM, or the map is deleted, your screen goes back to the table's map and a message says why |
+| Your phone's **Back** | Takes you back to the table, as **Back to the table** does, asking first about paint not saved (see [Drawing a map](#drawing-a-map)) |
+| Another tab, or a handover of the DM seat | Making the map you are preparing active from anywhere ends preparing and shows it with the table. If someone else becomes the DM, or the map is deleted, your screen goes back to the table's map and a message says why; paint not saved on it is offered to you as a picture to download |
 
 A map picture you upload while preparing stays out of your players' Asset Library until the table is on a map using it (see **Prepare ahead** below).
 
@@ -1043,10 +1073,11 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | The **Fog of War**, **Walls** and **Lights** panels at the top right of the map | The map's **More**, then **Show tools**. The panels show at the top right, folded, as on the desktop; **Hide tools**, in the map's **More** or on the bar above the panels, puts them away and puts down the tool you had up |
 | The spirit tokens button in the map's toolbar | The map's **More**: **Show spirit tokens** |
 | **Draw** | **Draw**, in the map's toolbar: its tools open in a strip across the foot of the map, with the map above it to draw on. **Clear…** offers every drawing or one member's, and asks before it clears |
+| **Paint**, and its panel | The map's **More**: **Paint** (**Put Paint away** while it is on). Its tools open in a strip across the foot of the map, with the map above it to paint on: **Undo**, **Redo**, **Save** and **Done** at its top, the tools in a row that scrolls sideways (an end with more past it fades out under an arrow), **Colour and width**, which opens the two colours, the palette and the width over the strip (`Esc` or a tap elsewhere closes it), and **Download picture**. On a phone on its side the tools sit beside **Paint** at the strip's top. Every control is at least 44 pixels |
 | **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
 | The banner over a map you are preparing | The same, across the top of the map: on a phone upright its words take one row and **Back to the table**, **Bring everyone here** and **What reaches the table?** the next; on a phone on its side it is one row, with the buttons reading **Back**, **Bring everyone** and an info button. The phone's **Back** goes back to the table |
 
-A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** included, so a tablet propped up for the table stays in the players' view.
+A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** and **Paint** with what you have painted included, so a tablet propped up for the table stays in the players' view.
 
 ---
 

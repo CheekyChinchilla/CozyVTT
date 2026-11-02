@@ -74,9 +74,11 @@ import { useWallTool } from './map/tools/useWallTool';
 import { useDrawTool, DEFAULT_DRAW_SETTINGS, type DrawSettings, type DrawToolKind } from './map/tools/useDrawTool';
 import type { MapTool, PointerAt } from './map/tools/types';
 import { usePaintSurface } from './map/paint/usePaintSurface';
+import { usePaintGuards } from './map/paint/usePaintGuards';
 import { rememberPictureAsset, useMapPictureKind } from './map/paint/mapPicture';
 import { drawPaintPreview } from './map/paint/paintShapes';
 import { releaseCanvas } from './map/paint/blankPicture';
+import { draftTime, dropDrafts, paintDraftStore } from './map/paint/paintDrafts';
 import { mapInputOwner } from './map/inputOwner';
 import { usePaintStore } from '@/stores/paintStore';
 import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, DOUBLE_TAP_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
@@ -137,6 +139,8 @@ import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
 import DrawControls, { type DrawControlsProps, type MemberDrawings } from '@/components/campaign/DrawControls';
 import DrawStrip from '@/components/campaign/DrawStrip';
 import PaintControls from '@/components/campaign/PaintControls';
+import PaintStrip from '@/components/campaign/PaintStrip';
+import { PaintLeaveQuestion, PaintLeftoverQuestion } from '@/components/campaign/PaintQuestions';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
 import HeldTokenBar from '@/components/campaign/HeldTokenBar';
@@ -202,7 +206,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // `currentMap` here is the map this page shows (viewedMap): the table's,
   // or one the DM is preparing. Every emit, request and filter below is for
   // it; the table's own map is the context's to follow (receiveTableMap).
-  const { viewedMap: currentMap, isPreparing, receiveTableMap, updateMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
+  const { viewedMap: currentMap, isPreparing, receiveTableMap, updateMap, registerViewedMapGuard, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
   const characterHpCache = useCharacterHp();
   // Live token state comes from the game store, not the campaign context —
   // socket handlers write there directly (outside React), and this
@@ -699,7 +703,26 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // Save found the map's picture changed where this page was not told: show the map as it is.
     onMapRead: (latest) => updateMap(latest.id, latest),
     refuse: (message) => showToast(message, 'error'),
+    warn: (message) => showToast(message, 'warning'),
+    drafts: paintDraftStore(),
+    userId: user?.id,
   });
+  // Paint not saved is asked about before anything takes it off the screen
+  // (map/paint/usePaintGuards.ts). The phone's Back while preparing a map
+  // goes back to the table, which asks it through the campaign page.
+  const paintGuards = usePaintGuards(paint, { registerViewedMapGuard, holdBack: !(compact && isPreparing) });
+  // Drafts of painting on maps since deleted, from another device or tab,
+  // are dropped as the DM opens the campaign: they have no map to go back to.
+  const draftsPruned = useRef<string | null>(null);
+  const campaignMaps = campaign?.maps;
+  useEffect(() => {
+    const campaignId = campaign?.id;
+    const userId = user?.id;
+    if (!isDM || !campaignId || !userId || !Array.isArray(campaignMaps) || draftsPruned.current === campaignId) return;
+    draftsPruned.current = campaignId;
+    const maps = new Set(campaignMaps.map((m) => m.id));
+    void dropDrafts(paintDraftStore(), (draft) => draft.userId === userId && draft.campaignId === campaignId && !maps.has(draft.mapId));
+  }, [isDM, campaign?.id, user?.id, campaignMaps]);
   // Paint held over a picture changed elsewhere keeps the button, which asks about it.
   const paintOffered = isDM && !!currentMap
     && (paint.stranded || pictureKind === 'none' || pictureKind === 'gone' || (pictureKind === 'drawn' && (imageLoaded || paint.source !== null)));
@@ -3828,6 +3851,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     toggleAoE: () => { setDrawKind(null); handleToggleAoE(); },
     toggleSpiritTokens: () => setDmShowSpiritTokens((prev) => !prev),
     toggleTools: () => (stackShown ? hideTools() : showTools()),
+    togglePaint: () => togglePaint(),
   };
   // Where the AoE panel and the Put back bar start: null keeps their places
   // under one row of a mouse's buttons. While both show, the AoE panel starts
@@ -3907,9 +3931,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     usePaintStore.getState().openWhenShown(null);
     openPaint();
   });
+  // Paint pressed before its draft had been looked for waits here too.
   useEffect(() => {
-    if (openOnMapId !== null && openOnMapId === currentMap?.id && paintOffered && !paint.on) openPaintWhenShown();
-  }, [openOnMapId, currentMap?.id, paintOffered, paint.on]);
+    if (openOnMapId !== null && openOnMapId === currentMap?.id && paintOffered && paint.ready && !paint.on) openPaintWhenShown();
+  }, [openOnMapId, currentMap?.id, paintOffered, paint.ready, paint.on]);
   /**
    * On the compact layout the DM's tool stack shows while Tools is on, and
    * while a tool from it is armed, so a tool armed as the layout turns
@@ -3977,6 +4002,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     showAoE,
     spiritTokensShown: dmShowSpiritTokens,
     toolsShown: stackShown,
+    paint: paintOffered ? (paint.on ? 'on' : 'offered') : null,
   }, mapControlActions);
   // The buttons both layouts' toolbars hold: the zoom buttons and their
   // readout, Ping and Draw.
@@ -4366,7 +4392,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <div className="w-px h-6 shrink-0 bg-moss-green/20" />
             {currentMap && !paint.on && pingButton}
             {currentMap && !paint.on && drawButton}
-            {currentMap && paintButton}
+            {/* Paint is in More here, so the row stays one row. */}
             {/* "More", and named for what it holds, its name starting with
                 the word it shows. The word goes on a screen under 384
                 pixels wide, where the row has room for the icon alone. */}
@@ -4545,7 +4571,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           band={topBand}
           // On the compact layout it hides behind Tools, in Map controls,
           // and a drag keeps it under the band, where Map controls is.
-          hidden={compact && !stackShown && !paint.on}
+          hidden={compact && !stackShown}
           onHide={compact ? () => {
             hideTools();
             mapControlsButtonRef.current?.focus({ preventScroll: true });
@@ -4554,7 +4580,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           // Above the dock, Preview and the details card in it, however tall.
           roomBelow={compact && dockHeight !== null ? dockHeight + BAND_GAP : undefined}
         >
-          {paint.on && (
+          {/* On the compact layout Paint's tools are a strip at the map's foot instead. */}
+          {paint.on && !compact && (
             <PaintControls
               settings={paint.settings}
               onSettingsChange={(patch) => paint.setSettings((prev) => ({ ...prev, ...patch }))}
@@ -4565,11 +4592,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               unsaved={paint.unsaved}
               onSave={() => { void paint.save(); }}
               saving={paint.saving}
+              onDownload={() => { void paint.download(); }}
+              signedOut={paintGuards.signedOut}
               onClose={paint.close}
             />
           )}
           {drawPanel && !compact && <DrawControls {...drawPanel} />}
-          {/* On a phone Paint's panel is the stack, so the map keeps room to paint on. */}
+          {/* On a phone the stack is put away while Paint is on, so the map keeps room to paint on. */}
           {userRole === 'DM' && !(compact && paint.on) && (<>
           <DmFogControls
             fogMode={fogMode}
@@ -4947,6 +4976,22 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               {!drawPanel && !paint.on && tokenDetails(true)}
             </div>
             {drawPanel && currentMap && <DrawStrip {...drawPanel} />}
+            {paint.on && currentMap && (
+              <PaintStrip
+                settings={paint.settings}
+                onSettingsChange={(patch) => paint.setSettings((prev) => ({ ...prev, ...patch }))}
+                canUndo={paint.canUndo}
+                canRedo={paint.canRedo}
+                onUndo={paint.undo}
+                onRedo={paint.redo}
+                unsaved={paint.unsaved}
+                onSave={() => { void paint.save(); }}
+                saving={paint.saving}
+                onDownload={() => { void paint.download(); }}
+                signedOut={paintGuards.signedOut}
+                onClose={paint.close}
+              />
+            )}
           </div>
         </div>
       )}
@@ -5057,6 +5102,41 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           </div>
         </FloatingLayer>
       )}
+
+      {/* Paint not saved, before something takes it off the screen; and left behind by a map gone without asking. */}
+      <PaintLeaveQuestion
+        leaving={paintGuards.leaving}
+        mapName={currentMap?.name ?? 'this map'}
+        answering={paintGuards.answering}
+        onAnswer={(choice) => { void paintGuards.answer(choice); }}
+      />
+      <PaintLeftoverQuestion
+        leftover={paint.leftover}
+        onDownload={() => { void paint.downloadLeftover(); }}
+        onDiscard={paint.discardLeftover}
+      />
+
+      {/* A draft of what was painted here and not saved, offered back as Paint opens. */}
+      <ConfirmDialog
+        isOpen={paint.offer !== null}
+        title="Restore your painting?"
+        message={paint.offer?.older
+          ? `Your unsaved painting from ${draftTime(paint.offer.header.savedAt)} was painted on an older picture of this map. Restore it over this picture, or discard it?`
+          : `Restore your unsaved painting from ${paint.offer ? draftTime(paint.offer.header.savedAt) : ''}?`}
+        confirmLabel={paint.offer?.older ? 'Restore it over this picture' : 'Restore my painting'}
+        cancelLabel="Not now"
+        variant="info"
+        onConfirm={() => { void paint.answerOffer('restore'); }}
+        onCancel={() => { void paint.answerOffer('later'); }}
+      >
+        <button
+          type="button"
+          onClick={() => { void paint.answerOffer('discard'); }}
+          className="touch-target text-sm text-danger-ink underline underline-offset-2 hover:no-underline"
+        >
+          Discard it
+        </button>
+      </ConfirmDialog>
 
       {/* Paint not saved over a picture changed elsewhere: what to do with it. */}
       <ConfirmDialog

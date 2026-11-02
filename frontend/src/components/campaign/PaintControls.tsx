@@ -1,21 +1,24 @@
 /**
  * PaintControls
  * Paint's panel, while the DM paints a drawn map: the tool, the colour and
- * the second colour, the width, Undo and Redo, and Done.
+ * the second colour, the width, Undo and Redo, Save,
+ * Download picture, and Done.
  * It sets no place of its own: it heads the DM's tool stack while Paint is
- * on.
+ * on. On the compact layout PaintStrip offers the same, from the tools,
+ * hints and colours written here.
  */
 
 import { useState } from 'react';
-import { Circle, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
+import { Circle, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { labelFontSize } from './map/drawingGeometry';
+import SignedOutNotice from '@/components/common/SignedOutNotice';
 
 /** Each tool's name, as its button is called, its key and its icon. */
-const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
+export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
   brush: { label: 'Brush', key: 'B', icon: Paintbrush },
   eraser: { label: 'Eraser', key: 'E', icon: Eraser },
   line: { label: 'Line', key: 'L', icon: Minus },
@@ -26,7 +29,7 @@ const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintb
   eyedropper: { label: 'Eyedropper', key: 'I', icon: Pipette },
 };
 
-const HINTS: Record<PaintTool, string> = {
+export const HINTS: Record<PaintTool, string> = {
   brush: 'Drag to paint, or tap for a dot. Two fingers, or the right mouse button, move the map.',
   eraser: 'Drag to paint the second colour over what is there.',
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
@@ -37,18 +40,18 @@ const HINTS: Record<PaintTool, string> = {
   eyedropper: 'Click or tap the picture to take its colour there; the tool before comes back.',
 };
 
-const STYLES: ReadonlyArray<{ style: ShapeStyle; label: string }> = [
+export const STYLES: ReadonlyArray<{ style: ShapeStyle; label: string }> = [
   { style: 'outline', label: 'Outline' },
   { style: 'fill', label: 'Filled' },
   { style: 'both', label: 'Outline and fill' },
 ];
 
 /** A colour's name as the palette gives it, or its #rrggbb. */
-const nameOf = (value: string) => PAINT_COLOURS.find((c) => c.value === value)?.name ?? value;
+export const nameOf = (value: string) => PAINT_COLOURS.find((c) => c.value === value)?.name ?? value;
 
 /** Which of the two colours the palette sets. */
-type Slot = 'colour' | 'second';
-const SLOTS: ReadonlyArray<{ slot: Slot; label: string }> = [
+export type Slot = 'colour' | 'second';
+export const SLOTS: ReadonlyArray<{ slot: Slot; label: string }> = [
   { slot: 'colour', label: 'Colour' },
   { slot: 'second', label: 'Second colour' },
 ];
@@ -64,7 +67,11 @@ export interface PaintControlsProps {
   unsaved: boolean;
   /** Save the picture as the map's. */
   onSave: () => void;
+  /** Download the picture as it is now, as a PNG, to keep paint that cannot be saved. */
+  onDownload: () => void;
   saving: boolean;
+  /** The browser was signed out while there was paint not saved. */
+  signedOut?: boolean;
   onClose: () => void;
 }
 
@@ -75,7 +82,7 @@ const toolButton = (on: boolean) =>
 
 const actionButton = 'touch-target inline-flex items-center justify-center gap-1 px-2 h-8 rounded border text-[11px] bg-stone-700/60 text-stone-300 border-stone-600/50 hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed';
 
-export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onClose }: PaintControlsProps) {
+export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose }: PaintControlsProps) {
   const [slot, setSlot] = useState<Slot>('colour');
   const chosen = settings[slot];
   const custom = !PAINT_COLOURS.some((c) => c.value === chosen);
@@ -256,9 +263,19 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
         {saving ? 'Saving…' : 'Save'}
       </button>
+      <button
+        type="button"
+        onClick={onDownload}
+        title="Save the picture as it is now on this device, as a PNG: a way to keep paint that cannot be saved to the map"
+        className={`${actionButton} justify-center`}
+      >
+        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+        Download picture
+      </button>
       {unsaved && !saving && (
         <p className="text-[11px] leading-snug text-amber-200/80">Not saved yet: on your screen only. Done keeps it on the map until you save.</p>
       )}
+      {signedOut && unsaved && <SignedOutNotice />}
     </section>
   );
 }

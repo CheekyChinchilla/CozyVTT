@@ -278,11 +278,11 @@ describe('Map controls', () => {
   it('says in its tooltip what it holds for the viewer', () => {
     const noop = () => undefined;
     const run: MapControlsActions = {
-      fit: noop, toggleGrid: noop, nextGridColor: noop, toggleRuler: noop, nextRulerColor: noop, toggleAoE: noop, toggleSpiritTokens: noop, toggleTools: noop,
+      fit: noop, toggleGrid: noop, nextGridColor: noop, toggleRuler: noop, nextRulerColor: noop, toggleAoE: noop, toggleSpiritTokens: noop, toggleTools: noop, togglePaint: noop,
     };
     const view: MapControlsView = {
       isDM: true, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
-      spiritTokensShown: true, toolsShown: false,
+      spiritTokensShown: true, toolsShown: false, paint: null,
     };
     const titleFor = (extra: Partial<MapControlsView>) => mapControlsTitle(mapControlItems({ ...view, ...extra }, run));
 
