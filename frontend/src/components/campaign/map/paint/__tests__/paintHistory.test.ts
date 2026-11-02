@@ -290,3 +290,37 @@ describe('undo and redo', () => {
     expect(store.released - before).toBe(8);
   });
 });
+
+describe('the tiles changed, for drafts', () => {
+  const names = (tiles: readonly TileRect[]) => tiles.map((t) => `${t.tx},${t.ty}`);
+
+  it('are told once a change lands, after it is painted, and once an undo or a redo has put them back', async () => {
+    const p = picture(600, 600, 1);
+    const told: Array<{ tiles: string[]; painted: number }> = [];
+    const history = createPaintHistory(bufferStore(p), {
+      width: p.width, height: p.height, budgetBytes: 10_000_000, maxSteps: 50,
+      onTouched: (tiles) => told.push({ tiles: names(tiles), painted: p.px[150 * 600 + 150] }),
+    });
+    const step = history.begin();
+    step.cover({ x0: 100, y0: 100, x1: 300, y1: 200 });
+    expect(told).toEqual([]);
+    await step.land(() => paint(p, { x0: 100, y0: 100, x1: 300, y1: 200 }, 7));
+    expect(told).toEqual([{ tiles: ['0,0', '1,0'], painted: 7 }]);
+    await history.undo();
+    expect(told[1]).toEqual({ tiles: ['0,0', '1,0'], painted: 1 });
+    await history.redo();
+    expect(told[2]).toEqual({ tiles: ['0,0', '1,0'], painted: 7 });
+  });
+
+  it('are not told of a change dropped', () => {
+    const p = picture(600, 600, 1);
+    const told: string[][] = [];
+    const history = createPaintHistory(bufferStore(p), {
+      width: p.width, height: p.height, budgetBytes: 10_000_000, maxSteps: 50, onTouched: (tiles) => told.push(names(tiles)),
+    });
+    const step = history.begin();
+    step.cover({ x0: 0, y0: 0, x1: 50, y1: 50 });
+    step.drop();
+    expect(told).toEqual([]);
+  });
+});
