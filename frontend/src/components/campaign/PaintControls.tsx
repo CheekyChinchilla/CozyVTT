@@ -7,11 +7,12 @@
  */
 
 import { useState } from 'react';
-import { Circle, Eraser, Minus, PaintBucket, Paintbrush, Redo2, Square, Undo2, X } from 'lucide-react';
+import { Circle, Eraser, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
+import { labelFontSize } from './map/drawingGeometry';
 
 /** Each tool's name, as its button is called, its key and its icon. */
 const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
@@ -21,6 +22,8 @@ const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintb
   rect: { label: 'Rectangle', key: 'R', icon: Square },
   ellipse: { label: 'Ellipse', key: 'O', icon: Circle },
   fill: { label: 'Fill', key: 'F', icon: PaintBucket },
+  text: { label: 'Text', key: 'T', icon: Type },
+  eyedropper: { label: 'Eyedropper', key: 'I', icon: Pipette },
 };
 
 const HINTS: Record<PaintTool, string> = {
@@ -30,6 +33,8 @@ const HINTS: Record<PaintTool, string> = {
   rect: 'Drag from one corner to the other.',
   ellipse: 'Drag across the box it fills.',
   fill: 'Click or tap an area to fill it with the colour. A finger\'s drag moves the map.',
+  text: 'Click or tap where the line of text goes, type it, then press Enter. Its size follows the width.',
+  eyedropper: 'Click or tap the picture to take its colour there; the tool before comes back.',
 };
 
 const STYLES: ReadonlyArray<{ style: ShapeStyle; label: string }> = [
@@ -171,7 +176,7 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
       <label className="flex flex-col gap-0.5">
         <span className="flex justify-between text-[10px] text-stone-400">
           <span>Width</span>
-          <span>{settings.width} px</span>
+          <span>{settings.width} px{settings.tool === 'text' ? ` (letters ${labelFontSize(settings.width)} px tall)` : ''}</span>
         </span>
         <input
           type="range"

@@ -592,6 +592,61 @@ describe('the fill bucket', () => {
   });
 });
 
+describe('text and the eyedropper', () => {
+  const panel = () => screen.getByRole('region', { name: 'Paint' });
+
+  it('paint a line of text where it is tapped, in the colour, once Enter is pressed', async () => {
+    await showMap();
+    await paintOn();
+    press('t');
+    expect(within(panel()).getByRole('button', { name: 'Text' })).toHaveAttribute('aria-pressed', 'true');
+    const finger = contact('touch', 5);
+    finger.down(input(), { clientX: 200, clientY: 300 });
+    finger.up(input(), { clientX: 200, clientY: 300 });
+    const box = screen.getByRole('textbox', { name: 'Text to paint' });
+    fireEvent.change(box, { target: { value: 'Crypt' } });
+    await act(async () => { fireEvent.keyDown(box, { key: 'Enter' }); });
+    await waitFor(() => expect(callsOn(pictureCanvas()).find((c) => c.method === 'fillText')?.args).toEqual(['Crypt', 200, 300]));
+    const ctx = pictureCanvas()?.getContext('2d');
+    expect(ctx?.font).toContain('24px');
+    expect(ctx?.fillStyle).toBe('#1a1a1a');
+    expect(screen.queryByRole('textbox', { name: 'Text to paint' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  });
+
+  it('paint no text when Esc closes its box, or it is left empty', async () => {
+    await showMap();
+    await paintOn();
+    press('t');
+    mouse.down(input(), { clientX: 200, clientY: 300 });
+    mouse.up(input(), { clientX: 200, clientY: 300 });
+    const box = screen.getByRole('textbox', { name: 'Text to paint' });
+    fireEvent.change(box, { target: { value: 'Never' } });
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: 'Text to paint' })).toBeNull();
+    mouse.down(input(), { clientX: 200, clientY: 300 });
+    mouse.up(input(), { clientX: 200, clientY: 300 });
+    await act(async () => { fireEvent.keyDown(screen.getByRole('textbox', { name: 'Text to paint' }), { key: 'Enter' }); });
+    expect(callsOn(pictureCanvas()).some((c) => c.method === 'fillText')).toBe(false);
+  });
+
+  it('take the colour of the pixel tapped, and go back to the tool before', async () => {
+    await showMap();
+    await paintOn();
+    press('r');
+    press('i');
+    expect(within(panel()).getByRole('button', { name: 'Eyedropper' })).toHaveAttribute('aria-pressed', 'true');
+    const ctx = pictureCanvas()!.getContext('2d')!;
+    const asked: number[][] = [];
+    Object.assign(ctx, { getImageData: (...args: number[]) => { asked.push(args); return { data: new Uint8ClampedArray([74, 52, 35, 255]) }; } });
+    mouse.down(input(), { clientX: 410, clientY: 220 });
+    mouse.up(input(), { clientX: 410, clientY: 220 });
+    expect(asked).toEqual([[410, 220, 1, 1]]);
+    expect(within(panel()).getByRole('button', { name: /^Colour:/ })).toHaveAccessibleName('Colour: Dark wood');
+    expect(within(panel()).getByRole('button', { name: 'Rectangle' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 describe('the lift', () => {
   it('copies each tile as the stroke first reaches it, and on the lift only paints: no tile copied or packed then', async () => {
     const packed = vi.fn();

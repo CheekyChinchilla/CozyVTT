@@ -167,6 +167,8 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['R'], does: 'Paint a rectangle, while Paint is on', who: 'dm' },
   { keys: ['O'], does: 'Paint an ellipse, while Paint is on', who: 'dm' },
   { keys: ['F'], does: 'Fill an area, while Paint is on', who: 'dm' },
+  { keys: ['T'], does: 'Paint a line of text, while Paint is on', who: 'dm' },
+  { keys: ['I'], does: 'Take a colour from the picture, while Paint is on', who: 'dm' },
   { keys: ['Shift + drag'], does: 'Keep a painted line to 15 degree steps', who: 'dm' },
   { keys: ['[', ']'], does: 'Make the brush narrower or wider, while Paint is on', who: 'dm' },
   { keys: ['Ctrl + Z'], does: 'Undo the last change to the picture, while Paint is on', who: 'dm' },
