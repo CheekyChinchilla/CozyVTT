@@ -245,6 +245,8 @@ A save can be refused: the picture must be within your server's size limit for a
 
 Each save deletes the picture the map had before, if it was a drawn one, so saves do not pile up in the Asset Library. A picture something else still uses (another map, a token, a character's or a creature's picture) is kept, and a picture you uploaded is never deleted this way. A handout or note that shows a drawn picture by its address loses it at the next save; use an uploaded picture there.
 
+**Deleting a drawn map.** The **Delete Map** question in the Map Library offers **Also delete its picture from the Asset Library**, unticked, for a map you drew (never for one whose picture you uploaded). Tick it and the picture goes with the map, unless something else still uses it: then it stays, and the Map Library says so. Left unticked, the picture stays in the Asset Library for you to delete there.
+
 ### Switching Maps
 
 Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map the table is on, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again. **Set Active** always takes your own screen with the table, so if you were preparing another map (below), you stop preparing it.
