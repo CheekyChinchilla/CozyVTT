@@ -97,6 +97,76 @@ describe('a campaign exported and imported again', () => {
   });
 });
 
+describe("a picture of someone's own library the campaign uses", () => {
+  // The DM may read it, but an archive goes off the server: only the
+  // campaign's own assets carry what their uploader wrote about them.
+  it('goes into the archive as its file, with no name, description or tags', async () => {
+    const source = await createTestCampaign(userId, { name: 'Borrowing' });
+    const player = await createTestUser({ displayName: 'Archive Names Player' });
+    try {
+      await prisma.campaignMembership.createMany({
+        data: [
+          { userId, campaignId: source.id, role: 'DM', characterIds: [] },
+          { userId: player.id, campaignId: source.id, role: 'PLAYER', characterIds: [] },
+        ],
+      });
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      const filePath = path.join(UPLOAD_DIR, `${randomUUID()}.png`);
+      fs.writeFileSync(filePath, PNG);
+      const own = await prisma.asset.create({
+        data: {
+          type: 'TOKEN', scope: 'USER', campaignId: null, uploadedById: player.id, filename: path.basename(filePath),
+          originalName: 'my-elf.png', mimeType: 'image/png', fileSize: PNG.length, filePath,
+          name: 'Elowen, before the curse', description: 'Do not show the DM', tags: ['secret-plot'],
+        },
+      });
+      const kept = await picture(source.id, 'TOKEN', 'goblin', 'Goblin', 'A goblin');
+      await prisma.tokenTemplate.create({ data: { campaignId: source.id, name: 'Elowen', imageUrl: `/api/assets/tokens/${own.id}` } });
+      await prisma.tokenTemplate.create({ data: { campaignId: source.id, name: 'Goblin', imageUrl: `/api/assets/tokens/${kept.id}` } });
+
+      const file = path.join(SCRATCH, 'borrowing.cozyvtt');
+      const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
+      await prepared.writeTo(fs.createWriteStream(file));
+      const directory = await unzipper.Open.file(file);
+      const manifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
+      const manifest = JSON.parse((await manifestEntry!.buffer()).toString()) as Record<string, Record<string, unknown>>;
+
+      expect(manifest[own.id]).toEqual({ originalName: 'my-elf.png', mimeType: 'image/png', type: 'TOKEN', fileSize: PNG.length });
+      expect(manifest[kept.id]).toMatchObject({ name: 'Goblin', description: 'A goblin' });
+    } finally {
+      await prisma.asset.deleteMany({ where: { uploadedById: player.id } });
+      await cleanupUsers([player.id]);
+    }
+  });
+});
+
+describe("a picture of the exporting DM's own library the campaign uses", () => {
+  it('goes with its name, description and tags', async () => {
+    const source = await createTestCampaign(userId, { name: 'Own art' });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    const filePath = path.join(UPLOAD_DIR, `${randomUUID()}.png`);
+    fs.writeFileSync(filePath, PNG);
+    const mine = await prisma.asset.create({
+      data: {
+        type: 'TOKEN', scope: 'USER', campaignId: null, uploadedById: userId, filename: path.basename(filePath),
+        originalName: 'IMG_7.png', mimeType: 'image/png', fileSize: PNG.length, filePath,
+        name: 'The Lich', description: 'Final form', tags: ['boss'],
+      },
+    });
+    await prisma.tokenTemplate.create({ data: { campaignId: source.id, name: 'Lich', imageUrl: `/api/assets/tokens/${mine.id}` } });
+
+    const file = path.join(SCRATCH, 'own-art.cozyvtt');
+    const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
+    await prepared.writeTo(fs.createWriteStream(file));
+    const directory = await unzipper.Open.file(file);
+    const manifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
+    const manifest = JSON.parse((await manifestEntry!.buffer()).toString()) as Record<string, Record<string, unknown>>;
+
+    expect(manifest[mine.id]).toMatchObject({ name: 'The Lich', description: 'Final form', tags: ['boss'] });
+  });
+});
+
 /** An archive holding one picture for each entry of `entries`, each with the asset manifest fields given. */
 async function archiveOf(entries: Array<[file: string, fields: Record<string, unknown>]>): Promise<string> {
   const file = path.join(SCRATCH, `${randomUUID()}.cozyvtt`);
