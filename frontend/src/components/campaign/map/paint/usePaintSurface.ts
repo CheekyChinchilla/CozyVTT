@@ -32,7 +32,7 @@ import type { MapLayer } from '../useRenderLoop';
 import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
 import { createPaintHistory, type PaintHistory, type PaintHistoryCounts, type PaintStep } from './paintHistory';
-import { createCanvasTileStore, type CanvasTileStore } from './canvasTileStore';
+import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
@@ -139,7 +139,7 @@ interface Surface {
   /** Picture pixels to a map pixel, across and down. */
   sx: number;
   sy: number;
-  history: PaintHistory;
+  history: PaintHistory<KeptTile>;
   store: CanvasTileStore;
   /** Counts every change, undo and redo; differs from `saved` while there is paint to save. */
   revision: number;
@@ -286,8 +286,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const second = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
     setSettings((prev) => ({ ...prev, second }));
     // The history is made after the store, which tells it of each tile packed.
-    let history: PaintHistory | null = null;
-    const store = createCanvasTileStore(canvas, { onPacked: () => history?.trim(), make });
+    let history: PaintHistory<KeptTile> | null = null;
+    const store = createCanvasTileStore(canvas, {
+      onPacked: () => history?.trim(),
+      make,
+      // Packing waits while a stroke or a shape is being drawn.
+      busy: () => strokeRef.current !== null || shapeRef.current !== null,
+    });
     history = createPaintHistory(store, {
       width,
       height,
