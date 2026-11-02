@@ -80,6 +80,9 @@ interface ArchivedAsset {
   originalName: string;
   type: string;
   fileSize: number;
+  /** The asset's own name and description, as the Asset Library shows them. */
+  name: string;
+  description: string | null;
   tags: string[];
 }
 
@@ -107,6 +110,8 @@ async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<
     originalName: asset.originalName,
     type: asset.type,
     fileSize: asset.fileSize,
+    name: asset.name,
+    description: asset.description,
     tags: asset.tags,
   };
 }
@@ -255,9 +260,6 @@ export async function prepareCampaignExport(
   }
 
   // 6. Build asset manifest
-  // TODO(assets): an asset's own name and description are not written, so an
-  // import names each asset after its file name and gives it no description.
-  // Carry both, held on import to the upload's limits (validators/assets.ts).
   const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath'>> = {};
   for (const [id, info] of assetMap.entries()) {
     assetManifest[id] = {
@@ -265,6 +267,8 @@ export async function prepareCampaignExport(
       mimeType: info.mimeType,
       type: info.type,
       fileSize: info.fileSize,
+      name: info.name,
+      description: info.description,
       tags: info.tags,
     };
   }

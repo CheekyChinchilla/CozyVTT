@@ -562,6 +562,9 @@ interface StagedAsset {
   originalName: string;
   mimeType: string;
   fileSize: number;
+  /** Its own name and description, when its entry gives them. */
+  name?: string;
+  description?: string;
   tags: string[];
 }
 
@@ -660,6 +663,13 @@ async function stageAssets(
     const stagedPath = path.join(staging, filename);
     await fs.promises.rename(unpackedPath, stagedPath);
     const typeDir = folderFor(assetInfo.type);
+    // Its own name and description, held to what an upload may set: one an
+    // older release stored longer is cut to fit, and the import says so.
+    const fit = (text: string | undefined, max: number, what: string): string | undefined => {
+      if (text === undefined || text.length <= max) return text;
+      report.warn(`Asset "${label(assetInfo.originalName, oldId)}": shortened its ${what} to ${max.toLocaleString('en-US')} characters.`);
+      return cutText(text, max);
+    };
     staged.push({
       oldId,
       newId,
@@ -672,6 +682,8 @@ async function stageAssets(
       originalName: displayName(assetInfo.originalName, assetInfo.type, content.ext),
       mimeType: content.mime,
       fileSize,
+      name: fit(assetInfo.name, ASSET_LIMITS.maxNameLength, 'name'),
+      description: fit(assetInfo.description, ASSET_LIMITS.maxDescriptionLength, 'description'),
       tags: assetInfo.tags ?? [],
     });
   }
@@ -847,7 +859,10 @@ export async function importCampaign(
                 mimeType: a.mimeType,
                 fileSize: a.fileSize,
                 filePath: a.finalPath.replace(/\\/g, '/'),
-                name: cutText(a.originalName.replace(/\.[^.]+$/, ''), ASSET_LIMITS.maxNameLength),
+                // An archive made before names were carried has none: the
+                // asset is named after its file.
+                name: a.name ?? cutText(a.originalName.replace(/\.[^.]+$/, ''), ASSET_LIMITS.maxNameLength),
+                description: a.description ?? null,
                 tags: a.tags,
                 createdAt: new Date(importedAt + i),
               })),
