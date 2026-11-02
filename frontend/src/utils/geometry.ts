@@ -203,3 +203,17 @@ export function edgeSnapPoints(
     searchRadius
   );
 }
+
+/**
+ * What each of the first `count` diagonal steps costs in feet under a rule
+ * (calcGridDistance), as Create Map and Edit Map list them beside the
+ * alternating rule: 5/10/5/10 on 5 ft squares, 10/20/10/20 on 10 ft ones.
+ */
+export function diagonalStepCosts(
+  feetPerSquare: number,
+  diagonalRule: 'flat' | 'alternating',
+  count = 4
+): number[] {
+  return Array.from({ length: count }, (_, i) =>
+    calcGridDistance(i + 1, i + 1, feetPerSquare, diagonalRule) - calcGridDistance(i, i, feetPerSquare, diagonalRule));
+}

@@ -158,11 +158,24 @@ describe('Edit Map layout', () => {
     const preview = await screen.findByText('Grid Preview');
     const row = preview.closest('.grid');
     const section = screen.getByRole('group', { name: 'Lighting and Fog' });
-    for (const name of ['Enable dynamic lighting', 'Fog of war on this map', 'Global illumination', 'Remember explored areas']) {
+    for (const name of ['Enable dynamic lighting', 'Fog of war on this map', 'Global Illumination', 'Remember explored areas']) {
       const box = screen.getByRole('checkbox', { name });
       expect(section.contains(box)).toBe(true);
       expect(row?.contains(box)).toBe(false);
     }
     expect(row !== null && Boolean(row.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+});
+
+// The alternating rule was described as 5/10/5/10 ft diagonals whatever the
+// Grid Scale.
+describe("Edit Map's diagonal rules", () => {
+  it('describes the alternating rule at the Grid Scale chosen', async () => {
+    open({ ...listed, feetPerSquare: 10 } as CampaignMap);
+    expect(await screen.findByText('Alternating — 10/20/10/20 ft diagonals')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('5 ft'));
+
+    expect(screen.getByText('Alternating — 5/10/5/10 ft diagonals')).toBeInTheDocument();
   });
 });

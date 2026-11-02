@@ -219,9 +219,9 @@ export default function DmLightControls({
                 checked={globalIllumination}
                 disabled={!lightingEnabled}
                 onChange={(e) => onGlobalIlluminationChange(e.target.checked)}
-                aria-label="Global illumination"
+                aria-label="Global Illumination"
               />
-              Global illumination
+              Global Illumination
             </label>
           )}
           {lightingEnabled && !globalIllumination && lightCount === 0 && (

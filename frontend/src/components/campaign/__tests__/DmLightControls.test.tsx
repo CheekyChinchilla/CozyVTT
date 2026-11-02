@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import ts from 'typescript';
 import DmLightControls from '../DmLightControls';
 
 function renderPanel(over: Partial<{ lightCount: number; lightingEnabled: boolean; globalIllumination: boolean }> = {}) {
@@ -51,12 +52,18 @@ describe('DmLightControls', () => {
   it('does not warn while dynamic lighting is off, and disables the switch', () => {
     renderPanel({ lightingEnabled: false });
     expect(screen.queryByText(WARNING)).toBeNull();
-    expect((screen.getByLabelText('Global illumination') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText('Global Illumination') as HTMLInputElement).disabled).toBe(true);
+  });
+
+  // As Edit Map, the guides and the panel's own warning spell it.
+  it('names the switch Global Illumination, on the screen and for a screen reader', () => {
+    renderPanel();
+    expect(screen.getByRole('checkbox', { name: 'Global Illumination' }).closest('label')).toHaveTextContent(/^Global Illumination$/);
   });
 
   it('reports the switch being ticked', () => {
     const { onGlobalIlluminationChange } = renderPanel();
-    fireEvent.click(screen.getByLabelText('Global illumination'));
+    fireEvent.click(screen.getByLabelText('Global Illumination'));
     expect(onGlobalIlluminationChange).toHaveBeenCalledWith(true);
   });
 });
@@ -122,3 +129,43 @@ describe('the Lights title', () => {
   });
 });
 
+// The setting is written one way wherever a user reads or hears its name: the
+// Lights panel, Edit Map and the message when a change fails. Only what a
+// page may show or speak is read, a JSX text or a string's or a template's
+// text, such as a label, an aria-label, a title or a message; comments and
+// code are left alone.
+describe('the name Global Illumination', () => {
+  const sources = import.meta.glob<string>(['/src/**/*.{ts,tsx}', '!/src/**/__tests__/**', '!/src/**/*.test.{ts,tsx}'], { query: '?raw', import: 'default', eager: true });
+
+  /** The text in a source a page may show or speak: JSX text, and string and template text. */
+  function shownText(file: string, source: string): string[] {
+    const kind = file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+    const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind);
+    const found: string[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isJsxText(node) || ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)
+        || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) found.push(node.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    return found;
+  }
+
+  it('reads what a page shows, and not comments or names', () => {
+    const sample = [
+      '// skipped under global illumination',
+      'const globalIllumination = true;',
+      'export const Switch = () => <label title="Lit" aria-label="Global illumination">Global illumination</label>;',
+      "export const message = `Could not change ${'x'} global illumination`;",
+    ].join('\n');
+    expect(shownText('/sample.tsx', sample)).toEqual(['Lit', 'Global illumination', 'Global illumination', 'Could not change ', 'x', ' global illumination']);
+  });
+
+  it('is spelled Global Illumination wherever a page shows it', () => {
+    expect(Object.keys(sources)).toContain('/src/components/campaign/DmLightControls.tsx');
+    const others = Object.entries(sources).flatMap(([file, source]) =>
+      shownText(file, source).flatMap((text) =>
+        [...text.matchAll(/global illumination/gi)].filter((m) => m[0] !== 'Global Illumination').map((m) => `${file}: ${m[0]}`)));
+    expect(others).toEqual([]);
+  });
+});
