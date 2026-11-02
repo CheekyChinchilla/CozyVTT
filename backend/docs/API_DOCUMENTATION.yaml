@@ -9586,8 +9586,12 @@ paths:
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
         without a picture. Each asset's entry in `assets/asset-manifest.json`
-        gives its `originalName`, `mimeType`, `type`, `fileSize`, `name`,
-        `description` (`null` when it has none) and `tags`.
+        gives its `originalName`, `mimeType`, `type` and `fileSize`, and for
+        an asset of the campaign's own library (CAMPAIGN scope, this
+        campaign) or of the exporter's own (USER scope, uploaded by them)
+        its `name`, `description` (`null` when it has none) and `tags` as
+        well; another user's USER asset, or a GLOBAL one, that the campaign
+        uses has none of those three.
         Each map file (`maps/map-<n>.json`, written without
         indentation) carries the map's drawings in `drawings`, in drawing
         order, each with the `Drawing` fields but `id`, `authorId` and
