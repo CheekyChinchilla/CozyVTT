@@ -53,6 +53,7 @@ import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { savePaint } from './savePaint';
 import { pictureIsDrawn } from './mapPicture';
 import { pictureToPng } from './blankPicture';
+import { extractAssetId } from '@/utils/assetUrl';
 
 /** The tools Paint offers. */
 export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'fill' | 'text' | 'eyedropper';
@@ -149,6 +150,12 @@ interface Surface {
    * elsewhere (Edit Map, another tab or device).
    */
   baseUrl: string;
+  /**
+   * The picture a save under way has uploaded, until the save is done: the
+   * server sends the table's map with it before the save answers, which is
+   * this page's own picture and no change from elsewhere.
+   */
+  savingAssetId: string | null;
 }
 
 /** A line, a rectangle or an ellipse being dragged: in map pixels, its outline too. */
@@ -324,7 +331,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (import.meta.env.MODE !== 'test') console.debug('[paint] undo', history.counts());
       },
     });
-    show({ mapId: map.id, canvas, ctx, history, store, revision: 0, saved: 0, baseUrl: map.imageUrl ?? '' });
+    show({ mapId: map.id, canvas, ctx, history, store, revision: 0, saved: 0, baseUrl: map.imageUrl ?? '', savingAssetId: null });
     setOn(true);
     onRef.current = true;
     markDirty('terrain', 'overlay');
@@ -395,8 +402,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   // What the rest of the page reads.
   const unsaved = unsavedOf(surface);
   // The map's picture was changed elsewhere since the canvas was made or
-  // last saved: the canvas is no longer what the map shows.
-  const stale = surface !== null && map !== null && surface.mapId === map.id && (map.imageUrl ?? '') !== surface.baseUrl;
+  // last saved: the canvas is no longer what the map shows. The picture a
+  // save under way uploaded is this page's own.
+  const stale = surface !== null && map !== null && surface.mapId === map.id && (map.imageUrl ?? '') !== surface.baseUrl
+    && (surface.savingAssetId === null || extractAssetId(map.imageUrl) !== surface.savingAssetId);
   // Paint not saved over a picture changed elsewhere: kept, and the DM is
   // asked what to do with it, here and each time Paint is pressed until
   // they say. With nothing to save, the canvas simply goes.
@@ -602,7 +611,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const { map: saved, asset } = await savePaint({
         previous,
         makePng: () => pictureToPng(s.canvas),
-        upload: (png) => uploadDrawnPicture(png, campaignId),
+        upload: async (png) => {
+          const uploaded = await uploadDrawnPicture(png, campaignId);
+          s.savingAssetId = uploaded.id;
+          return uploaded;
+        },
         pointMapAt: (assetId) => mapService.updateMap(campaignId, s.mapId, { imageUrl: assetId }),
         previousIsDrawn: () => pictureIsDrawn(previous, campaignId),
         remove: (assetId) => api.deleteAsset(assetId),
@@ -617,6 +630,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     } catch (err) {
       refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
     } finally {
+      s.savingAssetId = null;
       savingRef.current = false;
       setSaving(false);
     }
