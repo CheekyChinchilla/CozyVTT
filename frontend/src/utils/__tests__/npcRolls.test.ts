@@ -160,6 +160,16 @@ describe('buildNpcRolls — Pathfinder 2e', () => {
     expect(find(rolls.skills, 'Athletics')?.expression).toBe('1d20+12');
   });
 
+  // The stat block takes any save key; the label table was read as a plain
+  // object, so "constructor" found Object and labelled the roll with its text.
+  it('names a save of its own by its key, whatever the key is', () => {
+    const odd = buildNpcRolls({ ...pf2eCreature, savingThrows: { constructor: 3, Reflex: 7 } }, 'PATHFINDER_2E');
+    expect(odd.savingThrows.map((r) => [r.label, r.purpose])).toEqual([
+      ['constructor +3', 'constructor Save'],
+      ['Reflex +7', 'Reflex Save'],
+    ]);
+  });
+
   it('falls back to deriving from scores for a creature entered 5e-style', () => {
     const legacy = buildNpcRolls(
       { ...pf2eCreature, attributeModifiers: undefined, abilities: { ...pf2eCreature.abilities, str: 18 } },

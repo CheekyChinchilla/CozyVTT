@@ -152,16 +152,18 @@ export function withChoices<T>(result: Reapplied<T>, keepMine: boolean[]): T {
   return sheet as T;
 }
 
-const WORDS: Record<string, string> = {
-  hp: 'HP',
-  ac: 'AC',
-  dc: 'DC',
-  xp: 'XP',
-};
+/** A Map, so a key finds only these: "constructor" found Object in a plain object. */
+const WORDS: ReadonlyMap<string, string> = new Map([
+  ['hp', 'HP'],
+  ['ac', 'AC'],
+  ['dc', 'DC'],
+  ['xp', 'XP'],
+]);
 
 /** "hitDice" → "Hit dice"; an all-capitals key such as "STR" stays as it is. */
 function fieldWords(key: string): string {
-  if (WORDS[key.toLowerCase()]) return WORDS[key.toLowerCase()];
+  const word = WORDS.get(key.toLowerCase());
+  if (word) return word;
   if (key === key.toUpperCase()) return key;
   const words = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
