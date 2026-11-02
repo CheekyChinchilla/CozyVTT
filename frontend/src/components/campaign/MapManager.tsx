@@ -30,7 +30,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { extractAssetId } from '@/utils/assetUrl';
-import { rememberPictureAsset } from './map/paint/mapPicture';
+import { pictureIsDrawn, rememberPictureAsset } from './map/paint/mapPicture';
 import { usePaintStore } from '@/stores/paintStore';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
@@ -247,6 +247,13 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // Confirm delete
   const [mapToDelete, setMapToDelete] = useState<CampaignMap | null>(null);
+  /**
+   * For a drawn map: its picture can go with it, if the DM ticks the box
+   * (null while it is not a drawn map, or not yet known to be one).
+   */
+  const [deletePicture, setDeletePicture] = useState<boolean | null>(null);
+  /** What a delete left to say: a picture kept because it is in use. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   // UVTT import
   const uvttInputRef = useRef<HTMLInputElement>(null);
@@ -319,12 +326,20 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   const handleDeleteClick = (map: CampaignMap) => {
     setMapToDelete(map);
+    setDeletePicture(null);
+    setNotice(null);
+    // Only a picture Paint made is offered; the box starts unticked.
+    void pictureIsDrawn(map.imageUrl, campaign?.id).then((drawn) => {
+      if (drawn) setDeletePicture((now) => now ?? false);
+    });
   };
 
   const handleConfirmDelete = async () => {
     if (!campaign?.id || !mapToDelete) return;
     const map = mapToDelete;
+    const alsoPicture = deletePicture === true;
     setMapToDelete(null);
+    setDeletePicture(null);
     // The map on screen, being prepared: whatever holds it is asked first.
     // Deleting it ends preparing (removeCampaignMap).
     if (map.id === preparedMapId && !(await mayChangeViewedMap({ kind: 'delete', toMapId: activeMapId }))) return;
@@ -334,6 +349,17 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
       removeCampaignMap(map.id);
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to delete map.');
+      return;
+    }
+    // Without force: a picture something else still uses stays.
+    const pictureId = alsoPicture ? extractAssetId(map.imageUrl) : null;
+    if (!pictureId) return;
+    try {
+      await api.deleteAsset(pictureId);
+    } catch (err: unknown) {
+      setNotice(apiErrorCode(err) === 'ASSET_IN_USE'
+        ? `${map.name} is deleted. Its picture is used elsewhere, so it stays in the Asset Library.`
+        : `${map.name} is deleted. Its picture could not be deleted; delete it in the Asset Library.`);
     }
   };
 
@@ -471,6 +497,13 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
             </div>
           )}
 
+          {notice && (
+            <div role="status" className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              {notice}
+            </div>
+          )}
+
           {importSuccess && (
             <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
               <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -586,8 +619,23 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
         confirmLabel="Delete"
         variant="danger"
         onConfirm={handleConfirmDelete}
-        onCancel={() => setMapToDelete(null)}
-      />
+        onCancel={() => {
+          setMapToDelete(null);
+          setDeletePicture(null);
+        }}
+      >
+        {deletePicture !== null && (
+          <label className="flex items-start gap-2 text-sm text-ink-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={deletePicture}
+              onChange={(e) => setDeletePicture(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>Also delete its picture from the Asset Library</span>
+          </label>
+        )}
+      </ConfirmDialog>
     </>
   );
 }
