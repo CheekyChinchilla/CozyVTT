@@ -155,6 +155,8 @@ function mapWith(extra: Partial<CampaignMap> = {}): CampaignMap {
     width: 20,
     height: 20,
     gridSize: 50,
+    feetPerSquare: 5,
+    diagonalRule: 'flat',
     tokens: [],
     wallSegments: [],
     lights: [],
