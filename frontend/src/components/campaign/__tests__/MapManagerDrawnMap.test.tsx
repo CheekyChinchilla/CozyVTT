@@ -82,6 +82,15 @@ describe('a map just made', () => {
     expect(usePaintStore.getState().openOnMapId).toBe('crypt');
   });
 
+  it('does not open with Paint on later when it is not opened now: Not now kept the map on screen', async () => {
+    h.created = { map: crypt, picture: drawnPicture };
+    h.openToPrepare.mockResolvedValue(false);
+    const onClose = await make();
+    expect(h.openToPrepare).toHaveBeenCalledWith('crypt');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(usePaintStore.getState().openOnMapId).toBeNull();
+  });
+
   it('stays in the library when it was made from a picture', async () => {
     h.created = { map: { ...crypt, imageUrl: '/api/assets/maps/upload-1' } };
     const onClose = await make();
