@@ -1513,6 +1513,28 @@ describe('paint not saved, asked about before it is left', () => {
   });
 });
 
+describe('Download picture', () => {
+  it('saves the picture as it is now, painted or not, as a PNG named after the map, and keeps the paint', async () => {
+    const saved: Blob[] = [];
+    const names: string[] = [];
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, writable: true, value: (blob: Blob) => { saved.push(blob); return 'blob:picture'; } });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, writable: true, value: () => undefined });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { names.push(this.download); });
+    try {
+      await showMap(mapWith({ name: 'Crypt: level 1' }));
+      await paintOn();
+      drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+      await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Download picture' })); });
+      await waitFor(() => expect(saved).toHaveLength(1));
+      expect(saved[0].type).toBe('image/png');
+      expect(names).toEqual(['Crypt level 1.png']);
+      expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+    } finally {
+      click.mockRestore();
+    }
+  });
+});
+
 describe('paint not saved through a lost sign-in', () => {
   it('stays, and the panel says to sign in again before saving', async () => {
     await showMap();

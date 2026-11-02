@@ -18,7 +18,7 @@ import { layScrollRow, readScrollCue } from '@/test/scrollCue';
 function strip(extra: Partial<PaintControlsProps> = {}, settings: Partial<PaintSettings> = {}) {
   const props: PaintControlsProps = {
     settings: { ...DEFAULT_PAINT_SETTINGS, ...settings }, onSettingsChange: vi.fn(), canUndo: true, canRedo: false,
-    onUndo: vi.fn(), onRedo: vi.fn(), unsaved: true, onSave: vi.fn(), saving: false, onClose: vi.fn(),
+    onUndo: vi.fn(), onRedo: vi.fn(), unsaved: true, onSave: vi.fn(), saving: false, onDownload: vi.fn(), onClose: vi.fn(),
     ...extra,
   };
   const view = render(<PaintStrip {...props} />);
@@ -73,6 +73,12 @@ describe('the strip', () => {
     expect(props.onSave).toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
     expect(props.onClose).toHaveBeenCalled();
+  });
+
+  it('offers Download picture, which keeps the picture as it is now on this device', () => {
+    const { props } = strip();
+    fireEvent.click(screen.getByRole('button', { name: 'Download picture' }));
+    expect(props.onDownload).toHaveBeenCalled();
   });
 
   it('offers no Save with nothing to save, and says what is not saved', () => {
