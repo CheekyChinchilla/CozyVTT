@@ -64,7 +64,7 @@ import { uploadDrawnPicture, DrawnPictureRefused } from '@/services/drawnPicture
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { savePaint, PNG_NOT_MADE } from './savePaint';
 import { saveBlob } from '@/utils/download';
-import { pictureIsDrawn } from './mapPicture';
+import { pictureIsDrawn, type MapPictureKind } from './mapPicture';
 import { pictureToPng } from './blankPicture';
 import { extractAssetId } from '@/utils/assetUrl';
 import {
@@ -228,10 +228,17 @@ export interface PaintSurfaceOptions {
   onSaved: (map: CampaignMap, picture: Asset) => void;
   /** Told of the map as Save read it, when it differs from the page's: the page shows that one. */
   onMapRead: (map: CampaignMap) => void;
-  /** Its picture as loaded: null for a map with none, and while the page has let go of it (holdsPicture). */
-  picture: HTMLImageElement | null;
-  /** The page's own picture is drawn again, or has failed to load, or the map has none: nothing is loading. */
-  pictureSettled: boolean;
+  /**
+   * The picture drawn for it, with the address it was loaded from: null for
+   * a map with none, and while the page has let go of it (holdsPicture).
+   * Paint opens only on one at the map's own address, never on the picture
+   * before it, still drawn while a new one loads or after it failed.
+   */
+  picture: { image: HTMLImageElement; url: string } | null;
+  /** What the map's picture is (mapPicture.ts): Paint is offered on a drawn one, and starts blank on none or one gone. */
+  pictureKind: MapPictureKind;
+  /** The picture at the map's own address failed to load. */
+  pictureFailed: boolean;
   isDM: boolean;
   mapControls: MapControls;
   markDirty: (...layers: MapLayer[]) => void;
@@ -254,7 +261,17 @@ export interface PaintSurfaceOptions {
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
-  const { map, picture, pictureSettled, campaignId, onSaved, onMapRead, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
+  const { map, picture, pictureKind, pictureFailed, campaignId, onSaved, onMapRead, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
+  // What Paint opens on: the picture at the map's own address, once it has
+  // loaded, so a save never writes the picture before it, still drawn while a
+  // new one loads or after it failed, over the new one. A map with no
+  // picture, or one gone from the server, starts blank. Nothing else opens,
+  // and Paint is offered where it opens (offered, below).
+  const startsBlank = pictureKind === 'none' || pictureKind === 'gone';
+  const ownPicture = !startsBlank && picture !== null && !!map?.imageUrl && picture.url === map.imageUrl ? picture : null;
+  const opensOn = startsBlank || (pictureKind === 'drawn' && ownPicture !== null);
+  /** The map's own picture is drawn again, or has failed to load, or the map has none: nothing is loading. */
+  const pictureSettled = !map?.imageUrl || ownPicture !== null || pictureFailed;
   const [on, setOn] = useState(false);
   const onRef = useRef(false);
   const [surface, setSurface] = useState<Surface | null>(null);
@@ -536,6 +553,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       onRef.current = true;
       return true;
     }
+    if (!opensOn) return false;
     const size = drawnPictureSize(map.width, map.height, map.gridSize);
     // A draft of this map kept from before is offered back first; until it
     // has been looked for, Paint waits (the page opens it once it has).
@@ -566,8 +584,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       refuse(PAINT_NO_CANVAS);
       return false;
     }
-    if (picture) {
-      ctx.drawImage(picture, 0, 0, width, height);
+    if (ownPicture) {
+      ctx.drawImage(ownPicture.image, 0, 0, width, height);
     } else {
       ctx.fillStyle = DRAWN_MAP_BACKGROUND;
       ctx.fillRect(0, 0, width, height);
@@ -594,7 +612,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       },
     });
     made = {
-      mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: restored.length > 0 ? 1 : 0, saved: 0, baseUrl: map.imageUrl ?? '', savingAssetId: null,
+      mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: restored.length > 0 ? 1 : 0, saved: 0,
+      // The address of the pixels drawn in; a map started blank, its own.
+      baseUrl: ownPicture ? ownPicture.url : map.imageUrl ?? '',
+      savingAssetId: null,
       changed: new Map(restored.map((tile) => [`${tile.tx},${tile.ty}`, tile])),
       // A draft restored is written again as this tab's own, whole, and the
       // one it came from dropped once that has landed. A draft left from
@@ -609,7 +630,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     onRef.current = true;
     markDirty('terrain', 'overlay');
     return true;
-  }, [map, isDM, picture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound, scheduleDraft]);
+  }, [map, isDM, opensOn, ownPicture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound, scheduleDraft]);
 
   /**
    * Paint off. Paint not saved stays on screen, to go on with; with nothing
@@ -1247,19 +1268,27 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     return shown;
   }, [xy]);
 
+  const source = surface && map && surface.mapId === map.id && !stale ? surface.canvas : null;
+
   return {
     /** Paint is on. */
     on,
     open,
     close,
     /** The picture to draw the map with: the one being painted, while there is one for the map on screen and it is still the map's. */
-    source: surface && map && surface.mapId === map.id && !stale ? surface.canvas : null,
+    source,
     /** Picture pixels to a map pixel across: a text box is shown as tall as it is painted. */
     scale: surface && map ? surface.canvas.width / (map.width * map.gridSize) : 1,
     /** Paint is on, or holds paint not saved over the map's picture: the page lets go of its own decoded picture meanwhile. */
     holdsPicture: surface !== null && !stale && (on || unsaved),
     /** Paint not saved is held over a picture changed elsewhere: Paint stays offered, to ask about it. */
     stranded,
+    /**
+     * Paint is offered to the DM, and open() opens: on the map's own picture,
+     * or blank, or on the canvas held for the map; or to ask about paint held
+     * over a picture changed elsewhere.
+     */
+    offered: isDM && map !== null && (stranded || source !== null || opensOn),
     /** The question about it is open. */
     asking,
     answer,

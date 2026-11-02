@@ -1133,6 +1133,87 @@ describe('on the table\'s map', () => {
 });
 
 /**
+ * A new picture for the map on screen keeps the one before it drawn while
+ * it loads, and over its notice if it fails. Paint works only on the
+ * picture at the map's own address: never on the one before it, which a
+ * save would write over the new one, deleting it.
+ */
+describe('a new picture for the map on screen', () => {
+  const sendMap = (map: CampaignMap) => {
+    act(() => {
+      for (const handler of h.handlers.get('map.changed') ?? []) handler({ mapId: map.id, mapData: map } as never);
+    });
+  };
+  /** The table's map at the picture another device has just saved, as map.changed brings it; the asset question answers at once. */
+  async function savedOnTheTablet(): Promise<string> {
+    const next = `/api/assets/maps/from-the-tablet-${mapCount}`;
+    sendMap({ ...(h.state.currentMap as CampaignMap), imageUrl: next });
+    await act(async () => { await Promise.resolve(); });
+    return next;
+  }
+  const paintButton = () => screen.queryByRole('button', { name: 'Paint' });
+
+  it('is waited for, from another device\'s save: Paint opens on it once it has loaded, never on the picture before it', async () => {
+    await showMap();
+    await screen.findByRole('button', { name: 'Paint' });
+    const before = pictures[0];
+    const next = await savedOnTheTablet();
+    const fresh = pictures[pictures.length - 1];
+    expect(fresh.src).toBe(next);
+    // The picture before is still drawn, and Paint is not offered on it.
+    expect(paintButton()).toBeNull();
+    // Paint asked for meanwhile, as Draw a map asks, waits for the new picture.
+    act(() => { usePaintStore.getState().openWhenShown('map-a'); });
+    expect(pictureCanvas()).toBeUndefined();
+    fresh.load();
+    await fresh.decoded();
+    await waitFor(() => expect(paintButton()).toHaveAttribute('aria-pressed', 'true'));
+    const copied = callsOn(pictureCanvas()).filter((c) => c.method === 'drawImage').map((c) => c.args[0]);
+    expect(copied).toEqual([fresh]);
+    expect(copied).not.toContain(before);
+    // Save asks nothing: the picture Paint holds is the map's.
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
+    });
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' }));
+    expect(screen.queryByRole('dialog', { name: 'This map\'s picture changed' })).toBeNull();
+  });
+
+  it('gone from the server, the picture before it still drawn, starts Paint blank, as a map with no picture does', async () => {
+    await showMap();
+    await screen.findByRole('button', { name: 'Paint' });
+    const before = pictures[0];
+    // The map now names a picture deleted from the Asset Library: its asset answers 404, and it does not load.
+    h.getAsset.mockImplementation((id: string) => (id.startsWith('gone-')
+      ? Promise.reject({ response: { status: 404, data: { message: 'Asset not found' } } })
+      : Promise.resolve(drawnAsset())));
+    sendMap({ ...(h.state.currentMap as CampaignMap), imageUrl: `/api/assets/maps/gone-${mapCount}` });
+    await act(async () => { await Promise.resolve(); });
+    pictures[pictures.length - 1].fail();
+    expect(screen.getByText('Failed to load map image')).toBeInTheDocument();
+    await paintOn();
+    const calls = callsOn(pictureCanvas());
+    expect(calls).toContainEqual({ method: 'fillRect', args: [0, 0, 1000, 1000] });
+    expect(calls.filter((c) => c.method === 'drawImage').map((c) => c.args[0])).not.toContain(before);
+  });
+
+  it('that fails to load keeps its notice and Paint not offered: Paint never opens over it on the picture before it', async () => {
+    await showMap();
+    await screen.findByRole('button', { name: 'Paint' });
+    await savedOnTheTablet();
+    pictures[pictures.length - 1].fail();
+    expect(screen.getByText('Failed to load map image')).toBeInTheDocument();
+    expect(paintButton()).toBeNull();
+    act(() => { usePaintStore.getState().openWhenShown('map-a'); });
+    await act(async () => { await Promise.resolve(); });
+    expect(pictureCanvas()).toBeUndefined();
+    expect(screen.getByText('Failed to load map image')).toBeInTheDocument();
+    expect(h.uploadAsset).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * Drafts: what is painted and not saved is kept in the browser, the tiles
  * changed only, so a reload or a closed tab does not take it, and is
  * offered back when Paint opens on the map again.
