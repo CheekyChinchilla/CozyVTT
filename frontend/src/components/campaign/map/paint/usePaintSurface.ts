@@ -10,8 +10,9 @@
 // tiles a stroke touches (paintHistory.ts), never the whole picture, each
 // read and packed as the stroke first reaches it (canvasTileStore.ts), so
 // the lift only paints the stroke in. The canvas is made to be read often,
-// so the tiles, the fill and the eyedropper read it straight, and quickly,
-// in every browser.
+// so the tiles, the fill and the eyedropper read it straight, and quickly
+// in WebKit and Chromium alike; the map draws it as it is (ARCHITECTURE.md
+// says what that costs).
 //
 // The canvas is kept, keyed by the map's id, while Paint is on and while
 // what was painted is not saved, so Paint turned off keeps the work on
