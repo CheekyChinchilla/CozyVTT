@@ -1549,6 +1549,18 @@ describe('drafts', () => {
     expect(restoreQuestion()).toBeInTheDocument();
   });
 
+  it('closes its offer when another map is shown under it: the answer would have nothing to act on', async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    expect(restoreQuestion()).toBeInTheDocument();
+    // The table moved from elsewhere.
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(restoreQuestion()).toBeNull());
+    expect(drafts().headers.has(closedKey)).toBe(true);
+  });
+
   it('says so when the draft was painted on a picture changed since', async () => {
     keepDraft('/api/assets/maps/an-older-picture');
     await showMap();
