@@ -161,6 +161,18 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['Double-click'], does: 'Finish a wall line', who: 'dm' },
   { keys: ['Ctrl + Z'], does: 'Undo the last wall change', who: 'dm' },
   { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a wall change', who: 'dm' },
+  { keys: ['B'], does: 'Paint with the brush, while Paint is on', who: 'dm' },
+  { keys: ['E'], does: 'Paint with the eraser, in the second colour, while Paint is on', who: 'dm' },
+  { keys: ['L'], does: 'Paint a line, while Paint is on', who: 'dm' },
+  { keys: ['R'], does: 'Paint a rectangle, while Paint is on', who: 'dm' },
+  { keys: ['O'], does: 'Paint an ellipse, while Paint is on', who: 'dm' },
+  { keys: ['F'], does: 'Fill an area, while Paint is on', who: 'dm' },
+  { keys: ['T'], does: 'Paint a line of text, while Paint is on', who: 'dm' },
+  { keys: ['I'], does: 'Take a colour from the picture, while Paint is on', who: 'dm' },
+  { keys: ['Shift + drag'], does: 'Keep a painted line to 15 degree steps', who: 'dm' },
+  { keys: ['[', ']'], does: 'Make the brush narrower or wider, while Paint is on', who: 'dm' },
+  { keys: ['Ctrl + Z'], does: 'Undo the last change to the picture, while Paint is on', who: 'dm' },
+  { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a change to the picture, while Paint is on', who: 'dm' },
 ];
 
 /**

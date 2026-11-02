@@ -219,7 +219,7 @@ In the **Chat** sheet **To**, the message box and **Send** share one line, and e
 
 In the **Dice** sheet each roll takes two lines, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top. Under the list the dice buttons and your saved rolls are one row that scrolls sideways, and **Roll** sits beside the expression. **Character** and **Purpose** are under **More options**, which while it is closed names whichever of the two still holds text. **Secret** (show or hide secret rolls, once the list holds one) and, for the DM, **Clear** are at the foot of the sheet.
 
-The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** opens its tools in a strip across the bottom of the map, with the map above it to draw on. The drawing tools, and the buttons of the **Dice** sheet, sit in a row that scrolls sideways; an end of the row with more past it fades out under an arrow. A token's details show at the bottom of the map when you tap it.
+The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw**, for the DM on a map they can paint **Paint**, and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** opens its tools in a strip across the bottom of the map, with the map above it to draw on. The drawing tools, and the buttons of the **Dice** sheet, sit in a row that scrolls sideways; an end of the row with more past it fades out under an arrow. A token's details show at the bottom of the map when you tap it.
 
 Menus open as a list from the bottom of the screen: press and hold a token, a door, a character in the roster or a combatant in the initiative tracker. Tap an item, or **Cancel**.
 
@@ -235,14 +235,14 @@ Menus open as a list from the bottom of the screen: press and hold a token, a do
 
 ### Adding Maps
 
-Maps are the battlegrounds, taverns, and dungeons your players will explore. Before a session, upload your map images to the **Asset Library** (see [The Asset Library](#the-asset-library)), then add them to your campaign.
+Maps are the battlegrounds, taverns, and dungeons your players will explore. Before a session, upload your map images to the **Asset Library** (see [The Asset Library](#the-asset-library)), then add them to your campaign, or draw a map in CozyVTT.
 
 As the DM, click **Map Library** (the map icon) in the campaign header.
 
 *Screenshot pending — Map Library panel.*
 
 From here you can:
-- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); or **Import UVTT** from a mapping tool
+- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); **Draw a map** in the same window, which starts a blank map of the size and colour you choose (see [Drawing a map](DM_GUIDE.md#drawing-a-map)); or **Import UVTT** from a mapping tool
 - **Set Active** to switch to a different map — this updates the view for all connected players immediately
 - **Edit** a map's settings, export it, or delete it
 
@@ -475,6 +475,8 @@ The Asset Library is where all your campaign media lives — maps, token images,
 | **Avatar** | Your personal profile picture | PNG, JPEG or WebP |
 
 A PNG that is animated is refused for now, for every kind of picture.
+
+A map drawn in CozyVTT keeps its picture in the campaign's library too, named **Drawn map** and tagged `drawn-map`, one for each drawn map: each save of it replaces the one before (see [Drawing a map](DM_GUIDE.md#drawing-a-map)).
 
 A map, token or avatar picture can be at most 16,384 pixels wide and 16,384 pixels tall (a WebP at most 16,383, the most the format allows). An animated GIF or WebP also has limits, because every player's browser unpacks every frame of it:
 
@@ -733,6 +735,7 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
 | **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging. On a touch screen, two quick taps on empty ground ping too, while no tool is up |
 | **Draw** | Opens the drawing tools: a pen, lines, arrows, rectangles, ellipses, polygons, text labels, an eraser and a laser pointer, in a colour and width you choose. The table sees what you draw as you draw it. The DM always has it; a player has it while the DM lets players draw, except while the session is paused or has ended; while they may not draw, it offers only the **Eraser** and **Clear mine**, and only while the map holds drawings of theirs; a spectator does not have it, and nobody has it on a map with no picture or one whose picture failed to load (see [Drawing and pointing](PLAYER_GUIDE.md#drawing-and-pointing) and, for the DM, [Drawing on the map](DM_GUIDE.md#drawing-on-the-map)) |
+| **Paint** | The DM's, on a map drawn in CozyVTT or one with no picture: paints the map's picture with a brush, an eraser, lines, rectangles, ellipses, a fill bucket, text and an eyedropper, on the DM's screen until **Save** makes it the map's picture (see [Drawing a map](DM_GUIDE.md#drawing-a-map)) |
 
 To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.
 
