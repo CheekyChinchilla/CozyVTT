@@ -15,6 +15,7 @@ import {
   clearLayer,
   drawSaved,
   effectiveDpr,
+  resetLayer,
   sizeBackingStore,
   withinBackingLimit,
 } from '../layerCanvas';
@@ -201,5 +202,21 @@ describe('drawSaved', () => {
     const ctx = { save: () => calls.push('save'), restore: () => calls.push('restore') } as unknown as CanvasRenderingContext2D;
     expect(() => drawSaved(ctx, () => { calls.push('draw'); throw new Error('no badge'); })).toThrow('no badge');
     expect(calls).toEqual(['save', 'draw', 'restore']);
+  });
+});
+
+describe('resetLayer', () => {
+  it('resets the context where the browser can', () => {
+    const calls: string[] = [];
+    const ctx = { reset: () => calls.push('reset'), canvas: { width: 300 } } as unknown as CanvasRenderingContext2D;
+    resetLayer(ctx);
+    expect(calls).toEqual(['reset']);
+  });
+
+  it('sets the canvas\'s width again where it cannot, which resets it too', () => {
+    const widths: number[] = [];
+    const canvas = { get width() { return 300; }, set width(value: number) { widths.push(value); } };
+    resetLayer({ canvas } as unknown as CanvasRenderingContext2D);
+    expect(widths).toEqual([300]);
   });
 });
