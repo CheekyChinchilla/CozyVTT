@@ -30,10 +30,11 @@ export function tidyTags(tags: readonly string[]): string[] {
   return [...new Set(tags.flatMap((tag) => tag.split(',')).map((tag) => tag.trim()).filter(Boolean))];
 }
 
-/** Comma-separated tags as one list, tidied. */
-// TODO(assets): a tag holding U+0000 passes here, and PostgreSQL refuses the
-// character in text when the asset row is written. Refuse it with a message,
-// as a campaign import leaves such a tag out (validators/campaignImport.ts).
+/**
+ * Comma-separated tags as one list, tidied. A form holding U+0000 never
+ * reaches here: the upload route refuses it once the form is read
+ * (middleware/nulCharacter.ts).
+ */
 const tagList = text('tags')
   .transform((raw) => tidyTags([raw]))
   .pipe(

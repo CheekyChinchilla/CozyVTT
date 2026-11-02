@@ -6,6 +6,7 @@ import multer from 'multer';
 import { AuthenticatedRequest, NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { downloadOnly } from '../middleware/downloadOnly';
+import { refuseNulCharacters } from '../middleware/nulCharacter';
 import { oneCampaignArchiveAtATime, whileHoldingArchiveSlot } from '../middleware/campaignArchiveLimits';
 import { prisma } from '../config/database';
 import {
@@ -462,6 +463,7 @@ router.post(
   uploadLimiter,
   oneUvttImportAtATime,
   receiveUvtt,
+  refuseNulCharacters,
   async (req: AuthenticatedRequest, res: Response) => {
     const uploaded = req.file?.path;
     // A client that gave up while its import waited is dropped from the

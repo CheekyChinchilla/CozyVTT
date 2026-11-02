@@ -474,6 +474,7 @@ The web client relies on Socket.io's own heartbeat and does not send `ping`. A s
 - "Rate limit exceeded: too many dice rolls at once. Wait a few seconds, then roll again." - The `dice.roll` ceiling was reached; sent once in the same way
 - "Too many CozyVTT tabs or devices are open on this account at once (the most is 40). Close one, then reload this page." - The user already holds 40 open sockets; the server then closes this connection
 - "The instance is being restored from a backup. Try again in a minute; …" - A new connection made while a backup is being restored; the server closes it (see [Prerequisites](#prerequisites)). Connections already open are sent `campaign.access.revoked` instead
+- "Text cannot contain the null character (U+0000)." - The event's payload holds U+0000 somewhere, in any text or key, which the database cannot store. Every event is checked before its handler reads it, and one holding the character is not carried out. An event sent with an acknowledgement is answered `{ ok: false, error }` with this message through it every time, and sends no `error`; without one, `error` is sent once in ten seconds for the connection, and further refusals are silent until then, as for a flood ceiling
 
 `error` only goes from the server to the client. Socket.io does not reserve the name, so a client can emit an event called `error`; the server ignores it, answers nothing, and writes none of its payload to the log.
 

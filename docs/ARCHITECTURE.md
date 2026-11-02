@@ -108,6 +108,8 @@ src/
 │   ├── originCheck.ts     Refuses a change a browser sent from another site (HTTP and the socket handshake)
 │   ├── restoreGate.ts     Refuses API requests while a backup restore replaces the database
 │   ├── bodyParsers.ts     JSON body parsing and its 1 MB limit (a form-encoded body is not read), shared with the test app
+│   ├── nulCharacter.ts    Refuses a request holding U+0000, which PostgreSQL cannot store, in its body or address,
+│   │                      and an upload's form once it is read (validators/nulCharacter.ts)
 │   ├── errorHandler.ts    The JSON error answer for anything a route did not catch
 │   ├── failureLimiter.ts  The limiter on wrong passwords, codes and reset links: counts only
 │   │                      wrong answers, per address (an IPv6 address by its /56 network)
@@ -207,7 +209,7 @@ Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules;
 1. `trust proxy` set to one hop (the bundled nginx), so the limiters read the visitor's address and the cookie is marked Secure over HTTPS
 2. helmet's headers, then CORS for `CORS_ORIGIN`
 3. `originCheck`: a change a browser sent from another site is refused
-4. `bodyParsers`: JSON up to 1 MB, and an empty body for a request that sent none
+4. `bodyParsers`: JSON up to 1 MB, and an empty body for a request that sent none, then `refuseNulCharacters` (`nulCharacter.ts`): 400 for a body, key, path or query string holding U+0000, which PostgreSQL cannot store in text or jsonb, a password field of the routes that read one (`PASSWORD_FIELDS`) excepted. The upload routes run it again once their form is read, and the live table refuses such an event in `events.ts` (`socket.use`); a campaign archive's text is imported without the character
 5. On `/api`, the restore gate (`restoreGate.ts`), ahead of the session lookup
 6. The session (`express-session` over the PostgreSQL store)
 7. The setup gate, which lets only `/health` and `/api/setup` through until setup has run

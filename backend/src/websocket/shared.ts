@@ -314,12 +314,21 @@ const refusalNotices = new RateLimiter();
 export function withinCeiling(socket: AuthenticatedSocket, event: CeilingEvent, ack: SocketAck | null = null): boolean {
   const ceiling: SocketCeiling = SOCKET_CEILINGS[event];
   if (ceilingLimiter.checkAll(`${limiterKey(socket)}:${event}`, ceiling.windows)) return true;
-  if (ack) {
-    ack({ ok: false, error: ceiling.refusal });
-  } else if (refusalNotices.check(`${socket.id}:${event}`, 1, REFUSAL_NOTICE_MS)) {
-    socket.emit('error', { message: ceiling.refusal });
-  }
+  refuseOncePerNotice(socket, ack, event, ceiling.refusal);
   return false;
+}
+
+/**
+ * Refuse a request a client may send many of, as withinCeiling refuses one
+ * past its ceiling: through its acknowledgement every time, and otherwise
+ * with `error` once in REFUSAL_NOTICE_MS for this socket and `kind`.
+ */
+export function refuseOncePerNotice(socket: AuthenticatedSocket, ack: SocketAck | null, kind: string, message: string): void {
+  if (ack) {
+    ack({ ok: false, error: message });
+  } else if (refusalNotices.check(`${socket.id}:${kind}`, 1, REFUSAL_NOTICE_MS)) {
+    socket.emit('error', { message });
+  }
 }
 
 // Cleanup old events every 5 minutes, in every limiter there is. unref() so

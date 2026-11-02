@@ -743,6 +743,7 @@
         "oneCampaignArchiveAtATime",
         "<anonymous>",
         "takeImportUpload",
+        "refuseNulCharacters",
         "<anonymous>"
       ]
     },
@@ -977,6 +978,7 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>",
+        "refuseNulCharacters",
         "<anonymous>",
         "validateFileSize",
         "validateFileType",
@@ -1118,6 +1120,7 @@
         "<anonymous>",
         "<anonymous>",
         "receiveUvtt",
+        "refuseNulCharacters",
         "<anonymous>"
       ]
     },
@@ -1546,6 +1549,11 @@
     },
     {
       "name": "emptyBodyWhenNone",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "refuseNulCharacters",
       "path": "",
       "route": false
     },

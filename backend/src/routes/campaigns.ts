@@ -40,6 +40,7 @@ import { standingInvitation, isStanding } from '../utils/invitationState';
 import { CAMPAIGN_LIMITS } from '../validators/campaignLimits';
 import { MAX_CHAT_HISTORY_PAGE } from '../validators/chatLimits';
 import { downloadOnly } from '../middleware/downloadOnly';
+import { refuseNulCharacters } from '../middleware/nulCharacter';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -2301,7 +2302,7 @@ router.post('/import/preview', authenticated, oneCampaignArchiveAtATime, campaig
  * Requires: Authentication. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
  * (20 by default), and one archive operation at a time.
  */
-router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportLimiter, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportLimiter, takeImportUpload, refuseNulCharacters, async (req: AuthenticatedRequest, res: Response) => {
   await answerAfterRemovingArchive(req, res, async (archivePath) => {
     try {
       const userId = req.session.userId!;

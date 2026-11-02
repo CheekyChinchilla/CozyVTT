@@ -9,6 +9,7 @@ import { positiveIntegerFromEnv } from '../config/env';
 import { createTurnQueue } from '../utils/turnQueue';
 import { storedFilePath } from '../utils/storedPath';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
+import { refuseNulCharacters } from '../middleware/nulCharacter';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import {
   AssetType,
@@ -372,6 +373,8 @@ router.post(
       next();
     });
   },
+  // The form's fields and the file's name, read only now.
+  refuseNulCharacters,
   // Now validate and set asset metadata (req.body is populated)
   async (req: UploadRequest, res: Response, next: NextFunction) => {
     try {

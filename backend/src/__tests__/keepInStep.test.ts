@@ -183,6 +183,13 @@
  * shows a proxy error instead. Both limits together, and five seconds more,
  * stay within the proxy_read_timeout of the location in nginx/locations.conf
  * that serves the import, chosen as nginx chooses it.
+ *
+ * The password fields the U+0000 refusal leaves alone. The refusal
+ * (middleware/nulCharacter.ts) lists each route that reads a password from
+ * its body and the fields it reads; the routes decide which those are, by
+ * the schemas they parse their bodies with and the fields they take from
+ * req.body by name. A password field the list missed is refused, and an
+ * account whose password holds the character could not use it there.
  */
 
 import crypto from 'crypto';
@@ -207,6 +214,7 @@ import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/
 import { Prisma, type MapDrawing } from '@prisma/client';
 import { drawingForArchive } from '../services/mapDrawings';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
+import { PASSWORD_FIELDS } from '../middleware/nulCharacter';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -1295,3 +1303,66 @@ describe('the Universal VTT import\'s longest wait', () => {
     expect(proxyReadTimeoutMs(nginxLocationFor(withPrefixFirst, IMPORT))).toBe(45_000);
   });
 });
+
+/** The names of a body schema's fields that say they hold a password, by the schema's exported name. */
+function passwordFieldsOfSchemas(): Map<string, string[]> {
+  const fields = new Map<string, string[]>();
+  for (const file of fs.readdirSync(path.join(root, 'backend/src/validators'))) {
+    if (!file.endsWith('.ts')) continue;
+    const exported = jest.requireActual<Record<string, unknown>>(path.join(root, 'backend/src/validators', file));
+    for (const [name, value] of Object.entries(exported)) {
+      const shape = typeof value === 'object' && value !== null && 'shape' in value ? value.shape : undefined;
+      if (typeof shape !== 'object' || shape === null) continue;
+      const passwords = Object.keys(shape).filter((key) => /password/i.test(key));
+      if (passwords.length > 0) fields.set(name, passwords);
+    }
+  }
+  return fields;
+}
+
+/**
+ * Every route that reads a password from its body, as `METHOD /api/path`,
+ * with the fields it reads: read from each router file's own text, a route
+ * at a time, and placed where app.ts mounts its router.
+ */
+function passwordFieldsRoutesRead(): Record<string, string[]> {
+  const app = read('backend/src/app.ts');
+  const fileOf = new Map([...app.matchAll(/^import (\w+) from '\.\/routes\/(\w+)';$/gm)].map((m) => [m[1], m[2]]));
+  const mounts = new Map<string, string>();
+  for (const m of app.matchAll(/app\.use\('([^']+)', (\w+)\)/g)) {
+    const file = fileOf.get(m[2]);
+    if (file) mounts.set(file, m[1]);
+  }
+  const schemas = passwordFieldsOfSchemas();
+  const found: Record<string, string[]> = {};
+  for (const file of fs.readdirSync(path.join(root, 'backend/src/routes'))) {
+    if (!file.endsWith('.ts')) continue;
+    const source = read(`backend/src/routes/${file}`);
+    const routes = [...source.matchAll(/router\.(get|post|put|patch|delete)\(\s*'([^']*)'/g)];
+    routes.forEach((route, i) => {
+      const handler = source.slice(route.index, routes[i + 1]?.index ?? source.length);
+      const fields = new Set<string>();
+      for (const m of handler.matchAll(/parseBody\(\s*(\w+)|(\w+)\.(?:safeParse|parse)\(/g)) {
+        for (const field of schemas.get(m[1] ?? m[2]) ?? []) fields.add(field);
+      }
+      for (const m of handler.matchAll(/req\.body\.(\w+)/g)) if (/password/i.test(m[1])) fields.add(m[1]);
+      for (const m of handler.matchAll(/const \{([^}]*)\} = req\.body/g)) {
+        for (const name of m[1].split(',').map((part) => part.trim().split(/[:\s=]/)[0])) {
+          if (/password/i.test(name)) fields.add(name);
+        }
+      }
+      if (fields.size === 0) return;
+      const mount = mounts.get(file.replace(/\.ts$/, '')) ?? `<${file} is not mounted in app.ts>`;
+      found[`${route[1].toUpperCase()} ${mount}${route[2] === '/' ? '' : route[2]}`] = [...fields].sort();
+    });
+  }
+  return found;
+}
+
+describe('the password fields the U+0000 refusal leaves alone', () => {
+  it('are every password field a route reads from its body', () => {
+    const listed = Object.fromEntries(Object.entries(PASSWORD_FIELDS).map(([route, fields]) => [route, [...fields].sort()]));
+    expect(listed).toEqual(passwordFieldsRoutesRead());
+  });
+});
+

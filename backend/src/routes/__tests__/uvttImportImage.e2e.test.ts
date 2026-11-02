@@ -149,6 +149,22 @@ describe('a UVTT whose picture is not one', () => {
   });
 });
 
+describe('a UVTT import whose map name holds U+0000', () => {
+  it('is refused, leaving no map, asset or uploaded file', async () => {
+    const before = await prisma.asset.count({ where: { campaignId } });
+    const uploads = path.join(UPLOAD_DIR, 'temp', 'uvtt');
+    const res = await dm
+      .post(`/api/campaigns/${campaignId}/maps/import-uvtt`)
+      .attach('file', uvttWithImage(PNG), 'cellar.uvtt')
+      .field('name', 'Cel\u0000lar');
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: 'Validation Error', message: 'Text cannot contain the null character (U+0000).' });
+    expect(await mapCount()).toBe(0);
+    expect(await prisma.asset.count({ where: { campaignId } })).toBe(before);
+    expect(fs.existsSync(uploads) ? fs.readdirSync(uploads) : []).toEqual([]);
+  });
+});
+
 describe('a UVTT whose picture is too big for a map', () => {
   it('is refused at the map size limit, not the multipart one', async () => {
     // The MAP cap is 50 MB; multer allows 100 MB for the whole JSON, so a

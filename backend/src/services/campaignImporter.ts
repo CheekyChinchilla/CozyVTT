@@ -33,6 +33,7 @@ import path from 'path';
 import { shortenFileName, MAX_ORIGINAL_NAME_LENGTH } from '../validators/assets';
 import { ASSET_LIMITS } from '../validators/assetLimits';
 import { cutText } from '../utils/cutText';
+import { removeNulCharacters } from '../validators/nulCharacter';
 import fs from 'fs';
 import type { File as ArchiveEntry } from 'unzipper';
 import { Prisma } from '@prisma/client';
@@ -168,19 +169,33 @@ async function readEntryText(archivePath: string, entry: ArchiveEntry, total: Un
   return text;
 }
 
-function parseEntryText(text: string, entry: ArchiveEntry): unknown {
+/**
+ * A data file's text, parsed. U+0000 is taken out of every text in it, keys
+ * included, as it is read: PostgreSQL cannot store the character
+ * (validators/nulCharacter.ts), and one anywhere in an archive failed the
+ * whole import. The report, when there is one, says how many were taken.
+ */
+function parseEntryText(text: string, entry: ArchiveEntry, report?: ImportReport): unknown {
+  let data: unknown;
   try {
-    return JSON.parse(text);
+    data = JSON.parse(text);
   } catch {
     throw new ArchiveRefusedError(`${entry.path} in the archive is damaged: it is not readable data.`);
   }
+  const { value, removed } = removeNulCharacters(data);
+  if (removed > 0) {
+    report?.warn(
+      `${entry.path}: removed ${removed.toLocaleString('en-US')} null ${removed === 1 ? 'character' : 'characters'} (U+0000) from its text, which the app cannot store.`
+    );
+  }
+  return value;
 }
 
 /** Why a map holding more values than an export ever writes is left out. */
 const TOO_MANY_VALUES_REASON = `It holds more than ${IMPORT_LIMITS.MAX_MAP_VALUES.toLocaleString('en-US')} values, far more than CozyVTT ever writes for one map.`;
 
-async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
-  return parseEntryText(await readEntryText(archivePath, entry, total), entry);
+async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal, report?: ImportReport): Promise<unknown> {
+  return parseEntryText(await readEntryText(archivePath, entry, total), entry, report);
 }
 
 /** Why an item whose data nests too deeply is left out. */
@@ -316,14 +331,14 @@ async function readListEntry(
     return [];
   }
   const cut = jsonListCut(text, limit.max);
-  if (cut?.cutAt == null) return parseEntryText(text, entry);
+  if (cut?.cutAt == null) return parseEntryText(text, entry, report);
   const over = cut.items - limit.max;
   report.skip(
     kind,
     `${over.toLocaleString('en-US')} ${over === 1 ? limit.one : limit.many}`,
     `An archive can carry ${limit.max.toLocaleString('en-US')} ${limit.many}. These were the last in its list.`
   );
-  return parseEntryText(`${text.slice(0, cut.cutAt)}]`, entry);
+  return parseEntryText(`${text.slice(0, cut.cutAt)}]`, entry, report);
 }
 
 /** Say in words which limit an archive passed, or pass any other error on. */
@@ -733,14 +748,15 @@ export async function importCampaign(
 
   // Everything unpacked from the archive, against its limit (zip bomb protection).
   const total = new UnpackedTotal(maxSize);
+  const report = new ImportReport();
 
-  const manifestData = parseArchiveFile(ManifestSchema, await readJsonEntry(archivePath, manifestEntry, total), 'manifest.json');
+  const manifestData = parseArchiveFile(ManifestSchema, await readJsonEntry(archivePath, manifestEntry, total, report), 'manifest.json');
 
   // 3. Extract campaign settings
   const campaignEntry = directory.files.find((f) => f.path === 'campaign.json');
   if (!campaignEntry) throw new ArchiveRefusedError('Invalid archive: missing campaign.json');
 
-  const campaignSettings = parseArchiveFile(CampaignSettingsSchema, await readJsonEntry(archivePath, campaignEntry, total), 'campaign.json');
+  const campaignSettings = parseArchiveFile(CampaignSettingsSchema, await readJsonEntry(archivePath, campaignEntry, total, report), 'campaign.json');
 
   // 4. Extract asset manifest
   const assetManifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
@@ -748,13 +764,12 @@ export async function importCampaign(
   if (assetManifestEntry) {
     assetManifest = parseArchiveFile(
       AssetManifestSchema,
-      await readJsonEntry(archivePath, assetManifestEntry, total),
+      await readJsonEntry(archivePath, assetManifestEntry, total, report),
       'assets/asset-manifest.json'
     );
   }
 
   const newCampaignId = randomUUID();
-  const report = new ImportReport();
   const staging = path.join(importTempDirectory(), `${newCampaignId}.staging`);
   await fs.promises.mkdir(path.resolve(staging), { recursive: true });
 
@@ -859,7 +874,7 @@ export async function importCampaign(
                 report.skip('map', `Map ${i + 1}`, TOO_MANY_VALUES_REASON);
                 continue;
               }
-              mapRaw = parseEntryText(mapText, mapEntry);
+              mapRaw = parseEntryText(mapText, mapEntry, report);
             } catch (error) {
               if (!(error instanceof NestedTooDeepError)) throw error;
               report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);

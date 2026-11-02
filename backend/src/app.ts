@@ -18,6 +18,7 @@ import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
 import { requireAdminMfa } from './middleware/adminMfa';
 import { bodyParsers } from './middleware/bodyParsers';
+import { refuseNulCharacters } from './middleware/nulCharacter';
 import { originCheck } from './middleware/originCheck';
 import { errorHandler } from './middleware/errorHandler';
 import { refuseWhileDatabaseIsReplaced } from './middleware/restoreGate';
@@ -150,6 +151,10 @@ export function createApp(options: AppOptions): express.Express {
 
   // See middleware/bodyParsers.ts for why the limit is what it is.
   app.use(bodyParsers());
+
+  // A request holding U+0000, which PostgreSQL cannot store, is refused
+  // here, whichever route it is for (middleware/nulCharacter.ts).
+  app.use(refuseNulCharacters);
 
   // ============================================
   // RESTORE GATE

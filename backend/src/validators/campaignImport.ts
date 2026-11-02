@@ -56,11 +56,6 @@ export const IMPORT_LIMITS = {
 
 // ── Helper sub-schemas ──────────────────────────────────────────────────────
 
-// TODO(assets): text in an archive (a campaign, map, token, creature or
-// template name, notes, a description) may hold U+0000, which PostgreSQL
-// refuses in text, so one such character fails the whole import. Drop or
-// refuse it where each field is read, as ImportAssetTagsSchema does for tags.
-
 const PositionSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
@@ -268,17 +263,18 @@ export const TokenTemplateImportSchema = z.object({
 export const IMPORTABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO'] as const;
 
 // An asset's tags, held to what an upload may set (validators/assets.ts) and
-// tidied as an upload's are. A tag that is not text, is too long, or holds a
-// character PostgreSQL cannot store in text (U+0000) is left out on its own,
-// as a token's condition is. A picture tagged on 1.5.1 or earlier may have
-// more tags than an upload now may, and keeps the first ones, in order. A
-// list too long to be one an export wrote, or one that is not a list,
-// imports as none, and is not walked. Archives made before tags were
-// carried have no list, and their assets none.
+// tidied as an upload's are. A tag that is not text or is too long is left
+// out on its own, as a token's condition is; one that held U+0000 arrives
+// without it, as all of an archive's text does (services/campaignImporter.ts).
+// A picture tagged on 1.5.1 or earlier may have more tags than an upload now
+// may, and keeps the first ones, in order. A list too long to be one an
+// export wrote, or one that is not a list, imports as none, and its entries
+// are not checked. Archives made before tags were carried have no list, and
+// their assets none.
 const ImportAssetTagsSchema = z
   .unknown()
   .transform((tags) => (Array.isArray(tags) && tags.length <= IMPORT_LIMITS.MAX_ASSET_TAG_ENTRIES ? tags : []))
-  .pipe(z.array(z.string().refine((tag) => !tag.includes('\u0000')).catch('')))
+  .pipe(z.array(z.string().catch('')))
   .transform((tags) => tidyTags(tags).filter((tag) => tag.length <= ASSET_LIMITS.maxTagLength).slice(0, ASSET_LIMITS.maxTags));
 
 // The declared MIME type is kept for the log only: the stored type and file

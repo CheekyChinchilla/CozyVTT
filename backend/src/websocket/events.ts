@@ -6,7 +6,9 @@ import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSe
 import { databaseBeingReplaced, RESTORING_MESSAGE } from '../services/restoreState';
 import { broadcastPresence, getOnlineUserIds, clearCampaignFromLiveSockets, applyRoleToLiveSockets } from './utils';
 import logger from '../utils/logger';
-import { stateRequestAllowed, withinCeiling, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS } from './shared';
+import { holdsNulCharacter, NUL_REFUSAL } from '../validators/nulCharacter';
+import { ackFrom } from './ack';
+import { stateRequestAllowed, withinCeiling, refuseOncePerNotice, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS } from './shared';
 import { registerTokenHandlers } from './handlers/tokens';
 import { registerDiceHandlers } from './handlers/dice';
 import { registerChatHandlers } from './handlers/chat';
@@ -72,6 +74,20 @@ export function registerEventHandlers(io: Server): void {
       socket.join(socket.userId);
       logger.debug('ws joined user room', { socketId: socket.id, userId: socket.userId });
     }
+
+    // An event holding U+0000 in any text, which PostgreSQL cannot store,
+    // is refused before any handler reads it (validators/nulCharacter.ts):
+    // through its acknowledgement every time, and otherwise with `error` once
+    // in ten seconds, as an event past its ceiling is. The event's name is
+    // not text a handler stores, and an `error` a client sends is never
+    // read, nor answered (below).
+    socket.use(([event, ...args], next) => {
+      if (event === 'error' || !holdsNulCharacter(args)) {
+        next();
+        return;
+      }
+      refuseOncePerNotice(socket, ackFrom(args[args.length - 1]), 'nul', NUL_REFUSAL);
+    });
 
     // Send connection acknowledgment
     socket.emit('connected', {
@@ -309,6 +325,9 @@ export function registerEventHandlers(io: Server): void {
     // PING/PONG HEARTBEAT
     // Connection health monitoring
     // ============================================
+    // TODO(play): ping is answered every time, with no ceiling, so a client
+    // that sends them without reading fills the server's write buffer for its
+    // socket. Count it as withinCeiling counts the events in SOCKET_CEILINGS.
     socket.on('ping', () => {
       socket.emit('pong', { timestamp: new Date().toISOString() });
     });
