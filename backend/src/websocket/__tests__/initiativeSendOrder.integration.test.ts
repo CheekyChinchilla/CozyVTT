@@ -43,7 +43,7 @@ const token = (id: string, extra: Record<string, unknown>) => ({
   visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {}, ...extra,
 });
 const entry = (tokenId: string, type: 'npc' | 'player') => ({
-  tokenId, mapId, name: tokenId, imageUrl: '', initiative: null, hp: null, type, disposition: null,
+  tokenId, mapId, name: tokenId, imageUrl: '', initiative: null, hp: null, type, disposition: null, characterId: null,
 });
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -233,7 +233,7 @@ describe('authenticating into another campaign on the same socket', () => {
   // campaign's data worked out for the new campaign's role.
   it('never answers a request from the room it left with the new role', async () => {
     const entry = (tokenId: string, name: string) => ({
-      tokenId, mapId: mapA, name, imageUrl: '', initiative: 10, hp: null, type: 'npc' as const, disposition: null,
+      tokenId, mapId: mapA, name, imageUrl: '', initiative: 10, hp: null, type: 'npc' as const, disposition: null, characterId: null,
     });
     setState(campaignA, { active: true, round: 1, currentTokenId: null, combatants: [entry(SEEN_TOKEN, 'Guard'), entry(HIDDEN_TOKEN, 'Assassin')] });
     const switcher = await server.connectAndAuth(switcherCookie, campaignA);

@@ -20,6 +20,8 @@ export interface CombatantEntry {
   hp: { current: number; max: number; temp: number } | null;
   type: 'player' | 'npc' | 'object';
   disposition: 'friendly' | 'neutral' | 'hostile' | null;
+  /** The token's character, for the tracker to open its sheet; null for a creature. */
+  characterId: string | null;
 }
 
 export interface CombatState {
@@ -202,14 +204,15 @@ export interface CombatantSource {
   hp?: { current: number; max: number; temp: number } | null;
   type?: 'player' | 'npc' | 'object';
   disposition?: 'friendly' | 'neutral' | 'hostile' | null;
+  characterId?: string | null;
 }
 
 /**
  * The state as one recipient may see it. Entries follow their tokens: a
  * player is given only the combatants the role filter keeps for them, with
- * the name, picture and hit points exactly as that token is sent to them
- * (the filter has already dropped hidden and off-plane tokens and the hit
- * points they may not know). The lighting rule is not applied here: the
+ * the name, picture, hit points and character exactly as that token is sent
+ * to them (the filter has already dropped hidden and off-plane tokens, the
+ * hit points they may not know, and an obscured token's identity). The lighting rule is not applied here: the
  * order is public once the DM adds a token to it, so a combatant out of a
  * player's sight on a lit or fogged map is still listed, and hiding the
  * token is what keeps it out. The DM gets every combatant with the token as
@@ -235,6 +238,7 @@ export function projectCombatState(
       hp: token.hp ?? null,
       type: token.type ?? 'npc',
       disposition: token.disposition ?? null,
+      characterId: token.characterId ?? null,
     });
   }
   const currentTokenId = combatants.some((c) => c.tokenId === state.currentTokenId) ? state.currentTokenId : null;

@@ -26,7 +26,7 @@ let mapId: string;
 let dm: ClientSocket;
 
 const entry = (tokenId: string, initiative: number): CombatantEntry => ({
-  tokenId, mapId, name: tokenId, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null,
+  tokenId, mapId, name: tokenId, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null, characterId: null,
 });
 type Sent = { active: boolean; currentTokenId: string | null; combatants: Array<{ tokenId: string }> };
 

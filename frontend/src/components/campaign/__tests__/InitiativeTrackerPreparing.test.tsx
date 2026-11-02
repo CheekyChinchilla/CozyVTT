@@ -42,7 +42,7 @@ const token = (id: string, name: string): Token => ({
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 });
 const entry = (tokenId: string, mapId: string): CombatantEntry => ({
-  tokenId, mapId, name: 'Lich', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null,
+  tokenId, mapId, name: 'Lich', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null, characterId: null,
 });
 
 /** A custom roll from the combatant's Roll..., as the DM makes it. */

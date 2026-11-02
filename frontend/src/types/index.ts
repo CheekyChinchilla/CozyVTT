@@ -1624,6 +1624,8 @@ export interface CombatantEntry {
   hp: { current: number; max: number; temp: number } | null;
   type: 'player' | 'npc' | 'object';
   disposition: 'friendly' | 'neutral' | 'hostile' | null;
+  /** The token's character, as this viewer may know it; null for a creature. */
+  characterId: string | null;
 }
 
 export interface CombatState {

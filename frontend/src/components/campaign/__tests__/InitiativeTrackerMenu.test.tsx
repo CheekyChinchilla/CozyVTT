@@ -74,8 +74,9 @@ const token = (id: string, name: string, extra: Partial<Token> = {}): Token => (
   ...extra,
 });
 
-const entry = (tokenId: string, name: string, type: CombatantEntry['type'], mapId = 'map-1'): CombatantEntry => ({
-  tokenId, mapId, name, imageUrl: '', initiative: 10, hp: null, type, disposition: null,
+/** A combatant, naming its token's character as the server does. */
+const entry = (tokenId: string, name: string, type: CombatantEntry['type'], mapId = 'map-1', characterId: string | null = null): CombatantEntry => ({
+  tokenId, mapId, name, imageUrl: '', initiative: 10, hp: null, type, disposition: null, characterId,
 });
 
 beforeEach(() => {
@@ -89,7 +90,7 @@ beforeEach(() => {
   ]);
   useGameStore.getState().setCombatState({
     active: false, round: 0, currentTokenId: null,
-    combatants: [entry('pa', 'Alice', 'player'), entry('pb', 'Bob', 'player'), entry('g', 'Goblin', 'npc')],
+    combatants: [entry('pa', 'Alice', 'player', 'map-1', 'char-alice'), entry('pb', 'Bob', 'player', 'map-1', 'char-bob'), entry('g', 'Goblin', 'npc')],
   });
 });
 
@@ -137,7 +138,8 @@ describe("a combatant's right-click menu", () => {
     expect(screen.getByTestId('creature-rolls')).toHaveTextContent('g');
   });
 
-  it('offers nothing for a combatant whose token is on another map', () => {
+  // One with a character offers its sheet (InitiativeTrackerOtherMapSheet).
+  it('offers nothing for a combatant on another map with no character', () => {
     useGameStore.getState().setCombatState({
       active: false, round: 0, currentTokenId: null,
       combatants: [entry('far', 'Carol', 'player', 'map-2')],

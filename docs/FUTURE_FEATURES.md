@@ -37,7 +37,6 @@ _Nothing at present._
 - `after the next release` **In Player Preview a right-click on a hidden creature's square opens the DM's menu for it,** on the screen the players may be watching. It should find only a token the preview draws, as a click on it does (`MapCanvas.tsx`).
 - `next release` **The token menu keeps Move to Map… open from one token to the next, and shows two dividers together when there is no other map** (`MapCanvas.tsx`, `map/tokenMenuItems.ts`).
 - `next release` **The door menu can open partly off the screen** near its right or bottom edge; it should flip to stay on screen, as the token menu does (`MapCanvas.tsx`).
-- `next release` **The initiative tracker's menu has no View Character Sheet for a combatant whose token is on another map** (`InitiativeTracker.tsx`).
 - `after the next release` Suspected: **a drop refused when it arrives with its pick-up is not put back on the mover's screen.** One connection's `token.move.start` and `token.move.end` are handled side by side, so the end can be read before the drag is recorded (`handlers/tokens.ts`).
 
 ### Campaigns and assets

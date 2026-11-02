@@ -44,7 +44,7 @@ const wall = { id: wallId, x1: 100, y1: 100, x2: 200, y2: 100, type: 'wall' };
 const light = { id: lightId, x: 300, y: 300, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true };
 const token = (id: string) => ({ id, name: id, x: 1, y: 1, size: 1, imageUrl: '', type: 'npc', visible: true });
 const entry = (tokenId: string, initiative: number): CombatantEntry => ({
-  tokenId, mapId, name: tokenId, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null,
+  tokenId, mapId, name: tokenId, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null, characterId: null,
 });
 
 /** What the map holds at the start of every test, with one drawing (below). */

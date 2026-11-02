@@ -511,8 +511,10 @@ export default function InitiativeTracker() {
   // ── A combatant's sheet and rolls ────────────────────────────────────────
   //
   // What the map's right-click menu offers about a token's character, by the
-  // same rules (utils/tokenCharacter), and the DM a creature's rolls. Only for
-  // a token on the map being shown: one on another map is not loaded here.
+  // same rules (utils/tokenCharacter), and the DM a creature's rolls. The
+  // sheet is found from the combatant's entry, which names its character
+  // wherever its token stands; the rolls need the token itself, so only one
+  // on the map on screen offers them.
 
   // `opening` counts the menus opened, so each is a menu of its own, placed
   // at its point: a long-press on another row brings no mousedown to close
@@ -525,7 +527,8 @@ export default function InitiativeTracker() {
   const membership = campaign?.memberships?.find((m) => m.userId === user?.id);
 
   const tokenOf = (tokenId: string): Token | undefined => tokens.find((t) => t.id === tokenId);
-  const offersSheet = (token: Token | undefined): boolean => !!token && campaignHasCharacter(campaign, token.characterId);
+  const combatantOf = (tokenId: string): CombatantEntry | undefined => combatState.combatants.find((c) => c.tokenId === tokenId);
+  const offersSheet = (entry: CombatantEntry | undefined): boolean => !!entry && campaignHasCharacter(campaign, entry.characterId);
   const offersCharacterRolls = (token: Token | undefined): boolean => !!token && canRollTokenCharacter(user, campaign, token);
   // As on the map: a creature's rolls are the DM's, and a token bound to a
   // character rolls from the sheet whatever its type says.
@@ -537,12 +540,13 @@ export default function InitiativeTracker() {
    * when this holds anything, so its right-click, long-press and name open
    * exactly the menus there are. A roll picker opens where the menu is open.
    */
-  const combatantMenuItems = (token: Token): FlatMenuItem[] => {
+  const combatantMenuItems = (entry: CombatantEntry): FlatMenuItem[] => {
     const items: FlatMenuItem[] = [];
-    if (offersSheet(token)) {
-      items.push({ kind: 'command', id: 'view-sheet', icon: Eye, label: 'View Character Sheet', run: () => { void openSheet(token.id); } });
+    if (offersSheet(entry)) {
+      items.push({ kind: 'command', id: 'view-sheet', icon: Eye, label: 'View Character Sheet', run: () => { void openSheet(entry.tokenId); } });
     }
-    if (offersCharacterRolls(token) || offersCreatureRolls(token)) {
+    const token = tokenOf(entry.tokenId);
+    if (token && (offersCharacterRolls(token) || offersCreatureRolls(token))) {
       items.push({
         kind: 'command', id: 'roll', icon: Dices, label: 'Roll...',
         run: () => {
@@ -559,8 +563,11 @@ export default function InitiativeTracker() {
     return items;
   };
 
+  /** A combatant's token on the table's map, which the DM keeps while preparing another. */
+  const tableTokenOf = (tokenId: string): Token | undefined => currentMap?.tokens?.find((t) => t.id === tokenId);
+
   const openSheet = async (tokenId: string) => {
-    const characterId = tokenOf(tokenId)?.characterId;
+    const characterId = combatantOf(tokenId)?.characterId;
     if (!characterId) return;
     try {
       const { character } = await api.getCharacter(characterId);
@@ -821,11 +828,8 @@ export default function InitiativeTracker() {
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
                     onMove={moveCombatant}
-                    hasMenu={(() => {
-                      const token = tokenOf(entry.tokenId);
-                      return !!token && combatantMenuItems(token).length > 0;
-                    })()}
-                    hasSheet={offersSheet(tokenOf(entry.tokenId))}
+                    hasMenu={combatantMenuItems(entry).length > 0}
+                    hasSheet={offersSheet(entry)}
                     onOpenMenu={(tokenId, x, y, byKeyboard) => {
                       menuOpenings.current += 1;
                       setMenu({ tokenId, x, y, byKeyboard, opening: menuOpenings.current });
@@ -924,17 +928,17 @@ export default function InitiativeTracker() {
       />
 
       {menu && (() => {
-        const token = tokenOf(menu.tokenId);
-        if (!token) return null;
+        const entry = combatantOf(menu.tokenId);
+        if (!entry) return null;
         return (
           <CharacterContextMenu
             key={menu.opening}
             x={menu.x}
             y={menu.y}
             autoFocus={menu.byKeyboard}
-            items={combatantMenuItems(token)}
+            items={combatantMenuItems(entry)}
             onClose={closeMenu}
-            title={tokenDisplayName(token)}
+            title={tokenDisplayName(tokenOf(menu.tokenId) ?? entry)}
           />
         );
       })()}
@@ -946,7 +950,9 @@ export default function InitiativeTracker() {
           membership={membership}
           // Rolls from it reach the whole table, as from Roll... below,
           // or the DM alone for a combatant on a map the table is not on.
-          publicName={characterRollPublicName(tokenOf(sheet.tokenId), user?.id)}
+          // Named as the map names the token, read from the table's map
+          // when the DM has another on screen.
+          publicName={characterRollPublicName(tokenOf(sheet.tokenId) ?? tableTokenOf(sheet.tokenId), user?.id)}
           secretRolls={mapOf(sheet.tokenId) !== mapId}
           onClose={() => setSheet(null)}
         />

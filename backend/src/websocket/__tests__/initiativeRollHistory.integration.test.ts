@@ -47,7 +47,7 @@ const token = (id: string, extra: Record<string, unknown> = {}) => ({
   id, name: id, imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, layer: 'token',
   visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {}, ...extra,
 });
-const entry = (tokenId: string) => ({ tokenId, mapId, name: tokenId, imageUrl: '', initiative: null, hp: null, type: 'npc' as const, disposition: null });
+const entry = (tokenId: string) => ({ tokenId, mapId, name: tokenId, imageUrl: '', initiative: null, hp: null, type: 'npc' as const, disposition: null, characterId: null });
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function placeTokens(tokens: ReturnType<typeof token>[], inOrder: string[] = []) {

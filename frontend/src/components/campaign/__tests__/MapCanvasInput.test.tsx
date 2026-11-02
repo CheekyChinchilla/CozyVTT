@@ -380,7 +380,7 @@ describe('the card a hovered token shows', () => {
   const inOrder = (initiative: number | null) => act(() => {
     useGameStore.getState().setCombatState({
       active: true, round: 1, currentTokenId: null,
-      combatants: [{ tokenId: 'tok-goblin', mapId: 'map-a', name: 'Goblin Scout', imageUrl: '', initiative, hp: null, type: 'npc', disposition: null }],
+      combatants: [{ tokenId: 'tok-goblin', mapId: 'map-a', name: 'Goblin Scout', imageUrl: '', initiative, hp: null, type: 'npc', disposition: null, characterId: null }],
     });
   });
 

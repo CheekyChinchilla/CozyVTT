@@ -34,7 +34,7 @@ function combat(order: string[], active = true): CombatState {
     round: 1,
     currentTokenId: order[0] ?? null,
     combatants: order.map((tokenId) => ({
-      tokenId, mapId: 'map-a', name: tokenId, imageUrl: '', initiative: 10, hp: null, type: 'npc', disposition: null,
+      tokenId, mapId: 'map-a', name: tokenId, imageUrl: '', initiative: 10, hp: null, type: 'npc', disposition: null, characterId: null,
     })),
   };
 }
