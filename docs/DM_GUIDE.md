@@ -226,15 +226,16 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 | **Eraser** | `E` | Drag to paint the second colour over what is there. The second colour starts as the colour of the picture's top-left corner: the map's own colour on a new drawn map. |
 | **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
 | **Rectangle**, **Ellipse** | `R`, `O` | Drag from one corner to the other. Choose **Outline** (in the colour), **Filled** (with the colour) or **Outline and fill** (outlined in the colour, filled with the second colour). |
+| **Fill** | `F` | Click or tap an area to fill it with the colour: it spreads side to side and up and down, not across corners. **Tolerance** (10% to start) takes in colours that far from the one clicked, so the soft edge of a stroke fills too; at 0% only the exact colour fills. On a touch screen a finger's drag moves the map under it. |
 
 **Snap to grid**, for a line, a rectangle and an ellipse, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
 
-4. **Undo stroke** and **Redo stroke** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take a stroke back and put it back.
+4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape or a fill and put it back.
 5. Click **Done painting** (the **×** on the panel), press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
 
 While Paint is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
 
-Undo keeps up to 50 strokes, as memory allows: it keeps only the part of the picture each stroke changed, so a stroke across the whole map takes more, and the oldest go first.
+Undo keeps up to 50 changes, as memory allows: it keeps only the part of the picture each one changed, so a stroke across the whole map or a large fill takes more, and the oldest go first.
 
 What you paint is on your screen only, and saving it as the map's picture is still to come: until then it stays on the map when you put Paint away, and goes when you reload the page or show another map.
 
@@ -993,10 +994,11 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Paint a line, while **Paint** is on | `L` |
 | Paint a rectangle, while **Paint** is on | `R` |
 | Paint an ellipse, while **Paint** is on | `O` |
+| Fill an area, while **Paint** is on | `F` |
 | Keep a painted line to 15 degree steps | `Shift + drag` |
 | Make the brush narrower or wider, while **Paint** is on | `[` `]` |
-| Undo the last stroke, while **Paint** is on | `Ctrl + Z` |
-| Redo a stroke, while **Paint** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
+| Undo the last change to the picture, while **Paint** is on | `Ctrl + Z` |
+| Redo a change to the picture, while **Paint** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
 
 On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Paint** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, and the arrows, `Delete` and `Backspace` do nothing.
 
