@@ -77,3 +77,15 @@ describe('the instance name in emails', () => {
     expect(sent().subject).toContain('Welcome to CozyVTT');
   });
 });
+
+describe('the test email', () => {
+  // The page an administrator sends it from, by the name the app gives it.
+  it('says it was sent from the Admin Panel', async () => {
+    getSystemSettings.mockResolvedValue({ instanceName: 'CozyVTT' });
+
+    await sendTestEmail('p@x.test', 'Pat');
+
+    expect(sent().html).toContain('This email was triggered from the Admin Panel.');
+    expect(sent().html).not.toContain('Admin Dashboard');
+  });
+});
