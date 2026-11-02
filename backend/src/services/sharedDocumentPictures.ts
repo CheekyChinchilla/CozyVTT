@@ -12,10 +12,12 @@
 // written or uploaded in it (a CAMPAIGN document of that campaign). Of those,
 // only the ones whose text the campaign's DM controls now count, since
 // showing the picture is the DM's choice: a document the DM uploaded or
-// wrote, linked or written in the campaign. A document a former DM wrote
-// while they held the seat (which they can still rewrite as a member), one
-// any other member got there, and a global one someone else uploaded and
-// the DM linked, count for nothing. The members of the campaign are exactly
+// wrote, written in the campaign or linked to it from their own library or
+// the global one. A document a former DM wrote while they held the seat
+// (which they can still rewrite as a member), one any other member got
+// there, a global one someone else uploaded and the DM linked, and a
+// document of another campaign linked to it (whose DM, later someone else,
+// could rewrite it), count for nothing. The members of the campaign are exactly
 // those the document is shared with.
 //
 // A picture counts when the document's text holds its address,
@@ -229,13 +231,19 @@ export async function readSomeUnreadDocuments(of: {
 
 /**
  * A document that counts for `campaignId` while `dmId` is its DM: theirs,
- * and written or uploaded in the campaign, or linked to it.
+ * and written or uploaded in the campaign, or linked to it from their own
+ * library or the global one. A document of another campaign linked to it
+ * does not count, even one the DM wrote: that campaign's later DM could
+ * rewrite it.
  */
 function sharedBy(campaignId: string, dmId: string): Prisma.AssetWhereInput {
   return {
     type: 'DOCUMENT',
     uploadedById: dmId,
-    OR: [{ scope: 'CAMPAIGN', campaignId }, { campaignLinks: { some: { campaignId } } }],
+    OR: [
+      { scope: 'CAMPAIGN', campaignId },
+      { NOT: { scope: 'CAMPAIGN', campaignId: { not: null } }, campaignLinks: { some: { campaignId } } },
+    ],
   };
 }
 
