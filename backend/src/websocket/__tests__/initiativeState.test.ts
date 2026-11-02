@@ -12,7 +12,7 @@ import { projectCombatState, sortCombatants, removeCombatants, getState, setStat
 const hp = (current: number) => ({ current, max: 10, temp: 0 });
 const entry = (tokenId: string, extra: Partial<CombatantEntry> = {}): CombatantEntry => ({
   tokenId, mapId: 'map-1', name: `stored ${tokenId}`, imageUrl: '', initiative: 10, hp: hp(10),
-  type: 'npc', disposition: 'hostile', ...extra,
+  type: 'npc', disposition: 'hostile', characterId: null, ...extra,
 });
 const token = (id: string, extra: Record<string, unknown> = {}) => ({ id, name: `live ${id}`, imageUrl: `/${id}.png`, ...extra });
 
@@ -85,7 +85,7 @@ describe('sortCombatants', () => {
 
 describe('removeCombatants', () => {
   const combatant = (tokenId: string) => ({
-    tokenId, mapId: 'm', name: tokenId, imageUrl: '', initiative: 10, hp: null, type: 'npc' as const, disposition: null,
+    tokenId, mapId: 'm', name: tokenId, imageUrl: '', initiative: 10, hp: null, type: 'npc' as const, disposition: null, characterId: null,
   });
 
   it('drops the named entries and keeps the fight going while any remain', () => {

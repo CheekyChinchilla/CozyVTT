@@ -219,7 +219,7 @@ describe('a player writing to a prepared map', () => {
     // roll is refused anyway, and could not show the map rule doing its work.
     setState(campaignId, {
       active: false, round: 0, currentTokenId: null,
-      combatants: [{ tokenId: SCOUT, mapId: preparedId, name: 'Scout', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null }],
+      combatants: [{ tokenId: SCOUT, mapId: preparedId, name: 'Scout', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null, characterId: null }],
     });
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const refused = waitForEvent<{ message: string }>(player, 'error');

@@ -109,7 +109,7 @@ it("revealing one spirit token stands when re-sending the map fails", async () =
 it('a roll stands, and the new order goes out, when the dice log entry cannot be written', async () => {
   setState(campaignId, {
     active: true, round: 1, currentTokenId: null,
-    combatants: [{ tokenId: ORC, mapId, name: 'Orc', imageUrl: '', initiative: null, hp: null, type: 'npc', disposition: null }],
+    combatants: [{ tokenId: ORC, mapId, name: 'Orc', imageUrl: '', initiative: null, hp: null, type: 'npc', disposition: null, characterId: null }],
   });
   jest.spyOn(prisma.user, 'findUnique').mockImplementationOnce(boom as never);
   const noError = expectNoEvent(dm, 'error', 800);

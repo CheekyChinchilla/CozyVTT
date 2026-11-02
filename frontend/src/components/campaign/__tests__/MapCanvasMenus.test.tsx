@@ -1012,7 +1012,7 @@ describe('when the map on screen changes', () => {
     act(() => {
       useGameStore.getState().setCombatState({
         active: false, round: 0, currentTokenId: null,
-        combatants: [{ tokenId: 'tok-hero', mapId: 'map-a', name: 'Hero', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null }],
+        combatants: [{ tokenId: 'tok-hero', mapId: 'map-a', name: 'Hero', imageUrl: '', initiative: null, hp: null, type: 'player', disposition: null, characterId: null }],
       });
     });
     rightClick(2, 19);

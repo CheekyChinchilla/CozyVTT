@@ -545,7 +545,7 @@ The DM controls when initiative advances — after your turn, they'll click **Ne
 - Check HP totals to gauge how the fight is going
 - Use chat for action narration and out-of-character dice commentary
 
-**Sheets and rolls from the tracker.** Click or tap a character's name in the tracker, or right-click it, and choose **View Character Sheet** to read their sheet, or, on your own character, **Roll...** for the same rolls as right-clicking your token on the map. Double-clicking a character's name opens their sheet straight away. From the keyboard, press **Tab** until the name has the focus and press **Enter** for the menu. Creatures have nothing to open here, and neither does a character whose token is on a map the DM hasn't switched to.
+**Sheets and rolls from the tracker.** Click or tap a character's name in the tracker, or right-click it, and choose **View Character Sheet** to read their sheet, or, on your own character, **Roll...** for the same rolls as right-clicking your token on the map. Double-clicking a character's name opens their sheet straight away. From the keyboard, press **Tab** until the name has the focus and press **Enter** for the menu. Creatures have nothing to open here, and neither does a character whose token you can't see on the map, in the dark for instance: the tracker still lists them, but it offers their sheet only once their token is in your sight.
 
 **Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
 

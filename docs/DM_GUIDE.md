@@ -1038,7 +1038,7 @@ You can roll for a combatant, or look something up on their sheet, straight from
 - **Double-click a player character's row** to open their sheet at once; on the name, the menu its first click opened closes as the sheet opens. Double-clicking a creature does nothing.
 - **From the keyboard**, press **Tab** until the combatant's name has the focus and press **Enter** to open the same menu.
 
-This works for combatants on the map on your screen. One whose token is on another map offers nothing until you switch to that map, or open it to prepare; rolls for a combatant on a map the table is not on go to you alone. Players get the same menu: any character's sheet, and rolls for their own character.
+**View Character Sheet** works whatever map a combatant's token is on: one on a map you are preparing, or one at the table while you prepare another. **Roll...** needs the token itself, so it is offered only for a combatant on the map on your screen; switch to its map, or open it to prepare, to roll for it. Rolls for a combatant on a map the table is not on, from **Roll...** or from its sheet, go to you alone. Players get the same menu: the sheet of any character whose token their map shows them, and rolls for their own character. On a map with lighting, a character out of a player's sight is listed in their tracker with no sheet to open, so the order never tells them who a combatant is before the map does.
 
 ### Pinging a Location
 

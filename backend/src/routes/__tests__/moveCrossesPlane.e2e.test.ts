@@ -73,7 +73,7 @@ afterAll(async () => {
 it("sends the order again when a move takes a player's spirit token off the map", async () => {
   setState(campaignId, {
     active: true, round: 1, currentTokenId: null,
-    combatants: [{ tokenId: WRAITH, mapId: shownId, name: 'Wraith', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null }],
+    combatants: [{ tokenId: WRAITH, mapId: shownId, name: 'Wraith', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null, characterId: null }],
   });
   const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
   // Crossed over, the player is sent the wraith; back on the material plane, not.
@@ -95,7 +95,7 @@ it("sends the order again when a move takes a player's spirit token off the map"
 describe('placing or deleting a player\'s spirit token', () => {
   const combat = () => setState(campaignId, {
     active: true, round: 1, currentTokenId: null,
-    combatants: [{ tokenId: WRAITH, mapId: shownId, name: 'Wraith', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null }],
+    combatants: [{ tokenId: WRAITH, mapId: shownId, name: 'Wraith', imageUrl: '', initiative: 12, hp: null, type: 'npc', disposition: null, characterId: null }],
   });
   /** Resolves when the player is sent an order that does, or does not, list the wraith. */
   const orderFor = (player: import('socket.io-client').Socket, withWraith: boolean) => Promise.race([

@@ -47,7 +47,7 @@ const goblinToken: Token = {
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };
 const goblin: CombatantEntry = {
-  tokenId: 'goblin', mapId: 'map-a', name: 'Goblin', imageUrl: '', initiative: 7, hp: null, type: 'npc', disposition: null,
+  tokenId: 'goblin', mapId: 'map-a', name: 'Goblin', imageUrl: '', initiative: 7, hp: null, type: 'npc', disposition: null, characterId: null,
 };
 
 const ogreToken: Token = { ...goblinToken, id: 'ogre', name: 'Ogre' };
