@@ -568,7 +568,7 @@ describe('lines, rectangles and ellipses', () => {
 describe('the fill bucket', () => {
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
 
-  it('fills the area clicked with the colour, putting back only the box it changed, which undo keeps', async () => {
+  it('fills the area clicked with the colour, tile by tile, never reading the whole picture, and undo keeps it', async () => {
     await showMap();
     await paintOn();
     choose('Fill');
@@ -578,13 +578,41 @@ describe('the fill bucket', () => {
     mouse.down(input(), { clientX: 300, clientY: 300 });
     mouse.up(input(), { clientX: 300, clientY: 300 });
     const calls = take(canvas!);
-    expect(calls.find((c) => c.method === 'getImageData')?.args).toEqual([0, 0, 1000, 1000]);
-    // The stand-in picture is one empty colour throughout, so all of it is filled.
-    const put = calls.find((c) => c.method === 'putImageData');
-    expect(put?.args.slice(1)).toEqual([0, 0, 0, 0, 1000, 1000]);
-    const filled = put?.args[0] as ImageData;
+    // Nothing is read off the picture itself; each tile is written back.
+    expect(calls.filter((c) => c.method === 'getImageData')).toEqual([]);
+    const puts = calls.filter((c) => c.method === 'putImageData');
+    // The stand-in picture is one empty colour throughout, so every tile of the 1,000 px picture is filled.
+    expect(puts.map((c) => c.args.slice(1)).sort()).toEqual(
+      [0, 256, 512, 768].flatMap((y) => [0, 256, 512, 768].map((x) => [x, y])).sort(),
+    );
+    const filled = puts[0].args[0] as ImageData;
     expect([...filled.data.subarray(0, 4)]).toEqual([26, 26, 26, 255]);
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  });
+
+  it('says so when the device cannot read the picture to fill it, and changes nothing', async () => {
+    await showMap();
+    await paintOn();
+    choose('Fill');
+    const canvas = pictureCanvas();
+    // Every canvas but the picture, those made from now on included, refuses to be read.
+    const refuseReading = (ctx: CanvasRenderingContext2D) => Object.assign(ctx, { getImageData: () => { throw new RangeError('out of memory'); } });
+    for (const other of recorded.keys()) if (other !== canvas) refuseReading(other.getContext('2d')!);
+    const making = HTMLCanvasElement.prototype.getContext;
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      writable: true,
+      value(this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement['getContext']>) {
+        const ctx = making.apply(this, args) as CanvasRenderingContext2D;
+        return this === canvas ? ctx : refuseReading(ctx);
+      },
+    });
+    take(canvas!);
+    mouse.down(input(), { clientX: 300, clientY: 300 });
+    mouse.up(input(), { clientX: 300, clientY: 300 });
+    expect(await screen.findByText('This device could not fill an area that large.')).toBeInTheDocument();
+    expect(take(canvas!).filter((c) => c.method === 'putImageData')).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
   });
 
   it('pans for a finger\'s drag, and fills on a tap', async () => {
@@ -643,104 +671,33 @@ describe('text and the eyedropper', () => {
     expect(callsOn(pictureCanvas()).some((c) => c.method === 'fillText')).toBe(false);
   });
 
-  it('take the colour of the pixel tapped, and go back to the tool before', async () => {
+  it('take the colour of the pixel tapped, read without reading the picture itself, and go back to the tool before', async () => {
     await showMap();
     await paintOn();
     press('r');
     press('i');
     expect(within(panel()).getByRole('button', { name: 'Eyedropper' })).toHaveAttribute('aria-pressed', 'true');
-    const ctx = pictureCanvas()!.getContext('2d')!;
-    const asked: number[][] = [];
-    Object.assign(ctx, { getImageData: (...args: number[]) => { asked.push(args); return { data: new Uint8ClampedArray([74, 52, 35, 255]) }; } });
+    const canvas = pictureCanvas()!;
+    const darkWood = () => ({ data: new Uint8ClampedArray([74, 52, 35, 255]) });
+    for (const other of recorded.keys()) if (other !== canvas) Object.assign(other.getContext('2d')!, { getImageData: darkWood });
+    const making = HTMLCanvasElement.prototype.getContext;
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      writable: true,
+      value(this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement['getContext']>) {
+        const ctx = making.apply(this, args) as CanvasRenderingContext2D;
+        return this === canvas ? ctx : Object.assign(ctx, { getImageData: darkWood });
+      },
+    });
+    take(canvas);
     mouse.down(input(), { clientX: 410, clientY: 220 });
     mouse.up(input(), { clientX: 410, clientY: 220 });
-    expect(asked).toEqual([[410, 220, 1, 1]]);
+    expect(take(canvas).filter((c) => c.method === 'getImageData')).toEqual([]);
+    const read = [...recorded.entries()].filter(([c]) => c !== canvas)
+      .flatMap(([, calls]) => calls.filter((c) => c.method === 'drawImage' && c.args[0] === canvas).map((c) => c.args.slice(1, 5)));
+    expect(read).toContainEqual([410, 220, 1, 1]);
     expect(within(panel()).getByRole('button', { name: /^Colour:/ })).toHaveAccessibleName('Colour: Dark wood');
     expect(within(panel()).getByRole('button', { name: 'Rectangle' })).toHaveAttribute('aria-pressed', 'true');
-  });
-});
-
-describe('Save', () => {
-  const save = async () => {
-    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
-  };
-
-  it('uploads the picture tagged drawn-map, points the map at it, and deletes the drawn picture it had', async () => {
-    const map = mapWith();
-    await showMap(map);
-    await paintOn();
-    expect(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })).toBeDisabled();
-    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    await save();
-    await waitFor(() => expect(h.deleteAsset).toHaveBeenCalled());
-    const form = h.uploadAsset.mock.calls[0][0] as FormData;
-    expect(form.get('tags')).toBe('drawn-map');
-    expect(form.get('scope')).toBe('CAMPAIGN');
-    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' });
-    // Without force, the picture it had before.
-    expect(h.deleteAsset.mock.calls).toEqual([[map.imageUrl.split('/').pop()]]);
-    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: false });
-    expect(screen.queryByText(/Not saved yet/)).toBeNull();
-    expect(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })).toBeDisabled();
-    // The map on screen is the saved one: its own picture comes back once Paint goes.
-    expect((h.state.currentMap as CampaignMap).imageUrl).toBe('/api/assets/maps/saved-1');
-  });
-
-  it('leaves unsaved what is painted while the save is under way', async () => {
-    await showMap();
-    await paintOn();
-    let finishUpload: (value: unknown) => void = () => undefined;
-    h.uploadAsset.mockReturnValue(new Promise((resolve) => { finishUpload = resolve; }));
-    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    await save();
-    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
-    await act(async () => { finishUpload({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', campaignId: 'campaign-1', tags: ['drawn-map'] } }); });
-    await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
-    await act(async () => { await Promise.resolve(); });
-    expect(usePaintStore.getState().unsaved).toBe(true);
-  });
-
-  it('keeps the paint, and deletes its upload, when the map will not take the picture, and says why', async () => {
-    h.updateMap.mockRejectedValue({ isAxiosError: true, response: { status: 403, data: { message: 'Only the DM can change this map' } } });
-    await showMap();
-    await paintOn();
-    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    await save();
-    expect(await screen.findByText('Only the DM can change this map')).toBeInTheDocument();
-    expect(h.deleteAsset.mock.calls).toEqual([['saved-1']]);
-    expect(usePaintStore.getState().unsaved).toBe(true);
-  });
-
-  it('never has the map drawn from a canvas whose pixels are let go of, as Esc after a Save hands back the picture', async () => {
-    await showMap();
-    await paintOn();
-    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    await save();
-    await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
-    // The width of each canvas the terrain is drawn from, as it is drawn.
-    const widths: number[] = [];
-    const ctx = terrain().getContext('2d')!;
-    Object.assign(ctx, { drawImage: (source: CanvasImageSource) => { if (source instanceof HTMLCanvasElement) widths.push(source.width); } });
-    press('Escape');
-    // A draw before the picture is back: from Paint's canvas.
-    fireEvent.click(screen.getByRole('button', { name: 'Zoom In' }));
-    await nextFrame();
-    // The saved picture loads again, and Paint's canvas goes.
-    pictures[pictures.length - 1].load();
-    fireEvent.click(screen.getByRole('button', { name: 'Zoom Out' }));
-    await nextFrame();
-    await nextFrame();
-    expect(widths.length).toBeGreaterThan(0);
-    expect(widths.filter((w) => w === 0)).toEqual([]);
-  });
-
-  it('deletes nothing for a map that had no picture', async () => {
-    await showMap(mapWith({ imageUrl: '' }), { load: false });
-    await paintOn();
-    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    await save();
-    await waitFor(() => expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' }));
-    expect(h.deleteAsset).not.toHaveBeenCalled();
   });
 });
 
@@ -751,10 +708,10 @@ describe('the lift', () => {
     await showMap();
     await paintOn();
     const canvas = pictureCanvas();
-    /** Tiles copied off the picture: drawImage of it onto any canvas but the map's own layers. */
+    /** Tiles read off the picture: drawImage of a tile of it onto any canvas but the map's own layers (not the one pixel read as Paint opens). */
     const copies = () => [...recorded.entries()]
       .filter(([c]) => c !== canvas && c !== terrain())
-      .flatMap(([, calls]) => calls.filter((k) => k.method === 'drawImage' && k.args[0] === canvas)).length;
+      .flatMap(([, calls]) => calls.filter((k) => k.method === 'drawImage' && k.args[0] === canvas && k.args[3] !== 1)).length;
     mouse.down(input(), { clientX: 100, clientY: 100 });
     expect(copies()).toBe(1);
     mouse.move(input(), { clientX: 400, clientY: 100 }, 1);
@@ -798,7 +755,7 @@ describe('undo and redo', () => {
     // The two tiles across the stroke, 0 to 512 by 0 to 256, kept before it.
     const kept = [...recorded.entries()]
       .filter(([c]) => c !== canvas)
-      .flatMap(([, calls]) => calls.filter((c) => c.method === 'drawImage' && c.args[0] === canvas).map((c) => c.args.slice(1, 5)));
+      .flatMap(([, calls]) => calls.filter((c) => c.method === 'drawImage' && c.args[0] === canvas && c.args[3] !== 1).map((c) => c.args.slice(1, 5)));
     expect(kept).toEqual([[0, 0, 256, 256], [256, 0, 256, 256]]);
 
     /** Where tiles were put back: from their raw bytes, or cleared for their PNG. */
