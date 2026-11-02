@@ -556,6 +556,12 @@ erDiagram
         string mimeType
         string thumbnailPath
         string[] tags
+        datetime picturesReadAt
+    }
+
+    DocumentPicture {
+        string documentId PK,FK
+        string pictureId PK,FK
     }
 
     Message {
@@ -709,6 +715,8 @@ erDiagram
     Campaign ||--o{ TokenTemplate : "has"
     Campaign ||--o{ CampaignDocument : "shares"
     Asset ||--o{ CampaignDocument : "shared as"
+    Asset ||--o{ DocumentPicture : "names, as a document"
+    Asset ||--o{ DocumentPicture : "is named in"
     User ||--o{ CampaignDocument : "linked by"
 ```
 
@@ -934,7 +942,7 @@ The client builds the mask on three canvases the size of the map in map pixels; 
 
 The map a member is sent is built from an allowlist: `filterMapData` (`utils/spirit-layer.ts`) takes the columns in `MAP_FIELDS_SENT_TO_EVERYONE` as stored and decides each one in `MAP_FIELDS_DECIDED_PER_RECIPIENT` (tokens, walls, lights, fog, the spirit layer, annotations) for the recipient, so a column in neither list never reaches a member. Four DM-only replies (`POST /maps`, `POST /maps/import-uvtt`, `PUT /maps/:id`, `POST /maps/:id/tokens`) return the stored row whole. The map list and the campaign fetch select the first list (`MAP_SELECT_SENT_TO_EVERYONE`) and decide the spirit layer address themselves. `keepInStep.test.ts` fails while any column of `Map` is in none of the three lists.
 
-A map's picture follows the map. A player or a spectator is listed and served a campaign asset that a map of the campaign names as its picture, base layer or spirit layer, and any map picture of the campaign, only while a table they sit at shows it to them: the campaign's current map, or the current map of another campaign of theirs where the picture's uploader sits too. A picture is also shown to the campaign's members while a handout of the campaign's current DM, shared with the campaign or written in it, names it, and what they uploaded themselves always is (`mapPictureHidden`, `services/permissions.ts`). The handouts are read from their files on disk (`services/sharedDocumentPictures.ts`), which makes the asset list read files: only the first 1 MiB of each, at most 200 addresses kept from it and 50,000 in all, least recently used first out, with one read of a document shared by every request waiting on it. The one predicate decides `GET /api/assets` and every file route, which all ask `canReadAsset`, so a picture is listed exactly when it opens; the DM and a platform admin are not held to it.
+A map's picture follows the map. A player or a spectator is listed and served a campaign asset that a map of the campaign names as its picture, base layer or spirit layer, and any map picture of the campaign, only while a table they sit at shows it to them: the campaign's current map, or the current map of another campaign of theirs where the picture's uploader sits too. A picture is also shown to the campaign's members while a handout of the campaign's current DM, shared with the campaign or written in it, names it, and what they uploaded themselves always is (`mapPictureHidden`, `services/permissions.ts`). What each document names is read from its text when it is uploaded (`POST /api/assets/upload`), written (`POST /api/assets/documents`) or saved (`PUT /api/assets/documents/:id/content`, within the document's turn): its first 1 MiB, at most 200 addresses, each naming an asset that exists, kept as rows of `DocumentPicture` in place of the document's earlier ones, the document's own row written first so two records of it take turns (`services/sharedDocumentPictures.ts`). The asset list and the file routes ask the database, in one query whatever the handouts, and never read a file. A document stored before those rows were kept, with `Asset.picturesReadAt` null, is read by the requests that ask, five at a time, those of the campaigns asked about first, each once, until none is left; a record that fails leaves it null, to be read again. The one predicate decides `GET /api/assets` and every file route, which all ask `canReadAsset`, so a picture is listed exactly when it opens; the DM and a platform admin are not held to it.
 
 The rule, in order: walls first, always (nothing outside a viewer's line of sight is seen, lit or not); then the map's **Global Illumination** flag (everything in sight is bright); then darkvision and light, which add up the way the mask is composited: bright is 1.0, dim is 0.5, so dim + dim is bright and darkvision in dim light is bright. A viewer's own square is always dim: you know where you stand. Explored memory is never an input: the map image is already in every client, so what to grey in is a rendering concern; token positions are not.
 

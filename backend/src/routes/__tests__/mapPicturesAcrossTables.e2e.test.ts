@@ -52,6 +52,7 @@ const camp = { a: '', b: '', d: '', e: '' };
 const user = { dm: '', player: '', spectator: '', otherDm: '', deputy: '' };
 let player: Agent;
 let spectator: Agent;
+let dm: Agent;
 
 /** The fixture's pictures by what they are, and where each is filed. */
 const ids = {
@@ -183,6 +184,7 @@ beforeAll(async () => {
   await handout(`![mine](/api/assets/maps/${ids.deputysHandout})`, { writtenIn: camp.a }, user.deputy);
 
   const emails = made.map((u) => u.email);
+  dm = await login(emails[0]);
   player = await login(emails[1]);
   spectator = await login(emails[2]);
 });
@@ -299,16 +301,17 @@ describe('a picture in a handout', () => {
     }
   });
 
-  it('follows the handout when its text changes', async () => {
-    const doc = await prisma.campaignDocument.findFirstOrThrow({ where: { campaignId: camp.a }, select: { asset: { select: { filePath: true } } } });
+  it('follows the handout when the DM saves its text', async () => {
+    const { assetId } = await prisma.campaignDocument.findFirstOrThrow({ where: { campaignId: camp.a }, select: { assetId: true } });
+    const save = async (content: string) =>
+      expect((await dm.put(`/api/assets/documents/${assetId}/content`).send({ content })).status).toBe(200);
     try {
-      // A later write, so the file's time and size both change.
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      fs.writeFileSync(doc.asset.filePath, '# From the Baron\n\nThe letter is gone.\n');
+      await save('# From the Baron\n\nThe letter is gone.\n');
       expect((await player.get(`/api/assets/maps/${ids.handout}`)).status).toBe(404);
     } finally {
-      fs.writeFileSync(doc.asset.filePath, `# From the Baron\n\n![The letter](/api/assets/maps/${ids.handout})\n`);
+      await save(`# From the Baron\n\n![The letter](/api/assets/maps/${ids.handout})\n`);
     }
+    expect((await player.get(`/api/assets/maps/${ids.handout}`)).status).toBe(200);
   });
 });
 

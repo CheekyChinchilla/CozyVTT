@@ -5,7 +5,7 @@
 // (`![The letter](/api/assets/maps/<id>)`), as the user guide shows. Sharing
 // the handout with the campaign is the DM's choice to show that picture to
 // its members, so the map-picture rule lets such a picture through for them
-// (mapPictureHidden). This reads which pictures each shared document names.
+// (mapPictureHidden). This says which pictures the shared documents name.
 //
 // "Shared with the campaign" is what the campaign's document list shows and
 // its members may read: a document linked to it (CampaignDocument), and one
@@ -26,26 +26,34 @@
 // picture can read its address in the same text. Only plain text and
 // Markdown documents hold addresses; a PDF names nothing.
 //
-// Every cost is bounded, since any signed-in user can run a campaign and
-// upload a document: only the first MAX_SCANNED_BYTES of a file are read,
-// at most MAX_IDS_PER_DOCUMENT addresses are kept from it, the answers are
-// kept for at most MAX_KEPT_IDS ids in all (the least recently used go
-// first), and one read of a document is shared by every request waiting on
-// it.
+// What a document names is read from its text when it is uploaded, written
+// or saved, and kept (DocumentPicture), so a request reads the database and
+// never a file: its work does not grow with the files of a campaign. Only
+// the first MAX_SCANNED_BYTES of a text are read, and at most
+// MAX_IDS_PER_DOCUMENT addresses kept from it, each naming an asset that
+// exists. A document stored before this was kept (Asset.picturesReadAt
+// null) is read by the requests that ask, DOCUMENTS_READ_PER_REQUEST at a
+// time, until none is left: a player's request, the documents of the
+// campaigns it asks about; a delete's check, any. A read that fails leaves
+// the document unread, to be read again DOCUMENT_READ_RETRY_MS later.
 // ============================================
 
 import fs from 'fs/promises';
 import path from 'path';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { storedFilePath } from '../utils/storedPath';
+import { errorCode } from '../utils/errors';
 
 /** How much of a document is read for addresses: far more than any handout, so a picture's address past it does not count. */
 export const MAX_SCANNED_BYTES = 1024 * 1024;
 /** The most addresses kept from one document; a picture named after them does not count. */
 export const MAX_IDS_PER_DOCUMENT = 200;
-/** The most ids kept in all, over every document read. */
-export const MAX_KEPT_IDS = 50_000;
+/** How many documents not read yet one request reads, until none is left. */
+export const DOCUMENTS_READ_PER_REQUEST = 5;
+/** How long a document whose file could not be read waits before it is read again. */
+export const DOCUMENT_READ_RETRY_MS = 10 * 60 * 1000;
 
 const ADDRESS = /\/api\/assets\/(?:maps|tokens|avatars|audio|documents)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?![0-9A-Za-z_-])/gi;
 const NAMED_REFERENCES: Record<string, string> = { sol: '/', hyphen: '-', dash: '-', period: '.', colon: ':', lowbar: '_' };
@@ -69,94 +77,173 @@ export function assetIdsNamedIn(text: string, limit = MAX_IDS_PER_DOCUMENT): Set
   return ids;
 }
 
-interface Scan { file: string; mtimeMs: number; size: number; ids: ReadonlySet<string> }
-/** The answers kept, oldest used first. */
-const scans = new Map<string, Scan>();
-let keptIds = 0;
-/** A read under way, per document, which later requests wait on. */
-const reading = new Map<string, Promise<ReadonlySet<string>>>();
-/** Files found missing, each reported once. */
-const reportedMissing = new Set<string>();
-const NONE: ReadonlySet<string> = new Set();
-
-/** How much is kept now. */
-export function documentPictureScanStats(): { documents: number; ids: number; reading: number } {
-  return { documents: scans.size, ids: keptIds, reading: reading.size };
+/** The asset ids a document's bytes name: its first MAX_SCANNED_BYTES, read as UTF-8. */
+export function assetIdsNamedInBytes(bytes: Buffer): Set<string> {
+  return assetIdsNamedIn(bytes.subarray(0, MAX_SCANNED_BYTES).toString('utf8'));
 }
 
-function keep(documentId: string, scan: Scan): void {
-  const before = scans.get(documentId);
-  if (before) {
-    keptIds -= before.ids.size;
-    scans.delete(documentId);
-  }
-  scans.set(documentId, scan);
-  keptIds += scan.ids.size;
-  while (keptIds > MAX_KEPT_IDS && scans.size > 1) {
-    const oldest = scans.keys().next();
-    if (oldest.done) break;
-    keptIds -= scans.get(oldest.value)?.ids.size ?? 0;
-    scans.delete(oldest.value);
-  }
-}
-
-/** The start of a file, at most MAX_SCANNED_BYTES of it, as text. */
-async function readStart(file: string, size: number): Promise<string> {
+/** The start of a file, at most MAX_SCANNED_BYTES of it. */
+async function readStart(file: string): Promise<Buffer> {
   const handle = await fs.open(file, 'r');
   try {
-    const buffer = Buffer.alloc(Math.min(size, MAX_SCANNED_BYTES));
+    const buffer = Buffer.alloc(Math.min((await handle.stat()).size, MAX_SCANNED_BYTES));
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    return buffer.subarray(0, bytesRead).toString('utf8');
+    return buffer.subarray(0, bytesRead);
   } finally {
     await handle.close();
   }
 }
 
-async function idsNamedBy(documentId: string, storedPath: string): Promise<ReadonlySet<string>> {
+/** Documents whose failed read has been logged, each once in this process. */
+const reportedUnreadable = new Set<string>();
+
+/**
+ * The asset ids a stored document's file names: none for a PDF, which names
+ * nothing, and null for a file that could not be read, logged once for each
+ * document, so the document is read again later rather than kept as naming
+ * nothing. Until then it shows nothing and grants nothing.
+ */
+export async function assetIdsNamedInFile(documentId: string, storedPath: string): Promise<Set<string> | null> {
   const ext = path.extname(storedPath).toLowerCase();
-  if (ext !== '.md' && ext !== '.txt') return NONE;
-  const file = storedFilePath(storedPath);
-  let stat: { mtimeMs: number; size: number };
+  if (ext !== '.md' && ext !== '.txt') return new Set();
   try {
-    stat = await fs.stat(file);
+    return assetIdsNamedInBytes(await readStart(storedFilePath(storedPath)));
   } catch (error) {
-    // A file gone from the disk shows nothing, and grants nothing. Said
-    // once: every member's every list would say it again.
-    if (!reportedMissing.has(file)) {
-      if (reportedMissing.size >= 1000) reportedMissing.clear();
-      reportedMissing.add(file);
-      logger.warn('A shared document could not be read for the pictures it shows', { err: error, documentId });
+    if (!reportedUnreadable.has(documentId)) {
+      if (reportedUnreadable.size >= 1000) reportedUnreadable.clear();
+      reportedUnreadable.add(documentId);
+      logger.warn('A document could not be read for the pictures it shows; it will be read again later', { err: error, documentId });
     }
-    return NONE;
+    return null;
   }
-  const kept = scans.get(documentId);
-  if (kept && kept.file === file && kept.mtimeMs === stat.mtimeMs && kept.size === stat.size) {
-    scans.delete(documentId);
-    scans.set(documentId, kept);
-    return kept.ids;
-  }
-  const pending = reading.get(documentId);
-  if (pending) return pending;
-  const read = (async () => {
-    try {
-      const ids = assetIdsNamedIn(await readStart(file, stat.size));
-      keep(documentId, { file, mtimeMs: stat.mtimeMs, size: stat.size, ids });
-      return ids;
-    } catch (error) {
-      logger.warn('A shared document could not be read for the pictures it shows', { err: error, documentId });
-      return NONE;
-    } finally {
-      reading.delete(documentId);
-    }
-  })();
-  reading.set(documentId, read);
-  return read;
 }
 
 /**
- * For each of `campaignIds`, which of `candidates` (asset ids) the documents
- * shared with it name. Only the candidates are tested, against what each
- * document names, so nothing is copied for the rest.
+ * Keep what a document names, in place of what it named before, and that it
+ * has been read. Only assets that exist are kept, the document itself left
+ * out. The document's row is written first, which holds back any other
+ * record of the same document until this one is done. `onlyIfUnread` leaves
+ * a document someone has recorded meanwhile alone, as the reading of one
+ * stored before must: a save since has the newer text. Never throws: a
+ * record that fails leaves the document unread, for a later request to read
+ * again. Answers whether it was recorded.
+ */
+export async function recordDocumentPictures(
+  documentId: string,
+  named: ReadonlySet<string>,
+  options: { onlyIfUnread?: boolean } = {}
+): Promise<boolean> {
+  const ids = [...named].filter((id) => id !== documentId);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const marked = await tx.asset.updateMany({
+          where: { id: documentId, type: 'DOCUMENT', ...(options.onlyIfUnread ? { picturesReadAt: null } : {}) },
+          data: { picturesReadAt: new Date() },
+        });
+        if (marked.count === 0) return false;
+        await tx.documentPicture.deleteMany({ where: { documentId } });
+        if (ids.length > 0) {
+          const existing = await tx.asset.findMany({ where: { id: { in: ids } }, select: { id: true } });
+          await tx.documentPicture.createMany({
+            data: existing.map((asset) => ({ documentId, pictureId: asset.id })),
+            skipDuplicates: true,
+          });
+        }
+        return true;
+      });
+    } catch (error) {
+      // An asset it names deleted between the two reads: once more, without it.
+      if (errorCode(error) === 'P2003' && attempt < 2) continue;
+      logger.warn('What a document shows could not be kept; it will be read again', { err: error, documentId });
+      await prisma.asset
+        .updateMany({ where: { id: documentId }, data: { picturesReadAt: null } })
+        .catch((markError: unknown) => logger.warn('A document could not be marked to be read again', { err: markError, documentId }));
+      return false;
+    }
+  }
+}
+
+/** Documents this process is reading now, so requests that come together read different ones. */
+const reading = new Set<string>();
+/**
+ * Documents whose file could not be read, with when each may be tried
+ * again, so a file that is missing is not read on every request. At most
+ * this many wait; past that, one is tried again at the next request.
+ */
+const readAgainAt = new Map<string, number>();
+const MAX_WAITING_TO_READ_AGAIN = 1000;
+
+/**
+ * Read up to DOCUMENTS_READ_PER_REQUEST documents stored before what they
+ * name was kept, newest first, and keep what each names: those `ownerId`
+ * uploaded, then those shared with `campaignIds` (written in one or linked
+ * to one), and with `othersToo` any other after them. A request that reads
+ * only those campaigns' documents (the handout grant) asks for theirs; the
+ * delete's check asks for the caller's own first, then any. Each request
+ * that reads what documents name asks this first, so the documents from
+ * before are read once each, by the requests that need them; once none is
+ * left, it is a query or two that find none.
+ */
+export async function readSomeUnreadDocuments(of: {
+  ownerId?: string;
+  campaignIds: readonly string[];
+  othersToo?: boolean;
+  now?: number;
+}): Promise<void> {
+  const now = of.now ?? Date.now();
+  for (const [id, at] of readAgainAt) if (at <= now) readAgainAt.delete(id);
+  const busy = [...reading, ...readAgainAt.keys()];
+  const unread = (skip: readonly string[]): Prisma.AssetWhereInput => ({
+    type: 'DOCUMENT', picturesReadAt: null, ...(skip.length > 0 ? { id: { notIn: [...skip] } } : {}),
+  });
+  const select = { id: true, filePath: true } as const;
+  const orderBy: Prisma.AssetOrderByWithRelationInput[] = [{ createdAt: 'desc' }, { id: 'asc' }];
+  const picked: Array<{ id: string; filePath: string }> = [];
+  const more = async (where: Prisma.AssetWhereInput) => {
+    if (picked.length >= DOCUMENTS_READ_PER_REQUEST) return;
+    picked.push(...await prisma.asset.findMany({
+      where: { AND: [unread([...busy, ...picked.map((doc) => doc.id)]), where] },
+      select,
+      orderBy,
+      take: DOCUMENTS_READ_PER_REQUEST - picked.length,
+    }));
+  };
+  if (of.ownerId) await more({ uploadedById: of.ownerId });
+  const ids = [...new Set(of.campaignIds)];
+  if (ids.length > 0) {
+    await more({ OR: [{ scope: 'CAMPAIGN', campaignId: { in: ids } }, { campaignLinks: { some: { campaignId: { in: ids } } } }] });
+  }
+  if (of.othersToo) await more({});
+  for (const doc of picked) reading.add(doc.id);
+  await Promise.all(picked.map(async (doc) => {
+    try {
+      const named = await assetIdsNamedInFile(doc.id, doc.filePath);
+      if (named) await recordDocumentPictures(doc.id, named, { onlyIfUnread: true });
+      else if (readAgainAt.size < MAX_WAITING_TO_READ_AGAIN) readAgainAt.set(doc.id, now + DOCUMENT_READ_RETRY_MS);
+    } finally {
+      reading.delete(doc.id);
+    }
+  }));
+}
+
+/**
+ * A document that counts for `campaignId` while `dmId` is its DM: theirs,
+ * and written or uploaded in the campaign, or linked to it.
+ */
+function sharedBy(campaignId: string, dmId: string): Prisma.AssetWhereInput {
+  return {
+    type: 'DOCUMENT',
+    uploadedById: dmId,
+    OR: [{ scope: 'CAMPAIGN', campaignId }, { campaignLinks: { some: { campaignId } } }],
+  };
+}
+
+/**
+ * For each of `campaignIds`, which of `candidates` (asset ids of that
+ * campaign's library) the documents shared with it name. One query whatever
+ * the documents, answering at most the candidates; a picture counts only
+ * for its own campaign.
  */
 export async function picturesInSharedDocuments(
   campaignIds: string[],
@@ -165,31 +252,24 @@ export async function picturesInSharedDocuments(
   const result = new Map<string, Set<string>>();
   if (campaignIds.length === 0 || candidates.size === 0) return result;
   const ids = [...new Set(campaignIds)];
-  const [dms, linked, own] = await Promise.all([
-    prisma.campaignMembership.findMany({ where: { campaignId: { in: ids }, role: 'DM' }, select: { campaignId: true, userId: true } }),
-    prisma.campaignDocument.findMany({
-      where: { campaignId: { in: ids }, asset: { type: 'DOCUMENT' } },
-      select: { campaignId: true, asset: { select: { id: true, filePath: true, uploadedById: true } } },
-    }),
-    prisma.asset.findMany({
-      where: { type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId: { in: ids } },
-      select: { id: true, filePath: true, uploadedById: true, campaignId: true },
-    }),
-  ]);
-  const isDmOf = (campaignId: string, userId: string | null) =>
-    userId !== null && dms.some((dm) => dm.campaignId === campaignId && dm.userId === userId);
-  const shared = [
-    ...linked.filter((link) => isDmOf(link.campaignId, link.asset.uploadedById)),
-    ...own.flatMap((asset) => (asset.campaignId && isDmOf(asset.campaignId, asset.uploadedById) ? [{ campaignId: asset.campaignId, asset }] : [])),
-  ];
-  for (const link of shared) {
-    const named = await idsNamedBy(link.asset.id, link.asset.filePath);
-    for (const id of named) {
-      if (!candidates.has(id)) continue;
-      const forCampaign = result.get(link.campaignId) ?? new Set<string>();
-      forCampaign.add(id);
-      result.set(link.campaignId, forCampaign);
-    }
+  await readSomeUnreadDocuments({ campaignIds: ids });
+  const dms = await prisma.campaignMembership.findMany({
+    where: { campaignId: { in: ids }, role: 'DM' },
+    select: { campaignId: true, userId: true },
+  });
+  if (dms.length === 0) return result;
+  const shown = await prisma.asset.findMany({
+    where: {
+      id: { in: [...candidates] },
+      OR: dms.map((dm) => ({ campaignId: dm.campaignId, namedInDocuments: { some: { document: sharedBy(dm.campaignId, dm.userId) } } })),
+    },
+    select: { id: true, campaignId: true },
+  });
+  for (const picture of shown) {
+    if (!picture.campaignId) continue;
+    const forCampaign = result.get(picture.campaignId) ?? new Set<string>();
+    forCampaign.add(picture.id);
+    result.set(picture.campaignId, forCampaign);
   }
   return result;
 }
