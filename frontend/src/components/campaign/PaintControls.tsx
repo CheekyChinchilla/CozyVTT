@@ -7,21 +7,34 @@
  */
 
 import { useState } from 'react';
-import { Eraser, Paintbrush, Redo2, Undo2, X } from 'lucide-react';
+import { Circle, Eraser, Minus, Paintbrush, Redo2, Square, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
+import type { ShapeStyle } from './map/paint/paintShapes';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 
 /** Each tool's name, as its button is called, its key and its icon. */
 const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
   brush: { label: 'Brush', key: 'B', icon: Paintbrush },
   eraser: { label: 'Eraser', key: 'E', icon: Eraser },
+  line: { label: 'Line', key: 'L', icon: Minus },
+  rect: { label: 'Rectangle', key: 'R', icon: Square },
+  ellipse: { label: 'Ellipse', key: 'O', icon: Circle },
 };
 
 const HINTS: Record<PaintTool, string> = {
   brush: 'Drag to paint, or tap for a dot. Two fingers, or the right mouse button, move the map.',
   eraser: 'Drag to paint the second colour over what is there.',
+  line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
+  rect: 'Drag from one corner to the other.',
+  ellipse: 'Drag across the box it fills.',
 };
+
+const STYLES: ReadonlyArray<{ style: ShapeStyle; label: string }> = [
+  { style: 'outline', label: 'Outline' },
+  { style: 'fill', label: 'Filled' },
+  { style: 'both', label: 'Outline and fill' },
+];
 
 /** A colour's name as the palette gives it, or its #rrggbb. */
 const nameOf = (value: string) => PAINT_COLOURS.find((c) => c.value === value)?.name ?? value;
@@ -169,6 +182,40 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
           className="w-full accent-amber-400 touch-target"
         />
       </label>
+
+      {(settings.tool === 'rect' || settings.tool === 'ellipse') && (
+        <fieldset className="flex flex-col gap-0.5">
+          <legend className="text-[10px] text-stone-400 mb-0.5">Shape</legend>
+          {STYLES.map(({ style, label }) => (
+            <label key={style} className="touch-target flex items-center gap-2 text-[11px] cursor-pointer select-none">
+              <input
+                type="radio"
+                name="paint-shape-style"
+                checked={settings.style === style}
+                onChange={() => onSettingsChange({ style })}
+                className="accent-amber-400"
+              />
+              {label}
+            </label>
+          ))}
+          <p className="text-[10px] text-stone-400">An outline is in the colour; Outline and fill fills with the second colour.</p>
+        </fieldset>
+      )}
+
+      {(settings.tool === 'line' || settings.tool === 'rect' || settings.tool === 'ellipse') && (
+        <div className="flex flex-col gap-0.5">
+          {settings.tool === 'line' && (
+            <label className="touch-target flex items-center gap-2 text-[11px] cursor-pointer select-none">
+              <input type="checkbox" checked={settings.straight} onChange={(e) => onSettingsChange({ straight: e.target.checked })} className="accent-amber-400" />
+              15 degree steps
+            </label>
+          )}
+          <label className="touch-target flex items-center gap-2 text-[11px] cursor-pointer select-none">
+            <input type="checkbox" checked={settings.snap} onChange={(e) => onSettingsChange({ snap: e.target.checked })} className="accent-amber-400" />
+            Snap to grid
+          </label>
+        </div>
+      )}
 
       {unsaved && (
         <p className="text-[11px] leading-snug text-amber-200/80">Not saved yet. Done keeps it on the map, on your screen only.</p>

@@ -75,7 +75,7 @@ import { useDrawTool, DEFAULT_DRAW_SETTINGS, type DrawSettings, type DrawToolKin
 import type { MapTool, PointerAt } from './map/tools/types';
 import { usePaintSurface } from './map/paint/usePaintSurface';
 import { useMapPictureKind } from './map/paint/mapPicture';
-import { strokePaint } from './map/paint/paintStroke';
+import { drawPaintPreview } from './map/paint/paintShapes';
 import { releaseCanvas } from './map/paint/blankPicture';
 import { mapInputOwner } from './map/inputOwner';
 import { usePaintStore } from '@/stores/paintStore';
@@ -2138,7 +2138,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         }
         : null;
       // Paint's strokes on their way, until the lift paints them into the picture.
-      for (const stroke of paintStrokes()) strokePaint(ctx, stroke.points, stroke.width, stroke.colour);
+      for (const preview of paintStrokes()) drawPaintPreview(ctx, preview);
       drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
       const previewNow = Date.now();
       const ownStroke = drawTool.inProgress();

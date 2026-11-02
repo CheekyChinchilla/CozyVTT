@@ -224,6 +224,10 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 |---|---|---|
 | **Brush** | `B` | Drag to paint in the colour, or click or tap for a dot. |
 | **Eraser** | `E` | Drag to paint the second colour over what is there. The second colour starts as the colour of the picture's top-left corner: the map's own colour on a new drawn map. |
+| **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
+| **Rectangle**, **Ellipse** | `R`, `O` | Drag from one corner to the other. Choose **Outline** (in the colour), **Filled** (with the colour) or **Outline and fill** (outlined in the colour, filled with the second colour). |
+
+**Snap to grid**, for a line, a rectangle and an ellipse, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
 
 4. **Undo stroke** and **Redo stroke** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take a stroke back and put it back.
 5. Click **Done painting** (the **×** on the panel), press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
@@ -986,6 +990,10 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
 | Paint with the brush, while **Paint** is on | `B` |
 | Paint with the eraser, in the second colour, while **Paint** is on | `E` |
+| Paint a line, while **Paint** is on | `L` |
+| Paint a rectangle, while **Paint** is on | `R` |
+| Paint an ellipse, while **Paint** is on | `O` |
+| Keep a painted line to 15 degree steps | `Shift + drag` |
 | Make the brush narrower or wider, while **Paint** is on | `[` `]` |
 | Undo the last stroke, while **Paint** is on | `Ctrl + Z` |
 | Redo a stroke, while **Paint** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
