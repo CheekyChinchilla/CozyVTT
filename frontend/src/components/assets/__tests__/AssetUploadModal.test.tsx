@@ -198,6 +198,29 @@ describe('the name, description and tags', () => {
     expect(screen.getByText('dungeon')).toBeInTheDocument();
   });
 
+  // The server splits tags at their commas, so a piece of a typed list is
+  // a tag of its own: each is one chip, and drawn-map is refused as a piece too.
+  it('adds each piece of a comma list as a tag of its own, never drawn-map, and sends no drawn-map', async () => {
+    uploadAsset.mockReset();
+    uploadAsset.mockResolvedValue({ asset: { id: 'new' } });
+    open();
+    const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
+    for (const typed of ['dungeon,drawn-map', 'Drawn-Map, cave', ' , ']) {
+      fireEvent.change(tagBox, { target: { value: typed } });
+      fireEvent.keyDown(tagBox, { key: 'Enter' });
+    }
+    expect(screen.getByText('dungeon')).toBeInTheDocument();
+    expect(screen.getByText('cave')).toBeInTheDocument();
+    expect(screen.queryByText(/drawn-map,|,\s*drawn-map|^drawn-map$/i)).not.toBeInTheDocument();
+    expect(screen.getByText('The tag drawn-map is kept for maps drawn in CozyVTT.')).toBeInTheDocument();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['png'], 'Cave.png', { type: 'image/png' })] } });
+    fireEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+    await waitFor(() => expect(uploadAsset).toHaveBeenCalledTimes(1));
+    const form = uploadAsset.mock.calls[0][0] as FormData;
+    expect(form.get('tags')).toBe('dungeon,cave');
+  });
+
   it('names an upload after its file, cut to 200 characters', async () => {
     open();
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
