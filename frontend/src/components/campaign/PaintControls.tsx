@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { Circle, Eraser, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
+import { Circle, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
@@ -62,6 +62,9 @@ export interface PaintControlsProps {
   onRedo: () => void;
   /** Paint not saved, which stays on the map after Done. */
   unsaved: boolean;
+  /** Save the picture as the map's. */
+  onSave: () => void;
+  saving: boolean;
   onClose: () => void;
 }
 
@@ -72,7 +75,7 @@ const toolButton = (on: boolean) =>
 
 const actionButton = 'touch-target inline-flex items-center justify-center gap-1 px-2 h-8 rounded border text-[11px] bg-stone-700/60 text-stone-300 border-stone-600/50 hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed';
 
-export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onClose }: PaintControlsProps) {
+export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onClose }: PaintControlsProps) {
   const [slot, setSlot] = useState<Slot>('colour');
   const chosen = settings[slot];
   const custom = !PAINT_COLOURS.some((c) => c.value === chosen);
@@ -244,8 +247,17 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         </label>
       )}
 
-      {unsaved && (
-        <p className="text-[11px] leading-snug text-amber-200/80">Not saved yet. Done keeps it on the map, on your screen only.</p>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={!unsaved || saving}
+        className="touch-target inline-flex items-center justify-center gap-1.5 h-8 rounded border text-[11px] font-semibold bg-amber-400/25 text-amber-100 border-amber-400/60 hover:bg-amber-400/35 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
+        {saving ? 'Saving…' : 'Save'}
+      </button>
+      {unsaved && !saving && (
+        <p className="text-[11px] leading-snug text-amber-200/80">Not saved yet: on your screen only. Done keeps it on the map until you save.</p>
       )}
     </section>
   );

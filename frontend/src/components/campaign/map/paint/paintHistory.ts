@@ -119,6 +119,8 @@ export interface PaintHistory {
   canRedo(): boolean;
   /** Whether an undo, a redo or a change waiting for one is under way. */
   busy(): boolean;
+  /** Settles once no undo, redo or change waiting for one is under way. */
+  settled(): Promise<void>;
   counts(): PaintHistoryCounts;
   /** Hold the steps to the budget again, after the store has packed some tiles. */
   trim(): void;
@@ -269,6 +271,9 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
     canUndo: () => undone.length > 0,
     canRedo: () => redoable.length > 0,
     busy: () => waiting > 0,
+    async settled() {
+      while (waiting > 0) await queue;
+    },
     counts: () => ({
       undo: undone.length,
       redo: redoable.length,
