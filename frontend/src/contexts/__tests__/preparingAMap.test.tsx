@@ -410,6 +410,14 @@ describe('a guard on the map on screen', () => {
     expect(await latest!.mayChangeViewedMap({ kind: 'back-to-table', toMapId: 'village' })).toBe(false);
   });
 
+  it('that fails to answer keeps the map on screen, as a no does', async () => {
+    await openPage();
+    act(() => { latest!.registerViewedMapGuard({ mayLeave: () => Promise.reject(new Error('broken')) }); });
+    expect(await prepare('crypt')).toBe(false);
+    expect(latest!.isPreparing).toBe(false);
+    expect(await latest!.mayChangeViewedMap({ kind: 'set-active', toMapId: 'crypt' })).toBe(false);
+  });
+
   it('is asked no more once it is removed', async () => {
     await openPage();
     let remove: () => void = () => undefined;
