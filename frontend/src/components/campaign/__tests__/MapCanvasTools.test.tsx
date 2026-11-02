@@ -1588,11 +1588,11 @@ describe('the Global Illumination switch', () => {
     vi.mocked(mapService.updateMap).mockRejectedValueOnce({ response: { status: 429, data: { message: 'Too many requests, please slow down' } } });
     render(<MapCanvas />);
     fireEvent.click(screen.getByText(/^Lights/));
-    const toggle = screen.getByLabelText('Global illumination') as HTMLInputElement;
+    const toggle = screen.getByLabelText('Global Illumination') as HTMLInputElement;
     await act(async () => { fireEvent.click(toggle); });
 
     expect(await screen.findByText('Too many requests, please slow down')).toBeTruthy();
-    expect((screen.getByLabelText('Global illumination') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Global Illumination') as HTMLInputElement).checked).toBe(true);
   });
 });
 

@@ -158,7 +158,7 @@ describe('Edit Map layout', () => {
     const preview = await screen.findByText('Grid Preview');
     const row = preview.closest('.grid');
     const section = screen.getByRole('group', { name: 'Lighting and Fog' });
-    for (const name of ['Enable dynamic lighting', 'Fog of war on this map', 'Global illumination', 'Remember explored areas']) {
+    for (const name of ['Enable dynamic lighting', 'Fog of war on this map', 'Global Illumination', 'Remember explored areas']) {
       const box = screen.getByRole('checkbox', { name });
       expect(section.contains(box)).toBe(true);
       expect(row?.contains(box)).toBe(false);

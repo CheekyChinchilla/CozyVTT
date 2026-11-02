@@ -657,7 +657,7 @@ export default function EditMapModal({
                           disabled={!lightingEnabled}
                           onChange={(e) => setGlobalIllumination(e.target.checked)}
                           className="w-4 h-4 accent-moss-green"
-                          aria-label="Global illumination"
+                          aria-label="Global Illumination"
                         />
                         <div>
                           <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">

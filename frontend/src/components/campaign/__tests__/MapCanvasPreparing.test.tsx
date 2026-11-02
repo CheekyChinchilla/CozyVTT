@@ -352,7 +352,7 @@ describe('on a map being prepared', () => {
   it("switching Global Illumination changes that map and leaves the table's", async () => {
     render(<MapCanvas />);
     fireEvent.click(screen.getByText(/^Lights/));
-    await act(async () => { fireEvent.click(screen.getByLabelText('Global illumination')); });
+    await act(async () => { fireEvent.click(screen.getByLabelText('Global Illumination')); });
     expect(h.updateMapRequest).toHaveBeenCalledWith('campaign-1', 'map-prepared', { globalIllumination: false });
     expect(h.state.tableMap).toBe(TABLE);
     expect(h.setCurrentMap).not.toHaveBeenCalled();
