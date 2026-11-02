@@ -28,6 +28,12 @@
 // go of with paint not saved; offered back when Paint opens on the map
 // again, and cleared by Save and by Discard.
 //
+// Paint not saved is asked about before anything takes it off the screen
+// (usePaintGuards.ts): isUnsaved, whenSaved and discard are for that. A map
+// that leaves the screen without asking (deleted from elsewhere, or the
+// viewer no longer the DM) leaves the painting behind as `leftover`, kept
+// as a draft and offered as a picture to download.
+//
 // Paint is the first of the map's tools: while it is on it takes every left
 // press, and the keys the other tools take (key()). It owns the map's input
 // (map/inputOwner.ts), which MapCanvas reads at each place it keeps the
@@ -56,7 +62,8 @@ import mapService from '@/services/map.service';
 import { api } from '@/services/api';
 import { uploadDrawnPicture, DrawnPictureRefused } from '@/services/drawnPicture';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
-import { savePaint } from './savePaint';
+import { savePaint, PNG_NOT_MADE } from './savePaint';
+import { saveBlob } from '@/utils/download';
 import { pictureIsDrawn } from './mapPicture';
 import { pictureToPng } from './blankPicture';
 import { extractAssetId } from '@/utils/assetUrl';
@@ -147,6 +154,8 @@ declare global {
 
 interface Surface {
   mapId: string;
+  /** The map's name as Paint opened, for the questions about it. */
+  mapName: string;
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
   history: PaintHistory<KeptTile>;
@@ -172,6 +181,15 @@ interface Surface {
   unwritten: Map<string, TileRect>;
   /** The next draft write begins the draft anew, dropping any tiles kept from before. */
   draftFresh: boolean;
+}
+
+/** Paint not saved on a map that left the screen without asking, until the DM says what to do with it. */
+export interface PaintLeftover {
+  mapId: string;
+  mapName: string;
+  /** The map is no longer on screen, or the viewer is no longer the DM. */
+  reason: 'map' | 'not-dm';
+  canvas: HTMLCanvasElement;
 }
 
 /** How Paint opens: on the picture as it is, or with a draft's tiles put back. */
@@ -202,7 +220,7 @@ interface Stroke {
 
 export interface PaintSurfaceOptions {
   /** The map on screen. */
-  map: Pick<CampaignMap, 'id' | 'width' | 'height' | 'gridSize' | 'imageUrl'> | null;
+  map: Pick<CampaignMap, 'id' | 'name' | 'width' | 'height' | 'gridSize' | 'imageUrl'> | null;
   campaignId: string | undefined;
   /** Told of a save: the map as pointed at its new picture, and the picture. */
   onSaved: (map: CampaignMap, picture: Asset) => void;
@@ -251,6 +269,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   /** The question about paint not saved over a picture changed elsewhere is open. */
   const [asking, setAsking] = useState(false);
   const savingRef = useRef(false);
+  /** The save under way, which a question about leaving waits for. */
+  const saveRun = useRef<Promise<boolean> | null>(null);
   /**
    * The map as last rendered, for the scale: Edit Map can change its size
    * while Paint holds its picture, which is then stretched over the new size.
@@ -424,6 +444,28 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
 
   const unsavedOf = (s: Surface | null) => s !== null && s.revision !== s.saved;
 
+  const [leftover, setLeftover] = useState<PaintLeftover | null>(null);
+  /**
+   * Let go of everything but the picture, which stays as `leftover` for the
+   * DM to download or discard: its map left the screen without asking.
+   */
+  const strand = useCallback((s: Surface, reason: PaintLeftover['reason']) => {
+    textRef.current = null;
+    setTextBox(null);
+    (strokeRef.current ?? shapeRef.current)?.step.drop();
+    strokeRef.current = null;
+    shapeRef.current = null;
+    s.history.clear();
+    s.store.dispose();
+    show(null);
+    waitingRef.current = [];
+    setLeftover((before) => {
+      if (before) toRelease.current.push(before.canvas);
+      return { mapId: s.mapId, mapName: s.mapName, reason, canvas: s.canvas };
+    });
+    markDirty('terrain', 'overlay');
+  }, [show, markDirty]);
+
   /**
    * Open Paint on the map on screen, at its squares times its grid size
    * (held to the drawn-map size rule), whatever its picture's own size: a
@@ -501,7 +543,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       },
     });
     made = {
-      mapId: map.id, canvas, ctx, history, store, revision: restored.length > 0 ? 1 : 0, saved: 0, baseUrl: map.imageUrl ?? '', savingAssetId: null,
+      mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: restored.length > 0 ? 1 : 0, saved: 0, baseUrl: map.imageUrl ?? '', savingAssetId: null,
       changed: new Map(restored.map((tile) => [`${tile.tx},${tile.ty}`, tile])),
       unwritten: new Map(),
       // Begun anew unless it goes on from a draft restored: a draft left
@@ -548,15 +590,20 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     if (s && (s.mapId !== mapId || !isDM)) {
       writeDraft(s);
-      dispose();
+      if (unsavedOf(s)) strand(s, isDM ? 'map' : 'not-dm');
+      else dispose();
       setOn(false);
       onRef.current = false;
     } else if (!s && on && !isDM) {
       setOn(false);
       onRef.current = false;
     }
-  }, [mapId, isDM, on, dispose, writeDraft]);
+  }, [mapId, isDM, on, dispose, writeDraft, strand]);
   // And when the map goes from the page.
+  const leftoverRef = useRef(leftover);
+  useEffect(() => {
+    leftoverRef.current = leftover;
+  }, [leftover]);
   const disposeRef = useRef(dispose);
   const writeDraftRef = useRef(writeDraft);
   useEffect(() => {
@@ -567,15 +614,17 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     writeDraftRef.current(surfaceRef.current);
     if (draftTimer.current !== null) clearTimeout(draftTimer.current);
     disposeRef.current();
+    if (leftoverRef.current) releaseCanvas(leftoverRef.current.canvas);
     for (const canvas of toRelease.current) releaseCanvas(canvas);
     toRelease.current = [];
   }, []);
   // The pixels of a canvas let go of, once this render no longer draws with it.
   const drawnCanvas = surface?.canvas ?? null;
+  const leftoverCanvas = leftover?.canvas ?? null;
   useEffect(() => {
     if (toRelease.current.length === 0) return;
     toRelease.current = toRelease.current.filter((canvas) => {
-      if (canvas === drawnCanvas) return true;
+      if (canvas === drawnCanvas || canvas === leftoverCanvas) return true;
       releaseCanvas(canvas);
       return false;
     });
@@ -786,7 +835,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * has landed. What is painted while the save is under way stays not
    * saved: the picture saved is the one as Save was pressed.
    */
-  const save = useCallback(async (overwrite = false): Promise<boolean> => {
+  const saveNow = useCallback(async (overwrite: boolean): Promise<boolean> => {
     const s = surfaceRef.current;
     if (!s || !map || !campaignId || savingRef.current || s.mapId !== map.id) return false;
     savingRef.current = true;
@@ -850,6 +899,48 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       setSaving(false);
     }
   }, [map, campaignId, bump, onSaved, onMapRead, refuse, clearDraft, touched]);
+  /** Save, answering whether it saved; pressed again while one is under way, that one's answer. */
+  const save = useCallback((overwrite = false): Promise<boolean> => {
+    if (savingRef.current && saveRun.current) return saveRun.current;
+    const run = saveNow(overwrite);
+    saveRun.current = run;
+    void run.finally(() => {
+      if (saveRun.current === run) saveRun.current = null;
+    });
+    return run;
+  }, [saveNow]);
+
+  /** Drop what is painted and not saved, with its draft: the picture as saved shows again. */
+  const discard = useCallback(() => {
+    const s = surfaceRef.current;
+    if (!s) return;
+    clearDraft(s.mapId);
+    setOn(false);
+    onRef.current = false;
+    dispose();
+  }, [clearDraft, dispose]);
+
+  /** The painting left behind by a map gone without asking: downloaded as a PNG, then let go of. */
+  const downloadLeftover = useCallback(async () => {
+    const left = leftoverRef.current;
+    if (!left) return;
+    const png = await pictureToPng(left.canvas);
+    if (!png) {
+      refuse(PNG_NOT_MADE);
+      return;
+    }
+    saveBlob(`${left.mapName.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Painting'}.png`, png);
+    setLeftover(null);
+    toRelease.current.push(left.canvas);
+  }, [refuse]);
+  /** The painting left behind, let go of with its draft. */
+  const discardLeftover = useCallback(() => {
+    const left = leftoverRef.current;
+    if (!left) return;
+    clearDraft(left.mapId);
+    setLeftover(null);
+    toRelease.current.push(left.canvas);
+  }, [clearDraft]);
 
   /** The DM's answer about paint not saved over a picture changed elsewhere. */
   const answer = useCallback((choice: 'save' | 'discard' | 'later') => {
@@ -1125,6 +1216,15 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     canRedo: surface?.history.canRedo() ?? false,
     /** Paint on the map that is not saved. */
     unsaved,
+    /** Paint not saved now, read as it is, for a question asked after an await. */
+    isUnsaved: () => unsavedOf(surfaceRef.current),
+    /** Settles once a save under way has, at once with none. */
+    whenSaved: (): Promise<unknown> => saveRun.current ?? Promise.resolve(),
+    discard,
+    /** Paint not saved left behind by a map gone without asking, and what the DM may do with it. */
+    leftover,
+    downloadLeftover,
+    discardLeftover,
     /** The draft of the map on screen has been looked for, so Paint can open. */
     ready: draftKnown,
     /** A draft offered back as Paint opens, while the question is open, and the DM's answer to it. */
