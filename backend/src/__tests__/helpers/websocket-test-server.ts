@@ -27,6 +27,7 @@ import { registerEventHandlers } from '../../websocket/events';
 import { setSocketInstance } from '../../websocket/utils';
 import { startSignInSweep } from '../../websocket/signInSweep';
 import { socketAllowRequest } from '../../middleware/originCheck';
+import { MAX_SOCKET_MESSAGE_BYTES } from '../../validators/mapLimits';
 
 export interface WsTestServer {
   httpServer: HTTPServer;
@@ -82,6 +83,7 @@ export async function createWsTestServer(options: { sweep?: boolean } = {}): Pro
   const io = new IOServer(httpServer, {
     transports: ['websocket', 'polling'],
     allowRequest: socketAllowRequest,
+    maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES,
   });
 
   // Same session-sharing wiring as production (websocket/index.ts), casts
