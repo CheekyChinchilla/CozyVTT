@@ -722,6 +722,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     return true;
   }, [map, isDM, opensOn, ownPicture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound]);
 
+  /** The latest open, for an answer given after an await, on the map as it is then. */
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
+
   /**
    * Paint off. Paint not saved stays on screen, to go on with; with nothing
    * to save, the canvas is let go of once the map's own picture is back.
@@ -1158,11 +1164,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return;
     }
     const tiles = await inDraftQueue((store) => store.tiles(offered.header.key));
+    // The map on screen changed while the draft was read: nothing to restore it on.
+    if (mapRef.current?.id !== offered.header.mapId) return;
     if (!tiles) {
       refuse('Your draft could not be read from this browser.');
       return;
     }
-    open({ draft: tiles, from: offered.header.key, size: { width: offered.header.width, height: offered.header.height } });
+    openRef.current({ draft: tiles, from: offered.header.key, size: { width: offered.header.width, height: offered.header.height } });
   }, [offer, map, dropDraft, open, inDraftQueue, refuse]);
 
   /** The eyedropper: the colour of the pixel at map pixel `point` becomes the colour, and the tool before comes back. */
