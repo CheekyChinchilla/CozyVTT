@@ -29,8 +29,9 @@ const h = vi.hoisted(() => {
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
     memberships: [] as Array<{ userId: string; role: string; user: { displayName: string } }>,
-    characters: [] as Array<{ id: string; userId: string; name: string }>,
+    characters: [] as Array<{ id: string; userId: string; name: string; gameSystem?: string }>,
     maps: [] as Array<{ id: string; name: string }>,
+    gameSystem: null as string | null,
   };
   const sent: Array<[string, unknown]> = [];
   const raw = {
@@ -75,6 +76,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
     get status() { return h.state.status; },
     get memberships() { return h.state.memberships; },
     get maps() { return h.state.maps; },
+    get gameSystem() { return h.state.gameSystem; },
   };
   return {
     useCampaign: () => {
@@ -110,6 +112,7 @@ vi.mock('@/contexts/WebSocketContext', async () => {
     emitInitiativeAdd: record('initiative.add'),
     emitInitiativeRoll: record('initiative.roll'),
     emitMapPing: record('map.ping'),
+    emitCharacterTemporaryHp: record('character.hp.temporary'),
   } as Record<string, unknown>, {
     get(target, prop: string) {
       if (prop in target) return target[prop];
@@ -337,6 +340,7 @@ beforeEach(() => {
     characters: [CHARACTERS.mine, CHARACTERS.alices],
     maps: [{ id: 'map-a', name: 'Map A' }, { id: 'map-b', name: 'Map B' }, { id: 'map-c', name: 'Map C' }],
     currentMap: mapNamed('map-a'),
+    gameSystem: null,
   });
 });
 
@@ -1041,5 +1045,79 @@ describe('when the map on screen changes', () => {
     show(goblin());
 
     expect(screen.queryByText('Roll for Goblin Scout')).toBeNull();
+  });
+});
+
+// Temporary HP... grants a creature's to its token, through the token
+// update route, and a character's to its sheet, over the socket. The rule
+// for a second grant is the dialog's (TemporaryHpDialog.test.tsx).
+describe('Temporary HP...', () => {
+  const box = () => screen.getByLabelText(/^Temporary hit points for /);
+  async function grant(amount: string) {
+    fireEvent.change(box(), { target: { value: amount } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Grant' })); });
+  }
+
+  it("gives a creature the DM grants them to its token's hit points", async () => {
+    h.set({ gameSystem: 'DND_5E' });
+    render(<MapCanvas />);
+    show(goblin({ hp: { current: 7, max: 7, temp: 0 } }));
+    rightClick(0, 19);
+    await choose('Temporary HP...');
+    await grant('5');
+
+    expect(h.api.updateToken).toHaveBeenCalledWith('campaign-1', 'map-a', 'tok-goblin', { hp: { current: 7, max: 7, temp: 5 } });
+    expect(useGameStore.getState().tokens['tok-goblin']?.hp).toEqual({ current: 7, max: 7, temp: 5 });
+  });
+
+  it('asks a creature with some whether to keep them or take the new ones', async () => {
+    h.set({ gameSystem: 'PATHFINDER_2E' });
+    render(<MapCanvas />);
+    show(goblin({ hp: { current: 7, max: 7, temp: 4 } }));
+    rightClick(0, 19);
+    await choose('Temporary HP...');
+    await grant('9');
+    expect(h.api.updateToken).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Take 9' })); });
+
+    expect(h.api.updateToken).toHaveBeenCalledWith('campaign-1', 'map-a', 'tok-goblin', { hp: { current: 7, max: 7, temp: 9 } });
+  });
+
+  it("gives a player's own character them on its sheet, from its token", async () => {
+    h.set({
+      userRole: 'PLAYER',
+      memberships: [MEMBERS.me('PLAYER'), MEMBERS.alice],
+      characters: [{ ...CHARACTERS.mine, gameSystem: 'DND_5E' }, { ...CHARACTERS.alices, gameSystem: 'DND_5E' }],
+      gameSystem: 'DND_5E',
+    });
+    act(() => { useGameStore.getState().setCharacterHp('char-mine', { current: 12, max: 12, temp: 0 }); });
+    render(<MapCanvas />);
+    show(hero('char-mine', 'me'));
+    rightClick(2, 19);
+    await choose('Temporary HP...');
+    await grant('6');
+
+    expect(sentOf('character.hp.temporary')).toEqual([{ characterId: 'char-mine', temporary: 6 }]);
+    expect(h.api.updateToken).not.toHaveBeenCalled();
+  });
+
+  it("is not offered on another player's character, nor in Call of Cthulhu", async () => {
+    h.set({
+      userRole: 'PLAYER',
+      memberships: [MEMBERS.me('PLAYER'), MEMBERS.alice],
+      characters: [{ ...CHARACTERS.alices, gameSystem: 'DND_5E' }],
+      gameSystem: 'DND_5E',
+    });
+    act(() => { useGameStore.getState().setCharacterHp('char-alice', { current: 12, max: 12, temp: 0 }); });
+    render(<MapCanvas />);
+    show(hero('char-alice', 'alice'));
+    rightClick(2, 19);
+    expect(screen.queryByText('Temporary HP...')).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    h.set({ userRole: 'DM', memberships: [MEMBERS.me('DM')], gameSystem: 'CALL_OF_CTHULHU_7E' });
+    show(goblin({ hp: { current: 7, max: 7, temp: 0 } }));
+    rightClick(0, 19);
+    expect(screen.queryByText('Temporary HP...')).toBeNull();
   });
 });

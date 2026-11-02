@@ -239,6 +239,10 @@ export const SOCKET_CEILINGS = {
     windows: [{ limit: 50, windowMs: SECOND }],
     refusal: 'Too many hit point changes at once. Wait a moment, then try again.',
   },
+  'character.hp.temporary': {
+    windows: [{ limit: 20, windowMs: SECOND }],
+    refusal: 'Too many temporary hit point changes at once. Wait a moment, then try again.',
+  },
   'character.hitdice.spend': {
     windows: [{ limit: 50, windowMs: SECOND }],
     refusal: 'Too many hit dice spent at once. Wait a moment, then try again.',

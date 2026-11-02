@@ -18,6 +18,8 @@ export interface TokenMenuActions {
   viewSheet: (token: Token) => void;
   /** Rolls from the token's character's sheet. */
   rollCharacter: (token: Token) => void;
+  /** Temporary hit points, for its character or for the creature itself. */
+  grantTemporaryHp: (token: Token) => void;
   /** Turns the token by `step` degrees, clockwise when positive. */
   rotate: (token: Token, step: number) => void;
   /** The DM's rolls for a creature with no character. */
@@ -46,6 +48,11 @@ export interface TokenMenuView {
   mayViewSheet: boolean;
   /** The viewer may roll from the token's character's sheet (utils/tokenCharacter). */
   mayRoll: boolean;
+  /**
+   * The viewer may grant temporary hit points here (utils/temporaryHp): to
+   * the token's character, or the DM to a creature's token.
+   */
+  mayGrantTemporaryHp: boolean;
   /**
    * The viewer may turn the token, by the move rule: the DM any token at any
    * time, a player a token they control while the session is live.
@@ -83,6 +90,7 @@ export function tokenMenuItems(token: Token, ctx: TokenMenuContext): MenuItem[] 
   if (token.characterId) {
     if (ctx.mayViewSheet) items.push(command('view-sheet', 'View Character Sheet', () => act.viewSheet(token)));
     if (ctx.mayRoll) items.push(command('roll', 'Roll...', () => act.rollCharacter(token)));
+    if (ctx.mayGrantTemporaryHp) items.push(command('temporary-hp', 'Temporary HP...', () => act.grantTemporaryHp(token)));
   }
 
   // The menu stays open so presses add up.
@@ -107,6 +115,10 @@ export function tokenMenuItems(token: Token, ctx: TokenMenuContext): MenuItem[] 
   // from offering Roll... twice: it rolls from the sheet, above.
   if (type === TokenType.NPC && !token.characterId) {
     items.push(command('roll-creature', 'Roll...', () => act.rollCreature(token)));
+  }
+  // A creature's own hit points, which only the DM changes.
+  if (!token.characterId && ctx.mayGrantTemporaryHp) {
+    items.push(command('temporary-hp', 'Temporary HP...', () => act.grantTemporaryHp(token)));
   }
 
   // Every token type. The editor shows a player token its name, image,
@@ -162,7 +174,7 @@ export function tokenMenuItems(token: Token, ctx: TokenMenuContext): MenuItem[] 
 
 /** Actions that do nothing, for asking what the menu holds without opening it. */
 const NO_ACTIONS: TokenMenuActions = {
-  viewSheet: () => undefined, rollCharacter: () => undefined, rotate: () => undefined, rollCreature: () => undefined,
+  viewSheet: () => undefined, rollCharacter: () => undefined, grantTemporaryHp: () => undefined, rotate: () => undefined, rollCreature: () => undefined,
   edit: () => undefined, addToInitiative: () => undefined, duplicate: () => undefined, saveAsTemplate: () => undefined,
   setVisible: () => undefined, setObscured: () => undefined, setLayer: () => undefined, moveToMap: () => undefined,
   remove: () => undefined,

@@ -29,6 +29,7 @@ import type {
   AtmosphereAudioSetEvent,
   AtmosphereAudioUpdatedBroadcast,
   CharacterHpUpdateEvent,
+  CharacterTemporaryHpEvent,
   CharacterHpUpdatedBroadcast,
   DmTransferredBroadcast,
   MemberRoleChangedBroadcast,
@@ -674,6 +675,11 @@ class SocketClient {
 
   emitCharacterHpUpdate(data: CharacterHpUpdateEvent) {
     this.socket?.emit('character.hp.update', data);
+  }
+
+  /** The character takes these temporary hit points in place of any it has. */
+  emitCharacterTemporaryHp(data: CharacterTemporaryHpEvent) {
+    this.socket?.emit('character.hp.temporary', data);
   }
 
   onCharacterHpUpdated(callback: EventCallback<CharacterHpUpdatedBroadcast>) {

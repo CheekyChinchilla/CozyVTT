@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { NpcStatBlockSchema } from './statBlock';
 import { TOKEN_LIMITS } from './tokenLimits';
+import { MAX_TEMPORARY_HIT_POINTS } from '../utils/rules/hitPoints';
 
 /** How many squares a token occupies. */
 /**
@@ -48,7 +49,7 @@ export const TokenSizeSchema = z.object({
 export const TokenHpSchema = z.object({
   current: z.number().int().min(0).max(99999),
   max: z.number().int().min(1).max(99999),
-  temp: z.number().int().min(0).max(99999),
+  temp: z.number().int().min(0).max(MAX_TEMPORARY_HIT_POINTS),
 });
 
 /**

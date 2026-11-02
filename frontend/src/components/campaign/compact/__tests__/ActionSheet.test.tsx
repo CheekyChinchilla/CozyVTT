@@ -36,14 +36,14 @@ function token(extra: Partial<Token> = {}): Token {
 
 function tokenActions(): TokenMenuActions {
   return {
-    viewSheet: vi.fn(), rollCharacter: vi.fn(), rotate: vi.fn(), rollCreature: vi.fn(), edit: vi.fn(), addToInitiative: vi.fn(),
+    viewSheet: vi.fn(), rollCharacter: vi.fn(), grantTemporaryHp: vi.fn(), rotate: vi.fn(), rollCreature: vi.fn(), edit: vi.fn(), addToInitiative: vi.fn(),
     duplicate: vi.fn(), saveAsTemplate: vi.fn(), setVisible: vi.fn(), setObscured: vi.fn(), setLayer: vi.fn(), moveToMap: vi.fn(),
     remove: vi.fn(),
   };
 }
 
 const DM_VIEW: TokenMenuView = {
-  role: CampaignRole.DM, mayViewSheet: true, mayRoll: true, mayRotate: true, mapId: 'map-a',
+  role: CampaignRole.DM, mayViewSheet: true, mayRoll: true, mayGrantTemporaryHp: false, mayRotate: true, mapId: 'map-a',
   maps: [{ id: 'map-a', name: 'Map A' }, { id: 'map-b', name: 'Map B' }, { id: 'map-c', name: 'Map C' }],
   busy: { crossing: false, moving: false },
 };

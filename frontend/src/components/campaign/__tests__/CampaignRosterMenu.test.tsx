@@ -20,6 +20,7 @@ const h = vi.hoisted(() => ({
     assignCharacterToCampaign: vi.fn(),
     addToken: vi.fn(),
   },
+  emitCharacterTemporaryHp: vi.fn(),
 }));
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
@@ -32,7 +33,9 @@ vi.mock('@/contexts/CampaignContext', () => ({
     userRole: h.seat.role,
   }),
 }));
-vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: { on: vi.fn(), off: vi.fn() } }) }));
+vi.mock('@/contexts/WebSocketContext', () => ({
+  useWebSocket: () => ({ socket: { on: vi.fn(), off: vi.fn(), emitCharacterTemporaryHp: h.emitCharacterTemporaryHp } }),
+}));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: h.seat.userId } }) }));
 vi.mock('@/services/api', () => ({ api: h.api, default: h.api }));
 vi.mock('../../character/CharacterSheetViewerModal', () => ({
@@ -171,5 +174,57 @@ describe("a roster character's menu on the compact layout", () => {
       'View Character Sheet', 'Roll...', 'Edit Character Sheet', 'Add to Map', 'Remove from Campaign', 'Cancel',
     ]);
     expect(openCharacterMenu()).toBeNull();
+  });
+});
+
+// Temporary HP...: for whoever may change the character's hit points, in a
+// system whose rules have temporary hit points (utils/temporaryHp); the rule
+// for a second grant is the dialog's (TemporaryHpDialog.test.tsx).
+describe('Temporary HP... on a roster character', () => {
+  const inSystem = (gameSystem: string, temp = 0): RosterMember[] => [
+    member('dm', 'Mara', CampaignRole.DM),
+    ...[member('p1', 'Ash', CampaignRole.PLAYER), member('p2', 'Bea', CampaignRole.PLAYER)].map((m) => ({
+      ...m, characters: m.characters.map((c) => ({ ...c, gameSystem, hp: { current: 7, max: 10, temp } })),
+    })) as RosterMember[],
+  ];
+  const TEMPORARY_HP = '[shield-plus] Temporary HP...';
+
+  beforeEach(() => { h.emitCharacterTemporaryHp.mockReset(); });
+
+  it("follows Roll... for the DM and for the character's owner", async () => {
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('DND_5E') });
+    render(<CampaignRoster />);
+    await rightClick("Ash's hero");
+    expect(characterMenuRows().slice(0, 3)).toEqual(['[eye] View Character Sheet', '[dices] Roll...', TEMPORARY_HP]);
+  });
+
+  it("is not offered on another player's character, nor in Call of Cthulhu", async () => {
+    h.seat = { role: 'PLAYER', userId: 'p1' };
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('PATHFINDER_2E') });
+    const { unmount } = render(<CampaignRoster />);
+    await rightClick("Ash's hero");
+    expect(characterMenuRows()).toContain(TEMPORARY_HP);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await rightClick("Bea's hero");
+    expect(characterMenuRows()).not.toContain(TEMPORARY_HP);
+    unmount();
+
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('CALL_OF_CTHULHU_7E') });
+    render(<CampaignRoster />);
+    await rightClick("Ash's hero");
+    expect(characterMenuRows()).not.toContain(TEMPORARY_HP);
+  });
+
+  it('grants them over the socket, asking first when the character has some', async () => {
+    h.api.getCampaignCharacters.mockResolvedValue({ roster: inSystem('DND_5E', 3) });
+    render(<CampaignRoster />);
+    await rightClick("Ash's hero");
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Temporary HP/ })); });
+    fireEvent.change(screen.getByLabelText("Temporary hit points for Ash's hero"), { target: { value: '8' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Grant' }));
+    expect(h.emitCharacterTemporaryHp).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Take 8' }));
+
+    expect(h.emitCharacterTemporaryHp).toHaveBeenCalledWith({ characterId: 'p1-char', temporary: 8 });
   });
 });
