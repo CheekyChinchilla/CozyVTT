@@ -3961,12 +3961,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
         }`}
         title={previewHint}
-        // TODO(ui): this name does not hold the words the button shows ("Preview Player View",
-        // "DM View"), so a voice command for them finds nothing; name it by what it shows,
-        // with aria-pressed for the preview being on.
-        aria-label="Toggle DM player view preview"
       >
-        {dmPreviewPlayerView && !isPreparing ? '👁 DM View' : '🎭 Preview Player View'}
+        {/* Named by the words it shows, which say what a press does, so a
+            voice command for them finds it. */}
+        {dmPreviewPlayerView && !isPreparing
+          ? <><span aria-hidden="true">👁</span> DM View</>
+          : <><span aria-hidden="true">🎭</span> Preview Player View</>}
       </button>
       {/* Said as well as greyed out: a touch screen shows no tooltip. */}
       {isPreparing && (

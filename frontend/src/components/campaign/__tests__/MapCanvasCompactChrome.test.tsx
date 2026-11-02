@@ -508,7 +508,8 @@ describe('what sits under the band', () => {
 describe('the dock at the map’s foot', () => {
   const dock = () => document.querySelector<HTMLElement>('[data-map-dock]')!;
   const card = () => screen.getByText('Goblin').closest('.glass-panel') as HTMLElement;
-  const previewButton = () => screen.getByRole('button', { name: 'Toggle DM player view preview' });
+  /** The preview's button, by the words it shows with the preview off or on. */
+  const previewButton = () => screen.getByRole('button', { name: /^(Preview Player View|DM View)$/ });
 
   it('holds the details card a tap shows, across the map’s foot on a phone', () => {
     h.set({ userRole: 'PLAYER' });

@@ -457,7 +457,7 @@ describe('the token menu in Player Preview', () => {
   it("is the DM's, on a token the preview draws and on a hidden one", () => {
     render(<MapCanvas />);
     show(hero('char-alice', 'alice'), goblin({ visible: false, position: { x: 3, y: 10 } }));
-    fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
     rightClick(2, 19);
     expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...DM_ITEMS]);

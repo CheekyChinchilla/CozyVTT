@@ -1140,7 +1140,7 @@ describe('Put back', () => {
     tap(1, square(4, 19));
     expect(putBack()!.parentElement).toHaveTextContent('Holding Dire Wolf');
 
-    fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
     expect(putBack()!.parentElement).not.toHaveTextContent('Dire Wolf');
     expect(putBack()!.parentElement).toHaveTextContent('Holding Unknown creature');
@@ -1965,7 +1965,7 @@ describe('the details of the selected token', () => {
       tap(2, square(4, 19));
       expect(card()).not.toBeNull();
 
-      fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+      fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
       expect(card()).toBeNull();
     });

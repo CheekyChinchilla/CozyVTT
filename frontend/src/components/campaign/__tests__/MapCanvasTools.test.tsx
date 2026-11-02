@@ -1111,7 +1111,20 @@ describe("the DM's spirit token button", () => {
 });
 
 describe('Preview Player View', () => {
-  const previewButton = () => screen.queryByLabelText('Toggle DM player view preview');
+  /** The preview's button, by the words it shows with the preview off or on. */
+  const previewButton = () => screen.queryByRole('button', { name: /^(Preview Player View|DM View)$/ });
+
+  // So a voice command for the words on the button finds it.
+  it('is named by the words it shows, with the preview off and on', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
+    fireEvent.click(screen.getByRole('button', { name: 'DM View' }));
+
+    expect(screen.getByRole('button', { name: 'Preview Player View' })).toBeInTheDocument();
+  });
 
   it('can still be ended after fog and lighting are both turned off', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });

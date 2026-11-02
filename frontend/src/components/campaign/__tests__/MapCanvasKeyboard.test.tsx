@@ -348,7 +348,7 @@ describe('selecting in Player Preview', () => {
     });
   });
 
-  const previewAsAlice = () => fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+  const previewAsAlice = () => fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
   it('selects nothing the preview does not draw, by a click or a right-click', () => {
     render(<MapCanvas />);
@@ -1171,7 +1171,7 @@ describe('a selection the screen does not draw', () => {
     // The DM's fog: everything hidden.
     fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
     select('tok-goblin');
-    fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
     press('ArrowRight');
     await act(async () => { press(']'); });
@@ -1305,7 +1305,7 @@ describe('Follow my selection', () => {
   });
 
   function follow() {
-    fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
     fireEvent.change(screen.getByLabelText('Player or token to preview as'), { target: { value: 'selected' } });
   }
 
@@ -1349,7 +1349,7 @@ describe('Follow my selection', () => {
     expect(sentOf('exploration:request')).toHaveLength(asked);
     mouse.move(surface(), at(3, 10));
     expect(card('Lurker')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Toggle DM player view preview')).toHaveTextContent('DM View');
+    expect(screen.getByRole('button', { name: 'DM View' })).toBeInTheDocument();
   });
 
   it("steps through a split party on a lit map, from nothing selected, and never to what is hidden", () => {
