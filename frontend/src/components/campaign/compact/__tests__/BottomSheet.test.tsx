@@ -583,6 +583,29 @@ describe('a phone turned sideways', () => {
   });
 });
 
+describe("an iPhone's on-screen keyboard", () => {
+  it('lifts the open sheet onto the keyboard, which Safari lays over the page, and lets it down when the keyboard goes', () => {
+    const viewport = new EventTarget() as EventTarget & { height: number; offsetTop: number };
+    viewport.height = 508;
+    viewport.offsetTop = 30;
+    Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true });
+    try {
+      render(<Sheet onHeightChange={() => undefined} />);
+      expect(sheetElement().style.bottom).toContain('306px');
+      expect(sheetElement().style.maxHeight).toContain('306px');
+      act(() => {
+        viewport.height = 844;
+        viewport.offsetTop = 0;
+        viewport.dispatchEvent(new Event('resize'));
+      });
+      expect(sheetElement().style.bottom).toBe('0px');
+    } finally {
+      Object.defineProperty(window, 'visualViewport', { value: undefined, configurable: true });
+    }
+  });
+});
+
 describe('a short window narrower than it is tall', () => {
   it('draws the sheet from the foot of the screen, with its handle', () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
