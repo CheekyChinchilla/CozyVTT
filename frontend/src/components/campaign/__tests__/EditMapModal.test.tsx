@@ -179,3 +179,16 @@ describe("Edit Map's diagonal rules", () => {
     expect(screen.getByText('Alternating — 5/10/5/10 ft diagonals')).toBeInTheDocument();
   });
 });
+
+describe('Edit Map\'s buttons', () => {
+  // They stood in a see-through bar inside the scrolling form, inset from its
+  // sides, so on a phone the form's fields showed through and around them.
+  it('stand under the scrolling form, in the dialog\'s own footer', () => {
+    open();
+    const form = screen.getByText('Map Dimensions').closest('.overflow-y-auto');
+    expect(form).not.toBeNull();
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    expect(screen.getByRole('dialog', { name: 'Edit Map' })).toContainElement(cancel);
+    expect(form).not.toContainElement(cancel);
+  });
+});

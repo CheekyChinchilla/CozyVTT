@@ -199,3 +199,18 @@ describe('Draw a map', () => {
     expect(screen.getByRole('slider', { name: 'Grid Size (px/square) slider' })).toHaveValue('50');
   });
 });
+
+describe('Create Map\'s buttons', () => {
+  // They stood in a see-through bar inside the scrolling form, inset from its
+  // sides, so on a phone the Grid Size box showed through and around them.
+  it('stand under the scrolling form, in the dialog\'s own footer', () => {
+    open();
+    const form = screen.getByText('Map Dimensions').closest('.overflow-y-auto');
+    expect(form).not.toBeNull();
+    const dialog = screen.getByRole('dialog', { name: 'Create Map' });
+    for (const button of ['Cancel', 'Create Map']) {
+      expect(dialog).toContainElement(screen.getByRole('button', { name: button }));
+      expect(form).not.toContainElement(screen.getByRole('button', { name: button }));
+    }
+  });
+});

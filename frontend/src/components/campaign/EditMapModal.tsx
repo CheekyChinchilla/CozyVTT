@@ -265,10 +265,33 @@ export default function EditMapModal({
 
   if (!isOpen) return null;
 
+  // Cancel and the submit button, in the Modal's footer under the scrolling body.
+  const footer = (
+    <>
+      <Button
+        type="button"
+        onClick={onClose}
+        variant="secondary"
+        disabled={isSubmitting}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        onClick={handleSubmit}
+        disabled={!canSubmit}
+        className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+        Save Changes
+      </Button>
+    </>
+  );
+
   return (
-    <Modal open={isOpen} onClose={handleClose} title="Edit Map" icon={MapPin} size="xl" closeDisabled={isSubmitting}>
-            {/* Body */}
-            <div className="space-y-6">
+    <Modal open={isOpen} onClose={handleClose} title="Edit Map" icon={MapPin} size="xl" closeDisabled={isSubmitting} fitViewport footer={footer}>
+            {/* Body: it scrolls, between the header and the Modal's footer */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-6">
               <p className="text-xs text-ink-muted -mt-4 truncate">{map.name}</p>
               {error && (
                 <div role="alert" className="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm">
@@ -605,26 +628,6 @@ export default function EditMapModal({
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-xs border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
-              <Button
-                type="button"
-                onClick={onClose}
-                variant="secondary"
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                Save Changes
-              </Button>
-            </div>
     </Modal>
   );
 }
