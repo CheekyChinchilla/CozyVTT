@@ -191,6 +191,13 @@
   }
 }
 
+/* A page as tall as the browser shows it, less the insets the body pads by
+   (a notch, the home indicator): min-h-screen (100vh) is the height without
+   a phone's toolbar, which left the foot of a short page under it. */
+@utility min-h-page {
+  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+}
+
 @utility glass-panel {
   /* Glassmorphism Panel */
   @apply bg-white/10 backdrop-blur-cozy border border-white/20 rounded-cozy shadow-lg;
@@ -387,7 +394,10 @@
     @apply font-body bg-canvas text-ink;
     margin: 0;
     padding: 0;
-    min-height: 100vh;
+    /* The height the browser shows, its toolbar coming and going on a phone. */
+    min-height: 100dvh;
+    /* No double-tap zoom on a button, and no wait before a tap counts. */
+    touch-action: manipulation;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

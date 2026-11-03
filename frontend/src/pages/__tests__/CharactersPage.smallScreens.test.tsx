@@ -69,6 +69,6 @@ describe('the Characters page on a phone', () => {
 
   it('is as tall as the browser shows it', () => {
     expect(source.match(/\bmin-h-screen\b/g) ?? []).toEqual([]);
-    expect(source).toMatch(/\bmin-h-dvh\b/);
+    expect(source).toMatch(/\bmin-h-page\b/);
   });
 });

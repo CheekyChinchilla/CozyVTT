@@ -961,7 +961,7 @@ export default function AdminPage() {
   // ============================================
 
   return (
-    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-page bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
 
       {/* ---- Header ---- */}
       <header className="bg-moss-green/10 border-b border-moss-green/20">
