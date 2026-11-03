@@ -411,7 +411,7 @@ On a phone or a tablet some controls are bigger than on a computer, at least 44 
 
 ### Two creatures can't stand in the same square
 
-Try to finish a move on a square somebody is already standing in and the move is refused, with a note saying who is in the way. That matches the rules: you can move *past* another creature, but you can't end your move on top of one.
+Try to finish a move on a square somebody is already standing in and the move is refused, with a note saying who is in the way, or "Someone" for a creature hidden from you under fog. That matches the rules: you can move *past* another creature, but you can't end your move on top of one.
 
 A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight. That only works when you can see its hit points: another player's character, or a creature whose HP bar the DM has turned on. A creature whose hit points the DM keeps hidden looks standing to you until the DM removes it.
 

@@ -426,6 +426,42 @@ describe('the spirit layer picture on a switch of map', () => {
   });
 });
 
+describe('a move refused onto a creature under fog', () => {
+  recordDrawing();
+  /** The player's token at (0, 19) and a wolf at (3, 19), fog cell 3, with only `revealed` uncovered. */
+  async function setUp(revealed: number[]) {
+    h.set({ userRole: 'PLAYER', currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    for (const picture of [...pictures]) picture.load();
+    act(() => {
+      useGameStore.getState().setTokens([
+        token('tok-mine', 'Aldra', 0, 19, { type: 'player', controlledBy: 'me' } as Partial<Token>),
+        token('tok-wolf', 'Wolf', 3, 19),
+      ]);
+    });
+    fire('fog:cells', { mapId: 'map-a', revealedCells: revealed });
+    await nextFrame();
+    const at = (x: number, y: number) => ({ clientX: x * 50 + 10, clientY: (19 - y) * 50 + 10 });
+    for (const point of [at(0, 19), at(3, 19)]) {
+      mouse.down(surface(), point);
+      mouse.up(surface(), point);
+    }
+  }
+
+  // The refusal named any creature on the square, one the player's fog
+  // covers included.
+  it('names "Someone" for a creature the player\'s screen does not draw', async () => {
+    await setUp([0]);
+    expect(await screen.findByText('Someone is already standing there.')).toBeInTheDocument();
+    expect(screen.queryByText('Wolf is already standing there.')).toBeNull();
+  });
+
+  it('names a creature the player can see', async () => {
+    await setUp([0, 3]);
+    expect(await screen.findByText('Wolf is already standing there.')).toBeInTheDocument();
+  });
+});
+
 // ── The draw tool ────────────────────────────────────────────────────────────
 
 /** Map pixel (x, y), which at 100% and no pan is the same screen pixel. */
