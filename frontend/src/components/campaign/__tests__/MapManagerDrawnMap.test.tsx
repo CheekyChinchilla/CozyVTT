@@ -102,3 +102,14 @@ describe('a map just made', () => {
     expect(await screen.findByRole('heading', { name: 'Crypt' })).toBeInTheDocument();
   });
 });
+
+describe("a drawn map's card", () => {
+  // A save in Paint writes over the picture under the same id, and gives the
+  // map a new version of its address: the card's thumbnail follows it.
+  it("loads its thumbnail with the version the map's picture address carries", async () => {
+    h.created = { map: { ...crypt, imageUrl: '/api/assets/maps/upload-2?v=1730000000000' } };
+    await make();
+    const card = await screen.findByRole('img', { name: 'Crypt' });
+    expect(card.getAttribute('src')).toMatch(/\/api\/assets\/maps\/upload-2\/thumbnail\?v=1730000000000$/);
+  });
+});

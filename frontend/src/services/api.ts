@@ -969,6 +969,20 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Write a new picture over a picture drawn in CozyVTT, under the same id:
+   * Paint's Save. Answers the asset and `imageUrl`, the picture's address
+   * with a version new on every save, to give the map. No limit of the
+   * page's own, as for an upload.
+   */
+  async replaceDrawnPicture(id: string, formData: FormData): Promise<{ message: string; asset: Asset; imageUrl: string }> {
+    const response = await this.client.put(`/api/assets/${id}/picture`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+    });
+    return response.data;
+  }
+
   async getAsset(id: string): Promise<{ asset: Asset }> {
     const response = await this.client.get<{ asset: Asset }>(`/api/assets/${id}`);
     return response.data;

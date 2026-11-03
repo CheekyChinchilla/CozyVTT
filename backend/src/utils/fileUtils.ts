@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { AssetType as PrismaAssetType } from '@prisma/client';
 import path from 'path';
 import fs from 'fs/promises';
+import { constants as fsConstants } from 'fs';
 import logger from './logger';
 import { errorCode } from './errors';
 import { UPLOAD_CONTENT_TYPES, UPLOAD_EXTENSIONS } from '../validators/uploadTypes';
@@ -250,10 +251,24 @@ export async function deleteFile(filePath: string): Promise<boolean> {
  * If anything fails, the new file is removed and the original is untouched.
  */
 export async function writeFileAtomically(filePath: string, data: Buffer): Promise<void> {
+  // `wx`: a new file, never one that is already there.
+  await renameIntoPlace(filePath, (temporary) => fs.writeFile(temporary, data, { flag: 'wx' }));
+}
+
+/**
+ * Replace a file with a copy of `source`, as writeFileAtomically does: the
+ * copy is made beside the file, flushed and renamed over it. `source` is
+ * left where it is.
+ */
+export async function copyFileAtomically(source: string, filePath: string): Promise<void> {
+  await renameIntoPlace(filePath, (temporary) => fs.copyFile(source, temporary, fsConstants.COPYFILE_EXCL));
+}
+
+/** Fill a new file beside `filePath`, flush it and rename it over `filePath`; on any failure remove it. */
+async function renameIntoPlace(filePath: string, fill: (temporary: string) => Promise<void>): Promise<void> {
   const temporary = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${randomUUID()}.tmp`);
   try {
-    // `wx`: a new file, never one that is already there.
-    await fs.writeFile(temporary, data, { flag: 'wx' });
+    await fill(temporary);
     const handle = await fs.open(temporary, 'r+');
     try {
       await handle.sync();

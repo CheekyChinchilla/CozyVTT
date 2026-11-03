@@ -38,6 +38,16 @@ export function isDrawnMapTag(tag: string): boolean {
 export { DRAWN_MAP_TAG_REFUSAL };
 
 /**
+ * A picture Paint made, which a save writes over in place: a map picture
+ * carrying exactly DRAWN_MAP_TAG, as the web app reads it. Any case of the
+ * tag is refused on upload and dropped on import, so no other picture
+ * carries it.
+ */
+export function isDrawnPicture(asset: { type: string; tags: readonly string[] }): boolean {
+  return asset.type === 'MAP' && asset.tags.includes(DRAWN_MAP_TAG);
+}
+
+/**
  * Whether an upload of `type` at `scope` may carry the tags it sends: the
  * drawn-map tag only on a campaign map picture, which only the campaign's DM
  * may place (canPlaceAssetAtScope), as Paint's own upload is.

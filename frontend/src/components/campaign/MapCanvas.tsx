@@ -140,7 +140,8 @@ import DrawControls, { type DrawControlsProps, type MemberDrawings } from '@/com
 import DrawStrip from '@/components/campaign/DrawStrip';
 import PaintControls from '@/components/campaign/PaintControls';
 import PaintStrip from '@/components/campaign/PaintStrip';
-import { PaintLeaveQuestion, PaintLeftoverQuestion } from '@/components/campaign/PaintQuestions';
+import { PaintLeaveQuestion, PaintLeftoverQuestion, PaintSaveQuestion } from '@/components/campaign/PaintQuestions';
+import { extractAssetId } from '@/utils/assetUrl';
 import { preparingHoldsBack } from '@/components/campaign/PreparingBanner';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
@@ -694,6 +695,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // map drawn in CozyVTT, or of a map with no picture, which it gives one.
   // Never offered on an uploaded picture.
   const pictureKind = useMapPictureKind(currentMap, campaign?.id, isDM);
+  // The other maps of the campaign whose picture is the one at `address`:
+  // Save writes over that picture, so they change too, and are named before.
+  const campaignMapList = campaign?.maps;
+  const mapsSharingPicture = useCallback((mapId: string, address: string | null | undefined) => {
+    const pictureId = extractAssetId(address);
+    return pictureId ? (campaignMapList ?? []).filter((m) => m.id !== mapId && extractAssetId(m.imageUrl) === pictureId) : [];
+  }, [campaignMapList]);
   const paint = usePaintSurface({
     map: currentMap, picture: shownPicture, pictureKind, pictureFailed: imageError !== null, isDM, mapControls, markDirty,
     campaignId: campaign?.id,
@@ -705,8 +713,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       updateMap(saved.id, saved);
       showToast(isPreparing ? 'Saved. Players see it when you bring them here.' : 'Saved. Players on this map see the new picture.', 'success');
     },
-    // Save found the map's picture changed where this page was not told: show the map as it is.
+    // Save found the map's picture changed where this page was not told, or
+    // pointed another map using the picture at its new address: show the map as it is.
     onMapRead: (latest) => updateMap(latest.id, latest),
+    mapsSharing: (mapId, address) => mapsSharingPicture(mapId, address).map((m) => m.id),
     refuse: (message) => showToast(message, 'error'),
     warn: (message) => showToast(message, 'warning'),
     drafts: paintDraftStore(),
@@ -716,6 +726,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // (map/paint/usePaintGuards.ts). The phone's Back while preparing a map
   // goes back to the table, which asks it through the campaign page.
   const paintGuards = usePaintGuards(paint, { registerViewedMapGuard, holdBack: !preparingHoldsBack(compact, isPreparing) });
+  // Save writes over the map's drawn picture (map/paint/savePaint.ts), so it
+  // asks first, on every press; a map with no drawn picture is given one
+  // without asking. The unsaved-paint question's Save my painting does not
+  // ask again: its own words say so.
+  const saveOverwrites = pictureKind === 'drawn';
+  // The map Save asked about: the question goes with Paint, and with the map.
+  const [askingSaveOf, setAskingSaveOf] = useState<string | null>(null);
+  const paintSave = paint.save;
+  const shownMapId = currentMap?.id ?? null;
+  const pressSave = useCallback(() => {
+    if (saveOverwrites) setAskingSaveOf(shownMapId);
+    else void paintSave();
+  }, [saveOverwrites, paintSave, shownMapId]);
   // Drafts of painting on maps since deleted, from another device or tab,
   // are dropped as the DM opens the campaign: they have no map to go back to.
   const draftsPruned = useRef<string | null>(null);
@@ -4615,7 +4638,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               onUndo={paint.undo}
               onRedo={paint.redo}
               unsaved={paint.unsaved}
-              onSave={() => { void paint.save(); }}
+              onSave={pressSave}
               saving={paint.saving}
               onDownload={() => { void paint.download(); }}
               signedOut={paintGuards.signedOut}
@@ -5010,7 +5033,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 onUndo={paint.undo}
                 onRedo={paint.redo}
                 unsaved={paint.unsaved}
-                onSave={() => { void paint.save(); }}
+                onSave={pressSave}
                 saving={paint.saving}
                 onDownload={() => { void paint.download(); }}
                 signedOut={paintGuards.signedOut}
@@ -5129,9 +5152,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       )}
 
       {/* Paint not saved, before something takes it off the screen; and left behind by a map gone without asking. */}
+      <PaintSaveQuestion
+        open={paint.on && askingSaveOf !== null && askingSaveOf === currentMap?.id}
+        mapName={currentMap?.name ?? 'this map'}
+        sharing={currentMap ? mapsSharingPicture(currentMap.id, currentMap.imageUrl).map((m) => m.name) : []}
+        onSave={() => {
+          setAskingSaveOf(null);
+          void paint.save();
+        }}
+        onCancel={() => setAskingSaveOf(null)}
+      />
       <PaintLeaveQuestion
         leaving={paintGuards.leaving}
         mapName={currentMap?.name ?? 'this map'}
+        overwrites={saveOverwrites}
         answering={paintGuards.answering}
         onAnswer={(choice) => { void paintGuards.answer(choice); }}
       />
