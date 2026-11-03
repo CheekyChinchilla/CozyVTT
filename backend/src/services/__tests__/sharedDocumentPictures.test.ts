@@ -18,6 +18,7 @@ import fsPromises from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
+import { Client } from 'pg';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns } from '../../__tests__/helpers/db';
 import { prisma as appPrisma } from '../../config/database';
 import logger from '../../utils/logger';
@@ -312,6 +313,60 @@ describe('a campaign with many handouts', () => {
     if (process.env.PRINT_TIMINGS) console.table(timings.map((ms) => ({ ms: Math.round(ms) })));
     expect(opened.mock.calls.filter(([file]) => ours.has(String(file)))).toHaveLength(0);
     expect(Math.max(...timings)).toBeLessThan(500);
+  });
+});
+
+describe('a campaign whose handouts were written after the tables were last analysed', () => {
+  // PostgreSQL plans from statistics it gathers now and then. Taken while
+  // the tables were small and left so while the handouts were written, as
+  // when the documents from before are read after an upgrade, they once led
+  // the planner to read every handout's pictures for every candidate:
+  // seconds a call here, minutes on larger tables.
+  it('is answered as quickly', async () => {
+    const run = (sql: string) => prisma.$executeRawUnsafe(sql);
+    try {
+      await run('ALTER TABLE "DocumentPicture" SET (autovacuum_enabled = false)');
+      await run('ALTER TABLE "Asset" SET (autovacuum_enabled = false)');
+      await run('ANALYZE "Asset"');
+      await run('ANALYZE "DocumentPicture"');
+      const candidates = await pictures(200);
+      const handouts = Array.from({ length: 300 }, () => randomUUID());
+      await prisma.asset.createMany({
+        data: handouts.map((id) => ({
+          id, type: 'DOCUMENT' as const, scope: 'CAMPAIGN' as const, campaignId, uploadedById: dmId, filename: `${id}.md`,
+          originalName: `${id}.md`, mimeType: 'text/markdown', fileSize: 1, filePath: path.join(DIR, `${id}.md`), name: id, picturesReadAt: new Date(),
+        })),
+      });
+      docIds.push(...handouts);
+      const links = handouts.flatMap((documentId) => candidates.map((pictureId) => ({ documentId, pictureId })));
+      for (let i = 0; i < links.length; i += 10_000) await prisma.documentPicture.createMany({ data: links.slice(i, i + 10_000) });
+
+      // Every statement the call sends, as the database driver is handed it.
+      const sent: string[] = [];
+      const realQuery = Client.prototype.query;
+      jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
+        const [first] = args;
+        const text = typeof first === 'string' ? first : first && typeof first === 'object' && 'text' in first ? String(first.text) : '';
+        sent.push(text);
+        return (realQuery as (...a: unknown[]) => unknown).apply(this, args);
+      } as never);
+      const start = performance.now();
+      const found = await picturesInSharedDocuments([campaignId], new Set(candidates));
+      const ms = performance.now() - start;
+
+      expect(found.get(campaignId)?.size).toBe(candidates.length);
+      expect(ms).toBeLessThan(1000);
+      // The plan cannot go wrong where there is nothing to plan: each
+      // statement reads one table, by an index or whole.
+      const reads = sent.filter((sql) => /^\s*SELECT/i.test(sql));
+      expect(reads.length).toBeGreaterThan(0);
+      for (const sql of reads) expect(sql).not.toMatch(/\bJOIN\b|EXISTS\s*\(/i);
+    } finally {
+      await run('ALTER TABLE "DocumentPicture" RESET (autovacuum_enabled)');
+      await run('ALTER TABLE "Asset" RESET (autovacuum_enabled)');
+      await run('ANALYZE "Asset"');
+      await run('ANALYZE "DocumentPicture"');
+    }
   });
 });
 
