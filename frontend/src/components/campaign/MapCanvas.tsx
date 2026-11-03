@@ -154,7 +154,7 @@ import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import { useCompactLayout } from '@/contexts/LayoutContext';
-import ActionSheet, { headedMenu } from '@/components/campaign/compact/ActionSheet';
+import ActionSheet, { headedMenu, type SheetEdge } from '@/components/campaign/compact/ActionSheet';
 import { TokenSheetPicture, tokenSheetLine } from '@/components/campaign/compact/tokenSheetHeader';
 import { anyMenuShown, menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
@@ -3440,15 +3440,17 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
 
   /**
-   * Pan `token` into the part of the map above `top`, a page y: on the
-   * compact layout its action sheet covers the foot of the screen, and a
-   * turn pressed in the sheet must be seen. A sheet that covers the whole
-   * map leaves nothing to pan into.
+   * Pan `token` into the part of the map its action sheet leaves: above the
+   * sheet's top on the compact layout, left of its left side on a phone held
+   * sideways. A turn pressed in the sheet must be seen. A sheet that covers
+   * the whole map leaves nothing to pan into.
    */
-  const keepInViewAbove = (token: Token, top: number) => {
+  const keepInViewBeside = (token: Token, edge: SheetEdge) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
-    keepInView(token, { width: canvasSize.width, height: Math.min(canvasSize.height, top - rect.top) });
+    keepInView(token, edge.side === 'right'
+      ? { width: Math.min(canvasSize.width, edge.at - rect.left), height: canvasSize.height }
+      : { width: canvasSize.width, height: Math.min(canvasSize.height, edge.at - rect.top) });
   };
 
   /** Whether the next token menu to open puts the cursor on its first item. */
@@ -5134,7 +5136,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           leading={<TokenSheetPicture token={contextMenu.token} imageSrc={cachedTokenImage(contextMenu.token, tokenImages)?.src} />}
           items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
           onClose={closeTokenMenu}
-          onPlaced={(top) => keepInViewAbove(contextMenu.token, top)}
+          onPlaced={(edge) => keepInViewBeside(contextMenu.token, edge)}
         />
       )}
       {contextMenu && !compact && (

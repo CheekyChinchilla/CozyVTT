@@ -225,7 +225,7 @@ Menus open as a list from the bottom of the screen: press and hold a token, a do
 
 **A DM preparing a map** the table is not on sees a banner across the top of the map naming the map on their screen and the one the table is on, with **Back to the table**, **Bring everyone here** and **What reaches the table?** (on a phone on its side, **Back**, **Bring everyone** and an info button). The phone's **Back** goes back to the table. Players see nothing of it (see [Preparing a map while the table plays](DM_GUIDE.md#preparing-a-map-while-the-table-plays) in the DM Guide).
 
-**A phone on its side** has no room for the bar, so its buttons move into the header, and sheets open from the right at the map's full height.
+**A phone on its side** has no room for the bar, so its buttons move into the header, and sheets open from the right at the map's full height. A token's, a door's and a character's menu open from the right too, with **Cancel** at the foot.
 
 **On a tablet** the sheets and the bar are at most 672 pixels wide, in the middle of the screen. Turning a tablet between upright and sideways switches between this layout and the three columns without losing anything: a message you were typing, a token you were carrying, the zoom, **Preview Player View** and any window you had open stay as they were.
 

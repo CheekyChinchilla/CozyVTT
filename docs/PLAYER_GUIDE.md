@@ -186,7 +186,7 @@ Each opens as a sheet over the map. Chat, Dice, Initiative and Party open at hal
 
 In **Dice** each roll takes two lines, who rolled it, what for and when over the expression and its dice, with the total beside them in large type, so several fit in the half-height sheet.
 
-A press and hold on your token opens its menu as a list from the bottom of the screen, as it does on a character in **Party**'s roster. The map's toolbar keeps **Zoom Out**, **Zoom In**, **Ping** and **Draw** in its one row; its **More** has the rest, such as **Fit to Screen**, the grid and the **Ruler**. Turn the phone on its side and the bar's buttons move into the header, with sheets opening from the right. See [The campaign page on a phone or tablet](USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet) for the whole of it.
+A press and hold on your token opens its menu as a list from the bottom of the screen, as it does on a character in **Party**'s roster. The map's toolbar keeps **Zoom Out**, **Zoom In**, **Ping** and **Draw** in its one row; its **More** has the rest, such as **Fit to Screen**, the grid and the **Ruler**. Turn the phone on its side and the bar's buttons move into the header, with sheets and menus opening from the right. See [The campaign page on a phone or tablet](USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet) for the whole of it.
 
 To open CozyVTT from your phone's home screen like an app, full screen, see [Adding CozyVTT to your home screen](USER_GUIDE.md#adding-cozyvtt-to-your-home-screen).
 
