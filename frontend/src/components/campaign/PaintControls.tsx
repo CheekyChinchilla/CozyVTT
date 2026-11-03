@@ -97,6 +97,9 @@ export const SELECTION_BUTTONS: ReadonlyArray<{ label: string; act: keyof Omit<P
   { label: 'Select all', act: 'selectAll', needs: null },
 ];
 
+/** A choice pressed: its own colours win over a button's plain ones (Tailwind's aria-pressed variant). */
+const CHOSEN = 'aria-pressed:bg-amber-400/30 aria-pressed:text-amber-100 aria-pressed:border-amber-400/70';
+
 const toolButton = (on: boolean) =>
   `touch-target inline-flex items-center justify-center w-8 h-8 rounded border transition-colors ${
     on ? 'bg-amber-400/30 text-amber-200 border-amber-400/60' : 'bg-stone-700/60 text-stone-300 border-stone-600/50 hover:bg-stone-700'
@@ -171,13 +174,17 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
       {settings.tool === 'stamp' && (
         <div role="group" aria-label="Stamp" className="flex flex-wrap gap-1">
           {PAINT_STAMPS.map(({ kind, label }) => (
-            <button key={kind} type="button" aria-pressed={settings.stamp === kind} onClick={() => onSettingsChange({ stamp: kind })} className={`${actionButton} ${settings.stamp === kind ? 'border-amber-400/60 bg-amber-400/15 text-amber-100' : ''}`}>
+            <button key={kind} type="button" aria-pressed={settings.stamp === kind} onClick={() => onSettingsChange({ stamp: kind })} className={`${actionButton} ${CHOSEN}`}>
               {label}
             </button>
           ))}
           <button type="button" onClick={() => onSettingsChange({ turn: nextTurn(settings.turn) })} className={actionButton}>
             {turnLabel(settings.turn)}
           </button>
+          <label className="touch-target flex items-center gap-2 text-[11px] cursor-pointer select-none">
+            <input type="checkbox" checked={settings.stampSnap} onChange={(e) => onSettingsChange({ stampSnap: e.target.checked })} className="accent-amber-400" />
+            Snap to grid
+          </label>
         </div>
       )}
       {settings.tool === 'select' && selection && (

@@ -240,13 +240,17 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
       {tool === 'stamp' && (
         <div role="group" aria-label="Stamp" className="flex flex-wrap gap-2 pr-2">
           {PAINT_STAMPS.map(({ kind, label }) => (
-            <button key={kind} type="button" aria-pressed={settings.stamp === kind} onClick={() => onSettingsChange({ stamp: kind })} className={cn(CHIP, settings.stamp === kind && 'border-brand bg-brand/15')}>
+            <button key={kind} type="button" aria-pressed={settings.stamp === kind} onClick={() => onSettingsChange({ stamp: kind })} className={cn(CHIP, 'aria-pressed:border-brand aria-pressed:bg-brand/15')}>
               {label}
             </button>
           ))}
           <button type="button" onClick={() => onSettingsChange({ turn: nextTurn(settings.turn) })} className={CHIP}>
             {turnLabel(settings.turn)}
           </button>
+          <label className={CHIP}>
+            <input type="checkbox" checked={settings.stampSnap} onChange={(e) => onSettingsChange({ stampSnap: e.target.checked })} className="accent-brand" />
+            Snap to grid
+          </label>
         </div>
       )}
 

@@ -847,6 +847,21 @@ describe('a stamp', () => {
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
   });
 
+  it('puts a door on the grid line nearest the click, and anywhere with Snap to grid off, the door shown as chosen', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    expect(panel().getByRole('button', { name: 'Door' })).toHaveAttribute('aria-pressed', 'true');
+    expect(panel().getByRole('button', { name: 'Door' }).className).toContain('aria-pressed:bg-amber-400/30');
+    mouse.down(input(), { clientX: 130, clientY: 260 });
+    mouse.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate')!.slice(-1)[0]?.args).toEqual([125, 250]);
+    fireEvent.click(panel().getByRole('checkbox', { name: 'Snap to grid' }));
+    mouse.down(input(), { clientX: 130, clientY: 260 });
+    mouse.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate')!.slice(-1)[0]?.args).toEqual([130, 260]);
+  });
+
   it('is chosen by P', async () => {
     await showMap();
     await paintOn();
