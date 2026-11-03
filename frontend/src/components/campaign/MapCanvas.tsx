@@ -101,7 +101,7 @@ import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
 import { keyBelongsToMap, mapKeyAction, createRepeatPacer, ARROW_REPEAT_MS, MAP_KEYS_HINT } from './map/keyboard';
-import { selectableTokens, nextSelectedId, squareFromArrow, panToKeepInView, settleArrowEcho, type ArrowKey, type StepDirection } from './map/selection';
+import { selectableTokens, nextSelectedId, squareFromArrow, panToKeepInView, keepInViewMargin, settleArrowEcho, type ArrowKey, type StepDirection } from './map/selection';
 import { tokenCentre } from '@/utils/tokenCentre';
 import { createOwnEdits } from './map/ownEdits';
 import mapService from '@/services/map.service';
@@ -3382,7 +3382,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     selectedTokenId && drawnIds.has(selectedTokenId) ? useGameStore.getState().tokens[selectedTokenId] : undefined;
 
   /**
-   * Pan just enough to bring a token's centre a square inside the view, and
+   * Pan just enough to bring a token's centre two squares inside the view (at
+   * least 48 px, `keepInViewMargin`), and
    * say how far it panned, in canvas pixels.
    */
   const keepInView = (token: Token, area: { width: number; height: number } = canvasSize): { dx: number; dy: number } => {
@@ -3392,7 +3393,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       x: centre.x * mapControls.zoom + mapControls.panOffset.x,
       y: centre.y * mapControls.zoom + mapControls.panOffset.y,
     };
-    const pan = panToKeepInView(onScreen, area, currentMap.gridSize * mapControls.zoom);
+    const pan = panToKeepInView(onScreen, area, keepInViewMargin(currentMap.gridSize * mapControls.zoom));
     if (pan.dx !== 0 || pan.dy !== 0) mapControls.panBy(pan.dx, pan.dy);
     return pan;
   };

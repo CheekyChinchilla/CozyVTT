@@ -11,6 +11,7 @@ import {
   squareFromArrow,
   isArrowKey,
   panToKeepInView,
+  keepInViewMargin,
   settleArrowEcho,
   type ArrowKey,
 } from '../selection';
@@ -179,6 +180,17 @@ describe('the pan that keeps a point in sight', () => {
 
   it('is none for a view with no size yet', () => {
     expect(panToKeepInView({ x: 900, y: 900 }, { width: 0, height: 0 }, 50)).toEqual({ dx: 0, dy: 0 });
+  });
+});
+
+describe('how far inside the view a token is brought', () => {
+  // Enter on a token past the edge at 24% zoom brought it one 17 px square
+  // in, its selection ring cut by the edge.
+  it('is two squares, and never under 48 pixels', () => {
+    expect(keepInViewMargin(17)).toBe(48);
+    expect(keepInViewMargin(24)).toBe(48);
+    expect(keepInViewMargin(35)).toBe(70);
+    expect(keepInViewMargin(140)).toBe(280);
   });
 });
 

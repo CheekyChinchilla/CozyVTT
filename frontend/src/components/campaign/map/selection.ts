@@ -85,6 +85,18 @@ export function squareFromArrow(
   };
 }
 
+/** The least room, in screen pixels, between a token brought into view and the edge. */
+const KEEP_IN_VIEW_MIN_PX = 48;
+
+/**
+ * How far inside the view a token's centre is brought, given a square's size
+ * on screen: two squares, so its selection ring and its neighbours show, and
+ * never under 48 pixels, which a square at a low zoom would be.
+ */
+export function keepInViewMargin(squarePx: number): number {
+  return Math.max(KEEP_IN_VIEW_MIN_PX, 2 * squarePx);
+}
+
 /**
  * How far to pan, in canvas pixels, so that `point` lies at least `margin`
  * inside the canvas: nothing while it does, else just enough to bring it to
