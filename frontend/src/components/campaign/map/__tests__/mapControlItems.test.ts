@@ -33,15 +33,15 @@ describe('the Map controls rows', () => {
   });
 
   it('gives the DM Paint where it is offered, before Tools, and Put Paint away while it is on', () => {
-    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions())).slice(-4)).toEqual(['---', 'Paint', 'Show tools', 'Hide spirit tokens']);
-    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'on' }, actions()))).toContain('Put Paint away');
-    expect(row(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions()), 'paint').title).toBe('Paint the map\'s picture, on your screen until it is saved');
-    expect(labels(mapControlItems({ ...VIEW, isDM: true }, actions()))).not.toContain('Paint');
+    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions())).slice(-4)).toEqual(['---', 'Mapmaker', 'Show tools', 'Hide spirit tokens']);
+    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'on' }, actions()))).toContain('Put Mapmaker away');
+    expect(row(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions()), 'paint').title).toBe('Draw on the map\'s picture, on your screen until it is saved');
+    expect(labels(mapControlItems({ ...VIEW, isDM: true }, actions()))).not.toContain('Mapmaker');
     const run = actions();
     row(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, run), 'paint').run();
     expect(run.togglePaint).toHaveBeenCalledTimes(1);
     expect(mapControlsTitle(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions())))
-      .toBe('Map controls: fit, grid, ruler, AoE shape, Paint, tools and spirit tokens');
+      .toBe('Map controls: fit, grid, ruler, AoE shape, Mapmaker, tools and spirit tokens');
   });
 
   it('says what each row does now', () => {

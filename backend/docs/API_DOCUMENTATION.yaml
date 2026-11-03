@@ -5938,7 +5938,7 @@ paths:
                     Comma-separated tags; each is trimmed, empty ones are
                     dropped and a repeated one is kept once. At most 50 tags of
                     at most 50 characters each. `cozyvtt-drawn-map`, in any
-                    case, marks a picture Paint made, which Paint may change
+                    case, marks a picture Mapmaker made, which Mapmaker may change
                     and a later save writes over in place
                     (`PUT /api/assets/{id}/picture`): it is taken only on a MAP of
                     CAMPAIGN scope, which only the campaign's DM may upload.
@@ -6367,7 +6367,7 @@ paths:
         - Assets
       summary: Save a new painting over a drawn map's picture
       description: >-
-        What **Save** in Paint calls. Writes the uploaded picture over the
+        What **Save** in Mapmaker calls. Writes the uploaded picture over the
         file of an existing picture drawn in CozyVTT: a `MAP` asset of
         `CAMPAIGN` scope tagged exactly `cozyvtt-drawn-map`. The asset keeps
         its id, so every address naming it (a map, a shared Document, a

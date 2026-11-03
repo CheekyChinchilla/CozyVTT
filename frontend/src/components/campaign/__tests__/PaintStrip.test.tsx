@@ -26,7 +26,7 @@ function strip(extra: Partial<PaintControlsProps> = {}, settings: Partial<PaintS
 }
 
 const classes = (el: Element) => el.className.split(/\s+/);
-const region = () => screen.getByRole('region', { name: 'Paint' });
+const region = () => screen.getByRole('region', { name: 'Mapmaker' });
 const row = () => screen.getByRole('group', { name: 'Tools' });
 
 afterEach(() => {
@@ -36,7 +36,7 @@ afterEach(() => {
 describe('the strip', () => {
   it('is a region named Paint, headed Paint, and no dialog', () => {
     strip();
-    expect(within(region()).getByRole('heading', { name: 'Paint' })).toBeInTheDocument();
+    expect(within(region()).getByRole('heading', { name: 'Mapmaker' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -113,7 +113,7 @@ describe('the strip', () => {
       addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
     }));
     strip();
-    const heading = within(region()).getByRole('heading', { name: 'Paint' });
+    const heading = within(region()).getByRole('heading', { name: 'Mapmaker' });
     expect(heading.parentElement).toContainElement(row());
   });
 });

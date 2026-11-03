@@ -112,7 +112,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
         type="button"
         onClick={onClose}
         aria-label="Done painting"
-        title="Put Paint away; what is not saved stays on the map"
+        title="Put Mapmaker away; what is not saved stays on the map"
         className={cn(HEADER_BUTTON, 'border border-ink/15 bg-paper text-ink hover:bg-ink/5')}
       >
         Done
@@ -240,8 +240,8 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
 
   return (
     <ToolStrip
-      label="Paint"
-      title="Paint"
+      label="Mapmaker"
+      title="Mapmaker"
       actions={actions}
       hint={HINTS[tool]}
       tools={tools}

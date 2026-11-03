@@ -130,13 +130,13 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
   const custom = !PAINT_COLOURS.some((c) => c.value === chosen);
   return (
     <section
-      aria-label="Paint"
+      aria-label="Mapmaker"
       className="flex flex-col gap-2 p-2 bg-stone-800/90 rounded-lg border border-amber-400/20 w-full text-stone-300"
     >
       {/* Save and Done head the panel, as the phone's strip has them: at the
           foot, under every tool's settings, Save scrolled out of sight. */}
       <div className="flex items-center gap-1.5">
-        <h2 className="flex-1 text-xs text-amber-400/70 font-medium uppercase tracking-wide">Paint</h2>
+        <h2 className="flex-1 text-xs text-amber-400/70 font-medium uppercase tracking-wide">Mapmaker</h2>
         <button
           type="button"
           onClick={onSave}
@@ -150,7 +150,7 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
           type="button"
           onClick={onClose}
           aria-label="Done painting"
-          title="Put Paint away; what is not saved stays on the map"
+          title="Put Mapmaker away; what is not saved stays on the map"
           className="touch-target inline-flex items-center justify-center gap-1 h-7 px-2 rounded border border-stone-600/60 text-[11px] text-stone-300 hover:text-white hover:bg-stone-700"
         >
           <X className="w-3.5 h-3.5" aria-hidden="true" />

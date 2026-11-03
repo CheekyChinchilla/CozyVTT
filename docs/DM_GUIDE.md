@@ -196,7 +196,7 @@ No map ready for the scene? Draw one in CozyVTT: a room or a clearing sketched w
 1. Open the **Map Library** and click **Create Map**.
 2. Click **Draw a map** at the top of the window.
 3. Fill in the map's name, its **Width** and **Height** in grid squares, its **Detail (pixels per square)** (70 at first), the **Grid Settings**, and a **Background colour**: parchment at first, one of the colours offered, or any colour with **Another colour**.
-4. Click **Create Map**. CozyVTT puts a blank picture of that colour in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)), with **Paint** on (below). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
+4. Click **Create Map**. CozyVTT puts a blank picture of that colour in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)), with **Mapmaker** on (below). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
 
 If the picture cannot be made, the window says so and nothing is created: "This browser could not make the map's picture" means the device ran short, so choose fewer squares and try again.
 
@@ -214,15 +214,15 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 
 **Painting it**
 
-**Paint**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, or whose picture has been deleted from the Asset Library, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
+**Mapmaker**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, or whose picture has been deleted from the Asset Library, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
 
-1. Click **Paint**. Its panel opens at the top of your tool panels (on a phone, **Paint** is in the map's **More**, and its tools are a strip at the foot of the map: see [On a phone](#on-a-phone)), and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
-2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Paint has two colours: **Colour** and **Second colour** above the colours say which one the palette sets. The second colour fills a rectangle, an ellipse, a polygon, a room's floor and a stamp. Set the **Width**, from 1 to 64 pixels, for the tools that paint a line; Select, Fill and the Eyedropper have none, and a stamp has a **Size**.
+1. Click **Mapmaker**. Its panel opens at the top of your tool panels (on a phone, **Mapmaker** is in the map's **More**, and its tools are a strip at the foot of the map: see [On a phone](#on-a-phone)), and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Mapmaker is on; choosing a wall, fog or light tool puts Mapmaker away.
+2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Mapmaker has two colours: **Colour** and **Second colour** above the colours say which one the palette sets. The second colour fills a rectangle, an ellipse, a polygon, a room's floor and a stamp. Set the **Width**, from 1 to 64 pixels, for the tools that paint a line; Select, Fill and the Eyedropper have none, and a stamp has a **Size**.
 3. Paint with the tool. A stroke shows as you drag, and goes into the picture when you let go.
 
 | Tool | Key | How |
 |---|---|---|
-| **Select** | `S` | Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it: where it was is left in the map's own colour. Click or tap outside it, press `Enter`, choose another tool, **Save** or put Paint away to put it down; **Undo** while it is moving puts it back. `Delete` erases the box to the map's own colour. `Ctrl + C`, `Ctrl + X` and `Ctrl + V` copy, cut and paste (a paste lands a square right and down, to move where you want it), and `Ctrl + A` selects the whole picture; the same are buttons under the tools, for a phone or a tablet. Select moves the picture only: a room's walls stay where the room was drawn, so move a room before you save it by undoing it and drawing it again, or move its walls with the wall tool after. |
+| **Select** | `S` | Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it: where it was is left in the map's own colour. Click or tap outside it, press `Enter`, choose another tool, **Save** or put Mapmaker away to put it down; **Undo** while it is moving puts it back. `Delete` erases the box to the map's own colour. `Ctrl + C`, `Ctrl + X` and `Ctrl + V` copy, cut and paste (a paste lands a square right and down, to move where you want it), and `Ctrl + A` selects the whole picture; the same are buttons under the tools, for a phone or a tablet. Select moves the picture only: a room's walls stay where the room was drawn, so move a room before you save it by undoing it and drawing it again, or move its walls with the wall tool after. |
 | **Brush** | `B` | Drag to paint in the colour, or click or tap for a dot. |
 | **Eraser** | `E` | Drag to erase back to the map's own colour: the one it was made in, read off the picture's top-left corner. It has no colour of its own, so the colours are hidden while it is chosen; the **Width** sets how wide it erases. |
 | **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
@@ -240,39 +240,39 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 **Texture**, for the **Brush**, a **Rectangle**, **Ellipse** or **Polygon**'s fill, a **Room**'s floor and **Fill**: **Stone**, **Bricks**, **Cobbles**, **Tiles**, **Wood**, **Grass**, **Sand** or **Water**, drawn in lighter and darker shades of the colour it paints, so grey stone, red brick or blue water are a colour away. Each texture is one square of the grid across and lines up with it, so neighbouring areas join. **None** paints the plain colour. A shape's outline, a line, a curve, a stamp and the eraser are never textured.
 
 4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape (a polygon or a curve too), a room, a stamp, a fill or a moved selection and put it back.
-5. Click **Done** at the top of the Paint panel, press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
+5. Click **Done** at the top of the Mapmaker panel, press `Esc` or click **Mapmaker** again to put Mapmaker away. A first `Esc` while you drag drops that stroke instead.
 
-While Paint is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
+While Mapmaker is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
 
 Undo keeps up to 50 changes. It keeps only the part of the picture each change touched, packed small, so even strokes across the whole map leave at least 30 to take back; on a picture with a great deal of fine detail the oldest may go sooner.
 
-**Saving.** What you paint is on your screen only until you click **Save**, at the top of the Paint panel beside **Done** (on a phone, in the strip's header). Until then it stays on the map when you put Paint away, and your browser keeps a draft of it (below). The map's size and grid do not change when you save, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
+**Saving.** What you paint is on your screen only until you click **Save**, at the top of the Mapmaker panel beside **Done** (on a phone, in the strip's header). Until then it stays on the map when you put Mapmaker away, and your browser keeps a draft of it (below). The map's size and grid do not change when you save, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
 
-**Rooms' walls.** Saving adds the walls of the rooms you painted since the last save, once the picture is saved; players on the map then see by them. If the map refuses some of them, such as past its 5,000 walls, Paint says how many were not added, and you draw those with the wall tool. Undoing a room after it is saved takes back its floor but leaves its walls: remove them with the wall tool.
+**Rooms' walls.** Saving adds the walls of the rooms you painted since the last save, once the picture is saved; players on the map then see by them. If the map refuses some of them, such as past its 5,000 walls, Mapmaker says how many were not added, and you draw those with the wall tool. Undoing a room after it is saved takes back its floor but leaves its walls: remove them with the wall tool.
 
 **Save overwrites the picture.** Saving writes your painting over the map's picture: the same picture in the Asset Library, not a new one. So everything that shows that picture shows your newest painting: the map, a shared Document or a note that shows it by its address, and any other map using it. **No earlier version is kept**, and a save cannot be undone. That is why **Save** asks, every time you press it, "Overwrite the map's picture?": "Saving will overwrite the current picture of Crypt, and no earlier version is kept. Are you sure you want to continue?" If another map of the campaign uses the same picture, it names it, for example "Crypt by night uses the same picture and will change too.", and that map changes too. Click **Save over it** to save, or **Not now** (or press `Esc`) to keep painting with nothing saved. A map with no picture yet is given one without the question: its first save puts a new **Drawn map** picture in the campaign's Asset Library.
 
 **To keep the picture as it was**, or to give another map a copy of its own before you paint, make the copy first:
 
-1. Download the picture: in the Asset Library, click **Download** on the map's **Drawn map** picture, or in Paint, click **Download picture** before you paint anything. Your browser saves it as a PNG file.
+1. Download the picture: in the Asset Library, click **Download** on the map's **Drawn map** picture, or in Mapmaker, click **Download picture** before you paint anything. Your browser saves it as a PNG file.
 2. Upload it as a new picture: in the Asset Library, click **Upload Asset**, choose **Map** and **Campaign**, and pick the file. Or, to start a new map on it, use **Upload New** in **Create Map**. It shows in the Asset Library as an ordinary map picture.
 3. If it is for another map, pick the uploaded picture for that map in **Edit Map**.
 
-An uploaded picture is never painted over, so the copy stays as it is. (Paint is not offered on it; mark it up with **Draw**.)
+An uploaded picture is never painted over, so the copy stays as it is. (Mapmaker is not offered on it; mark it up with **Draw**.)
 
-**Drafts.** While you have paint not saved, your browser keeps a draft of it: at least every 10 seconds, and at once when you switch to another tab or app or your phone's screen goes off. If the page is reloaded or closed, or your phone drops it, open the map again and click **Paint**. It asks "Restore your unsaved painting from 14:05?" (the time the draft was last written, and the day if it was not today):
+**Drafts.** While you have paint not saved, your browser keeps a draft of it: at least every 10 seconds, and at once when you switch to another tab or app or your phone's screen goes off. If the page is reloaded or closed, or your phone drops it, open the map again and click **Mapmaker**. It asks "Restore your unsaved painting from 14:05?" (the time the draft was last written, and the day if it was not today):
 
 | Answer | What happens |
 |---|---|
-| **Restore my painting** | Paint opens with your painting put back, not yet saved. **Undo** takes the restore back |
-| **Discard it** | The draft is dropped and Paint opens on the picture as it was saved |
-| **Not now** (or `Esc`) | Nothing changes: the draft stays and Paint stays off, until you click **Paint** again |
+| **Restore my painting** | Mapmaker opens with your painting put back, not yet saved. **Undo** takes the restore back |
+| **Discard it** | The draft is dropped and Mapmaker opens on the picture as it was saved |
+| **Not now** (or `Esc`) | Nothing changes: the draft stays and Mapmaker stays off, until you click **Mapmaker** again |
 
 If the map's picture was saved or changed since the draft was written, or **Edit Map** changed the map's squares or grid size, the question says the painting "was painted on an older picture of this map". **Restore it over this picture** puts back what you painted, and only that, over the picture the map has now: what the newer picture holds around your strokes stays as it is. If the map's size changed, your painting is stretched with the picture, so it lands where you painted it on the map. **Undo** takes the restore back. **Save**, **Discard my painting** and deleting the map in the Map Library clear the draft, and a draft of a map deleted from another device is dropped the next time you open the campaign.
 
-A draft is kept in that browser only, for you and that map, and for each tab: two tabs painting one map keep a draft each, and neither touches the other's. **Paint** offers the newest draft of the map from that tab, or from a tab you have closed since; a tab still open keeps its own. If **Paint** opened before your browser had looked a draft up (it waits at most 3 seconds), that draft is kept, and offered once what you paint now is saved or discarded. (Over plain `http://`, unless the server is on the same computer, a browser cannot tell which tabs are open, so it offers the newest draft of any tab.) Another browser or device has its own drafts. Signing out deletes your drafts in that browser, so the next person to use it cannot find your unsaved painting there: save what you want to keep first (leaving the campaign page with paint not saved asks you first, as below). A tab still open with paint on screen keeps that paint, and keeps its draft too, except over plain `http://` with the server on another computer, where its draft is deleted with the rest and written again only after your next stroke in that tab. Clearing the browser's site data clears them too, and Safari (on a Mac, an iPhone or an iPad) may clear what a site keeps after seven days in which you have not used it, so do not leave a painting unsaved for a week. If the browser cannot keep drafts (some private windows), Paint says "This browser cannot keep a draft of your painting, so save it often: what is not saved is lost if the page closes." once, and you paint on as before; if it is out of room it says "This browser has no room left to keep a draft of your painting" instead.
+A draft is kept in that browser only, for you and that map, and for each tab: two tabs painting one map keep a draft each, and neither touches the other's. **Mapmaker** offers the newest draft of the map from that tab, or from a tab you have closed since; a tab still open keeps its own. If **Mapmaker** opened before your browser had looked a draft up (it waits at most 3 seconds), that draft is kept, and offered once what you paint now is saved or discarded. (Over plain `http://`, unless the server is on the same computer, a browser cannot tell which tabs are open, so it offers the newest draft of any tab.) Another browser or device has its own drafts. Signing out deletes your drafts in that browser, so the next person to use it cannot find your unsaved painting there: save what you want to keep first (leaving the campaign page with paint not saved asks you first, as below). A tab still open with paint on screen keeps that paint, and keeps its draft too, except over plain `http://` with the server on another computer, where its draft is deleted with the rest and written again only after your next stroke in that tab. Clearing the browser's site data clears them too, and Safari (on a Mac, an iPhone or an iPad) may clear what a site keeps after seven days in which you have not used it, so do not leave a painting unsaved for a week. If the browser cannot keep drafts (some private windows), Mapmaker says "This browser cannot keep a draft of your painting, so save it often: what is not saved is lost if the page closes." once, and you paint on as before; if it is out of room it says "This browser has no room left to keep a draft of your painting" instead.
 
-**Asked before paint not saved goes.** With paint not saved on the map, Paint asks "Save your painting?" before anything takes it off your screen: **Open to prepare** on another map, **Back to the table** (and your phone's **Back** while you prepare a map), **Set Active** on another map, the header's way back to the dashboard, and your browser's **Back**, on a computer or a phone. On a phone, **Back** closes any sheet or window that is open first, as it always does, and asks only after that.
+**Asked before paint not saved goes.** With paint not saved on the map, Mapmaker asks "Save your painting?" before anything takes it off your screen: **Open to prepare** on another map, **Back to the table** (and your phone's **Back** while you prepare a map), **Set Active** on another map, the header's way back to the dashboard, and your browser's **Back**, on a computer or a phone. On a phone, **Back** closes any sheet or window that is open first, as it always does, and asks only after that.
 
 | Answer | What happens |
 |---|---|
@@ -282,19 +282,19 @@ A draft is kept in that browser only, for you and that map, and for each tab: tw
 
 Deleting the map in the Map Library asks "Discard your painting?" with **Discard my painting** and **Not now** only: a picture saved then would go with the map. **Bring everyone here**, and **Set Active** on the map you are on, ask nothing: the map stays on your screen and your paint with it, not yet saved, so your players see the picture as it was last saved until you click **Save** (if a save is under way, they are brought once it has landed).
 
-Reloading the page, closing the tab or typing another address gets your browser's own question instead, in the browser's words; if the browser does not ask, the draft keeps your painting. While you have paint not saved, CozyVTT keeps you signed in, and if you are signed out anyway the page stays where it is and the Paint panel says so: sign in again in a new tab, then click **Save**.
+Reloading the page, closing the tab or typing another address gets your browser's own question instead, in the browser's words; if the browser does not ask, the draft keeps your painting. While you have paint not saved, CozyVTT keeps you signed in, and if you are signed out anyway the page stays where it is and the Mapmaker panel says so: sign in again in a new tab, then click **Save**.
 
 If the table is moved to another map from somewhere else (another tab of yours, say) while you have paint not saved on its map, your screen stays on that map, as a map you are preparing, with your paint. If the map leaves your screen without asking (it is deleted from another tab or device, or someone else becomes the DM), CozyVTT says "Your painting was not saved" and offers **Download my painting**, which saves it on your device as a PNG picture, or **Discard my painting**; until you choose, leaving the page is asked about as with paint not saved.
 
-**Download picture**, in the Paint panel, saves the picture as it is now on your device, as a PNG named after the map, with what you painted and whether or not it is saved. It is the way to keep paint that cannot be saved: a picture over the server's size limit, a campaign deleted while you paint, or a sign-in that must be changed before anything else is saved.
+**Download picture**, in the Mapmaker panel, saves the picture as it is now on your device, as a PNG named after the map, with what you painted and whether or not it is saved. It is the way to keep paint that cannot be saved: a picture over the server's size limit, a campaign deleted while you paint, or a sign-in that must be changed before anything else is saved.
 
-**Painting during play.** **Paint** works on the map the table is on as well as on one you are preparing, so you can add a side passage while your players play. They see none of your strokes, and keep moving their tokens meanwhile: a token moved while you paint moves on your screen too, and your stroke and your paint not yet saved stay as they are. When you click **Save**, their picture changes where they are, without moving their view or dropping a token they are holding.
+**Painting during play.** **Mapmaker** works on the map the table is on as well as on one you are preparing, so you can add a side passage while your players play. They see none of your strokes, and keep moving their tokens meanwhile: a token moved while you paint moves on your screen too, and your stroke and your paint not yet saved stay as they are. When you click **Save**, their picture changes where they are, without moving their view or dropping a token they are holding.
 
 A save can be refused: the picture must be within your server's size limit for a map picture (`MAX_MAP_SIZE_MB`, 50 MB unless your administrator changed it), and a painted picture of a large map with much detail can pass it, which the message says with both sizes.
 
 A save never deletes a picture: the drawn picture is written over, and an uploaded picture is never written over. If the map's picture was changed to an uploaded one elsewhere (below) and you save your painting over it, the painting becomes a new **Drawn map** picture and the uploaded one stays as it was in the Asset Library.
 
-**If the picture changes elsewhere.** If the map's picture is changed somewhere else while you have paint here not saved (in **Edit Map**, or by a save from another tab or device), your screen shows the new picture and asks what to do with your painting: **Save my painting over it**, **Discard my painting**, or **Not now**, which keeps it; **Paint** then asks again when you press it. **Save** checks the map first, so a picture saved meanwhile from another tab is never replaced without asking. With nothing unsaved, Paint simply gives way to the new picture. While a new picture is still loading on your screen, after a save from another device for instance, the picture before it stays on the map and **Paint** is not offered until the new one has loaded; if it fails to load, the map says "Failed to load map image" and **Paint** stays away until you reload the page. If that picture has been deleted from the Asset Library, **Paint** is offered and starts a blank picture, as on a map with no picture. Paint only ever opens on the map's picture as it is now, or blank.
+**If the picture changes elsewhere.** If the map's picture is changed somewhere else while you have paint here not saved (in **Edit Map**, or by a save from another tab or device), your screen shows the new picture and asks what to do with your painting: **Save my painting over it**, **Discard my painting**, or **Not now**, which keeps it; **Mapmaker** then asks again when you press it. **Save** checks the map first, so a picture saved meanwhile from another tab is never replaced without asking. With nothing unsaved, Mapmaker simply gives way to the new picture. While a new picture is still loading on your screen, after a save from another device for instance, the picture before it stays on the map and **Mapmaker** is not offered until the new one has loaded; if it fails to load, the map says "Failed to load map image" and **Mapmaker** stays away until you reload the page. If that picture has been deleted from the Asset Library, **Mapmaker** is offered and starts a blank picture, as on a map with no picture. Mapmaker only ever opens on the map's picture as it is now, or blank.
 
 **Deleting a drawn map.** The **Delete Map** question in the Map Library offers **Also delete its picture from the Asset Library**, unticked, for a map you drew (never for one whose picture you uploaded). Tick it and the picture goes with the map, unless something else still uses it: then it stays, and the Map Library says so. Left unticked, the picture stays in the Asset Library for you to delete there.
 
@@ -934,7 +934,7 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 
 ### Drawing on the map
 
-Draw is for marking up any map, and the whole table sees it live; to change a map's own picture, on a map you drew, use **Paint** (see [Drawing a map](#drawing-a-map)). Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
+Draw is for marking up any map, and the whole table sees it live; to change a map's own picture, on a map you drew, use **Mapmaker** (see [Drawing a map](#drawing-a-map)). Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
 
 | Tool | How |
 |---|---|
@@ -1036,7 +1036,7 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 
 ### Keyboard Shortcuts
 
-Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo, and for **Paint** (see [Drawing a map](#drawing-a-map)):
+Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo, and for **Mapmaker** (see [Drawing a map](#drawing-a-map)):
 
 | Action | Shortcut |
 |--------|---------|
@@ -1048,31 +1048,31 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Finish a wall line | `Double-click` |
 | Undo the last wall change | `Ctrl + Z` |
 | Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
-| Select part of the picture, while **Paint** is on | `S` |
-| Paint with the brush, while **Paint** is on | `B` |
-| Erase to the map's own colour, while **Paint** is on | `E` |
-| Paint a line, while **Paint** is on | `L` |
-| Paint a rectangle, while **Paint** is on | `R` |
-| Paint an ellipse, while **Paint** is on | `O` |
-| Paint a polygon, corner by corner, while **Paint** is on | `G` |
-| Paint a curve, bent by a second drag, while **Paint** is on | `C` |
-| Close a polygon or paint a curve as it is, while **Paint** is on | `Enter` |
-| Take a polygon's last corner back, while **Paint** is on | `Backspace` |
-| Paint a room, whose walls are added when it is saved, while **Paint** is on | `M` |
-| Paint a stamp into a square, while **Paint** is on | `P` |
-| Fill an area, while **Paint** is on | `F` |
-| Paint a line of text, while **Paint** is on | `T` |
-| Take a colour from the picture, while **Paint** is on | `I` |
-| Copy, cut or paste the selection, while **Paint** is on | `Ctrl + C` `Ctrl + X` `Ctrl + V` |
-| Select the whole picture, while **Paint** is on | `Ctrl + A` |
-| Erase the selection to the map's own colour, while **Paint** is on | `Delete` `Backspace` |
-| Put the selection down, while **Paint** is on | `Enter` |
+| Select part of the picture, while **Mapmaker** is on | `S` |
+| Paint with the brush, while **Mapmaker** is on | `B` |
+| Erase to the map's own colour, while **Mapmaker** is on | `E` |
+| Paint a line, while **Mapmaker** is on | `L` |
+| Paint a rectangle, while **Mapmaker** is on | `R` |
+| Paint an ellipse, while **Mapmaker** is on | `O` |
+| Paint a polygon, corner by corner, while **Mapmaker** is on | `G` |
+| Paint a curve, bent by a second drag, while **Mapmaker** is on | `C` |
+| Close a polygon or paint a curve as it is, while **Mapmaker** is on | `Enter` |
+| Take a polygon's last corner back, while **Mapmaker** is on | `Backspace` |
+| Paint a room, whose walls are added when it is saved, while **Mapmaker** is on | `M` |
+| Paint a stamp into a square, while **Mapmaker** is on | `P` |
+| Fill an area, while **Mapmaker** is on | `F` |
+| Paint a line of text, while **Mapmaker** is on | `T` |
+| Take a colour from the picture, while **Mapmaker** is on | `I` |
+| Copy, cut or paste the selection, while **Mapmaker** is on | `Ctrl + C` `Ctrl + X` `Ctrl + V` |
+| Select the whole picture, while **Mapmaker** is on | `Ctrl + A` |
+| Erase the selection to the map's own colour, while **Mapmaker** is on | `Delete` `Backspace` |
+| Put the selection down, while **Mapmaker** is on | `Enter` |
 | Keep a painted line to 15 degree steps | `Shift + drag` |
-| Make the brush narrower or wider, while **Paint** is on | `[` `]` |
-| Undo the last change to the picture, while **Paint** is on | `Ctrl + Z` |
-| Redo a change to the picture, while **Paint** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
+| Make the brush narrower or wider, while **Mapmaker** is on | `[` `]` |
+| Undo the last change to the picture, while **Mapmaker** is on | `Ctrl + Z` |
+| Redo a change to the picture, while **Mapmaker** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
 
-On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Paint** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, and the arrows, `Delete` and `Backspace` do nothing.
+On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Mapmaker** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, and the arrows, `Delete` and `Backspace` do nothing.
 
 ### On a touch screen
 
@@ -1103,11 +1103,11 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | The **Fog of War**, **Walls** and **Lights** panels at the top right of the map | The map's **More**, then **Show tools**. The panels show at the top right, folded, as on the desktop; **Hide tools**, in the map's **More** or on the bar above the panels, puts them away and puts down the tool you had up |
 | The spirit tokens button in the map's toolbar | The map's **More**: **Show spirit tokens** |
 | **Draw** | **Draw**, in the map's toolbar: its tools open in a strip across the foot of the map, with the map above it to draw on. **Clear…** offers every drawing or one member's, and asks before it clears |
-| **Paint**, and its panel | The map's **More**: **Paint** (**Put Paint away** while it is on). Its tools open in a strip across the foot of the map, with the map above it to paint on: **Undo**, **Redo**, **Save** and **Done** at its top, the tools in a row that scrolls sideways (an end with more past it fades out under an arrow), **Colour and width**, which opens the two colours, the palette and the width over the strip (`Esc` or a tap elsewhere closes it), and **Download picture**. On a phone on its side the tools sit beside **Paint** at the strip's top. Every control is at least 44 pixels |
+| **Mapmaker**, and its panel | The map's **More**: **Mapmaker** (**Put Mapmaker away** while it is on). Its tools open in a strip across the foot of the map, with the map above it to paint on: **Undo**, **Redo**, **Save** and **Done** at its top, the tools in a row that scrolls sideways (an end with more past it fades out under an arrow), **Colour and width**, which opens the two colours, the palette and the width over the strip (`Esc` or a tap elsewhere closes it), and **Download picture**. On a phone on its side the tools sit beside **Mapmaker** at the strip's top. Every control is at least 44 pixels |
 | **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
 | The banner over a map you are preparing | The same, across the top of the map: on a phone upright its words take one row and **Back to the table**, **Bring everyone here** and **What reaches the table?** the next; on a phone on its side it is one row, with the buttons reading **Back**, **Bring everyone** and an info button. The phone's **Back** goes back to the table |
 
-A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** and **Paint** with what you have painted included, so a tablet propped up for the table stays in the players' view.
+A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** and **Mapmaker** with what you have painted included, so a tablet propped up for the table stays in the players' view.
 
 ---
 
