@@ -48,6 +48,7 @@ import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
 import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type PaintStepNote, type TileRect } from './paintHistory';
 import { gridCorner, roomBox, roomWalls, wallsToAdd, type WallLine } from './paintRoom';
+import { drawStamp, stampSquare, type StampKind, type StampTurn } from './paintStamps';
 import { handleAt, isInside, movedBox, pastedBox, resizedBox, selectedBox, type SelectBox, type SelectHandle } from './paintSelection';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
@@ -74,10 +75,10 @@ import {
 } from './paintDrafts';
 
 /** The tools Paint offers. */
-export type PaintTool = 'select' | 'brush' | 'eraser' | PaintShapeKind | 'room' | 'fill' | 'text' | 'eyedropper';
+export type PaintTool = 'select' | 'brush' | 'eraser' | PaintShapeKind | 'room' | 'stamp' | 'fill' | 'text' | 'eyedropper';
 
 /** The tools that act on a tap or a click: a finger's drag pans under them. */
-const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['fill', 'text', 'eyedropper']);
+const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['stamp', 'fill', 'text', 'eyedropper']);
 
 /** Text's letters: as tall as Draw's labels for the width, in the app's own type. */
 const textFont = (size: number) => `600 ${size}px 'Inter', system-ui, sans-serif`;
@@ -110,6 +111,9 @@ export interface PaintSettings {
   snap: boolean;
   /** How far, in percent, a colour may be from the one clicked for the fill to take it in. */
   tolerance: number;
+  /** The stamp a tap paints, and how far it is turned. */
+  stamp: StampKind;
+  turn: StampTurn;
 }
 
 export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
@@ -121,10 +125,12 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   straight: false,
   snap: false,
   tolerance: 10,
+  stamp: 'door',
+  turn: 0,
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['s', 'select'], ['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['m', 'room'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['s', 'select'], ['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['m', 'room'], ['p', 'stamp'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
 
 /** The most the undo tiles may take, packed; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -1321,6 +1327,22 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape), note);
   }, [land, xy]);
 
+  /** Paint the stamp chosen into the square of the grid at map pixel `point`, as one change. */
+  const stampAt = useCallback((point: PaintPoint) => {
+    const s = surfaceRef.current;
+    const m = mapRef.current;
+    if (!s || !m || m.id !== s.mapId) return;
+    const look = settingsRef.current;
+    const square = stampSquare(point, m.gridSize, m.width * m.gridSize, m.height * m.gridSize);
+    const [sx, sy] = xy(s);
+    const box = { x0: Math.floor(square.x * sx), y0: Math.floor(square.y * sy), x1: Math.ceil((square.x + m.gridSize) * sx), y1: Math.ceil((square.y + m.gridSize) * sy) };
+    const step = s.history.begin();
+    step.cover(box);
+    land(step, null, () => drawStamp(s.ctx, {
+      kind: look.stamp, x: square.x * sx, y: square.y * sy, size: m.gridSize * sx, turn: look.turn, colour: look.colour, second: look.second,
+    }));
+  }, [land, xy]);
+
   /** A box in map pixels as whole picture pixels; cut at the picture's edge when `onPicture`. */
   const pictureBoxOf = useCallback((s: Surface, box: SelectBox, onPicture: boolean): PaintBox => {
     const [sx, sy] = xy(s);
@@ -1524,6 +1546,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (textRef.current) commitText();
         if (at.via === 'drag') mapControls.startDrag(at.e);
         else if (look.tool === 'fill') fillAt(point);
+        else if (look.tool === 'stamp') stampAt(point);
         else if (look.tool === 'eyedropper') pickAt(point);
         else if (look.tool === 'text') {
           textRef.current = { at: point, draft: '', mapId: s.mapId };

@@ -9,10 +9,11 @@
  */
 
 import { useState } from 'react';
-import { BrickWall, Circle, SquareDashed, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
+import { BrickWall, Circle, SquareDashed, Stamp, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSelectionActions, PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
+import { PAINT_STAMPS, type StampTurn } from './map/paint/paintStamps';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { labelFontSize } from './map/drawingGeometry';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
@@ -26,6 +27,7 @@ export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof
   rect: { label: 'Rectangle', key: 'R', icon: Square },
   ellipse: { label: 'Ellipse', key: 'O', icon: Circle },
   room: { label: 'Room', key: 'M', icon: BrickWall },
+  stamp: { label: 'Stamp', key: 'P', icon: Stamp },
   fill: { label: 'Fill', key: 'F', icon: PaintBucket },
   text: { label: 'Text', key: 'T', icon: Type },
   eyedropper: { label: 'Eyedropper', key: 'I', icon: Pipette },
@@ -38,6 +40,7 @@ export const HINTS: Record<PaintTool, string> = {
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
   rect: 'Drag from one corner to the other.',
   ellipse: 'Drag across the box it fills.',
+  stamp: 'Click or tap a square to paint the stamp chosen into it, outlined in the colour and filled with the second. Turn turns the next one. A finger\'s drag moves the map.',
   room: 'Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour, and its four walls, which are added to the map when you save.',
   fill: 'Click or tap an area to fill it with the colour. A finger\'s drag moves the map.',
   text: 'Click or tap where the line of text goes, type it, then press Enter. Its size follows the width.',
@@ -80,6 +83,10 @@ export interface PaintControlsProps {
   /** Select's buttons, shown while Select is chosen: a phone has no Ctrl+C. */
   selection?: PaintSelectionActions;
 }
+
+/** The next quarter turn, and the angle it shows as. */
+export const nextTurn = (turn: StampTurn): StampTurn => ((turn + 1) % 4) as StampTurn;
+export const turnLabel = (turn: StampTurn) => `Turn: ${turn * 90}°`;
 
 /** Select's buttons, each with what it needs: a selection, or something to paste. */
 export const SELECTION_BUTTONS: ReadonlyArray<{ label: string; act: keyof Omit<PaintSelectionActions, 'has' | 'canPaste'>; needs: 'has' | 'canPaste' | null }> = [
@@ -161,6 +168,18 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         </button>
       </div>
       <p className="text-[11px] leading-snug text-stone-400">{HINTS[settings.tool]}</p>
+      {settings.tool === 'stamp' && (
+        <div role="group" aria-label="Stamp" className="flex flex-wrap gap-1">
+          {PAINT_STAMPS.map(({ kind, label }) => (
+            <button key={kind} type="button" aria-pressed={settings.stamp === kind} onClick={() => onSettingsChange({ stamp: kind })} className={`${actionButton} ${settings.stamp === kind ? 'border-amber-400/60 bg-amber-400/15 text-amber-100' : ''}`}>
+              {label}
+            </button>
+          ))}
+          <button type="button" onClick={() => onSettingsChange({ turn: nextTurn(settings.turn) })} className={actionButton}>
+            {turnLabel(settings.turn)}
+          </button>
+        </div>
+      )}
       {settings.tool === 'select' && selection && (
         <div role="group" aria-label="Selection" className="flex flex-wrap gap-1">
           {SELECTION_BUTTONS.map(({ label, act, needs }) => (

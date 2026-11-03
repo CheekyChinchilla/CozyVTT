@@ -827,6 +827,34 @@ describe('a selection', () => {
   });
 });
 
+describe('a stamp', () => {
+  const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
+  const panel = () => within(screen.getByRole('region', { name: 'Paint' }));
+
+  it('paints the stamp chosen into the square clicked, turned as chosen, as one change', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    expect(panel().getByRole('button', { name: 'Chest' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(panel().getByRole('button', { name: 'Turn: 0°' }));
+    expect(panel().getByRole('button', { name: 'Turn: 90°' })).toBeInTheDocument();
+    mouse.down(input(), { clientX: 130, clientY: 260 });
+    mouse.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate')!.slice(-1)[0]?.args).toEqual([125, 275]);
+    expect(callsOfPicture('rotate')!.slice(-1)[0]?.args).toEqual([Math.PI / 2]);
+    expect(callsOfPicture('rect')!.slice(-1)[0]?.args).toEqual([-15, -10, 30, 20]);
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  });
+
+  it('is chosen by P', async () => {
+    await showMap();
+    await paintOn();
+    press('p');
+    expect(screen.getByRole('button', { name: 'Stamp' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 describe('the fill bucket', () => {
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
 

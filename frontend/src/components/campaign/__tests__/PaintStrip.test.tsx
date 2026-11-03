@@ -40,10 +40,10 @@ describe('the strip', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('offers the ten tools in one row that scrolls sideways, the one in use pressed', () => {
+  it('offers the eleven tools in one row that scrolls sideways, the one in use pressed', () => {
     const { props } = strip({}, { tool: 'line' });
     const names = within(row()).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
-    expect(names).toEqual(['Select', 'Brush', 'Eraser', 'Line', 'Rectangle', 'Ellipse', 'Room', 'Fill', 'Text', 'Eyedropper']);
+    expect(names).toEqual(['Select', 'Brush', 'Eraser', 'Line', 'Rectangle', 'Ellipse', 'Room', 'Stamp', 'Fill', 'Text', 'Eyedropper']);
     expect(screen.getByRole('button', { name: 'Line' })).toHaveAttribute('aria-pressed', 'true');
     expect(classes(row())).toContain('overflow-x-auto');
     expect(classes(row())).not.toContain('flex-wrap');
