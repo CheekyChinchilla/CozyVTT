@@ -147,6 +147,17 @@
   one, give every element that relies on it an explicit utility first.
 */
 @layer base {
+  /* With viewport-fit=cover (index.html) a page runs under a notch, a
+     home-screen app's status bar and the home indicator: every page but the
+     table keeps clear of them here. The table pads its own top, and its bar,
+     sheets, header, dock and strips their own sides and foot. */
+  body:not(:has([data-table-page])) {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+
   *,
   ::after,
   ::before,

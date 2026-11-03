@@ -578,6 +578,8 @@ describe('a phone turned sideways', () => {
     expect(screen.queryByRole('button', { name: /Make Chat/ })).toBeNull();
     // As open to the map as at half height.
     expect(backdrop()).toBeNull();
+    // Clear of a notch at the right, the way the phone may be turned.
+    expect((sheetElement().firstElementChild as HTMLElement).className).toContain('pr-[env(safe-area-inset-right)]');
   });
 });
 

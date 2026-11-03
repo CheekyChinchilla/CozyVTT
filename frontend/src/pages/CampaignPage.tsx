@@ -276,8 +276,9 @@ function CampaignPageContent() {
   return (
     // The dynamic viewport height: on a phone or a tablet the browser's
     // toolbar comes and goes, and h-screen (100vh) is the height without it,
-    // which put the bottom of the page under the toolbar.
-    <div className="h-dvh flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    // which put the bottom of the page under the toolbar. Its top clears a
+    // notch or a home-screen app's status bar (index.css pads the other pages).
+    <div data-table-page="" className="h-dvh pt-[env(safe-area-inset-top)] flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       <TableHosts parts={tableParts}>
         {compact ? (
           <CompactTable

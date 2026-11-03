@@ -339,7 +339,8 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
           {...motionProps}
           className={cn(
             'flex h-full min-h-0 flex-col overflow-hidden border border-brand/20 bg-surface-light shadow-2xl',
-            sideways ? 'rounded-l-cozy-lg border-r-0' : 'rounded-t-cozy-lg border-b-0',
+            // On its side, a phone's notch or rounded corner may be at the right.
+            sideways ? 'rounded-l-cozy-lg border-r-0 pr-[env(safe-area-inset-right)]' : 'rounded-t-cozy-lg border-b-0',
             !edges && 'pb-[env(safe-area-inset-bottom)]'
           )}
         >
