@@ -486,6 +486,11 @@ export interface AdminBackup {
   createdAt: string;
 }
 
+/** A backup just made (POST /api/admin/backups), with why the restore would refuse it, if it would. */
+export interface CreatedBackup extends AdminBackup {
+  warning?: string;
+}
+
 /** A file in the uploads folder that no asset names (GET /api/admin/orphaned-files). */
 export interface OrphanedFile {
   /** Relative to the uploads folder. */

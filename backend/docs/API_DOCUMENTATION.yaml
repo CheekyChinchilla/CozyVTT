@@ -11094,7 +11094,12 @@ paths:
         - cookieAuth: []
       responses:
         '201':
-          description: Backup created
+          description: >-
+            Backup created. A backup the Admin Panel's restore would refuse
+            (larger than 4 GB, more than 100,000 files, or more than 10 GiB
+            unpacked) is still made and kept, and its answer carries a
+            `warning` saying which limit it passes; the activity log and the
+            backend log say the same.
           content:
             application/json:
               schema:
@@ -11107,6 +11112,9 @@ paths:
                   createdAt:
                     type: string
                     format: date-time
+                  warning:
+                    type: string
+                    description: Present only for a backup the restore would refuse.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

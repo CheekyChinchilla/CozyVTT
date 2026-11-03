@@ -874,6 +874,8 @@ describe('POST /api/admin/backups', () => {
     }
     const made = await making;
     expect(made.status).toBe(201);
+    // Well within what the restore takes, so no warning.
+    expect(made.body.warning).toBeUndefined();
     const name = made.body.filename;
     expect(named(await fs.readdir(BACKUP_DIR))).toContain(name);
     expect((await fs.readdir(BACKUP_DIR)).filter((f) => f.endsWith('.partial'))).toEqual([]);

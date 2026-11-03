@@ -127,6 +127,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Fixed
 
+- **Create Backup says when the Admin Panel could not restore the backup it made.** A backup larger than the restore takes (4 GB, 100,000 files or 10 GiB unpacked) was reported as made like any other, and only the restore refused it, on the day it was needed. It is still made and kept, and now comes with a warning on screen, in the activity log and in the backend log, pointing to the command-line restore. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
+
 - **The AoE Shape panel no longer covers the map's toolbar with a mouse.** It opened 20 pixels above the foot of the toolbar, over the lower part of **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen**. It now opens under the toolbar with every pointer.
 
 - **Deleting a campaign tells its owner once.** **Delete Campaign** in Campaign Settings showed two notices, the panel's "Campaign deleted" and the page's "This campaign was deleted.", both on the way to the dashboard. It now shows one.
