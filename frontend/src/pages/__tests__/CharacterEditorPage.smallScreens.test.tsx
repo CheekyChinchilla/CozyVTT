@@ -61,6 +61,6 @@ describe('the Character Editor page on a phone', () => {
 
   it('is as tall as the browser shows it, in every state', () => {
     expect(source.match(/\bmin-h-screen\b/g) ?? []).toEqual([]);
-    expect(source.match(/\bmin-h-dvh\b/g)).toHaveLength(4);
+    expect(source.match(/\bmin-h-page\b/g)).toHaveLength(4);
   });
 });
