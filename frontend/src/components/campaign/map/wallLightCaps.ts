@@ -22,6 +22,34 @@ export function atLightCap(count: number): boolean {
 }
 
 /**
+ * How long a wall or light edit waits for the server's answer, as the other
+ * answered events do (services/socket.ts). An edit with none in this long is
+ * taken as refused with NO_ANSWER_MESSAGE: a server past its budget of events
+ * a socket may send drops one unanswered.
+ */
+export const WALL_LIGHT_ANSWER_TIMEOUT_MS = 10_000;
+export const NO_ANSWER_MESSAGE = "That change didn't reach the table. Check your connection and try again.";
+
+/**
+ * The acknowledgement to send a wall or light edit with: it hands `handle`
+ * the server's answer, or a refusal saying NO_ANSWER_MESSAGE once `ms` has
+ * passed with none, whichever comes first, and nothing after that.
+ */
+export function answeredWithin(ms: number, handle: (reply: unknown) => void): (reply: unknown) => void {
+  let done = false;
+  const timer = setTimeout(() => {
+    done = true;
+    handle({ ok: false, error: NO_ANSWER_MESSAGE });
+  }, ms);
+  return (reply) => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    handle(reply);
+  };
+}
+
+/**
  * The reason in the server's answer to a wall or light edit, when the
  * answer refuses it, `{ ok: false, error }`; null for anything else.
  */
