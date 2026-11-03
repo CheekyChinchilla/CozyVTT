@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { measureTopBand, measureBottom, underBand, stackCornerTop, BAND_GAP, type TopBand } from '../toolbarLayout';
+import { measureTopBand, measureBottom, underBand, belowBand, stackCornerTop, BAND_GAP, type TopBand } from '../toolbarLayout';
 
 /** A box at `left, top` of `width` by `height`, as getBoundingClientRect gives it. */
 const box = (left: number, top: number, width: number, height: number) =>
@@ -87,7 +87,14 @@ describe('measureBottom', () => {
 
 const oneRow: TopBand = { bottom: 68, buttonsRight: 503, width: 754, wrapped: false };
 
-describe('underBand: the AoE panel and the Put back bar', () => {
+describe('belowBand: the AoE panel', () => {
+  it('starts under the band with every pointer, once it is measured', () => {
+    expect(belowBand(oneRow)).toBe(oneRow.bottom + BAND_GAP);
+    expect(belowBand(null)).toBeNull();
+  });
+});
+
+describe('underBand: the Put back bar', () => {
   it('leaves them in their places under one row of a mouse’s buttons', () => {
     expect(underBand(oneRow, false)).toBeNull();
     expect(underBand(null, false)).toBeNull();

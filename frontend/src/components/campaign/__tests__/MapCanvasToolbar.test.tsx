@@ -445,15 +445,16 @@ describe('what sits under the toolbar', () => {
   }
 
   // One row of 34-pixel buttons on a map 754 wide, as on a 1440-pixel
-  // screen with the side panels at their defaults.
-  it('keeps the AoE panel and the tool stack in their places under one row of a mouse’s buttons', () => {
+  // screen with the side panels at their defaults. The AoE panel kept its
+  // place there, 20 pixels above the toolbar's foot, over the lower part of
+  // Zoom Out, the zoom, Zoom In and Fit to Screen; it starts under the band.
+  it('starts the AoE panel under one row of a mouse’s buttons, and keeps the tool stack beside them', () => {
     render(<MapCanvas />);
     openAoE();
     layOut(754, [[25, 25, 148, 34], [181, 25, 127, 34], [316, 25, 169, 34], [493, 25, 43, 34]]);
 
-    expect(aoePanel().style.top).toBe('');
-    expect(aoePanel().style.maxHeight).toBe('');
-    expect(classesOf(aoePanel())).toContain('top-12');
+    // The band's foot is at 68, the buttons' 59 and its padding.
+    expect(aoePanel().style.top).toBe('76px');
     expect(toolStack().style.top).toBe('3.5rem');
   });
 

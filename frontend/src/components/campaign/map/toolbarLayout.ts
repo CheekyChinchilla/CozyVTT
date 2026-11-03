@@ -50,14 +50,20 @@ export function measureTopBand(band: HTMLElement, toolbar: HTMLElement, containe
   };
 }
 
+/** The top of a panel just under the band's bottom edge, or null before it is measured. */
+export function belowBand(band: TopBand | null): number | null {
+  return band ? band.bottom + BAND_GAP : null;
+}
+
 /**
- * The top of a panel under the band, the AoE panel or the Put back bar: null
- * keeps its place in the stylesheet, which suits one row of a mouse's
- * buttons; on a touch screen (`coarse`), or with a second row, it starts
- * under the band's bottom edge.
+ * The top of the Put back bar under the band: null keeps its place in the
+ * stylesheet, below one row of a mouse's buttons; on a touch screen
+ * (`coarse`), or with a second row, it starts under the band's bottom edge.
+ * The AoE panel, whose place in the stylesheet is higher, starts under the
+ * band with every pointer (belowBand).
  */
 export function underBand(band: TopBand | null, coarse: boolean): number | null {
-  return band && (coarse || band.wrapped) ? band.bottom + BAND_GAP : null;
+  return coarse || band?.wrapped ? belowBand(band) : null;
 }
 
 /**
