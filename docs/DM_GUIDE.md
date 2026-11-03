@@ -217,14 +217,14 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 **Paint**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, or whose picture has been deleted from the Asset Library, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
 
 1. Click **Paint**. Its panel opens at the top of your tool panels (on a phone, **Paint** is in the map's **More**, and its tools are a strip at the foot of the map: see [On a phone](#on-a-phone)), and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Paint is on; choosing a wall, fog or light tool puts Paint away.
-2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Paint has two colours: **Colour** and **Second colour** above the colours say which one the palette sets. Set the **Width**, from 1 to 64 pixels.
+2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Paint has two colours: **Colour** and **Second colour** above the colours say which one the palette sets. The second colour fills a rectangle, an ellipse, a room's floor and a stamp. Set the **Width**, from 1 to 64 pixels.
 3. Paint with the tool. A stroke shows as you drag, and goes into the picture when you let go.
 
 | Tool | Key | How |
 |---|---|---|
-| **Select** | `S` | Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it: where it was is painted in the second colour. Click or tap outside it, press `Enter`, choose another tool, **Save** or put Paint away to put it down; **Undo** while it is moving puts it back. `Delete` paints the box over with the second colour. `Ctrl + C`, `Ctrl + X` and `Ctrl + V` copy, cut and paste (a paste lands a square right and down, to move where you want it), and `Ctrl + A` selects the whole picture; the same are buttons under the tools, for a phone or a tablet. Select moves the picture only: a room's walls stay where the room was drawn, so move a room before you save it by undoing it and drawing it again, or move its walls with the wall tool after. |
+| **Select** | `S` | Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it: where it was is left in the map's own colour. Click or tap outside it, press `Enter`, choose another tool, **Save** or put Paint away to put it down; **Undo** while it is moving puts it back. `Delete` erases the box to the map's own colour. `Ctrl + C`, `Ctrl + X` and `Ctrl + V` copy, cut and paste (a paste lands a square right and down, to move where you want it), and `Ctrl + A` selects the whole picture; the same are buttons under the tools, for a phone or a tablet. Select moves the picture only: a room's walls stay where the room was drawn, so move a room before you save it by undoing it and drawing it again, or move its walls with the wall tool after. |
 | **Brush** | `B` | Drag to paint in the colour, or click or tap for a dot. |
-| **Eraser** | `E` | Drag to paint the second colour over what is there. The second colour starts as the colour of the picture's top-left corner: the map's own colour on a new drawn map. |
+| **Eraser** | `E` | Drag to erase back to the map's own colour: the one it was made in, read off the picture's top-left corner. It has no colour of its own, so the colours are hidden while it is chosen; the **Width** sets how wide it erases. |
 | **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
 | **Rectangle**, **Ellipse** | `R`, `O` | Drag from one corner to the other. Choose **Outline** (in the colour), **Filled** (with the colour) or **Outline and fill** (outlined in the colour, filled with the second colour). |
 | **Room** | `M` | Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour at the **Width**, with its corners always on the grid's corners. Its four walls are added to the map when you save, as if drawn with the wall tool, so sight and fog follow them: until then they are on your screen only, **Undo** takes them back with the floor, and your draft keeps them. A side two rooms share, or a wall the map already has, is added once. |
@@ -1046,7 +1046,7 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
 | Select part of the picture, while **Paint** is on | `S` |
 | Paint with the brush, while **Paint** is on | `B` |
-| Paint with the eraser, in the second colour, while **Paint** is on | `E` |
+| Erase to the map's own colour, while **Paint** is on | `E` |
 | Paint a line, while **Paint** is on | `L` |
 | Paint a rectangle, while **Paint** is on | `R` |
 | Paint an ellipse, while **Paint** is on | `O` |
@@ -1057,7 +1057,7 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Take a colour from the picture, while **Paint** is on | `I` |
 | Copy, cut or paste the selection, while **Paint** is on | `Ctrl + C` `Ctrl + X` `Ctrl + V` |
 | Select the whole picture, while **Paint** is on | `Ctrl + A` |
-| Paint the selection over in the second colour, while **Paint** is on | `Delete` `Backspace` |
+| Erase the selection to the map's own colour, while **Paint** is on | `Delete` `Backspace` |
 | Put the selection down, while **Paint** is on | `Enter` |
 | Keep a painted line to 15 degree steps | `Shift + drag` |
 | Make the brush narrower or wider, while **Paint** is on | `[` `]` |

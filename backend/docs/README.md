@@ -32,7 +32,7 @@ Two checks, run from the repository root:
 ```bash
 python3 scripts/spec-coverage.py       # HTTP routes
 python3 scripts/websocket-events.py --check   # Socket.io events
-python3 -m unittest discover -s scripts/tests # their tests, and the nginx and coverage scripts'
+python3 -m unittest discover -s scripts/tests # their tests, the nginx and coverage scripts', and no other company's product named in a tracked file
 ```
 
 The first covers `API_DOCUMENTATION.yaml`, which must be complete in both

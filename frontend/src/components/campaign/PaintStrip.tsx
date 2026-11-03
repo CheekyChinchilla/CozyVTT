@@ -131,8 +131,8 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
       className="absolute bottom-full left-[max(1rem,env(safe-area-inset-left))] z-10 mb-2 flex max-h-[calc(50cqh-1rem)] w-[min(22rem,calc(100cqw-2rem))] flex-col gap-2 overflow-y-auto overscroll-contain rounded-cozy border border-brand/20 bg-surface-light p-2 shadow-2xl short:w-[min(40rem,calc(100cqw-2rem))] short:flex-row short:items-start"
     >
       <div className="flex flex-col gap-2 short:w-60 short:shrink-0">
-        {/* The two colours; the palette sets the one chosen here. */}
-        <div className="flex flex-wrap gap-1">
+        {/* The two colours; the palette sets the one chosen here. The eraser has none: it paints the map's own colour. */}
+        {tool !== 'eraser' && <div className="flex flex-wrap gap-1">
           {SLOTS.map(({ slot: which, label }) => (
             <button
               key={which}
@@ -149,7 +149,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
               {label}
             </button>
           ))}
-        </div>
+        </div>}
         <label className="flex flex-col gap-0.5">
           <span className="flex justify-between text-xs text-ink-muted">
             <span>Width</span>
@@ -167,7 +167,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           />
         </label>
       </div>
-      <div className="flex flex-wrap gap-1">
+      {tool !== 'eraser' && <div className="flex flex-wrap gap-1">
         {PAINT_COLOURS.map((colour) => (
           <button
             key={colour.value}
@@ -206,7 +206,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
             className="size-7 cursor-pointer border-0 bg-transparent p-0"
           />
         </label>
-      </div>
+      </div>}
     </div>
   );
 
@@ -226,14 +226,14 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           onClick={() => setOverOpen((open) => !open)}
           aria-expanded={overOpen}
           aria-controls={overOpen ? overId : undefined}
-          aria-label={`Colour and width: ${nameOf(settings.colour)}, ${settings.width} px`}
+          aria-label={tool === 'eraser' ? `Width: ${settings.width} px` : `Colour and width: ${nameOf(settings.colour)}, ${settings.width} px`}
           className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-cozy border border-ink/15 bg-paper pr-3 pl-2 text-sm text-ink transition-colors hover:bg-ink/5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
         >
           <span aria-hidden="true" className="relative block size-7">
             <span className="absolute right-0 bottom-0 block size-5 rounded-sm border border-ink/30" style={{ backgroundColor: settings.second }} />
             <span className="absolute top-0 left-0 block size-5 rounded-sm border border-ink/30" style={{ backgroundColor: settings.colour }} />
           </span>
-          {nameOf(settings.colour)}, {settings.width} px
+          {tool === 'eraser' ? `${settings.width} px` : `${nameOf(settings.colour)}, ${settings.width} px`}
         </button>
       </div>
 

@@ -4,8 +4,8 @@
 //
 // The area filled is the pixels joined side to side or up and down (not
 // corner to corner) to the one pressed, whose colour is within the
-// tolerance of its colour on every channel, as a paint bucket does with
-// a tolerance of 0. The tolerance lets the soft edge of a brush stroke be
+// tolerance of its colour on every channel; a tolerance of 0 takes in only
+// that exact colour. The tolerance lets the soft edge of a brush stroke be
 // filled up to.
 //
 // A tile is read as the fill reaches it, filled as far as the fill goes

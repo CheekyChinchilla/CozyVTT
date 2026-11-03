@@ -97,8 +97,9 @@ export interface PaintSettings {
   tool: PaintTool;
   colour: string;
   /**
-   * The second colour, which the eraser paints: the
-   * colour of the picture's top-left pixel as Paint opens on it.
+   * The second colour, which fills a shape, a room and a stamp: to start
+   * with, the map's own colour, read off the picture's top-left pixel as
+   * Paint opens on it.
    */
   second: string;
   /** Picture pixels, 1 to 64. */
@@ -202,6 +203,8 @@ interface Surface {
   ownsDraft: boolean;
   /** The rooms painted and not saved, whose walls Save adds to the map. */
   rooms: PendingRoom[];
+  /** The map's own colour, read off the picture's top-left pixel as Paint opens: what the eraser paints. */
+  background: string;
 }
 
 /**
@@ -285,7 +288,7 @@ export interface PaintSelectionActions {
   copy(): void;
   cut(): void;
   paste(): void;
-  /** Paint the selection over with the second colour, or drop the pixels lifted. */
+  /** Paint the selection over with the map's own colour, or drop the pixels lifted. */
   remove(): void;
   selectAll(): void;
 }
@@ -751,9 +754,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       capture: (tile) => remember(tile, tileStore.capture(tile)),
       keep: (tile, pixels) => remember(tile, tileStore.keep(tile, pixels)),
     };
-    // The eraser's colour: the picture's own, read off its top-left pixel.
-    const second = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
-    setSettings((prev) => ({ ...prev, second }));
+    // The map's own colour, read off the picture's top-left pixel: what the
+    // eraser paints, and the second colour to start with.
+    const background = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
+    setSettings((prev) => ({ ...prev, second: background }));
     let made: Surface | null = null;
     const history: PaintHistory<KeptTile> = createPaintHistory(store, {
       width,
@@ -784,6 +788,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       takenFrom: how !== undefined && how !== 'fresh' ? how.from : null,
       ownsDraft: false,
       rooms: [],
+      background,
     };
     made = surface;
     canvasesMade.current += 1;
@@ -1373,12 +1378,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const lift = useCallback((s: Surface, selection: Selection) => {
     if (selection.lifted || !selection.box) return;
     const canvas = copyOut(s, selection.box);
-    if (canvas) selection.lifted = { canvas, from: selection.box, hole: settingsRef.current.second };
+    if (canvas) selection.lifted = { canvas, from: selection.box, hole: s.background };
   }, [copyOut]);
 
   /**
    * Let the selection go. Pixels lifted are put down where it is now, the
-   * box they came from painted in the second colour, as one change Undo
+   * box they came from painted in the map's own colour, as one change Undo
    * takes back; with `place` false they are let go of, the picture as it was.
    */
   const endSelection = useCallback((place = true) => {
@@ -1422,7 +1427,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   }, [copyOut]);
 
   /**
-   * Paint the selection over with the second colour, as one change; with
+   * Paint the selection over with the map's own colour, as one change; with
    * pixels lifted, they are let go of and the box they came from is
    * painted over (nothing, for a paste).
    */
@@ -1435,7 +1440,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!s || !selection?.box || selection.mapId !== s.mapId) return;
     const area = selection.lifted ? selection.lifted.from : selection.box;
     if (!area) return;
-    const colour = selection.lifted ? selection.lifted.hole : settingsRef.current.second;
+    const colour = selection.lifted ? selection.lifted.hole : s.background;
     const box = pictureBoxOf(s, area, true);
     const step = s.history.begin();
     step.cover(box);
@@ -1581,8 +1586,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       }
       const step = s.history.begin();
       step.cover(strokeBox(toPicture([point], ...xy(s)), look.width));
-      // The eraser is a brush of the second colour.
-      const colour = look.tool === 'eraser' ? look.second : look.colour;
+      // The eraser is a brush of the map's own colour.
+      const colour = look.tool === 'eraser' ? s.background : look.colour;
       strokeRef.current = { mapId: s.mapId, colour, width: look.width, points: [point], step };
       markDirty('overlay');
       return true;
