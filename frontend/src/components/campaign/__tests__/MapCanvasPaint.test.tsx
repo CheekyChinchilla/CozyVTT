@@ -872,6 +872,71 @@ describe('a stamp', () => {
   });
 });
 
+describe('polygons and curves', () => {
+  const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+  const click = (x: number, y: number) => {
+    mouse.down(input(), { clientX: x, clientY: y });
+    mouse.up(input(), { clientX: x, clientY: y });
+  };
+  const corners = () => callsOfPicture('moveTo').concat(callsOfPicture('lineTo')).map((c) => c.args);
+
+  it('closes a polygon on a click on its first corner, filled inside its outline, as one change', async () => {
+    await showMap();
+    await paintOn();
+    choose('Polygon');
+    fireEvent.click(screen.getByRole('radio', { name: 'Outline and fill' }));
+    click(100, 100);
+    click(200, 100);
+    click(150, 200);
+    expect(callsOfPicture('fill')).toHaveLength(0);
+    click(103, 102);
+    expect(corners()).toEqual(expect.arrayContaining([[100, 100], [200, 100], [150, 200]]));
+    expect(callsOfPicture('closePath')).toHaveLength(1);
+    expect(callsOfPicture('fill')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  });
+
+  it('closes a polygon on Enter, Backspace taking its last corner back, and lets go of one under three corners', async () => {
+    await showMap();
+    await paintOn();
+    press('g');
+    click(100, 100);
+    click(200, 100);
+    click(500, 500);
+    press('Backspace');
+    click(150, 200);
+    press('Enter');
+    expect(corners()).not.toContainEqual([500, 500]);
+    expect(corners()).toEqual(expect.arrayContaining([[100, 100], [200, 100], [150, 200]]));
+    const before = callsOfPicture('closePath').length;
+    click(300, 300);
+    click(400, 300);
+    press('Enter');
+    expect(callsOfPicture('closePath')).toHaveLength(before);
+  });
+
+  it('bends a curve by a second drag, painting it when that drag ends', async () => {
+    await showMap();
+    await paintOn();
+    press('c');
+    expect(screen.getByRole('button', { name: 'Curve' })).toHaveAttribute('aria-pressed', 'true');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 100 });
+    expect(callsOfPicture('quadraticCurveTo')).toHaveLength(0);
+    drag({ clientX: 200, clientY: 110 }, { clientX: 200, clientY: 200 });
+    expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 200, 300, 100]);
+  });
+
+  it('paints a curve not bent, straight, on Enter', async () => {
+    await showMap();
+    await paintOn();
+    choose('Curve');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 100 });
+    press('Enter');
+    expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 100, 300, 100]);
+  });
+});
+
 describe('the fill bucket', () => {
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
 

@@ -78,7 +78,7 @@ import {
 export type PaintTool = 'select' | 'brush' | 'eraser' | PaintShapeKind | 'room' | 'stamp' | 'fill' | 'text' | 'eyedropper';
 
 /** The tools that act on a tap or a click: a finger's drag pans under them. */
-const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['stamp', 'fill', 'text', 'eyedropper']);
+const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['polygon', 'stamp', 'fill', 'text', 'eyedropper']);
 
 /** Text's letters: as tall as Draw's labels for the width, in the app's own type. */
 const textFont = (size: number) => `600 ${size}px 'Inter', system-ui, sans-serif`;
@@ -133,7 +133,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['s', 'select'], ['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['m', 'room'], ['p', 'stamp'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['s', 'select'], ['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['g', 'polygon'], ['c', 'curve'], ['m', 'room'], ['p', 'stamp'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
 
 /** The most the undo tiles may take, packed; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -370,6 +370,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const strokeRef = useRef<Stroke | null>(null);
   const shapeRef = useRef<ShapeUnderWay | null>(null);
   const selectionRef = useRef<Selection | null>(null);
+  /** A polygon being clicked out, corner by corner, and where the pointer is now, in map pixels. */
+  const polygonRef = useRef<{ mapId: string; points: PaintPoint[]; cursor: PaintPoint | null } | null>(null);
+  /** A curve dragged end to end, waiting for a second drag to bend it (`bending` while that drag is under way). */
+  const curveRef = useRef<{ mapId: string; shape: PaintShape; bending: boolean } | null>(null);
   /** What Copy or Cut took, for Paste, on any map Paint opens on. */
   const clipboardRef = useRef<{ canvas: HTMLCanvasElement; box: SelectBox } | null>(null);
   /** Put the selection down (or, with false, let it go), from callbacks made before it. */
@@ -650,6 +654,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     shapeRef.current = null;
     selectionRef.current = null;
     setSelectionShown(false);
+    polygonRef.current = null;
+    curveRef.current = null;
     s.history.clear();
     s.store.dispose();
     toRelease.current.push(s.canvas);
@@ -673,6 +679,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     shapeRef.current = null;
     selectionRef.current = null;
     setSelectionShown(false);
+    polygonRef.current = null;
+    curveRef.current = null;
     s.history.clear();
     s.store.dispose();
     show(null);
@@ -838,6 +846,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     // A line of text being written is painted, as the next press would; a selection is put down.
     if (textRef.current) commitTextRef.current();
     endSelectionRef.current();
+    polygonRef.current = null;
+    curveRef.current = null;
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
@@ -1334,6 +1344,46 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape), note);
   }, [land, xy]);
 
+  /** Paint a shape finished in map pixels as one change, its tiles kept as they are now. */
+  const paintShape = useCallback((mapId: string, shape: PaintShape) => {
+    const s = surfaceRef.current;
+    if (!s || s.mapId !== mapId) return;
+    const step = s.history.begin();
+    step.cover(shapeBox(scaleShape(shape, ...xy(s))));
+    commitShape({ mapId, step, shape });
+  }, [commitShape, xy]);
+
+  /** Close the polygon being clicked out and paint it, once it has three corners; fewer, and it is let go. */
+  const finishPolygon = useCallback(() => {
+    const polygon = polygonRef.current;
+    polygonRef.current = null;
+    if (!polygon) return;
+    markDirty('overlay');
+    if (polygon.points.length < 3) return;
+    const look = settingsRef.current;
+    const s = surfaceRef.current;
+    if (!s) return;
+    paintShape(polygon.mapId, {
+      kind: 'polygon', from: polygon.points[0], to: polygon.points[polygon.points.length - 1], points: polygon.points,
+      width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: look.style,
+    });
+  }, [markDirty, paintShape, xy]);
+
+  /** Paint the curve waiting to be bent, as it is now. */
+  const finishCurve = useCallback(() => {
+    const curve = curveRef.current;
+    curveRef.current = null;
+    if (!curve) return;
+    markDirty('overlay');
+    paintShape(curve.mapId, curve.shape);
+  }, [markDirty, paintShape]);
+
+  // Another tool chosen: a polygon not closed and a curve not bent are let go.
+  useEffect(() => {
+    if (settings.tool !== 'polygon') polygonRef.current = null;
+    if (settings.tool !== 'curve') curveRef.current = null;
+  }, [settings.tool]);
+
   /** Paint the stamp chosen where map pixel `point` puts it (paintStamps.ts), as one change. */
   const stampAt = useCallback((point: PaintPoint) => {
     const s = surfaceRef.current;
@@ -1555,11 +1605,39 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (at.via === 'drag') mapControls.startDrag(at.e);
         else if (look.tool === 'fill') fillAt(point);
         else if (look.tool === 'stamp') stampAt(point);
+        else if (look.tool === 'polygon') {
+          const corner = look.snap ? snapToGrid(point, map.gridSize) : point;
+          const polygon = polygonRef.current?.mapId === s.mapId ? polygonRef.current : null;
+          // A press on the first corner, within reach of a finger or a mouse, closes it.
+          const reach = (at.via === 'mouse' ? 10 : 22) / mapControls.zoom;
+          if (polygon && polygon.points.length >= 3 && Math.hypot(corner[0] - polygon.points[0][0], corner[1] - polygon.points[0][1]) <= reach) finishPolygon();
+          else if (polygon) polygon.points.push(corner);
+          else polygonRef.current = { mapId: s.mapId, points: [corner], cursor: null };
+          markDirty('overlay');
+        }
         else if (look.tool === 'eyedropper') pickAt(point);
         else if (look.tool === 'text') {
           textRef.current = { at: point, draft: '', mapId: s.mapId };
           setTextBox({ at: point, draft: '' });
         }
+        return true;
+      }
+      if (look.tool === 'curve') {
+        // A curve waiting to be bent: this drag bends it.
+        const curve = curveRef.current?.mapId === s.mapId ? curveRef.current : null;
+        if (curve) {
+          curve.bending = true;
+          curve.shape = { ...curve.shape, control: point };
+          markDirty('overlay');
+          return true;
+        }
+        const from = look.snap ? snapToGrid(point, map.gridSize) : point;
+        shapeRef.current = {
+          mapId: s.mapId,
+          step: s.history.begin(),
+          shape: { kind: 'curve', from, to: from, control: from, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'outline' },
+        };
+        markDirty('overlay');
         return true;
       }
       if (isShapeTool(look.tool)) {
@@ -1612,6 +1690,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (under.room && map) to = gridCorner(point, map.gridSize, map.width * map.gridSize, map.height * map.gridSize);
         if (under.shape.kind === 'line' && (look.straight || at.e.shiftKey)) to = stepAngle(under.shape.from, to);
         under.shape = { ...under.shape, to };
+        // A curve is drawn straight until it is bent.
+        if (under.shape.kind === 'curve') under.shape = { ...under.shape, control: [(under.shape.from[0] + to[0]) / 2, (under.shape.from[1] + to[1]) / 2] };
         // The tiles the shape reaches as it grows, kept as they are before it lands.
         const s = surfaceRef.current;
         if (s) under.step.cover(shapeBox(scaleShape(under.shape, ...xy(s))));
@@ -1631,12 +1711,29 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         markDirty('overlay');
         return true;
       }
+      const curve = curveRef.current;
+      if (curve?.bending) {
+        curve.shape = { ...curve.shape, control: [at.mapPx.x, at.mapPx.y] };
+        markDirty('overlay');
+        return true;
+      }
+      // A polygon being clicked out follows the pointer to its next corner.
+      const polygon = polygonRef.current;
+      if (polygon && at.via === 'mouse' && map) {
+        const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+        polygon.cursor = settingsRef.current.snap ? snapToGrid(point, map.gridSize) : point;
+        markDirty('overlay');
+      }
       // No press: the right button's pan goes on, and no token is hovered.
       mapControls.handleDrag(at.e);
       if (mapControls.isDragging) markDirty('terrain', 'tokens', 'overlay');
       return true;
     },
     up() {
+      if (curveRef.current?.bending) {
+        finishCurve();
+        return;
+      }
       const selection = selectionRef.current;
       if (selection?.drag) {
         selection.drag = null;
@@ -1655,6 +1752,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
           markDirty('overlay');
           return;
         }
+        // A curve waits for a second drag to bend it; its tiles are kept again when it is painted.
+        if (under.shape.kind === 'curve') {
+          under.step.drop();
+          curveRef.current = { mapId: under.mapId, shape: under.shape, bending: false };
+          markDirty('overlay');
+          return;
+        }
         commitShape(under);
         return;
       }
@@ -1668,6 +1772,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     },
     escape() {
       if (dropStroke()) return true;
+      if (polygonRef.current || curveRef.current) {
+        polygonRef.current = null;
+        curveRef.current = null;
+        markDirty('overlay');
+        return true;
+      }
       if (selectionRef.current) {
         endSelection();
         return true;
@@ -1705,6 +1815,20 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (ctrl && !e.altKey && (letter === 'y' || (letter === 'z' && e.shiftKey))) {
       e.preventDefault();
       redo();
+      return true;
+    }
+    // A polygon's and a curve's keys, on the map: Enter finishes, Backspace takes the last corner back.
+    if (onMap && e.key === 'Enter' && (polygonRef.current || curveRef.current)) {
+      e.preventDefault();
+      if (polygonRef.current) finishPolygon();
+      else finishCurve();
+      return true;
+    }
+    if (onMap && e.key === 'Backspace' && polygonRef.current) {
+      e.preventDefault();
+      polygonRef.current.points.pop();
+      if (polygonRef.current.points.length === 0) polygonRef.current = null;
+      markDirty('overlay');
       return true;
     }
     // Select's keys, on the map: Delete paints over, Enter lets go, and copy, cut, paste and select all.
@@ -1756,6 +1880,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const stroke = strokeRef.current;
     if (stroke) shown.push({ kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour });
     if (shapeRef.current) shown.push({ kind: 'shape', shape: shapeRef.current.shape });
+    const polygon = polygonRef.current;
+    if (polygon && polygon.mapId === s.mapId) {
+      const look = settingsRef.current;
+      const points = polygon.cursor ? [...polygon.points, polygon.cursor] : polygon.points;
+      const shape: PaintShape = { kind: 'polygon', from: points[0], to: points[points.length - 1], points, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'outline' };
+      shown.push({ kind: 'shape', shape });
+    }
+    if (curveRef.current && curveRef.current.mapId === s.mapId) shown.push({ kind: 'shape', shape: curveRef.current.shape });
     const selection = selectionRef.current;
     if (selection?.box && selection.mapId === s.mapId) {
       shown.push({
