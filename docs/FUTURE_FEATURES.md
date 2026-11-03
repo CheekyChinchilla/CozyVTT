@@ -30,7 +30,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 - `after the next release` **On a wider screen, an editor's two notes under the portrait can be drawn over each other,** when the message for a refused picture and **Saves as personal token** show together (the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors).
 - `after the next release` **Some sheet editor controls do not work for a screen reader or the keyboard.** The buttons that remove a D&D 5e attack, spell or inventory item, and most of the Pathfinder 2e editor's delete buttons, have no name; a Flexible sheet's delete buttons stay invisible when the keyboard reaches them; and its list ticks have no name or state.
-- `after the next release` **A D&D 5e attack's other damage roll goes to the Dice panel under two names.** Clicked on the sheet it is sent as the attack's name and the roll's note joined by a dash, and from **Roll...** as "Spear Damage (Two-handed)". Both should take one name from a helper the sheet and the picker share (`AttacksList.tsx`, `utils/characterRolls.ts`).
 
 ### Tokens
 
@@ -51,8 +50,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 - `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
 - `after the next release` **With a mouse, the AoE Shape panel covers the foot of the first toolbar buttons,** by about 20 pixels over **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen** (`MapCanvas.tsx`).
-- `after the next release` **Switching to a map with a spirit layer shows the last map's spirit layer picture on it until its own has loaded.** The spirit picture should be kept with the map it was loaded for, as the map's own picture is, so another map's is never drawn (`MapCanvas.tsx`).
-- `after the next release` **A screen reader names none of Create Map's number boxes.** The labels **Width (grid squares)**, **Height (grid squares)**, **Grid Size (px/square)** and **Detail (pixels per square)** are tied to nothing, so only the slider under each box has a name (`CreateMapModal.tsx`).
 
 ### Backups
 
@@ -98,7 +95,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - **Optionally reveal along a carried token's path.** Sight and explored memory follow a token only where it is put down, for every drag. Roll20 makes this a page setting ("Update On Token Drop"), and with it off a player's explored areas fill in along the path as the DM drags their token, which some DMs use to walk a party through a map ahead of play. A per-map flag beside **Remember Explored Areas** could offer that, off by default. The drag frames already carry `dragging: true`, so the switch would be one decision in the store's `receiveTokenMove`: apply a frame as a move when the map allows it. It needs a column with a default (an additive migration), the map settings route and broadcast, the Edit Map checkbox and the DM guide. Not planned for any release yet.
 - **Wall collision (`wallsBlockMovement`).** Previously implemented and removed due to bugs. If reattempted, start fresh without reviving the old code.
 - **Auto-detection of walls from map images.** LLM, contour, and trace approaches all failed previously. Treat any future attempt as new R&D, not a continuation.
-- `next release` **More tools for painting a drawn map.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Draw a map** and **Mapmaker** make and paint a map with a brush, an eraser, lines, rectangles, ellipses, a fill bucket, text and an eyedropper. Tools that make a detailed map quick would follow: a selection to move, copy and paste, textures, stamps, a room that adds its own walls, polygons and curves, and layers if they turn out to be wanted.
 - **Paint over an uploaded picture.** Mapmaker is meant only for a map drawn in CozyVTT, whose picture is tagged `cozyvtt-drawn-map`, and for a map with no picture. Adding a door or a passage to an uploaded map picture would need the picture copied into the campaign's library first, so the uploaded file is never changed, and a limit on how large a picture opens to paint on a phone.
 - `after the next release` **Layers for Mapmaker.** A floor and a detail layer, flattened on save, so a floor's texture can be changed under what is drawn over it; only if DMs ask for it after using Mapmaker.
 - `after the next release` **A room's walls move with it under Select.** Select moves a picture's pixels only, so a room drawn and not yet saved leaves its walls where it was drawn (the DM guide says so). The walls waiting for Save that lie inside a lifted box could move and resize with it, and go back with it on Undo.
@@ -385,22 +381,11 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   on canvas images, and a test that renders the policy with an address set.
   **Revisit if** someone needs it with a setup a proxy cannot cover.
 
-- `next release` **Small-screen polish after the phone layout.** On a phone on
-  its side the token, door and character menus and the **Roll...** pickers
-  still rise from the bottom, and the side sheets do not keep clear of a notch;
-  the on-screen keyboard can cover the chat box; a notched phone draws the bar
-  under its home indicator; CozyVTT cannot be added to a home screen as an
-  app; the pages outside the campaign page take the screen's height with the
-  browser's toolbar hidden; the grid previews in Create Map and Edit Map are
-  drawn at one pixel per point; a token held by a tap loses its hit-point bar,
-  badges and rings while held; **Enter** on a token off the edge pans it only
-  one square into view; some controls a finger reaches are still under 44
-  pixels (the Fog of War panel, Player Preview's list, the edit, delete, save
-  and cancel buttons of the **Saved rolls** window, and **Set Active** and the
-  edit, export and delete buttons on a map's card in the **Map Library**); the campaign header
-  takes two rows on an iPad on its side; Create Map's footer can cover its
-  Grid Size box on an iPhone; and a sheet's tabs are not announced as tabs.
-  Each wants a check on a real device first.
+- `next release` **The campaign header on an iPad on its side.** Since its
+  icon buttons grew to 44 pixels for a finger, the header takes two rows on an
+  iPad held sideways, about 45 pixels of the map's height. Tighter gaps between
+  its icons on a touch screen would bring it back to one row, if a check on a
+  real iPad finds the lost height matters.
 
 - **Roll from a character sheet with the keyboard.** A sheet's rollable
   stats roll on a click or a tap, but none of them takes the keyboard's focus,
