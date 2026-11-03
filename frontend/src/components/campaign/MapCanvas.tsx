@@ -160,7 +160,7 @@ import { anyMenuShown, menuOpened, menuShown, whenMenuOpens } from '@/components
 import '@/styles/spirit-effects.css';
 import { mapImageState, pictureFor, PICTURE_DECODE_WAIT_MS, type LoadedPicture } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
-import { useTopBand, underBand, useMeasuredBottom, useMeasuredHeight, BAND_GAP } from './map/toolbarLayout';
+import { useTopBand, underBand, belowBand, useMeasuredBottom, useMeasuredHeight, BAND_GAP } from './map/toolbarLayout';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -3902,14 +3902,15 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     toggleTools: () => (stackShown ? hideTools() : showTools()),
     togglePaint: () => togglePaint(),
   };
-  // Where the AoE panel and the Put back bar start: null keeps their places
-  // under one row of a mouse's buttons. While both show, the AoE panel starts
-  // under the bar, which would otherwise lie over its shape buttons. The
-  // compact layout's band spans the map, so they start under it there.
+  // Where the Put back bar starts: null keeps its place under one row of a
+  // mouse's buttons. The compact layout's band spans the map, so it starts
+  // under the band there. The AoE panel starts under the band with every
+  // pointer, and while both show, under the bar, which would otherwise lie
+  // over its shape buttons.
   const underToolbar = underBand(topBand, coarsePointer || compact);
   const putBackShown = draggedToken !== null && putBackOffered && !fingerCarrying;
   const heldBarBottom = useMeasuredBottom(heldBarRef, containerRef, putBackShown, underToolbar);
-  const aoeTop = heldBarBottom !== null ? heldBarBottom + BAND_GAP : underToolbar;
+  const aoeTop = heldBarBottom !== null ? heldBarBottom + BAND_GAP : belowBand(topBand);
 
   /**
    * Open Draw with the pen, putting away what would take its presses (a DM
@@ -4862,13 +4863,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* AoE panel, under the toolbar's band once that is taller than one
-          row of a mouse's buttons, and under Put back while that shows.
-          TODO(ui): under one row of a mouse's buttons this panel starts at
-          top-12, 20 px above the toolbar's bottom edge, and covers the lower
-          part of Zoom Out, the zoom readout, Zoom In and Fit to Screen. It
-          belongs under the band with every pointer (underBand without its
-          one-row case), which moves it 28 px down on a desktop. */}
+      {/* AoE panel, under the toolbar's band (top-12 until the band is
+          measured), and under Put back while that shows. */}
       {showAoE && currentMap && (
         <div
           className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-xs"

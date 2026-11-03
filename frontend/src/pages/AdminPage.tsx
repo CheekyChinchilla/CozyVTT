@@ -106,6 +106,9 @@ interface AppearanceColors {
 // Helpers
 // ============================================
 
+/** How long a new backup's warning that the restore would refuse it stays up: long enough to read. */
+const BACKUP_WARNING_MS = 20_000;
+
 /** How the Admin Panel writes a size: "512.0 B", "1.5 KB", up to TB. */
 const ADMIN_SIZES: FileSizeOptions = { byteDecimals: 1, largest: 'TB' };
 
@@ -864,8 +867,11 @@ export default function AdminPage() {
     setCreatingBackup(true);
     setBackupCreateError('');
     try {
-      const backup = await adminService.createBackup();
+      const { warning, ...backup } = await adminService.createBackup();
       setBackups(prev => [backup, ...prev]);
+      // Made and kept, but past what the restore takes: said now, not on the
+      // day it is needed.
+      if (warning) showToast(warning, 'warning', BACKUP_WARNING_MS);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setBackupCreateError(apiErrorMessage(e) ?? 'Failed to create backup');

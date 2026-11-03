@@ -67,3 +67,13 @@ it('removes nothing when the confirmation is cancelled', async () => {
 
   expect(assignCharacterToCampaign).not.toHaveBeenCalled();
 });
+
+// The question said "this character", so a menu opened on the wrong row
+// could remove someone the DM did not mean.
+it('names the character it asks about', async () => {
+  render(<CampaignRoster />);
+  fireEvent.contextMenu(await screen.findByText("Ash's hero"), { clientX: 40, clientY: 40 });
+  await userEvent.click(await screen.findByRole('button', { name: /Remove from Campaign/ }));
+
+  expect(await screen.findByText("Remove Ash's hero from the campaign? They go back to their player's own list.")).toBeInTheDocument();
+});

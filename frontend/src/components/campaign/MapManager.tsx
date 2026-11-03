@@ -175,10 +175,6 @@ function MapCard({
           )}
         </div>
 
-        {/* TODO(ui): Set Active, Edit, Export and Delete are under 44 px on a
-            touch screen (the Map Library is drawn outside the compact
-            layout's finger-controls); give them touch-target, as Open to
-            prepare has. */}
         <div className="flex items-center justify-end gap-1.5 mt-1.5">
           <button
             type="button"

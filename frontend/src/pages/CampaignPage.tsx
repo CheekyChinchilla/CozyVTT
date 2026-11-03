@@ -379,6 +379,7 @@ function CampaignPageContent() {
         <CampaignSettingsModal
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+          onDeleted={endTable}
         />
       )}
 

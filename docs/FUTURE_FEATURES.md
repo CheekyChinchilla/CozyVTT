@@ -31,23 +31,13 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 - `after the next release` Suspected: **a drop refused when it arrives with its pick-up is not put back on the mover's screen.** One connection's `token.move.start` and `token.move.end` are handled side by side, so the end can be read before the drag is recorded (`handlers/tokens.ts`).
 
-### Campaigns and assets
-
-- `after the next release` **Remove from Campaign in the Campaign Roster does not name the character,** asking "Are you sure you want to remove this character from the campaign?" (`CampaignRoster.tsx`).
-
 ### Play and connection
 
 - `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
-- `after the next release` **Deleting a campaign from Campaign Settings tells its owner twice** (`CampaignSettingsModal.tsx`).
 
 ### Maps
 
 - `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
-- `after the next release` **With a mouse, the AoE Shape panel covers the foot of the first toolbar buttons,** by about 20 pixels over **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen** (`MapCanvas.tsx`).
-
-### Backups
-
-- `after the next release` **Create Backup reports a backup as made when the Admin Panel's restore would refuse it.** A restore takes a backup of at most 4 GB that unpacks to at most 10 GiB in at most 100,000 files; a larger backup is made and listed as any other, and only the restore refuses it. **Create Backup** should warn, in its answer and the backend log (`routes/admin.ts`).
 
 ---
 

@@ -57,6 +57,7 @@ import type {
   AdminActivityData,
   AdminServerConfig,
   AdminBackup,
+  CreatedBackup,
   OrphanedFilesReport,
   OrphanedFilesDeletion,
   LeftCampaignSummary,
@@ -466,10 +467,10 @@ class ApiClient {
     return response.data;
   }
 
-  async createAdminBackup(): Promise<AdminBackup> {
+  async createAdminBackup(): Promise<CreatedBackup> {
     // Dumping and zipping the whole database takes minutes on a large
     // instance; the bundled nginx allows this route ten minutes.
-    const response = await this.client.post<AdminBackup>('/api/admin/backups', undefined, { timeout: LONG_ADMIN_REQUEST_MS });
+    const response = await this.client.post<CreatedBackup>('/api/admin/backups', undefined, { timeout: LONG_ADMIN_REQUEST_MS });
     return response.data;
   }
 

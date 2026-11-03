@@ -37,6 +37,7 @@ import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, t
 import { SERVER_BUILT_PATH, UPLOAD_LIMITS, getUploadsDirectory } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely, openArchiveFile, isSafeArchivePath, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
+import { RESTORE_LIMITS, restoreRefusalOf } from '../services/backupLimits';
 import { writeZipTo, ZipInputError, type ZipEntrySource } from '../utils/zipWriter';
 import {
   startRestore,
@@ -61,13 +62,10 @@ const UPLOADS_DIR = getUploadsDirectory();
 const BACKUP_DIR = resolveBackupDir();
 const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip$/;
 
-// Guards for restoring an uploaded backup archive (see utils/archive.ts).
-// A full-instance backup legitimately bundles every uploaded file, but the
-// upload itself is capped at 4 GB by multer and media compresses poorly, so a
-// 10 GB decompressed ceiling comfortably fits real backups while stopping a
-// zip bomb long before it can exhaust the disk.
-const RESTORE_MAX_FILES = 100_000;
-const RESTORE_MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024;
+// Guards for restoring an uploaded backup archive: RESTORE_LIMITS
+// (services/backupLimits.ts), which Create Backup reads a new backup against.
+const RESTORE_MAX_FILES = RESTORE_LIMITS.maxFiles;
+const RESTORE_MAX_TOTAL_BYTES = RESTORE_LIMITS.maxTotalBytes;
 
 /** A restore's upload whose name does not end in .zip. */
 class NotAZipName extends Error {
@@ -90,7 +88,7 @@ const restoreStorage = multer.diskStorage({
 const restoreUpload = multer({
   ...MULTIPART_NAME_CHARSET,
   storage: restoreStorage,
-  limits: { fileSize: 4 * 1024 * 1024 * 1024, ...MULTIPART_FIELD_LIMITS }, // 4 GB max
+  limits: { fileSize: RESTORE_LIMITS.maxUploadBytes, ...MULTIPART_FIELD_LIMITS }, // 4 GB max
   fileFilter: (_req, file, cb) => {
     if (file.originalname.toLowerCase().endsWith('.zip')) {
       cb(null, true);
@@ -1059,10 +1057,6 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     // Complete: only now does it take a backup's name.
     await fs.rename(partialPath, zipPath).catch((error: unknown) => { throw inBackupsFolder(error); });
     const stat = await fs.stat(zipPath);
-    // TODO(backups): a backup larger than the dashboard restore takes (4 GB, 10 GiB unpacked or
-    // 100,000 files, RESTORE_MAX_FILES and RESTORE_MAX_TOTAL_BYTES above) is reported as made,
-    // and only the restore refuses it. It should warn here, in the reply and the log. This
-    // predates the move to yazl: v1.5.4 did the same.
     return { filename, sizeBytes: stat.size };
   } catch (error) {
     if (!streamed) await handle.close().catch(() => {});
@@ -1096,13 +1090,21 @@ router.post('/backups', async (req, res) => {
 
   try {
     const { filename, sizeBytes } = await writeBackupZip(dbUrl, true);
+    // A backup past the restore's limits is still made and kept, and said to
+    // be one now, in the answer and the log, not on the day it is needed.
+    const warning = await restoreRefusalOf(path.join(BACKUP_DIR, filename), sizeBytes).catch((err: unknown) => {
+      logger.warn('A new backup could not be read against the restore\'s limits', { filename, err });
+      return null;
+    });
+    if (warning) logger.warn('Backup made that the Admin Panel cannot restore', { filename, sizeBytes, warning });
 
-    await writeAdminLog(req.session.userId!, `Created instance backup: ${filename}`, 'INFO', {
+    await writeAdminLog(req.session.userId!, `Created instance backup: ${filename}`, warning ? 'WARNING' : 'INFO', {
       filename,
       sizeBytes,
+      ...(warning ? { warning } : {}),
     });
 
-    return res.status(201).json({ filename, sizeBytes, createdAt: new Date().toISOString() });
+    return res.status(201).json({ filename, sizeBytes, createdAt: new Date().toISOString(), ...(warning ? { warning } : {}) });
   } catch (error) {
     if (error instanceof ToolMissing) {
       return res.status(500).json(TOOL_MISSING_REPLY);

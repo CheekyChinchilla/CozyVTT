@@ -15,6 +15,7 @@ import type {
   AdminActivityData,
   AdminServerConfig,
   AdminBackup,
+  CreatedBackup,
 } from '@/types';
 
 class AdminService {
@@ -113,7 +114,7 @@ class AdminService {
     return message;
   }
 
-  async createBackup(): Promise<AdminBackup> {
+  async createBackup(): Promise<CreatedBackup> {
     return api.createAdminBackup();
   }
 

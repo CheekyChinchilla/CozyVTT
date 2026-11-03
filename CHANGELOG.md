@@ -127,6 +127,14 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Fixed
 
+- **Create Backup says when the Admin Panel could not restore the backup it made.** A backup larger than the restore takes (4 GB, 100,000 files or 10 GiB unpacked) was reported as made like any other, and only the restore refused it, on the day it was needed. It is still made and kept, and now comes with a warning on screen, in the activity log and in the backend log, pointing to the command-line restore. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
+
+- **The AoE Shape panel no longer covers the map's toolbar with a mouse.** It opened 20 pixels above the foot of the toolbar, over the lower part of **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen**. It now opens under the toolbar with every pointer.
+
+- **Deleting a campaign tells its owner once.** **Delete Campaign** in Campaign Settings showed two notices, the panel's "Campaign deleted" and the page's "This campaign was deleted.", both on the way to the dashboard. It now shows one.
+
+- **Remove from Campaign names the character.** The question in the Campaign Roster asked "Are you sure you want to remove this character from the campaign?", so a menu opened on the wrong row could remove someone the DM did not mean. It now names the character: "Remove Ash's hero from the campaign?"
+
 - **A refused move no longer names a creature hidden under fog.** A player who tried to end a move on a square the fog of war covered was told "Goblin is already standing there.", naming a creature their screen did not show. The note now names only a creature the player can see, and says "Someone" for one they cannot.
 
 - **A DM who handed the DM seat over can no longer delete the new DM's map pictures.** Whoever uploaded a picture to a campaign's library could delete it, or move it out of the campaign, for as long as they were a member, so a former DM sitting as a player could delete with **Delete anyway** a picture the new DM's maps used, and every map using it lost its picture. Now a member who does not run the campaign may delete or move a campaign file they uploaded only while nothing but their own characters, the tokens they control and their own documents use it; anything else using it makes it the campaign's DM's alone.
