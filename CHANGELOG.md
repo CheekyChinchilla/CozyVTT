@@ -127,6 +127,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Fixed
 
+- **The grid preview in Create Map and Edit Map is sharp on a phone.** It was drawn at one pixel per point, so on a phone, a tablet or a high-density monitor the picture and the grid lines were soft, at a third of the screen's pixels on most phones. It is now drawn at the screen's own density, as the map is.
+
 - **A screen reader names the Include audio assets switch in Export Campaign.** The switch under Campaign Settings' **Export Campaign** had no name, so a screen reader announced only an unnamed switch, on or off. It is now named by its label.
 
 - **Deleting a picture asks first when a document can show it.** The question before deleting an asset in use listed the maps, tokens, characters, templates, creatures and sounds using it, but not a text or Markdown document showing it by its address, such as a handout, which then lost the picture with no warning. A document now counts when it names the picture by its address and whoever wrote it can see the picture: a handout the DM shared, the DM's own documents, a player's document naming a picture they are shown. Only the documents of the picture's uploader and of its campaign's members are looked at, so a document of someone outside the campaign, or a player's document naming a map picture their table has left, keeps nothing. Such a document is listed by name, as in Document "The road to Thornwall" (Lost Mine), or counted, as in 1 document you cannot see, and the picture is deleted only with **Delete anyway**. A note that shows a picture by its address is still not checked.

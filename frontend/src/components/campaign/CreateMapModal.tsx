@@ -5,7 +5,7 @@
 // colour chosen (map/paint/drawnMapSize.ts)
 // ============================================
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MapPin, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
@@ -22,6 +22,7 @@ import { DRAWN_MAP_BACKGROUND, DRAWN_MAP_GRID_SIZE, drawnPictureSize, drawnSizeN
 import { blankPicture, pictureToPng, releaseCanvas } from './map/paint/blankPicture';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import { DrawnPictureRefused, uploadDrawnPicture } from '@/services/drawnPicture';
+import MapGridPreview from './MapGridPreview';
 
 interface CreateMapModalProps {
   isOpen: boolean;
@@ -35,120 +36,6 @@ interface CreateMapModalProps {
 const NO_PICTURE_MADE = "This browser could not make the map's picture. Choose fewer squares and try again.";
 
 const count = (n: number) => n.toLocaleString('en-US');
-
-// ============================================
-// MapPreviewCanvas
-// Renders the selected map image with a grid overlay so the DM
-// can verify their Width/Height/GridSize settings line up with
-// any existing grid baked into the image.
-// ============================================
-
-const PREVIEW_PX = 280;
-
-function MapPreviewCanvas({
-  imageUrl,
-  width,
-  height,
-  gridSize,
-  zoom,
-}: {
-  imageUrl: string | null;
-  width: number;
-  height: number;
-  gridSize: number;
-  zoom: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear with parchment background
-    ctx.clearRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-    ctx.fillStyle = '#E8E0D0';
-    ctx.fillRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-
-    if (!imageUrl) {
-      ctx.fillStyle = '#9C8E7A';
-      ctx.font = '13px Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Select a map image', PREVIEW_PX / 2, PREVIEW_PX / 2 - 10);
-      ctx.fillText('to preview the grid', PREVIEW_PX / 2, PREVIEW_PX / 2 + 10);
-      return;
-    }
-
-    const mapPixelW = width * gridSize;
-    const mapPixelH = height * gridSize;
-
-    // Scale the entire map to fit inside PREVIEW_PX, then apply zoom on top
-    const baseScale = Math.min(PREVIEW_PX / mapPixelW, PREVIEW_PX / mapPixelH);
-    const scale = baseScale * zoom;
-
-    const drawW = mapPixelW * scale;
-    const drawH = mapPixelH * scale;
-    // Center the scaled map in the preview canvas
-    const offsetX = (PREVIEW_PX - drawW) / 2;
-    const offsetY = (PREVIEW_PX - drawH) / 2;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      if (!canvasRef.current) return;
-      const c = canvasRef.current;
-      const cx = c.getContext('2d');
-      if (!cx) return;
-
-      // Redraw background (image load is async; state may have changed by now)
-      cx.clearRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-      cx.fillStyle = '#E8E0D0';
-      cx.fillRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-
-      // Map image
-      cx.drawImage(img, offsetX, offsetY, drawW, drawH);
-
-      // Grid overlay — clipped to the map bounds so lines don't bleed outside
-      const cellSize = gridSize * scale;
-      cx.save();
-      cx.beginPath();
-      cx.rect(offsetX, offsetY, drawW, drawH);
-      cx.clip();
-
-      cx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-      cx.lineWidth = 1;
-
-      for (let x = 0; x <= width; x++) {
-        cx.beginPath();
-        cx.moveTo(offsetX + x * cellSize, offsetY);
-        cx.lineTo(offsetX + x * cellSize, offsetY + drawH);
-        cx.stroke();
-      }
-      for (let y = 0; y <= height; y++) {
-        cx.beginPath();
-        cx.moveTo(offsetX, offsetY + y * cellSize);
-        cx.lineTo(offsetX + drawW, offsetY + y * cellSize);
-        cx.stroke();
-      }
-
-      cx.restore();
-    };
-    img.src = imageUrl;
-  }, [imageUrl, width, height, gridSize, zoom]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={PREVIEW_PX}
-      height={PREVIEW_PX}
-      className="w-full rounded-sm border border-moss-green/30 bg-parchment/50"
-      style={{ aspectRatio: '1 / 1' }}
-      aria-label="Grid alignment preview"
-    />
-  );
-}
 
 // ============================================
 // DimensionField
@@ -683,7 +570,7 @@ export default function CreateMapModal({
                     </div>
                   </div>
 
-                  <MapPreviewCanvas
+                  <MapGridPreview
                     imageUrl={previewImageUrl}
                     width={width}
                     height={height}
