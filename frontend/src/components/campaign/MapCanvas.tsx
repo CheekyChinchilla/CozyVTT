@@ -2495,9 +2495,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (userRole !== 'DM') {
       const blockedBy = blockingTokensAt(tokens, token, square, characterHpCache);
       if (blockedBy.length > 0) {
-        // TODO(play): blockingTokensAt counts tokens under manual fog, so this note names a creature the
-        // player cannot see; name only a token the viewer's screen draws, and an unseen one as "Someone".
-        showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
+        // A creature under the player's fog still holds its square, but the
+        // note names only one this screen draws, so it gives none away.
+        const seen = blockedBy.find((t) => drawnIds.has(t.id));
+        showToast(`${seen ? tokenDisplayName(seen) : 'Someone'} is already standing there.`, 'info');
         if (draggedToken?.id === token.id) cancelHold();
         markDirty('tokens');
         return false;
@@ -3685,9 +3686,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
     // Check tokens first — they sit on a higher visual layer than doors. A
     // token whose menu would be empty for this viewer is passed over.
-    // TODO(play): in Player Preview this finds a token the preview does not draw, a hidden creature
-    // included, and opens the DM's menu at it on the shared screen; look it up through the preview's
-    // drawn list (getHoverTokenAt) while previewing, as the click's pick-up does.
+    // In Player Preview this finds a creature the preview hides too, and opens
+    // the DM's menu for it: the DM previewing is still the DM.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
     if (token && tokenMenuHasItems(token, tokenMenuView(token))) {
       rememberMenuPoint(clientX, clientY);
