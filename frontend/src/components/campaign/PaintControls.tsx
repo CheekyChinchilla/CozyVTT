@@ -34,9 +34,9 @@ export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof
 };
 
 export const HINTS: Record<PaintTool, string> = {
-  select: 'Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it; where it was is painted in the second colour. Click outside it, or press Enter, to put it down.',
+  select: 'Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it; where it was is left in the map\'s own colour. Click outside it, or press Enter, to put it down.',
   brush: 'Drag to paint, or tap for a dot. Two fingers, or the right mouse button, move the map.',
-  eraser: 'Drag to paint the second colour over what is there.',
+  eraser: 'Drag to erase back to the map\'s own colour, the one it was made in.',
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
   rect: 'Drag from one corner to the other.',
   ellipse: 'Drag across the box it fills.',
@@ -197,8 +197,8 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         </div>
       )}
 
-      <div>
-        {/* The two colours; the palette sets the one chosen here. */}
+      {/* The two colours; the palette sets the one chosen here. The eraser has none: it paints the map's own colour. */}
+      {settings.tool !== 'eraser' && <div>
         <div className="flex items-center gap-1 mb-1">
           {SLOTS.map(({ slot: which, label }) => (
             <button
@@ -247,7 +247,7 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
             />
           </label>
         </div>
-      </div>
+      </div>}
 
       <label className="flex flex-col gap-0.5">
         <span className="flex justify-between text-[10px] text-stone-400">

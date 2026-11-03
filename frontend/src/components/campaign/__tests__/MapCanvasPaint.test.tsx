@@ -557,7 +557,7 @@ describe('the eraser', () => {
   /** The style the picture's last stroke was drawn in. */
   const lastStrokeStyle = () => pictureCanvas()?.getContext('2d')?.strokeStyle;
 
-  it('paints the second colour, the map\'s own at first, in the brush\'s place', async () => {
+  it('paints the map\'s own colour in the brush\'s place', async () => {
     await showMap();
     await paintOn();
     drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
@@ -569,7 +569,7 @@ describe('the eraser', () => {
     expect(lastStrokeStyle()).toBe('#e8dcc4');
   });
 
-  it('paints the second colour chosen, and the brush keeps its own', async () => {
+  it('erases to the map\'s own colour whatever the second colour, offering no colour to choose, and the brush keeps its own', async () => {
     await showMap();
     await paintOn();
     const panel = screen.getByRole('region', { name: 'Paint' });
@@ -577,8 +577,10 @@ describe('the eraser', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Stone' }));
     expect(within(panel).getByRole('button', { name: /^Second colour/ })).toHaveAccessibleName('Second colour: Stone');
     press('e');
+    expect(within(panel).queryByRole('button', { name: /^Second colour/ })).toBeNull();
+    expect(within(panel).queryByRole('button', { name: 'Stone' })).toBeNull();
     drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
-    expect(lastStrokeStyle()).toBe('#9b958a');
+    expect(lastStrokeStyle()).toBe('#e8dcc4');
     press('b');
     drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
     expect(lastStrokeStyle()).toBe('#1a1a1a');
@@ -745,7 +747,7 @@ describe('a selection', () => {
   const drawnAt = () => callsOfPicture('drawImage').map((c) => c.args.slice(-4));
   const holes = () => callsOfPicture('fillRect').map((c) => c.args);
 
-  it('moves the pixels dragged inside it, putting them down where it is let go and painting where they were in the second colour, as one change', async () => {
+  it('moves the pixels dragged inside it, putting them down where it is let go and leaving where they were in the map\'s own colour, as one change', async () => {
     await showMap();
     await paintOn();
     choose('Select');
