@@ -9,9 +9,9 @@
  */
 
 import { useState } from 'react';
-import { BrickWall, Circle, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
+import { BrickWall, Circle, SquareDashed, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
-import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
+import type { PaintSelectionActions, PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { labelFontSize } from './map/drawingGeometry';
@@ -19,6 +19,7 @@ import SignedOutNotice from '@/components/common/SignedOutNotice';
 
 /** Each tool's name, as its button is called, its key and its icon. */
 export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
+  select: { label: 'Select', key: 'S', icon: SquareDashed },
   brush: { label: 'Brush', key: 'B', icon: Paintbrush },
   eraser: { label: 'Eraser', key: 'E', icon: Eraser },
   line: { label: 'Line', key: 'L', icon: Minus },
@@ -31,6 +32,7 @@ export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof
 };
 
 export const HINTS: Record<PaintTool, string> = {
+  select: 'Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it; where it was is painted in the second colour. Click outside it, or press Enter, to put it down.',
   brush: 'Drag to paint, or tap for a dot. Two fingers, or the right mouse button, move the map.',
   eraser: 'Drag to paint the second colour over what is there.',
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
@@ -75,7 +77,18 @@ export interface PaintControlsProps {
   /** The browser was signed out while there was paint not saved. */
   signedOut?: boolean;
   onClose: () => void;
+  /** Select's buttons, shown while Select is chosen: a phone has no Ctrl+C. */
+  selection?: PaintSelectionActions;
 }
+
+/** Select's buttons, each with what it needs: a selection, or something to paste. */
+export const SELECTION_BUTTONS: ReadonlyArray<{ label: string; act: keyof Omit<PaintSelectionActions, 'has' | 'canPaste'>; needs: 'has' | 'canPaste' | null }> = [
+  { label: 'Copy', act: 'copy', needs: 'has' },
+  { label: 'Cut', act: 'cut', needs: 'has' },
+  { label: 'Paste', act: 'paste', needs: 'canPaste' },
+  { label: 'Delete', act: 'remove', needs: 'has' },
+  { label: 'Select all', act: 'selectAll', needs: null },
+];
 
 const toolButton = (on: boolean) =>
   `touch-target inline-flex items-center justify-center w-8 h-8 rounded border transition-colors ${
@@ -84,7 +97,7 @@ const toolButton = (on: boolean) =>
 
 const actionButton = 'touch-target inline-flex items-center justify-center gap-1 px-2 h-8 rounded border text-[11px] bg-stone-700/60 text-stone-300 border-stone-600/50 hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed';
 
-export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose }: PaintControlsProps) {
+export default function PaintControls({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose, selection }: PaintControlsProps) {
   const [slot, setSlot] = useState<Slot>('colour');
   const chosen = settings[slot];
   const custom = !PAINT_COLOURS.some((c) => c.value === chosen);
@@ -148,6 +161,15 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         </button>
       </div>
       <p className="text-[11px] leading-snug text-stone-400">{HINTS[settings.tool]}</p>
+      {settings.tool === 'select' && selection && (
+        <div role="group" aria-label="Selection" className="flex flex-wrap gap-1">
+          {SELECTION_BUTTONS.map(({ label, act, needs }) => (
+            <button key={act} type="button" onClick={() => selection[act]()} disabled={needs !== null && !selection[needs]} className={actionButton}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div>
         {/* The two colours; the palette sets the one chosen here. */}

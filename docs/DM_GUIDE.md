@@ -222,6 +222,7 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 
 | Tool | Key | How |
 |---|---|---|
+| **Select** | `S` | Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it: where it was is painted in the second colour. Click or tap outside it, press `Enter`, choose another tool, **Save** or put Paint away to put it down; **Undo** while it is moving puts it back. `Delete` paints the box over with the second colour. `Ctrl + C`, `Ctrl + X` and `Ctrl + V` copy, cut and paste (a paste lands a square right and down, to move where you want it), and `Ctrl + A` selects the whole picture; the same are buttons under the tools, for a phone or a tablet. Select moves the picture only: a room's walls stay where the room was drawn, so move a room before you save it by undoing it and drawing it again, or move its walls with the wall tool after. |
 | **Brush** | `B` | Drag to paint in the colour, or click or tap for a dot. |
 | **Eraser** | `E` | Drag to paint the second colour over what is there. The second colour starts as the colour of the picture's top-left corner: the map's own colour on a new drawn map. |
 | **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
@@ -233,7 +234,7 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 
 **Snap to grid**, for a line, a rectangle and an ellipse, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
 
-4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape, a room or a fill and put it back.
+4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape, a room, a fill or a moved selection and put it back.
 5. Click **Done** at the top of the Paint panel, press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
 
 While Paint is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
@@ -1042,14 +1043,20 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Finish a wall line | `Double-click` |
 | Undo the last wall change | `Ctrl + Z` |
 | Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
+| Select part of the picture, while **Paint** is on | `S` |
 | Paint with the brush, while **Paint** is on | `B` |
 | Paint with the eraser, in the second colour, while **Paint** is on | `E` |
 | Paint a line, while **Paint** is on | `L` |
 | Paint a rectangle, while **Paint** is on | `R` |
 | Paint an ellipse, while **Paint** is on | `O` |
+| Paint a room, whose walls are added when it is saved, while **Paint** is on | `M` |
 | Fill an area, while **Paint** is on | `F` |
 | Paint a line of text, while **Paint** is on | `T` |
 | Take a colour from the picture, while **Paint** is on | `I` |
+| Copy, cut or paste the selection, while **Paint** is on | `Ctrl + C` `Ctrl + X` `Ctrl + V` |
+| Select the whole picture, while **Paint** is on | `Ctrl + A` |
+| Paint the selection over in the second colour, while **Paint** is on | `Delete` `Backspace` |
+| Put the selection down, while **Paint** is on | `Enter` |
 | Keep a painted line to 15 degree steps | `Shift + drag` |
 | Make the brush narrower or wider, while **Paint** is on | `[` `]` |
 | Undo the last change to the picture, while **Paint** is on | `Ctrl + Z` |

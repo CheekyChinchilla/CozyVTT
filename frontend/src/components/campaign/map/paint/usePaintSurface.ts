@@ -48,6 +48,7 @@ import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
 import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type PaintStepNote, type TileRect } from './paintHistory';
 import { gridCorner, roomBox, roomWalls, wallsToAdd, type WallLine } from './paintRoom';
+import { handleAt, isInside, movedBox, pastedBox, resizedBox, selectedBox, type SelectBox, type SelectHandle } from './paintSelection';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
@@ -73,7 +74,7 @@ import {
 } from './paintDrafts';
 
 /** The tools Paint offers. */
-export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'room' | 'fill' | 'text' | 'eyedropper';
+export type PaintTool = 'select' | 'brush' | 'eraser' | PaintShapeKind | 'room' | 'fill' | 'text' | 'eyedropper';
 
 /** The tools that act on a tap or a click: a finger's drag pans under them. */
 const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['fill', 'text', 'eyedropper']);
@@ -123,7 +124,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['m', 'room'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['s', 'select'], ['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['m', 'room'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
 
 /** The most the undo tiles may take, packed; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -246,6 +247,41 @@ interface ShapeUnderWay {
   room?: boolean;
 }
 
+/**
+ * The box Select has chosen, in map pixels, and the press moving it. Its
+ * pixels are lifted off the picture as it starts to move or resize, shown
+ * on the overlay meanwhile, and put down as one change when it is let go.
+ */
+interface Selection {
+  mapId: string;
+  /** Where it is now; null while the first drag has made no box yet. */
+  box: SelectBox | null;
+  drag:
+    | { kind: 'mark'; from: PaintPoint }
+    | { kind: 'move'; from: PaintPoint; start: SelectBox }
+    | { kind: 'resize'; handle: SelectHandle; start: SelectBox }
+    | null;
+  /**
+   * Its pixels once lifted, at the picture's own size, with the box they
+   * came from (null for a paste) and the colour that box is left in.
+   */
+  lifted: { canvas: HTMLCanvasElement; from: SelectBox | null; hole: string } | null;
+}
+
+/** What Select offers besides the drag: for the panel's buttons and the keys. */
+export interface PaintSelectionActions {
+  /** There is a selection. */
+  has: boolean;
+  /** Something has been copied or cut. */
+  canPaste: boolean;
+  copy(): void;
+  cut(): void;
+  paste(): void;
+  /** Paint the selection over with the second colour, or drop the pixels lifted. */
+  remove(): void;
+  selectAll(): void;
+}
+
 interface Stroke {
   mapId: string;
   colour: string;
@@ -322,6 +358,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const settingsRef = useRef(settings);
   const strokeRef = useRef<Stroke | null>(null);
   const shapeRef = useRef<ShapeUnderWay | null>(null);
+  const selectionRef = useRef<Selection | null>(null);
+  /** What Copy or Cut took, for Paste, on any map Paint opens on. */
+  const clipboardRef = useRef<{ canvas: HTMLCanvasElement; box: SelectBox } | null>(null);
+  /** Put the selection down (or, with false, let it go), from callbacks made before it. */
+  const endSelectionRef = useRef<(place?: boolean) => void>(() => undefined);
+  /** Whether there is a selection, and something to paste, for the panel's buttons. */
+  const [selectionShown, setSelectionShown] = useState(false);
+  const [canPaste, setCanPaste] = useState(false);
   const [textBox, setTextBox] = useState<PaintTextBox | null>(null);
   const textRef = useRef<(PaintTextBox & { mapId: string }) | null>(null);
   /** The tool before the eyedropper, which a pick goes back to. */
@@ -593,6 +637,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
+    selectionRef.current = null;
+    setSelectionShown(false);
     s.history.clear();
     s.store.dispose();
     toRelease.current.push(s.canvas);
@@ -614,6 +660,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
+    selectionRef.current = null;
+    setSelectionShown(false);
     s.history.clear();
     s.store.dispose();
     show(null);
@@ -774,8 +822,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * to save, the canvas is let go of once the map's own picture is back.
    */
   const close = useCallback(() => {
-    // A line of text being written is painted, as the next press would.
+    // A line of text being written is painted, as the next press would; a selection is put down.
     if (textRef.current) commitTextRef.current();
+    endSelectionRef.current();
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
@@ -1053,6 +1102,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const saveNow = useCallback(async (overwrite: boolean): Promise<boolean> => {
     const s = surfaceRef.current;
     if (!s || !map || !campaignId || savingRef.current || s.mapId !== map.id) return false;
+    // A selection moved and not let go is part of the picture saved.
+    endSelectionRef.current();
     savingRef.current = true;
     setSaving(true);
     // The tiles painted until the picture is taken go with this save, and
@@ -1270,10 +1321,157 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape), note);
   }, [land, xy]);
 
+  /** A box in map pixels as whole picture pixels; cut at the picture's edge when `onPicture`. */
+  const pictureBoxOf = useCallback((s: Surface, box: SelectBox, onPicture: boolean): PaintBox => {
+    const [sx, sy] = xy(s);
+    const found = { x0: Math.floor(box.x0 * sx), y0: Math.floor(box.y0 * sy), x1: Math.ceil(box.x1 * sx), y1: Math.ceil(box.y1 * sy) };
+    if (!onPicture) return found;
+    return { x0: Math.max(0, found.x0), y0: Math.max(0, found.y0), x1: Math.min(s.canvas.width, found.x1), y1: Math.min(s.canvas.height, found.y1) };
+  }, [xy]);
+
+  /** A copy of the picture's pixels under `box`, at the picture's own size; null for none. */
+  const copyOut = useCallback((s: Surface, box: SelectBox): HTMLCanvasElement | null => {
+    const from = pictureBoxOf(s, box, true);
+    const width = from.x1 - from.x0;
+    const height = from.y1 - from.y0;
+    if (width < 1 || height < 1) return null;
+    const canvas = (make ?? (() => document.createElement('canvas')))();
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(s.canvas, from.x0, from.y0, width, height, 0, 0, width, height);
+    return canvas;
+  }, [make, pictureBoxOf]);
+
+  /** Lift the selection's pixels off the picture, to move or resize them; the picture is unchanged until they are put down. */
+  const lift = useCallback((s: Surface, selection: Selection) => {
+    if (selection.lifted || !selection.box) return;
+    const canvas = copyOut(s, selection.box);
+    if (canvas) selection.lifted = { canvas, from: selection.box, hole: settingsRef.current.second };
+  }, [copyOut]);
+
+  /**
+   * Let the selection go. Pixels lifted are put down where it is now, the
+   * box they came from painted in the second colour, as one change Undo
+   * takes back; with `place` false they are let go of, the picture as it was.
+   */
+  const endSelection = useCallback((place = true) => {
+    const selection = selectionRef.current;
+    selectionRef.current = null;
+    if (!selection) return;
+    setSelectionShown(false);
+    markDirty('overlay');
+    const s = surfaceRef.current;
+    const lifted = selection.lifted;
+    if (!place || !lifted || !selection.box || !s || s.mapId !== selection.mapId) return;
+    const to = pictureBoxOf(s, selection.box, false);
+    const from = lifted.from ? pictureBoxOf(s, lifted.from, true) : null;
+    const same = (a: PaintBox, b: PaintBox) => a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1;
+    // Lifted and put back as it was: nothing changed.
+    if (from && same(from, to)) return;
+    const step = s.history.begin();
+    if (from) step.cover(from);
+    step.cover(to);
+    land(step, null, () => {
+      if (from) {
+        s.ctx.fillStyle = lifted.hole;
+        s.ctx.fillRect(from.x0, from.y0, from.x1 - from.x0, from.y1 - from.y0);
+      }
+      s.ctx.drawImage(lifted.canvas, to.x0, to.y0, to.x1 - to.x0, to.y1 - to.y0);
+    });
+  }, [markDirty, land, pictureBoxOf]);
+  useEffect(() => {
+    endSelectionRef.current = endSelection;
+  }, [endSelection]);
+
+  /** Keep the selection's pixels for Paste: as lifted, or as the picture has them. */
+  const copySelection = useCallback(() => {
+    const s = surfaceRef.current;
+    const selection = selectionRef.current;
+    if (!s || !selection?.box || selection.mapId !== s.mapId) return;
+    const canvas = selection.lifted ? selection.lifted.canvas : copyOut(s, selection.box);
+    if (!canvas) return;
+    clipboardRef.current = { canvas, box: selection.box };
+    setCanPaste(true);
+  }, [copyOut]);
+
+  /**
+   * Paint the selection over with the second colour, as one change; with
+   * pixels lifted, they are let go of and the box they came from is
+   * painted over (nothing, for a paste).
+   */
+  const removeSelection = useCallback(() => {
+    const s = surfaceRef.current;
+    const selection = selectionRef.current;
+    selectionRef.current = null;
+    setSelectionShown(false);
+    markDirty('overlay');
+    if (!s || !selection?.box || selection.mapId !== s.mapId) return;
+    const area = selection.lifted ? selection.lifted.from : selection.box;
+    if (!area) return;
+    const colour = selection.lifted ? selection.lifted.hole : settingsRef.current.second;
+    const box = pictureBoxOf(s, area, true);
+    const step = s.history.begin();
+    step.cover(box);
+    land(step, null, () => {
+      s.ctx.fillStyle = colour;
+      s.ctx.fillRect(box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0);
+    });
+  }, [markDirty, land, pictureBoxOf]);
+
+  const cutSelection = useCallback(() => {
+    copySelection();
+    removeSelection();
+  }, [copySelection, removeSelection]);
+
+  /** Put what was copied down as a new selection, lifted, a square right and down from where it was copied, to drag into place. */
+  const pasteSelection = useCallback(() => {
+    const s = surfaceRef.current;
+    const clip = clipboardRef.current;
+    const m = mapRef.current;
+    if (!s || !clip || !m || m.id !== s.mapId) return;
+    endSelection();
+    selectionRef.current = {
+      mapId: s.mapId,
+      box: pastedBox(clip.box, m.gridSize, m.width * m.gridSize, m.height * m.gridSize),
+      drag: null,
+      lifted: { canvas: clip.canvas, from: null, hole: '' },
+    };
+    setSelectionShown(true);
+    setSettings((prev) => ({ ...prev, tool: 'select' }));
+    markDirty('overlay');
+  }, [endSelection, markDirty]);
+
+  /** Select the whole picture. */
+  const selectAll = useCallback(() => {
+    const s = surfaceRef.current;
+    const m = mapRef.current;
+    if (!s || !m || m.id !== s.mapId) return;
+    endSelection();
+    selectionRef.current = { mapId: s.mapId, box: { x0: 0, y0: 0, x1: m.width * m.gridSize, y1: m.height * m.gridSize }, drag: null, lifted: null };
+    setSelectionShown(true);
+    setSettings((prev) => ({ ...prev, tool: 'select' }));
+    markDirty('overlay');
+  }, [endSelection, markDirty]);
+
+  // Another tool chosen: the selection is put down.
+  useEffect(() => {
+    if (settings.tool !== 'select') endSelectionRef.current();
+  }, [settings.tool]);
+
   const step = useCallback((direction: 'undo' | 'redo') => {
     const s = surfaceRef.current;
     if (!s) return;
     dropStroke();
+    // Undo with pixels lifted puts them back where they were, and undoes nothing else.
+    const selection = selectionRef.current;
+    selectionRef.current = null;
+    if (selection) {
+      setSelectionShown(false);
+      markDirty('overlay');
+    }
+    if (selection?.lifted && direction === 'undo') return;
     void s.history[direction]().then((done) => {
       if (!done || surfaceRef.current !== s) return;
       s.revision += 1;
@@ -1301,6 +1499,25 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const look = settingsRef.current;
       dropStroke();
       const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+      if (look.tool === 'select') {
+        if (textRef.current) commitText();
+        const selection = selectionRef.current?.mapId === s.mapId ? selectionRef.current : null;
+        // A corner is within reach of a finger further than of a mouse.
+        const reach = (at.via === 'mouse' ? 10 : 22) / mapControls.zoom;
+        const handle = selection?.box ? handleAt(selection.box, point, reach) : null;
+        if (selection?.box && handle) {
+          lift(s, selection);
+          selection.drag = { kind: 'resize', handle, start: selection.box };
+        } else if (selection?.box && isInside(selection.box, point)) {
+          lift(s, selection);
+          selection.drag = { kind: 'move', from: point, start: selection.box };
+        } else {
+          endSelection();
+          selectionRef.current = { mapId: s.mapId, box: null, drag: { kind: 'mark', from: point }, lifted: null };
+        }
+        markDirty('overlay');
+        return true;
+      }
       if (TAP_TOOLS.has(look.tool)) {
         // A finger's drag moves the map; a tap or a click acts.
         // A line of text being written is painted as the next press lands.
@@ -1346,6 +1563,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     },
     move(at: PointerAt) {
       if (!onRef.current) return false;
+      const selection = selectionRef.current;
+      if (selection?.drag && map) {
+        const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+        const drag = selection.drag;
+        if (drag.kind === 'mark') selection.box = selectedBox(drag.from, point, map.width * map.gridSize, map.height * map.gridSize);
+        else if (drag.kind === 'move') selection.box = movedBox(drag.start, point[0] - drag.from[0], point[1] - drag.from[1]);
+        else selection.box = resizedBox(drag.start, drag.handle, point);
+        markDirty('overlay');
+        return true;
+      }
       const under = shapeRef.current;
       if (under) {
         const look = settingsRef.current;
@@ -1379,6 +1606,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return true;
     },
     up() {
+      const selection = selectionRef.current;
+      if (selection?.drag) {
+        selection.drag = null;
+        if (!selection.box) selectionRef.current = null;
+        setSelectionShown(selectionRef.current !== null);
+        markDirty('overlay');
+        return;
+      }
       const under = shapeRef.current;
       if (under) {
         shapeRef.current = null;
@@ -1402,6 +1637,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     },
     escape() {
       if (dropStroke()) return true;
+      if (selectionRef.current) {
+        endSelection();
+        return true;
+      }
       if (textRef.current) {
         closeText();
         return true;
@@ -1437,6 +1676,28 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       redo();
       return true;
     }
+    // Select's keys, on the map: Delete paints over, Enter lets go, and copy, cut, paste and select all.
+    const selected = selectionRef.current !== null;
+    if (onMap && selected && (e.key === 'Delete' || e.key === 'Backspace')) {
+      e.preventDefault();
+      removeSelection();
+      return true;
+    }
+    if (onMap && selected && e.key === 'Enter') {
+      endSelection();
+      return true;
+    }
+    if (onMap && ctrl && !e.altKey && !e.shiftKey) {
+      const act = letter === 'c' && selected ? copySelection
+        : letter === 'x' && selected ? cutSelection
+          : letter === 'v' && clipboardRef.current ? pasteSelection
+            : letter === 'a' ? selectAll : null;
+      if (act) {
+        e.preventDefault();
+        act();
+        return true;
+      }
+    }
     if (ctrl && letter === 'a') return true;
     if (isArrowKey(e.key) || e.key === 'Delete' || e.key === 'Backspace') return true;
     const action = mapKeyAction(e);
@@ -1464,8 +1725,18 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const stroke = strokeRef.current;
     if (stroke) shown.push({ kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour });
     if (shapeRef.current) shown.push({ kind: 'shape', shape: shapeRef.current.shape });
+    const selection = selectionRef.current;
+    if (selection?.box && selection.mapId === s.mapId) {
+      shown.push({
+        kind: 'selection',
+        box: selection.box,
+        hole: selection.lifted?.from ? { box: selection.lifted.from, colour: selection.lifted.hole } : null,
+        lifted: selection.lifted?.canvas ?? null,
+        pixel: 1 / mapControls.zoom,
+      });
+    }
     return shown;
-  }, [xy]);
+  }, [xy, mapControls.zoom]);
 
   const source = surface && map && surface.mapId === map.id && !stale ? surface.canvas : null;
 
@@ -1494,6 +1765,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     tool,
     key,
     inProgress,
+    /** Select's actions, for the panel's buttons. */
+    selection: {
+      has: selectionShown,
+      canPaste,
+      copy: copySelection,
+      cut: cutSelection,
+      paste: pasteSelection,
+      remove: removeSelection,
+      selectAll,
+    } satisfies PaintSelectionActions,
     settings,
     setSettings,
     /** The line of text being written, and its box's actions. */
