@@ -127,6 +127,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Fixed
 
+- **A sheet editor's two notes under the portrait no longer overlap.** The message for a refused picture and **Saves as personal token** were both placed at the foot of the portrait, so for a character in no campaign one was drawn over the other. They now stand one under the other, in the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors.
+
 - **A screen reader names every remove button in the sheet editors.** The buttons that remove a D&D 5e attack, spell or inventory item were read as "times", and the Pathfinder 2e editor's buttons that remove a lore skill, a strike, a cantrip, a spell, a focus or innate spell, a ritual, an item or a feat only as "button". Each now names its row, such as "Remove Longsword". In a Flexible sheet's editor the remove buttons, which appear when the pointer is over their row, now appear when the keyboard reaches them too, and a list entry's tick is named after its entry and says whether it is ticked.
 
 - **Create Backup says when the Admin Panel could not restore the backup it made.** A backup larger than the restore takes (4 GB, 100,000 files or 10 GiB unpacked) was reported as made like any other, and only the restore refused it, on the day it was needed. It is still made and kept, and now comes with a warning on screen, in the activity log and in the backend log, pointing to the command-line restore. See [Database Backups](docs/DEPLOYMENT.md#database-backups).

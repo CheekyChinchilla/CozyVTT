@@ -36,6 +36,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import NumberField from '../../ui/NumberField';
 import ListLimitNote, { ADD_BUTTON_OFF, listChangeAllowed, listIsFull } from '../ListLimitNote';
+import PortraitNotes from '../PortraitNotes';
 import {
   passiveScore,
   dnd5eSpellSaveDC,
@@ -1325,20 +1326,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-white" />
               </div>
             </label>
-            {/* TODO(sheets): from sm up this note and the personal token note below are
-                both absolute at top-full, so with both showing (a refused picture on a
-                character in no campaign) one is drawn over the other. Right: one
-                positioned box under the portrait holding both, one under the other. */}
-            {errors.tokenImage && (
-              <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>
-                {errors.tokenImage}
-              </div>
-            )}
-            {!character.campaignId && (
-              <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>
-                Saves as personal token
-              </div>
-            )}
+            <PortraitNotes error={errors.tokenImage} personal={!character.campaignId} errorClassName={headerHintColor} noteClassName={headerHintColor} />
           </div>
           )}
 
