@@ -304,7 +304,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     if (drawnPicture) {
       rememberPictureAsset(drawnPicture);
       usePaintStore.getState().openWhenShown(map.id);
-      void handleOpenToPrepare(map);
+      // Not opened (Not now kept paint on the map on screen, or it failed):
+      // Paint does not turn on by itself when the map is shown later.
+      void handleOpenToPrepare(map).then((opened) => {
+        if (!opened && usePaintStore.getState().openOnMapId === map.id) usePaintStore.getState().openWhenShown(null);
+      });
     }
   };
 
@@ -426,14 +430,18 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- Map switching ----
 
-  const handleOpenToPrepare = async (map: CampaignMap) => {
+  /** Open the map to prepare, answering whether it opened. */
+  const handleOpenToPrepare = async (map: CampaignMap): Promise<boolean> => {
     setError(null);
     setOpeningId(map.id);
     try {
       // On this page only, so the Map Library gets out of the way of it.
-      if (await openToPrepare(map.id)) onClose();
+      const opened = await openToPrepare(map.id);
+      if (opened) onClose();
+      return opened;
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Could not open that map. Try again.');
+      return false;
     } finally {
       // Only this card's: a second card opened meanwhile keeps its spinner.
       setOpeningId((opening) => (opening === map.id ? null : opening));

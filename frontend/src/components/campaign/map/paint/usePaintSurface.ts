@@ -64,12 +64,12 @@ import { uploadDrawnPicture, DrawnPictureRefused } from '@/services/drawnPicture
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { savePaint, PNG_NOT_MADE } from './savePaint';
 import { saveBlob } from '@/utils/download';
-import { pictureIsDrawn } from './mapPicture';
+import { pictureIsDrawn, type MapPictureKind } from './mapPicture';
 import { pictureToPng } from './blankPicture';
 import { extractAssetId } from '@/utils/assetUrl';
 import {
-  DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_UNAVAILABLE, draftKey, draftsFailedMessage, newestDraft, packDraftTiles, paintTab, putDraftTiles,
-  type DraftHeader, type DraftStore, type DraftTile, type PaintTab,
+  DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_UNAVAILABLE, draftKey, draftsFailedMessage, keepDraftAside, newestDraft, packDraftTiles, paintTab, putDraftTiles,
+  draftTileBox, type DraftHeader, type DraftStore, type DraftTile, type PaintTab, type PictureSize,
 } from './paintDrafts';
 
 /** The tools Paint offers. */
@@ -177,12 +177,19 @@ interface Surface {
   savingAssetId: string | null;
   /** The tiles painted since the picture was made or last saved, by `column,row`. */
   changed: Map<string, TileRect>;
+  /**
+   * Those tiles as the picture saved had them, packed, each kept as a change
+   * first reached it: what a draft leaves out, so it holds only the paint.
+   */
+  asSaved: Map<string, Uint8Array<ArrayBuffer>>;
   /** Of those, the ones changed since the draft was last written. */
   unwritten: Map<string, TileRect>;
   /** The next draft write begins the draft anew, dropping any tiles kept from before. */
   draftFresh: boolean;
   /** Another tab's draft this canvas was restored from, dropped once this tab's own has been written. */
   takenFrom: string | null;
+  /** This tab's draft of the map is this canvas's, written by it or restored from: set by its first write. */
+  ownsDraft: boolean;
 }
 
 /** Paint not saved on a map that left the screen without asking, until the DM says what to do with it. */
@@ -194,8 +201,8 @@ export interface PaintLeftover {
   canvas: HTMLCanvasElement;
 }
 
-/** How Paint opens: on the picture as it is, or with a draft's tiles put back. */
-type OpenWith = 'fresh' | { draft: DraftTile[]; from: string };
+/** How Paint opens: on the picture as it is, or with a draft's tiles, of a picture `size` in size, put back. */
+type OpenWith = 'fresh' | { draft: DraftTile[]; from: string; size: PictureSize };
 
 /** A draft offered back as Paint opens, and whether it was painted on another picture than the map's now. */
 export interface DraftOffer {
@@ -228,10 +235,17 @@ export interface PaintSurfaceOptions {
   onSaved: (map: CampaignMap, picture: Asset) => void;
   /** Told of the map as Save read it, when it differs from the page's: the page shows that one. */
   onMapRead: (map: CampaignMap) => void;
-  /** Its picture as loaded: null for a map with none, and while the page has let go of it (holdsPicture). */
-  picture: HTMLImageElement | null;
-  /** The page's own picture is drawn again, or has failed to load, or the map has none: nothing is loading. */
-  pictureSettled: boolean;
+  /**
+   * The picture drawn for it, with the address it was loaded from: null for
+   * a map with none, and while the page has let go of it (holdsPicture).
+   * Paint opens only on one at the map's own address, never on the picture
+   * before it, still drawn while a new one loads or after it failed.
+   */
+  picture: { image: HTMLImageElement; url: string } | null;
+  /** What the map's picture is (mapPicture.ts): Paint is offered on a drawn one, and starts blank on none or one gone. */
+  pictureKind: MapPictureKind;
+  /** The picture at the map's own address failed to load. */
+  pictureFailed: boolean;
   isDM: boolean;
   mapControls: MapControls;
   markDirty: (...layers: MapLayer[]) => void;
@@ -254,7 +268,17 @@ export interface PaintSurfaceOptions {
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
-  const { map, picture, pictureSettled, campaignId, onSaved, onMapRead, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
+  const { map, picture, pictureKind, pictureFailed, campaignId, onSaved, onMapRead, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
+  // What Paint opens on: the picture at the map's own address, once it has
+  // loaded, so a save never writes the picture before it, still drawn while a
+  // new one loads or after it failed, over the new one. A map with no
+  // picture, or one gone from the server, starts blank. Nothing else opens,
+  // and Paint is offered where it opens (offered, below).
+  const startsBlank = pictureKind === 'none' || pictureKind === 'gone';
+  const ownPicture = !startsBlank && picture !== null && !!map?.imageUrl && picture.url === map.imageUrl ? picture : null;
+  const opensOn = startsBlank || (pictureKind === 'drawn' && ownPicture !== null);
+  /** The map's own picture is drawn again, or has failed to load, or the map has none: nothing is loading. */
+  const pictureSettled = !map?.imageUrl || ownPicture !== null || pictureFailed;
   const [on, setOn] = useState(false);
   const onRef = useRef(false);
   const [surface, setSurface] = useState<Surface | null>(null);
@@ -339,6 +363,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   /** This tab's draft of a map. */
   const keyOf = useCallback((mapId: string): string | null =>
     userIdRef.current && campaignIdRef.current ? draftKey(userIdRef.current, campaignIdRef.current, mapId, tabRef.current.id()) : null, []);
+  /** The draft offered for the map on screen, as last looked for: by user, campaign and map. */
+  const [found, setFound] = useState<{ key: string; header: DraftHeader | null } | null>(null);
+  /** The draft offered no longer offered, once `key` is dropped. */
+  const forgetFound = useCallback((key: string) => {
+    setFound((now) => (now?.header?.key === key ? { key: now.key, header: null } : now));
+  }, []);
+  /** Canvases made, counted: a lookup that answers after one was made on its map is out of date. */
+  const canvasesMade = useRef(0);
   /** The latest writeDraft, for the timer and the page going. */
   const writeDraftRef = useRef<(s: Surface | null) => void>(() => undefined);
   /** Write what is new to the draft within DRAFT_INTERVAL_MS. */
@@ -372,7 +404,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!key || !user || !campaign) return;
     let tiles: DraftTile[];
     try {
-      tiles = packDraftTiles(s.ctx, [...s.unwritten.values()]);
+      tiles = packDraftTiles(s.ctx, [...s.unwritten.values()], (t) => s.asSaved.get(`${t.tx},${t.ty}`));
     } catch (err) {
       console.warn('[paint] Could not read the picture for its draft:', errorSummary(err));
       return;
@@ -387,15 +419,32 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       width: s.canvas.width, height: s.canvas.height, savedAt: Date.now(),
     };
     void inDraftQueue(async (store) => {
+      // A canvas's first write goes over this tab's draft of the map only
+      // when the canvas came from it. One it never saw (found after Paint
+      // stopped waiting for it, or older than the draft restored) is kept
+      // aside, and offered once nothing of this canvas is held.
+      const first = !s.ownsDraft;
+      s.ownsDraft = true;
+      if (first && takenFrom !== key) {
+        const unseen = (await store.list()).find((draft) => draft.key === key);
+        if (unseen) {
+          const aside = await keepDraftAside(store, unseen);
+          const shown = `${user}|${campaign}|${s.mapId}`;
+          setFound((now) => (now?.key === shown ? { key: shown, header: aside } : now));
+        }
+      }
       const whole = await store.put(header, tiles, fresh);
-      if (takenFrom && takenFrom !== key) await store.remove(takenFrom);
+      if (takenFrom && takenFrom !== key) {
+        await store.remove(takenFrom);
+        forgetFound(takenFrom);
+      }
       if (!whole && surfaceRef.current === s) {
         for (const [at, tile] of s.changed) s.unwritten.set(at, tile);
         s.draftFresh = true;
         scheduleDraft();
       }
     });
-  }, [inDraftQueue, tellNoDrafts, keyOf, scheduleDraft]);
+  }, [inDraftQueue, tellNoDrafts, keyOf, scheduleDraft, forgetFound]);
   useEffect(() => {
     writeDraftRef.current = writeDraft;
   }, [writeDraft]);
@@ -409,45 +458,68 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (draftsRef.current === null || draftsOff.current) tellNoDrafts();
     scheduleDraft();
   }, [scheduleDraft, tellNoDrafts]);
-  /** The draft offered for the map on screen, as last looked for: by user, campaign and map. */
-  const [found, setFound] = useState<{ key: string; header: DraftHeader | null } | null>(null);
   /** This tab's draft of a map dropped, as Save and Discard do. */
   const clearDraft = useCallback((mapId: string) => {
     const key = keyOf(mapId);
     if (!key) return;
-    setFound((now) => (now?.header?.key === key ? { key: now.key, header: null } : now));
+    forgetFound(key);
     void inDraftQueue((store) => store.remove(key));
-  }, [inDraftQueue, keyOf]);
+  }, [inDraftQueue, keyOf, forgetFound]);
   /** Another draft dropped, as Discard it does to the one offered. */
   const dropDraft = useCallback((key: string) => {
-    setFound((now) => (now?.header?.key === key ? { key: now.key, header: null } : now));
+    forgetFound(key);
     void inDraftQueue((store) => store.remove(key));
-  }, [inDraftQueue]);
+  }, [inDraftQueue, forgetFound]);
+  /**
+   * The drafts of what a canvas holds dropped, as Save and Discard do: this
+   * tab's, and the closed tab's it was restored from, if its own has not
+   * been written yet to drop that one.
+   */
+  const clearDrafts = useCallback((s: Surface) => {
+    clearDraft(s.mapId);
+    if (s.takenFrom) dropDraft(s.takenFrom);
+    s.takenFrom = null;
+  }, [clearDraft, dropDraft]);
   // The newest draft of the map on screen, this tab's or a closed tab's,
-  // looked for as it is shown to the DM. A store that does not answer in
-  // DRAFT_LOOKUP_MS is taken as keeping none, so Paint is never held up.
+  // looked for as it is shown to the DM. A press of Paint waits for it at
+  // most DRAFT_LOOKUP_MS, so Paint is never held up; one found later, behind
+  // a large write still under way for instance, is offered at the next press
+  // while no canvas has been made on the map since (a canvas made meanwhile
+  // keeps such a draft aside as it first writes, and that is offered). A
+  // store that takes as long to answer the lookup itself, once its turn has
+  // come, does not answer at all: drafts are off for the page.
   const mapIdShown = map?.id ?? null;
   const lookupKey = mapIdShown && isDM && userId && campaignId && drafts ? `${userId}|${campaignId}|${mapIdShown}` : null;
   useEffect(() => {
     if (!lookupKey || !mapIdShown || !userId || !campaignId) return undefined;
     let live = true;
-    let late: ReturnType<typeof setTimeout> | null = null;
-    const timedOut = new Promise<'late'>((resolve) => {
-      late = setTimeout(() => resolve('late'), DRAFT_LOOKUP_MS);
-    });
+    const madeBefore = canvasesMade.current;
+    const waited = setTimeout(() => {
+      setFound((now) => (now?.key === lookupKey ? now : { key: lookupKey, header: null }));
+    }, DRAFT_LOOKUP_MS);
     const where = { userId, campaignId, mapId: mapIdShown };
-    void Promise.race([inDraftQueue((store) => newestDraft(store, tabRef.current, where)), timedOut]).then((header) => {
-      if (late !== null) clearTimeout(late);
-      if (!live) return;
+    void inDraftQueue(async (store) => {
+      let stuck: ReturnType<typeof setTimeout> | undefined;
+      try {
+        return await Promise.race([
+          newestDraft(store, tabRef.current, where),
+          new Promise<'late'>((resolve) => { stuck = setTimeout(() => resolve('late'), DRAFT_LOOKUP_MS); }),
+        ]);
+      } finally {
+        clearTimeout(stuck);
+      }
+    }).then((header) => {
+      clearTimeout(waited);
       if (header === 'late') {
         console.warn('[paint] The draft store did not answer; no draft is kept on this page.');
         draftsOff.current = true;
       }
+      if (!live || canvasesMade.current !== madeBefore) return;
       setFound({ key: lookupKey, header: header === 'late' ? null : header ?? null });
     });
     return () => {
       live = false;
-      if (late !== null) clearTimeout(late);
+      clearTimeout(waited);
     };
   }, [lookupKey, mapIdShown, userId, campaignId, inDraftQueue]);
   /** Whether the map on screen's draft has been looked for: Paint opens once it has. */
@@ -536,6 +608,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       onRef.current = true;
       return true;
     }
+    if (!opensOn) return false;
     const size = drawnPictureSize(map.width, map.height, map.gridSize);
     // A draft of this map kept from before is offered back first; until it
     // has been looked for, Paint waits (the page opens it once it has).
@@ -566,18 +639,29 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       refuse(PAINT_NO_CANVAS);
       return false;
     }
-    if (picture) {
-      ctx.drawImage(picture, 0, 0, width, height);
+    if (ownPicture) {
+      ctx.drawImage(ownPicture.image, 0, 0, width, height);
     } else {
       ctx.fillStyle = DRAWN_MAP_BACKGROUND;
       ctx.fillRect(0, 0, width, height);
     }
-    const store = createCanvasTileStore(ctx);
+    // Each tile as the picture saved had it, as a change first reaches it:
+    // every change keeps its tiles before it is made, the fill's included.
+    const remember = (tile: TileRect, kept: KeptTile): KeptTile => {
+      const at = `${tile.tx},${tile.ty}`;
+      const into = made?.asSaved;
+      if (into && kept.packed && !into.has(at)) into.set(at, kept.packed);
+      return kept;
+    };
+    const tileStore = createCanvasTileStore(ctx);
+    const store: CanvasTileStore = {
+      ...tileStore,
+      capture: (tile) => remember(tile, tileStore.capture(tile)),
+      keep: (tile, pixels) => remember(tile, tileStore.keep(tile, pixels)),
+    };
     // The eraser's colour: the picture's own, read off its top-left pixel.
     const second = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
     setSettings((prev) => ({ ...prev, second }));
-    // A draft's tiles, put back over the picture: paint not saved.
-    const restored = how !== undefined && how !== 'fresh' ? putDraftTiles(ctx, how.draft, width, height) : [];
     let made: Surface | null = null;
     const history: PaintHistory<KeptTile> = createPaintHistory(store, {
       width,
@@ -593,23 +677,56 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (made) touched(made, tiles);
       },
     });
-    made = {
-      mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: restored.length > 0 ? 1 : 0, saved: 0, baseUrl: map.imageUrl ?? '', savingAssetId: null,
-      changed: new Map(restored.map((tile) => [`${tile.tx},${tile.ty}`, tile])),
+    const surface: Surface = {
+      mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: 0, saved: 0,
+      // The address of the pixels drawn in; a map started blank, its own.
+      baseUrl: ownPicture ? ownPicture.url : map.imageUrl ?? '',
+      savingAssetId: null,
+      changed: new Map(),
+      asSaved: new Map(),
+      unwritten: new Map(),
       // A draft restored is written again as this tab's own, whole, and the
       // one it came from dropped once that has landed. A draft left from
       // before and not restored is not mixed into this one.
-      unwritten: new Map(restored.map((tile) => [`${tile.tx},${tile.ty}`, tile])),
       draftFresh: true,
       takenFrom: how !== undefined && how !== 'fresh' ? how.from : null,
+      ownsDraft: false,
     };
-    show(made);
-    if (restored.length > 0) scheduleDraft();
+    made = surface;
+    canvasesMade.current += 1;
+    show(surface);
+    // A draft's painting, put back over the picture as one change, which
+    // Undo takes back: paint not saved, in the draft as the tiles it reached.
+    if (how !== undefined && how !== 'fresh') {
+      const step = history.begin();
+      for (const tile of how.draft) {
+        const box = draftTileBox(tile, how.size, { width, height });
+        if (box) step.cover(box);
+      }
+      // A history just made has no undo under way: the change lands at once.
+      let put = 0;
+      void step.land(() => {
+        put = putDraftTiles(ctx, how.draft, how.size, { width, height }, make);
+        if (put > 0) surface.revision += 1;
+      });
+      // Nothing of the draft could be read: nothing to undo, or to keep.
+      if (put === 0) {
+        history.clear();
+        surface.changed.clear();
+        surface.unwritten.clear();
+      }
+    }
     setOn(true);
     onRef.current = true;
     markDirty('terrain', 'overlay');
     return true;
-  }, [map, isDM, picture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound, scheduleDraft]);
+  }, [map, isDM, opensOn, ownPicture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound]);
+
+  /** The latest open, for an answer given after an await, on the map as it is then. */
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
 
   /**
    * Paint off. Paint not saved stays on screen, to go on with; with nothing
@@ -653,6 +770,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       onRef.current = false;
     }
   }, [mapId, isDM, on, dispose, writeDraft, strand]);
+  // A draft offered for a map no longer on screen, or to a viewer no longer
+  // the DM, is no longer asked about: its answer would act on nothing.
+  useEffect(() => {
+    setOffer((offered) => (offered && (offered.header.mapId !== mapId || !isDM) ? null : offered));
+  }, [mapId, isDM]);
   // And when the map goes from the page.
   const leftoverRef = useRef(leftover);
   useEffect(() => {
@@ -895,7 +1017,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     // The tiles painted until the picture is taken go with this save, and
     // come back if it fails; those painted while it is under way stay for
     // the draft after it.
-    let taken: { changed: Map<string, TileRect>; unwritten: Map<string, TileRect> } | null = null;
+    let taken: { changed: Map<string, TileRect>; unwritten: Map<string, TileRect>; asSaved: Map<string, Uint8Array<ArrayBuffer>> } | null = null;
     try {
       await s.history.settled();
       // The map as the server has it now: a picture changed elsewhere,
@@ -909,8 +1031,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         return false;
       }
       const asOf = s.revision;
-      taken = { changed: s.changed, unwritten: s.unwritten };
+      // The picture is taken for the PNG now (savePaint makes it first, at
+      // once): a tile changed from here on is kept as it is in the picture
+      // saved, so a draft after the save holds only what was painted since.
+      taken = { changed: s.changed, unwritten: s.unwritten, asSaved: s.asSaved };
       s.changed = new Map();
+      s.asSaved = new Map();
       s.unwritten = new Map();
       const { map: saved, asset } = await savePaint({
         previous,
@@ -932,7 +1058,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       }
       // The draft was of the picture before; what was painted during the
       // save begins a new one, on the picture saved.
-      clearDraft(s.mapId);
+      clearDrafts(s);
       s.draftFresh = true;
       if (s.changed.size > 0) touched(s, [...s.changed.values()]);
       setAsking(false);
@@ -942,6 +1068,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       if (taken) {
         for (const [at, tile] of taken.changed) s.changed.set(at, tile);
         for (const [at, tile] of taken.unwritten) s.unwritten.set(at, tile);
+        // Nothing was saved: the tiles as kept before the save stand.
+        for (const [at, packed] of taken.asSaved) s.asSaved.set(at, packed);
       }
       refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
       return false;
@@ -950,7 +1078,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [map, campaignId, bump, onSaved, onMapRead, refuse, clearDraft, touched]);
+  }, [map, campaignId, bump, onSaved, onMapRead, refuse, clearDrafts, touched]);
   /** Save, answering whether it saved; pressed again while one is under way, that one's answer. */
   const save = useCallback((overwrite = false): Promise<boolean> => {
     if (savingRef.current && saveRun.current) return saveRun.current;
@@ -966,12 +1094,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const discard = useCallback(() => {
     const s = surfaceRef.current;
     if (!s) return;
-    clearDraft(s.mapId);
+    clearDrafts(s);
     setAsking(false);
     setOn(false);
     onRef.current = false;
     dispose();
-  }, [clearDraft, dispose]);
+  }, [clearDrafts, dispose]);
 
   /** Hand the browser the picture `canvas` holds now as a PNG, named after its map; false when no PNG could be made. */
   const savePicture = useCallback(async (canvas: HTMLCanvasElement, mapName: string): Promise<boolean> => {
@@ -1016,10 +1144,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (choice === 'save') void save(true);
     else if (choice === 'discard') {
       const s = surfaceRef.current;
-      if (s) clearDraft(s.mapId);
+      if (s) clearDrafts(s);
       dispose();
     }
-  }, [save, dispose, clearDraft]);
+  }, [save, dispose, clearDrafts]);
 
   /**
    * The DM's answer to the draft offered back: Restore opens Paint with its
@@ -1036,11 +1164,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return;
     }
     const tiles = await inDraftQueue((store) => store.tiles(offered.header.key));
+    // The map on screen changed while the draft was read: nothing to restore it on.
+    if (mapRef.current?.id !== offered.header.mapId) return;
     if (!tiles) {
       refuse('Your draft could not be read from this browser.');
       return;
     }
-    open({ draft: tiles, from: offered.header.key });
+    openRef.current({ draft: tiles, from: offered.header.key, size: { width: offered.header.width, height: offered.header.height } });
   }, [offer, map, dropDraft, open, inDraftQueue, refuse]);
 
   /** The eyedropper: the colour of the pixel at map pixel `point` becomes the colour, and the tool before comes back. */
@@ -1247,19 +1377,27 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     return shown;
   }, [xy]);
 
+  const source = surface && map && surface.mapId === map.id && !stale ? surface.canvas : null;
+
   return {
     /** Paint is on. */
     on,
     open,
     close,
     /** The picture to draw the map with: the one being painted, while there is one for the map on screen and it is still the map's. */
-    source: surface && map && surface.mapId === map.id && !stale ? surface.canvas : null,
+    source,
     /** Picture pixels to a map pixel across: a text box is shown as tall as it is painted. */
     scale: surface && map ? surface.canvas.width / (map.width * map.gridSize) : 1,
     /** Paint is on, or holds paint not saved over the map's picture: the page lets go of its own decoded picture meanwhile. */
     holdsPicture: surface !== null && !stale && (on || unsaved),
     /** Paint not saved is held over a picture changed elsewhere: Paint stays offered, to ask about it. */
     stranded,
+    /**
+     * Paint is offered to the DM, and open() opens: on the map's own picture,
+     * or blank, or on the canvas held for the map; or to ask about paint held
+     * over a picture changed elsewhere.
+     */
+    offered: isDM && map !== null && (stranded || source !== null || opensOn),
     /** The question about it is open. */
     asking,
     answer,

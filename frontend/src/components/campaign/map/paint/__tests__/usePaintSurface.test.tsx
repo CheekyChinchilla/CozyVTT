@@ -27,9 +27,12 @@ const makeCanvas = () => {
 const controls = { handleDrag: () => undefined, startDrag: () => undefined, isDragging: false } as unknown as MapControls;
 const map = { id: 'map-a', width: 20, height: 20, gridSize: 50, imageUrl: '' } as unknown as CampaignMap;
 
-function Harness({ onPaint, seen }: { onPaint: (p: PaintSurface) => void; seen: Array<number | null> }) {
+type Shown = { image: HTMLImageElement; url: string } | null;
+
+function Harness({ onPaint, seen, on = map, picture = null }: { onPaint: (p: PaintSurface) => void; seen: Array<number | null>; on?: CampaignMap; picture?: Shown }) {
   const paint = usePaintSurface({
-    map, campaignId: 'campaign-1', onSaved: () => undefined, onMapRead: () => undefined, picture: null, pictureSettled: true, isDM: true,
+    map: on, campaignId: 'campaign-1', onSaved: () => undefined, onMapRead: () => undefined, picture,
+    pictureKind: on.imageUrl ? 'drawn' : 'none', pictureFailed: false, isDM: true,
     mapControls: controls, markDirty: () => undefined, refuse: () => undefined, make: makeCanvas,
   });
   onPaint(paint);
@@ -62,6 +65,30 @@ describe('the canvas Paint hands the page', () => {
     const canvas = paint!.source!;
     act(() => { paint!.close(); });
     expect([canvas.width, canvas.height]).toEqual([0, 0]);
+  });
+});
+
+describe('the picture Paint opens on', () => {
+  const drawn = { ...map, imageUrl: '/api/assets/maps/new' } as CampaignMap;
+  const image = document.createElement('img');
+
+  it('is only one at the map\'s own address: never the picture before it, drawn while the new one loads', () => {
+    let paint: PaintSurface | null = null;
+    render(<Harness onPaint={(p) => { paint = p; }} seen={[]} on={drawn} picture={{ image, url: '/api/assets/maps/old' }} />);
+    let opened = true;
+    act(() => { opened = paint!.open(); });
+    expect(opened).toBe(false);
+    expect(paint!.source).toBeNull();
+    // And is not offered, where it would not open.
+    expect(paint!.offered).toBe(false);
+  });
+
+  it('is held as the map\'s picture once it is the map\'s own', () => {
+    let paint: PaintSurface | null = null;
+    render(<Harness onPaint={(p) => { paint = p; }} seen={[]} on={drawn} picture={{ image, url: '/api/assets/maps/new' }} />);
+    act(() => { paint!.open(); });
+    expect(paint!.source?.width).toBe(1000);
+    expect(paint!.stranded).toBe(false);
   });
 });
 

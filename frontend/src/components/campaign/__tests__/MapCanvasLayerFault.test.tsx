@@ -123,9 +123,19 @@ vi.mock('../map/layers/drawTokens', async (original) => {
   const real = await original<typeof import('../map/layers/drawTokens')>();
   return { ...real, drawTokens: vi.fn(real.drawTokens) };
 });
+vi.mock('../map/layers/drawWalls', async (original) => {
+  const real = await original<typeof import('../map/layers/drawWalls')>();
+  return { ...real, drawWalls: vi.fn(real.drawWalls) };
+});
+vi.mock('../map/layers/drawFog', async (original) => {
+  const real = await original<typeof import('../map/layers/drawFog')>();
+  return { ...real, drawFog: vi.fn(real.drawFog) };
+});
 
 import MapCanvas from '../MapCanvas';
 import { drawTokens } from '../map/layers/drawTokens';
+import { drawWalls } from '../map/layers/drawWalls';
+import { drawFog } from '../map/layers/drawFog';
 import { useGameStore } from '@/stores/gameStore';
 
 /** A 20 by 20 map of 50 pixel squares: 1,000 by 1,000 map pixels. */
@@ -206,6 +216,8 @@ beforeEach(() => {
 afterEach(() => {
   logged.mockRestore();
   vi.mocked(drawTokens).mockReset();
+  vi.mocked(drawWalls).mockReset();
+  vi.mocked(drawFog).mockClear();
 });
 
 /** The three layers, bottom to top. */
@@ -239,4 +251,56 @@ it('restores the token layer and draws the overlay when a token cannot be drawn'
   expect(count(overlayCalls, 'save')).toBeGreaterThan(0);
   expect(count(overlayCalls, 'restore')).toBe(count(overlayCalls, 'save'));
   expect(logged).toHaveBeenCalledTimes(1);
+});
+
+it('draws a player\'s fog over the map when a layer drawn before it on the overlay throws', async () => {
+  vi.mocked(drawWalls).mockImplementation(() => {
+    throw new TypeError('wall.x1 is undefined');
+  });
+  h.set({ userRole: 'PLAYER', currentMap: mapWith({ fogEnabled: true }) });
+  render(<MapCanvas />);
+  pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+  await nextFrame();
+  vi.mocked(drawFog).mockClear();
+  for (const layer of layers()) drawing.take(layer);
+
+  // A frame that draws every layer again.
+  act(() => { useGameStore.getState().setTokens([token('tok-goblin', 'Goblin', 6, 13)]); });
+  await nextFrame();
+
+  const overlay = layers()[2];
+  expect(drawFog).toHaveBeenCalledWith(overlay.getContext('2d'), expect.objectContaining({ isDM: false }), expect.anything());
+  const overlayCalls = drawing.take(overlay);
+  expect(count(overlayCalls, 'restore')).toBe(count(overlayCalls, 'save'));
+  expect(logged).toHaveBeenCalledTimes(1);
+});
+
+it('draws a player\'s fog over the whole map, in a fresh state, when a step before it throws inside a clip of its own', async () => {
+  vi.mocked(drawWalls).mockImplementation((ctx) => {
+    // As a layer that clips to a player's sight and throws before its restore.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, 10, 10);
+    ctx.clip();
+    throw new TypeError('wall.x1 is undefined');
+  });
+  h.set({ userRole: 'PLAYER', currentMap: mapWith({ fogEnabled: true }) });
+  render(<MapCanvas />);
+  pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+  await nextFrame();
+  for (const layer of layers()) drawing.take(layer);
+
+  act(() => { useGameStore.getState().setTokens([token('tok-goblin', 'Goblin', 6, 13)]); });
+  await nextFrame();
+
+  const calls = drawing.take(layers()[2]);
+  const clipped = calls.findIndex((c) => c.method === 'clip');
+  const fresh = calls.findIndex((c) => c.method === 'reset');
+  expect(clipped).toBeGreaterThan(-1);
+  expect(fresh).toBeGreaterThan(clipped);
+  const fog = calls.slice(fresh);
+  // Every square of the 20 by 20 map, none of them revealed, and no clip left to cut it.
+  expect(fog.filter((c) => c.method === 'rect')).toHaveLength(400);
+  expect(fog.some((c) => c.method === 'clip')).toBe(false);
+  expect(fog.some((c) => c.method === 'fill')).toBe(true);
 });
