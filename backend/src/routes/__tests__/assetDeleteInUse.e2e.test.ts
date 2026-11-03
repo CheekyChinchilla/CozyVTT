@@ -15,6 +15,7 @@
  */
 
 import request from 'supertest';
+import { Client } from 'pg';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { personalFilesBeingRemoved } from '../../services/accountDeletion';
 import {
@@ -277,6 +278,29 @@ describe('a picture a document shows', () => {
     ]));
     expect(res.body.usage).toHaveLength(2);
     expect(res.body.omitted).toBe(0);
+  });
+
+  // No statement of the check joins what documents name to the documents:
+  // its plan would come from statistics PostgreSQL gathers now and then,
+  // and stale ones made such a join read every document's pictures.
+  it('reads what documents name one table at a time', async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    await documentOf(dm, 'Handout', `![x](/api/assets/maps/${id})`, { campaignId });
+    const sent: string[] = [];
+    const realQuery = Client.prototype.query;
+    jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
+      const [first] = args;
+      sent.push(typeof first === 'string' ? first : first && typeof first === 'object' && 'text' in first ? String(first.text) : '');
+      return (realQuery as (...a: unknown[]) => unknown).apply(this, args);
+    } as never);
+    try {
+      expect((await dm.delete(`/api/assets/${id}`)).status).toBe(409);
+    } finally {
+      jest.restoreAllMocks();
+    }
+    const documentReads = sent.filter((sql) => /"DocumentPicture"|"CampaignDocument"/.test(sql) && /^\s*SELECT/i.test(sql));
+    expect(documentReads.length).toBeGreaterThan(0);
+    for (const sql of documentReads) expect(sql).not.toMatch(/\bJOIN\b|EXISTS\s*\(/i);
   });
 
   // Just after the upgrade the caller's own documents from before are read

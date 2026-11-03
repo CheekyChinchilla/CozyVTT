@@ -214,7 +214,11 @@ export async function readSomeUnreadDocuments(of: {
   if (of.ownerId) await more({ uploadedById: of.ownerId });
   const ids = [...new Set(of.campaignIds)];
   if (ids.length > 0) {
-    await more({ OR: [{ scope: 'CAMPAIGN', campaignId: { in: ids } }, { campaignLinks: { some: { campaignId: { in: ids } } } }] });
+    await more({ scope: 'CAMPAIGN', campaignId: { in: ids } });
+    if (picked.length < DOCUMENTS_READ_PER_REQUEST) {
+      const linked = await prisma.campaignDocument.findMany({ where: { campaignId: { in: ids } }, select: { assetId: true } });
+      if (linked.length > 0) await more({ id: { in: [...new Set(linked.map((link) => link.assetId))] } });
+    }
   }
   if (of.othersToo) await more({});
   for (const doc of picked) reading.add(doc.id);
@@ -229,29 +233,39 @@ export async function readSomeUnreadDocuments(of: {
   }));
 }
 
+/** What the handout grant reads of a document. */
+interface SharedDocument {
+  id: string;
+  scope: string;
+  campaignId: string | null;
+  uploadedById: string | null;
+}
+
 /**
- * A document that counts for `campaignId` while `dmId` is its DM: theirs,
- * and written or uploaded in the campaign, or linked to it from their own
- * library or the global one. A document of another campaign linked to it
- * does not count, even one the DM wrote: that campaign's later DM could
- * rewrite it.
+ * Whether a document counts for `campaignId` while `dms` hold its DM seat:
+ * theirs, and written or uploaded in the campaign, or `linked` to it from
+ * their own library or the global one. A document of another campaign
+ * linked to it does not count, even one the DM wrote: that campaign's
+ * later DM could rewrite it.
  */
-function sharedBy(campaignId: string, dmId: string): Prisma.AssetWhereInput {
-  return {
-    type: 'DOCUMENT',
-    uploadedById: dmId,
-    OR: [
-      { scope: 'CAMPAIGN', campaignId },
-      { NOT: { scope: 'CAMPAIGN', campaignId: { not: null } }, campaignLinks: { some: { campaignId } } },
-    ],
-  };
+function countsFor(doc: SharedDocument, campaignId: string, dms: ReadonlySet<string>, linked: boolean): boolean {
+  if (!doc.uploadedById || !dms.has(doc.uploadedById)) return false;
+  if (doc.scope === 'CAMPAIGN' && doc.campaignId === campaignId) return true;
+  return linked && !(doc.scope === 'CAMPAIGN' && doc.campaignId !== null);
 }
 
 /**
  * For each of `campaignIds`, which of `candidates` (asset ids of that
- * campaign's library) the documents shared with it name. One query whatever
- * the documents, answering at most the candidates; a picture counts only
- * for its own campaign.
+ * campaign's library) the documents shared with it name; a picture counts
+ * only for its own campaign.
+ *
+ * Each statement reads one table, by an index or whole, and the rest is
+ * put together here: a statement joining the documents' pictures to the
+ * documents was planned from statistics PostgreSQL gathers now and then,
+ * and with ones taken while the tables were small it read every handout's
+ * pictures for every candidate, minutes a call. What it reads grows with
+ * the documents shared with the campaigns and the pictures they name, never
+ * with anything else.
  */
 export async function picturesInSharedDocuments(
   campaignIds: string[],
@@ -261,23 +275,55 @@ export async function picturesInSharedDocuments(
   if (campaignIds.length === 0 || candidates.size === 0) return result;
   const ids = [...new Set(campaignIds)];
   await readSomeUnreadDocuments({ campaignIds: ids });
-  const dms = await prisma.campaignMembership.findMany({
+  const seats = await prisma.campaignMembership.findMany({
     where: { campaignId: { in: ids }, role: 'DM' },
     select: { campaignId: true, userId: true },
   });
-  if (dms.length === 0) return result;
-  const shown = await prisma.asset.findMany({
-    where: {
-      id: { in: [...candidates] },
-      OR: dms.map((dm) => ({ campaignId: dm.campaignId, namedInDocuments: { some: { document: sharedBy(dm.campaignId, dm.userId) } } })),
-    },
+  const dmsOf = new Map<string, Set<string>>();
+  for (const seat of seats) dmsOf.set(seat.campaignId, (dmsOf.get(seat.campaignId) ?? new Set<string>()).add(seat.userId));
+  if (dmsOf.size === 0) return result;
+  const dmIds = [...new Set(seats.map((seat) => seat.userId))];
+  const select = { id: true, scope: true, campaignId: true, uploadedById: true } as const;
+
+  // The documents that count for each campaign, by document.
+  const [written, links] = await Promise.all([
+    prisma.asset.findMany({
+      where: { type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId: { in: [...dmsOf.keys()] }, uploadedById: { in: dmIds } },
+      select,
+    }),
+    prisma.campaignDocument.findMany({ where: { campaignId: { in: [...dmsOf.keys()] } }, select: { campaignId: true, assetId: true } }),
+  ]);
+  const linkedDocs = links.length === 0 ? [] : await prisma.asset.findMany({
+    where: { id: { in: [...new Set(links.map((link) => link.assetId))] }, type: 'DOCUMENT', uploadedById: { in: dmIds } },
+    select,
+  });
+  const counts = new Map<string, Set<string>>();
+  const count = (docId: string, campaignId: string) => counts.set(docId, (counts.get(docId) ?? new Set<string>()).add(campaignId));
+  for (const doc of written) {
+    if (doc.campaignId && countsFor(doc, doc.campaignId, dmsOf.get(doc.campaignId) ?? new Set(), false)) count(doc.id, doc.campaignId);
+  }
+  const byId = new Map(linkedDocs.map((doc) => [doc.id, doc]));
+  for (const link of links) {
+    const doc = byId.get(link.assetId);
+    if (doc && countsFor(doc, link.campaignId, dmsOf.get(link.campaignId) ?? new Set(), true)) count(doc.id, link.campaignId);
+  }
+  if (counts.size === 0) return result;
+
+  // Which campaign each candidate is of, and which of them those documents name.
+  const pictures = await prisma.asset.findMany({
+    where: { id: { in: [...candidates] }, campaignId: { in: [...dmsOf.keys()] } },
     select: { id: true, campaignId: true },
   });
-  for (const picture of shown) {
-    if (!picture.campaignId) continue;
-    const forCampaign = result.get(picture.campaignId) ?? new Set<string>();
-    forCampaign.add(picture.id);
-    result.set(picture.campaignId, forCampaign);
+  if (pictures.length === 0) return result;
+  const campaignOf = new Map(pictures.map((picture) => [picture.id, picture.campaignId]));
+  const named = await prisma.documentPicture.findMany({
+    where: { pictureId: { in: [...campaignOf.keys()] }, documentId: { in: [...counts.keys()] } },
+    select: { documentId: true, pictureId: true },
+  });
+  for (const { documentId, pictureId } of named) {
+    const campaignId = campaignOf.get(pictureId);
+    if (!campaignId || !counts.get(documentId)?.has(campaignId)) continue;
+    result.set(campaignId, (result.get(campaignId) ?? new Set<string>()).add(pictureId));
   }
   return result;
 }

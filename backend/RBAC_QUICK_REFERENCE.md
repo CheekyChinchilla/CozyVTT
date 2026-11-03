@@ -525,7 +525,7 @@ unless one of these shows it to them:
   What a document names is read from its text when it is uploaded, written
   or saved, only its first 1 MiB and at most 200 addresses, each naming an
   asset that exists, and kept in `DocumentPicture`
-  (`services/sharedDocumentPictures.ts`); the rule reads that in one query
+  (`services/sharedDocumentPictures.ts`); the rule reads that a table at a time
   and never a file. A document stored before those rows were kept is read
   by the requests that ask, five at a time, until none is left.
 
