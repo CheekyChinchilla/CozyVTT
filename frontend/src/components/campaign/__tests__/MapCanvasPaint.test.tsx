@@ -737,6 +737,96 @@ describe('a room', () => {
   });
 });
 
+describe('a selection', () => {
+  const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
+  const panel = () => within(screen.getByRole('region', { name: 'Paint' }));
+  const choose = (tool: string) => fireEvent.click(panel().getByRole('button', { name: tool }));
+  /** Where a drawImage onto the picture put its pixels: x, y, width, height. */
+  const drawnAt = () => callsOfPicture('drawImage').map((c) => c.args.slice(-4));
+  const holes = () => callsOfPicture('fillRect').map((c) => c.args);
+
+  it('moves the pixels dragged inside it, putting them down where it is let go and painting where they were in the second colour, as one change', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 });
+    // Lifted, not yet put down: the picture is as it was.
+    expect(drawnAt()).not.toContainEqual([200, 200, 100, 50]);
+    press('Enter');
+    await waitFor(() => expect(drawnAt()).toContainEqual([200, 200, 100, 50]));
+    expect(holes()).toContainEqual([100, 100, 100, 50]);
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+  });
+
+  it('resizes by a corner, the corner across from it staying', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    drag({ clientX: 200, clientY: 150 }, { clientX: 300, clientY: 250 });
+    press('Enter');
+    await waitFor(() => expect(drawnAt()).toContainEqual([100, 100, 200, 150]));
+  });
+
+  it('paints the box over with the second colour on Delete, and offers Copy, Cut and Delete only with a box', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    expect(panel().getByRole('button', { name: 'Delete' })).toBeDisabled();
+    expect(panel().getByRole('button', { name: 'Paste' })).toBeDisabled();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    expect(panel().getByRole('button', { name: 'Copy' })).toBeEnabled();
+    press('Delete');
+    await waitFor(() => expect(holes()).toContainEqual([100, 100, 100, 50]));
+    expect(panel().getByRole('button', { name: 'Delete' })).toBeDisabled();
+  });
+
+  it('pastes a copy a square right and down, lifted, put down by a click outside it', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    press('c', { ctrlKey: true });
+    expect(panel().getByRole('button', { name: 'Paste' })).toBeEnabled();
+    fireEvent.click(panel().getByRole('button', { name: 'Paste' }));
+    mouse.down(input(), { clientX: 700, clientY: 700 });
+    mouse.up(input(), { clientX: 700, clientY: 700 });
+    await waitFor(() => expect(drawnAt()).toContainEqual([150, 150, 100, 50]));
+    // A paste leaves no hole where it was copied from.
+    expect(holes()).not.toContainEqual([100, 100, 100, 50]);
+  });
+
+  it('puts the pixels back where they were on Undo while they are moving, and undoes nothing else', async () => {
+    await showMap();
+    await paintOn();
+    choose('Brush');
+    drag({ clientX: 400, clientY: 400 }, { clientX: 450, clientY: 450 });
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 });
+    const undoneBefore = callsOfPicture('putImageData').length;
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
+    press('Enter');
+    expect(drawnAt()).not.toContainEqual([200, 200, 100, 50]);
+    expect(callsOfPicture('putImageData')).toHaveLength(undoneBefore);
+  });
+
+  it('is chosen by S, Ctrl+A selects the whole picture, and another tool puts a moved selection down', async () => {
+    await showMap();
+    await paintOn();
+    press('s');
+    expect(screen.getByRole('button', { name: 'Select' })).toHaveAttribute('aria-pressed', 'true');
+    choose('Brush');
+    press('a', { ctrlKey: true });
+    expect(screen.getByRole('button', { name: 'Select' })).toHaveAttribute('aria-pressed', 'true');
+    expect(panel().getByRole('button', { name: 'Copy' })).toBeEnabled();
+    drag({ clientX: 500, clientY: 500 }, { clientX: 520, clientY: 510 });
+    choose('Brush');
+    await waitFor(() => expect(drawnAt()).toContainEqual([20, 10, 1000, 1000]));
+  });
+});
+
 describe('the fill bucket', () => {
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
 

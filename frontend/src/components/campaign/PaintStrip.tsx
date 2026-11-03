@@ -8,7 +8,7 @@
  *
  * - a header: Paint, Undo, Redo, Save and Done painting;
  * - the tool's hint;
- * - the nine tools in one row that scrolls sideways, with the shared scroll
+ * - the ten tools in one row that scrolls sideways, with the shared scroll
  *   cue (on a short screen, a phone on its side, in the header's row);
  * - Colour and width, a button naming both, which opens a pop-over over the
  *   strip with the two colours, the palette, Another colour and the width,
@@ -31,12 +31,12 @@ import { cn } from '@/utils/cn';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintTool } from './map/paint/usePaintSurface';
 import { labelFontSize } from './map/drawingGeometry';
-import { HINTS, nameOf, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
+import { HINTS, nameOf, SELECTION_BUTTONS, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
 
 /** A slider a finger can take. */
 const SLIDER = 'h-11 w-full accent-brand';
 
-export default function PaintStrip({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose }: PaintControlsProps) {
+export default function PaintStrip({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose, selection }: PaintControlsProps) {
   const [overOpen, setOverOpen] = useState(false);
   const overRef = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -235,6 +235,16 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           {nameOf(settings.colour)}, {settings.width} px
         </button>
       </div>
+
+      {tool === 'select' && selection && (
+        <div role="group" aria-label="Selection" className="flex flex-wrap gap-2 pr-2">
+          {SELECTION_BUTTONS.map(({ label, act, needs }) => (
+            <button key={act} type="button" onClick={() => selection[act]()} disabled={needs !== null && !selection[needs]} className={cn(CHIP, 'disabled:opacity-40')}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {(tool === 'rect' || tool === 'ellipse') && (
         <div role="radiogroup" aria-label="Shape" className="flex flex-wrap gap-2 pr-2">

@@ -7,6 +7,7 @@
 
 import type { PaintBox } from './paintHistory';
 import { strokePaint, type PaintPoint } from './paintStroke';
+import type { SelectBox } from './paintSelection';
 
 export type PaintShapeKind = 'line' | 'rect' | 'ellipse';
 export type ShapeStyle = 'outline' | 'fill' | 'both';
@@ -92,10 +93,57 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: PaintShape): voi
 /** Something of Paint's on its way, as the overlay draws it: in map pixels, its width too. */
 export type PaintPreview =
   | { kind: 'stroke'; points: readonly PaintPoint[]; width: number; colour: string }
-  | { kind: 'shape'; shape: PaintShape };
+  | { kind: 'shape'; shape: PaintShape }
+  | {
+    kind: 'selection';
+    box: SelectBox;
+    /** Where lifted pixels came from, shown in the second colour until they are put down. */
+    hole: { box: SelectBox; colour: string } | null;
+    /** The pixels lifted, drawn into `box`. */
+    lifted: CanvasImageSource | null;
+    /** Map pixels to a screen pixel, so the frame and its corners keep their size at any zoom. */
+    pixel: number;
+  };
 
-/** Draw a stroke or a shape on its way. */
+/** A corner of a selection, in screen pixels across. */
+const HANDLE_SIZE = 8;
+
+/** A selection: the hole its lifted pixels left, the pixels, a dashed frame and its four corners. */
+function drawSelection(ctx: CanvasRenderingContext2D, preview: Extract<PaintPreview, { kind: 'selection' }>): void {
+  const { box, hole, lifted, pixel } = preview;
+  const width = box.x1 - box.x0;
+  const height = box.y1 - box.y0;
+  ctx.save();
+  try {
+    if (hole) {
+      ctx.fillStyle = hole.colour;
+      ctx.fillRect(hole.box.x0, hole.box.y0, hole.box.x1 - hole.box.x0, hole.box.y1 - hole.box.y0);
+    }
+    if (lifted) ctx.drawImage(lifted, box.x0, box.y0, width, height);
+    // Black under white dashes: seen on any picture.
+    ctx.lineWidth = 1.5 * pixel;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#000000';
+    ctx.strokeRect(box.x0, box.y0, width, height);
+    ctx.setLineDash([5 * pixel, 4 * pixel]);
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(box.x0, box.y0, width, height);
+    ctx.setLineDash([]);
+    const side = HANDLE_SIZE * pixel;
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#000000';
+    for (const [x, y] of [[box.x0, box.y0], [box.x1, box.y0], [box.x1, box.y1], [box.x0, box.y1]]) {
+      ctx.fillRect(x - side / 2, y - side / 2, side, side);
+      ctx.strokeRect(x - side / 2, y - side / 2, side, side);
+    }
+  } finally {
+    ctx.restore();
+  }
+}
+
+/** Draw a stroke, a shape or a selection on its way. */
 export function drawPaintPreview(ctx: CanvasRenderingContext2D, preview: PaintPreview): void {
   if (preview.kind === 'stroke') strokePaint(ctx, preview.points, preview.width, preview.colour);
-  else drawShape(ctx, preview.shape);
+  else if (preview.kind === 'shape') drawShape(ctx, preview.shape);
+  else drawSelection(ctx, preview);
 }

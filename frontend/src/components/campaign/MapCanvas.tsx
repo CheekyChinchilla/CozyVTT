@@ -4643,6 +4643,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
               onDownload={() => { void paint.download(); }}
               signedOut={paintGuards.signedOut}
               onClose={paint.close}
+              selection={paint.selection}
             />
           )}
           {drawPanel && !compact && <DrawControls {...drawPanel} />}
@@ -5038,6 +5039,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                 onDownload={() => { void paint.download(); }}
                 signedOut={paintGuards.signedOut}
                 onClose={paint.close}
+                selection={paint.selection}
               />
             )}
           </div>
