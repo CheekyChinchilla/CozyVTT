@@ -188,7 +188,7 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
         edges={edges}
       >
         {/* The session panels are the page's, moved in here; each fills this box. */}
-        <div ref={sessionSlot.ref} className="finger-controls absolute inset-0" />
+        <div ref={sessionSlot.ref} className="finger-controls absolute inset-0 overflow-hidden" />
       </BottomSheet>
 
       <BottomSheet

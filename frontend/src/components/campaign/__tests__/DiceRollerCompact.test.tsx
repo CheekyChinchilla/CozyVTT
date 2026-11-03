@@ -6,12 +6,14 @@
  * hint. In a sheet half a phone's height it took nearly all of the panel and
  * left the log nothing. On the compact layout the quick rolls, the saved rolls
  * and **Saved** sit in one row that scrolls sideways, Roll sits beside the
- * expression, Character and Purpose wait behind **More options**, and the log
- * keeps at least 55 percent of the panel's height, the controls scrolling
- * when they need more. On the desktop nothing changes.
+ * expression, Character and Purpose wait behind **More options**, Secret and
+ * Clear sit beside Secret Roll, and the log takes the room the controls
+ * leave, the panel's one scroll area: the controls keep their own height and
+ * scroll only past 80 percent of the panel (More options open on a very short
+ * sheet). On the desktop nothing changes.
  *
- * jsdom lays nothing out, so the 55 percent is read from the classes that
- * set it; a browser shows the result.
+ * jsdom lays nothing out, so the layout is read from the classes that set
+ * it; a browser shows the result.
  */
 
 import { it, expect, vi, beforeAll, beforeEach } from 'vitest';
@@ -154,13 +156,16 @@ it('rolls from the expression beside its Roll button, and keeps Secret Roll in s
   expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '2d6+3', secret: true });
 });
 
-it('keeps at least 55 percent of the panel for the log, the controls scrolling when they need more', () => {
+it('gives the log the room the controls leave, the controls keeping their height, and Secret and Clear beside Secret Roll', () => {
   renderCompact();
   const { box, controls } = logAndControls();
-  expect(box.className.split(' ')).toContain('min-h-[55%]');
-  expect(box.className.split(' ')).not.toContain('min-h-0');
-  expect(controls.className.split(' ')).toEqual(expect.arrayContaining(['min-h-0', 'overflow-y-auto']));
-  expect(controls.className.split(' ')).not.toContain('shrink-0');
+  expect(box.className.split(' ')).toEqual(expect.arrayContaining(['flex-1', 'min-h-0']));
+  expect(box.className).not.toContain('min-h-[55%]');
+  expect(controls.className.split(' ')).toEqual(expect.arrayContaining(['shrink-0', 'max-h-[80%]']));
+  const secretRow = screen.getByText(/^Secret Roll/).closest('div[class*="flex-wrap"]') as HTMLElement;
+  expect(within(secretRow).getByRole('button', { name: /More options/ })).toBeTruthy();
+  // The checkbox's label short, its meaning in its title, to share the row.
+  expect(screen.getByText('Secret Roll').closest('label')).toHaveAttribute('title', 'Hidden from other players');
   expect(screen.queryByText('Press Enter to roll')).toBeNull();
 });
 
@@ -179,8 +184,8 @@ it('gives every control under the log a 44 pixel target on a touch screen', asyn
   const controls = await footerControls();
   expect(controls.length).toBe(19);
   for (const control of controls) expect(control.className.split(/\s+/), control.textContent ?? '').toContain('touch-target');
-  // The log keeps its floor beside them.
-  expect(logAndControls().box.className.split(' ')).toContain('min-h-[55%]');
+  // The controls keep their height beside the log.
+  expect(logAndControls().controls.className.split(' ')).toContain('shrink-0');
 });
 
 it('leaves the desktop panel as it was', async () => {
