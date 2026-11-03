@@ -17,6 +17,7 @@ import { diagonalStepCosts } from '@/utils/geometry';
 import { Button, Modal } from '@/components/ui';
 import { extractAssetId } from '@/utils/assetUrl';
 import MapGridPreview from './MapGridPreview';
+import MapDimensionField from './MapDimensionField';
 
 interface EditMapModalProps {
   isOpen: boolean;
@@ -24,49 +25,6 @@ interface EditMapModalProps {
   campaignId: string;
   onClose: () => void;
   onUpdated: (map: CampaignMap) => void;
-}
-
-// ============================================
-// DimensionField
-// Number input paired with a range slider for easier adjustment
-// ============================================
-
-function DimensionField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-}) {
-  const clamp = (v: number) => Math.max(min, Math.min(max, v));
-  return (
-    <div>
-      <label className="block text-xs text-stone-gray/70 mb-1">{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(clamp(parseInt(e.target.value) || min))}
-        min={min}
-        max={max}
-        className="input-cozy"
-      />
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full mt-1.5 accent-moss-green cursor-pointer"
-        aria-label={`${label} slider`}
-      />
-    </div>
-  );
 }
 
 // ============================================
@@ -346,21 +304,21 @@ export default function EditMapModal({
                       Map Dimensions
                     </label>
                     <div className="space-y-3">
-                      <DimensionField
+                      <MapDimensionField
                         label="Width (grid squares)"
                         value={width}
                         onChange={setWidth}
                         min={MAP_LIMITS.minSide}
                         max={MAP_LIMITS.maxSide}
                       />
-                      <DimensionField
+                      <MapDimensionField
                         label="Height (grid squares)"
                         value={height}
                         onChange={setHeight}
                         min={MAP_LIMITS.minSide}
                         max={MAP_LIMITS.maxSide}
                       />
-                      <DimensionField
+                      <MapDimensionField
                         label="Grid Size (px/square)"
                         value={gridSize}
                         onChange={setGridSize}

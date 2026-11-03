@@ -192,3 +192,12 @@ describe('Edit Map\'s buttons', () => {
     expect(form).not.toContainElement(cancel);
   });
 });
+
+describe('Edit Map\'s size boxes', () => {
+  it('are named by their labels', () => {
+    open();
+    for (const name of ['Width (grid squares)', 'Height (grid squares)', 'Grid Size (px/square)']) {
+      expect(screen.getByRole('spinbutton', { name })).toBeInTheDocument();
+    }
+  });
+});

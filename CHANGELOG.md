@@ -131,6 +131,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A token you have picked up keeps its hit-point bar, condition badges and rings.** While a token was held it was drawn only as a faded picture, without its hit-point bar, its condition badges, the gold turn ring or the initiative tracker's ring, which on a tablet, where a token can stay held for a while, hid them for as long as it stayed. While it waits on its own square it is now drawn faded with all of them; carried to another square it is the faded picture, as before.
 
+- **A screen reader names the size boxes in Create Map and Edit Map.** The **Width**, **Height**, **Grid Size** and **Detail** boxes had labels tied to nothing, so a screen reader announced each as an unnamed number box. Each box is now named by its label.
+
 - **Create Map's and Edit Map's buttons no longer sit over the form.** **Cancel** and **Create Map** or **Save Changes** stood in a see-through bar inside the scrolling form, narrower than the dialog, so on a phone the **Grid Size** box and the fields below it showed through and around them. The form now scrolls on its own, and the buttons stand under it on the dialog's surface.
 
 - **The grid preview in Create Map and Edit Map is sharp on a phone.** It was drawn at one pixel per point, so on a phone, a tablet or a high-density monitor the picture and the grid lines were soft, at a third of the screen's pixels on most phones. It is now drawn at the screen's own density, as the map is.
