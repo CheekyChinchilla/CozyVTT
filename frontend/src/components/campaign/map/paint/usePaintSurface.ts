@@ -60,13 +60,12 @@ import { usePaintStore } from '@/stores/paintStore';
 import type { Asset } from '@/types';
 import mapService from '@/services/map.service';
 import { api } from '@/services/api';
-import { uploadDrawnPicture, DrawnPictureRefused } from '@/services/drawnPicture';
+import { replaceDrawnPicture, uploadDrawnPicture, DrawnPictureRefused } from '@/services/drawnPicture';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { savePaint, PNG_NOT_MADE } from './savePaint';
 import { saveBlob } from '@/utils/download';
 import { pictureIsDrawn, type MapPictureKind } from './mapPicture';
 import { pictureToPng } from './blankPicture';
-import { extractAssetId } from '@/utils/assetUrl';
 import {
   DRAFT_INTERVAL_MS, DRAFT_LOOKUP_MS, DRAFTS_UNAVAILABLE, draftKey, draftsFailedMessage, keepDraftAside, newestDraft, packDraftTiles, paintTab, putDraftTiles,
   draftTileBox, type DraftHeader, type DraftStore, type DraftTile, type PaintTab, type PictureSize,
@@ -170,11 +169,12 @@ interface Surface {
    */
   baseUrl: string;
   /**
-   * The picture a save under way has uploaded, until the save is done: the
-   * server sends the table's map with it before the save answers, which is
-   * this page's own picture and no change from elsewhere.
+   * The address a save under way is giving the map, once its picture is
+   * written, until the save is done: the server sends the table's map with
+   * it before the save answers, which is this page's own picture and no
+   * change from elsewhere.
    */
-  savingAssetId: string | null;
+  savingUrl: string | null;
   /** The tiles painted since the picture was made or last saved, by `column,row`. */
   changed: Map<string, TileRect>;
   /**
@@ -236,6 +236,12 @@ export interface PaintSurfaceOptions {
   /** Told of the map as Save read it, when it differs from the page's: the page shows that one. */
   onMapRead: (map: CampaignMap) => void;
   /**
+   * The other maps of the campaign whose picture is the one at `address`
+   * (by its asset), besides `mapId`: a save writes over that picture, so
+   * they are pointed at its new address too.
+   */
+  mapsSharing?: (mapId: string, address: string) => string[];
+  /**
    * The picture drawn for it, with the address it was loaded from: null for
    * a map with none, and while the page has let go of it (holdsPicture).
    * Paint opens only on one at the map's own address, never on the picture
@@ -268,7 +274,7 @@ export interface PaintSurfaceOptions {
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
-  const { map, picture, pictureKind, pictureFailed, campaignId, onSaved, onMapRead, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
+  const { map, picture, pictureKind, pictureFailed, campaignId, onSaved, onMapRead, mapsSharing, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
   // What Paint opens on: the picture at the map's own address, once it has
   // loaded, so a save never writes the picture before it, still drawn while a
   // new one loads or after it failed, over the new one. A map with no
@@ -681,7 +687,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       mapId: map.id, mapName: map.name, canvas, ctx, history, store, revision: 0, saved: 0,
       // The address of the pixels drawn in; a map started blank, its own.
       baseUrl: ownPicture ? ownPicture.url : map.imageUrl ?? '',
-      savingAssetId: null,
+      savingUrl: null,
       changed: new Map(),
       asSaved: new Map(),
       unwritten: new Map(),
@@ -810,7 +816,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   // last saved: the canvas is no longer what the map shows. The picture a
   // save under way uploaded is this page's own.
   const stale = surface !== null && map !== null && surface.mapId === map.id && (map.imageUrl ?? '') !== surface.baseUrl
-    && (surface.savingAssetId === null || extractAssetId(map.imageUrl) !== surface.savingAssetId);
+    && (map.imageUrl ?? '') !== surface.savingUrl;
   // Paint not saved over a picture changed elsewhere: kept, and the DM is
   // asked what to do with it, here and each time Paint is pressed until
   // they say. With nothing to save, the canvas simply goes.
@@ -1041,13 +1047,21 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const { map: saved, asset } = await savePaint({
         previous,
         makePng: () => pictureToPng(s.canvas),
+        previousIsDrawn: () => pictureIsDrawn(previous, campaignId),
+        writeOver: async (assetId, png) => {
+          const written = await replaceDrawnPicture(png, assetId);
+          s.savingUrl = written.imageUrl;
+          return written;
+        },
         upload: async (png) => {
           const uploaded = await uploadDrawnPicture(png, campaignId);
-          s.savingAssetId = uploaded.id;
+          s.savingUrl = `/api/assets/maps/${uploaded.id}`;
           return uploaded;
         },
-        pointMapAt: (assetId) => mapService.updateMap(campaignId, s.mapId, { imageUrl: assetId }),
-        previousIsDrawn: () => pictureIsDrawn(previous, campaignId),
+        pointMapAt: (address) => mapService.updateMap(campaignId, s.mapId, { imageUrl: address }),
+        sharing: mapsSharing?.(s.mapId, previous) ?? [],
+        // The page shows each as the server now has it.
+        pointOtherMapAt: (mapId, address) => mapService.updateMap(campaignId, mapId, { imageUrl: address }).then(onMapRead),
         remove: (assetId) => api.deleteAsset(assetId),
       });
       taken = null;
@@ -1074,11 +1088,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
       return false;
     } finally {
-      s.savingAssetId = null;
+      s.savingUrl = null;
       savingRef.current = false;
       setSaving(false);
     }
-  }, [map, campaignId, bump, onSaved, onMapRead, refuse, clearDrafts, touched]);
+  }, [map, campaignId, bump, onSaved, onMapRead, mapsSharing, refuse, clearDrafts, touched]);
   /** Save, answering whether it saved; pressed again while one is under way, that one's answer. */
   const save = useCallback((overwrite = false): Promise<boolean> => {
     if (savingRef.current && saveRun.current) return saveRun.current;

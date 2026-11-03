@@ -2,7 +2,7 @@
  * Asset URL Utilities — Unit Tests
  */
 
-import { normalizeAssetUrl } from './asset-urls';
+import { normalizeAssetUrl, extractAssetId, isExactAssetAddress, mapPictureAddress } from './asset-urls';
 
 const VALID_UUID = 'bc5f19c0-158b-4330-a5cc-6133666a4fec';
 
@@ -51,5 +51,32 @@ describe('normalizeAssetUrl', () => {
     const once = normalizeAssetUrl(VALID_UUID, 'maps');
     const twice = normalizeAssetUrl(once!, 'maps');
     expect(twice).toBe(once);
+  });
+});
+
+// ============================================
+// A map picture's address with its version
+// ============================================
+
+describe('a map picture address with a version', () => {
+  const address = `/api/assets/maps/${VALID_UUID}`;
+
+  it('is an exact asset address, read as the asset it names', () => {
+    expect(isExactAssetAddress(`${address}?v=1730000000000`)).toBe(true);
+    expect(extractAssetId(`${address}?v=1730000000000`)).toBe(VALID_UUID);
+  });
+
+  it('is made from an id and a version', () => {
+    expect(mapPictureAddress(VALID_UUID, 1730000000000)).toBe(`${address}?v=1730000000000`);
+  });
+
+  it('carries nothing but v and digits, and only under maps', () => {
+    for (const refused of [
+      `${address}?v=`, `${address}?v=1a`, `${address}?v=1&x=2`, `${address}?x=1`, `${address}?V=1`,
+      `${address}#v=1`, `${address}?v=1#x`, `${address}?v=12345678901234567`,
+      `/api/assets/tokens/${VALID_UUID}?v=1`, `/api/assets/documents/${VALID_UUID}?v=1`,
+    ]) {
+      expect([refused, isExactAssetAddress(refused)]).toEqual([refused, false]);
+    }
   });
 });

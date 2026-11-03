@@ -877,7 +877,7 @@ Create a new map (DM only).
 
 `width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `name` may be at most 200 characters once trimmed, or the request answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default; a name or size equal to the one already stored is accepted as it is.
 
-`imageUrl` and the optional `spiritLayerUrl` may not name an asset of another kind: one that is not a map picture (type `MAP`), whatever folder an address gives, answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An address naming no existing asset is stored as sent. An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged.
+`imageUrl` and the optional `spiritLayerUrl` may not name an asset of another kind: one that is not a map picture (type `MAP`), whatever folder an address gives, answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An address naming no existing asset is stored as sent. An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged. A map picture's address may carry a version, `/api/assets/maps/:id?v=<digits>` (up to 16 digits), as a drawn map's picture does after **Save** in Paint; it is stored as sent and names the same asset. Any other query answers `403`.
 
 ---
 
@@ -1366,6 +1366,24 @@ its uploader or a platform admin. Anyone else gets `404`. A PDF answers `400`: o
 Markdown can be edited in place. Takes `{ content }` under the same limits as
 creation. Readers see the new text the next time they open it; there is no
 live refresh.
+
+---
+
+### `PUT /api/assets/:id/picture`
+
+Write a new picture over a picture drawn in CozyVTT, as **Save** in Paint
+does: a campaign map picture tagged `cozyvtt-drawn-map`. The asset keeps its
+id, so every address naming it shows the new picture; no earlier version is
+kept. **Only the DM of the asset's campaign**, a platform admin included in
+the refusal (`403`). An asset the caller may not read answers `404`; any other
+picture answers `400` with `Only a picture drawn in CozyVTT can be saved over.
+Upload a new picture instead.` The multipart body carries one `file`, checked
+as a map upload is (`MAX_MAP_SIZE_MB`, the type from its bytes, the picture
+limits), and of the same format as the picture it replaces. A refused save
+leaves the old picture as it was. Answers `{ asset, imageUrl }`, where
+`imageUrl` is `/api/assets/maps/:id?v=<n>`, a version that changes on every
+save: give it to the map with `PUT /api/campaigns/:id/maps/:mapId` so open
+tables load the new picture. Counted against the upload rate limit.
 
 ---
 

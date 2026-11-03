@@ -1,8 +1,9 @@
 // ============================================
-// Uploading a picture Paint made: into the campaign's library, as a map
-// picture tagged DRAWN_MAP_TAG, through the same upload as any other. Written
-// once here for Draw a map and Save, so the fields and their order cannot
-// differ between them.
+// Sending a picture Paint made: uploaded into the campaign's library, as a
+// map picture tagged DRAWN_MAP_TAG, through the same upload as any other;
+// or written over the drawn picture it replaces, by Save. Written once here
+// for Draw a map and Save, so the fields, their order and the size check
+// cannot differ between them.
 // ============================================
 
 import { api } from './api';
@@ -30,17 +31,39 @@ export class DrawnPictureRefused extends Error {
 const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 /**
- * Upload `png` into the campaign's library and answer the asset. Refused
- * here, before anything is sent, when it is over the server's limit for a
- * map picture (MAX_MAP_SIZE_MB); the server's own answer otherwise.
+ * Refused here, before anything is sent, when `png` is over the server's
+ * limit for a map picture (MAX_MAP_SIZE_MB).
  */
-export async function uploadDrawnPicture(png: Blob, campaignId: string): Promise<Asset> {
+async function refuseOverLimit(png: Blob): Promise<void> {
   // The limit as the server has it, or the usual one where it cannot be read.
   const config = await api.getServerConfig().catch(() => undefined);
   const limit = getUploadLimit(config, AssetType.MAP);
   if (png.size > limit) {
     throw new DrawnPictureRefused(`This picture is ${megabytes(png.size)}, over this server's limit of ${formatUploadLimit(limit)} for a map picture.`);
   }
+}
+
+/** The server's answer, or the words for the proxy in front of it refusing the size, which it says nothing of. */
+async function sent<T>(request: Promise<T>): Promise<T> {
+  try {
+    return await request;
+  } catch (err) {
+    if (apiErrorStatus(err) === 413) {
+      throw new DrawnPictureRefused('This picture is too large for this server to take. Its administrator can raise the limit.');
+    }
+    throw err;
+  }
+}
+
+const pictureFile = (png: Blob) => new File([png], DRAWN_PICTURE_FILE, { type: 'image/png' });
+
+/**
+ * Upload `png` into the campaign's library and answer the asset: Draw a
+ * map's blank picture, and a map's first painting when it has no drawn
+ * picture to write over.
+ */
+export async function uploadDrawnPicture(png: Blob, campaignId: string): Promise<Asset> {
+  await refuseOverLimit(png);
   // The type first: the server reads the parts in order, and names the
   // type's limit only if it has read the type before the file.
   const form = new FormData();
@@ -49,14 +72,18 @@ export async function uploadDrawnPicture(png: Blob, campaignId: string): Promise
   form.append('name', DRAWN_PICTURE_NAME);
   form.append('tags', DRAWN_MAP_TAG);
   form.append('campaignId', campaignId);
-  form.append('file', new File([png], DRAWN_PICTURE_FILE, { type: 'image/png' }));
-  try {
-    return (await api.uploadAsset(form)).asset;
-  } catch (err) {
-    // The proxy in front of the server answers this, with no words of its own.
-    if (apiErrorStatus(err) === 413) {
-      throw new DrawnPictureRefused('This picture is too large for this server to take. Its administrator can raise the limit.');
-    }
-    throw err;
-  }
+  form.append('file', pictureFile(png));
+  return (await sent(api.uploadAsset(form))).asset;
+}
+
+/**
+ * Write `png` over the drawn picture with this id, under the same id
+ * (Paint's Save), and answer the asset and the address to give its map.
+ */
+export async function replaceDrawnPicture(png: Blob, assetId: string): Promise<{ asset: Asset; imageUrl: string }> {
+  await refuseOverLimit(png);
+  const form = new FormData();
+  form.append('file', pictureFile(png));
+  const { asset, imageUrl } = await sent(api.replaceDrawnPicture(assetId, form));
+  return { asset, imageUrl };
 }

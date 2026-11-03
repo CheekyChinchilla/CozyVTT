@@ -71,7 +71,10 @@ const h = vi.hoisted(() => {
     updateToken: vi.fn(),
     addToken: vi.fn(),
     uploadAsset: vi.fn(),
+    replaceDrawnPicture: vi.fn(),
     deleteAsset: vi.fn(),
+    /** The campaign the page is given; its maps are each test's. */
+    campaign: { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, characters: [], status: 'ACTIVE', playersMayDraw: true, memberships: [], maps: [] as Array<{ id: string; name?: string; imageUrl?: string }> },
     updateMap: vi.fn(),
     getMap: vi.fn(),
     /** The draft store Paint is given; a fresh one each test. */
@@ -99,7 +102,6 @@ vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
   const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, (map) => h.set({ currentMap: map }));
   const noop = () => undefined;
-  const campaign = { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, characters: [], status: 'ACTIVE', playersMayDraw: true, memberships: [], maps: [{ id: 'map-a' }, { id: 'map-b' }] };
   return {
     useCampaign: () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
@@ -110,7 +112,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         setCurrentMap: noop,
         ...mapActions,
         userRole: h.state.userRole,
-        campaign,
+        campaign: h.campaign,
         updateCampaignSpiritLayer: noop,
         dmViewBothPlanes: false,
         playerSpiritVisible: false,
@@ -164,6 +166,7 @@ vi.mock('@/services/map.service', () => ({
 vi.mock('@/services/api', () => {
   const named: Record<string, unknown> = {
     getAsset: h.getAsset, updateToken: h.updateToken, addToken: h.addToken, uploadAsset: h.uploadAsset, deleteAsset: h.deleteAsset,
+    replaceDrawnPicture: h.replaceDrawnPicture,
     getServerConfig: () => Promise.resolve({}),
   };
   const client = new Proxy({}, {
@@ -263,6 +266,22 @@ beforeAll(() => {
   Object.defineProperty(window, 'ResizeObserver', { value: RO, configurable: true });
 });
 
+/** A map picture's address as the server stores it: an address as given, a bare id under maps. */
+const storedAs = (imageUrl: string) => (imageUrl.startsWith('/') ? imageUrl : `/api/assets/maps/${imageUrl}`);
+
+/** Saves written over a picture so far this test, the version of the address each answers. */
+let saves = 0;
+
+/**
+ * Press Save in the Paint panel, and say yes to the question before a save
+ * writes over the map's picture, when it is asked.
+ */
+async function pressSave() {
+  await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+  const asked = screen.queryByRole('dialog', { name: "Overwrite the map's picture?" });
+  if (asked) await act(async () => { fireEvent.click(within(asked).getByRole('button', { name: 'Save over it' })); });
+}
+
 /** The draft store of this test. */
 const drafts = () => h.drafts.store as MemoryDraftStore;
 
@@ -276,9 +295,15 @@ beforeEach(() => {
   h.addToken.mockReset().mockResolvedValue({ token: token('placed', 1, 1) });
   h.uploadAsset.mockReset().mockResolvedValue({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] } });
   h.deleteAsset.mockReset().mockResolvedValue({ message: 'deleted' });
+  saves = 0;
+  h.replaceDrawnPicture.mockReset().mockImplementation((id: string) => {
+    saves += 1;
+    return Promise.resolve({ message: 'Picture saved', asset: { id, type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] }, imageUrl: `/api/assets/maps/${id}?v=${saves}` });
+  });
+  h.campaign.maps = [{ id: 'map-a' }, { id: 'map-b' }];
   h.getMap.mockReset().mockImplementation(() => Promise.resolve(h.state.currentMap));
   h.updateMap.mockReset().mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
-    Promise.resolve({ ...(h.state.currentMap as object), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` }));
+    Promise.resolve({ ...(h.state.currentMap as object), id: mapId, imageUrl: storedAs(data.imageUrl) }));
   act(() => {
     useGameStore.getState().clearGameState();
     usePaintStore.setState({ mapId: null, unsaved: false, openOnMapId: null });
@@ -846,7 +871,7 @@ describe('a picture changed elsewhere', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     // Another tab saved this map, which is being prepared: no map.changed came.
     h.getMap.mockResolvedValue({ ...(h.state.currentMap as CampaignMap), imageUrl: '/api/assets/maps/from-another-tab' });
-    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    await pressSave();
     expect(await screen.findByRole('dialog', { name: 'This map\'s picture changed' })).toBeInTheDocument();
     expect(h.uploadAsset).not.toHaveBeenCalled();
   });
@@ -1140,13 +1165,11 @@ describe('on the table\'s map', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     // The server tells every page of the new picture before it answers the save.
     h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => {
-      const saved = { ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` };
+      const saved = { ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: storedAs(data.imageUrl) };
       sendMap(saved);
       return Promise.resolve(saved);
     });
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
+    await pressSave();
     await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
     expect(question()).toBeNull();
     expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
@@ -1160,7 +1183,7 @@ describe('on the table\'s map', () => {
  * A new picture for the map on screen keeps the one before it drawn while
  * it loads, and over its notice if it fails. Paint works only on the
  * picture at the map's own address: never on the one before it, which a
- * save would write over the new one, deleting it.
+ * save would write over the new one, losing it.
  */
 describe('a new picture for the map on screen', () => {
   const sendMap = (map: CampaignMap) => {
@@ -1197,10 +1220,8 @@ describe('a new picture for the map on screen', () => {
     expect(copied).not.toContain(before);
     // Save asks nothing: the picture Paint holds is the map's.
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
-    await waitFor(() => expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' }));
+    await pressSave();
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: `/api/assets/maps/from-the-tablet-${mapCount}?v=1` }));
     expect(screen.queryByRole('dialog', { name: 'This map\'s picture changed' })).toBeNull();
   });
 
@@ -1338,9 +1359,7 @@ describe('drafts', () => {
   }
   /** Save, put Paint away, and let the picture saved load, so nothing of Paint's is held. */
   async function saveAndPutAway() {
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
+    await pressSave();
     await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
     await settle();
     fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
@@ -1396,9 +1415,7 @@ describe('drafts', () => {
     await settle();
     expect(drafts().writes.map((w) => w.key)).toEqual([key]);
     expect([...drafts().kept.get(openKey)!.keys()]).toEqual(['0,0', '1,0']);
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
+    await pressSave();
     await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
     await settle();
     expect(drafts().headers.has(key)).toBe(false);
@@ -1527,9 +1544,7 @@ describe('drafts', () => {
     const aside = [...drafts().headers.values()].filter((d) => d.mapId === 'map-b' && d.key !== mapB);
     expect(aside.map((d) => [...drafts().kept.get(d.key)!.keys()])).toEqual([['3,3']]);
     // Once this painting is saved and put away, the one kept aside is offered.
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
+    await pressSave();
     await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
     await settle();
     fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
@@ -1692,15 +1707,13 @@ describe('drafts', () => {
     });
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     painted = 1;
-    // The upload takes its time; the DM paints on meanwhile.
+    // The picture takes its time to send; the DM paints on meanwhile.
     let uploaded = () => undefined as void;
-    h.uploadAsset.mockImplementationOnce(() => new Promise((resolve) => {
-      uploaded = () => resolve({ message: 'ok', asset: { id: 'saved-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: ['drawn-map'] } });
+    h.replaceDrawnPicture.mockImplementationOnce((id: string) => new Promise((resolve) => {
+      uploaded = () => resolve({ message: 'Picture saved', asset: { id, type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] }, imageUrl: `/api/assets/maps/${id}?v=1` });
     }));
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
-    await waitFor(() => expect(h.uploadAsset).toHaveBeenCalled());
+    await pressSave();
+    await waitFor(() => expect(h.replaceDrawnPicture).toHaveBeenCalled());
     drag({ clientX: 100, clientY: 100 }, { clientX: 120, clientY: 110 });
     painted = 2;
     await act(async () => { uploaded(); });
@@ -1723,9 +1736,7 @@ describe('drafts', () => {
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
     await settle();
     expect(drafts().headers.has(key)).toBe(true);
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
+    await pressSave();
     await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
     await settle();
     expect(drafts().headers.has(key)).toBe(false);
@@ -1856,9 +1867,9 @@ describe('paint not saved, asked about before it is left', () => {
     await painted();
     let land: (() => void) | null = null;
     h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => new Promise((resolve) => {
-      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` });
+      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: storedAs(data.imageUrl) });
     }));
-    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    await pressSave();
     await waitFor(() => expect(land).not.toBeNull());
     const answer = askAbout('bring-everyone');
     await act(async () => { await Promise.resolve(); });
@@ -1887,20 +1898,23 @@ describe('paint not saved, asked about before it is left', () => {
     expect(question()).toBeNull();
   });
 
-  it('Save my painting saves, then lets the change go', async () => {
+  it('says that saving overwrites the picture; Save my painting saves over it without asking again, then lets the change go', async () => {
     await painted();
     const answer = askAbout('back-to-table');
     await waitFor(() => expect(question()).toBeInTheDocument());
+    expect(within(question()!).getByText(/Saving overwrites the map's picture\./)).toBeInTheDocument();
     await choose('Save my painting');
     await waitFor(() => expect(answer.value).toBe(true));
-    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' });
+    expect(screen.queryByRole('dialog', { name: "Overwrite the map's picture?" })).toBeNull();
+    expect(h.replaceDrawnPicture).toHaveBeenCalledWith(`drawn-${mapCount}`, expect.any(FormData));
+    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: `/api/assets/maps/drawn-${mapCount}?v=1` });
     expect(usePaintStore.getState().unsaved).toBe(false);
     await waitFor(() => expect(question()).toBeNull());
   });
 
   it('a save refused keeps the paint, and the change does not happen', async () => {
     await painted();
-    h.uploadAsset.mockRejectedValue(new Error('refused'));
+    h.replaceDrawnPicture.mockRejectedValue(new Error('refused'));
     const answer = askAbout('set-active');
     await waitFor(() => expect(question()).toBeInTheDocument());
     await choose('Save my painting');
@@ -1956,9 +1970,9 @@ describe('paint not saved, asked about before it is left', () => {
     await painted();
     let land: (() => void) | null = null;
     h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) => new Promise((resolve) => {
-      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: `/api/assets/maps/${data.imageUrl}` });
+      land = () => resolve({ ...(h.state.currentMap as CampaignMap), id: mapId, imageUrl: storedAs(data.imageUrl) });
     }));
-    await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+    await pressSave();
     await waitFor(() => expect(land).not.toBeNull());
     const answer = askAbout('open-other');
     await act(async () => { await Promise.resolve(); });
@@ -1996,9 +2010,7 @@ describe('paint not saved, asked about before it is left', () => {
 
 describe('Save', () => {
   const save = async () => {
-    await act(async () => {
-      fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' }));
-    });
+    await pressSave();
     await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
   };
 
@@ -2017,6 +2029,89 @@ describe('Save', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     await save();
     expect(screen.getByText('Saved. Players see it when you bring them here.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Save writes over the map's drawn picture, the same asset under the same
+ * id, so every link to it shows the new painting, and no earlier version is
+ * kept. So it asks first, every time: "Saving will overwrite the current
+ * map image, are you sure you want to continue?", naming the other maps of
+ * the campaign using that picture, which change too. Esc and Not now send
+ * nothing. A map with no picture is given one without asking.
+ */
+describe('the question before Save', () => {
+  const asked = () => screen.queryByRole('dialog', { name: "Overwrite the map's picture?" });
+  const panelSave = () => within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' });
+  async function paintedOn(map = mapWith({ name: 'Crypt' })) {
+    await showMap(map);
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    return map;
+  }
+
+  it('is asked before anything is sent; Save over it writes over the picture under its id, and the map takes its new address', async () => {
+    await paintedOn();
+    await act(async () => { fireEvent.click(panelSave()); });
+    expect(asked()).toBeInTheDocument();
+    expect(within(asked()!).getByText('Saving will overwrite the current picture of Crypt, and no earlier version is kept. Are you sure you want to continue?')).toBeInTheDocument();
+    expect(h.replaceDrawnPicture).not.toHaveBeenCalled();
+    expect(h.getMap).not.toHaveBeenCalled();
+
+    await act(async () => { fireEvent.click(within(asked()!).getByRole('button', { name: 'Save over it' })); });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    expect(h.replaceDrawnPicture).toHaveBeenCalledWith(`drawn-${mapCount}`, expect.any(FormData));
+    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: `/api/assets/maps/drawn-${mapCount}?v=1` });
+    expect(h.uploadAsset).not.toHaveBeenCalled();
+    expect(h.deleteAsset).not.toHaveBeenCalled();
+    await waitFor(() => expect(asked()).toBeNull());
+  });
+
+  it.each([
+    ['Not now', () => fireEvent.click(within(asked()!).getByRole('button', { name: 'Not now' }))],
+    ['Esc', () => fireEvent.keyDown(asked()!, { key: 'Escape' })],
+  ])('sends nothing on %s, and the paint stays to be saved', async (_how, cancel) => {
+    await paintedOn();
+    await act(async () => { fireEvent.click(panelSave()); });
+    await act(async () => { cancel(); });
+    await waitFor(() => expect(asked()).toBeNull());
+    expect(h.replaceDrawnPicture).not.toHaveBeenCalled();
+    expect(h.updateMap).not.toHaveBeenCalled();
+    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it('is asked on every press of Save', async () => {
+    await paintedOn();
+    await pressSave();
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
+    await act(async () => { fireEvent.click(panelSave()); });
+    expect(asked()).toBeInTheDocument();
+  });
+
+  it('names the other maps using the picture, which change too, and points them at its new address', async () => {
+    const map = mapWith({ name: 'Crypt' });
+    h.campaign.maps = [
+      { id: 'map-a', name: 'Crypt', imageUrl: map.imageUrl },
+      { id: 'map-b', name: 'Crypt by night', imageUrl: `${map.imageUrl}?v=7` },
+      { id: 'map-c', name: 'Village', imageUrl: '/api/assets/maps/village' },
+    ];
+    await paintedOn(map);
+    await act(async () => { fireEvent.click(panelSave()); });
+    expect(within(asked()!).getByText('Crypt by night uses the same picture and will change too.')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(within(asked()!).getByRole('button', { name: 'Save over it' })); });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    const address = `/api/assets/maps/drawn-${mapCount}?v=1`;
+    expect(h.updateMap.mock.calls.map(([, mapId, data]) => [mapId, data])).toEqual([['map-a', { imageUrl: address }], ['map-b', { imageUrl: address }]]);
+  });
+
+  it('is not asked on a map with no picture, which is given a new one', async () => {
+    await paintedOn(mapWith({ imageUrl: '' }));
+    await pressSave();
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    expect(h.uploadAsset).toHaveBeenCalled();
+    expect(h.replaceDrawnPicture).not.toHaveBeenCalled();
+    expect(h.updateMap).toHaveBeenCalledWith('campaign-1', 'map-a', { imageUrl: 'saved-1' });
   });
 });
 
@@ -2244,6 +2339,23 @@ describe('on the compact layout', () => {
     fireEvent.click(within(strip()!).getByRole('button', { name: 'Done painting' }));
     await waitFor(() => expect(strip()).toBeNull());
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+  });
+
+  it("asks before the strip's Save writes over the picture, as the panel's does", async () => {
+    await showCompact();
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
+      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    });
+    pressRow('Paint');
+    await waitFor(() => expect(strip()).toBeInTheDocument());
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+    await act(async () => { fireEvent.click(within(strip()!).getByRole('button', { name: 'Save' })); });
+    const asked = screen.getByRole('dialog', { name: "Overwrite the map's picture?" });
+    expect(h.replaceDrawnPicture).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(within(asked).getByRole('button', { name: 'Save over it' })); });
+    await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
+    expect(h.replaceDrawnPicture).toHaveBeenCalled();
   });
 
   it('keeps the paint, the picture and Paint on as the layout changes, a tablet turned', async () => {
