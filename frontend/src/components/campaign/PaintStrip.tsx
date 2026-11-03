@@ -31,8 +31,9 @@ import { cn } from '@/utils/cn';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintTool } from './map/paint/usePaintSurface';
 import { PAINT_STAMPS } from './map/paint/paintStamps';
+import { PAINT_TEXTURES } from './map/paint/paintTextures';
 import { labelFontSize } from './map/drawingGeometry';
-import { HINTS, nameOf, nextTurn, SELECTION_BUTTONS, turnLabel, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
+import { HINTS, nameOf, nextTurn, SELECTION_BUTTONS, TEXTURED_TOOLS, textureOf, turnLabel, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
 
 /** A slider a finger can take. */
 const SLIDER = 'h-11 w-full accent-brand';
@@ -236,6 +237,16 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           {tool === 'eraser' ? `${settings.width} px` : `${nameOf(settings.colour)}, ${settings.width} px`}
         </button>
       </div>
+
+      {TEXTURED_TOOLS.has(tool) && (
+        <label className={CHIP}>
+          Texture
+          <select value={settings.texture ?? ''} onChange={(e) => onSettingsChange({ texture: textureOf(e.target.value) })} className="min-h-9 rounded-cozy border border-ink/15 bg-paper px-2 text-sm text-ink">
+            <option value="">None</option>
+            {PAINT_TEXTURES.map(({ kind, label }) => <option key={kind} value={kind}>{label}</option>)}
+          </select>
+        </label>
+      )}
 
       {tool === 'stamp' && (
         <div role="group" aria-label="Stamp" className="flex flex-wrap gap-2 pr-2">

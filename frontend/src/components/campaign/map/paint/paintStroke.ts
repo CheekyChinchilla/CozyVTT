@@ -46,7 +46,7 @@ export function strokeBox(points: readonly PaintPoint[], width: number): PaintBo
  * in: a line with round ends and corners, or a dot as wide as the brush for
  * a stroke that never moved, such as a tap.
  */
-export function strokePaint(ctx: CanvasRenderingContext2D, points: readonly PaintPoint[], width: number, colour: string): void {
+export function strokePaint(ctx: CanvasRenderingContext2D, points: readonly PaintPoint[], width: number, colour: string | CanvasPattern): void {
   if (points.length === 0) return;
   const [fx, fy] = points[0];
   const still = points.every(([x, y]) => x === fx && y === fy);

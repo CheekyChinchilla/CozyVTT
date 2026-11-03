@@ -10,6 +10,7 @@
 import type { PaintBox } from './paintHistory';
 import { strokePaint, type PaintPoint } from './paintStroke';
 import type { SelectBox } from './paintSelection';
+import type { TextureKind } from './paintTextures';
 
 export type PaintShapeKind = 'line' | 'rect' | 'ellipse' | 'polygon' | 'curve';
 export type ShapeStyle = 'outline' | 'fill' | 'both';
@@ -28,6 +29,8 @@ export interface PaintShape {
   points?: readonly PaintPoint[];
   /** The point a curve bends towards, between `from` and `to`. */
   control?: PaintPoint;
+  /** The texture its fill is painted in (paintTextures.ts); its outline stays the colour. */
+  texture?: TextureKind;
 }
 
 /** Every point that bounds a shape: its corners, a polygon's corners, a curve's bend. */
@@ -69,8 +72,8 @@ export function scaleShape(shape: PaintShape, sx: number, sy: number): PaintShap
   };
 }
 
-/** Draw a shape through `ctx`, in whatever space its corners are in. */
-export function drawShape(ctx: CanvasRenderingContext2D, shape: PaintShape): void {
+/** Draw a shape through `ctx`, in whatever space its corners are in; `fill`, its texture's pattern, in place of its fill colour. */
+export function drawShape(ctx: CanvasRenderingContext2D, shape: PaintShape, fill: CanvasPattern | null = null): void {
   if (shape.kind === 'line') {
     strokePaint(ctx, [shape.from, shape.to], shape.width, shape.colour);
     return;
@@ -108,7 +111,7 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: PaintShape): voi
       ctx.closePath();
     } else ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
     if (shape.style !== 'outline') {
-      ctx.fillStyle = shape.style === 'both' ? shape.second : shape.colour;
+      ctx.fillStyle = fill ?? (shape.style === 'both' ? shape.second : shape.colour);
       ctx.fill();
     }
     if (shape.style !== 'fill') {

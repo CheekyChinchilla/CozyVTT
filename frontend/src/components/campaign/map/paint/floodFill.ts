@@ -53,10 +53,12 @@ interface Span {
 /**
  * Fill the area at (x, y) with `colour`, taking in pixels within
  * `tolerance` (0 to 255) of the pressed pixel's colour on every channel.
+ * With a `texture`, each pixel takes the texture's pixel at its place on
+ * the picture, the texture repeating from the picture's top-left corner.
  * Answers the box changed, or null for nothing changed: a press off the
  * picture, or on the fill colour itself.
  */
-export function floodFillTiled<P extends Pixels>(tiles: FillTiles<P>, x: number, y: number, colour: Rgba, tolerance: number): PaintBox | null {
+export function floodFillTiled<P extends Pixels>(tiles: FillTiles<P>, x: number, y: number, colour: Rgba, tolerance: number, texture: Pixels | null = null): PaintBox | null {
   const { width, height, tileSize } = tiles;
   const sx = Math.floor(x);
   const sy = Math.floor(y);
@@ -74,7 +76,7 @@ export function floodFillTiled<P extends Pixels>(tiles: FillTiles<P>, x: number,
   const firstPixels = tiles.read(first);
   const at = ((sy - first.y) * first.w + (sx - first.x)) * 4;
   const seed = [firstPixels.data[at], firstPixels.data[at + 1], firstPixels.data[at + 2], firstPixels.data[at + 3]];
-  if (seed[0] === colour[0] && seed[1] === colour[1] && seed[2] === colour[2] && seed[3] === colour[3]) {
+  if (!texture && seed[0] === colour[0] && seed[1] === colour[1] && seed[2] === colour[2] && seed[3] === colour[3]) {
     tiles.done?.(first);
     return null;
   }
@@ -156,10 +158,18 @@ export function floodFillTiled<P extends Pixels>(tiles: FillTiles<P>, x: number,
           wrote = true;
         }
         mask[i >> 3] |= 1 << (i & 7);
-        data[i * 4] = colour[0];
-        data[i * 4 + 1] = colour[1];
-        data[i * 4 + 2] = colour[2];
-        data[i * 4 + 3] = colour[3];
+        if (texture) {
+          const t = (((tile.y + ly) % texture.height) * texture.width + ((tile.x + lx) % texture.width)) * 4;
+          data[i * 4] = texture.data[t];
+          data[i * 4 + 1] = texture.data[t + 1];
+          data[i * 4 + 2] = texture.data[t + 2];
+          data[i * 4 + 3] = texture.data[t + 3];
+        } else {
+          data[i * 4] = colour[0];
+          data[i * 4 + 1] = colour[1];
+          data[i * 4 + 2] = colour[2];
+          data[i * 4 + 3] = colour[3];
+        }
         if (ly > 0) {
           const fits = matches(i - w);
           if (fits && !above) stack.push(lx, ly - 1);

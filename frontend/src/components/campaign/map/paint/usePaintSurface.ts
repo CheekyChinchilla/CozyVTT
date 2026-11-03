@@ -48,6 +48,7 @@ import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
 import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type PaintStepNote, type TileRect } from './paintHistory';
 import { gridCorner, roomBox, roomWalls, wallsToAdd, type WallLine } from './paintRoom';
+import { drawTextureTile, textureSize, type TextureKind } from './paintTextures';
 import { drawStamp, stampCentre, stampReach, type StampKind, type StampTurn } from './paintStamps';
 import { handleAt, isInside, movedBox, pastedBox, resizedBox, selectedBox, type SelectBox, type SelectHandle } from './paintSelection';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
@@ -116,6 +117,8 @@ export interface PaintSettings {
   stamp: StampKind;
   turn: StampTurn;
   stampSnap: boolean;
+  /** The texture the brush, a shape's fill, a room's floor and the fill bucket paint in, or none. */
+  texture: TextureKind | null;
 }
 
 export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
@@ -130,6 +133,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   stamp: 'door',
   turn: 0,
   stampSnap: true,
+  texture: null,
 };
 
 /** The tool each letter key chooses while Paint is on. */
@@ -296,6 +300,8 @@ export interface PaintSelectionActions {
 interface Stroke {
   mapId: string;
   colour: string;
+  /** The brush's texture, painted in shades of `colour`. */
+  texture?: TextureKind;
   /** Picture pixels. */
   width: number;
   points: PaintPoint[];
@@ -407,6 +413,26 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!m || m.id !== s.mapId) return [1, 1];
     return [s.canvas.width / (m.width * m.gridSize), s.canvas.height / (m.height * m.gridSize)];
   }, []);
+  /** Each texture's tile, by texture, colour and size: drawn once and kept, a few dozen at most. */
+  const texturesRef = useRef(new Map<string, HTMLCanvasElement>());
+  /** The tile of `kind` in shades of `colour`, a square of the grid on the picture's scale; null when none can be drawn. */
+  const textureTile = useCallback((s: Surface, kind: TextureKind, colour: string): HTMLCanvasElement | null => {
+    const m = mapRef.current;
+    if (!m || m.id !== s.mapId) return null;
+    const n = textureSize(m.gridSize * xy(s)[0]);
+    const key = `${kind}|${colour}|${n}`;
+    const kept = texturesRef.current.get(key);
+    if (kept) return kept;
+    if (texturesRef.current.size >= 32) texturesRef.current.clear();
+    const tile = drawTextureTile(kind, colour, n, make ?? (() => document.createElement('canvas')));
+    if (tile) texturesRef.current.set(key, tile);
+    return tile;
+  }, [make, xy]);
+  /** A texture as a pattern on the picture, repeating from its top-left corner, so it lines up with the grid. */
+  const texturePattern = useCallback((s: Surface, kind: TextureKind, colour: string): CanvasPattern | null => {
+    const tile = textureTile(s, kind, colour);
+    return tile ? s.ctx.createPattern(tile, 'repeat') : null;
+  }, [textureTile]);
   /** Bumped when the history changes, so the panel's Undo and Redo follow. */
   const [, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -1009,10 +1035,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return;
     }
     const points = toPicture(stroke.points, ...xy(s));
+    const pattern = stroke.texture ? texturePattern(s, stroke.texture, stroke.colour) : null;
     land(stroke.step, { kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour }, () => {
-      strokePaint(s.ctx, points, stroke.width, stroke.colour);
+      strokePaint(s.ctx, points, stroke.width, pattern ?? stroke.colour);
     });
-  }, [land, xy]);
+  }, [land, xy, texturePattern]);
 
   /**
    * Fill the area at map pixel `point` with the colour, tile by tile
@@ -1028,6 +1055,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!s || s.history.busy()) return;
     const look = settingsRef.current;
     const { width, height } = s.canvas;
+    // With a texture, each pixel filled takes the tile's pixel at its place.
+    const tile = look.texture ? textureTile(s, look.texture, look.colour) : null;
+    const texturePixels = tile ? tile.getContext('2d')?.getImageData(0, 0, tile.width, tile.height) ?? null : null;
     const step = s.history.begin();
     let box: PaintBox | null = null;
     let changedTiles = 0;
@@ -1042,7 +1072,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
           step.keep(tile, s.store.keep(tile, pixels));
         },
         write: (tile, pixels) => s.ctx.putImageData(pixels, tile.x, tile.y),
-      }, point[0] * xy(s)[0], point[1] * xy(s)[1], hexToRgba(look.colour), Math.round(look.tolerance * 2.55));
+      }, point[0] * xy(s)[0], point[1] * xy(s)[1], hexToRgba(look.colour), Math.round(look.tolerance * 2.55), texturePixels);
     } catch (err) {
       console.warn('[paint] A fill could not read the picture:', errorSummary(err));
       refuse(FILL_TOO_LARGE);
@@ -1058,7 +1088,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       bump();
       markDirty('terrain');
     });
-  }, [bump, markDirty, refuse, xy]);
+  }, [bump, markDirty, refuse, xy, textureTile]);
 
   const closeText = useCallback(() => {
     textRef.current = null;
@@ -1341,8 +1371,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         note = pending.note;
       }
     }
-    land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape), note);
-  }, [land, xy]);
+    const fill = shape.texture && shape.style !== 'outline' ? texturePattern(s, shape.texture, shape.style === 'both' ? shape.second : shape.colour) : null;
+    land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape, fill), note);
+  }, [land, xy, texturePattern]);
 
   /** Paint a shape finished in map pixels as one change, its tiles kept as they are now. */
   const paintShape = useCallback((mapId: string, shape: PaintShape) => {
@@ -1365,7 +1396,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!s) return;
     paintShape(polygon.mapId, {
       kind: 'polygon', from: polygon.points[0], to: polygon.points[polygon.points.length - 1], points: polygon.points,
-      width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: look.style,
+      width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: look.style, ...(look.texture ? { texture: look.texture } : {}),
     });
   }, [markDirty, paintShape, xy]);
 
@@ -1645,7 +1676,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         shapeRef.current = {
           mapId: s.mapId,
           step: s.history.begin(),
-          shape: { kind: look.tool, from, to: from, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: look.style },
+          shape: { kind: look.tool, from, to: from, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: look.style, ...(look.texture && look.tool !== 'line' ? { texture: look.texture } : {}) },
         };
         markDirty('overlay');
         return true;
@@ -1656,7 +1687,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         shapeRef.current = {
           mapId: s.mapId,
           step: s.history.begin(),
-          shape: { kind: 'rect', from, to: from, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'both' },
+          shape: { kind: 'rect', from, to: from, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'both', ...(look.texture ? { texture: look.texture } : {}) },
           room: true,
         };
         markDirty('overlay');
@@ -1666,7 +1697,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       step.cover(strokeBox(toPicture([point], ...xy(s)), look.width));
       // The eraser is a brush of the map's own colour.
       const colour = look.tool === 'eraser' ? s.background : look.colour;
-      strokeRef.current = { mapId: s.mapId, colour, width: look.width, points: [point], step };
+      strokeRef.current = { mapId: s.mapId, colour, width: look.width, points: [point], step, ...(look.tool === 'brush' && look.texture ? { texture: look.texture } : {}) };
       markDirty('overlay');
       return true;
     },
