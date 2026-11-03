@@ -6692,7 +6692,13 @@ paths:
         as maps; anything else as
         `application/octet-stream`) and `X-Content-Type-Options: nosniff`.
         It is cached as `private, max-age=31536000, immutable` with the ETag
-        `"<asset id>"`; send that in `If-None-Match` for a 304.
+        `"<asset id>"`; send that in `If-None-Match` for a 304. A picture
+        drawn in CozyVTT (tagged `cozyvtt-drawn-map`) is written over in place
+        by `PUT /api/assets/{id}/picture`, so it is served
+        `private, no-cache` instead, with the ETag
+        `"<asset id>-<size in bytes>-<modified time in ms>"`, which changes
+        with the file. A query after the id, such as a map's `?v=<n>`, is
+        ignored.
       operationId: serveMap
       security:
         - cookieAuth: []
@@ -6776,7 +6782,8 @@ paths:
         its longer side, made at upload, for the Asset Library's cards and the
         pickers. The same read rule, 404 for a refused read, content types,
         `nosniff` and caching as `GET /api/assets/maps/{id}`, with an ETag
-        of its own. An asset with no thumbnail (one imported from a campaign
+        of its own (`"<asset id>-thumbnail"`, or for a drawn picture
+        `"<asset id>-thumbnail-<size>-<modified time>"`). An asset with no thumbnail (one imported from a campaign
         archive, or uploaded before thumbnails were made) is sent its full
         picture, with the full picture's ETag.
       operationId: serveMapThumbnail
