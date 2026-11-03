@@ -48,6 +48,7 @@ import {
   parseUploadMetadata,
   tagsAllowedOn,
   DRAWN_MAP_TAG_REFUSAL,
+  isDrawnPicture,
   shortenFileName,
   downloadNameOf,
   MAX_ASSET_NAME_LENGTH,
@@ -130,11 +131,14 @@ async function canReadAssetFile(
 
 /**
  * Set cache headers for a served asset and answer conditional requests.
- * Asset files are stored under UUID filenames and never mutated in place
- * (re-upload creates a new asset row), so asset-id URLs can be cached as
- * immutable. Avatar URLs are keyed by USER id and resolve to the newest
- * AVATAR asset, so they get a short max-age instead — the ETag still
- * changes when a new avatar is uploaded, keeping 304 revalidation correct.
+ * Most asset files are stored under UUID filenames and never written over
+ * (a re-upload creates a new asset row), so their asset-id URLs can be
+ * cached as immutable. Two kinds are written over in place and go through
+ * answerRewritableFile instead: a text or Markdown document, and a picture
+ * Paint made (isDrawnPicture), with its thumbnail. Avatar URLs are keyed by
+ * USER id and resolve to the newest AVATAR asset, so they get a short
+ * max-age instead — the ETag still changes when a new avatar is uploaded,
+ * keeping 304 revalidation correct.
  *
  * Must be called AFTER permission checks (a 304 must not leak asset
  * existence to non-members). Returns true if a 304 was sent and the
@@ -157,6 +161,36 @@ function handleAssetCaching(
     return true;
   }
   return false;
+}
+
+/**
+ * Cache headers for a file written over in place under its asset's id: it is
+ * revalidated on every request, with an ETag from `tag` (the asset's id, or
+ * its thumbnail's) and the file's size and modified time, so an unchanged
+ * file still answers 304 and a changed one is sent again. Called, like
+ * handleAssetCaching, after the permission checks; true if a 304 was sent.
+ */
+function answerRewritableFile(req: AuthenticatedRequest, res: Response, tag: string, stat: fs.Stats): boolean {
+  const etag = `"${tag}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
+  res.set('Cache-Control', 'private, no-cache');
+  res.set('ETag', etag);
+  if (req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return true;
+  }
+  return false;
+}
+
+/** Cache headers for a map picture or its thumbnail: answerRewritableFile for a drawn one, unchanging for any other. */
+async function answerMapPictureCaching(
+  req: AuthenticatedRequest,
+  res: Response,
+  asset: { id: string; type: AssetTypes; tags: string[] },
+  tag: string,
+  filePath: string
+): Promise<boolean> {
+  if (!isDrawnPicture(asset)) return handleAssetCaching(req, res, tag);
+  return answerRewritableFile(req, res, tag, await fs.promises.stat(filePath));
 }
 
 /**
@@ -1093,15 +1127,8 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       if (handleAssetCaching(req, res, asset.id)) return;
     } else {
       // Text and Markdown can be rewritten in place, so the same caching would
-      // hand a reader the old text for a year. Revalidate on every request,
-      // with an ETag from the file itself so an unchanged document still
-      // answers 304.
-      const etag = `"${asset.id}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
-      res.set('Cache-Control', 'private, no-cache');
-      res.set('ETag', etag);
-      if (req.headers['if-none-match'] === etag) {
-        return res.status(304).end();
-      }
+      // hand a reader the old text for a year.
+      if (answerRewritableFile(req, res, asset.id, stat)) return;
     }
 
     return res.sendFile(documentPath, {
@@ -1155,7 +1182,7 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
     }
 
     // Send file with appropriate content type
-    if (handleAssetCaching(req, res, asset.id)) return;
+    if (await answerMapPictureCaching(req, res, asset, asset.id, mapPath)) return;
     return sendImageAsset(res, mapPath);
   } catch (error) {
     logger.error('Error serving map', { err: error });
@@ -1230,14 +1257,14 @@ function serveThumbnail(type: 'MAP' | 'TOKEN', notFound: string, label: string) 
       }
       const thumbnail = asset.thumbnailPath ? storedFilePath(asset.thumbnailPath) : null;
       if (thumbnail && fs.existsSync(thumbnail)) {
-        if (handleAssetCaching(req, res, `${asset.id}-thumbnail`)) return;
+        if (await answerMapPictureCaching(req, res, asset, `${asset.id}-thumbnail`, thumbnail)) return;
         return sendImageAsset(res, thumbnail);
       }
       const full = storedFilePath(asset.filePath);
       if (!fs.existsSync(full)) {
         return res.status(404).json({ error: 'Not Found', message: 'Asset file not found on server' });
       }
-      if (handleAssetCaching(req, res, asset.id)) return;
+      if (await answerMapPictureCaching(req, res, asset, asset.id, full)) return;
       return sendImageAsset(res, full);
     } catch (error) {
       logger.error(`Error serving ${label} thumbnail`, { err: error });
