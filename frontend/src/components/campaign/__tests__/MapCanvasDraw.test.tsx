@@ -400,6 +400,32 @@ describe('the drawings on the map', () => {
 });
 
 
+describe('the spirit layer picture on a switch of map', () => {
+  const drawn = recordDrawing();
+  const drawsPicture = (src: string) => layers().some((layer) =>
+    drawn.take(layer).some((c) => c.method === 'drawImage' && (c.args[0] as { src?: string }).src === src));
+
+  // The last map's spirit picture went on being drawn over the next map until
+  // the next map's own had loaded.
+  it('draws only the spirit picture loaded for the map on screen', async () => {
+    h.set({ userRole: 'PLAYER', playerSpiritVisible: true, currentMap: mapWith({ spiritLayerUrl: '/api/assets/maps/spirit-a' }) });
+    render(<MapCanvas />);
+    for (const picture of [...pictures]) picture.load();
+    await nextFrame();
+    expect(drawsPicture('/api/assets/maps/spirit-a')).toBe(true);
+
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B', imageUrl: '/api/assets/maps/y', spiritLayerUrl: '/api/assets/maps/spirit-b' }) }); });
+    // Map B's own picture loads; its spirit picture is slow.
+    for (const picture of pictures.filter((p) => p.src === '/api/assets/maps/y')) picture.load();
+    await nextFrame();
+    expect(drawsPicture('/api/assets/maps/spirit-a')).toBe(false);
+
+    for (const picture of pictures.filter((p) => p.src === '/api/assets/maps/spirit-b')) picture.load();
+    await nextFrame();
+    expect(drawsPicture('/api/assets/maps/spirit-b')).toBe(true);
+  });
+});
+
 // ── The draw tool ────────────────────────────────────────────────────────────
 
 /** Map pixel (x, y), which at 100% and no pan is the same screen pixel. */
