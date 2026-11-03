@@ -937,6 +937,54 @@ describe('polygons and curves', () => {
   });
 });
 
+describe('textures', () => {
+  const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
+  const panel = () => within(screen.getByRole('region', { name: 'Paint' }));
+  const choose = (tool: string) => fireEvent.click(panel().getByRole('button', { name: tool }));
+  const texture = (name: string) => fireEvent.change(panel().getByRole('combobox', { name: 'Texture' }), { target: { value: name } });
+  /** The texture's tile: a canvas a square of the grid across. */
+  const tile = () => [...recorded.keys()].find((c) => c.width === 50 && c.height === 50);
+
+  it("fills a rectangle with a texture's pattern, repeating from the picture's corner, its outline the colour", async () => {
+    await showMap();
+    await paintOn();
+    choose('Rectangle');
+    fireEvent.click(screen.getByRole('radio', { name: 'Outline and fill' }));
+    texture('bricks');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 200 });
+    expect(callsOfPicture('createPattern')).toHaveLength(1);
+    expect(callsOfPicture('createPattern')[0].args[1]).toBe('repeat');
+    expect(callsOn(tile()).some((c) => c.method === 'fillRect')).toBe(true);
+    expect(callsOfPicture('fill')).toHaveLength(1);
+    expect(callsOfPicture('stroke')).toHaveLength(1);
+  });
+
+  it('paints a brush stroke in a texture, and never the eraser, nor a line', async () => {
+    await showMap();
+    await paintOn();
+    choose('Brush');
+    texture('grass');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
+    expect(callsOfPicture('createPattern')).toHaveLength(1);
+    press('e');
+    expect(panel().queryByRole('combobox', { name: 'Texture' })).toBeNull();
+    drag({ clientX: 100, clientY: 300 }, { clientX: 200, clientY: 320 });
+    press('l');
+    drag({ clientX: 100, clientY: 500 }, { clientX: 200, clientY: 520 });
+    expect(callsOfPicture('createPattern')).toHaveLength(1);
+  });
+
+  it("fills an area with a texture's pixels, read from its tile", async () => {
+    await showMap();
+    await paintOn();
+    choose('Fill');
+    texture('tiles');
+    mouse.down(input(), { clientX: 300, clientY: 300 });
+    mouse.up(input(), { clientX: 300, clientY: 300 });
+    expect(callsOn(tile()).some((c) => c.method === 'getImageData')).toBe(true);
+  });
+});
+
 describe('the fill bucket', () => {
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
 

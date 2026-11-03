@@ -235,7 +235,9 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 | **Text** | `T` | Click or tap where a line of text goes, type it, and press `Enter`; `Esc` drops it. It is painted in the colour, its letters four times the **Width** tall, in the app's own type. A finger's drag moves the map under it. |
 | **Eyedropper** | `I` | Click or tap the picture to make its colour there the colour, and go back to the tool you had. |
 
-**Snap to grid**, for a line, a rectangle and an ellipse, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
+**Snap to grid**, for a line, a rectangle, an ellipse, a polygon and a curve, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
+
+**Texture**, for the **Brush**, a **Rectangle**, **Ellipse** or **Polygon**'s fill, a **Room**'s floor and **Fill**: **Stone**, **Bricks**, **Cobbles**, **Tiles**, **Wood**, **Grass**, **Sand** or **Water**, drawn in lighter and darker shades of the colour it paints, so grey stone, red brick or blue water are a colour away. Each texture is one square of the grid across and lines up with it, so neighbouring areas join. **None** paints the plain colour. A shape's outline, a line, a curve, a stamp and the eraser are never textured.
 
 4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape (a polygon or a curve too), a room, a stamp, a fill or a moved selection and put it back.
 5. Click **Done** at the top of the Paint panel, press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.

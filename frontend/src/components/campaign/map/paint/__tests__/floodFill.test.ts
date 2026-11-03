@@ -189,3 +189,14 @@ describe('the fill bucket', () => {
     expect([...p.data.subarray(p.data.length - 4)]).toEqual([200, 10, 20, 255]);
   });
 });
+
+describe('the fill bucket with a texture', () => {
+  it('gives each pixel the texture\'s pixel at its place on the picture, across tiles, inside the area only', () => {
+    const p = picture(['....#..', '....#..', '....#..']);
+    const { access } = tilesOf(p);
+    // A 2 by 2 texture: black, grey / grey, black.
+    const texture: Pixels = { width: 2, height: 2, data: new Uint8ClampedArray([0, 0, 0, 255, 128, 128, 128, 255, 128, 128, 128, 255, 0, 0, 0, 255]) };
+    expect(floodFillTiled(access, 0, 0, red, 0, texture)).toEqual({ x0: 0, y0: 0, x1: 4, y1: 3 });
+    expect(rows(p)).toEqual(['#o#o#..', 'o#o##..', '#o#o#..']);
+  });
+});

@@ -14,6 +14,7 @@ import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSelectionActions, PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
 import { PAINT_STAMPS, type StampTurn } from './map/paint/paintStamps';
+import { PAINT_TEXTURES, type TextureKind } from './map/paint/paintTextures';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { labelFontSize } from './map/drawingGeometry';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
@@ -87,6 +88,12 @@ export interface PaintControlsProps {
   /** Select's buttons, shown while Select is chosen: a phone has no Ctrl+C. */
   selection?: PaintSelectionActions;
 }
+
+/** The tools that paint in a texture: the brush, a shape's fill, a room's floor and the fill bucket. */
+export const TEXTURED_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['brush', 'rect', 'ellipse', 'polygon', 'room', 'fill']);
+
+/** The texture a picker's value names, or none. */
+export const textureOf = (value: string): TextureKind | null => PAINT_TEXTURES.find((t) => t.kind === value)?.kind ?? null;
 
 /** The next quarter turn, and the angle it shows as. */
 export const nextTurn = (turn: StampTurn): StampTurn => ((turn + 1) % 4) as StampTurn;
@@ -175,6 +182,19 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         </button>
       </div>
       <p className="text-[11px] leading-snug text-stone-400">{HINTS[settings.tool]}</p>
+      {TEXTURED_TOOLS.has(settings.tool) && (
+        <label className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="text-stone-400">Texture</span>
+          <select
+            value={settings.texture ?? ''}
+            onChange={(e) => onSettingsChange({ texture: textureOf(e.target.value) })}
+            className="touch-target flex-1 rounded border border-stone-600/50 bg-stone-700/60 px-1.5 py-1 text-stone-200"
+          >
+            <option value="">None</option>
+            {PAINT_TEXTURES.map(({ kind, label }) => <option key={kind} value={kind}>{label}</option>)}
+          </select>
+        </label>
+      )}
       {settings.tool === 'stamp' && (
         <div role="group" aria-label="Stamp" className="flex flex-wrap gap-1">
           {PAINT_STAMPS.map(({ kind, label }) => (
