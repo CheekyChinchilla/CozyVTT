@@ -1,5 +1,5 @@
 import { CampaignRole, PlatformRole, AssetType, AssetScope } from '@prisma/client';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
 import { getSpiritVisibility, getSpiritVisibilityAcrossCampaigns } from '../utils/spirit-layer';
@@ -379,7 +379,7 @@ export function mapPictureHidden(
   return asset.type === 'MAP' || pictures.named.has(asset.id);
 }
 
-/** The facts read of a user's tables: their campaigns, their maps and which spirit planes they see. */
+/** The facts read of a user's tables: their campaigns, each one's current map and which spirit planes they see. */
 interface Tables {
   memberships: ReadonlyArray<{ campaignId: string; role: CampaignRole }>;
   currentMapOf: ReadonlyMap<string, string | null>;
@@ -426,16 +426,11 @@ async function picturesAtTables(tables: Tables): Promise<Map<string, Set<string>
 }
 
 /**
- * A user's tables: their campaigns and those campaigns' maps, or only the
- * maps naming `onlyAssetId`, with the spirit planes they see. The spirit
- * planes are read only where a map is read.
+ * A user's tables: their campaigns and each one's current map, or only a
+ * current map naming `onlyAssetId`, with the spirit planes they see. Only a
+ * current map shows anything at a table (picturesOnTables), so a campaign of
+ * many maps costs one. The spirit planes are read only where a map is read.
  */
-// TODO(assets): with no asset named, this reads every map of every campaign
-// the user is a member of, on every asset list by a member who is not the
-// DM somewhere; maps per campaign are not capped, and a map may name an
-// asset that does not exist. picturesOnTables needs only the current maps,
-// and `named` only the maps naming one of the campaigns' MAP assets: read
-// those alone.
 async function tablesOf(userId: string, onlyAssetId?: string): Promise<Tables> {
   const memberships = await prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } });
   const campaignIds = memberships.map((m) => m.campaignId);
@@ -447,13 +442,36 @@ async function tablesOf(userId: string, onlyAssetId?: string): Promise<Tables> {
       { spiritLayerUrl: { contains: onlyAssetId } },
     ],
   };
-  const [campaigns, maps] = await Promise.all([
-    prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, currentMapId: true } }),
-    prisma.map.findMany({ where: { AND: [{ campaignId: { in: campaignIds } }, naming] }, select: { ...MAP_PICTURES_SELECT, campaignId: true } }),
-  ]);
+  const campaigns = await prisma.campaign.findMany({ where: { id: { in: campaignIds } }, select: { id: true, currentMapId: true } });
+  const currentIds = campaigns.flatMap((c) => (c.currentMapId ? [c.currentMapId] : []));
+  const maps = currentIds.length === 0 ? [] : await prisma.map.findMany({
+    where: { AND: [{ id: { in: currentIds } }, { campaignId: { in: campaignIds } }, naming] },
+    select: { ...MAP_PICTURES_SELECT, campaignId: true },
+  });
   const withMaps = [...new Set(maps.map((m) => m.campaignId))];
   const seesSpirit = withMaps.length === 0 ? new Map<string, boolean>() : await getSpiritVisibilityAcrossCampaigns(userId, withMaps);
   return { memberships, currentMapOf: new Map(campaigns.map((c) => [c.id, c.currentMapId])), maps, seesSpirit };
+}
+
+/**
+ * The maps of these campaigns whose picture, base layer or spirit layer
+ * mentions one of the campaign's own files that is not a map picture, read
+ * in the database. The map-picture rule keeps a map picture by its type, so
+ * of a campaign's other maps only these change what it keeps
+ * (campaignMapPictures reads each address exactly).
+ */
+async function mapsNamingOtherFiles(campaignIds: string[]): Promise<Array<MapPictures & { campaignId: string }>> {
+  if (campaignIds.length === 0) return [];
+  return prisma.$queryRaw<Array<MapPictures & { campaignId: string }>>`
+    SELECT DISTINCT m.id, m."imageUrl", m."baseLayerUrl", m."spiritLayerUrl", m."campaignId"
+    FROM "Map" m
+    JOIN "Asset" a ON a."campaignId" = m."campaignId"
+    WHERE m."campaignId" IN (${Prisma.join(campaignIds)})
+      AND a.scope = 'CAMPAIGN' AND a.type <> 'MAP'
+      AND (strpos(m."imageUrl", a.id) > 0
+        OR strpos(coalesce(m."baseLayerUrl", ''), a.id) > 0
+        OR strpos(coalesce(m."spiritLayerUrl", ''), a.id) > 0)
+  `;
 }
 
 /**
@@ -466,9 +484,9 @@ async function tablesOf(userId: string, onlyAssetId?: string): Promise<Tables> {
 export async function mapPictureAssetIdsHiddenFrom(userId: string, campaignIds: string[]): Promise<string[]> {
   const ids = [...new Set(campaignIds)];
   if (ids.length === 0) return [];
-  const tables = await tablesOf(userId);
+  const [tables, namingOthers] = await Promise.all([tablesOf(userId), mapsNamingOtherFiles(ids)]);
   const own = new Map(ids.map((campaignId) => [campaignId, campaignMapPictures(
-    tables.maps.filter((m) => m.campaignId === campaignId),
+    [...tables.maps, ...namingOthers].filter((m) => m.campaignId === campaignId),
     tables.currentMapOf.get(campaignId) ?? null,
     tables.seesSpirit.get(campaignId) === true
   )]));

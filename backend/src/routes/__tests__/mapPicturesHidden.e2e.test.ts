@@ -23,6 +23,7 @@ const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-map-pictures-'
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import request from 'supertest';
+import { Client } from 'pg';
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
@@ -306,6 +307,50 @@ describe('a player is listed a picture exactly when it opens for them', () => {
     });
   }
   afterAll(async () => setCurrent(maps.village));
+});
+
+// A player's asset list read every map of every campaign they sit in, to
+// learn which pictures their tables show. It needs only each table's current
+// map and the maps naming a campaign file that is not a map picture (a map
+// picture is the rule's by its type), so a campaign of many maps costs no more.
+describe('the asset list of a player in a campaign of many maps', () => {
+  const extra: string[] = [];
+  beforeAll(async () => {
+    for (let i = 0; i < 12; i += 1) extra.push(await makeMap(`Side room ${i}`, { image: `/api/assets/maps/${ids.cryptPic}` }));
+  });
+  afterAll(async () => {
+    await prisma.map.deleteMany({ where: { id: { in: extra } } });
+  });
+
+  it('reads only the current map and the maps naming a file that is not a map picture', async () => {
+    const mapRows: number[] = [];
+    const realQuery = Client.prototype.query;
+    jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
+      const [first] = args;
+      const sql = typeof first === 'string' ? first : first && typeof first === 'object' && 'text' in first ? String(first.text) : '';
+      const reading = /^\s*SELECT/i.test(sql) && /FROM "public"\."Map"/.test(sql);
+      const done = args[args.length - 1];
+      if (reading && typeof done === 'function') {
+        // The driver passes a callback: count the rows it is handed.
+        args[args.length - 1] = (err: unknown, result: { rows?: unknown[] } | undefined) => {
+          if (!err) mapRows.push(result?.rows?.length ?? 0);
+          return (done as (e: unknown, r: unknown) => unknown)(err, result);
+        };
+      }
+      const answer = (realQuery as (...a: unknown[]) => unknown).apply(this, args);
+      if (reading && answer instanceof Promise) {
+        void answer.then((result: { rows?: unknown[] }) => mapRows.push(result.rows?.length ?? 0), () => undefined);
+      }
+      return answer;
+    } as never);
+    try {
+      expect((await player.get('/api/assets').query({ campaignId, limit: '100' })).status).toBe(200);
+    } finally {
+      jest.restoreAllMocks();
+    }
+    // The village, the table's map, and the old hall, which names token art.
+    expect(mapRows.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(2);
+  });
 });
 
 describe("an instance administrator who is not in the campaign", () => {
