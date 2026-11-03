@@ -29,7 +29,7 @@ import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
-import { extractAssetId } from '@/utils/assetUrl';
+import { assetAddressVersion, extractAssetId } from '@/utils/assetUrl';
 import { pictureIsDrawn, rememberPictureAsset } from './map/paint/mapPicture';
 import { usePaintStore } from '@/stores/paintStore';
 import { dropDrafts, paintDraftStore } from './map/paint/paintDrafts';
@@ -96,7 +96,7 @@ function MapCard({
       <div className="relative h-36 bg-moss-green/10 overflow-hidden">
         {thumbnailId ? (
           <img
-            src={api.getAssetThumbnailUrl(thumbnailId, 'maps')}
+            src={api.getAssetThumbnailUrl(thumbnailId, 'maps') + assetAddressVersion(map.imageUrl)}
             alt={map.name}
             className="w-full h-full object-cover"
             onError={(e) => {
