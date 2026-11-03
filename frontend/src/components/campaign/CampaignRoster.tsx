@@ -294,6 +294,8 @@ export default function CampaignRoster() {
     setConfirmRemove(contextMenu.characterId);
   };
 
+  const removingName = roster.flatMap((m) => m.characters).find((c) => c.id === confirmRemove)?.name ?? 'this character';
+
   const handleConfirmRemove = async () => {
     const characterId = confirmRemove;
     setConfirmRemove(null);
@@ -498,13 +500,11 @@ export default function CampaignRoster() {
 
       <Toast message={toast.message} type={toast.type} show={toast.show} onClose={hideToast} />
 
-      {/* TODO(ui): the confirmation does not name the character it removes;
-          say "Remove <name> from the campaign?" so a menu opened on the
-          wrong row cannot remove someone unseen. */}
+      {/* Named, so a menu opened on the wrong row cannot remove someone unseen. */}
       <ConfirmDialog
         isOpen={confirmRemove !== null}
         title="Remove from Campaign"
-        message="Are you sure you want to remove this character from the campaign?"
+        message={`Remove ${removingName} from the campaign? They go back to their player's own list.`}
         confirmLabel="Remove"
         variant="danger"
         onConfirm={handleConfirmRemove}
