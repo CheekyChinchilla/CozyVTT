@@ -47,6 +47,7 @@
 // content are drawn on the body, so none is inside it.
 // ============================================
 
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 import {
   useEffect,
   useEffectEvent,
@@ -303,7 +304,10 @@ export function BottomSheet({ open, title, height, onClose, onHeightChange, edge
   // backdrop's included: on a phone on its side the bar's buttons are in
   // the header.
   const top = edges?.top ?? '0px';
-  const bottom = edges?.bottom ?? '0px';
+  // Over an iPhone's on-screen keyboard, which Safari lays over the page:
+  // the sheet stands on the keyboard and keeps what is typed in sight.
+  const keyboard = useKeyboardInset();
+  const bottom = keyboard > 0 && open ? `max(${edges?.bottom ?? '0px'}, ${keyboard}px)` : edges?.bottom ?? '0px';
   const place: CSSProperties = sideways
     ? { top, bottom }
     : height === 'full'
