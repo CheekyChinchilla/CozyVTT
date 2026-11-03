@@ -48,7 +48,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
     <div className="p-4 space-y-4">
       {section.items.length > 0 ? (
         <Reorder.Group axis="y" values={section.items} onReorder={reorderItems} className="space-y-2">
-          {section.items.map((item) => (
+          {section.items.map((item, index) => (
             <DragEntry key={item.id} value={item}>
               {(grip) => (
                 <div className="flex items-center gap-2 p-2 bg-ink/5 border border-moss-green/20 rounded-lg group hover:bg-ink/10 transition-colors">
@@ -64,8 +64,8 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
                     onClick={() =>
                       updateItem(item.id, { checked: !item.checked })
                     }
-                    // TODO(sheets): this tick has no accessible name or state; it wants
-                    // aria-label "Done" (or the entry's text) and aria-pressed.
+                    aria-label={`${item.text.trim() || `Entry ${index + 1}`} done`}
+                    aria-pressed={item.checked === true}
                     className="shrink-0"
                   >
                     {item.checked ? (
@@ -86,7 +86,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
 
                 <button
                   onClick={() => removeItem(item.id)}
-                  className="shrink-0 touch-target inline-flex items-center justify-center p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-danger/15"
+                  className="shrink-0 touch-target inline-flex items-center justify-center p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-danger/15"
                   title="Remove item"
                 >
                   <Trash2 className="w-4 h-4" />

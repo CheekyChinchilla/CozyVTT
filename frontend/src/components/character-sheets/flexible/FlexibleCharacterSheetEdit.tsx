@@ -22,6 +22,7 @@ import type { CharacterData } from '@/types';
 import Button from '@/components/ui/Button';
 import { FLEXIBLE_MAX_SECTIONS } from '@/constants/sheetLimits';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
+import PortraitNotes from '../PortraitNotes';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
@@ -238,20 +239,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
                 <Upload className="w-6 h-6 text-white" />
               </div>
             </label>
-            {/* TODO(sheets): from sm up this note and the personal token note below are
-                both absolute at top-full, so with both showing (a refused picture on a
-                character in no campaign) one is drawn over the other. Right: one
-                positioned box under the portrait holding both, one under the other. */}
-            {tokenError && (
-              <div className="mt-1 text-xs text-danger-ink sm:absolute sm:top-full sm:whitespace-nowrap">
-                {tokenError}
-              </div>
-            )}
-            {!character.campaignId && (
-              <div className="mt-1 text-xs text-warning-ink sm:absolute sm:top-full sm:whitespace-nowrap">
-                Saves as personal token
-              </div>
-            )}
+            <PortraitNotes error={tokenError} personal={!character.campaignId} errorClassName="text-danger-ink" noteClassName="text-warning-ink" />
           </div>
           )}
 

@@ -114,7 +114,8 @@ describe.each([
 
   it('puts the caption under the portrait in the flow on a phone', () => {
     show();
-    const caption = classes(screen.getByText('Saves as personal token'));
+    // Placed by the box holding the notes under the portrait (PortraitNotes).
+    const caption = classes(screen.getByText('Saves as personal token').parentElement);
     expect(caption).not.toContain('absolute');
     expect(caption).not.toContain('whitespace-nowrap');
     expect(caption).toEqual(expect.arrayContaining(['sm:absolute', 'sm:top-full', 'sm:whitespace-nowrap']));
@@ -155,7 +156,8 @@ describe('the flexible editor header', () => {
 
   it('puts the caption under the portrait in the flow on a phone', () => {
     render(<FlexibleCharacterSheetEdit character={flexible} onSave={noop} onCancel={vi.fn()} />);
-    const caption = classes(screen.getByText('Saves as personal token'));
+    // Placed by the box holding the notes under the portrait (PortraitNotes).
+    const caption = classes(screen.getByText('Saves as personal token').parentElement);
     expect(caption).not.toContain('absolute');
     expect(caption).toEqual(expect.arrayContaining(['sm:absolute', 'sm:top-full', 'sm:whitespace-nowrap']));
   });
