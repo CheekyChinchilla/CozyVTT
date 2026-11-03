@@ -48,7 +48,7 @@ import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
 import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type PaintStepNote, type TileRect } from './paintHistory';
 import { gridCorner, roomBox, roomWalls, wallsToAdd, type WallLine } from './paintRoom';
-import { drawStamp, stampSquare, type StampKind, type StampTurn } from './paintStamps';
+import { drawStamp, stampCentre, stampReach, type StampKind, type StampTurn } from './paintStamps';
 import { handleAt, isInside, movedBox, pastedBox, resizedBox, selectedBox, type SelectBox, type SelectHandle } from './paintSelection';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
@@ -111,9 +111,10 @@ export interface PaintSettings {
   snap: boolean;
   /** How far, in percent, a colour may be from the one clicked for the fill to take it in. */
   tolerance: number;
-  /** The stamp a tap paints, and how far it is turned. */
+  /** The stamp a tap paints, how far it is turned, and whether it goes where the grid puts it or where it is clicked. */
   stamp: StampKind;
   turn: StampTurn;
+  stampSnap: boolean;
 }
 
 export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
@@ -127,6 +128,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   tolerance: 10,
   stamp: 'door',
   turn: 0,
+  stampSnap: true,
 };
 
 /** The tool each letter key chooses while Paint is on. */
@@ -1327,19 +1329,20 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape), note);
   }, [land, xy]);
 
-  /** Paint the stamp chosen into the square of the grid at map pixel `point`, as one change. */
+  /** Paint the stamp chosen where map pixel `point` puts it (paintStamps.ts), as one change. */
   const stampAt = useCallback((point: PaintPoint) => {
     const s = surfaceRef.current;
     const m = mapRef.current;
     if (!s || !m || m.id !== s.mapId) return;
     const look = settingsRef.current;
-    const square = stampSquare(point, m.gridSize, m.width * m.gridSize, m.height * m.gridSize);
+    const [cx, cy] = stampCentre(look.stamp, look.turn, point, m.gridSize, m.width * m.gridSize, m.height * m.gridSize, look.stampSnap);
     const [sx, sy] = xy(s);
-    const box = { x0: Math.floor(square.x * sx), y0: Math.floor(square.y * sy), x1: Math.ceil((square.x + m.gridSize) * sx), y1: Math.ceil((square.y + m.gridSize) * sy) };
+    const reach = stampReach(look.stamp) * m.gridSize;
+    const box = { x0: Math.floor((cx - reach) * sx), y0: Math.floor((cy - reach) * sy), x1: Math.ceil((cx + reach) * sx), y1: Math.ceil((cy + reach) * sy) };
     const step = s.history.begin();
     step.cover(box);
     land(step, null, () => drawStamp(s.ctx, {
-      kind: look.stamp, x: square.x * sx, y: square.y * sy, size: m.gridSize * sx, turn: look.turn, colour: look.colour, second: look.second,
+      kind: look.stamp, cx: cx * sx, cy: cy * sy, size: m.gridSize * sx, turn: look.turn, colour: look.colour, second: look.second,
     }));
   }, [land, xy]);
 
