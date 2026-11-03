@@ -71,13 +71,18 @@ export default function SessionPanels() {
 
   // In a sheet, under the sheet's own heading, the panels need no space above.
   const pad = compact ? 'px-2 pb-2' : 'p-3';
+  // A panel that scrolls inside itself clips what is taller than it: the
+  // four not shown stay in the page, only invisible, and one taller than the
+  // sheet made the sheet itself scroll on past its content, whichever tab was
+  // open. Initiative and Session scroll as a whole instead.
+  const clipped = 'overflow-hidden';
 
   return (
     <>
       <div
         id="session-tabpanel-chat"
         {...panel('chat')}
-        className={cn('absolute inset-0', pad, activeTab === 'chat' ? 'animate-fade-in' : 'invisible')}
+        className={cn('absolute inset-0', pad, clipped, activeTab === 'chat' ? 'animate-fade-in' : 'invisible')}
       >
         <ChatPanel />
       </div>
@@ -85,7 +90,7 @@ export default function SessionPanels() {
       <div
         id="session-tabpanel-dice"
         {...panel('dice')}
-        className={cn('absolute inset-0', pad, activeTab === 'dice' ? 'animate-fade-in' : 'invisible')}
+        className={cn('absolute inset-0', pad, clipped, activeTab === 'dice' ? 'animate-fade-in' : 'invisible')}
       >
         <DiceRoller />
       </div>
@@ -105,7 +110,7 @@ export default function SessionPanels() {
         id="session-tabpanel-notes"
         {...panel('notes')}
         className={cn(
-          'absolute inset-0', pad,
+          'absolute inset-0', pad, clipped,
           activeTab === 'notes' ? 'animate-fade-in' : 'invisible'
         )}
       >

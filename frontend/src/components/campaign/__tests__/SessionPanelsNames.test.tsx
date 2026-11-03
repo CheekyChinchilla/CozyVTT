@@ -40,3 +40,14 @@ it('names each panel itself on the compact layout, as a group and no tab panel',
   expect(panels.map((p) => p.getAttribute('aria-label'))).toEqual(['Chat', 'Dice', 'Initiative', 'Notes', 'Session']);
   expect(panels.every((p) => !p.hasAttribute('aria-labelledby'))).toBe(true);
 });
+
+it('clips each panel to its box, so a panel taller than the compact sheet, shown or not, never makes the sheet scroll', () => {
+  render(<LayoutProvider compact><SessionPanels /></LayoutProvider>);
+  const panels = PANELS.map((tab) => document.getElementById(`session-tabpanel-${tab}`) as HTMLElement);
+  for (const panel of panels) {
+    const classes = panel.className.split(/\s+/);
+    expect(classes, panel.id).toContain('absolute');
+    // Exactly one: clipped (Chat, Dice, Notes scroll inside) or scrolling as a whole (Initiative, Session).
+    expect(classes.filter((c) => c === 'overflow-hidden' || c === 'overflow-y-auto'), panel.id).toHaveLength(1);
+  }
+});

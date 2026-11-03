@@ -715,10 +715,10 @@ export default function DiceRoller() {
   // Not "only you": the server sends every secret roll to the DM as well,
   // deliberately, for audit and dispute resolution. Saying otherwise promises
   // a privacy the app does not provide.
-  const secretRollWords = <span>Secret Roll (hidden from other players)</span>;
+  const secretRollWords = <span>{compact ? 'Secret Roll' : 'Secret Roll (hidden from other players)'}</span>;
   const secretRoll = compact ? (
-    // The box inside its label, which a finger presses.
-    <label className="touch-target flex items-center gap-2 text-xs text-ink-secondary cursor-pointer">
+    // The box inside its label, which a finger presses; the label short, to share its row.
+    <label title="Hidden from other players" className="touch-target flex items-center gap-2 text-xs text-ink-secondary cursor-pointer">
       {secretRollBox}
       <EyeOff className="w-3 h-3" />
       {secretRollWords}
@@ -804,8 +804,9 @@ export default function DiceRoller() {
           : 'Show secret rolls in this list (only affects your view)'
       }
     >
-      {showSecretRolls ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-      <span>Secret</span>
+      {showSecretRolls ? <Eye className="w-3 h-3" aria-hidden="true" /> : <EyeOff className="w-3 h-3" aria-hidden="true" />}
+      {/* On a phone, the icon alone, to share the row with Secret Roll. */}
+      {compact ? <span className="sr-only">Secret</span> : <span>Secret</span>}
     </button>
   );
 
@@ -816,8 +817,8 @@ export default function DiceRoller() {
       className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 transition-all${compact ? ' touch-target' : ''}`}
       title="Clear all roll history"
     >
-      <Trash2 className="w-3 h-3" />
-      <span>Clear</span>
+      <Trash2 className="w-3 h-3" aria-hidden="true" />
+      {compact ? <span className="sr-only">Clear</span> : <span>Clear</span>}
     </button>
   );
 
@@ -864,10 +865,9 @@ export default function DiceRoller() {
       )}
 
       {/* Roll list — a running log, oldest first, like the chat beside it.
-          On the compact layout it keeps at least 55 percent of the panel,
-          room for three rolls of two lines in a sheet half a phone's height,
-          and the controls under it scroll when they need more room. */}
-      <div className={compact ? 'relative flex-1 min-h-[55%] flex flex-col' : 'relative flex-1 min-h-0 flex flex-col'}>
+          It takes the room the controls leave and is the panel's one scroll
+          area; on the compact layout the controls keep their own height. */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
@@ -911,7 +911,9 @@ export default function DiceRoller() {
       </div>
 
       {/* Input Area */}
-      <div className={cn(compact ? 'min-h-0 overflow-y-auto overscroll-contain' : 'shrink-0', 'border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs')}>
+      {/* The controls never scroll as they are; only More options open on a
+          very short half sheet can take them past four fifths of the panel. */}
+      <div className={cn('shrink-0', compact && 'max-h-[80%] overflow-y-auto overscroll-contain', 'border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs')}>
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-accent-ink text-center mb-2 italic">
@@ -994,18 +996,26 @@ export default function DiceRoller() {
                 {rollButton}
                 {clearFieldsButton}
               </div>
-              <div key="secret" className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              {/* Secret Roll, More options, and the header's Secret and Clear on one row. */}
+              <div key="secret" className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {secretRoll}
                 <button
                   type="button"
                   onClick={() => setMoreOptions((open) => !open)}
                   aria-expanded={moreOptions}
                   aria-controls="dice-more-options"
+                  aria-label={moreOptionsLabel}
+                  title={moreOptionsLabel}
                   className="touch-target flex items-center gap-1 px-2 py-1 rounded-md text-xs text-ink-secondary hover:bg-surface transition-all"
                 >
                   <ChevronDown className={cn('w-3 h-3 transition-transform', moreOptions && 'rotate-180')} aria-hidden="true" />
-                  {moreOptionsLabel}
+                  {/* Short, to share the row; the options in use are counted, and named in its name. */}
+                  {!moreOptions && optionsInUse.length > 0 ? `More (${optionsInUse.length})` : 'More'}
                 </button>
+                <span className="ml-auto flex items-center gap-1.5">
+                  {secretRollsToggle}
+                  {clearHistoryButton}
+                </span>
               </div>
               <Fragment key="character-and-purpose">{characterAndPurpose}</Fragment>
             </>
@@ -1029,13 +1039,7 @@ export default function DiceRoller() {
           )}
         </form>
 
-        {/* The header's Secret and Clear, on the compact layout. */}
-        {compact && (secretRollsToggle || clearHistoryButton) && (
-          <div className="mt-1.5 flex flex-wrap items-center justify-end gap-1.5">
-            {secretRollsToggle}
-            {clearHistoryButton}
-          </div>
-        )}
+
 
         {/* Hint / Rate Limit Countdown; the hint is left out of the compact layout's short footer. */}
         {rateLimitCooldown > 0 ? (

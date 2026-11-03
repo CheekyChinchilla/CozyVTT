@@ -5,9 +5,8 @@
  * own header row, and one roll took about 150 px. On the compact layout each
  * roll is two lines (DiceResultDense.test.tsx), the header row's title goes,
  * since the sheet's heading names the panel already, and its Secret and Clear
- * move under the controls, so the log starts at the top of the sheet's body.
- * The log keeps at least 55 percent of the panel. On the desktop nothing
- * changes.
+ * move beside Secret Roll, so the log starts at the top of the sheet's body.
+ * The log takes the room the controls leave. On the desktop nothing changes.
  */
 
 import { it, expect, vi, beforeAll, beforeEach } from 'vitest';
@@ -122,9 +121,9 @@ it('shows a player no row for them when there is nothing to show or clear', asyn
   expect(logAndControls().box.previousElementSibling).toBeNull();
 });
 
-it('keeps at least 55 percent of the panel for the log on the compact layout', () => {
+it('gives the log the room the controls leave on the compact layout, with no floor that could outgrow the sheet', () => {
   renderPanel(true);
-  expect(logAndControls().box.className.split(' ')).toContain('min-h-[55%]');
+  expect(logAndControls().box.className.split(' ')).toEqual(expect.arrayContaining(['flex-1', 'min-h-0']));
 });
 
 it('leaves the desktop panel as it was: its title, Secret and Clear above the log, full cards in it', async () => {
