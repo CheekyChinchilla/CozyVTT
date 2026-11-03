@@ -558,6 +558,24 @@ describe('the dock at the map’s foot', () => {
     expect(dock()).toContainElement(screen.getByRole('combobox', { name: 'Player or token to preview as' }));
   });
 
+  // Preview's controls rose a row as the square under the mouse appeared
+  // below them, and fell as it went, out from under the pointer.
+  it('keeps Preview\'s controls on the row of the square under the mouse, so it coming and going never moves them', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    const row = () => previewButton().parentElement!.parentElement!;
+    const before = row();
+    mouse.move(surface(), square(3, 2));
+    const readout = screen.getByText('(3, 2)').closest('.glass-panel') as HTMLElement;
+    expect(row()).toBe(before);
+    expect(row()).toContainElement(readout);
+    expect(classesOf(row())).toEqual(expect.arrayContaining(['flex', 'justify-between']));
+    expect(classesOf(row())).not.toContain('flex-col');
+    mouse.leave(surface());
+    expect(screen.queryByText('(3, 2)')).toBeNull();
+    expect(row()).toBe(before);
+  });
+
   it('shows the square under a mouse there while no card does', () => {
     render(<MapCanvas />);
     mouse.move(surface(), square(3, 2));
