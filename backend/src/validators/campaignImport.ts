@@ -14,7 +14,7 @@ import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG
 import { TOKEN_LIMITS } from './tokenLimits';
 import { CAMPAIGN_LIMITS } from './campaignLimits';
 import { ASSET_LIMITS } from './assetLimits';
-import { tidyTags } from './assets';
+import { tidyTags, isDrawnMapTag } from './assets';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -282,12 +282,16 @@ const ImportAssetTextSchema = z
 // may, and keeps the first ones, in order. A list too long to be one an
 // export wrote, or one that is not a list, imports as none, and its entries
 // are not checked. Archives made before tags were carried have no list, and
-// their assets none.
+// their assets none. The tag kept for the pictures Paint makes is left out,
+// in any case: Paint deletes a picture on its word, and an archive may come
+// from anyone.
 const ImportAssetTagsSchema = z
   .unknown()
   .transform((tags) => (Array.isArray(tags) && tags.length <= IMPORT_LIMITS.MAX_ASSET_TAG_ENTRIES ? tags : []))
   .pipe(z.array(z.string().catch('')))
-  .transform((tags) => tidyTags(tags).filter((tag) => tag.length <= ASSET_LIMITS.maxTagLength).slice(0, ASSET_LIMITS.maxTags));
+  .transform((tags) => tidyTags(tags)
+    .filter((tag) => tag.length <= ASSET_LIMITS.maxTagLength && !isDrawnMapTag(tag))
+    .slice(0, ASSET_LIMITS.maxTags));
 
 // The declared MIME type is kept for the log only: the stored type and file
 // extension come from the file's own bytes, as on upload.

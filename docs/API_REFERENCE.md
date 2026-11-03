@@ -986,7 +986,8 @@ an asset's own `/api/assets/<kind>/:id` address, stored as sent. Anything else, 
 site included, answers `403`, as does an asset the DM may not read unless this campaign already uses
 that exact address. An existing asset that is not a token picture (type `TOKEN`) answers `400` with
 `The token image must be a token picture from the asset library.` Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
-as the full path. Rows written before this normalisation may still hold a bare id, so clients should
+as the full path, and refuses with the same `400` a creature stored before this rule whose picture is
+not a token picture. Rows written before this normalisation may still hold a bare id, so clients should
 tolerate both when reading.
 
 ### `GET /api/campaigns/:id/creatures`
@@ -1385,12 +1386,15 @@ session, so revoking it takes effect immediately.
 
 While a map, a token, a character, a character template, a creature, a token
 template, a campaign's atmosphere track or the sound of one of a campaign's
-times of day still uses the asset, the route
+times of day still uses the asset, or a text or Markdown document names it by
+its address and its writer, the asset's uploader or a member of its campaign,
+can read the asset now, the route
 answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
 nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
 what the caller may see: an admin sees everything, anyone else sees only the
 campaigns they are the DM of, their own characters and shared character
-templates, and the rest is counted without names.
+templates, and documents of their own, global ones and those of campaigns they
+run, and the rest is counted without names.
 
 ---
 

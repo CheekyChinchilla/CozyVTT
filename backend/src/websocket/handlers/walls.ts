@@ -16,6 +16,7 @@ import {
   wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
 import { mapEditLimiter, MAP_EDITS_PER_SECOND, TOO_MANY_MAP_EDITS_MESSAGE, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
+import { emitNewestState } from '../outgoingQueue';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 import { wallOutsideMap, WALL_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
@@ -96,13 +97,13 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
     const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) return;
-      if (socket.role !== 'DM') {
-        refuse('Only DMs can add wall segments');
-        return;
-      }
       if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) {
         // Flood ceiling, per user: dropped without a word unless it asked for an answer.
         ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
+        return;
+      }
+      if (socket.role !== 'DM') {
+        refuse('Only DMs can add wall segments');
         return;
       }
 
@@ -152,11 +153,11 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   socket.on('wall:remove', async (data: { mapId: string; segmentId: string; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
       if (socket.role !== 'DM') {
         socket.emit('error', { message: 'Only DMs can remove wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, segmentId } = data;
       if (!mapId || !segmentId) { socket.emit('error', { message: 'mapId and segmentId required' }); return; }
@@ -309,12 +310,12 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
     const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) return;
-      if (socket.role !== 'DM') {
-        refuse('Only DMs can replace wall segments');
-        return;
-      }
       if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) {
         ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
+        return;
+      }
+      if (socket.role !== 'DM') {
+        refuse('Only DMs can replace wall segments');
         return;
       }
 
@@ -377,7 +378,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
       // A locked door goes to anyone but the DM as a closed one.
-      socket.emit('walls:replaced', { mapId, segments: wallsSentTo(socket.role, map.wallSegments) });
+      emitNewestState(socket, 'walls:replaced', { mapId, segments: wallsSentTo(socket.role, map.wallSegments) }, mapId);
     } catch (error) {
       logger.error('walls:request failed', { err: error });
     }

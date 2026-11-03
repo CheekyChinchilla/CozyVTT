@@ -13,6 +13,7 @@ import MapManager from '../MapManager';
 import { api } from '@/services/api';
 import { memoryDraftStore, type MemoryDraftStore } from '@/test/memoryDraftStore';
 import { draftKey } from '../map/paint/paintDrafts';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 
 const drafts = vi.hoisted(() => ({ store: null as unknown }));
 vi.mock('../map/paint/paintDrafts', async (importOriginal) => ({
@@ -53,7 +54,7 @@ vi.mock('@/components/assets/AssetPicker', () => ({ default: () => null }));
 
 const client = (api as unknown as { client: AxiosInstance }).client;
 let picture = 'pic-1';
-let tags = ['drawn-map'];
+let tags = [DRAWN_MAP_TAG];
 let assetDeleteStatus = 200;
 const requests: string[] = [];
 /** While set, the drawn picture's tags answer only when it is called. */
@@ -95,7 +96,7 @@ beforeEach(() => {
   // A picture of its own each test: the page asks for a picture's tags once a session.
   count += 1;
   picture = `pic-${count}`;
-  tags = ['drawn-map'];
+  tags = [DRAWN_MAP_TAG];
   assetDeleteStatus = 200;
   holdPicture = null;
   drafts.store = memoryDraftStore();

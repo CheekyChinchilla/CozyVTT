@@ -1,8 +1,8 @@
 /**
  * Saving what is painted: the picture made as a PNG, uploaded as a new
- * drawn-map picture, the map pointed at it, and then the picture it had
+ * DRAWN_MAP_TAG picture, the map pointed at it, and then the picture it had
  * before deleted, without force, so one something else uses stays. Only a
- * picture Paint made (tagged drawn-map) is ever deleted this way; an
+ * picture Paint made (tagged DRAWN_MAP_TAG) is ever deleted this way; an
  * uploaded one never is. A map the server will not point at the new
  * picture leaves no picture behind.
  */
@@ -10,9 +10,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { savePaint, PNG_NOT_MADE, type SavePaintSteps } from '../savePaint';
 import type { Asset, CampaignMap } from '@/types';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 
 const png = new Blob(['png'], { type: 'image/png' });
-const asset = { id: 'new-picture', tags: ['drawn-map'] } as unknown as Asset;
+const asset = { id: 'new-picture', tags: [DRAWN_MAP_TAG] } as unknown as Asset;
 const map = { id: 'map-a', imageUrl: '/api/assets/maps/new-picture' } as unknown as CampaignMap;
 
 let order: string[];

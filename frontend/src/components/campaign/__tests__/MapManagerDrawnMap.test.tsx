@@ -55,9 +55,10 @@ vi.mock('../CreateMapModal', () => ({
 }));
 
 import MapManager from '../MapManager';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 
 const crypt = { id: 'crypt', campaignId: 'campaign-1', name: 'Crypt', imageUrl: '/api/assets/maps/drawn-1', width: 20, height: 20, gridSize: 70, tokens: [] };
-const drawnPicture = { id: 'drawn-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: ['drawn-map'] };
+const drawnPicture = { id: 'drawn-1', type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] };
 
 beforeEach(() => {
   h.openToPrepare.mockReset().mockResolvedValue(true);

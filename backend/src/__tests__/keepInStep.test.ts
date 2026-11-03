@@ -197,7 +197,8 @@ import fs from 'fs';
 import path from 'path';
 import { RESTORE_TRAILER } from '../utils/pgRestore';
 import { sessionSecretProblem } from '../config/sessionSecret';
-import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
+import { SOCKET_CEILINGS, SOCKET_EVENTS_PER_SECOND, type CeilingWindow } from '../websocket/shared';
+import { MAX_QUEUED_PACKETS, MAX_QUEUED_BYTES, MAX_QUEUED_BYTES_PER_USER } from '../websocket/outgoingQueue';
 import { REVEALS_PER_SECOND } from '../websocket/handlers/exploration';
 import { THEME_IDS, FONT_IDS } from '../validators/appearance';
 import { sheetTypeMismatches } from './helpers/sheetTypeParity';
@@ -754,6 +755,17 @@ describe('the dice limits', () => {
   });
 });
 
+describe('the refusal of the tag kept for drawn maps', () => {
+  it.each([
+    'backend/src/validators/assets.ts',
+    'frontend/src/components/assets/AssetUploadModal.tsx',
+  ])('is the mirrored asset limits file\'s in %s, with no wording of its own', (file) => {
+    const source = read(file);
+    expect(source).toContain('DRAWN_MAP_TAG_REFUSAL');
+    expect(source).not.toMatch(/is kept for maps drawn in CozyVTT/);
+  });
+});
+
 describe('the files each kind of asset may be uploaded as', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/uploadTypes.ts')).toBe(read('backend/src/validators/uploadTypes.ts'));
@@ -788,6 +800,17 @@ describe('the socket flood ceilings in the WebSocket guide', () => {
 
   it('exploration:reveal is stated as the server applies it', () => {
     expect(stated('exploration:reveal')).toBe(inWords([{ limit: REVEALS_PER_SECOND, windowMs: 1000 }]));
+  });
+
+  it('every event one socket sends is stated as the server counts it', () => {
+    expect(guide).toContain(`one socket may send at most ${SOCKET_EVENTS_PER_SECOND} events a second`);
+  });
+
+  it('what is held for a client that does not read is stated as the server bounds it', () => {
+    expect(guide).toContain(
+      `more than ${MAX_QUEUED_PACKETS.toLocaleString('en-US')} packets, or ${MAX_QUEUED_BYTES / (1024 * 1024)} MiB of them, wait`
+    );
+    expect(guide).toContain(`more than ${MAX_QUEUED_BYTES_PER_USER / (1024 * 1024)} MiB waiting over all its connections`);
   });
 });
 

@@ -10,8 +10,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
 import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
-import { ASSET_LIMITS } from '@/constants/assetLimits';
-import { DRAWN_MAP_TAG } from '@/components/campaign/map/paint/drawnMapSize';
+import { ASSET_LIMITS, DRAWN_MAP_TAG, DRAWN_MAP_TAG_REFUSAL } from '@/constants/assetLimits';
 import { assetNameFrom } from '@/utils/assetName';
 import { UPLOAD_EXTENSIONS } from '@/constants/uploadTypes';
 
@@ -608,7 +607,7 @@ export default function AssetUploadModal({
               />
               {tagKept && (
                 <p className="text-xs text-warm-gray mt-1">
-                  The tag {DRAWN_MAP_TAG} is kept for maps drawn in CozyVTT.
+                  {DRAWN_MAP_TAG_REFUSAL}
                 </p>
               )}
               {atTagLimit && (

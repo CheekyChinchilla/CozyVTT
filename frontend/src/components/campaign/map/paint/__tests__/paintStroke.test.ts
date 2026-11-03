@@ -2,13 +2,14 @@
  * A brush stroke: its points carried from map pixels to the picture's,
  * the box it paints (what undo keeps), how it is drawn (a round line, or a
  * dot for a tap), and the widths [ and ] step through. Also which pictures
- * Paint may change: a map picture of this campaign tagged drawn-map, the
- * tag matched exactly.
+ * Paint may change: a map picture of this campaign carrying DRAWN_MAP_TAG,
+ * the tag matched exactly.
  */
 
 import { describe, it, expect } from 'vitest';
 import { strokeBox, toPicture, strokePaint, nextWidth, PAINT_WIDTHS } from '../paintStroke';
 import { isDrawnPicture } from '../mapPicture';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 import { recordingContext } from '@/test/recordingCanvas';
 
 describe('a stroke\'s points', () => {
@@ -66,15 +67,17 @@ describe('the brush widths', () => {
 });
 
 describe('a picture Paint may change', () => {
-  const asset = { type: 'MAP', campaignId: 'campaign-1', tags: ['dungeon', 'drawn-map'] };
+  const asset = { type: 'MAP', campaignId: 'campaign-1', tags: ['dungeon', DRAWN_MAP_TAG] };
 
-  it('is a map picture of this campaign tagged drawn-map', () => {
+  it(`is a map picture of this campaign tagged ${DRAWN_MAP_TAG}`, () => {
     expect(isDrawnPicture(asset, 'campaign-1')).toBe(true);
   });
 
   it.each([
     ['without the tag', { ...asset, tags: ['dungeon'] }, 'campaign-1'],
-    ['tagged in another case', { ...asset, tags: ['Drawn-Map'] }, 'campaign-1'],
+    ['tagged in another case', { ...asset, tags: [DRAWN_MAP_TAG.toUpperCase()] }, 'campaign-1'],
+    // A tag a DM could type before CozyVTT drew maps.
+    ['tagged drawn-map', { ...asset, tags: ['drawn-map'] }, 'campaign-1'],
     ['of another campaign', asset, 'campaign-2'],
     ['personal', { ...asset, campaignId: null }, 'campaign-1'],
     ['a token picture', { ...asset, type: 'TOKEN' }, 'campaign-1'],

@@ -13,7 +13,7 @@ import type { LightToolMode, LightPlacementDefaults } from '@/components/campaig
 import { randomId } from '@/utils/uuid';
 import { TOO_MANY_LIGHTS_MESSAGE } from '@/constants/mapLimits';
 import type { OwnEdits } from '../ownEdits';
-import { atLightCap, refusalIn } from '../wallLightCaps';
+import { answeredWithin, atLightCap, refusalIn, WALL_LIGHT_ANSWER_TIMEOUT_MS } from '../wallLightCaps';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
 
@@ -82,13 +82,13 @@ export function useLightTool({
         setSelectedLightId(newLight.id);
         const socketInstance = socket?.getSocket();
         if (socketInstance && mapId) {
-          socketInstance.emit('light:add', ownEdits.tag({ mapId, light: newLight }), (reply) => {
+          socketInstance.emit('light:add', ownEdits.tag({ mapId, light: newLight }), answeredWithin(WALL_LIGHT_ANSWER_TIMEOUT_MS, (reply) => {
             const why = refusalIn(reply);
             if (why === null || mapIdRef.current !== mapId) return;
             setLightSources((prev) => prev.filter((l) => l.id !== newLight.id));
             setSelectedLightId((selected) => (selected === newLight.id ? null : selected));
             refuse(why);
-          });
+          }));
         }
         return true;
       }

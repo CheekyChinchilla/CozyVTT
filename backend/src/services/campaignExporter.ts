@@ -73,17 +73,27 @@ const ZIP_BYTES_PER_ENTRY = 256;
 
 // ── Asset reference extractor ───────────────────────────────────────────────
 
-/** An asset going into the archive: its file, and what the asset manifest says of it. */
+/** What the Asset Library shows of an asset: its own name, description and tags. */
+interface AssetDetails {
+  name: string;
+  description: string | null;
+  tags: string[];
+}
+
+/**
+ * An asset going into the archive: its file, and what the asset manifest says
+ * of it. Only the campaign's own assets, and the exporter's own personal
+ * ones, carry their details: a picture of another member's own library that
+ * the campaign uses goes as its file alone, since an archive is shared off
+ * the server, and what its uploader wrote about it is theirs.
+ */
 interface ArchivedAsset {
   filePath: string;
   mimeType: string;
   originalName: string;
   type: string;
   fileSize: number;
-  /** The asset's own name and description, as the Asset Library shows them. */
-  name: string;
-  description: string | null;
-  tags: string[];
+  details: AssetDetails | null;
 }
 
 /**
@@ -92,7 +102,7 @@ interface ArchivedAsset {
  * in it, so what goes in follows the same read rule as the asset routes: a
  * campaign could otherwise name another user's private file and export it.
  */
-async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<ArchivedAsset | null> {
+async function resolveAssetFile(assetId: string, viewer: ExportViewer, campaignId: string): Promise<ArchivedAsset | null> {
   const asset = await prisma.asset.findUnique({ where: { id: assetId } });
   if (!asset) return null;
   if (!(await canReadAsset(asset, viewer.userId, viewer.isAdmin))) return null;
@@ -110,9 +120,9 @@ async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<
     originalName: asset.originalName,
     type: asset.type,
     fileSize: asset.fileSize,
-    name: asset.name,
-    description: asset.description,
-    tags: asset.tags,
+    details: (asset.scope === 'CAMPAIGN' && asset.campaignId === campaignId) || (asset.scope === 'USER' && asset.uploadedById === viewer.userId)
+      ? { name: asset.name, description: asset.description, tags: asset.tags }
+      : null,
   };
 }
 
@@ -154,7 +164,7 @@ export async function prepareCampaignExport(
     const id = extractAssetId(url);
     if (!id) return null;
     if (!assetMap.has(id)) {
-      const resolved = await resolveAssetFile(id, viewer);
+      const resolved = await resolveAssetFile(id, viewer, campaignId);
       if (resolved && (!onlyType || resolved.type === onlyType)) {
         // Skip audio files unless explicitly included
         if (resolved.type === 'AUDIO' && !includeAudio) return null;
@@ -260,16 +270,14 @@ export async function prepareCampaignExport(
   }
 
   // 6. Build asset manifest
-  const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath'>> = {};
+  const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath' | 'details'> & Partial<AssetDetails>> = {};
   for (const [id, info] of assetMap.entries()) {
     assetManifest[id] = {
       originalName: info.originalName,
       mimeType: info.mimeType,
       type: info.type,
       fileSize: info.fileSize,
-      name: info.name,
-      description: info.description,
-      tags: info.tags,
+      ...info.details,
     };
   }
 
