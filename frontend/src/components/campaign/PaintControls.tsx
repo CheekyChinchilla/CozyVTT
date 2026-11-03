@@ -13,7 +13,7 @@ import { BrickWall, Circle, Pentagon, Spline, SquareDashed, Stamp, Download, Era
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSelectionActions, PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
-import { PAINT_STAMPS, type StampTurn } from './map/paint/paintStamps';
+import { PAINT_STAMPS, STAMP_SIZE, type StampTurn } from './map/paint/paintStamps';
 import { PAINT_TEXTURES, type TextureKind } from './map/paint/paintTextures';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { labelFontSize } from './map/drawingGeometry';
@@ -88,6 +88,12 @@ export interface PaintControlsProps {
   /** Select's buttons, shown while Select is chosen: a phone has no Ctrl+C. */
   selection?: PaintSelectionActions;
 }
+
+/** The tools a width means nothing to: they paint no line. A stamp has a Size instead. */
+export const WIDTHLESS_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['select', 'fill', 'eyedropper', 'stamp']);
+
+/** A stamp's size, as its slider says it. */
+export const squaresLabel = (squares: number) => (squares === 1 ? '1 square' : `${squares} squares`);
 
 /** The tools that paint in a texture: the brush, a shape's fill, a room's floor and the fill bucket. */
 export const TEXTURED_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['brush', 'rect', 'ellipse', 'polygon', 'room', 'fill']);
@@ -273,22 +279,41 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         </div>
       </div>}
 
-      <label className="flex flex-col gap-0.5">
-        <span className="flex justify-between text-[10px] text-stone-400">
-          <span>Width</span>
-          <span>{settings.width} px{settings.tool === 'text' ? ` (letters ${labelFontSize(settings.width)} px tall)` : ''}</span>
-        </span>
-        <input
-          type="range"
-          aria-label="Width"
-          min={DRAWING_LIMITS.minWidth}
-          max={DRAWING_LIMITS.maxWidth}
-          step={1}
-          value={settings.width}
-          onChange={(e) => onSettingsChange({ width: Number(e.target.value) })}
-          className="w-full accent-amber-400 touch-target"
-        />
-      </label>
+      {settings.tool === 'stamp' ? (
+        <label className="flex flex-col gap-0.5">
+          <span className="flex justify-between text-[10px] text-stone-400">
+            <span>Size</span>
+            <span>{squaresLabel(settings.stampSize)}</span>
+          </span>
+          <input
+            type="range"
+            aria-label="Size"
+            min={STAMP_SIZE.min}
+            max={STAMP_SIZE.max}
+            step={STAMP_SIZE.step}
+            value={settings.stampSize}
+            onChange={(e) => onSettingsChange({ stampSize: Number(e.target.value) })}
+            className="w-full accent-amber-400 touch-target"
+          />
+        </label>
+      ) : !WIDTHLESS_TOOLS.has(settings.tool) && (
+        <label className="flex flex-col gap-0.5">
+          <span className="flex justify-between text-[10px] text-stone-400">
+            <span>Width</span>
+            <span>{settings.width} px{settings.tool === 'text' ? ` (letters ${labelFontSize(settings.width)} px tall)` : ''}</span>
+          </span>
+          <input
+            type="range"
+            aria-label="Width"
+            min={DRAWING_LIMITS.minWidth}
+            max={DRAWING_LIMITS.maxWidth}
+            step={1}
+            value={settings.width}
+            onChange={(e) => onSettingsChange({ width: Number(e.target.value) })}
+            className="w-full accent-amber-400 touch-target"
+          />
+        </label>
+      )}
 
       {(settings.tool === 'rect' || settings.tool === 'ellipse' || settings.tool === 'polygon') && (
         <fieldset className="flex flex-col gap-0.5">

@@ -864,6 +864,24 @@ describe('a stamp', () => {
     expect(callsOfPicture('translate')!.slice(-1)[0]?.args).toEqual([130, 260]);
   });
 
+  it('has a Size in place of the Width, a stamp two squares across sitting on a corner, and no Width for the fill', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    expect(panel().queryByRole('slider', { name: 'Width' })).toBeNull();
+    expect(panel().getByText('1 square')).toBeInTheDocument();
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    fireEvent.change(panel().getByRole('slider', { name: 'Size' }), { target: { value: '2' } });
+    expect(panel().getByText('2 squares')).toBeInTheDocument();
+    mouse.down(input(), { clientX: 130, clientY: 260 });
+    mouse.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate')!.slice(-1)[0]?.args).toEqual([150, 250]);
+    expect(callsOfPicture('rect')!.slice(-1)[0]?.args).toEqual([-30, -20, 60, 40]);
+    fireEvent.click(panel().getByRole('button', { name: 'Fill' }));
+    expect(panel().queryByRole('slider', { name: 'Width' })).toBeNull();
+    expect(panel().queryByRole('slider', { name: 'Size' })).toBeNull();
+  });
+
   it('is chosen by P', async () => {
     await showMap();
     await paintOn();
