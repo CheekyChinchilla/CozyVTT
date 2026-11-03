@@ -205,16 +205,19 @@ export interface AssetUsageView {
 }
 
 /**
- * Who has written a document that can show an asset: of the asset's
- * uploader and its campaign's members, those who wrote a document naming it
- * and can read the asset now (canReadAsset, once each). That holds every
- * handout the handout grant counts for the asset's campaign, since they are
- * its current DM's, who reads every asset of it; and the DM's own notes; and
- * a player's note naming a picture they are shown. A stranger's document, or
- * a player's note naming a map picture their table has left, shows nothing,
- * and does not count.
+ * The documents that can show an asset: of those written by the asset's
+ * uploader and its campaign's members and naming it, the ones whose writer
+ * can read the asset now (canReadAsset, once for each writer). That holds
+ * every handout the handout grant counts for the asset's campaign, since
+ * they are its current DM's, who reads every asset of it; and the DM's own
+ * notes; and a player's note naming a picture they are shown. A stranger's
+ * document, or a player's note naming a map picture their table has left,
+ * shows nothing, and does not count.
+ *
+ * Each statement reads one table, so no plan the database picks from its
+ * statistics can turn it into a read of every document's pictures.
  */
-async function documentWritersWhoSee(assetId: string): Promise<string[]> {
+async function documentsShowing(assetId: string): Promise<Array<{ id: string; name: string; scope: string; campaignId: string | null; uploadedById: string }>> {
   const asset = await prisma.asset.findUnique({
     where: { id: assetId },
     select: { id: true, type: true, scope: true, uploadedById: true, campaignId: true },
@@ -225,65 +228,57 @@ async function documentWritersWhoSee(assetId: string): Promise<string[]> {
     : [];
   const looked = [...new Set([...(asset.uploadedById ? [asset.uploadedById] : []), ...members])];
   if (looked.length === 0) return [];
-  const writers = await prisma.asset.groupBy({
-    by: ['uploadedById'],
-    where: { type: 'DOCUMENT', uploadedById: { in: looked }, picturesNamed: { some: { pictureId: assetId } } },
+  const naming = await prisma.documentPicture.findMany({ where: { pictureId: assetId }, select: { documentId: true } });
+  if (naming.length === 0) return [];
+  const docs = await prisma.asset.findMany({
+    where: { id: { in: naming.map((row) => row.documentId) }, type: 'DOCUMENT', uploadedById: { in: looked } },
+    select: { id: true, name: true, scope: true, campaignId: true, uploadedById: true },
   });
-  const users = await prisma.user.findMany({
-    where: { id: { in: writers.flatMap((w) => (w.uploadedById ? [w.uploadedById] : [])) } },
+  const writers = await prisma.user.findMany({
+    where: { id: { in: [...new Set(docs.flatMap((doc) => (doc.uploadedById ? [doc.uploadedById] : [])))] } },
     select: { id: true, platformRole: true },
   });
-  const sees = await Promise.all(users.map(async (u) => ((await canReadAsset(asset, u.id, u.platformRole === 'ADMIN')) ? u.id : null)));
-  return sees.flatMap((id) => (id ? [id] : []));
+  const seeing = new Set((await Promise.all(writers.map(async (u) => ((await canReadAsset(asset, u.id, u.platformRole === 'ADMIN')) ? u.id : null))))
+    .flatMap((id) => (id ? [id] : [])));
+  return docs.flatMap((doc) => (doc.uploadedById && seeing.has(doc.uploadedById) ? [{ ...doc, uploadedById: doc.uploadedById }] : []));
 }
 
 /**
- * The documents that can show an asset (documentWritersWhoSee), as the
- * caller may see them: by name where it is their own, a global one, or one
- * of a campaign they run, written in it or shared with it, at most
- * MAX_LISTED_USES of those; the rest only counted. Read from what each
- * document names, never its file.
+ * The documents that can show an asset (documentsShowing), as the caller
+ * may see them: by name where it is their own, a global one, or one of a
+ * campaign they run, written in it or shared with it, at most
+ * MAX_LISTED_USES of those, by name; the rest only counted. Read from what
+ * each document names, never its file.
  */
 async function documentUses(
   assetId: string,
   viewer: { userId: string; isAdmin: boolean },
   runs: ReadonlySet<string>
 ): Promise<{ named: AssetUse[]; notListed: number; unseen: number }> {
-  const writers = await documentWritersWhoSee(assetId);
-  if (writers.length === 0) return { named: [], notListed: 0, unseen: 0 };
-  const campaignsRun = [...runs];
-  const showing: Prisma.DocumentPictureWhereInput = { pictureId: assetId, document: { uploadedById: { in: writers } } };
-  const nameable: Prisma.DocumentPictureWhereInput = viewer.isAdmin ? showing : {
-    AND: [showing, {
-      document: {
-        OR: [
-          { uploadedById: viewer.userId },
-          { scope: 'GLOBAL' },
-          { scope: 'CAMPAIGN', campaignId: { in: campaignsRun } },
-          { campaignLinks: { some: { campaignId: { in: campaignsRun } } } },
-        ],
-      },
-    }],
-  };
-  const [total, mayName, rows] = await Promise.all([
-    prisma.documentPicture.count({ where: showing }),
-    prisma.documentPicture.count({ where: nameable }),
-    prisma.documentPicture.findMany({
-      where: nameable,
-      select: { document: { select: { name: true, scope: true, campaignId: true, campaign: { select: { name: true } } } } },
-      orderBy: [{ document: { name: 'asc' } }, { documentId: 'asc' }],
-      take: MAX_LISTED_USES,
-    }),
-  ]);
-  const named = rows.map(({ document }): AssetUse => {
-    const ofCampaign = document.scope === 'CAMPAIGN' && document.campaignId !== null;
+  const showing = await documentsShowing(assetId);
+  if (showing.length === 0) return { named: [], notListed: 0, unseen: 0 };
+  const linkedToRun = viewer.isAdmin || runs.size === 0 ? new Set<string>() : new Set((await prisma.campaignDocument.findMany({
+    where: { assetId: { in: showing.map((doc) => doc.id) }, campaignId: { in: [...runs] } },
+    select: { assetId: true },
+  })).map((link) => link.assetId));
+  const mayName = showing
+    .filter((doc) => viewer.isAdmin || doc.uploadedById === viewer.userId || doc.scope === 'GLOBAL'
+      || (doc.scope === 'CAMPAIGN' && doc.campaignId !== null && runs.has(doc.campaignId)) || linkedToRun.has(doc.id))
+    .sort((a, b) => a.name.localeCompare(b.name) || (a.id < b.id ? -1 : 1));
+  const listed = mayName.slice(0, MAX_LISTED_USES);
+  const campaignIds = [...new Set(listed.flatMap((doc) => (doc.scope === 'CAMPAIGN' && doc.campaignId ? [doc.campaignId] : [])))];
+  const campaignNames = new Map(campaignIds.length === 0 ? [] : (await prisma.campaign.findMany({
+    where: { id: { in: campaignIds } }, select: { id: true, name: true },
+  })).map((c) => [c.id, c.name]));
+  const named = listed.map((doc): AssetUse => {
+    const ofCampaign = doc.scope === 'CAMPAIGN' && doc.campaignId !== null;
     return {
-      kind: 'document', name: document.name, count: 1,
-      campaignId: ofCampaign ? document.campaignId : null,
-      campaignName: ofCampaign ? document.campaign?.name ?? null : null,
+      kind: 'document', name: doc.name, count: 1,
+      campaignId: ofCampaign ? doc.campaignId : null,
+      campaignName: ofCampaign && doc.campaignId ? campaignNames.get(doc.campaignId) ?? null : null,
     };
   });
-  return { named, notListed: mayName - named.length, unseen: total - mayName };
+  return { named, notListed: mayName.length - listed.length, unseen: showing.length - mayName.length };
 }
 
 /**
