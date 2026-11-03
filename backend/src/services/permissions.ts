@@ -750,9 +750,11 @@ export async function canReadAsset(
 }
 
 /**
- * Whether a user may change an asset where it is: delete it, move it out of
- * its scope, or rewrite a document's text. One rule for all three, so a
- * right the delete route takes away cannot be kept through another route.
+ * Whether a user may change an asset where it is: rewrite a document's text,
+ * and, narrowed by mayRemoveAsset (services/assetRemoval.ts) for a campaign
+ * asset's uploader who does not run the campaign, delete it or move it out
+ * of its scope. The delete and move routes ask mayRemoveAsset alike, so a
+ * right one takes away cannot be kept through the other.
  *
  * - GLOBAL: an admin, or its uploader while they still manage global assets.
  * - USER: its uploader, or an admin.
