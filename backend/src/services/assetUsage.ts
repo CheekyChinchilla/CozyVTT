@@ -74,6 +74,20 @@ interface MapTokenRow {
 }
 
 /**
+ * The maps whose tokens mention `assetId`, with the tokens. Tokens are JSON
+ * on the map, so the search is on the column read as text; the id is a UUID
+ * read from the asset row, and is bound as a parameter.
+ */
+function mapsWithTokensMentioning(assetId: string, db: Prisma.TransactionClient = prisma): Promise<MapTokenRow[]> {
+  return db.$queryRaw<MapTokenRow[]>`
+    SELECT m.id, m.name, m."campaignId", c.name AS "campaignName", m.tokens
+    FROM "Map" m
+    JOIN "Campaign" c ON c.id = m."campaignId"
+    WHERE m.tokens::text LIKE ${`%${assetId}%`}
+  `;
+}
+
+/**
  * Every record that stores an address naming `assetId`, read through `db`
  * (a transaction's client, when the caller decides inside one), with who owns
  * each: for what a caller is shown (assetUsageFor), and for what becomes of a
@@ -92,14 +106,7 @@ export async function findUses(assetId: string, db: Prisma.TransactionClient = p
           campaign: { select: { name: true } },
         },
       }),
-      // Tokens are JSON on the map, so the search is on the column read as text.
-      // The id is a UUID read from the asset row, and is bound as a parameter.
-      db.$queryRaw<MapTokenRow[]>`
-        SELECT m.id, m.name, m."campaignId", c.name AS "campaignName", m.tokens
-        FROM "Map" m
-        JOIN "Campaign" c ON c.id = m."campaignId"
-        WHERE m.tokens::text LIKE ${`%${assetId}%`}
-      `,
+      mapsWithTokensMentioning(assetId, db),
       db.character.findMany({
         where: { tokenImageUrl: mentions },
         select: { name: true, userId: true, campaignId: true, tokenImageUrl: true, campaign: { select: { name: true } } },
@@ -346,4 +353,22 @@ export async function assetUsageFor(
  */
 export async function isAssetInUse(assetId: string): Promise<boolean> {
   return (await findUses(assetId)).length > 0;
+}
+
+/**
+ * Whether anything but `userId`'s own things uses the asset: anything
+ * findUses finds other than their characters, a token on a map that they do
+ * not control, or a document that can show it (documentsShowing) written by
+ * someone else. Their own characters, the tokens they control and their own
+ * documents are theirs to lose.
+ */
+export async function usedByOthersThan(assetId: string, userId: string): Promise<boolean> {
+  const uses = await findUses(assetId);
+  if (uses.some((use) => use.kind !== 'token' && !(use.kind === 'character' && use.ownerId === userId))) return true;
+  if (uses.some((use) => use.kind === 'token')) {
+    const names = (address: string | null | undefined): boolean => extractAssetId(address) === assetId;
+    const maps = await mapsWithTokensMentioning(assetId);
+    if (maps.some((m) => readTokens(m.tokens).some((t) => names(t?.imageUrl) && t.controlledBy !== userId))) return true;
+  }
+  return (await documentsShowing(assetId)).some((doc) => doc.uploadedById !== userId);
 }
