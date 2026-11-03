@@ -292,7 +292,10 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const shownPicture = mapImage !== null ? loadedPicture : null;
 
   // Spirit layer image
-  const [spiritLayerImage, setSpiritLayerImage] = useState<HTMLImageElement | null>(null);
+  // The spirit layer picture last loaded, with the map it was loaded for:
+  // another map's is never drawn (pictureFor), as with the map's picture.
+  const [loadedSpirit, setLoadedSpirit] = useState<LoadedPicture<HTMLImageElement> | null>(null);
+  const spiritLayerImage = pictureFor(loadedSpirit, currentMap && { id: currentMap.id, imageUrl: currentMap.spiritLayerUrl });
   // Fade-in transition state for spirit layer toggle
   const [spiritLayerOpacity, setSpiritLayerOpacity] = useState(1);
 
@@ -1088,28 +1091,23 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Spirit Layer Image Loading
   // ============================================
 
-  // TODO(maps): a switch to another map with a spirit layer goes on drawing
-  // the last map's spirit layer picture over it until its own has loaded;
-  // keep the spirit picture with the map it was loaded for, as the map's
-  // picture is (pictureFor), so another map's is never drawn.
+  const spiritMapId = currentMap?.id;
+  const spiritUrl = currentMap?.spiritLayerUrl;
   useEffect(() => {
-    if (!currentMap?.spiritLayerUrl) {
-      setSpiritLayerImage(null);
-      return;
-    }
+    if (!spiritMapId || !spiritUrl) return;
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
-    img.onload = () => setSpiritLayerImage(img);
-    img.onerror = () => setSpiritLayerImage(null);
-    img.src = currentMap.spiritLayerUrl;
+    img.onload = () => setLoadedSpirit({ mapId: spiritMapId, url: spiritUrl, image: img });
+    img.onerror = () => setLoadedSpirit(null);
+    img.src = spiritUrl;
 
     return () => {
       img.onload = null;
       img.onerror = null;
     };
-  }, [currentMap?.spiritLayerUrl]);
+  }, [spiritMapId, spiritUrl]);
 
   // ============================================
   // Auto-Fit: centre and fit a new map once its picture has loaded and the
