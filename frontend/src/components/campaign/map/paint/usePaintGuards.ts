@@ -51,11 +51,14 @@ export const LEAVING_WORDS: Record<PaintLeaving, string> = {
   leave: 'Save it before you leave this page?',
 };
 
-/** The question in full. */
-export function leavingQuestion(mapName: string, leaving: PaintLeaving): string {
-  return leaving === 'delete'
-    ? `Your painting of ${mapName} is not saved, ${LEAVING_WORDS[leaving]}`
-    : `Your painting of ${mapName} is not saved. ${LEAVING_WORDS[leaving]}`;
+/** What the question adds when a save would write over the map's picture: Save my painting asks nothing more. */
+export const SAVING_OVERWRITES = "Saving overwrites the map's picture.";
+
+/** The question in full; `overwrites` when a save would write over the map's picture. */
+export function leavingQuestion(mapName: string, leaving: PaintLeaving, overwrites = false): string {
+  if (leaving === 'delete') return `Your painting of ${mapName} is not saved, ${LEAVING_WORDS[leaving]}`;
+  const question = `Your painting of ${mapName} is not saved. ${LEAVING_WORDS[leaving]}`;
+  return overwrites ? `${question} ${SAVING_OVERWRITES}` : question;
 }
 
 export interface PaintGuardsOptions {

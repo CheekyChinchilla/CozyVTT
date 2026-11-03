@@ -5939,7 +5939,8 @@ paths:
                     dropped and a repeated one is kept once. At most 50 tags of
                     at most 50 characters each. `cozyvtt-drawn-map`, in any
                     case, marks a picture Paint made, which Paint may change
-                    and a later save deletes: it is taken only on a MAP of
+                    and a later save writes over in place
+                    (`PUT /api/assets/{id}/picture`): it is taken only on a MAP of
                     CAMPAIGN scope, which only the campaign's DM may upload.
       responses:
         '201':
