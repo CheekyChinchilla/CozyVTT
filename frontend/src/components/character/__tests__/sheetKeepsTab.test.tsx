@@ -57,7 +57,7 @@ function openOnCombat() {
       onClose={() => {}}
     />
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
   expect(screen.getByRole('heading', { name: 'Death Saves' })).toBeInTheDocument();
 }
 

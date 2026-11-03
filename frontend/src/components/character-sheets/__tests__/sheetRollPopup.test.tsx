@@ -65,7 +65,7 @@ describe('on a D&D 5e sheet', () => {
     fireEvent.contextMenu(screen.getByText('STR'), at(40, 40));
     expect(screen.getByRole('menu', { name: 'Strength Check' })).toBeInTheDocument();
     fireEvent.pointerDown(document.body);
-    fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
     fireEvent.contextMenu(screen.getByText('Spear'), at(40, 40));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Disadvantage' }));
 

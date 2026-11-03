@@ -70,7 +70,7 @@ const sheet = () =>
 
 async function editorOn(tab?: string) {
   const view = render(<Pathfinder2eCharacterEditor character={sheet()} onSave={noop} onCancel={vi.fn()} />);
-  if (tab) await userEvent.click(screen.getByRole('button', { name: tab }));
+  if (tab) await userEvent.click(screen.getByRole('tab', { name: tab }));
   return view;
 }
 

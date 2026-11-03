@@ -23,7 +23,7 @@ describe('the read-only sheet', () => {
 
   it('shows no stray 0 for no Mythos and no spells', () => {
     render(<CallOfCthulhu7eCharacterView character={cocCharacter({ spellsAndMythos: { cthulhuMythos: 0, spells: [] } })} />);
-    fireEvent.click(screen.getByRole('button', { name: /Backstory/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Backstory/ }));
     expect(screen.queryByText(/^0$/)).toBeNull();
   });
 
@@ -36,7 +36,7 @@ describe('the read-only sheet', () => {
         })}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Backstory/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Backstory/ }));
     expect(screen.getByText('6%')).toBeInTheDocument();
   });
 });

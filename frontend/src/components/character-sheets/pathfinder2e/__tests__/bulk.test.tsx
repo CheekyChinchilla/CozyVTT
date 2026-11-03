@@ -62,7 +62,7 @@ describe('the editor', () => {
   it('counts a Bulk typed in the box', async () => {
     const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
     render(<Pathfinder2eCharacterEditor character={pf2eCharacter({ inventory: [item('Chest', { bulk: 'L' })] })} onSave={onSave} onCancel={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Inventory/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Inventory/ }));
     fireEvent.change(screen.getByPlaceholderText('Bulk'), { target: { value: '2' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

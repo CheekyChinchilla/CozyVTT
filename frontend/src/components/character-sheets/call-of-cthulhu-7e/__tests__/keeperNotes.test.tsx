@@ -18,7 +18,7 @@ vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefin
 
 function openBackstory(character: ReturnType<typeof cocCharacter>) {
   render(<CallOfCthulhu7eCharacterEditor character={character} onSave={vi.fn()} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Backstory' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Backstory' }));
 }
 
 describe("the editor's Keeper's Notes box", () => {
@@ -38,7 +38,7 @@ describe("the editor's Keeper's Notes box", () => {
 describe("the view's Keeper's Notes", () => {
   it('shows them when the sheet carries some', () => {
     render(<CallOfCthulhu7eCharacterView character={cocCharacter({ notes: 'A cultist' })} />);
-    fireEvent.click(screen.getByRole('button', { name: /Backstory/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Backstory/ }));
     expect(screen.getByText('A cultist')).toBeInTheDocument();
   });
 });

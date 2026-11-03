@@ -151,3 +151,30 @@ it('fades and marks the edge of the row past which more tabs lie, and neither ed
   expect(fade()[0]).not.toContain('calc');
   expect(marks()).toEqual(['left']);
 });
+
+// The row was tabs to a screen reader but answered no keys, and every tab was
+// a stop for Tab. The open tab is the one stop now, and the arrows, Home and
+// End open another, as on a sheet and the session rail.
+it('is one stop for Tab, and opens another tab on an arrow, Home or End', () => {
+  renderPage();
+  const tab = (name: string) => screen.getByRole('tab', { name: new RegExp(name) });
+  expect(tab('Dashboard')).toHaveAttribute('tabindex', '0');
+  expect(tab('Users')).toHaveAttribute('tabindex', '-1');
+
+  fireEvent.keyDown(tab('Dashboard'), { key: 'ArrowRight' });
+  expect(tab('Users')).toHaveAttribute('aria-selected', 'true');
+  expect(tab('Users')).toHaveFocus();
+  expect(tab('Users')).toHaveAttribute('tabindex', '0');
+
+  fireEvent.keyDown(tab('Users'), { key: 'End' });
+  const all = screen.getAllByRole('tab');
+  expect(all[all.length - 1]).toHaveAttribute('aria-selected', 'true');
+  expect(all[all.length - 1]).toHaveFocus();
+
+  fireEvent.keyDown(all[all.length - 1], { key: 'ArrowRight' });
+  expect(all[0]).toHaveAttribute('aria-selected', 'true');
+  fireEvent.keyDown(all[0], { key: 'ArrowLeft' });
+  expect(all[all.length - 1]).toHaveAttribute('aria-selected', 'true');
+  fireEvent.keyDown(all[all.length - 1], { key: 'Home' });
+  expect(all[0]).toHaveFocus();
+});

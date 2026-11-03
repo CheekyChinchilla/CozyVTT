@@ -61,7 +61,7 @@ describe('on the D&D 5e sheet', () => {
     const onSpendHitDie = vi.fn();
     const onRoll = vi.fn().mockResolvedValue(made);
     render(<DnD5eCharacterView character={brann} onRoll={onRoll} onSpendHitDie={onSpendHitDie} />);
-    fireEvent.click(screen.getByRole('button', { name: /Combat/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Combat/ }));
     fireEvent.click(screen.getByTitle('Spend one hit die: roll 1d10+2'));
     expect(onRoll).toHaveBeenCalledWith('1d10+2', 'Spend a Hit Die (Fighter)');
     await new Promise((resolve) => setTimeout(resolve, 20));

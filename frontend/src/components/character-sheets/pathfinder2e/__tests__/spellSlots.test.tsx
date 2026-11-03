@@ -29,7 +29,7 @@ function spellcastingWithSlots(slots: Slots): Record<string, unknown> {
 async function openSpellsAndSave(spellcasting: Record<string, unknown>, edit?: () => void): Promise<Slots> {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<Pathfinder2eCharacterEditor character={pf2eCharacter({ spellcasting })} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Spells' }));
   edit?.();
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(onSave).toHaveBeenCalled());
@@ -54,7 +54,7 @@ describe('spell slots', () => {
         onCancel={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Spells' }));
 
     expect((screen.getAllByPlaceholderText('Used')[0] as HTMLInputElement).value).toBe('1');
   });

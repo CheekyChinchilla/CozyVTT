@@ -20,7 +20,7 @@ async function saved(hpOverride: Record<string, unknown>, type?: [string, string
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<Pathfinder2eCharacterEditor character={pf2eCharacter({ hp: { ...hp, ...hpOverride } })} onSave={onSave} onCancel={vi.fn()} />);
   if (type) {
-    if (!screen.queryByLabelText(type[0])) fireEvent.click(screen.getByRole('button', { name: /^Combat$/ }));
+    if (!screen.queryByLabelText(type[0])) fireEvent.click(screen.getByRole('tab', { name: /^Combat$/ }));
     fireEvent.change(screen.getByLabelText(type[0]), { target: { value: type[1] } });
   }
   fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));

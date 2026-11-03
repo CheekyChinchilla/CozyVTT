@@ -16,7 +16,7 @@ function open() {
   render(<DnD5eCharacterEditor character={dnd5eCharacter({ exhaustionLevel: 2 })} onSave={() => Promise.resolve()} onCancel={vi.fn()} />);
   for (const tab of ['Combat', 'Stats & Skills']) {
     if (screen.queryByRole('button', { name: 'Exhaustion level 2' })) break;
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${tab}$`) }));
+    fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${tab}$`) }));
   }
 }
 

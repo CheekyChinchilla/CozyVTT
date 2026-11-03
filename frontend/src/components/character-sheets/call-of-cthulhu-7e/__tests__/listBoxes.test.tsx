@@ -36,7 +36,7 @@ async function save(onSave: ReturnType<typeof renderEditor>): Promise<Saved> {
 describe('possessions', () => {
   it('keeps each line, and the notes after " - ", as they are typed', async () => {
     const onSave = renderEditor();
-    fireEvent.click(screen.getByRole('button', { name: 'Possessions' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Possessions' }));
     const box = screen.getByPlaceholderText(/List possessions/) as HTMLTextAreaElement;
 
     await userEvent.type(box, 'Pocket knife - sharp{enter}Rope');
@@ -52,7 +52,7 @@ describe('possessions', () => {
 describe('spells', () => {
   it('keeps the spaces and new lines typed between spells', async () => {
     const onSave = renderEditor();
-    fireEvent.click(screen.getByRole('button', { name: 'Backstory' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Backstory' }));
     const box = screen.getByPlaceholderText(/Contact Nyarlathotep/) as HTMLTextAreaElement;
 
     await userEvent.type(box, 'Elder Sign{enter}Contact Nyarlathotep');

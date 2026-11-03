@@ -37,7 +37,7 @@ describe('grouped skills', () => {
   it('saves an edit to each kind of grouped skill where the sheet keeps it', async () => {
     const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
     render(<CallOfCthulhu7eCharacterEditor character={cocCharacter(sheetWithGroupedSkills())} onSave={onSave} onCancel={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
 
     fireEvent.change(valueBox('Fighting (Brawl)'), { target: { value: '60' } });
     fireEvent.change(valueBox('Firearms (Handgun)'), { target: { value: '45' } });
@@ -63,7 +63,7 @@ describe('grouped skills', () => {
   it('still saves an ordinary skill as before', async () => {
     const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
     render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={onSave} onCancel={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
 
     fireEvent.change(valueBox('Library Use'), { target: { value: '70' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

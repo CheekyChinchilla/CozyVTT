@@ -60,7 +60,7 @@ describe('the editor', () => {
         onCancel={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Spells/ }));
     const notes = screen.getByLabelText('Notes for innate spell 1');
     expect(notes).toHaveValue('Elf ancestry');
     fireEvent.change(notes, { target: { value: 'Elf ancestry, arcane' } });
@@ -83,7 +83,7 @@ describe('the editor', () => {
         onCancel={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Combat/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Combat/ }));
     // Strength +3, trained +3, item +1.
     expect(screen.getByText('Rank, attribute and item give +7')).toBeInTheDocument();
   });

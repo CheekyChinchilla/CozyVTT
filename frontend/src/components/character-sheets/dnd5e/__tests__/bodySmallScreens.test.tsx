@@ -61,13 +61,13 @@ const sheet = () =>
 
 async function editorOn(tab?: string) {
   const view = render(<DnD5eCharacterEditor character={sheet()} onSave={noop} onCancel={vi.fn()} />);
-  if (tab) await userEvent.click(screen.getByRole('button', { name: tab }));
+  if (tab) await userEvent.click(screen.getByRole('tab', { name: tab }));
   return view;
 }
 
 async function viewOn(tab?: string) {
   const view = render(<DnD5eCharacterView character={sheet()} />);
-  if (tab) await userEvent.click(screen.getByRole('button', { name: tab }));
+  if (tab) await userEvent.click(screen.getByRole('tab', { name: tab }));
   return view;
 }
 

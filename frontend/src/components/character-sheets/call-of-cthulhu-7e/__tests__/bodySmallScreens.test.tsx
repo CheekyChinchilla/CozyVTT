@@ -55,7 +55,7 @@ const sheet = () =>
 
 async function editorOn(tab?: string) {
   const view = render(<CallOfCthulhu7eCharacterEditor character={sheet()} onSave={noop} onCancel={vi.fn()} />);
-  if (tab) await userEvent.click(screen.getByRole('button', { name: tab }));
+  if (tab) await userEvent.click(screen.getByRole('tab', { name: tab }));
   return view;
 }
 
@@ -145,7 +145,7 @@ describe('the Call of Cthulhu sheet on a phone', () => {
 
   it('stacks the wealth\'s three figures, side by side from sm up', async () => {
     render(<CallOfCthulhu7eCharacterView character={sheet()} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Possessions' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Possessions' }));
     columns(above(screen.getByText('Spending Level'), ['grid']), 'grid-cols-1', 'sm:grid-cols-3');
   });
 });

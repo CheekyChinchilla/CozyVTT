@@ -41,7 +41,7 @@ interface Saved {
 function open(character: ReturnType<typeof wizard>) {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<Pathfinder2eCharacterEditor character={character} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
+  fireEvent.click(screen.getByRole('tab', { name: /Spells/ }));
   return async (): Promise<Saved> => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());

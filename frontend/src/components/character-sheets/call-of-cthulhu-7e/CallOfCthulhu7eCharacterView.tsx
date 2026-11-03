@@ -5,7 +5,7 @@
  * Organized in tabs for easy navigation. Uses vintage 1920s aesthetic.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import {
   User,
   Target,
@@ -32,7 +32,7 @@ import { BackstorySection } from './components/BackstorySection';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
-import { SheetTabs, type SheetTab } from '../SheetTabs';
+import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
 
 interface CallOfCthulhu7eCharacterViewProps {
   character: Character;
@@ -60,6 +60,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   onRoll,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const sheetTabsId = useId();
   const data = character.data as CoC7eCharacterData;
   // Worked out from the characteristics, as the editor saves them.
   const derived = cocDerivedAttributes(data);
@@ -537,8 +538,8 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   return (
     <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
       {renderHeader()}
-      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
-      <div data-sheet-body className="p-3 sm:p-6 bg-paper">
+      <SheetTabs id={sheetTabsId} tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
+      <div data-sheet-body {...sheetTabPanel(sheetTabsId, activeTab)} className="p-3 sm:p-6 bg-paper">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}

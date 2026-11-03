@@ -5,7 +5,7 @@
  * Organized in tabs for easy navigation.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import {
   Heart,
   Shield,
@@ -47,7 +47,7 @@ import { readProficiencyGroups } from '../../../utils/proficiencies';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
-import { SheetTabs, type SheetTab } from '../SheetTabs';
+import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
 import { rollTarget, useSheetRolls, type SheetRollHandler } from '../useSheetRolls';
 import type { RollMode } from '@/utils/rollModes';
 
@@ -81,6 +81,7 @@ const TABS: SheetTab<TabId>[] = [
  */
 export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll, rollMode, onSpendHitDie }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
+  const sheetTabsId = useId();
   const data = character.data as DnD5eCharacterData;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
@@ -751,8 +752,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   return (
     <div className="bg-paper rounded-lg shadow-lg overflow-hidden" {...rollRoot}>
       {renderHeader()}
-      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
-      <div data-sheet-body className="p-3 sm:p-6">{renderTabContent()}</div>
+      <SheetTabs id={sheetTabsId} tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
+      <div data-sheet-body {...sheetTabPanel(sheetTabsId, activeTab)} className="p-3 sm:p-6">{renderTabContent()}</div>
 
       {/* Advantage / Disadvantage, on a right-click or a press and hold of any d20 test */}
       {rollMenu}

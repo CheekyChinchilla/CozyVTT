@@ -19,7 +19,7 @@ const ring = (fields: Record<string, unknown>) => ({ name: 'Ring of Protection',
 async function openInventory(item: Record<string, unknown>) {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<DnD5eCharacterEditor character={dnd5eCharacter({ inventory: [item] })} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: /Inventory/ }));
+  fireEvent.click(screen.getByRole('tab', { name: /Inventory/ }));
   return async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
