@@ -6070,9 +6070,10 @@ paths:
       summary: Delete asset
       description: |
         Delete asset. A personal asset, its owner or an admin; a campaign
-        asset, its uploader while still a member of that campaign, the
-        campaign's DM, or an admin; a global asset, an admin or the uploading
-        global asset manager.
+        asset, the campaign's DM, an admin, or its uploader while still a
+        member of that campaign and while nothing but their own characters,
+        the tokens they control and the documents they wrote uses it; a
+        global asset, an admin or the uploading global asset manager.
 
         Removes the database row, the file and its thumbnail (if any), and
         for a document every share of it with a campaign. Deleting a user's
@@ -6137,7 +6138,13 @@ paths:
             for its scope: "Only admins or the uploading global asset manager
             can delete global assets", "Only the owner can delete personal
             assets" or "Only the uploader while a member of the campaign, its
-            DM, or an admin can delete campaign assets".
+            DM, or an admin can delete campaign assets". A campaign asset's
+            uploader who does not run the campaign, while anything else uses
+            it (a map, another member's character, a token they do not
+            control, a creature, a template, a campaign's sound, another
+            member's document), is told "Others in the campaign use this
+            asset, so only the campaign's DM can delete it", with or without
+            `force`.
           content:
             application/json:
               schema:
@@ -6231,7 +6238,7 @@ paths:
         | Either the current or the new scope is GLOBAL | Caller has `globalAssetManager` |
         | Current scope is GLOBAL | Caller is the asset's uploader, as for deleting it |
         | Current scope is USER | Caller is the asset's owner |
-        | Current scope is CAMPAIGN | Caller is the asset's owner and still a member of that campaign, or is that campaign's DM; a CAMPAIGN asset with no campaign recorded is an admin's alone |
+        | Current scope is CAMPAIGN | Caller is that campaign's DM, or the asset's owner while still a member of that campaign and while nothing but their own characters, tokens and documents uses it; a CAMPAIGN asset with no campaign recorded is an admin's alone |
         | New scope is CAMPAIGN | Caller may place an asset of this type in the target campaign: its DM, or a player placing TOKEN art only |
 
         The "current scope" rows are the rule for deleting the asset, so a
@@ -6331,7 +6338,10 @@ paths:
             admins or the uploading global asset manager can move a global
             asset out of the library", "Only the asset owner can move personal
             assets" or "Only the asset owner or campaign DM can move this
-            asset"); a move to USER by anyone but the asset's uploader or an
+            asset"), or by a campaign asset's uploader who does not run the
+            campaign while others there use it ("Others in the campaign use
+            this asset, so only the campaign's DM can move it out of the
+            campaign"); a move to USER by anyone but the asset's uploader or an
             admin ("Only the asset's uploader can move it to their personal
             library"), since the asset would land in the uploader's library;
             or a move into a campaign the caller may not upload this type to

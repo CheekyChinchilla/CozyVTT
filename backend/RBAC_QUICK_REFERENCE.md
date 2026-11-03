@@ -447,6 +447,20 @@ other (`drawing:previewed` applies the same rule in its own loop, which skips
 the sender's socket). A map the DM has prepared but not
 switched to is therefore the DM's alone, tokens left visible on it included.
 
+## Deleting an asset, or moving it out: the uploader's own uses only
+
+Whoever may change an asset (`mayChangeAsset`) may delete it
+(`DELETE /api/assets/:id`) or move it out of its scope
+(`PATCH /api/assets/:id/scope`), with one narrowing (`mayRemoveAsset`,
+`services/assetRemoval.ts`): a campaign asset's uploader who does not run the
+campaign may do either only while nothing but their own things use it, their
+characters, the tokens they control (`controlledBy`) and the documents they
+wrote (`usedByOthersThan` in `services/assetUsage.ts`). Anything else using it
+makes it the campaign's DM's alone, so a DM who handed the seat over cannot,
+as a player, delete a picture the new DM's maps use, `force=true` or not. The
+campaign's DM and a platform admin are not narrowed, and editing a document's
+text stays with `mayChangeAsset`.
+
 ## Reading an asset: access follows use
 
 Putting an asset *into* a campaign's library, by uploading at CAMPAIGN scope or

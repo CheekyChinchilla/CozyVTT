@@ -22,10 +22,6 @@ _Nothing in progress._
 
 Bugs confirmed in a released version and not fixed yet. Each entry starts with the release it is planned for, which can move as work is scheduled. Most are marked in the code with a `TODO(<area>)` comment at the spot. "Suspected" means read from the code and not yet reproduced. Delete an entry when its fix ships, as with the rest of this file.
 
-### Fix first: these lose data
-
-- `next release` **A DM who has handed the DM seat to someone else can still delete, or move out of the campaign's library, a picture they uploaded that the new DM's maps use.** Whoever uploaded a campaign asset may change it while they are a member (`mayChangeAsset`), so as a player they can delete it with `force=true`, a prepared map's picture included, and every map using it loses its picture; the refusal without `force` tells them a map uses it. A picture one of the campaign's maps uses should be the campaign's DM's alone to delete or move (`routes/assets.ts`).
-
 ### Character sheets
 
 - `after the next release` **On a wider screen, an editor's two notes under the portrait can be drawn over each other,** when the message for a refused picture and **Saves as personal token** show together (the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors).

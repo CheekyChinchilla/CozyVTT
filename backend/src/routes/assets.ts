@@ -33,6 +33,7 @@ import {
   assetChangeFactsFor,
 } from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
+import { mayRemoveAsset } from '../services/assetRemoval';
 import { recordDocumentPictures, assetIdsNamedInBytes, assetIdsNamedInFile } from '../services/sharedDocumentPictures';
 import { UpdateAssetScopeSchema } from '../validators/assetScope';
 import { removeAvatars, clearAvatarIfNoneLeft } from '../services/avatars';
@@ -679,10 +680,18 @@ const MOVE_REFUSALS: Record<AssetScopes, string> = {
   CAMPAIGN: 'Only the asset owner or campaign DM can move this asset',
 };
 
+/** Why an uploader who does not run the campaign may not delete, or move, an asset others there use (mayRemoveAsset). */
+const USED_BY_OTHERS = {
+  delete: "Others in the campaign use this asset, so only the campaign's DM can delete it",
+  move: "Others in the campaign use this asset, so only the campaign's DM can move it out of the campaign",
+};
+
 /**
  * DELETE /api/assets/:id
  * Delete an asset
- * Requires: Authentication + ownership or campaign DM
+ * Requires: Authentication + ownership or campaign DM. A campaign asset's
+ * uploader who does not run the campaign is refused with 403 while anything
+ * but their own characters, tokens and documents uses it (mayRemoveAsset).
  *
  * Answers 409 with code ASSET_IN_USE and the list of uses while a map, token,
  * character, template, creature or campaign setting still names the asset,
@@ -706,16 +715,14 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
 
     const isAdmin = req.session.platformRole === 'ADMIN';
 
-    // Scope-based permission matrix, shared with the scope move and the
-    // document editor (mayChangeAsset).
-    // TODO(assets): an uploader who is still a member may change a campaign
-    // asset (mayChangeAsset), so a DM who handed the seat over can, as a
-    // player, delete with force=true, or move out of the campaign with
-    // PATCH /:id/scope, a picture they uploaded that the new DM's maps use, a
-    // prepared map's included; and the 409 without force tells them some
-    // map uses it. A picture one of the campaign's maps uses should be the
-    // campaign's DM's alone to delete or move.
-    if (!(await mayChangeAsset(asset, userId, isAdmin))) {
+    // Scope-based permission matrix, shared with the scope move
+    // (mayRemoveAsset, which narrows mayChangeAsset for a campaign asset's
+    // uploader who does not run the campaign).
+    const removal = await mayRemoveAsset(asset, userId, isAdmin);
+    if (!removal.allowed) {
+      if (removal.reason === 'used-by-others') {
+        return res.status(403).json({ error: 'Forbidden', message: USED_BY_OTHERS.delete });
+      }
       // One the caller may not even read is answered as if it were not there.
       if (!(await canReadAssetFile(asset, req))) {
         return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
@@ -912,7 +919,7 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
 /**
  * PUT /api/assets/documents/:id/content
  * Replace the text of a plain text or Markdown document.
- * Requires: whoever may delete it (mayChangeAsset): for a campaign's document
+ * Requires: whoever may change it (mayChangeAsset): for a campaign's document
  * its uploader while still a member, the campaign's DM, or an admin; for a
  * global one an admin, or its uploader while they manage global assets; for a
  * personal one its uploader, or an admin
@@ -1586,9 +1593,10 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
  *
  * Permission matrix:
  *   Admin → any move
- *   Moving out of a scope → whoever may delete the asset there (mayChangeAsset):
+ *   Moving out of a scope → whoever may delete the asset there (mayRemoveAsset):
  *     GLOBAL: its uploader while a global asset manager; USER: its owner;
- *     CAMPAIGN: its uploader while still a member, or the campaign's DM
+ *     CAMPAIGN: the campaign's DM, or its uploader while still a member and
+ *     while nothing but their own characters, tokens and documents uses it
  *   Moving to or from GLOBAL → also a global asset manager
  *   Moving to CAMPAIGN → also whoever may upload that type there
  *
@@ -1670,10 +1678,12 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     if (!isAdmin) {
       // Moving out of where it is: whoever may delete it there. A global asset
       // manager moving another manager's global asset out of the library
-      // would take it from every DM, which deleting it forbids. (A former
-      // DM's old campaign pictures: see the TODO(assets) at DELETE /:id.)
-      if (!(await mayChangeAsset(asset, userId, false))) {
-        return res.status(403).json({ error: 'Forbidden', message: MOVE_REFUSALS[asset.scope] });
+      // would take it from every DM, which deleting it forbids; a campaign
+      // asset others there use is its DM's alone, a former DM's included.
+      const removal = await mayRemoveAsset(asset, userId, false);
+      if (!removal.allowed) {
+        const message = removal.reason === 'used-by-others' ? USED_BY_OTHERS.move : MOVE_REFUSALS[asset.scope];
+        return res.status(403).json({ error: 'Forbidden', message });
       }
 
       // A personal asset is its uploader's, so only they move one there. A
