@@ -80,7 +80,27 @@ export function isSameOriginPath(url: string): boolean {
   return !/^[a-z][a-z0-9+.-]*:/i.test(url) && (url.startsWith('/') || url.includes('..') || url.includes('\\'));
 }
 
-/** Exactly `/api/assets/{dir}/{uuid}` for one of the asset directories, and nothing more. */
+/**
+ * A map picture's address with its version: a drawn map's picture is
+ * written over in place (PUT /api/assets/:id/picture), and the map is given
+ * the address with a new version each time, so every viewer's browser asks
+ * for the new picture.
+ */
+export function mapPictureAddress(assetId: string, version: number): string {
+  return `/api/assets/maps/${assetId}?v=${version}`;
+}
+
+/** Exactly `/api/assets/{dir}/{uuid}` for one of the asset directories. */
+const EXACT_ASSET_ADDRESS = /^\/api\/assets\/(?:maps|tokens|avatars|audio|documents)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Exactly `/api/assets/{dir}/{uuid}` for one of the asset directories, and
+ * nothing more, but for a map picture's version (`?v=` and up to 16 digits,
+ * as mapPictureAddress writes it), which names the same asset.
+ */
 export function isExactAssetAddress(url: string): boolean {
-  return /^\/api\/assets\/(?:maps|tokens|avatars|audio|documents)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url);
+  const query = url.indexOf('?');
+  if (query === -1) return EXACT_ASSET_ADDRESS.test(url);
+  const address = url.slice(0, query);
+  return /^\?v=\d{1,16}$/.test(url.slice(query)) && /^\/api\/assets\/maps\//i.test(address) && EXACT_ASSET_ADDRESS.test(address);
 }

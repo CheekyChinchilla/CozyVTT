@@ -7059,9 +7059,12 @@ paths:
 
 
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
-        address (`/api/assets/<kind>/<id>`). A bare id is stored as
-        `/api/assets/maps/<id>`. Anything else, an outside URL included, is
-        given the same prefix and so answers 403. An address naming an
+        address (`/api/assets/<kind>/<id>`). A map picture's address may carry
+        a version, `/api/assets/maps/<id>?v=<digits>` (up to 16 digits, as
+        `PUT /api/assets/{id}/picture` answers it), and is stored as given; it
+        names the same asset. A bare id is stored as
+        `/api/assets/maps/<id>`. Anything else, an outside URL or any other
+        query included, is given the same prefix and so answers 403. An address naming an
         existing asset must name one the caller can read, or the request
         answers 403 (`You do not have access to that image`), unless this
         campaign already stores that exact address somewhere, as a copy of a
@@ -7269,9 +7272,10 @@ paths:
         under the map's lock.
 
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
-        address (`/api/assets/<kind>/<id>`); a bare id is stored as
-        `/api/assets/maps/<id>`, and anything else, an outside URL included,
-        answers 403. One naming an existing asset must name one the caller
+        address (`/api/assets/<kind>/<id>`), a map picture's with a version
+        (`?v=<digits>`, up to 16 digits) or without, stored as given; a bare
+        id is stored as `/api/assets/maps/<id>`, and anything else, an outside
+        URL or any other query included, answers 403. One naming an existing asset must name one the caller
         can read, or the request answers 403 (the right to read an asset
         follows its use, so storing a reference is checked like reading it),
         unless this campaign already stores that exact address somewhere, as
