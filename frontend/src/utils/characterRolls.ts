@@ -1,6 +1,7 @@
 import type { CharacterData } from '@/types';
 import { hitDieExpression, hitDiceMaximum, spendRoll, canSpendHitDie } from './hitDice';
 import { isValidDiceExpression } from './diceExpression';
+import { attackPurpose, damagePurpose, strikePurpose } from './rollPurposes';
 
 // Re-exported so the many callers that reach for it here keep working.
 export { isValidDiceExpression };
@@ -214,7 +215,7 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
       combat.push({
         label:             `${atk.name} (Attack ${fmt(atkBonus)})`,
         expression:        atkExpr,
-        purpose:           `${atk.name} Attack`,
+        purpose:           attackPurpose(atk.name),
         supportsAdvantage: true,
       });
       // Damage roll — only if the field is a valid dice expression
@@ -222,7 +223,7 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
         combat.push({
           label:             `${atk.name} (Damage ${atk.damageRoll})`,
           expression:        atk.damageRoll,
-          purpose:           `${atk.name} Damage`,
+          purpose:           damagePurpose(atk.name),
           supportsAdvantage: false,
         });
       }
@@ -237,7 +238,7 @@ function extractDnd5eRolls(data: DnD5eCharacterData): CharacterRolls {
         combat.push({
           label:             `${atk.name} — ${label} (${roll})`,
           expression:        roll,
-          purpose:           `${atk.name} Damage (${label})`,
+          purpose:           damagePurpose(atk.name, label),
           supportsAdvantage: false,
         });
       }
@@ -406,7 +407,7 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
         combat.push({
           label:             `${strike.name} Strike ${fmt(bonus)}`,
           expression:        `1d20${fmt(bonus)}`,
-          purpose:           `${strike.name} Strike`,
+          purpose:           strikePurpose(strike.name),
           supportsAdvantage: true,
         });
       }
@@ -414,7 +415,7 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
         combat.push({
           label:             `${strike.name} Damage (${strike.damageRoll})`,
           expression:        strike.damageRoll,
-          purpose:           `${strike.name} Damage`,
+          purpose:           damagePurpose(strike.name),
           supportsAdvantage: false,
         });
       }
@@ -618,7 +619,7 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
         combat.push({
           label:             `${w.name} Damage (${damage})`,
           expression:        damage,
-          purpose:           `${w.name} Damage`,
+          purpose:           damagePurpose(w.name),
           supportsAdvantage: false,
         });
       }

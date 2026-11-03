@@ -10,6 +10,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AttacksList } from '../components/AttacksList';
+import { getCharacterRolls } from '@/utils/characterRolls';
+import { dnd5eCharacter } from './dnd5eFixture';
 
 /** The element whose title the browser shows for this one, its own or the nearest above it. */
 const shownTitle = (element: HTMLElement) => element.closest('[title]')?.getAttribute('title');
@@ -91,14 +93,34 @@ describe("an attack's damage on the sheet", () => {
     );
     fireEvent.click(screen.getByText('1d10+3'));
     expect(onRollDamage).toHaveBeenCalledTimes(1);
-    expect(onRollDamage).toHaveBeenCalledWith('1d10+3', 'Longsword — Two-handed');
+    expect(onRollDamage).toHaveBeenCalledWith('1d10+3', 'Longsword Damage (Two-handed)');
 
     const unrollable = screen.getByText('2d6 fire');
     fireEvent.click(unrollable);
-    expect(onRollDamage).toHaveBeenLastCalledWith('2d6 fire', 'Longsword — Flame Tongue');
+    expect(onRollDamage).toHaveBeenLastCalledWith('2d6 fire', 'Longsword Damage (Flame Tongue)');
     expect(onRollAttack).not.toHaveBeenCalled();
     expect(shownTitle(unrollable)).toBe('Invalid dice expression: Missing an operator between "2d6" and "fire"');
     expect(unrollable.parentElement).toHaveClass('cursor-default');
     expect(unrollable.parentElement).toHaveAttribute('data-not-a-roll');
+  });
+});
+
+describe('a damage roll\'s name', () => {
+  // The sheet named a further damage line "Longsword — Two-handed" and the
+  // Roll... picker "Longsword Damage (Two-handed)", so the Dice panel named
+  // one roll two ways. Both take it from rollPurposes.ts now.
+  it('is the one the Roll... picker gives the same roll', () => {
+    const attack = { name: 'Longsword', attackBonus: 5, damageRoll: '1d8+3', additionalDamage: [{ label: 'Two-handed', damageRoll: '1d10+3' }] };
+    const onRollAttack = vi.fn();
+    const onRollDamage = vi.fn();
+    render(<AttacksList attacks={[attack]} onRollAttack={onRollAttack} onRollDamage={onRollDamage} />);
+    fireEvent.click(screen.getByText('1d8+3'));
+    fireEvent.click(screen.getByText('1d10+3'));
+    fireEvent.click(screen.getByText('+5'));
+    const sheet = dnd5eCharacter({ attacks: [attack] });
+    const picker = getCharacterRolls(sheet.gameSystem, sheet.data).combat;
+    const named = (expression: string) => picker.find((roll) => roll.expression === expression)?.purpose;
+    expect(onRollDamage.mock.calls).toEqual([['1d8+3', named('1d8+3')], ['1d10+3', named('1d10+3')]]);
+    expect(onRollAttack.mock.calls[0]?.[1]).toBe(named('1d20+5'));
   });
 });
