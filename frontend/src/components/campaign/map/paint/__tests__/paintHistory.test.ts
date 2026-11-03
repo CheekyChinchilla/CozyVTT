@@ -86,6 +86,25 @@ describe('undo and redo', () => {
     expect(p.px[150 * 600 + 300]).toBe(1);
   });
 
+  it("tell a change's note when an undo takes it back and a redo makes it again, as often as they do", async () => {
+    const p = picture(600, 600, 1);
+    const history = createPaintHistory(bufferStore(p), { width: p.width, height: p.height, budgetBytes: 10_000_000, maxSteps: 50 });
+    const told: string[] = [];
+    const note = { undone: () => told.push('undone'), redone: () => told.push('redone') };
+    const box = { x0: 0, y0: 0, x1: 10, y1: 10 };
+    await history.change(box, () => paint(p, box, 7), note);
+    await history.change(box, () => paint(p, box, 8));
+
+    await history.undo();
+    expect(told).toEqual([]);
+    await history.undo();
+    expect(told).toEqual(['undone']);
+    await history.redo();
+    await history.undo();
+    await history.redo();
+    expect(told).toEqual(['undone', 'redone', 'undone', 'redone']);
+  });
+
   it('keep only the tiles a change touches', () => {
     const p = picture(4096, 4096);
     const store = bufferStore(p);

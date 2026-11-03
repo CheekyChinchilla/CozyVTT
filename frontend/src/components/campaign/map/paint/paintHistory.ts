@@ -98,6 +98,15 @@ export interface PaintHistoryCounts {
   tiles: number;
 }
 
+/**
+ * What a change does besides its pixels, such as the walls a room adds:
+ * told when an undo takes the change back and when a redo makes it again.
+ */
+export interface PaintStepNote {
+  undone(): void;
+  redone(): void;
+}
+
 /** A change on its way, such as a stroke being drawn. */
 export interface PaintStep<K = unknown> {
   /** Keep the tiles `box` touches that this change has not kept yet, as they are now. */
@@ -107,8 +116,9 @@ export interface PaintStep<K = unknown> {
   /**
    * Make the change: `apply` draws it, at once unless an undo or a redo is
    * under way, which it waits for. The promise settles once it is made.
+   * `note` goes with the change through every undo and redo.
    */
-  land(apply: () => void): Promise<void>;
+  land(apply: () => void, note?: PaintStepNote): Promise<void>;
   /** The change is not made: let go of what it kept. */
   drop(): void;
 }
@@ -117,7 +127,7 @@ export interface PaintHistory<K = unknown> {
   /** Start a change whose tiles are kept as it goes (PaintStep.cover). */
   begin(): PaintStep<K>;
   /** Make a change to the pixels in `box` in one go: begin, cover `box`, land. */
-  change(box: PaintBox, apply: () => void): Promise<void>;
+  change(box: PaintBox, apply: () => void, note?: PaintStepNote): Promise<void>;
   /** Undo the last change. True when there was one. */
   undo(): Promise<boolean>;
   redo(): Promise<boolean>;
@@ -134,6 +144,7 @@ export interface PaintHistory<K = unknown> {
 
 interface Step<K> {
   tiles: Array<{ tile: TileRect; kept: K }>;
+  note?: PaintStepNote;
 }
 
 export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistoryOptions): PaintHistory<K> {
@@ -196,7 +207,7 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
         }
         kept.set(key, { tile, kept: k, at: epoch });
       },
-      land(apply) {
+      land(apply, note) {
         const make = () => {
           if (over) return;
           over = true;
@@ -209,7 +220,7 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
           apply();
           epoch += 1;
           while (redoable.length > 0) release(redoable.pop()!);
-          const step = { tiles: [...kept.values()].map(({ tile, kept: k }) => ({ tile, kept: k })) };
+          const step = { tiles: [...kept.values()].map(({ tile, kept: k }) => ({ tile, kept: k })), note };
           undone.push(step);
           onTouched?.(step.tiles.map(({ tile }) => tile));
           trim();
@@ -262,7 +273,9 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
     }
     onTouched?.(step.tiles.map(({ tile }) => tile));
     epoch += 1;
-    to.push(now);
+    to.push({ ...now, note: step.note });
+    if (from === undone) step.note?.undone();
+    else step.note?.redone();
     trim();
     return true;
   };
@@ -276,10 +289,10 @@ export function createPaintHistory<K>(store: TileStore<K>, options: PaintHistory
 
   return {
     begin,
-    change(box, apply) {
+    change(box, apply, note) {
       const step = begin();
       step.cover(box);
-      return step.land(apply);
+      return step.land(apply, note);
     },
     undo: () => turn(undone, redoable),
     redo: () => turn(redoable, undone),

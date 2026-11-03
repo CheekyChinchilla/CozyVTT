@@ -77,6 +77,7 @@ const h = vi.hoisted(() => {
     campaign: { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, characters: [], status: 'ACTIVE', playersMayDraw: true, memberships: [], maps: [] as Array<{ id: string; name?: string; imageUrl?: string }> },
     updateMap: vi.fn(),
     getMap: vi.fn(),
+    addWall: vi.fn(),
     /** The draft store Paint is given; a fresh one each test. */
     drafts: { store: null as unknown },
     /** This tab, as drafts tell tabs apart, and the other tabs open now (null: the browser cannot tell). */
@@ -160,7 +161,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/services/map.service', () => ({
-  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: h.getMap },
+  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: h.getMap, addWall: h.addWall },
 }));
 
 vi.mock('@/services/api', () => {
@@ -302,6 +303,7 @@ beforeEach(() => {
   });
   h.campaign.maps = [{ id: 'map-a' }, { id: 'map-b' }];
   h.getMap.mockReset().mockImplementation(() => Promise.resolve(h.state.currentMap));
+  h.addWall.mockReset().mockImplementation((_campaignId: string, _mapId: string, wall: object) => Promise.resolve({ id: 'wall', ...wall }));
   h.updateMap.mockReset().mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
     Promise.resolve({ ...(h.state.currentMap as object), id: mapId, imageUrl: storedAs(data.imageUrl) }));
   act(() => {
@@ -653,6 +655,85 @@ describe('lines, rectangles and ellipses', () => {
     }
     expect(callsOfPicture('stroke')).toEqual([]);
     expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+});
+
+describe('a room', () => {
+  const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+  const wallsAdded = () => h.addWall.mock.calls.map(([, , wall]) => wall as object);
+  /** The four walls of the room 50,50 to 150,100, as Save adds them. */
+  const fourWalls = [
+    { x1: 50, y1: 50, x2: 150, y2: 50, type: 'wall' },
+    { x1: 150, y1: 50, x2: 150, y2: 100, type: 'wall' },
+    { x1: 150, y1: 100, x2: 50, y2: 100, type: 'wall' },
+    { x1: 50, y1: 100, x2: 50, y2: 50, type: 'wall' },
+  ];
+
+  it('paints a floor on the grid\'s corners, outlined in the colour and filled with the second, and adds its four walls only once the painting is saved', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 62, clientY: 37 }, { clientX: 148, clientY: 104 });
+    expect(callsOfPicture('rect')[callsOfPicture('rect').length - 1]?.args).toEqual([50, 50, 100, 50]);
+    expect(callsOfPicture('fill')).toHaveLength(1);
+    expect(callsOfPicture('stroke')).toHaveLength(1);
+    expect(h.addWall).not.toHaveBeenCalled();
+    await pressSave();
+    await waitFor(() => expect(wallsAdded()).toEqual(fourWalls));
+    expect(h.addWall.mock.calls.every(([campaignId, mapId]) => campaignId === 'campaign-1' && mapId === 'map-a')).toBe(true);
+  });
+
+  it('is chosen by M, and paints nothing with no width or no height', async () => {
+    await showMap();
+    await paintOn();
+    press('m');
+    expect(screen.getByRole('button', { name: 'Room' })).toHaveAttribute('aria-pressed', 'true');
+    drag({ clientX: 52, clientY: 52 }, { clientX: 60, clientY: 300 });
+    expect(callsOfPicture('rect')).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+
+  it('takes its walls back with its floor on Undo, and Redo puts them back', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 52, clientY: 52 }, { clientX: 148, clientY: 98 });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
+    await pressSave();
+    await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
+    expect(h.addWall).not.toHaveBeenCalled();
+
+    drag({ clientX: 52, clientY: 52 }, { clientX: 148, clientY: 98 });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Redo' })); });
+    await pressSave();
+    await waitFor(() => expect(wallsAdded()).toEqual(fourWalls));
+  });
+
+  it('adds a side two rooms share once, and no wall the map has already', async () => {
+    const map = { ...(h.state.currentMap as CampaignMap), wallSegments: [{ id: 'w1', x1: 150, y1: 50, x2: 50, y2: 50, type: 'wall' as const }] };
+    await showMap(map);
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    drag({ clientX: 150, clientY: 50 }, { clientX: 250, clientY: 100 });
+    await pressSave();
+    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(6));
+    const keys = wallsAdded().map((w) => JSON.stringify(w));
+    expect(new Set(keys).size).toBe(6);
+    expect(keys).not.toContain(JSON.stringify(fourWalls[0]));
+  });
+
+  it('says how many walls were not added when the map refuses one, the picture saved', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    h.addWall.mockResolvedValueOnce({}).mockRejectedValueOnce(Object.assign(new Error('400'), { response: { status: 400, data: { message: 'Maximum 5000 wall segments per map' } } }));
+    await pressSave();
+    expect(await screen.findByText('The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: Maximum 5000 wall segments per map. Draw them with the wall tool.')).toBeInTheDocument();
+    expect(h.updateMap).toHaveBeenCalled();
   });
 });
 
@@ -1279,6 +1360,39 @@ describe('drafts', () => {
     drafts().kept.set(at, new Map([['0,0', { tx: 0, ty: 0, packed: blank }], ['1,0', { tx: 1, ty: 0, packed: blank }]]));
   }
   const putBack = () => callsOn(pictureCanvas()).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
+
+  it("keeps a room's walls with the draft, takes them out when the room is undone, and adds them when the restored painting is saved", async () => {
+    await showMap();
+    await paintOn();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Room' }));
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().headers.get(key)?.walls).toHaveLength(4);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
+    act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+    await settle();
+    expect(drafts().headers.get(key)?.walls).toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it("puts a draft's room walls back with it, for Save to add", async () => {
+    const map = mapWith();
+    keepDraft(map.imageUrl ?? '');
+    const at = draftKey('me', 'campaign-1', 'map-a', 'closed-tab');
+    drafts().headers.set(at, { ...drafts().headers.get(at)!, walls: [{ x1: 0, y1: 0, x2: 100, y2: 0 }, { x1: 100, y1: 0, x2: 100, y2: 50 }] });
+    await showMap(map);
+    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    await pressSave();
+    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(2));
+    expect(h.addWall.mock.calls.map(([, , wall]) => wall)).toEqual([
+      { x1: 0, y1: 0, x2: 100, y2: 0, type: 'wall' },
+      { x1: 100, y1: 0, x2: 100, y2: 50, type: 'wall' },
+    ]);
+  });
 
   it('writes the tiles painted within 10 seconds, then only those changed since', async () => {
     await showMap();

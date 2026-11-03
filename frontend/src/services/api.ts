@@ -3,6 +3,7 @@ import { handleUnauthorized } from '@/services/unsavedWork';
 import { loadPage } from '@/services/pageLoad';
 import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
+import type { WallSegment } from '@/types/walls';
 import type {
   User,
   AdminListedUser,
@@ -1055,6 +1056,12 @@ class ApiClient {
 
   async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<{ map: CampaignMap }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/maps/${mapId}`, data);
+    return response.data;
+  }
+
+  /** Add one wall segment to a map (DM only); the server gives it its id. */
+  async addWall(campaignId: string, mapId: string, segment: Omit<WallSegment, 'id'>): Promise<{ segment: WallSegment; total: number }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/maps/${mapId}/walls`, segment);
     return response.data;
   }
 

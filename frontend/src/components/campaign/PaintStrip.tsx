@@ -8,7 +8,7 @@
  *
  * - a header: Paint, Undo, Redo, Save and Done painting;
  * - the tool's hint;
- * - the eight tools in one row that scrolls sideways, with the shared scroll
+ * - the nine tools in one row that scrolls sideways, with the shared scroll
  *   cue (on a short screen, a phone on its side, in the header's row);
  * - Colour and width, a button naming both, which opens a pop-over over the
  *   strip with the two colours, the palette, Another colour and the width,
