@@ -168,6 +168,7 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['R'], does: 'Paint a rectangle, while Paint is on', who: 'dm' },
   { keys: ['O'], does: 'Paint an ellipse, while Paint is on', who: 'dm' },
   { keys: ['M'], does: 'Paint a room, whose walls are added when it is saved, while Paint is on', who: 'dm' },
+  { keys: ['P'], does: 'Paint a stamp into a square, while Paint is on', who: 'dm' },
   { keys: ['F'], does: 'Fill an area, while Paint is on', who: 'dm' },
   { keys: ['T'], does: 'Paint a line of text, while Paint is on', who: 'dm' },
   { keys: ['I'], does: 'Take a colour from the picture, while Paint is on', who: 'dm' },

@@ -8,7 +8,7 @@
  *
  * - a header: Paint, Undo, Redo, Save and Done painting;
  * - the tool's hint;
- * - the ten tools in one row that scrolls sideways, with the shared scroll
+ * - the eleven tools in one row that scrolls sideways, with the shared scroll
  *   cue (on a short screen, a phone on its side, in the header's row);
  * - Colour and width, a button naming both, which opens a pop-over over the
  *   strip with the two colours, the palette, Another colour and the width,
@@ -30,8 +30,9 @@ import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { cn } from '@/utils/cn';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintTool } from './map/paint/usePaintSurface';
+import { PAINT_STAMPS } from './map/paint/paintStamps';
 import { labelFontSize } from './map/drawingGeometry';
-import { HINTS, nameOf, SELECTION_BUTTONS, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
+import { HINTS, nameOf, nextTurn, SELECTION_BUTTONS, turnLabel, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
 
 /** A slider a finger can take. */
 const SLIDER = 'h-11 w-full accent-brand';
@@ -235,6 +236,19 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           {nameOf(settings.colour)}, {settings.width} px
         </button>
       </div>
+
+      {tool === 'stamp' && (
+        <div role="group" aria-label="Stamp" className="flex flex-wrap gap-2 pr-2">
+          {PAINT_STAMPS.map(({ kind, label }) => (
+            <button key={kind} type="button" aria-pressed={settings.stamp === kind} onClick={() => onSettingsChange({ stamp: kind })} className={cn(CHIP, settings.stamp === kind && 'border-brand bg-brand/15')}>
+              {label}
+            </button>
+          ))}
+          <button type="button" onClick={() => onSettingsChange({ turn: nextTurn(settings.turn) })} className={CHIP}>
+            {turnLabel(settings.turn)}
+          </button>
+        </div>
+      )}
 
       {tool === 'select' && selection && (
         <div role="group" aria-label="Selection" className="flex flex-wrap gap-2 pr-2">

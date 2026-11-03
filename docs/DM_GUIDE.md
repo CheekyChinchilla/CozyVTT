@@ -228,13 +228,14 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 | **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
 | **Rectangle**, **Ellipse** | `R`, `O` | Drag from one corner to the other. Choose **Outline** (in the colour), **Filled** (with the colour) or **Outline and fill** (outlined in the colour, filled with the second colour). |
 | **Room** | `M` | Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour at the **Width**, with its corners always on the grid's corners. Its four walls are added to the map when you save, as if drawn with the wall tool, so sight and fog follow them: until then they are on your screen only, **Undo** takes them back with the floor, and your draft keeps them. A side two rooms share, or a wall the map already has, is added once. |
+| **Stamp** | `P` | Click or tap a square to paint a stamp into it: **Door**, **Double door**, **Stairs**, **Pillar**, **Chest**, **Table**, **Tree** or **Rock**, outlined in the colour and filled with the second, filling the square. **Turn** turns the next one a quarter at a time, so a door can stand in a wall running either way. A finger's drag moves the map. |
 | **Fill** | `F` | Click or tap an area to fill it with the colour: it spreads side to side and up and down, not across corners. **Tolerance** (10% to start) takes in colours that far from the one clicked, so the soft edge of a stroke fills too; at 0% only the exact colour fills. On a touch screen a finger's drag moves the map under it. If the device runs short of memory for a very large area, the fill stops with "This device could not fill an area that large.", and **Undo** takes back any part it filled. |
 | **Text** | `T` | Click or tap where a line of text goes, type it, and press `Enter`; `Esc` drops it. It is painted in the colour, its letters four times the **Width** tall, in the app's own type. A finger's drag moves the map under it. |
 | **Eyedropper** | `I` | Click or tap the picture to make its colour there the colour, and go back to the tool you had. |
 
 **Snap to grid**, for a line, a rectangle and an ellipse, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
 
-4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape, a room, a fill or a moved selection and put it back.
+4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape, a room, a stamp, a fill or a moved selection and put it back.
 5. Click **Done** at the top of the Paint panel, press `Esc` or click **Paint** again to put Paint away. A first `Esc` while you drag drops that stroke instead.
 
 While Paint is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
@@ -1050,6 +1051,7 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Paint a rectangle, while **Paint** is on | `R` |
 | Paint an ellipse, while **Paint** is on | `O` |
 | Paint a room, whose walls are added when it is saved, while **Paint** is on | `M` |
+| Paint a stamp into a square, while **Paint** is on | `P` |
 | Fill an area, while **Paint** is on | `F` |
 | Paint a line of text, while **Paint** is on | `T` |
 | Take a colour from the picture, while **Paint** is on | `I` |
