@@ -1027,6 +1027,20 @@
       ]
     },
     {
+      "method": "PUT",
+      "path": "/api/assets/:id/picture",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>",
+        "<anonymous>",
+        "<anonymous>",
+        "refuseNulCharacters",
+        "validateFileSize",
+        "validateFileType",
+        "<anonymous>"
+      ]
+    },
+    {
       "method": "GET",
       "path": "/api/assets/documents/:id",
       "handlers": [

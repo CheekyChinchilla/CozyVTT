@@ -478,12 +478,27 @@ platform admin's right to read any file: a stored reference shows the asset
 to the whole table, so an admin who is a campaign's DM may reference only what
 they could read as that DM. An address on this server must be exactly an
 asset's own (`/api/assets/<kind>/<id>`): any other same-origin path is
-refused, since every viewer's browser would request it with their own
+refused (but for a map picture's `?v=<digits>` version, which names the same
+asset), since every viewer's browser would request it with their own
 session, and because an address the check read as naming nothing was read
 differently by the exports. The campaign export and a map's UVTT export
 include only the asset files their caller may read. A map's use counts
 for a player only while it is the campaign's current map (`canReadMap`): the
 artwork and token art of a prepared map stay the DM's until they switch to it.
+
+### Saving over a drawn picture
+
+`PUT /api/assets/:id/picture` (Paint's **Save**) writes a new file over a
+picture's own. An asset the caller may not read (`canReadAsset`) answers 404;
+one that is not a drawn picture of a campaign (`isDrawnPicture` in
+`validators/assets.ts`: a `MAP` tagged exactly `cozyvtt-drawn-map`, at
+`CAMPAIGN` scope with a campaign) answers 400; and a caller who is not the
+DM of the asset's campaign answers 403, a platform admin included. The DM
+seat decides, read from the membership at the time of the request, not who
+uploaded the picture: a former DM, now a player, is refused even for a
+picture they drew, and the new DM may save over it. Only the upload's tag marks a
+drawn picture, and only the campaign's DM may upload one (`tagsAllowedOn`),
+so no other picture can be written over this way.
 The list and detail
 responses select the public fields only; `filePath` and `thumbnailPath` are the
 server's.

@@ -283,8 +283,8 @@ const ImportAssetTextSchema = z
 // export wrote, or one that is not a list, imports as none, and its entries
 // are not checked. Archives made before tags were carried have no list, and
 // their assets none. The tag kept for the pictures Paint makes is left out,
-// in any case: Paint deletes a picture on its word, and an archive may come
-// from anyone.
+// in any case: a save in Paint writes over a picture on its word, and an
+// archive may come from anyone.
 const ImportAssetTagsSchema = z
   .unknown()
   .transform((tags) => (Array.isArray(tags) && tags.length <= IMPORT_LIMITS.MAX_ASSET_TAG_ENTRIES ? tags : []))
