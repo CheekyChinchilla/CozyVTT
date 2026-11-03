@@ -9,6 +9,7 @@ import React from 'react';
 import { Sword, Target, Zap, Dices } from 'lucide-react';
 import ProficiencyIndicator, { ProficiencyRank } from './ProficiencyIndicator';
 import { diceExpressionProblem } from '@/utils/diceExpression';
+import { damagePurpose, strikePurpose } from '@/utils/rollPurposes';
 import { notARoll, rollTarget } from '../../useSheetRolls';
 
 /**
@@ -82,7 +83,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
         const attackExpr = bonus !== null
           ? (bonus >= 0 ? `1d20+${bonus}` : `1d20${bonus}`)
           : '';
-        const attackPurpose = `${strike.name} Strike`;
+        const attackPurpose = strikePurpose(strike.name);
         // Damage the dice cannot roll ("1d8+4 S") is shown and not offered as
         // a roll: its title gives the parser's reason, and a click on it never
         // falls through to the strike. The click is handed to the table,
@@ -137,7 +138,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
               {/* Damage — click separately */}
               <div
                 className={rollsDamage ? 'cursor-pointer hover:text-danger-ink' : damageProblem ? 'cursor-default' : ''}
-                onClick={onRollDamage && damageRoll !== '' ? (e) => { e.stopPropagation(); onRollDamage(damageRoll, `${strike.name} Damage`); } : undefined}
+                onClick={onRollDamage && damageRoll !== '' ? (e) => { e.stopPropagation(); onRollDamage(damageRoll, damagePurpose(strike.name)); } : undefined}
                 title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
                 {...(damageProblem ? notARoll(damageProblem) : undefined)}
               >

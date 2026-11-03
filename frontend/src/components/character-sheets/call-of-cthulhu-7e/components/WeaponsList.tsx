@@ -14,6 +14,7 @@ import { SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 import type { CoC7eWeapon } from '@/types/game-systems';
 import { cocDamageWithBonus, cocWeaponSkillValue } from '@/utils/rules/callOfCthulhu7e';
 import { diceExpressionProblem } from '@/utils/diceExpression';
+import { damagePurpose } from '@/utils/rollPurposes';
 import { notARoll } from '../../useSheetRolls';
 
 // The weapon shape lives in types/game-systems. This file used to keep its own
@@ -214,7 +215,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                       (useTableRoll). */}
                   <td
                     className={`px-3 py-2 text-center ${rollsDamage ? 'cursor-pointer hover:text-danger-ink font-semibold' : damageProblem ? 'cursor-default' : ''}`}
-                    onClick={isClickable ? (e) => { e.stopPropagation(); if (damageRoll !== '') onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
+                    onClick={isClickable ? (e) => { e.stopPropagation(); if (damageRoll !== '') onRoll!(damageRoll, damagePurpose(weapon.name)); } : undefined}
                     title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
                     {...(damageProblem ? notARoll(damageProblem) : undefined)}
                   >

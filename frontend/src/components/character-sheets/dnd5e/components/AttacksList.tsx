@@ -8,6 +8,7 @@ import React from 'react';
 import { Sword, Zap, Dices } from 'lucide-react';
 import type { DnD5eAttack } from '@/types/game-systems/dnd5e';
 import { diceExpressionProblem } from '@/utils/diceExpression';
+import { attackPurpose, damagePurpose } from '@/utils/rollPurposes';
 import { notARoll, rollTarget } from '../../useSheetRolls';
 
 /**
@@ -45,11 +46,11 @@ const AttackRow: React.FC<{
                   attack.name.toLowerCase().includes('spell');
 
   const attackExpr = `1d20${formatBonus(attack.attackBonus)}`;
-  const attackPurpose = `${attack.name} Attack`;
+  const attackRollPurpose = attackPurpose(attack.name);
   const isClickable = !!onRollAttack;
 
   const handleAttackClick = () => {
-    if (onRollAttack) onRollAttack(attackExpr, attackPurpose);
+    if (onRollAttack) onRollAttack(attackExpr, attackRollPurpose);
   };
 
   // Damage the dice cannot roll ("1d8 slashing") is shown and not offered as
@@ -61,7 +62,7 @@ const AttackRow: React.FC<{
 
   const handleDamageClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onRollDamage && attack.damageRoll) onRollDamage(attack.damageRoll, `${attack.name} Damage`);
+    if (onRollDamage && attack.damageRoll) onRollDamage(attack.damageRoll, damagePurpose(attack.name));
   };
 
   return (
@@ -70,7 +71,7 @@ const AttackRow: React.FC<{
         isClickable ? 'cursor-pointer hover:not-has-[[data-not-a-roll]:hover]:bg-accent/10 hover:not-has-[[data-not-a-roll]:hover]:border-accent/30 select-none [-webkit-touch-callout:none]' : 'hover:bg-ink/10'
       }`}
       onClick={isClickable ? handleAttackClick : undefined}
-      {...(isClickable ? rollTarget(attackExpr, attackPurpose, 'DND_5E') : undefined)}
+      {...(isClickable ? rollTarget(attackExpr, attackRollPurpose, 'DND_5E') : undefined)}
     >
       {/* Attack Name & Icon */}
       <div className="flex items-center justify-between mb-2">
@@ -148,11 +149,7 @@ const AttackRow: React.FC<{
                     onRollDamage
                       ? (e) => {
                           e.stopPropagation();
-                          // TODO(sheets): the Roll... picker sends this roll as
-                          // "<attack> Damage (<label>)" (characterRolls.ts), so
-                          // the Dice panel names one roll two ways. Right: one
-                          // purpose, from a helper both import.
-                          onRollDamage(roll, `${attack.name} — ${label}`);
+                          onRollDamage(roll, damagePurpose(attack.name, label));
                         }
                       : undefined
                   }
