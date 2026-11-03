@@ -249,9 +249,9 @@ async function showMap(map = mapWith(), { load = true } = {}) {
 }
 
 async function paintOn() {
-  await screen.findByRole('button', { name: 'Paint' });
-  fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
-  expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+  await screen.findByRole('button', { name: 'Mapmaker' });
+  fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
+  expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
 }
 
 /** A mouse drag from `from` to `to`, through the middle. */
@@ -278,7 +278,7 @@ let saves = 0;
  * writes over the map's picture, when it is asked.
  */
 async function pressSave() {
-  await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' })); });
+  await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Save' })); });
   const asked = screen.queryByRole('dialog', { name: "Overwrite the map's picture?" });
   if (asked) await act(async () => { fireEvent.click(within(asked).getByRole('button', { name: 'Save over it' })); });
 }
@@ -323,7 +323,7 @@ afterEach(() => {
 describe('where Paint is offered', () => {
   it('on a drawn map, to the DM', async () => {
     await showMap();
-    expect(await screen.findByRole('button', { name: 'Paint' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Mapmaker' })).toBeInTheDocument();
   });
 
   it.each([
@@ -335,21 +335,21 @@ describe('where Paint is offered', () => {
     await showMap();
     await act(async () => { await Promise.resolve(); });
     expect(h.getAsset).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mapmaker' })).toBeNull();
   });
 
   it('never to a player, who is not even asked about the picture', async () => {
     h.set({ userRole: 'PLAYER' });
     await showMap();
     await act(async () => { await Promise.resolve(); });
-    expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mapmaker' })).toBeNull();
     expect(h.getAsset).not.toHaveBeenCalled();
   });
 
   it('on a map with no picture, which it opens blank at the map\'s size, its notice out of the way', async () => {
     await showMap(mapWith({ imageUrl: '' }), { load: false });
     expect(screen.getByText('This map has no picture.')).toBeInTheDocument();
-    expect(screen.getByText(/or paint one with Paint/)).toBeInTheDocument();
+    expect(screen.getByText(/or draw one with Mapmaker/)).toBeInTheDocument();
     await paintOn();
     const canvas = pictureCanvas();
     expect(canvas).toBeDefined();
@@ -392,7 +392,7 @@ describe('where Paint is offered', () => {
     const map = mapWith();
     act(() => { usePaintStore.getState().openWhenShown(map.id); });
     await showMap(map);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
     expect(usePaintStore.getState().openOnMapId).toBeNull();
   });
 });
@@ -426,7 +426,7 @@ describe('the brush', () => {
     expect(take(terrain()).some((c) => c.method === 'drawImage' && c.args[0] === canvas)).toBe(true);
   });
 
-  it('lands where the pointer is after the map\'s grid size changes, as Edit Map may change it while Paint is on', async () => {
+  it('lands where the pointer is after the map\'s grid size changes, as Edit Map may change it while Mapmaker is on', async () => {
     await showMap();
     await paintOn();
     // The picture, 1,000 pixels, is now stretched over 20 squares of 100.
@@ -469,15 +469,15 @@ describe('the brush', () => {
     press('Escape');
     mouse.up(input(), { clientX: 200, clientY: 150 });
     expect(strokesOn(pictureCanvas())).toEqual([]);
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
     press('Escape');
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('changes width with [ and ], in the panel too', async () => {
     await showMap();
     await paintOn();
-    const panel = screen.getByRole('region', { name: 'Paint' });
+    const panel = screen.getByRole('region', { name: 'Mapmaker' });
     expect(within(panel).getByText('6 px')).toBeInTheDocument();
     press(']');
     expect(within(panel).getByText('8 px')).toBeInTheDocument();
@@ -572,7 +572,7 @@ describe('the eraser', () => {
   it('erases to the map\'s own colour whatever the second colour, offering no colour to choose, and the brush keeps its own', async () => {
     await showMap();
     await paintOn();
-    const panel = screen.getByRole('region', { name: 'Paint' });
+    const panel = screen.getByRole('region', { name: 'Mapmaker' });
     fireEvent.click(within(panel).getByRole('button', { name: /^Second colour/ }));
     fireEvent.click(within(panel).getByRole('button', { name: 'Stone' }));
     expect(within(panel).getByRole('button', { name: /^Second colour/ })).toHaveAccessibleName('Second colour: Stone');
@@ -589,7 +589,7 @@ describe('the eraser', () => {
 
 describe('lines, rectangles and ellipses', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
-  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
   const last = (calls: Call[]) => calls[calls.length - 1];
 
   it('paint a line from the press to the lift, drawn on the overlay as it goes', async () => {
@@ -662,7 +662,7 @@ describe('lines, rectangles and ellipses', () => {
 
 describe('a room', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
-  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
   const wallsAdded = () => h.addWall.mock.calls.map(([, , wall]) => wall as object);
   /** The four walls of the room 50,50 to 150,100, as Save adds them. */
   const fourWalls = [
@@ -741,7 +741,7 @@ describe('a room', () => {
 
 describe('a selection', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
-  const panel = () => within(screen.getByRole('region', { name: 'Paint' }));
+  const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
   const choose = (tool: string) => fireEvent.click(panel().getByRole('button', { name: tool }));
   /** Where a drawImage onto the picture put its pixels: x, y, width, height. */
   const drawnAt = () => callsOfPicture('drawImage').map((c) => c.args.slice(-4));
@@ -831,7 +831,7 @@ describe('a selection', () => {
 
 describe('a stamp', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
-  const panel = () => within(screen.getByRole('region', { name: 'Paint' }));
+  const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
 
   it('paints the stamp chosen into the square clicked, turned as chosen, as one change', async () => {
     await showMap();
@@ -892,7 +892,7 @@ describe('a stamp', () => {
 
 describe('polygons and curves', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
-  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
   const click = (x: number, y: number) => {
     mouse.down(input(), { clientX: x, clientY: y });
     mouse.up(input(), { clientX: x, clientY: y });
@@ -957,7 +957,7 @@ describe('polygons and curves', () => {
 
 describe('textures', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
-  const panel = () => within(screen.getByRole('region', { name: 'Paint' }));
+  const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
   const choose = (tool: string) => fireEvent.click(panel().getByRole('button', { name: tool }));
   const texture = (name: string) => fireEvent.change(panel().getByRole('combobox', { name: 'Texture' }), { target: { value: name } });
   /** The texture's tile: a canvas a square of the grid across. */
@@ -1004,7 +1004,7 @@ describe('textures', () => {
 });
 
 describe('the fill bucket', () => {
-  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: tool }));
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
 
   it('fills the area clicked with the colour, a tile at a time, never reading the whole picture, and undo keeps it', async () => {
     await showMap();
@@ -1063,7 +1063,7 @@ describe('the fill bucket', () => {
 });
 
 describe('text and the eyedropper', () => {
-  const panel = () => screen.getByRole('region', { name: 'Paint' });
+  const panel = () => screen.getByRole('region', { name: 'Mapmaker' });
 
   it('paint a line of text where it is tapped, in the colour, once Enter is pressed', async () => {
     await showMap();
@@ -1136,7 +1136,7 @@ describe('a picture changed elsewhere', () => {
     changePictureTo('/api/assets/maps/uploaded-1');
     await act(async () => { await Promise.resolve(); });
     expect(question()).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'false');
     // The page loads the new picture, and draws it, not the paint.
     const fresh = pictures[pictures.length - 1];
     expect(fresh.src).toBe('/api/assets/maps/uploaded-1');
@@ -1175,7 +1175,7 @@ describe('a picture changed elsewhere', () => {
     fireEvent.click(within(question()!).getByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(question()).toBeNull());
     expect(usePaintStore.getState().unsaved).toBe(true);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     expect(question()).toBeInTheDocument();
   });
 
@@ -1186,7 +1186,7 @@ describe('a picture changed elsewhere', () => {
     changePictureTo('/api/assets/maps/other-drawn');
     await act(async () => { await Promise.resolve(); });
     expect(question()).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Paint', pressed: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mapmaker', pressed: true })).toBeNull();
     expect(canvas?.width).toBe(0);
   });
 
@@ -1381,7 +1381,7 @@ describe('Paint owns the map', () => {
       nothing: () => expect(sentOf('wall')).toEqual([]),
     },
     {
-      what: 'the ruler is put away, and not offered while Paint is on',
+      what: 'the ruler is put away, and not offered while Mapmaker is on',
       arrange: () => {
         fireEvent.click(screen.getByRole('button', { name: /^Ruler/ }));
       },
@@ -1390,7 +1390,7 @@ describe('Paint owns the map', () => {
         drag({ clientX: 100, clientY: 600 }, { clientX: 300, clientY: 700 });
       },
       nothing: () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
         expect(screen.getByRole('button', { name: /^Ruler/ }).className).not.toMatch(/bg-moss-green\/20/);
       },
     },
@@ -1439,7 +1439,7 @@ describe('Paint owns the map', () => {
     await paintOn();
     fireEvent.click(screen.getByText('Walls'));
     fireEvent.click(screen.getByLabelText('Wall draw mode'));
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('places nothing dropped on the map from the roster', async () => {
@@ -1501,7 +1501,7 @@ describe('on the table\'s map', () => {
     expect(strokesOn(canvas)).toHaveLength(2);
     expect(pictureCanvas()).toBe(canvas);
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
     expect(useGameStore.getState().tokens.goblin?.position).toEqual({ x: 4, y: 15 });
     expect(question()).toBeNull();
   });
@@ -1519,7 +1519,7 @@ describe('on the table\'s map', () => {
     await pressSave();
     await waitFor(() => expect(usePaintStore.getState().unsaved).toBe(false));
     expect(question()).toBeNull();
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
     // And painting goes on, on the picture saved.
     drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
@@ -1545,11 +1545,11 @@ describe('a new picture for the map on screen', () => {
     await act(async () => { await Promise.resolve(); });
     return next;
   }
-  const paintButton = () => screen.queryByRole('button', { name: 'Paint' });
+  const paintButton = () => screen.queryByRole('button', { name: 'Mapmaker' });
 
   it('is waited for, from another device\'s save: Paint opens on it once it has loaded, never on the picture before it', async () => {
     await showMap();
-    await screen.findByRole('button', { name: 'Paint' });
+    await screen.findByRole('button', { name: 'Mapmaker' });
     const before = pictures[0];
     const next = await savedOnTheTablet();
     const fresh = pictures[pictures.length - 1];
@@ -1574,7 +1574,7 @@ describe('a new picture for the map on screen', () => {
 
   it('gone from the server, the picture before it still drawn, starts Paint blank, as a map with no picture does', async () => {
     await showMap();
-    await screen.findByRole('button', { name: 'Paint' });
+    await screen.findByRole('button', { name: 'Mapmaker' });
     const before = pictures[0];
     // The map now names a picture deleted from the Asset Library: its asset answers 404, and it does not load.
     h.getAsset.mockImplementation((id: string) => (id.startsWith('gone-')
@@ -1592,7 +1592,7 @@ describe('a new picture for the map on screen', () => {
 
   it('that fails to load keeps its notice and Paint not offered: Paint never opens over it on the picture before it', async () => {
     await showMap();
-    await screen.findByRole('button', { name: 'Paint' });
+    await screen.findByRole('button', { name: 'Mapmaker' });
     await savedOnTheTablet();
     pictures[pictures.length - 1].fail();
     expect(screen.getByText('Failed to load map image')).toBeInTheDocument();
@@ -1631,7 +1631,7 @@ describe('drafts', () => {
     await showMap();
     await paintOn();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Room' }));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Room' }));
     drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
     act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
     await settle();
@@ -1649,9 +1649,9 @@ describe('drafts', () => {
     const at = draftKey('me', 'campaign-1', 'map-a', 'closed-tab');
     drafts().headers.set(at, { ...drafts().headers.get(at)!, walls: [{ x1: 0, y1: 0, x2: 100, y2: 0 }, { x1: 100, y1: 0, x2: 100, y2: 50 }] });
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
     await pressSave();
     await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(2));
     expect(h.addWall.mock.calls.map(([, , wall]) => wall)).toEqual([
@@ -1703,12 +1703,12 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '', new Date(2026, 10, 2, 14, 5).getTime());
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeInTheDocument();
     expect(within(restoreQuestion()!).getByText(`Restore your unsaved painting from ${draftTime(new Date(2026, 10, 2, 14, 5).getTime())}?`)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'false');
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
     expect(putBack()).toEqual([[0, 0], [256, 0]]);
     expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
     await waitFor(() => expect(restoreQuestion()).toBeNull());
@@ -1718,7 +1718,7 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
     await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
@@ -1733,9 +1733,9 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
   }
   /** Save, put Paint away, and let the picture saved load, so nothing of Paint's is held. */
   async function saveAndPutAway() {
@@ -1755,18 +1755,18 @@ describe('drafts', () => {
     expect(drafts().headers.has(closedKey)).toBe(false);
     expect(drafts().headers.has(key)).toBe(true);
     await saveAndPutAway();
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeNull();
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('offers nothing once a closed tab\'s draft taken over is saved at once, before its own draft is written', async () => {
     await restoreClosedTabs();
     await saveAndPutAway();
     expect(drafts().headers.size).toBe(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeNull();
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('does not bring back a closed tab\'s draft taken over and discarded at once', async () => {
@@ -1778,9 +1778,9 @@ describe('drafts', () => {
     await settle();
     expect(drafts().headers.size).toBe(0);
     pictures[pictures.length - 1].load();
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeNull();
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('keeps two tabs\' drafts of one map apart: another tab still open is neither offered nor cut', async () => {
@@ -1828,13 +1828,13 @@ describe('drafts', () => {
     render(<MapCanvas />);
     pictures[0]?.load();
     await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'false');
     await act(async () => {
       vi.advanceTimersByTime(DRAFT_LOOKUP_MS);
       for (let i = 0; i < 5; i += 1) await Promise.resolve();
     });
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('waits for the draft of a map shown behind a write still under way, at most 3 seconds, and keeps drafts on', async () => {
@@ -1854,13 +1854,13 @@ describe('drafts', () => {
     act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
     pictures[pictures.length - 1].load();
     await act(async () => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); });
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'false');
     await act(async () => {
       vi.advanceTimersByTime(DRAFT_LOOKUP_MS);
       for (let i = 0; i < 5; i += 1) await Promise.resolve();
     });
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
     await act(async () => { finish(); });
     await settle();
     vi.useRealTimers();
@@ -1908,14 +1908,14 @@ describe('drafts', () => {
     const { finish } = await lookupBehindASlowWrite();
     await finish();
     await settle();
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeInTheDocument();
   });
 
   it('keeps aside, and offers later, a draft found only after a canvas was opened on its map: its writes never take it', async () => {
     const { finish, mapB } = await lookupBehindASlowWrite();
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     await finish();
     act(() => { window.dispatchEvent(new Event('pagehide')); });
@@ -1931,7 +1931,7 @@ describe('drafts', () => {
     pictures[pictures.length - 1].load();
     await pictures[pictures.length - 1].decoded();
     await waitFor(() => expect(usePaintStore.getState().mapId).toBeNull());
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeInTheDocument();
   });
 
@@ -1947,11 +1947,11 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Discard it' })); });
     await settle();
     expect(drafts().headers.has(closedKey)).toBe(false);
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
     expect(putBack()).toEqual([]);
     expect(usePaintStore.getState().unsaved).toBe(false);
   });
@@ -1960,12 +1960,12 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Not now' }));
     await waitFor(() => expect(restoreQuestion()).toBeNull());
     expect(drafts().headers.has(closedKey)).toBe(true);
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'false');
-    fireEvent.click(screen.getByRole('button', { name: 'Paint' }));
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeInTheDocument();
   });
 
@@ -1973,7 +1973,7 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     expect(restoreQuestion()).toBeInTheDocument();
     // The table moved from elsewhere.
     act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
@@ -1985,7 +1985,7 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     // The draft's tiles are read slowly: behind a large write, say.
     const tiles = drafts().tiles;
     let finish = () => undefined as void;
@@ -2007,7 +2007,7 @@ describe('drafts', () => {
   it('says so when the draft was painted on a picture changed since', async () => {
     keepDraft('/api/assets/maps/an-older-picture');
     await showMap();
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     expect(within(restoreQuestion()!).getByText(/was painted on an older picture of this map/)).toBeInTheDocument();
     expect(within(restoreQuestion()!).getByRole('button', { name: 'Restore it over this picture' })).toBeInTheDocument();
   });
@@ -2020,9 +2020,9 @@ describe('drafts', () => {
     const map = mapWith({ width: 30 });
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore it over this picture' })); });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
     const tilesDrawn = callsOn(widerCanvas()).filter((c) => c.method === 'drawImage' && c.args[0] instanceof HTMLCanvasElement).map((c) => c.args.slice(1));
     expect(tilesDrawn).toEqual([[0, 0, 384, 256], [384, 0, 384, 256]]);
     expect(callsOn(widerCanvas()).filter((c) => c.method === 'putImageData')).toEqual([]);
@@ -2032,9 +2032,9 @@ describe('drafts', () => {
     const map = mapWith();
     keepDraft(map.imageUrl ?? '');
     await showMap(map);
-    fireEvent.click(await screen.findByRole('button', { name: 'Paint' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mapmaker' }));
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
     take(pictureCanvas()!);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
@@ -2168,7 +2168,7 @@ describe('drafts', () => {
     h.set({ userRole: 'PLAYER' });
     keepDraft('');
     await showMap();
-    expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mapmaker' })).toBeNull();
     expect(restoreQuestion()).toBeNull();
   });
 });
@@ -2422,7 +2422,7 @@ describe('Save', () => {
  */
 describe('the question before Save', () => {
   const asked = () => screen.queryByRole('dialog', { name: "Overwrite the map's picture?" });
-  const panelSave = () => within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Save' });
+  const panelSave = () => within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Save' });
   async function paintedOn(map = mapWith({ name: 'Crypt' })) {
     await showMap(map);
     await paintOn();
@@ -2506,7 +2506,7 @@ describe('Download picture', () => {
       await showMap(mapWith({ name: 'Crypt: level 1' }));
       await paintOn();
       drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-      await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Paint' })).getByRole('button', { name: 'Download picture' })); });
+      await act(async () => { fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Download picture' })); });
       await waitFor(() => expect(saved).toHaveLength(1));
       expect(saved[0].type).toBe('image/png');
       expect(names).toEqual(['Crypt level 1.png']);
@@ -2524,7 +2524,7 @@ describe('paint not saved through a lost sign-in', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     act(() => { reportSignedOut(); });
     try {
-      const panel = screen.getByRole('region', { name: 'Paint' });
+      const panel = screen.getByRole('region', { name: 'Mapmaker' });
       expect(within(panel).getByText('You\'ve been signed out.')).toBeInTheDocument();
       expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
     } finally {
@@ -2646,7 +2646,7 @@ describe('paint not saved, its map gone without asking', () => {
     act(() => { h.set({ userRole: 'PLAYER' }); });
     await waitFor(() => expect(offer()).toBeInTheDocument());
     expect(within(offer()!).getByText(/You are no longer the DM, so your painting of Map A cannot be saved/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Paint' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mapmaker' })).toBeNull();
     await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Discard my painting' })); });
     await waitFor(() => expect(offer()).toBeNull());
     expect(drafts().headers.size).toBe(0);
@@ -2684,21 +2684,21 @@ describe('on the compact layout', () => {
     if (!screen.queryByRole('dialog', { name: 'Map controls' })) fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
     fireEvent.click(within(moreSheet()).getByRole('button', { name: label }));
   };
-  const strip = () => screen.queryByRole('region', { name: 'Paint' });
+  const strip = () => screen.queryByRole('region', { name: 'Mapmaker' });
 
   it('offers Paint in More, not in the band, and opens its strip at the map\'s foot', async () => {
     await showCompact();
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
-      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+      expect(within(moreSheet()).getByRole('button', { name: 'Mapmaker' })).toBeInTheDocument();
     });
-    expect(within(band()).queryByRole('button', { name: 'Paint' })).toBeNull();
-    pressRow('Paint');
+    expect(within(band()).queryByRole('button', { name: 'Mapmaker' })).toBeNull();
+    pressRow('Mapmaker');
     await waitFor(() => expect(strip()).toBeInTheDocument());
     expect(strip()!.closest('[data-map-dock]')).not.toBeNull();
     expect(strip()!.querySelector('[role="group"][aria-label="Tools"]')).not.toBeNull();
     // While it is on, More puts it away.
-    pressRow('Put Paint away');
+    pressRow('Put Mapmaker away');
     await waitFor(() => expect(strip()).toBeNull());
   });
 
@@ -2706,9 +2706,9 @@ describe('on the compact layout', () => {
     await showCompact();
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
-      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+      expect(within(moreSheet()).getByRole('button', { name: 'Mapmaker' })).toBeInTheDocument();
     });
-    pressRow('Paint');
+    pressRow('Mapmaker');
     await waitFor(() => expect(strip()).toBeInTheDocument());
     const finger = contact('touch', 3);
     finger.down(input(), { clientX: 100, clientY: 100 });
@@ -2725,9 +2725,9 @@ describe('on the compact layout', () => {
     await showCompact();
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
-      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+      expect(within(moreSheet()).getByRole('button', { name: 'Mapmaker' })).toBeInTheDocument();
     });
-    pressRow('Paint');
+    pressRow('Mapmaker');
     await waitFor(() => expect(strip()).toBeInTheDocument());
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     await act(async () => { fireEvent.click(within(strip()!).getByRole('button', { name: 'Save' })); });
@@ -2742,16 +2742,16 @@ describe('on the compact layout', () => {
     const view = await showCompact();
     await waitFor(() => {
       fireEvent.click(screen.getByRole('button', { name: 'More map controls' }));
-      expect(within(moreSheet()).getByRole('button', { name: 'Paint' })).toBeInTheDocument();
+      expect(within(moreSheet()).getByRole('button', { name: 'Mapmaker' })).toBeInTheDocument();
     });
-    pressRow('Paint');
+    pressRow('Mapmaker');
     await waitFor(() => expect(strip()).toBeInTheDocument());
     const canvas = pictureCanvas();
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     view.rerender(<Table compact={false} />);
     expect(pictureCanvas()).toBe(canvas);
-    expect(screen.getByRole('button', { name: 'Paint' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('region', { name: 'Paint' }).closest('[data-map-dock]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('region', { name: 'Mapmaker' }).closest('[data-map-dock]')).toBeNull();
     view.rerender(<Table compact />);
     expect(pictureCanvas()).toBe(canvas);
     expect(strip()!.closest('[data-map-dock]')).not.toBeNull();

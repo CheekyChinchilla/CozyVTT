@@ -4116,9 +4116,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     <Button
       onClick={togglePaint}
       variant="secondary" iconOnly className={paint.on ? 'bg-moss-green/20' : undefined}
-      aria-label="Paint"
+      aria-label="Mapmaker"
       aria-pressed={paint.on}
-      title="Paint: brush the map's picture, on your screen until it is saved"
+      title="Mapmaker: draw on the map's picture, on your screen until it is saved"
     >
       <Paintbrush className={`w-4 h-4 ${paint.on ? 'text-brand-ink' : ''}`} />
     </Button>
@@ -5063,7 +5063,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
             <p className="text-sm text-brand-ink mb-1">This map has no picture.</p>
             <p className="text-xs text-stone-gray">
               {isDM
-                ? 'Choose one in Edit Map, or paint one with Paint; its walls, tokens and fog are kept.'
+                ? 'Choose one in Edit Map, or draw one with Mapmaker; its walls, tokens and fog are kept.'
                 : 'The DM has to choose one before the map can be shown.'}
             </p>
           </div>

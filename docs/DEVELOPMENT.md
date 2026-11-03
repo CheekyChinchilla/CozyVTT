@@ -561,7 +561,7 @@ Some of those deserve a note:
 
 - **No other company's product names a feature of ours.** Describe a tool in
   CozyVTT's own words: `scripts/tests/test_product_names.py` fails on a tracked
-  file that names the commercial drawing program Paint resembles, and keep
+  file that names the commercial drawing program Mapmaker resembles, and keep
   such names out of commit messages too.
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.

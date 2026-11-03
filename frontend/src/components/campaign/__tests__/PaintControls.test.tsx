@@ -20,7 +20,7 @@ function panel(extra: Partial<PaintControlsProps> = {}) {
   return props;
 }
 
-const header = () => within(screen.getByRole('region', { name: 'Paint' })).getByRole('heading', { name: 'Paint' }).parentElement!;
+const header = () => within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('heading', { name: 'Mapmaker' }).parentElement!;
 
 describe("Paint's panel", () => {
   it('puts Save and Done in its header, before any tool', () => {
@@ -28,7 +28,7 @@ describe("Paint's panel", () => {
     const save = within(header()).getByRole('button', { name: 'Save' });
     const done = within(header()).getByRole('button', { name: 'Done painting' });
     expect(done).toHaveTextContent('Done');
-    const buttons = within(screen.getByRole('region', { name: 'Paint' })).getAllByRole('button');
+    const buttons = within(screen.getByRole('region', { name: 'Mapmaker' })).getAllByRole('button');
     expect(buttons.indexOf(save)).toBeLessThan(buttons.indexOf(screen.getByRole('button', { name: 'Brush' })));
     fireEvent.click(save);
     expect(props.onSave).toHaveBeenCalled();

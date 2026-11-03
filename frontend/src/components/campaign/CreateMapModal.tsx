@@ -665,7 +665,7 @@ export default function CreateMapModal({
                       style={{ aspectRatio: `${width} / ${height}`, backgroundColor: background, maxWidth: `calc(18rem * ${width / height})` }}
                     />
                     <p className="text-xs text-stone-gray/50 text-center leading-relaxed">
-                      The map opens on your screen only, with Paint on, while your players stay where they are.
+                      The map opens on your screen only, with Mapmaker on, while your players stay where they are.
                     </p>
                   </div>
                 ) : (

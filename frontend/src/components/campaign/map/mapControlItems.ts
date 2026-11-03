@@ -85,7 +85,7 @@ export function mapControlItems(view: MapControlsView, actions: MapControlsActio
   if (view.isDM) {
     items.push({ kind: 'separator', id: 'dm' });
     if (view.hasMap && view.paint) {
-      items.push(row('paint', view.paint === 'on' ? 'Put Paint away' : 'Paint', Paintbrush, actions.togglePaint, { title: 'Paint the map\'s picture, on your screen until it is saved' }));
+      items.push(row('paint', view.paint === 'on' ? 'Put Mapmaker away' : 'Mapmaker', Paintbrush, actions.togglePaint, { title: 'Draw on the map\'s picture, on your screen until it is saved' }));
     }
     // The stack is drawn only on a map.
     if (view.hasMap) items.push(row('tools', view.toolsShown ? 'Hide tools' : 'Show tools', Wrench, actions.toggleTools, { title: 'Fog, Walls and Lights' }));
@@ -96,7 +96,7 @@ export function mapControlItems(view: MapControlsView, actions: MapControlsActio
 
 /** What each row is about, as Map controls' tooltip names it; the colours' rows go with theirs. */
 const TOPICS: Record<string, string> = {
-  fit: 'fit', grid: 'grid', ruler: 'ruler', aoe: 'AoE shape', paint: 'Paint', tools: 'tools', 'spirit-tokens': 'spirit tokens',
+  fit: 'fit', grid: 'grid', ruler: 'ruler', aoe: 'AoE shape', paint: 'Mapmaker', tools: 'tools', 'spirit-tokens': 'spirit tokens',
 };
 
 /** Map controls' tooltip: what its rows are about, in their order. */

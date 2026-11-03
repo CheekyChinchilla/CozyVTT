@@ -877,7 +877,7 @@ Create a new map (DM only).
 
 `width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `name` may be at most 200 characters once trimmed, or the request answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default; a name or size equal to the one already stored is accepted as it is.
 
-`imageUrl` and the optional `spiritLayerUrl` may not name an asset of another kind: one that is not a map picture (type `MAP`), whatever folder an address gives, answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An address naming no existing asset is stored as sent. An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged. A map picture's address may carry a version, `/api/assets/maps/:id?v=<digits>` (up to 16 digits), as a drawn map's picture does after **Save** in Paint; it is stored as sent and names the same asset. Any other query answers `403`.
+`imageUrl` and the optional `spiritLayerUrl` may not name an asset of another kind: one that is not a map picture (type `MAP`), whatever folder an address gives, answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An address naming no existing asset is stored as sent. An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged. A map picture's address may carry a version, `/api/assets/maps/:id?v=<digits>` (up to 16 digits), as a drawn map's picture does after **Save** in Mapmaker; it is stored as sent and names the same asset. Any other query answers `403`.
 
 ---
 
@@ -1371,7 +1371,7 @@ live refresh.
 
 ### `PUT /api/assets/:id/picture`
 
-Write a new picture over a picture drawn in CozyVTT, as **Save** in Paint
+Write a new picture over a picture drawn in CozyVTT, as **Save** in Mapmaker
 does: a campaign map picture tagged `cozyvtt-drawn-map`. The asset keeps its
 id, so every address naming it shows the new picture; no earlier version is
 kept. **Only the DM of the asset's campaign**, a platform admin included in

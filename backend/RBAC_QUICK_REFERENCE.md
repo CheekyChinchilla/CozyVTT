@@ -488,7 +488,7 @@ artwork and token art of a prepared map stay the DM's until they switch to it.
 
 ### Saving over a drawn picture
 
-`PUT /api/assets/:id/picture` (Paint's **Save**) writes a new file over a
+`PUT /api/assets/:id/picture` (Mapmaker's **Save**) writes a new file over a
 picture's own. An asset the caller may not read (`canReadAsset`) answers 404;
 one that is not a drawn picture of a campaign (`isDrawnPicture` in
 `validators/assets.ts`: a `MAP` tagged exactly `cozyvtt-drawn-map`, at

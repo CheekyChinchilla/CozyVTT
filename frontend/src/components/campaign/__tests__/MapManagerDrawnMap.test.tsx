@@ -1,6 +1,6 @@
 /**
  * A map made with Draw a map opens on the DM's screen at once, as Open to
- * prepare opens one, with Paint on, and the Map Library gets out of its
+ * prepare opens one, with Mapmaker on, and the Map Library gets out of its
  * way: the players stay where they are. Its picture is known to be drawn
  * without asking. A map made from a picture stays in the library, as
  * before.
@@ -83,7 +83,7 @@ describe('a map just made', () => {
     expect(usePaintStore.getState().openOnMapId).toBe('crypt');
   });
 
-  it('does not open with Paint on later when it is not opened now: Not now kept the map on screen', async () => {
+  it('does not open with Mapmaker on later when it is not opened now: Not now kept the map on screen', async () => {
     h.created = { map: crypt, picture: drawnPicture };
     h.openToPrepare.mockResolvedValue(false);
     const onClose = await make();
