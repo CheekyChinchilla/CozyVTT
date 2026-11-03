@@ -470,8 +470,8 @@ describe('a token near the foot of the screen', () => {
     rightClick(2, 1);
     expect(sheetNamed('Low Scout')).toBeInTheDocument();
 
-    // Panned up until the centre is one square above the sheet, at 350.
-    mouse.move(surface(), { clientX: 125, clientY: 350 });
+    // Panned up until the centre is two squares above the sheet, at 300.
+    mouse.move(surface(), { clientX: 125, clientY: 300 });
     expect(screen.getByText('(2, 1)')).toBeInTheDocument();
   });
 });

@@ -779,8 +779,8 @@ describe('stepping through tokens with , and .', () => {
 
       press('.');
 
-      // Panned left until the centre is one square inside the edge, at 750.
-      mouse.move(surface(), { clientX: 750, clientY: 475 });
+      // Panned left until the centre is two squares inside the edge, at 700.
+      mouse.move(surface(), { clientX: 700, clientY: 475 });
       expect(screen.getByText('Far Scout')).toBeInTheDocument();
       expect(screen.getByText('(18, 10)')).toBeInTheDocument();
     });
@@ -883,8 +883,8 @@ describe('Enter on a token out of sight', () => {
     expect(top).toBeGreaterThanOrEqual(page.top);
     expect(left).toBeLessThanOrEqual(page.left + page.width - 160);
     expect(top).toBeLessThanOrEqual(page.top + page.height - 240);
-    // The token's centre came to one square inside the corner.
-    expect([left, top]).toEqual([page.left + 50, page.top + 50]);
+    // The token's centre came to two squares inside the corner.
+    expect([left, top]).toEqual([page.left + 100, page.top + 100]);
   });
 
   it('holds the menu inside the map at its right and bottom edges', async () => {
@@ -907,8 +907,8 @@ describe('Enter on a token out of sight', () => {
 
     press('ArrowRight', { shiftKey: true });
 
-    // Square 19's centre, x 975 on the map, is panned to one square inside the right edge.
-    mouse.move(surface(), { clientX: page.left + 750, clientY: page.top + 475 });
+    // Square 19's centre, x 975 on the map, is panned to two squares inside the right edge.
+    mouse.move(surface(), { clientX: page.left + 700, clientY: page.top + 475 });
     expect(screen.getByText('(19, 10)')).toBeInTheDocument();
   });
 });
