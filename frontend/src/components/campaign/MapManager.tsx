@@ -142,7 +142,7 @@ function MapCard({
             onClick={() => onSetActive(map)}
             disabled={isActive || isSwitchingToThis}
             title={isActive ? 'Already active' : 'Set as active map'}
-            className={`flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
+            className={`touch-target flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
               isActive
                 ? 'bg-moss-green/10 text-brand-ink/50 cursor-not-allowed'
                 : 'bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink'
@@ -185,7 +185,7 @@ function MapCard({
             onClick={() => onEdit(map)}
             title="Edit map"
             aria-label="Edit map"
-            className="p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/15 text-accent-ink transition-colors"
+            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/15 text-accent-ink transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -195,7 +195,7 @@ function MapCard({
             onClick={() => onExport(map)}
             title="Export as .uvtt file"
             aria-label="Export as .uvtt file"
-            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
+            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
@@ -206,7 +206,7 @@ function MapCard({
             disabled={isActive}
             title={isActive ? 'Cannot delete the active map' : 'Delete map'}
             aria-label={isActive ? 'Cannot delete the active map' : 'Delete map'}
-            className={`p-1.5 rounded-lg transition-colors ${
+            className={`touch-target inline-flex items-center justify-center p-1.5 rounded-lg transition-colors ${
               isActive
                 ? 'bg-danger/5 text-danger-ink/40 cursor-not-allowed'
                 : 'bg-danger/10 hover:bg-danger/15 text-danger-ink'

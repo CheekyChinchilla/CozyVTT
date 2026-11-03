@@ -205,9 +205,7 @@ export default function DiceMacroManager({
               Nothing saved yet. Add a roll below and it will appear in the dice panel.
             </p>
           ) : (
-            // TODO(ui): the Edit, Delete, Save and Cancel buttons are p-1.5 around a
-            // 16 px icon, so 28 by 28 px on a phone too. On a touch screen they
-            // should be 44 by 44 (touch-target), as the compact layout's controls are.
+            // Edit, Delete, Save and Cancel are a 16 px icon each: 44 by 44 on a touch screen.
             <ul className="space-y-1.5">
               {macros.map((macro) => (
                 <li
@@ -251,7 +249,7 @@ export default function DiceMacroManager({
                         onClick={handleSaveEdit}
                         disabled={saving}
                         aria-label={`Save changes to ${macro.name}`}
-                        className="p-1.5 rounded-lg text-success-ink hover:bg-success/10 disabled:opacity-40"
+                        className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-success-ink hover:bg-success/10 disabled:opacity-40"
                       >
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                       </button>
@@ -259,7 +257,7 @@ export default function DiceMacroManager({
                         type="button"
                         onClick={() => setEditingId(null)}
                         aria-label="Cancel editing"
-                        className="p-1.5 rounded-lg text-ink-secondary hover:bg-surface"
+                        className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-ink-secondary hover:bg-surface"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -279,7 +277,7 @@ export default function DiceMacroManager({
                         type="button"
                         onClick={() => startEditing(macro)}
                         aria-label={`Edit ${macro.name}`}
-                        className="p-1.5 rounded-lg text-ink-secondary hover:bg-surface"
+                        className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-ink-secondary hover:bg-surface"
                       >
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -288,7 +286,7 @@ export default function DiceMacroManager({
                         onClick={() => setMacroToDelete(macro)}
                         disabled={deletingId === macro.id}
                         aria-label={`Delete ${macro.name}`}
-                        className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 disabled:opacity-40"
+                        className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 disabled:opacity-40"
                       >
                         {deletingId === macro.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />

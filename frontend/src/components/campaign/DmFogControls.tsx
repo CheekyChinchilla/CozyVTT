@@ -86,7 +86,7 @@ export default function DmFogControls({
         type="button"
         aria-expanded={!collapsed}
         aria-controls={bodyId}
-        className="w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
+        className="touch-target w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
         onClick={() => {
           const next = !collapsed;
           setCollapsed(next);
@@ -101,7 +101,7 @@ export default function DmFogControls({
 
       {/* The per-map switch. Off puts an armed tool down first: a reveal box
           dragged with fog off would change nothing players can see. */}
-      <label className="flex items-center gap-2 px-1 py-0.5 text-xs text-stone-300 cursor-pointer select-none">
+      <label className="touch-target flex items-center gap-2 px-1 py-0.5 text-xs text-stone-300 cursor-pointer select-none">
         <input
           type="checkbox"
           className="w-3.5 h-3.5 accent-lime-500"
@@ -128,7 +128,7 @@ export default function DmFogControls({
       <div className="flex gap-1">
         <button
           onClick={() => onFogModeChange(fogMode === 'fog-reveal' ? null : 'fog-reveal')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+          className={`touch-target flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
             fogMode === 'fog-reveal'
               ? 'bg-lime-600/30 text-lime-400 border border-lime-500/50'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700'
@@ -141,7 +141,7 @@ export default function DmFogControls({
         </button>
         <button
           onClick={() => onFogModeChange(fogMode === 'fog-hide' ? null : 'fog-hide')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+          className={`touch-target flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
             fogMode === 'fog-hide'
               ? 'bg-warning/30 text-warning-ink border border-warning/50'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700'
@@ -169,7 +169,7 @@ export default function DmFogControls({
             in every theme, and pulses a ring round it, never its label. */}
         <button
           onClick={handleRevealAll}
-          className={`relative flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+          className={`touch-target relative flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
             confirmRevealAll
               ? 'bg-lime-500 text-stone-900'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-lime-700/30 hover:text-lime-400'
@@ -183,7 +183,7 @@ export default function DmFogControls({
         </button>
         <button
           onClick={handleHideAll}
-          className={`relative flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+          className={`touch-target relative flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
             confirmHideAll
               ? 'bg-warning text-stone-900'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
@@ -204,7 +204,7 @@ export default function DmFogControls({
         <div className="pt-1 border-t border-stone-700/50">
           <button
             onClick={handleResetExploration}
-            className={`relative w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
+            className={`touch-target relative w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
               confirmReset
                 ? 'bg-warning text-stone-900'
                 : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'

@@ -182,7 +182,7 @@ export default function DocumentsPage() {
                       href={api.getDocumentUrl(doc.id)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-lg text-ink-secondary hover:bg-surface transition-colors"
+                      className="touch-target inline-flex items-center justify-center p-2 rounded-lg text-ink-secondary hover:bg-surface transition-colors"
                       aria-label={`Open ${doc.name} in a new tab`}
                       title="Open in a new tab"
                     >
@@ -193,7 +193,7 @@ export default function DocumentsPage() {
                         type="button"
                         onClick={() => setToDelete(doc)}
                         disabled={deletingId === doc.id}
-                        className="p-2 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                        className="touch-target inline-flex items-center justify-center p-2 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                         aria-label={`Delete ${doc.name}`}
                         title="Delete"
                       >

@@ -50,7 +50,7 @@ describe('Export Campaign', () => {
     downloadCampaignExport.mockResolvedValue('saved');
     render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
 
-    fireEvent.click(screen.getByRole('switch', { name: '' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Include audio assets' }));
     fireEvent.click(exportButton());
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Campaign exported successfully', 'success'));

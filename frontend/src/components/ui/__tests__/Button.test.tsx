@@ -2,7 +2,8 @@
  * The shared button on a touch screen.
  *
  * An icon-only button was 32 pixels wide and a small one about 32 tall,
- * under the 44 by 44 a finger needs. Both carry `touch-target` (index.css),
+ * under the 44 by 44 a finger needs, and a regular one 40 to 42 tall. All but
+ * the large size carry `touch-target` (index.css),
  * which sets that minimum only where the primary pointer is coarse, so a
  * mouse keeps their sizes. jsdom evaluates no media query: what can be
  * checked here is the class; the sizes are measured in a browser.
@@ -36,11 +37,12 @@ describe('Button on a touch screen', () => {
     expect(classesOf(screen.getByRole('button', { name: 'Put back' }))).toContain('touch-target');
   });
 
-  // A regular button is already 42 pixels tall, and a large one taller.
-  it('leaves the regular and large sizes alone', () => {
+  // A regular button is 40 to 42 pixels tall, and as narrow as its icon when
+  // its words hide on a phone; a large one is taller than a finger needs.
+  it('gives the regular size a finger\'s room too, and leaves the large size alone', () => {
     render(<><Button>Save</Button><Button size="lg">Start Combat</Button></>);
 
-    expect(classesOf(screen.getByRole('button', { name: 'Save' }))).not.toContain('touch-target');
+    expect(classesOf(screen.getByRole('button', { name: 'Save' }))).toContain('touch-target');
     expect(classesOf(screen.getByRole('button', { name: 'Start Combat' }))).not.toContain('touch-target');
   });
 });

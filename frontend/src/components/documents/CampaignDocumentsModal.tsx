@@ -194,7 +194,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                     href={api.getDocumentUrl(doc.id)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1.5 rounded-lg text-ink-secondary hover:bg-surface"
+                    className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-ink-secondary hover:bg-surface"
                     aria-label={`Open ${doc.name} in a new tab`}
                     title="Open in a new tab"
                   >
@@ -205,7 +205,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       type="button"
                       onClick={() => setToUnshare(doc)}
                       disabled={busyId === doc.id}
-                      className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 disabled:opacity-40"
+                      className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 disabled:opacity-40"
                       aria-label={`Stop sharing ${doc.name}`}
                       title="Stop sharing"
                     >
@@ -217,7 +217,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       type="button"
                       onClick={() => setToDelete(doc)}
                       disabled={busyId === doc.id}
-                      className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 disabled:opacity-40"
+                      className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 disabled:opacity-40"
                       aria-label={`Delete ${doc.name}`}
                       title="Delete"
                     >

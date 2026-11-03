@@ -458,7 +458,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         {/* Filter toggle */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+          className="touch-target flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
         >
           {showFilters ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           Filters
@@ -512,7 +512,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           <button
             ref={formCreateButtonRef}
             onClick={(e) => { setEditingCreature(null); setShowCreateForm(true); formOpened(e.currentTarget); }}
-            className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+            className="touch-target flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
           >
             <Plus className="w-3 h-3" /> Create Custom
           </button>
@@ -552,7 +552,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         <div className="border-b border-moss-green/20">
           <button
             onClick={() => setShowFavorites(!showFavorites)}
-            className="w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
+            className="touch-target w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
           >
             <div className="flex items-center gap-2">
               <Star className="w-3.5 h-3.5 text-warning-ink fill-warning" />
@@ -824,8 +824,8 @@ function CreatureRow({
             {creature.source === 'srd' ? 'SRD' : 'Custom'}
           </span>
 
-          {/* Room for the favourite star */}
-          <span className="w-4.5 shrink-0" aria-hidden="true" />
+          {/* Room for the favourite star: a finger's width on a touch screen. */}
+          <span className="w-4.5 pointer-coarse:w-11 shrink-0" aria-hidden="true" />
 
           {/* Expand icon */}
           {isExpanded ? (
@@ -840,7 +840,7 @@ function CreatureRow({
         <button
           type="button"
           onClick={onToggleFavorite}
-          className="absolute top-1/2 right-11 -translate-y-1/2 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
+          className="touch-target absolute top-1/2 right-11 -translate-y-1/2 inline-flex items-center justify-center p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >

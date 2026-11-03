@@ -4137,7 +4137,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
           onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
           aria-label="Player or token to preview as"
-          className="px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
+          className="touch-target px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
         >
           {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
           {/* Looks through whichever token is selected, as , and . step. */}
@@ -4160,7 +4160,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           setDmPreviewPlayerView(next);
         }}
         disabled={isPreparing}
-        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border disabled:opacity-60 disabled:cursor-not-allowed ${
+        className={`touch-target px-3 py-1.5 rounded text-xs font-medium transition-colors border disabled:opacity-60 disabled:cursor-not-allowed ${
           dmPreviewPlayerView && !isPreparing
             ? 'bg-info/30 text-info-ink border-info/50'
             // ink/paper invert together, so this stays a legible contrast

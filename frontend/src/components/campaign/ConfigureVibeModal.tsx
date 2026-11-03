@@ -108,7 +108,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
           onClick={() => onDelete(index)}
           disabled={!canDelete}
           title={canDelete ? 'Remove this period' : 'Cannot remove the only period'}
-          className="mt-5 p-2 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="touch-target mt-5 inline-flex items-center justify-center p-2 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <Trash2 className="w-4 h-4" />
         </button>
