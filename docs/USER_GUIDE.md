@@ -231,6 +231,30 @@ Menus open as a list from the bottom of the screen: press and hold a token, a do
 
 **In a narrow browser window on a computer** the compact layout works with the mouse and the keyboard: click where you would tap, and the keys work as on the three-column page; **Esc** also closes the open sheet. Make the window 1,024 pixels wide or more for the three columns.
 
+**A phone with a notch or a home indicator** keeps the page clear of them, upright and on its side. The on-screen keyboard never covers what you type: on Android the page makes room for it, and on an iPhone an open sheet, such as the chat, rises to stand on it.
+
+### Adding CozyVTT to your home screen
+
+CozyVTT can sit on a phone's or a tablet's home screen like an app: it opens full screen, without the browser's address bar, at your dashboard. It is the same CozyVTT, from your server; nothing is installed or kept offline.
+
+**On an iPhone or an iPad (Safari):**
+
+1. Open your CozyVTT in Safari and sign in.
+2. Tap **Share** (the square with an arrow pointing up), then **Add to Home Screen**.
+3. Tap **Add**.
+
+You should see the CozyVTT icon on your home screen. Tapping it opens your dashboard full screen.
+
+**On Android (Chrome):**
+
+1. Open your CozyVTT in Chrome and sign in.
+2. Tap **⋮** (top right), then **Add to Home screen** or **Install app**.
+3. Tap **Install** or **Add**.
+
+You should see the CozyVTT icon on your home screen or in your app list.
+
+If **Install app** is missing on Android, your CozyVTT is probably reached over plain `http://`: Chrome installs only from `https://`, and offers a home-screen shortcut that opens in the browser instead. Setting up HTTPS is in [the deployment guide](DEPLOYMENT.md).
+
 ---
 
 ### Adding Maps
