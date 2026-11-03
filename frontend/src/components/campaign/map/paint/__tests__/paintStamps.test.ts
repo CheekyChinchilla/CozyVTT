@@ -55,3 +55,17 @@ describe('stampCentre', () => {
     expect(stampCentre('tree', 0, [-5, 900], 50, 1000, 800, false)).toEqual([0, 800]);
   });
 });
+
+describe('a stamp of another size', () => {
+  it('sits an odd number of squares in the middle of the square clicked, an even number on the nearest corner', () => {
+    expect(stampCentre('tree', 0, [130, 260], 50, 1000, 800, true, 2)).toEqual([150, 250]);
+    expect(stampCentre('tree', 0, [130, 260], 50, 1000, 800, true, 3)).toEqual([125, 275]);
+    expect(stampCentre('rock', 0, [130, 260], 50, 1000, 800, true, 0.5)).toEqual([125, 275]);
+  });
+
+  it('keeps a door on its grid line, growing along it', () => {
+    expect(stampCentre('door', 0, [130, 260], 50, 1000, 800, true, 2)).toEqual([150, 250]);
+    expect(stampCentre('door', 1, [130, 260], 50, 1000, 800, true, 3)).toEqual([150, 275]);
+    expect(stampCentre('double-door', 0, [130, 260], 50, 1000, 800, true, 1.5)).toEqual([125, 250]);
+  });
+});

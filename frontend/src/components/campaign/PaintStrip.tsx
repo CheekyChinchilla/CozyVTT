@@ -30,13 +30,21 @@ import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { cn } from '@/utils/cn';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintTool } from './map/paint/usePaintSurface';
-import { PAINT_STAMPS } from './map/paint/paintStamps';
+import { PAINT_STAMPS, STAMP_SIZE } from './map/paint/paintStamps';
 import { PAINT_TEXTURES } from './map/paint/paintTextures';
 import { labelFontSize } from './map/drawingGeometry';
-import { HINTS, nameOf, nextTurn, SELECTION_BUTTONS, TEXTURED_TOOLS, textureOf, turnLabel, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
+import { HINTS, nameOf, nextTurn, SELECTION_BUTTONS, squaresLabel, TEXTURED_TOOLS, textureOf, turnLabel, WIDTHLESS_TOOLS, SLOTS, STYLES, TOOLS, type PaintControlsProps, type Slot } from './PaintControls';
 
 /** A slider a finger can take. */
 const SLIDER = 'h-11 w-full accent-brand';
+
+/** What the pop-over's button says: the colour and the width, the eraser's width alone, a stamp's size, or the colour alone. */
+function overLabel(tool: PaintTool, colour: string, width: number, stampSize: number): { aria: string; shown: string } {
+  if (tool === 'eraser') return { aria: `Width: ${width} px`, shown: `${width} px` };
+  if (tool === 'stamp') return { aria: `Colour and size: ${colour}, ${squaresLabel(stampSize)}`, shown: `${colour}, ${squaresLabel(stampSize)}` };
+  if (WIDTHLESS_TOOLS.has(tool)) return { aria: `Colour: ${colour}`, shown: colour };
+  return { aria: `Colour and width: ${colour}, ${width} px`, shown: `${colour}, ${width} px` };
+}
 
 export default function PaintStrip({ settings, onSettingsChange, canUndo, canRedo, onUndo, onRedo, unsaved, onSave, saving, onDownload, signedOut = false, onClose, selection }: PaintControlsProps) {
   const [overOpen, setOverOpen] = useState(false);
@@ -151,22 +159,41 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
             </button>
           ))}
         </div>}
-        <label className="flex flex-col gap-0.5">
-          <span className="flex justify-between text-xs text-ink-muted">
-            <span>Width</span>
-            <span>{settings.width} px{tool === 'text' ? ` (letters ${labelFontSize(settings.width)} px tall)` : ''}</span>
-          </span>
-          <input
-            type="range"
-            aria-label="Width"
-            min={DRAWING_LIMITS.minWidth}
-            max={DRAWING_LIMITS.maxWidth}
-            step={1}
-            value={settings.width}
-            onChange={(e) => onSettingsChange({ width: Number(e.target.value) })}
-            className={SLIDER}
-          />
-        </label>
+        {tool === 'stamp' ? (
+          <label className="flex flex-col gap-0.5">
+            <span className="flex justify-between text-xs text-ink-muted">
+              <span>Size</span>
+              <span>{squaresLabel(settings.stampSize)}</span>
+            </span>
+            <input
+              type="range"
+              aria-label="Size"
+              min={STAMP_SIZE.min}
+              max={STAMP_SIZE.max}
+              step={STAMP_SIZE.step}
+              value={settings.stampSize}
+              onChange={(e) => onSettingsChange({ stampSize: Number(e.target.value) })}
+              className={SLIDER}
+            />
+          </label>
+        ) : !WIDTHLESS_TOOLS.has(tool) && (
+          <label className="flex flex-col gap-0.5">
+            <span className="flex justify-between text-xs text-ink-muted">
+              <span>Width</span>
+              <span>{settings.width} px{tool === 'text' ? ` (letters ${labelFontSize(settings.width)} px tall)` : ''}</span>
+            </span>
+            <input
+              type="range"
+              aria-label="Width"
+              min={DRAWING_LIMITS.minWidth}
+              max={DRAWING_LIMITS.maxWidth}
+              step={1}
+              value={settings.width}
+              onChange={(e) => onSettingsChange({ width: Number(e.target.value) })}
+              className={SLIDER}
+            />
+          </label>
+        )}
       </div>
       {tool !== 'eraser' && <div className="flex flex-wrap gap-1">
         {PAINT_COLOURS.map((colour) => (
@@ -227,14 +254,14 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
           onClick={() => setOverOpen((open) => !open)}
           aria-expanded={overOpen}
           aria-controls={overOpen ? overId : undefined}
-          aria-label={tool === 'eraser' ? `Width: ${settings.width} px` : `Colour and width: ${nameOf(settings.colour)}, ${settings.width} px`}
+          aria-label={overLabel(tool, nameOf(settings.colour), settings.width, settings.stampSize).aria}
           className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-cozy border border-ink/15 bg-paper pr-3 pl-2 text-sm text-ink transition-colors hover:bg-ink/5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
         >
           <span aria-hidden="true" className="relative block size-7">
             <span className="absolute right-0 bottom-0 block size-5 rounded-sm border border-ink/30" style={{ backgroundColor: settings.second }} />
             <span className="absolute top-0 left-0 block size-5 rounded-sm border border-ink/30" style={{ backgroundColor: settings.colour }} />
           </span>
-          {tool === 'eraser' ? `${settings.width} px` : `${nameOf(settings.colour)}, ${settings.width} px`}
+          {overLabel(tool, nameOf(settings.colour), settings.width, settings.stampSize).shown}
         </button>
       </div>
 

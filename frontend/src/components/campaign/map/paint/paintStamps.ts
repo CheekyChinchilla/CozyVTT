@@ -41,10 +41,12 @@ export type StampTurn = 0 | 1 | 2 | 3;
 
 export interface StampPlace {
   kind: StampKind;
-  /** The stamp's middle and a square's side, in the pixels of the canvas drawn on. */
+  /** The stamp's middle and its side (a square's, times its size), in the pixels of the canvas drawn on. */
   cx: number;
   cy: number;
   size: number;
+  /** Its outline's width; a twentieth of its side when not given. */
+  lineWidth?: number;
   turn: StampTurn;
   colour: string;
   second: string;
@@ -58,20 +60,28 @@ export interface StampPlace {
  * square's side, across the way the door runs; for a double door, the
  * nearest corner of the grid.
  */
-export function stampCentre(kind: StampKind, turn: StampTurn, point: PaintPoint, gridSize: number, mapWidth: number, mapHeight: number, snap: boolean): [number, number] {
+export function stampCentre(kind: StampKind, turn: StampTurn, point: PaintPoint, gridSize: number, mapWidth: number, mapHeight: number, snap: boolean, size = 1): [number, number] {
   const keep = (value: number, limit: number) => Math.min(Math.max(value, 0), limit);
   if (!snap) return [keep(point[0], mapWidth), keep(point[1], mapHeight)];
   const g = gridSize;
   const middle = (value: number, limit: number) => Math.min(Math.max(Math.floor(value / g), 0), Math.max(Math.ceil(limit / g) - 1, 0)) * g + g / 2;
   const line = (value: number, limit: number) => keep(Math.round(value / g) * g, limit);
+  // Across `squares` squares: an odd number (or less than one) sits in the
+  // middle of the square clicked, an even number on the nearest corner.
+  const span = (value: number, limit: number, squares: number) => (squares < 1 || Math.round(squares) % 2 === 1 ? middle(value, limit) : line(value, limit));
   const along = turn % 2 === 0;
-  if (kind === 'double-door') return [line(point[0], mapWidth), line(point[1], mapHeight)];
-  if (kind === 'door') return along ? [middle(point[0], mapWidth), line(point[1], mapHeight)] : [line(point[0], mapWidth), middle(point[1], mapHeight)];
-  return [middle(point[0], mapWidth), middle(point[1], mapHeight)];
+  if (kind === 'door' || kind === 'double-door') {
+    const length = kind === 'double-door' ? 2 * size : size;
+    return along ? [span(point[0], mapWidth, length), line(point[1], mapHeight)] : [line(point[0], mapWidth), span(point[1], mapHeight, length)];
+  }
+  return [span(point[0], mapWidth, size), span(point[1], mapHeight, size)];
 }
 
-/** How far a stamp reaches from its middle, in squares: a double door's two squares, the others' one with its outline. */
-export const stampReach = (kind: StampKind) => (kind === 'double-door' ? 1 : 0.55);
+/** How far a stamp `size` squares across reaches from its middle, in squares: a double door twice as far, the others half with their outline. */
+export const stampReach = (kind: StampKind, size = 1) => (kind === 'double-door' ? 1 : 0.55) * size;
+
+/** The sizes a stamp may be, in squares across. */
+export const STAMP_SIZE = { min: 0.5, max: 6, step: 0.5 } as const;
 
 /** Outline the path just made in the colour, filling it with the second first when `filled`. */
 function finish(ctx: CanvasRenderingContext2D, filled: boolean): void {
@@ -250,7 +260,7 @@ export function drawStamp(ctx: CanvasRenderingContext2D, place: StampPlace): voi
     ctx.rotate((turn * Math.PI) / 2);
     ctx.strokeStyle = colour;
     ctx.fillStyle = second;
-    ctx.lineWidth = Math.max(1, size * 0.06);
+    ctx.lineWidth = place.lineWidth ?? Math.max(1, size * 0.06);
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     SHAPES[kind](ctx, size);

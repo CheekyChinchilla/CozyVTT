@@ -117,6 +117,8 @@ export interface PaintSettings {
   stamp: StampKind;
   turn: StampTurn;
   stampSnap: boolean;
+  /** A stamp's size, in squares across (STAMP_SIZE). */
+  stampSize: number;
   /** The texture the brush, a shape's fill, a room's floor and the fill bucket paint in, or none. */
   texture: TextureKind | null;
 }
@@ -133,6 +135,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
   stamp: 'door',
   turn: 0,
   stampSnap: true,
+  stampSize: 1,
   texture: null,
 };
 
@@ -1421,14 +1424,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const m = mapRef.current;
     if (!s || !m || m.id !== s.mapId) return;
     const look = settingsRef.current;
-    const [cx, cy] = stampCentre(look.stamp, look.turn, point, m.gridSize, m.width * m.gridSize, m.height * m.gridSize, look.stampSnap);
+    const [cx, cy] = stampCentre(look.stamp, look.turn, point, m.gridSize, m.width * m.gridSize, m.height * m.gridSize, look.stampSnap, look.stampSize);
     const [sx, sy] = xy(s);
-    const reach = stampReach(look.stamp) * m.gridSize;
+    const reach = stampReach(look.stamp, look.stampSize) * m.gridSize;
     const box = { x0: Math.floor((cx - reach) * sx), y0: Math.floor((cy - reach) * sy), x1: Math.ceil((cx + reach) * sx), y1: Math.ceil((cy + reach) * sy) };
     const step = s.history.begin();
     step.cover(box);
     land(step, null, () => drawStamp(s.ctx, {
-      kind: look.stamp, cx: cx * sx, cy: cy * sy, size: m.gridSize * sx, turn: look.turn, colour: look.colour, second: look.second,
+      kind: look.stamp, cx: cx * sx, cy: cy * sy, size: m.gridSize * look.stampSize * sx, turn: look.turn, colour: look.colour, second: look.second,
+      // The outline a one-square stamp has, whatever the size.
+      lineWidth: Math.max(1, m.gridSize * sx * 0.06),
     }));
   }, [land, xy]);
 
