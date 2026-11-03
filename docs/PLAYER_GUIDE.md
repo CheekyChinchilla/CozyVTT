@@ -392,7 +392,7 @@ On a tablet or a phone your finger does what the mouse does, and a little more:
 | To | Do this |
 |---|---|
 | Move your token | Put your finger on it, slide it to the square and lift: it goes down where you lift, and stays selected. A second finger on the glass before you lift puts it back where it was. |
-| Move it in two taps | Tap your token, then tap the square. In between it stays in your hand, drawn faded on its own square with the selection ring, so you can move the map with one finger, or pinch, and keep hold of it. Slide the token from its own square to carry it, or tap the square it came from to put it back. |
+| Move it in two taps | Tap your token, then tap the square. In between it stays in your hand, drawn faded on its own square with the selection ring, its hit-point bar and its conditions, so you can move the map with one finger, or pinch, and keep hold of it. Slide the token from its own square to carry it, or tap the square it came from to put it back. |
 | Put back a token you are holding | Tap **Put back** in the bar at the top of the map, which names the token. It does what **Esc** does. |
 | Move the map | Slide one finger anywhere but on a token you can move. Pinch two fingers to zoom, about your fingers. |
 | Read a token's details | Tap it. It is selected, and its card shows at the bottom left of the map (on a phone, across its foot), as hovering it with a mouse would (see [Pointing at a token](#pointing-at-a-token)). The card lets taps through to the map under it, except on its **✕**, which closes it until you next tap a token, the same one included. |

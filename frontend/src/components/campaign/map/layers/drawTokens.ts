@@ -19,6 +19,14 @@ import { facing } from '@/utils/tokenRotation';
 /** How much of its opacity a token at zero hit points keeps. */
 export const DOWNED_TOKEN_ALPHA = 0.45;
 
+/** The held token's picture is drawn this faded, on its square or carried. */
+const HELD_TOKEN_ALPHA = 0.6;
+
+/** Whether the held token is drawn on the square it stands on. */
+function heldOnOwnSquare(token: Token, drawnAt: { x: number; y: number } | null): boolean {
+  return drawnAt !== null && drawnAt.x === token.position.x && drawnAt.y === token.position.y;
+}
+
 export interface TokenDrawState {
   tokens: readonly Token[];
   tokenImages: ReadonlyMap<string, HTMLImageElement>;
@@ -220,6 +228,8 @@ export function drawTokens(
     mapHeight,
   };
 
+  /** Whether the loop drew the held token, on its own square. */
+  let heldDrawn = false;
   for (const token of state.tokens) {
     if (!isTokenVisibleTo(token, view)) continue;
 
@@ -228,8 +238,11 @@ export function drawTokens(
     // address decides whether art is drawn, not the cache.
     const tokenImg = cachedTokenImage(token, state.tokenImages);
 
-    // Skip dragged token (drawn separately as ghost)
-    if (state.draggedToken?.id === token.id) continue;
+    // The held token is drawn here while it sits on its own square, faded,
+    // with its rings, bar and badges; carried elsewhere it is the ghost below.
+    const heldHere = state.draggedToken?.id === token.id && heldOnOwnSquare(token, state.heldDrawnAt);
+    if (state.draggedToken?.id === token.id && !heldHere) continue;
+    if (heldHere) heldDrawn = true;
 
     // Check if token is animating
     const animation = state.animatingTokens.get(token.id);
@@ -277,6 +290,7 @@ export function drawTokens(
     if (isTokenDowned(token, state.characterHpCache)) {
       ctx.globalAlpha *= DOWNED_TOKEN_ALPHA;
     }
+    if (heldHere) ctx.globalAlpha *= HELD_TOKEN_ALPHA;
     // Which way the token faces: its picture, or its letter, turns about its
     // centre. The restore below undoes it, so the rings, the hit point bar
     // and the badges drawn after stay upright. An obscured token reaches a
@@ -581,11 +595,11 @@ export function drawTokens(
     }
   }
 
-  // The held token as a faded ghost, where the hold says: under the pointer
-  // carrying it, with the square it was taken by under the pointer, or on
-  // its own square when nothing carries it (a finger has lifted, a pen is out
-  // of range).
-  if (state.draggedToken && state.heldDrawnAt) {
+  // The held token as a faded ghost under the pointer carrying it, with the
+  // square it was taken by under the pointer. On its own square (nothing
+  // carries it: a finger has lifted, a pen is out of range; or the pointer
+  // is over that square) the loop above drew it, decorations and all.
+  if (state.draggedToken && state.heldDrawnAt && !heldDrawn) {
     const draggedToken = state.draggedToken;
     const tokenImg = cachedTokenImage(draggedToken, state.tokenImages);
     const ghostX = state.heldDrawnAt.x * gridSize;
@@ -599,7 +613,7 @@ export function drawTokens(
     const ghostDisplayMode = draggedToken.displayMode || 'pog';
 
     ctx.save();
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = HELD_TOKEN_ALPHA;
     // Carried facing the way it faces now: the token as the store has it, so
     // a turn while it is held shows on the ghost. The held copy is the token
     // as it was picked up.
