@@ -17,7 +17,7 @@ import { rectFromDrag, segmentsInRect } from '../mapSelection';
 import { useWallSelection } from '../useWallSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from '../mapGeometry';
 import type { OwnEdits } from '../ownEdits';
-import { pastWallCap, refusalIn, WallSendLog } from '../wallLightCaps';
+import { answeredWithin, pastWallCap, refusalIn, WallSendLog, WALL_LIGHT_ANSWER_TIMEOUT_MS } from '../wallLightCaps';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
 
@@ -141,7 +141,7 @@ export function useWallTool({
     if (!socketInstance || !currentMap) return;
     const mapId = currentMap.id;
     const seq = sendLog.sent(true);
-    socketInstance.emit('walls:replace', ownEdits.tag({ mapId, segments }), (reply) => {
+    socketInstance.emit('walls:replace', ownEdits.tag({ mapId, segments }), answeredWithin(WALL_LIGHT_ANSWER_TIMEOUT_MS, (reply) => {
       if (mapIdRef.current !== mapId) return;
       const why = refusalIn(reply);
       if (why === null) {
@@ -153,7 +153,7 @@ export function useWallTool({
         else takeBackRef.current((walls) => carryChange(segments, before, walls));
         refuse(why);
       });
-    });
+    }));
   }, [socket, currentMap, ownEdits, refuse, sendLog, stepWallHistoryBack]);
 
   /** Send one new wall; if the server refuses it, it is taken back and the DM told why, as a list is. */
@@ -162,7 +162,7 @@ export function useWallTool({
     if (!socketInstance || !currentMap) return;
     const mapId = currentMap.id;
     const seq = sendLog.sent(false);
-    socketInstance.emit('wall:add', ownEdits.tag({ mapId, segment }), (reply) => {
+    socketInstance.emit('wall:add', ownEdits.tag({ mapId, segment }), answeredWithin(WALL_LIGHT_ANSWER_TIMEOUT_MS, (reply) => {
       if (mapIdRef.current !== mapId) return;
       const why = refusalIn(reply);
       if (why === null) {
@@ -173,7 +173,7 @@ export function useWallTool({
         takeBackRef.current((walls) => walls.filter((w) => w.id !== segment.id));
         refuse(why);
       });
-    });
+    }));
   }, [socket, currentMap, ownEdits, refuse, sendLog]);
 
   /**

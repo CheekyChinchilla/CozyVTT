@@ -32,6 +32,7 @@ import {
   assetChangeFactsFor,
 } from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
+import { recordDocumentPictures, assetIdsNamedInBytes, assetIdsNamedInFile } from '../services/sharedDocumentPictures';
 import { UpdateAssetScopeSchema } from '../validators/assetScope';
 import { removeAvatars, clearAvatarIfNoneLeft } from '../services/avatars';
 import path from 'path';
@@ -45,6 +46,8 @@ import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
 import {
   parseUploadMetadata,
+  tagsAllowedOn,
+  DRAWN_MAP_TAG_REFUSAL,
   shortenFileName,
   downloadNameOf,
   MAX_ASSET_NAME_LENGTH,
@@ -445,6 +448,13 @@ router.post(
         }
         return res.status(400).json({ error: 'Validation Error', message: metadata.message });
       }
+      // The tag Paint deletes a picture on the word of is its own upload's alone.
+      if (!tagsAllowedOn(metadata.value.tags, type, assetScope)) {
+        if (req.file?.path) {
+          await deleteFile(req.file.path);
+        }
+        return res.status(400).json({ error: 'Validation Error', message: DRAWN_MAP_TAG_REFUSAL });
+      }
       req.uploadMetadata = metadata.value;
 
       // Set asset metadata on request for file validation. The campaign comes
@@ -528,6 +538,14 @@ router.post(
         },
         select: ASSET_PUBLIC_SELECT,
       });
+
+      // What a document names is kept as it is stored, for the handouts'
+      // pictures and the delete's check; a PDF names nothing.
+      // One that cannot be read now is left to be read later.
+      if (asset.type === 'DOCUMENT') {
+        const named = await assetIdsNamedInFile(asset.id, file.path);
+        if (named) await recordDocumentPictures(asset.id, named);
+      }
 
       // A new avatar replaces the ones before it: the avatar route serves the
       // newest, and an older one left behind would come back if this one were
@@ -846,6 +864,7 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
         );
         throw error;
       });
+    await recordDocumentPictures(asset.id, assetIdsNamedInBytes(bytes));
 
     return res.status(201).json({ asset });
   } catch (error) {
@@ -914,6 +933,8 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
         data: { fileSize: bytes.length },
         select: ASSET_PUBLIC_SELECT,
       });
+      // Within the document's turn, so saves keep what each names in order.
+      await recordDocumentPictures(asset.id, assetIdsNamedInBytes(bytes));
     } catch (error) {
       // Deleted while this save was writing: the delete has already removed
       // the file, so the one written here is named by no row and is removed too.

@@ -7,6 +7,10 @@ import { jsonOrNull } from '../utils/prisma-json';
 import { canReadMap } from '../services/permissions';
 import { characterForReader } from '../utils/keeperNotes';
 import type { AuthenticatedFields } from './auth';
+import { emitNewestState } from './outgoingQueue';
+
+/** The events that carry a map's whole list of walls, lights or drawings. */
+const WHOLE_LIST_EVENTS: ReadonlySet<string> = new Set(['walls:replaced', 'lights:replaced', 'drawings:state']);
 
 /**
  * WebSocket Utility Functions
@@ -190,7 +194,10 @@ export async function emitToMapReadersAs(
       const role = (s as unknown as AuthenticatedFields).role;
       if (!canReadMap(role, mapId, currentMapId)) continue;
       const send = sendFor(role);
-      if (send) s.emit(send.event, send.data);
+      if (!send) continue;
+      // A whole list of the map's walls, lights or drawings: the newest is all a reader needs.
+      if (WHOLE_LIST_EVENTS.has(send.event)) emitNewestState(s, send.event, send.data, mapId);
+      else s.emit(send.event, send.data);
     }
   } catch (error) {
     logger.warn(`${what} not broadcast; the change stands`, { err: error, mapId });

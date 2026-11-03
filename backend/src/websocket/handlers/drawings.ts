@@ -23,6 +23,7 @@ import { ackFrom, refuseRequest } from '../ack';
 import { echoedOpId } from '../opId';
 import { campaignSockets, emitToMapReadersAs } from '../utils';
 import { withinCeiling, stateRequestAllowed, drawingPreviewLimiter, DRAWING_PREVIEWS_PER_SECOND, limiterKey } from '../shared';
+import { emitNewestState } from '../outgoingQueue';
 import {
   canReadMap, canDraw, drawRefusal, canDrawOnLayer, canEraseDrawing, eraseRefusal, drawingSentTo, DRAW_LAYER_REFUSAL,
 } from '../../services/permissions';
@@ -404,7 +405,7 @@ export function registerDrawingHandlers(io: Server, socket: AuthenticatedSocket)
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, campaign: { select: { currentMapId: true } } } });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       const drawings = await drawingsFor(mapId, 'DM');
-      socket.emit('drawings:state', { mapId, drawings: drawings.filter((d) => drawingSentTo(socket.role, d)) } satisfies DrawingsStateBroadcast);
+      emitNewestState(socket, 'drawings:state', { mapId, drawings: drawings.filter((d) => drawingSentTo(socket.role, d)) } satisfies DrawingsStateBroadcast, mapId);
     } catch (error) {
       logger.error('drawings:request failed', { err: error });
     }

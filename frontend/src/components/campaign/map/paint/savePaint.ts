@@ -2,7 +2,7 @@
 // Saving what is painted as the map's picture.
 //
 // The picture is made as a PNG and uploaded as a new campaign map picture
-// tagged drawn-map (services/drawnPicture.ts), within the server's map
+// tagged DRAWN_MAP_TAG (services/drawnPicture.ts), within the server's map
 // limit; the map is pointed at it (PUT /maps/:id { imageUrl }), its size
 // and grid unchanged, so tokens, walls, lights and fog stay where they are.
 // Then the picture the map had is deleted, if Paint made it, without force:

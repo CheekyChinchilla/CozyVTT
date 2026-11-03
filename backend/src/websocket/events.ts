@@ -8,7 +8,11 @@ import { broadcastPresence, getOnlineUserIds, clearCampaignFromLiveSockets, appl
 import logger from '../utils/logger';
 import { holdsNulCharacter, NUL_REFUSAL } from '../validators/nulCharacter';
 import { ackFrom } from './ack';
-import { stateRequestAllowed, withinCeiling, refuseOncePerNotice, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS } from './shared';
+import {
+  stateRequestAllowed, withinCeiling, refuseOncePerNotice, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS,
+  withinSocketBudget, TOO_MANY_SOCKET_EVENTS, REJOIN_EVENTS, type EventBudget,
+} from './shared';
+import { boundOutgoingQueue } from './outgoingQueue';
 import { registerTokenHandlers } from './handlers/tokens';
 import { registerDiceHandlers } from './handlers/dice';
 import { registerChatHandlers } from './handlers/chat';
@@ -42,6 +46,9 @@ import { registerDrawingHandlers } from './handlers/drawings';
 export function registerEventHandlers(io: Server): void {
   io.on('connection', async (socket: AuthenticatedSocket) => {
     logger.debug('ws connection attempt', { socketId: socket.id });
+
+    // What waits to be sent to this socket is bounded from its first packet.
+    boundOutgoingQueue(socket);
 
     // While a restore replaces the database, nobody's sign-in is the one in
     // it, and a write would land on the restored rows (services/restoreState).
@@ -81,7 +88,20 @@ export function registerEventHandlers(io: Server): void {
     // in ten seconds, as an event past its ceiling is. The event's name is
     // not text a handler stores, and an `error` a client sends is never
     // read, nor answered (below).
+    //
+    // Before that, every event this socket sends is counted together, the
+    // ones no handler takes included: past SOCKET_EVENTS_PER_SECOND it is
+    // dropped unanswered, an acknowledgement too, and the socket is told
+    // once in ten seconds. Answering each would be the flood's own reply.
+    // The join and the requests that load the map (REJOIN_EVENTS) are
+    // neither counted nor dropped: socket.io sends them after whatever the
+    // page queued while the connection was down.
+    const budget: EventBudget = { windowStart: 0, sent: 0 };
     socket.use(([event, ...args], next) => {
+      if (!REJOIN_EVENTS.has(event) && !withinSocketBudget(budget)) {
+        refuseOncePerNotice(socket, null, 'events', TOO_MANY_SOCKET_EVENTS);
+        return;
+      }
       if (event === 'error' || !holdsNulCharacter(args)) {
         next();
         return;
@@ -325,10 +345,11 @@ export function registerEventHandlers(io: Server): void {
     // PING/PONG HEARTBEAT
     // Connection health monitoring
     // ============================================
-    // TODO(play): ping is answered every time, with no ceiling, so a client
-    // that sends them without reading fills the server's write buffer for its
-    // socket. Count it as withinCeiling counts the events in SOCKET_CEILINGS.
+    // Under a ceiling of its own, as every event a client sends is: each
+    // is answered, and a client that sent them without reading filled the
+    // server's memory with the answers.
     socket.on('ping', () => {
+      if (!withinCeiling(socket, 'ping')) return;
       socket.emit('pong', { timestamp: new Date().toISOString() });
     });
 

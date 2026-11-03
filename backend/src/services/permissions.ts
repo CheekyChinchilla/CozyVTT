@@ -309,6 +309,22 @@ export interface CampaignMapPictures {
   atOtherTables: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
+/** The asset ids a map names as its picture, base layer and spirit layer. */
+function picturesNamedBy(map: MapPictures): string[] {
+  return [map.imageUrl, map.baseLayerUrl, map.spiritLayerUrl].flatMap((address) => extractAssetId(address) ?? []);
+}
+
+/**
+ * The asset ids a map shows a member while a table they sit at is on it:
+ * its picture and base layer, and its spirit layer if they see that plane.
+ * What a table shows, written once for a member's own table
+ * (campaignMapPictures) and their others (picturesOnTables), so a new
+ * picture of a map cannot show at one and stay hidden at the other.
+ */
+function picturesShownBy(map: MapPictures, seesSpiritPlane: boolean): string[] {
+  return [map.imageUrl, map.baseLayerUrl, seesSpiritPlane ? map.spiritLayerUrl : null].flatMap((address) => extractAssetId(address) ?? []);
+}
+
 /**
  * The pictures of a campaign's maps as one member who is not its DM sees
  * them. `maps` may be every map of the campaign or only those naming the
@@ -324,12 +340,9 @@ export function campaignMapPictures(
   const named = new Set<string>();
   const shown = new Set<string>();
   for (const map of maps) {
-    const picture = extractAssetId(map.imageUrl);
-    const base = extractAssetId(map.baseLayerUrl);
-    const spirit = extractAssetId(map.spiritLayerUrl);
-    for (const id of [picture, base, spirit]) if (id) named.add(id);
+    for (const id of picturesNamedBy(map)) named.add(id);
     if (map.id !== currentMapId) continue;
-    for (const id of [picture, base, seesSpiritPlane ? spirit : null]) if (id) shown.add(id);
+    for (const id of picturesShownBy(map, seesSpiritPlane)) shown.add(id);
   }
   return { named, shown };
 }
@@ -387,9 +400,7 @@ function picturesOnTables(tables: Tables): Map<string, Set<string>> {
   for (const map of tables.maps) {
     if (tables.currentMapOf.get(map.campaignId) !== map.id) continue;
     const spiritShown = runs.has(map.campaignId) || tables.seesSpirit.get(map.campaignId) === true;
-    const ids = [extractAssetId(map.imageUrl), extractAssetId(map.baseLayerUrl), spiritShown ? extractAssetId(map.spiritLayerUrl) : null];
-    for (const id of ids) {
-      if (!id) continue;
+    for (const id of picturesShownBy(map, spiritShown)) {
       const campaigns = showing.get(id) ?? new Set<string>();
       campaigns.add(map.campaignId);
       showing.set(id, campaigns);
@@ -419,6 +430,12 @@ async function picturesAtTables(tables: Tables): Promise<Map<string, Set<string>
  * maps naming `onlyAssetId`, with the spirit planes they see. The spirit
  * planes are read only where a map is read.
  */
+// TODO(assets): with no asset named, this reads every map of every campaign
+// the user is a member of, on every asset list by a member who is not the
+// DM somewhere; maps per campaign are not capped, and a map may name an
+// asset that does not exist. picturesOnTables needs only the current maps,
+// and `named` only the maps naming one of the campaigns' MAP assets: read
+// those alone.
 async function tablesOf(userId: string, onlyAssetId?: string): Promise<Tables> {
   const memberships = await prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } });
   const campaignIds = memberships.map((m) => m.campaignId);

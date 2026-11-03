@@ -7,7 +7,7 @@ through the `pg` driver (`src/config/prismaClient.ts`).
 
 ## Models
 
-The schema is in [`schema.prisma`](./schema.prisma) — 23 models grouped by domain:
+The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by domain:
 
 **User & auth**
 - `User` — accounts with optional MFA, which an administrator must turn on within 7 days
@@ -47,9 +47,16 @@ The schema is in [`schema.prisma`](./schema.prisma) — 23 models grouped by dom
   campaign's members read it, and `canReadAsset` in `services/permissions.ts`
   is where that is decided. Deleting the campaign removes the link and keeps the
   document; deleting the asset removes every link to it
+- `DocumentPicture` — one asset a plain text or Markdown document names by its
+  address (`/api/assets/<kind>/<id>`), read from the first 1 MiB of its text,
+  at most 200 of them, when it is uploaded, written or saved
+  (`services/sharedDocumentPictures.ts`). The pictures a shared handout shows
+  players, and what keeps a picture from a delete that is not forced, are read
+  from here, never from the files. It goes with the document and with the
+  asset it names
 
 **Assets & messages**
-- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN. When the uploader's account is deleted, `uploadedById` becomes null on the uploads that stay (those in a campaign or the global library, and personal ones still in use or shared into a campaign); the avatar and every other personal upload are deleted, row and file (`services/accountDeletion.ts`)
+- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN. When the uploader's account is deleted, `uploadedById` becomes null on the uploads that stay (those in a campaign or the global library, and personal ones still in use or shared into a campaign); the avatar and every other personal upload are deleted, row and file (`services/accountDeletion.ts`). `picturesReadAt` is when a document's text was last read for `DocumentPicture`; it is null on every other asset, and on a document stored before those rows were kept until a request has read it
 - `Message` — chat history (player, DM, system, dice rolls, character actions, whispers). A `WHISPER` is for one member, named in `recipientId`; when that account is deleted the column becomes null and the whisper stays
 - `DiceRoll` — historical dice rolls with breakdowns; `userId` becomes null when the roller's account is deleted, and the roll stays
 

@@ -1,13 +1,13 @@
 // ============================================
 // Uploading a picture Paint made: into the campaign's library, as a map
-// picture tagged drawn-map, through the same upload as any other. Written
+// picture tagged DRAWN_MAP_TAG, through the same upload as any other. Written
 // once here for Draw a map and Save, so the fields and their order cannot
 // differ between them.
 // ============================================
 
 import { api } from './api';
 import { AssetScope, AssetType, type Asset } from '@/types';
-import { DRAWN_MAP_TAG } from '@/components/campaign/map/paint/drawnMapSize';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 import { formatUploadLimit, getUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorStatus } from '@/utils/errors';
 

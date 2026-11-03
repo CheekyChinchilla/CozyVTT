@@ -5,8 +5,9 @@
  * the busiest real use of its event, by the web client at a fast table or by
  * the community MCP bridge, whichever is higher. This plays that use at the
  * rates the clients actually send, measures the busiest window for each user
- * and event from what was sent, and fails if any ceiling is under five times
- * it, or if anything sent was refused or lost.
+ * and event from what was sent, and for each socket every event together,
+ * and fails if any ceiling is under five times it, or if anything sent was
+ * refused or lost.
  *
  * The web client, at its fastest:
  * - a drag is a pick-up, a frame at most every 16 ms, and a drop; a fast
@@ -50,7 +51,7 @@ import { prisma } from '../../config/database';
 import { createWsTestServer, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import type { AckAnswer } from '../ack';
 import { toJson, readTokens } from '../../utils/prisma-json';
-import { SOCKET_CEILINGS, MAX_SOCKETS_PER_USER, type CeilingEvent } from '../shared';
+import { SOCKET_CEILINGS, MAX_SOCKETS_PER_USER, SOCKET_EVENTS_PER_SECOND, type CeilingEvent } from '../shared';
 import { REVEALS_PER_SECOND } from '../handlers/exploration';
 
 jest.setTimeout(90000);
@@ -81,7 +82,7 @@ const players: Player[] = [];
  * the two, since a table run by the bridge is not also clicked through by
  * hand at full speed.
  */
-const sent: Array<{ user: string; event: string; at: number }> = [];
+const sent: Array<{ user: string; event: string; at: number; socket?: string }> = [];
 /** Every error any socket received. */
 const errors: string[] = [];
 /** The most sockets each user held open at once. */
@@ -92,7 +93,7 @@ const sockets: ClientSocket[] = [];
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function send(user: string, socket: ClientSocket, event: string, payload?: unknown): void {
-  sent.push({ user, event, at: Date.now() });
+  sent.push({ user, event, at: Date.now(), socket: socket.id });
   if (payload === undefined) socket.emit(event);
   else socket.emit(event, payload);
 }
@@ -110,13 +111,28 @@ async function join(user: string, cookie: string, label = user): Promise<ClientS
 
 /** The most of `event` one user sent in any `windowMs`. */
 function busiest(event: string, windowMs: number): number {
-  let peak = 0;
   const byUser = new Map<string, number[]>();
   for (const entry of sent) {
     if (entry.event !== event) continue;
     byUser.set(entry.user, [...(byUser.get(entry.user) ?? []), entry.at]);
   }
-  for (const times of byUser.values()) {
+  return busiestOf(byUser.values(), windowMs);
+}
+
+/** The most events of any kind one socket sent in any `windowMs`. */
+function busiestSocket(windowMs: number): number {
+  const bySocket = new Map<string, number[]>();
+  for (const entry of sent) {
+    if (!entry.socket) continue;
+    bySocket.set(entry.socket, [...(bySocket.get(entry.socket) ?? []), entry.at]);
+  }
+  return busiestOf(bySocket.values(), windowMs);
+}
+
+/** The most times of one list in any `windowMs`. */
+function busiestOf(lists: Iterable<number[]>, windowMs: number): number {
+  let peak = 0;
+  for (const times of lists) {
     times.sort((a, b) => a - b);
     let start = 0;
     for (let end = 0; end < times.length; end += 1) {
@@ -129,7 +145,7 @@ function busiest(event: string, windowMs: number): number {
 
 /** Send an event with an acknowledgement; a refusal counts as an error. */
 async function sendWithAck(user: string, socket: ClientSocket, event: string, payload: unknown): Promise<AckAnswer> {
-  sent.push({ user, event, at: Date.now() });
+  sent.push({ user, event, at: Date.now(), socket: socket.id });
   const answer = (await socket.timeout(10000).emitWithAck(event, payload)) as AckAnswer;
   if (!answer.ok) errors.push(`${event}: ${answer.error}`);
   return answer;
@@ -356,6 +372,7 @@ describe('a fast combat', () => {
     }
     measured.push({ event: 'exploration:reveal', window: '1s', peak: busiest('exploration:reveal', 1000), ceiling: REVEALS_PER_SECOND });
     measured.push({ event: 'sockets per user', window: 'open at once', peak: Math.max(...peakSockets.values()), ceiling: MAX_SOCKETS_PER_USER });
+    measured.push({ event: 'every event, per socket', window: '1s', peak: busiestSocket(1000), ceiling: SOCKET_EVENTS_PER_SECOND });
     if (process.env.PRINT_PEAKS) console.table(measured);
 
     for (const row of measured) {

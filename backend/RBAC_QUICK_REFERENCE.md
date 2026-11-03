@@ -515,16 +515,19 @@ unless one of these shows it to them:
   `CampaignDocument`, or a `CAMPAIGN` document written or uploaded in it)
   whose text the campaign's DM now controls, as they uploaded it, and whose
   text names the asset (`/api/assets/<kind>/<id>`, its folder in any case,
-  read by `services/sharedDocumentPictures.ts` from the plain text or
-  Markdown file; a mention counts as an embed). That is the DM choosing to
+  in a plain text or Markdown document; a mention counts as an embed). That is the DM choosing to
   show the picture in a handout. A document a former DM wrote while they
   held the seat (which they may still rewrite as a member), one any other
   member got there, a global document someone else uploaded that the DM
-  linked, and a document shared with another campaign count for nothing.
-  The read is bounded: only the first 1 MiB of a file is read, at most 200
-  addresses are kept from it, at most 50,000 in all (the least recently used
-  go first), one read of a document is shared, and a missing file is
-  reported once.
+  linked, a document shared with another campaign, and a `CAMPAIGN`
+  document of another campaign linked to this one (whose later DM could
+  rewrite it) count for nothing.
+  What a document names is read from its text when it is uploaded, written
+  or saved, only its first 1 MiB and at most 200 addresses, each naming an
+  asset that exists, and kept in `DocumentPicture`
+  (`services/sharedDocumentPictures.ts`); the rule reads that in one query
+  and never a file. A document stored before those rows were kept is read
+  by the requests that ask, five at a time, until none is left.
 
 An asset they uploaded themselves is never kept from them. Token art, audio,
 documents and every other asset are left alone, even on a prepared map: a

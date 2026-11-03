@@ -1,7 +1,7 @@
 /**
  * Draw a map, in the Create Map window: a blank map of the size and colour
  * the DM chooses, which the browser makes as a picture, uploads into the
- * campaign's library tagged drawn-map, and then creates the map with.
+ * campaign's library tagged DRAWN_MAP_TAG, and then creates the map with.
  *
  * The map is painted at the grid size asked for, or at fewer pixels a
  * square where that would make it larger than a phone or a tablet can
@@ -42,11 +42,12 @@ vi.mock('@/utils/detectMapGrid', () => ({ detectMapGrid: vi.fn().mockResolvedVal
 vi.mock('@/components/assets/AssetPicker', () => ({ default: () => null }));
 
 import CreateMapModal from '../CreateMapModal';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 
 const picture: Asset = {
   id: 'drawn-1', type: 'MAP', scope: 'CAMPAIGN', uploadedById: 'me', campaignId: 'campaign-1', filename: 'f.png',
   originalName: 'drawn-map.png', mimeType: 'image/png', fileSize: 1200, name: 'Drawn map', description: null,
-  tags: ['drawn-map'], createdAt: '2026-11-01T00:00:00.000Z',
+  tags: [DRAWN_MAP_TAG], createdAt: '2026-11-01T00:00:00.000Z',
 } as Asset;
 
 /** What each canvas made in a test drew, by canvas. */
@@ -123,7 +124,7 @@ describe('Draw a map', () => {
     expect(screen.getByRole('button', { name: 'Create Map' })).toBeDisabled();
   });
 
-  it('makes the blank picture one pixel a square, uploads it to the campaign tagged drawn-map, then creates the map at the pixels per square it is painted at', async () => {
+  it('makes the blank picture one pixel a square, uploads it to the campaign tagged with DRAWN_MAP_TAG, then creates the map at the pixels per square it is painted at', async () => {
     const { onCreated, onClose } = open();
     name('  The Crypt ');
     setSlider('Width (grid squares) slider', 100);
@@ -148,7 +149,7 @@ describe('Draw a map', () => {
     expect(form.get('type')).toBe('MAP');
     expect(form.get('scope')).toBe('CAMPAIGN');
     expect(form.get('campaignId')).toBe('campaign-1');
-    expect(form.get('tags')).toBe('drawn-map');
+    expect(form.get('tags')).toBe(DRAWN_MAP_TAG);
     expect(form.get('name')).toBe('Drawn map');
     const file = form.get('file');
     expect(file).toBeInstanceOf(File);

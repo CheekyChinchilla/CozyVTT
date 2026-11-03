@@ -22,6 +22,7 @@ import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
 import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState, fogFits, FogTooLargeError } from '../shared';
+import { emitNewestState } from '../outgoingQueue';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
 import { inBackgroundAfter, type WaitingWork } from '../../utils/backgroundWork';
@@ -152,8 +153,8 @@ function forgetQueuedReveals(mapId: string): void {
 
 export function registerExplorationHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * exploration:reveal — a player's vision covered these cells; remember them (a DM may name another member with userId to record theirs).
-   * Any member. Throttled to 40/s per user; over-limit reveals are dropped.
+   * exploration:reveal — a player's vision covered these cells; remember them (a DM names a player with userId to record theirs).
+   * Any member; the DM only for a player. Throttled to REVEALS_PER_SECOND per user; over-limit reveals are dropped.
    * Written at most once a second per map and user (queueReveal).
    * A DM may name another member and write that player's memory: Player
    * Preview records what the previewed token has seen, so a table the DM
@@ -172,6 +173,12 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         return;
       }
       const { mapId, cells, userId: named } = parsed.data;
+      const isDM = socket.role === 'DM';
+      // The page reports as the DM only for the player Player Preview shows,
+      // so a report of the DM's own memory comes from no page; each would
+      // write, and send back, the whole map's memory. Dropped without an
+      // answer, before anything is read.
+      if (isDM && (named === undefined || named === socket.userId)) return;
 
       // A prepared map is the DM's until they switch to it, for writes as
       // for reads (canReadMap). A report is sent by the page on its own and
@@ -186,7 +193,6 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       // moves, so it is dropped without a word.
       if (!fogFits(map)) return;
 
-      const isDM = socket.role === 'DM';
       let userId = socket.userId;
       if (named !== undefined && named !== socket.userId) {
         if (!isDM) {
@@ -243,7 +249,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         select: { explored: true },
       });
       const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
-      socket.emit('exploration:state', { mapId, userId, cells: revealedCellIndices(explored) });
+      emitNewestState(socket, 'exploration:state', { mapId, userId, cells: revealedCellIndices(explored) }, `${mapId}:${userId}`);
     } catch (error) {
       if (error instanceof FogTooLargeError) {
         socket.emit('error', { message: error.message });

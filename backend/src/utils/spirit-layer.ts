@@ -813,6 +813,33 @@ function mapFieldsSentToEveryone(map: MapRow): Pick<MapRow, MapFieldSentToEveryo
   return Object.fromEntries(MAP_FIELDS_SENT_TO_EVERYONE.map((field) => [field, map[field]])) as Pick<MapRow, MapFieldSentToEveryone>;
 }
 
+/** What a map's tokens and lighting are: all that decides which of its tokens a member is sent. */
+export type MapTokenSight = Pick<
+  MapRow,
+  'tokens' | 'lightingEnabled' | 'wallSegments' | 'width' | 'height' | 'gridSize' | 'lights' | 'globalIllumination'
+>;
+
+/**
+ * The tokens of a map one member is sent: those the role filter keeps for
+ * them, and on a lit map, for anyone but the DM, those in their sight. A
+ * spectator has no viewpoint (`viewerIdFor`), so a lit map sends them
+ * nothing, like a player with no token on it. The map's own copy
+ * (filterMapData) and anything that names what the map sends, such as the
+ * initiative order's characters, ask this.
+ */
+export function tokensSentTo(
+  map: MapTokenSight,
+  userRole: string,
+  spiritVisible: boolean,
+  userId: string | undefined
+): Token[] {
+  const forRole = filterTokensByRole(map.tokens, userRole, spiritVisible, userId);
+  if (userRole === 'DM' || !map.lightingEnabled || !userId) return forRole;
+  return filterTokensByLighting(
+    forRole, viewerIdFor(userRole, userId), map.wallSegments, map.width, map.height, map.gridSize, true, map.lights, map.globalIllumination
+  );
+}
+
 /**
  * A map as one member is sent it, built from the lists above: the columns
  * everyone is sent as stored, then each one decided for this recipient.
@@ -839,27 +866,8 @@ export function filterMapData(
    */
   userId: string | undefined
 ): MapSent {
-  let filteredTokens = filterTokensByRole(mapData.tokens, userRole, spiritVisible, userId);
-
-  // Apply dynamic lighting filter for non-DM members when lighting is enabled.
-  // A spectator has no viewpoint (`viewerIdFor`), so a lit map sends them
-  // nothing, like a player with no token on it.
-  if (userRole !== 'DM' && mapData.lightingEnabled && userId) {
-    filteredTokens = filterTokensByLighting(
-      filteredTokens,
-      viewerIdFor(userRole, userId),
-      mapData.wallSegments,
-      mapData.width,
-      mapData.height,
-      mapData.gridSize,
-      true,
-      mapData.lights,
-      mapData.globalIllumination
-    );
-  }
-
   const decided: DecidedForRecipient = {
-    tokens: filteredTokens,
+    tokens: tokensSentTo(mapData, userRole, spiritVisible, userId),
     // Remove spirit layer URL if user shouldn't see it
     spiritLayerUrl: (userRole === 'DM' || spiritVisible) ? mapData.spiritLayerUrl : null,
     // Wall segments are sent to all roles (players need them for visibility

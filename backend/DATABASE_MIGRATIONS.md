@@ -171,6 +171,23 @@ about; the list is not exhaustive.
   existing row is changed or removed. 1.5.4 runs on an upgraded database: it
   reads neither column, and a saved roll it makes or edits leaves them as they
   are.
+- `20261102224331_add_document_picture_links` - The `DocumentPicture` table,
+  one row for each asset a plain text or Markdown document names by its
+  address, and `Asset.picturesReadAt`, when a document's text was last read
+  for it. One `ALTER TABLE ... ADD COLUMN` with no default, so every existing
+  asset gets null; one `CREATE TABLE` keyed on `(documentId, pictureId)`, an
+  index on `pictureId`, an index on `Asset (type, picturesReadAt)`, and two
+  foreign keys to `Asset`, both `ON DELETE CASCADE`, so a row goes with its
+  document and with the asset it names. No existing row is changed or
+  removed, and the migration reads no file. The server fills the table as a
+  document is uploaded, written or saved; a document stored before it, with
+  `picturesReadAt` null, is read by the requests that need it, five at a
+  time, until none is left (`services/sharedDocumentPictures.ts`); one whose
+  file cannot be read stays null and is read again ten minutes later. Until a
+  document is read, a map picture it shows is not shown to players through
+  it. 1.5.4 runs on an upgraded database: it reads neither the table nor the
+  column. A document saved by 1.5.4 keeps the rows of its earlier text until
+  it is next saved on this version.
 
 ## Data migrations (one-off scripts)
 

@@ -9,7 +9,7 @@
 
 import path from 'path';
 import { z } from 'zod';
-import { ASSET_LIMITS } from './assetLimits';
+import { ASSET_LIMITS, DRAWN_MAP_TAG, DRAWN_MAP_TAG_REFUSAL } from './assetLimits';
 import { cutText } from '../utils/cutText';
 
 export const MAX_ASSET_NAME_LENGTH = ASSET_LIMITS.maxNameLength;
@@ -28,6 +28,22 @@ const text = (field: string) => z.string({ error: `Send the ${field} once, as te
  */
 export function tidyTags(tags: readonly string[]): string[] {
   return [...new Set(tags.flatMap((tag) => tag.split(',')).map((tag) => tag.trim()).filter(Boolean))];
+}
+
+/** Whether a tag is the one kept for the pictures Paint makes, in any case. */
+export function isDrawnMapTag(tag: string): boolean {
+  return tag.toLowerCase() === DRAWN_MAP_TAG;
+}
+
+export { DRAWN_MAP_TAG_REFUSAL };
+
+/**
+ * Whether an upload of `type` at `scope` may carry the tags it sends: the
+ * drawn-map tag only on a campaign map picture, which only the campaign's DM
+ * may place (canPlaceAssetAtScope), as Paint's own upload is.
+ */
+export function tagsAllowedOn(tags: readonly string[], type: string, scope: string): boolean {
+  return (type === 'MAP' && scope === 'CAMPAIGN') || !tags.some(isDrawnMapTag);
 }
 
 /**

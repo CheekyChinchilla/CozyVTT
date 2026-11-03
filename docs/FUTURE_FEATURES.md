@@ -46,7 +46,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 - `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
 - `after the next release` **Deleting a campaign from Campaign Settings tells its owner twice** (`CampaignSettingsModal.tsx`).
-- `next release` **The live table answers every `ping`, with no limit,** so a signed-in client that sends them and never reads the answers makes the server hold every answer in memory for it. A `ping` should count against a ceiling, as the events in `SOCKET_CEILINGS` do (`websocket/events.ts`).
 
 ### Maps
 
@@ -100,7 +99,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - **Wall collision (`wallsBlockMovement`).** Previously implemented and removed due to bugs. If reattempted, start fresh without reviving the old code.
 - **Auto-detection of walls from map images.** LLM, contour, and trace approaches all failed previously. Treat any future attempt as new R&D, not a continuation.
 - `next release` **More tools for painting a drawn map.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Draw a map** and **Paint** make and paint a map with a brush, an eraser, lines, rectangles, ellipses, a fill bucket, text and an eyedropper. Tools that make a detailed map quick would follow: a selection to move, copy and paste, textures, stamps, a room that adds its own walls, polygons and curves, and layers if they turn out to be wanted.
-- **Paint over an uploaded picture.** Paint is meant only for a map drawn in CozyVTT, whose picture is tagged `drawn-map`, and for a map with no picture. Adding a door or a passage to an uploaded map picture would need the picture copied into the campaign's library first, so the uploaded file is never changed, and a limit on how large a picture opens to paint on a phone.
+- **Paint over an uploaded picture.** Paint is meant only for a map drawn in CozyVTT, whose picture is tagged `cozyvtt-drawn-map`, and for a map with no picture. Adding a door or a passage to an uploaded map picture would need the picture copied into the campaign's library first, so the uploaded file is never changed, and a limit on how large a picture opens to paint on a phone.
 - **Add room to a drawn map without stretching it.** Edit Map's **Width** and **Height** stretch a map's picture, a drawn one's too, and move its walls and lights with it. Growing a drawn map by squares, with the new ground blank and everything already on it left in place, needs the picture made larger in the browser and the fog of war kept for the squares that were there.
 - **A token template that keeps its facing.** A token placed from a template always faces the default way, because `TokenTemplate` has no rotation column. It needs one (a migration), the template editor and the placement.
 

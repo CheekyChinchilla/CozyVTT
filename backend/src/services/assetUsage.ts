@@ -12,12 +12,23 @@
 // routes read one (extractAssetId). The database search narrows the rows to
 // those containing the id; an address that merely contains it, such as a
 // longer id or a query string, names no asset here and is not listed.
+//
+// A document that can show the asset is a use too, a handout's picture
+// among them: one whose text names the asset by its address (kept as each
+// is written, DocumentPicture, services/sharedDocumentPictures.ts) and
+// whose writer can read the asset now. A document is anyone's text, so only
+// the asset's uploader's and its campaign's members' are looked at, and a
+// document keeps a picture only from a delete that is not forced: deleting
+// an account still takes its personal files whatever documents name them
+// (findUses).
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { extractAssetId } from '../utils/asset-urls';
 import { readJsonObject, readTokens } from '../utils/prisma-json';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
+import { readSomeUnreadDocuments } from './sharedDocumentPictures';
+import { canReadAsset } from './permissions';
 
 export type AssetUseKind =
   | 'map'
@@ -27,7 +38,8 @@ export type AssetUseKind =
   | 'creature'
   | 'tokenTemplate'
   | 'campaignSetting'
-  | 'vibePeriod';
+  | 'vibePeriod'
+  | 'document';
 
 /**
  * One thing that uses an asset. `name` and the campaign are null when the
@@ -193,20 +205,100 @@ export interface AssetUsageView {
 }
 
 /**
+ * Who has written a document that can show an asset: of the asset's
+ * uploader and its campaign's members, those who wrote a document naming it
+ * and can read the asset now (canReadAsset, once each). That holds every
+ * handout the handout grant counts for the asset's campaign, since they are
+ * its current DM's, who reads every asset of it; and the DM's own notes; and
+ * a player's note naming a picture they are shown. A stranger's document, or
+ * a player's note naming a map picture their table has left, shows nothing,
+ * and does not count.
+ */
+async function documentWritersWhoSee(assetId: string): Promise<string[]> {
+  const asset = await prisma.asset.findUnique({
+    where: { id: assetId },
+    select: { id: true, type: true, scope: true, uploadedById: true, campaignId: true },
+  });
+  if (!asset) return [];
+  const members = asset.campaignId
+    ? (await prisma.campaignMembership.findMany({ where: { campaignId: asset.campaignId }, select: { userId: true } })).map((m) => m.userId)
+    : [];
+  const looked = [...new Set([...(asset.uploadedById ? [asset.uploadedById] : []), ...members])];
+  if (looked.length === 0) return [];
+  const writers = await prisma.asset.groupBy({
+    by: ['uploadedById'],
+    where: { type: 'DOCUMENT', uploadedById: { in: looked }, picturesNamed: { some: { pictureId: assetId } } },
+  });
+  const users = await prisma.user.findMany({
+    where: { id: { in: writers.flatMap((w) => (w.uploadedById ? [w.uploadedById] : [])) } },
+    select: { id: true, platformRole: true },
+  });
+  const sees = await Promise.all(users.map(async (u) => ((await canReadAsset(asset, u.id, u.platformRole === 'ADMIN')) ? u.id : null)));
+  return sees.flatMap((id) => (id ? [id] : []));
+}
+
+/**
+ * The documents that can show an asset (documentWritersWhoSee), as the
+ * caller may see them: by name where it is their own, a global one, or one
+ * of a campaign they run, written in it or shared with it, at most
+ * MAX_LISTED_USES of those; the rest only counted. Read from what each
+ * document names, never its file.
+ */
+async function documentUses(
+  assetId: string,
+  viewer: { userId: string; isAdmin: boolean },
+  runs: ReadonlySet<string>
+): Promise<{ named: AssetUse[]; notListed: number; unseen: number }> {
+  const writers = await documentWritersWhoSee(assetId);
+  if (writers.length === 0) return { named: [], notListed: 0, unseen: 0 };
+  const campaignsRun = [...runs];
+  const showing: Prisma.DocumentPictureWhereInput = { pictureId: assetId, document: { uploadedById: { in: writers } } };
+  const nameable: Prisma.DocumentPictureWhereInput = viewer.isAdmin ? showing : {
+    AND: [showing, {
+      document: {
+        OR: [
+          { uploadedById: viewer.userId },
+          { scope: 'GLOBAL' },
+          { scope: 'CAMPAIGN', campaignId: { in: campaignsRun } },
+          { campaignLinks: { some: { campaignId: { in: campaignsRun } } } },
+        ],
+      },
+    }],
+  };
+  const [total, mayName, rows] = await Promise.all([
+    prisma.documentPicture.count({ where: showing }),
+    prisma.documentPicture.count({ where: nameable }),
+    prisma.documentPicture.findMany({
+      where: nameable,
+      select: { document: { select: { name: true, scope: true, campaignId: true, campaign: { select: { name: true } } } } },
+      orderBy: [{ document: { name: 'asc' } }, { documentId: 'asc' }],
+      take: MAX_LISTED_USES,
+    }),
+  ]);
+  const named = rows.map(({ document }): AssetUse => {
+    const ofCampaign = document.scope === 'CAMPAIGN' && document.campaignId !== null;
+    return {
+      kind: 'document', name: document.name, count: 1,
+      campaignId: ofCampaign ? document.campaignId : null,
+      campaignName: ofCampaign ? document.campaign?.name ?? null : null,
+    };
+  });
+  return { named, notListed: mayName - named.length, unseen: total - mayName };
+}
+
+/**
  * The places an asset is used, as the caller may see them.
  *
  * An admin sees everything. Anyone else sees a record's name and campaign only
  * where they run the campaign it belongs to, own the character, or it is a
  * shared template; the rest are folded into one nameless entry per kind, so the
- * list says what would go blank without reading other people's campaigns.
+ * list says what would go blank without reading other people's campaigns. The
+ * documents that name it are listed as documentUses says.
  */
 export async function assetUsageFor(
   assetId: string,
   viewer: { userId: string; isAdmin: boolean }
 ): Promise<AssetUsageView> {
-  const uses = await findUses(assetId);
-  if (uses.length === 0) return { usage: [], omitted: 0 };
-
   let runs = new Set<string>();
   if (!viewer.isAdmin) {
     const dmOf = await prisma.campaignMembership.findMany({
@@ -215,6 +307,11 @@ export async function assetUsageFor(
     });
     runs = new Set(dmOf.map((m) => m.campaignId));
   }
+  // What the documents from before name is read first, a few at a time:
+  // the caller's own, then those of the campaigns they run, then any other.
+  await readSomeUnreadDocuments({ ownerId: viewer.userId, campaignIds: [...runs], othersToo: true });
+  const [uses, documents] = await Promise.all([findUses(assetId), documentUses(assetId, viewer, runs)]);
+  if (uses.length === 0 && documents.named.length === 0 && documents.unseen === 0) return { usage: [], omitted: 0 };
 
   const visible: AssetUse[] = [];
   const hidden = new Map<AssetUseKind, number>();
@@ -233,15 +330,25 @@ export async function assetUsageFor(
     }
   }
 
+  visible.push(...documents.named);
+  if (documents.unseen > 0) hidden.set('document', documents.unseen);
+
   const folded: AssetUse[] = [...hidden].map(([kind, count]) => ({
     kind, name: null, campaignId: null, campaignName: null, count,
   }));
 
   const all = [...visible, ...folded];
-  return { usage: all.slice(0, MAX_LISTED_USES), omitted: Math.max(0, all.length - MAX_LISTED_USES) };
+  return {
+    usage: all.slice(0, MAX_LISTED_USES),
+    omitted: Math.max(0, all.length - MAX_LISTED_USES) + documents.notListed,
+  };
 }
 
-/** Whether anything stores an address naming the asset: the places `assetUsageFor` lists. */
+/**
+ * Whether anything stores an address naming the asset: the places
+ * `assetUsageFor` lists, but the documents, which keep a file only from a
+ * delete that asks.
+ */
 export async function isAssetInUse(assetId: string): Promise<boolean> {
   return (await findUses(assetId)).length > 0;
 }
