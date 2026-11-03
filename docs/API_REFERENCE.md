@@ -1369,6 +1369,24 @@ live refresh.
 
 ---
 
+### `PUT /api/assets/:id/picture`
+
+Write a new picture over a picture drawn in CozyVTT, as **Save** in Paint
+does: a campaign map picture tagged `cozyvtt-drawn-map`. The asset keeps its
+id, so every address naming it shows the new picture; no earlier version is
+kept. **Only the DM of the asset's campaign**, a platform admin included in
+the refusal (`403`). An asset the caller may not read answers `404`; any other
+picture answers `400` with `Only a picture drawn in CozyVTT can be saved over.
+Upload a new picture instead.` The multipart body carries one `file`, checked
+as a map upload is (`MAX_MAP_SIZE_MB`, the type from its bytes, the picture
+limits), and of the same format as the picture it replaces. A refused save
+leaves the old picture as it was. Answers `{ asset, imageUrl }`, where
+`imageUrl` is `/api/assets/maps/:id?v=<n>`, a version that changes on every
+save: give it to the map with `PUT /api/campaigns/:id/maps/:mapId` so open
+tables load the new picture. Counted against the upload rate limit.
+
+---
+
 ### `DELETE /api/assets/:id`
 
 Delete an asset and its files from disk.

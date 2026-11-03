@@ -133,7 +133,7 @@ describe('an archive made by hand', () => {
     expect(await importedTags(result.campaignId)).toEqual({ 'untidy.png': ['crypt', 'drawn-map', 'undead', 'Crypt'] });
   });
 
-  // The tag Paint takes as proof a picture is its own to replace and delete:
+  // The tag Paint takes as proof a picture is its own to write over:
   // only the server's own upload of a drawn picture may carry it.
   it(`leaves out ${DRAWN_MAP_TAG}, in any case, and keeps the rest`, async () => {
     const result = await importCampaign(

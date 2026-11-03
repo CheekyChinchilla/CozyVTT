@@ -2,9 +2,9 @@
  * The tag that marks a picture drawn in CozyVTT.
  *
  * Paint takes a campaign map picture carrying the tag as one it made: the DM
- * is offered Paint on it, and a later Save deletes it. Any uploader could set
- * the tag, and it was a word a DM might type themselves, so an uploaded
- * picture could be taken for a drawn one and deleted by a save. The tag is
+ * is offered Paint on it, and a later Save writes over it. Any uploader could
+ * set the tag, and it was a word a DM might type themselves, so an uploaded
+ * picture could be taken for a drawn one and painted over. The tag is
  * now one no upload of 1.5.4 carries, and only the upload Paint makes may
  * set it: a campaign map picture, which only the campaign's DM may upload.
  *

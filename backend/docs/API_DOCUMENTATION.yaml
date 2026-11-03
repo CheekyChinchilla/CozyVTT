@@ -6360,6 +6360,118 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /api/assets/{id}/picture:
+    put:
+      tags:
+        - Assets
+      summary: Save a new painting over a drawn map's picture
+      description: >-
+        What **Save** in Paint calls. Writes the uploaded picture over the
+        file of an existing picture drawn in CozyVTT: a `MAP` asset of
+        `CAMPAIGN` scope tagged exactly `cozyvtt-drawn-map`. The asset keeps
+        its id, so every address naming it (a map, a shared Document, a
+        note) shows the new picture; no earlier version is kept. Only the
+        current DM of the asset's campaign may call it; a platform admin who
+        is not that DM is refused like anyone else. The multipart body has
+        one `file` part and is checked as `POST /api/assets/upload` checks a
+        map picture: within `MAX_MAP_SIZE_MB`, a PNG, JPEG, WebP or GIF by
+        its bytes, within the picture limits. It must also be of the format
+        of the picture it replaces (a drawn picture is a PNG). The new file
+        is copied beside the old one and renamed over it, so a reader gets
+        one or the other whole; a refused or failed save leaves the old
+        picture and its thumbnail as they were, and nothing behind. The
+        thumbnail is made again, `fileSize` and `mimeType` are updated, and
+        the picture is then served with a new ETag (see
+        `GET /api/assets/maps/{id}`). Saves of one picture run one at a time.
+        The answer's `imageUrl` is the address to give the map with
+        `PUT /api/campaigns/{campaignId}/maps/{id}`: the picture's address with
+        `?v=<the time in ms>`, which changes on every save, so each open table
+        loads the new picture. The route changes no map itself. Counted
+        against the upload rate limit (`ASSET_UPLOAD_RATE_LIMIT`, 30 a minute
+        by default).
+      operationId: replaceDrawnPicture
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Picture saved
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+                  imageUrl:
+                    type: string
+                    example: /api/assets/maps/3f1c2a4e-8b7d-4c1e-9f2a-1b2c3d4e5f60?v=1730000000000
+        '400':
+          description: >-
+            The asset is not a drawn picture of a campaign ("Only a picture
+            drawn in CozyVTT can be saved over. Upload a new picture
+            instead."), checked before the file is read; or the file is
+            refused as the map upload refuses it (no file, "MAP files must be
+            smaller than <n>MB", "Could not determine file type. File may be
+            corrupted or invalid.", a type that is not a map picture, the
+            picture limits), or is of another format than the picture it
+            replaces ("The new picture must be a PNG file, as the picture it
+            replaces is.").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Only a picture drawn in CozyVTT can be saved over. Upload a new picture instead.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            The caller may read the picture but is not the DM of its campaign:
+            a player or spectator at the table, or a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the campaign's DM can save over its drawn pictures
+        '404':
+          description: >-
+            No asset with this id, one the caller may not read, or one deleted
+            while this save was being written (nothing of the save is kept).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Asset not found
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
   /api/assets/{id}/download:
     get:
       tags:

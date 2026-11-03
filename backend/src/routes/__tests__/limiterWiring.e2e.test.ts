@@ -120,6 +120,7 @@ const ROWS: Row[] = [
   { route: 'PUT /api/users/:id', limiter: 'passwordCheckLimiter', limit: 10, send: (c) => c.agent.put(`/api/users/${c.user.id}`).send({ email: 'moved@test.invalid', currentPassword: WRONG }) },
   { route: 'POST /api/assets/upload', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post('/api/assets/upload') },
   { route: 'POST /api/assets/documents', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post('/api/assets/documents').send({}) },
+  { route: 'PUT /api/assets/:id/picture', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.put(`/api/assets/${c.campaignId}/picture`) },
   { route: 'POST /api/campaigns/:campaignId/maps/import-uvtt', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post(`/api/campaigns/${c.campaignId}/maps/import-uvtt`) },
   { route: 'GET /api/campaigns/:campaignId/export', limiter: 'campaignExportLimiter', limit: 20, testedIn: 'routes/__tests__/campaignArchiveLimits.e2e.test.ts' },
   { route: 'POST /api/campaigns/import/preview', limiter: 'campaignPreviewLimiter', limit: 20, testedIn: 'routes/__tests__/campaignArchiveLimits.e2e.test.ts' },
