@@ -17,6 +17,7 @@ import CharacterContextMenu from '@/components/campaign/CharacterContextMenu';
 import { tokenMenuItems, type TokenMenuActions, type TokenMenuView } from '@/components/campaign/map/tokenMenuItems';
 import { doorMenuItems } from '@/components/campaign/map/doorMenuItems';
 import ActionSheet from '../ActionSheet';
+import { SIDEWAYS_QUERY } from '@/constants/layout';
 
 const nextFrame = () => act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
 const onSheetEntry = () => (window.history.state as Record<string, unknown> | null)?.cozyvttSheet === true;
@@ -268,5 +269,38 @@ describe('the same items as the desktop popover', () => {
     const page = document.querySelector('[data-action-sheet-page]') as HTMLElement;
     expect(Array.from(page.querySelectorAll('svg')).map((svg) => svg.getAttribute('class')?.split(' ')[1])).toEqual(icons);
     expect(screen.getByRole('button', { name: 'Remove from Campaign' }).className).toContain('text-danger-ink');
+  });
+});
+
+describe('an action sheet\'s place', () => {
+  it('is told to the caller as the top of a sheet from the bottom', () => {
+    const onPlaced = vi.fn();
+    render(<ActionSheet open title="Goblin Scout" items={[]} onClose={() => undefined} onPlaced={onPlaced} />);
+    expect(onPlaced).toHaveBeenCalledWith({ side: 'bottom', at: 0 });
+  });
+});
+
+describe('an action sheet on a phone turned sideways', () => {
+  it('opens from the right at full height, as the sheets do, clear of a notch at the right, and tells its left side', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === SIDEWAYS_QUERY,
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    }));
+    try {
+      const onPlaced = vi.fn();
+      render(<ActionSheet open title="Goblin Scout" items={[]} onClose={() => undefined} onPlaced={onPlaced} />);
+      expect(onPlaced).toHaveBeenCalledWith({ side: 'right', at: 0 });
+      const classes = screen.getByRole('dialog', { name: 'Goblin Scout' }).className.split(/\s+/);
+      expect(classes).toEqual(expect.arrayContaining(['right-0', 'inset-y-0', 'w-88', 'pr-[calc(0.5rem+env(safe-area-inset-right))]']));
+      expect(classes).not.toContain('inset-x-0');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

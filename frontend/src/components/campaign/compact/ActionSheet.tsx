@@ -3,7 +3,8 @@
 //
 // The token, door and character menus open in one of these on the compact
 // layout, in place of the popover at the pointer: a modal sheet from the
-// bottom of the screen with a header (what the menu is on, and a line
+// bottom of the screen (from the right on a phone held sideways, as the
+// sheets come, the menu standing at the foot) with a header (what the menu is on, and a line
 // about it), the menu's rows (SheetMenuRows), and Cancel on a card of its
 // own. It draws the same MenuItems as the desktop's popovers. A submenu's
 // command opens its choices as a second page, under the submenu's name,
@@ -27,6 +28,8 @@ import { ChevronLeft } from 'lucide-react';
 import FloatingLayer from '@/components/ui/FloatingLayer';
 import type { MenuItem, MenuSubmenu } from '@/components/ui/menu';
 import { cn } from '@/utils/cn';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { SIDEWAYS_QUERY } from '@/constants/layout';
 import { SHEET_WIDTH, SheetBackdrop, useSheet, useSheetMotion } from './BottomSheet';
 import SheetMenuRows, { SHEET_ROW, pressRow } from './SheetMenuRows';
 
@@ -42,10 +45,19 @@ export interface ActionSheetProps {
   /** Drawn before the title, such as the token's picture. */
   leading?: ReactNode;
   /**
-   * Told, as the sheet opens, how far down the page its top stands, so the
-   * caller can keep what the menu is on in sight above it.
+   * Told, as the sheet opens, which edge of the screen it stands on and where
+   * it begins, so the caller can keep what the menu is on in sight beside it.
    */
-  onPlaced?: (top: number) => void;
+  onPlaced?: (edge: SheetEdge) => void;
+}
+
+/**
+ * Where an open action sheet covers the screen from: its top, a page y, on a
+ * sheet from the bottom; its left, a page x, on one from the right.
+ */
+export interface SheetEdge {
+  side: 'bottom' | 'right';
+  at: number;
 }
 
 /** A pictograph and the space after it, at the start of a label (the door menu's 🚪). */
@@ -70,11 +82,14 @@ export function headedMenu(items: MenuItem[], fallback: string): { title: string
 export default function ActionSheet({ open, title, items, onClose, subtitle, leading, onPlaced }: ActionSheetProps) {
   const rootRef = useSheet(open, true, onClose);
   // Its root is laid out where the sheet ends up; only the card inside slides.
-  const placed = useEffectEvent((top: number) => onPlaced?.(top));
+  const sideways = useMediaQuery(SIDEWAYS_QUERY);
+  const placed = useEffectEvent((edge: SheetEdge) => onPlaced?.(edge));
   useLayoutEffect(() => {
-    if (open && rootRef.current) placed(rootRef.current.getBoundingClientRect().top);
-  }, [open, rootRef]);
-  const motionProps = useSheetMotion(open, 'bottom');
+    if (!open || !rootRef.current) return;
+    const rect = rootRef.current.getBoundingClientRect();
+    placed(sideways ? { side: 'right', at: rect.left } : { side: 'bottom', at: rect.top });
+  }, [open, rootRef, sideways]);
+  const motionProps = useSheetMotion(open, sideways ? 'right' : 'bottom');
   const titleId = useId();
   const pageRef = useRef<HTMLDivElement>(null);
   // The submenu whose choices are the page shown, by its command's id: read
@@ -105,15 +120,17 @@ export default function ActionSheet({ open, title, items, onClose, subtitle, lea
         data-state={open ? 'open' : 'closed'}
         inert={!open}
         className={cn(
-          'fixed inset-x-0 bottom-0 z-50 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]',
-          SHEET_WIDTH,
+          'fixed z-50',
+          sideways
+            ? 'inset-y-0 right-0 w-88 max-w-full py-2 pl-2 pr-[calc(0.5rem+env(safe-area-inset-right))]'
+            : `inset-x-0 bottom-0 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] ${SHEET_WIDTH}`,
           !open && 'pointer-events-none'
         )}
         // A held Enter that opened the menu must not press its first item,
         // which takes the focus as the sheet opens; as the popover's guard.
         onKeyDown={(event) => { if (event.key === 'Enter' && event.repeat) event.preventDefault(); }}
       >
-        <motion.div {...motionProps} className="flex max-h-[calc(100dvh-1rem)] flex-col gap-2">
+        <motion.div {...motionProps} className={cn('flex flex-col gap-2', sideways ? 'h-full justify-end' : 'max-h-[calc(100dvh-1rem)]')}>
           <div className="flex min-h-0 flex-col overflow-hidden rounded-cozy-lg border border-brand/20 bg-surface-light shadow-2xl">
             <div className="flex shrink-0 items-center gap-3 border-b border-ink/10 px-4 py-3">
               {leading}
