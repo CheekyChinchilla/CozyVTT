@@ -5,7 +5,6 @@
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router';
 import {
   X,
   Settings,
@@ -29,7 +28,7 @@ import campaignService from '@/services/campaign.service';
 import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { CampaignRole } from '@/types';
-import type { CampaignMembership, CampaignInvitationSummary } from '@/types';
+import type { AccessRevoked, CampaignMembership, CampaignInvitationSummary } from '@/types';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { apiErrorMessage } from '@/utils/errors';
@@ -39,6 +38,12 @@ import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 interface CampaignSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Told once the campaign is deleted, with the notice every tab of the
+   * campaign is sent too (useAccessRevoked says it once, whichever comes
+   * first, and goes to the dashboard).
+   */
+  onDeleted: (revoked: AccessRevoked) => void;
 }
 
 // ============================================
@@ -53,6 +58,7 @@ const SWITCH_PRESS = "pointer-coarse:after:absolute pointer-coarse:after:inset-x
 export default function CampaignSettingsModal({
   isOpen,
   onClose,
+  onDeleted,
 }: CampaignSettingsModalProps) {
   const { campaign, refreshCampaign, userRole } = useCampaign();
 
@@ -70,7 +76,6 @@ export default function CampaignSettingsModal({
   const { showToast } = useToast();
   const { user } = useAuth();
   const mayDelete = isCampaignOwner(campaign, user?.id) || user?.platformRole === 'ADMIN';
-  const navigate = useNavigate();
 
   // ── Tab ─────────────────────────────────────
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -254,16 +259,14 @@ export default function CampaignSettingsModal({
     }
   };
 
-  // TODO(ui): the server also sends this tab campaign.access.revoked with reason campaign-deleted before it
-  // answers, and useAccessRevoked toasts "This campaign was deleted." and goes to the dashboard as well, so
-  // the owner is told twice. Hand this answer to the page's useAccessRevoked handler, as Leave Campaign does.
+  // The server also tells this tab, before it answers; the page's handler
+  // says whichever comes first, once, as for Leave Campaign.
   const handleDeleteCampaign = async () => {
     setShowDeleteConfirm(false);
     setDeletingCampaign(true);
     try {
       await campaignService.deleteCampaign(campaign.id);
-      showToast(`Campaign "${campaign.name}" deleted`, 'success');
-      navigate('/dashboard');
+      onDeleted({ campaignId: campaign.id, reason: 'campaign-deleted', message: `${campaign.name} was deleted.` });
     } catch (err) {
       showToast(apiErrorMessage(err) ?? 'Failed to delete campaign', 'error');
       setDeletingCampaign(false);

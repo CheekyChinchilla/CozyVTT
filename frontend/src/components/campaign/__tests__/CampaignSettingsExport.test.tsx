@@ -39,7 +39,7 @@ describe('Export Campaign', () => {
     downloadCampaignExport.mockRejectedValue(
       Object.assign(new Error('Request failed with status code 422'), { response: { status: 422, data: { message: reason } } })
     );
-    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    render(<CampaignSettingsModal onDeleted={() => undefined} isOpen onClose={() => undefined} />);
 
     fireEvent.click(exportButton());
 
@@ -48,7 +48,7 @@ describe('Export Campaign', () => {
 
   it('asks for the archive under the campaign name, with the audio choice', async () => {
     downloadCampaignExport.mockResolvedValue('saved');
-    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    render(<CampaignSettingsModal onDeleted={() => undefined} isOpen onClose={() => undefined} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Include audio assets' }));
     fireEvent.click(exportButton());
@@ -59,7 +59,7 @@ describe('Export Campaign', () => {
 
   it('says nothing when the DM cancels the save dialog', async () => {
     downloadCampaignExport.mockResolvedValue('cancelled');
-    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    render(<CampaignSettingsModal onDeleted={() => undefined} isOpen onClose={() => undefined} />);
 
     fireEvent.click(exportButton());
 

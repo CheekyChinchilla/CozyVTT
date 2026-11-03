@@ -127,6 +127,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Fixed
 
+- **Deleting a campaign tells its owner once.** **Delete Campaign** in Campaign Settings showed two notices, the panel's "Campaign deleted" and the page's "This campaign was deleted.", both on the way to the dashboard. It now shows one.
+
 - **Remove from Campaign names the character.** The question in the Campaign Roster asked "Are you sure you want to remove this character from the campaign?", so a menu opened on the wrong row could remove someone the DM did not mean. It now names the character: "Remove Ash's hero from the campaign?"
 
 - **A refused move no longer names a creature hidden under fog.** A player who tried to end a move on a square the fog of war covered was told "Goblin is already standing there.", naming a creature their screen did not show. The note now names only a creature the player can see, and says "Someone" for one they cannot.
