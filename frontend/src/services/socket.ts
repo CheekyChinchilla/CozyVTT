@@ -476,8 +476,14 @@ class SocketClient {
     this.socket?.emit('token.move.start', data);
   }
 
+  /**
+   * A drag's frame, volatile: dropped when it cannot be sent at once, as
+   * while the connection is down, where socket.io would keep every frame
+   * and send them all, ahead of the page's join, on reconnect. The pick-up
+   * and the put-down are kept, so the token ends where it was put.
+   */
   emitTokenMove(data: TokenMoveEvent) {
-    this.socket?.emit('token.move', data);
+    this.socket?.volatile.emit('token.move', data);
   }
 
   emitTokenMoveEnd(data: TokenMoveEndEvent) {

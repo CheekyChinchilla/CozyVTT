@@ -21,6 +21,7 @@ import type { CampaignMap } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { mouse } from '@/test/pointer';
 import { MAP_LIMITS, TOO_MANY_LIGHTS_MESSAGE, TOO_MANY_WALLS_MESSAGE } from '@/constants/mapLimits';
+import { NO_ANSWER_MESSAGE, WALL_LIGHT_ANSWER_TIMEOUT_MS } from '../map/wallLightCaps';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -327,6 +328,46 @@ describe('a wall or light the server refuses', () => {
     answerLast('light:add', { ok: false, error: TOO_MANY_LIGHTS_MESSAGE });
 
     expect(screen.getByText(TOO_MANY_LIGHTS_MESSAGE)).toBeInTheDocument();
+    expect(lightsShown()).toContain('(1)');
+  });
+});
+
+// ── Not answered ───────────────────────────────────────────────────────────
+
+describe('a wall or light the server never answers', () => {
+  /** Run `act` with timers faked, then let the answer's time run out. */
+  function unanswered(act_: () => void) {
+    vi.useFakeTimers();
+    try {
+      act_();
+      act(() => { vi.advanceTimersByTime(WALL_LIGHT_ANSWER_TIMEOUT_MS + 1); });
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it('takes back a drawn wall once the answer is overdue, and says so', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    unanswered(() => {
+      click(px(500, 500));
+      click(px(600, 500));
+    });
+
+    expect(screen.getByText(NO_ANSWER_MESSAGE)).toBeInTheDocument();
+    expect(heldWalls().map((w) => w.id)).toEqual(['a1']);
+  });
+
+  it('takes back a placed light once the answer is overdue, and a late answer changes nothing', () => {
+    h.set({ currentMap: mapWith({ lights: [lamp(1)] }) });
+    render(<MapCanvas />);
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Place'));
+    unanswered(() => click(px(260, 240)));
+
+    expect(screen.getByText(NO_ANSWER_MESSAGE)).toBeInTheDocument();
+    expect(lightsShown()).toContain('(1)');
+    answerLast('light:add', { ok: true });
     expect(lightsShown()).toContain('(1)');
   });
 });
