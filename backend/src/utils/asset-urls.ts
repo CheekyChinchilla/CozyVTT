@@ -3,6 +3,8 @@
  * Ensures all asset URLs use the full path format: /api/assets/{type}/{uuid}
  */
 
+import { PICTURE_VERSION_QUERY } from '../validators/assetLimits';
+
 /**
  * Check if a string is a valid UUID
  */
@@ -95,12 +97,12 @@ const EXACT_ASSET_ADDRESS = /^\/api\/assets\/(?:maps|tokens|avatars|audio|docume
 
 /**
  * Exactly `/api/assets/{dir}/{uuid}` for one of the asset directories, and
- * nothing more, but for a map picture's version (`?v=` and up to 16 digits,
- * as mapPictureAddress writes it), which names the same asset.
+ * nothing more, but for a map picture's version (PICTURE_VERSION_QUERY, as
+ * mapPictureAddress writes it), which names the same asset.
  */
 export function isExactAssetAddress(url: string): boolean {
   const query = url.indexOf('?');
   if (query === -1) return EXACT_ASSET_ADDRESS.test(url);
   const address = url.slice(0, query);
-  return /^\?v=\d{1,16}$/.test(url.slice(query)) && /^\/api\/assets\/maps\//i.test(address) && EXACT_ASSET_ADDRESS.test(address);
+  return PICTURE_VERSION_QUERY.test(url.slice(query)) && /^\/api\/assets\/maps\//i.test(address) && EXACT_ASSET_ADDRESS.test(address);
 }

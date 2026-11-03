@@ -157,6 +157,12 @@ describe('Markdown', () => {
       expect(container.querySelector('img')?.getAttribute('src')).toBe(`${window.location.origin}${MAP}`);
     });
 
+    // A drawn map's address after a save in Paint, as the map holds it.
+    it("shows a map picture's address with its version", () => {
+      const { container } = render(<Markdown>{`![the crypt](${MAP}?v=1730000000000)`}</Markdown>);
+      expect(container.querySelector('img')?.getAttribute('src')).toBe(`${MAP}?v=1730000000000`);
+    });
+
     it('shows token art and avatars too', () => {
       const { container } = render(<Markdown>{`![a](${TOKEN}) ![b](${AVATAR})`}</Markdown>);
       expect([...container.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual([TOKEN, AVATAR]);
@@ -173,6 +179,9 @@ describe('Markdown', () => {
             '![a](/api/campaigns/0b2b8f4e-9c1d-4c55-a2b0-4a1e2c3d4e5f/export?includeAudio=true)',
             '![b](/api/admin/backups)',
             `![c](${MAP}?n=1)`,
+            `![g](${MAP}?v=1&n=1)`,
+            `![h](${TOKEN}?v=1)`,
+            `![i](${MAP}?v=1#x)`,
             '![d](/api/assets/documents/6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f)',
             '![e](/api/assets/maps/not-an-id)',
             `![f](/api/assets/maps/../../campaigns/x)`,
