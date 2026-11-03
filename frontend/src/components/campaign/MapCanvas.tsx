@@ -4995,8 +4995,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       {!compact && tokenDetails(false)}
 
       {/* The compact layout's dock at the foot of the map, from the top: the
-          ruler's hint, the DM's Player Preview controls at the right, and the
-          token's details or the square under the pointer. Laid out as a
+          ruler's hint, a row of the square under the pointer at the left and
+          the DM's Player Preview controls at the right, and the token's
+          details. Laid out as a
           column from the foot, so each stands clear of the one below it
           whatever its height. It is the map's size, a size container, so the
           Draw strip's height is a share of the map's (cqh). It lets presses
@@ -5011,14 +5012,21 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
                   {RULER_NEEDS_TOKEN}
                 </div>
               )}
-              {previewOffered && (
-                <div className="self-end flex items-center gap-1 pointer-events-auto *:min-h-11">
-                  {playerPreviewControls}
-                </div>
-              )}
-              {cornerPanelShown && (
-                <div className="self-start glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs flex items-baseline gap-3">
-                  {cornerPanelText}
+              {/* The square under the pointer and the DM's Preview controls share
+                  a row, the square at the left: stacked, the controls rose and
+                  fell as the square came and went, out from under the pointer. */}
+              {(previewOffered || cornerPanelShown) && (
+                <div className="flex items-end justify-between gap-2">
+                  {cornerPanelShown ? (
+                    <div className="self-start min-w-0 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs flex items-baseline gap-3">
+                      {cornerPanelText}
+                    </div>
+                  ) : <span aria-hidden="true" />}
+                  {previewOffered && (
+                    <div className="self-end shrink-0 flex items-center gap-1 pointer-events-auto *:min-h-11">
+                      {playerPreviewControls}
+                    </div>
+                  )}
                 </div>
               )}
               {/* Not while the strip is up: the two left a phone little map to draw on. */}
