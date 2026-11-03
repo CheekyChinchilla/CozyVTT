@@ -818,17 +818,25 @@ describe('a picture changed elsewhere', () => {
   });
 
   it('keeps the paint through the map sent again with its picture unchanged', async () => {
-    await showMap();
-    await paintOn();
-    const canvas = pictureCanvas();
-    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
-    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), name: 'Renamed' } }); });
-    await act(async () => { await Promise.resolve(); });
-    expect(question()).toBeNull();
-    expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
-    take(terrain());
-    await nextFrame();
-    expect(take(terrain()).some((c) => c.method === 'drawImage' && c.args[0] === canvas)).toBe(true);
+    // The map's frames run when the test says, so none is drawn, and its
+    // draws taken, before the look below.
+    const frames: FrameRequestCallback[] = [];
+    const frame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((draw) => frames.push(draw));
+    try {
+      await showMap();
+      await paintOn();
+      const canvas = pictureCanvas();
+      drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
+      act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), name: 'Renamed' } }); });
+      await act(async () => { await Promise.resolve(); });
+      expect(question()).toBeNull();
+      expect(usePaintStore.getState()).toMatchObject({ mapId: 'map-a', unsaved: true });
+      take(terrain());
+      act(() => { for (const draw of frames.splice(0)) draw(performance.now()); });
+      expect(take(terrain()).some((c) => c.method === 'drawImage' && c.args[0] === canvas)).toBe(true);
+    } finally {
+      frame.mockRestore();
+    }
   });
 
   it('is found at Save, though this page was not told of it, and asked about before anything is uploaded', async () => {
