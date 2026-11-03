@@ -214,3 +214,22 @@ describe('Create Map\'s buttons', () => {
     }
   });
 });
+
+describe('Create Map\'s size boxes', () => {
+  // Their labels were tied to nothing, so a screen reader named the boxes nothing.
+  it('are named by their labels', () => {
+    open();
+    for (const name of ['Width (grid squares)', 'Height (grid squares)', 'Detail (pixels per square)']) {
+      expect(screen.getByRole('spinbutton', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('come from the one field both map dialogs draw', async () => {
+    const create = (await import('../CreateMapModal.tsx?raw')).default;
+    const edit = (await import('../EditMapModal.tsx?raw')).default;
+    for (const source of [create, edit]) {
+      expect(source).toContain("import MapDimensionField from './MapDimensionField';");
+      expect(source).not.toContain('function DimensionField');
+    }
+  });
+});

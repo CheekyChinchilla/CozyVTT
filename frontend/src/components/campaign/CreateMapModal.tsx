@@ -23,6 +23,7 @@ import { blankPicture, pictureToPng, releaseCanvas } from './map/paint/blankPict
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import { DrawnPictureRefused, uploadDrawnPicture } from '@/services/drawnPicture';
 import MapGridPreview from './MapGridPreview';
+import MapDimensionField from './MapDimensionField';
 
 interface CreateMapModalProps {
   isOpen: boolean;
@@ -36,51 +37,6 @@ interface CreateMapModalProps {
 const NO_PICTURE_MADE = "This browser could not make the map's picture. Choose fewer squares and try again.";
 
 const count = (n: number) => n.toLocaleString('en-US');
-
-// ============================================
-// DimensionField
-// Number input paired with a range slider for easier adjustment
-// ============================================
-
-function DimensionField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-}) {
-  const clamp = (v: number) => Math.max(min, Math.min(max, v));
-  return (
-    <div>
-      {/* TODO(ui): this label is tied to neither the number box nor the slider, so a
-          screen reader names the box nothing; give the box an id and the label htmlFor. */}
-      <label className="block text-xs text-stone-gray/70 mb-1">{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(clamp(parseInt(e.target.value) || min))}
-        min={min}
-        max={max}
-        className="input-cozy"
-      />
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full mt-1.5 accent-moss-green cursor-pointer"
-        aria-label={`${label} slider`}
-      />
-    </div>
-  );
-}
 
 // ============================================
 // CreateMapModal
@@ -385,14 +341,14 @@ export default function CreateMapModal({
                       Map Dimensions
                     </label>
                     <div className="space-y-3">
-                      <DimensionField
+                      <MapDimensionField
                         label="Width (grid squares)"
                         value={width}
                         onChange={setWidth}
                         min={MAP_LIMITS.minSide}
                         max={MAP_LIMITS.maxSide}
                       />
-                      <DimensionField
+                      <MapDimensionField
                         label="Height (grid squares)"
                         value={height}
                         onChange={setHeight}
@@ -400,7 +356,7 @@ export default function CreateMapModal({
                         max={MAP_LIMITS.maxSide}
                       />
                       {drawing ? (
-                        <DimensionField
+                        <MapDimensionField
                           label="Detail (pixels per square)"
                           value={detail}
                           onChange={setDetail}
@@ -408,7 +364,7 @@ export default function CreateMapModal({
                           max={MAP_LIMITS.maxGridSize}
                         />
                       ) : (
-                        <DimensionField
+                        <MapDimensionField
                           label="Grid Size (px/square)"
                           value={gridSize}
                           onChange={setGridSize}
