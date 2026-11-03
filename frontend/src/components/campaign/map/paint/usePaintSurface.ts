@@ -46,7 +46,8 @@ import type { MapControls, MapTool, PointerAt } from '../tools/types';
 import type { MapLayer } from '../useRenderLoop';
 import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
-import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type TileRect } from './paintHistory';
+import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type PaintStepNote, type TileRect } from './paintHistory';
+import { gridCorner, roomBox, roomWalls, wallsToAdd, type WallLine } from './paintRoom';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
@@ -72,7 +73,7 @@ import {
 } from './paintDrafts';
 
 /** The tools Paint offers. */
-export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'fill' | 'text' | 'eyedropper';
+export type PaintTool = 'brush' | 'eraser' | PaintShapeKind | 'room' | 'fill' | 'text' | 'eyedropper';
 
 /** The tools that act on a tap or a click: a finger's drag pans under them. */
 const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['fill', 'text', 'eyedropper']);
@@ -122,7 +123,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['m', 'room'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
 
 /** The most the undo tiles may take, packed; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
@@ -190,6 +191,32 @@ interface Surface {
   takenFrom: string | null;
   /** This tab's draft of the map is this canvas's, written by it or restored from: set by its first write. */
   ownsDraft: boolean;
+  /** The rooms painted and not saved, whose walls Save adds to the map. */
+  rooms: PendingRoom[];
+}
+
+/**
+ * A room's walls, waiting for Save to add them to the map. Undo takes them
+ * back with the room's floor and Redo puts them back (`live`).
+ */
+interface PendingRoom {
+  walls: WallLine[];
+  live: boolean;
+}
+
+/** The walls of the rooms painted and not saved, undone ones left out. */
+const liveWalls = (rooms: readonly PendingRoom[]): WallLine[] => rooms.filter((room) => room.live).flatMap((room) => room.walls);
+
+/** Said when the picture saved but some of its rooms' walls were not added to the map. */
+export function roomWallsNotAdded(missed: number, of: number, reason: string): string {
+  const which = missed === of ? (of === 1 ? 'The wall' : `The ${of} walls`) : `${missed} of the ${of} walls`;
+  return `The picture was saved, but ${which} of your rooms ${missed === 1 ? 'was' : 'were'} not added to the map${reason ? `: ${reason}` : ''}. Draw ${missed === 1 ? 'it' : 'them'} with the wall tool.`;
+}
+
+/** A pending room, with the note that takes its walls back on Undo and puts them back on Redo. */
+function pendingRoom(walls: WallLine[]): { room: PendingRoom; note: PaintStepNote } {
+  const room: PendingRoom = { walls, live: true };
+  return { room, note: { undone: () => { room.live = false; }, redone: () => { room.live = true; } } };
 }
 
 /** Paint not saved on a map that left the screen without asking, until the DM says what to do with it. */
@@ -202,7 +229,7 @@ export interface PaintLeftover {
 }
 
 /** How Paint opens: on the picture as it is, or with a draft's tiles, of a picture `size` in size, put back. */
-type OpenWith = 'fresh' | { draft: DraftTile[]; from: string; size: PictureSize };
+type OpenWith = 'fresh' | { draft: DraftTile[]; from: string; size: PictureSize; walls: readonly WallLine[] };
 
 /** A draft offered back as Paint opens, and whether it was painted on another picture than the map's now. */
 export interface DraftOffer {
@@ -215,6 +242,8 @@ interface ShapeUnderWay {
   mapId: string;
   shape: PaintShape;
   step: PaintStep;
+  /** A room: a rectangle on the grid's corners, outlined and filled, whose walls wait for Save. */
+  room?: boolean;
 }
 
 interface Stroke {
@@ -423,6 +452,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const header: DraftHeader = {
       key, userId: user, campaignId: campaign, mapId: s.mapId, tabId: tabRef.current.id(), baseUrl: s.baseUrl,
       width: s.canvas.width, height: s.canvas.height, savedAt: Date.now(),
+      ...(liveWalls(s.rooms).length > 0 ? { walls: liveWalls(s.rooms) } : {}),
     };
     void inDraftQueue(async (store) => {
       // A canvas's first write goes over this tab's draft of the map only
@@ -697,6 +727,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       draftFresh: true,
       takenFrom: how !== undefined && how !== 'fresh' ? how.from : null,
       ownsDraft: false,
+      rooms: [],
     };
     made = surface;
     canvasesMade.current += 1;
@@ -710,16 +741,20 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (box) step.cover(box);
       }
       // A history just made has no undo under way: the change lands at once.
+      // The draft's rooms' walls wait for Save again, and go with the restore on Undo.
+      const restored = how.walls.length > 0 ? pendingRoom([...how.walls]) : null;
+      if (restored) surface.rooms.push(restored.room);
       let put = 0;
       void step.land(() => {
         put = putDraftTiles(ctx, how.draft, how.size, { width, height }, make);
         if (put > 0) surface.revision += 1;
-      });
+      }, restored?.note);
       // Nothing of the draft could be read: nothing to undo, or to keep.
       if (put === 0) {
         history.clear();
         surface.changed.clear();
         surface.unwritten.clear();
+        surface.rooms = [];
       }
     }
     setOn(true);
@@ -879,14 +914,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * Land a change whose tiles are kept already, after any undo under way,
    * showing `preview` on the overlay until it is painted.
    */
-  const land = useCallback((step: PaintStep, preview: PaintPreview | null, apply: () => void) => {
+  const land = useCallback((step: PaintStep, preview: PaintPreview | null, apply: () => void, note?: PaintStepNote) => {
     const s = surfaceRef.current;
     if (!s) return;
     if (preview) waitingRef.current.push(preview);
     void step.land(() => {
       apply();
       s.revision += 1;
-    }).finally(() => {
+    }, note).finally(() => {
       waitingRef.current = waitingRef.current.filter((w) => w !== preview);
       bump();
       markDirty('terrain', 'overlay');
@@ -1023,7 +1058,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     // The tiles painted until the picture is taken go with this save, and
     // come back if it fails; those painted while it is under way stay for
     // the draft after it.
-    let taken: { changed: Map<string, TileRect>; unwritten: Map<string, TileRect>; asSaved: Map<string, Uint8Array<ArrayBuffer>> } | null = null;
+    let taken: { changed: Map<string, TileRect>; unwritten: Map<string, TileRect>; asSaved: Map<string, Uint8Array<ArrayBuffer>>; rooms: PendingRoom[] } | null = null;
     try {
       await s.history.settled();
       // The map as the server has it now: a picture changed elsewhere,
@@ -1040,10 +1075,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // The picture is taken for the PNG now (savePaint makes it first, at
       // once): a tile changed from here on is kept as it is in the picture
       // saved, so a draft after the save holds only what was painted since.
-      taken = { changed: s.changed, unwritten: s.unwritten, asSaved: s.asSaved };
+      taken = { changed: s.changed, unwritten: s.unwritten, asSaved: s.asSaved, rooms: s.rooms };
       s.changed = new Map();
       s.asSaved = new Map();
       s.unwritten = new Map();
+      s.rooms = [];
       const { map: saved, asset } = await savePaint({
         previous,
         makePng: () => pictureToPng(s.canvas),
@@ -1064,7 +1100,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         pointOtherMapAt: (mapId, address) => mapService.updateMap(campaignId, mapId, { imageUrl: address }).then(onMapRead),
         remove: (assetId) => api.deleteAsset(assetId),
       });
+      const roomsSaved = taken.rooms;
       taken = null;
+
       if (surfaceRef.current === s) {
         s.saved = asOf;
         s.baseUrl = saved.imageUrl ?? '';
@@ -1077,6 +1115,19 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       if (s.changed.size > 0) touched(s, [...s.changed.values()]);
       setAsking(false);
       onSaved(saved, asset);
+      // The rooms' walls, now that their floors are on the map's picture,
+      // after the word that it saved, so a wall refused is said last.
+      // A wall the map has already, or a side two rooms share, is added once.
+      const walls = wallsToAdd(liveWalls(roomsSaved), latest.wallSegments ?? []);
+      let added = 0;
+      try {
+        for (const wall of walls) {
+          await mapService.addWall(campaignId, s.mapId, { ...wall, type: 'wall' });
+          added += 1;
+        }
+      } catch (err) {
+        refuse(roomWallsNotAdded(walls.length - added, walls.length, apiErrorMessage(err) ?? ''));
+      }
       return true;
     } catch (err) {
       if (taken) {
@@ -1084,6 +1135,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         for (const [at, tile] of taken.unwritten) s.unwritten.set(at, tile);
         // Nothing was saved: the tiles as kept before the save stand.
         for (const [at, packed] of taken.asSaved) s.asSaved.set(at, packed);
+        s.rooms = [...taken.rooms, ...s.rooms];
       }
       refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
       return false;
@@ -1184,7 +1236,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       refuse('Your draft could not be read from this browser.');
       return;
     }
-    openRef.current({ draft: tiles, from: offered.header.key, size: { width: offered.header.width, height: offered.header.height } });
+    openRef.current({ draft: tiles, from: offered.header.key, size: { width: offered.header.width, height: offered.header.height }, walls: offered.header.walls ?? [] });
   }, [offer, map, dropDraft, open, inDraftQueue, refuse]);
 
   /** The eyedropper: the colour of the pixel at map pixel `point` becomes the colour, and the tool before comes back. */
@@ -1204,7 +1256,18 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return;
     }
     const shape = scaleShape(under.shape, ...xy(s));
-    land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape));
+    // A room's walls wait for Save, and go with its floor on Undo.
+    let note: PaintStepNote | undefined;
+    if (under.room) {
+      const m = mapRef.current;
+      const box = m && roomBox(under.shape.from, under.shape.to, m.gridSize, m.width * m.gridSize, m.height * m.gridSize);
+      if (box) {
+        const pending = pendingRoom(roomWalls(box));
+        s.rooms.push(pending.room);
+        note = pending.note;
+      }
+    }
+    land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape), note);
   }, [land, xy]);
 
   const step = useCallback((direction: 'undo' | 'redo') => {
@@ -1261,6 +1324,18 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         markDirty('overlay');
         return true;
       }
+      if (look.tool === 'room') {
+        // A rectangle outlined in the colour and filled with the second, on the grid's corners.
+        const from = gridCorner(point, map.gridSize, map.width * map.gridSize, map.height * map.gridSize);
+        shapeRef.current = {
+          mapId: s.mapId,
+          step: s.history.begin(),
+          shape: { kind: 'rect', from, to: from, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'both' },
+          room: true,
+        };
+        markDirty('overlay');
+        return true;
+      }
       const step = s.history.begin();
       step.cover(strokeBox(toPicture([point], ...xy(s)), look.width));
       // The eraser is a brush of the second colour.
@@ -1276,6 +1351,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         const look = settingsRef.current;
         const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
         let to: PaintPoint = look.snap && map ? snapToGrid(point, map.gridSize) : point;
+        if (under.room && map) to = gridCorner(point, map.gridSize, map.width * map.gridSize, map.height * map.gridSize);
         if (under.shape.kind === 'line' && (look.straight || at.e.shiftKey)) to = stepAngle(under.shape.from, to);
         under.shape = { ...under.shape, to };
         // The tiles the shape reaches as it grows, kept as they are before it lands.
@@ -1307,8 +1383,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       if (under) {
         shapeRef.current = null;
         const { from, to } = under.shape;
-        // A shape of no size paints nothing.
-        if (from[0] === to[0] && from[1] === to[1]) {
+        // A shape of no size paints nothing, nor a room with no width or no height.
+        if ((from[0] === to[0] && from[1] === to[1]) || (under.room && (from[0] === to[0] || from[1] === to[1]))) {
           under.step.drop();
           markDirty('overlay');
           return;

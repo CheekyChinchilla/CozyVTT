@@ -32,6 +32,8 @@ import { PAINT_TILE, type PaintBox, type TileRect } from './paintHistory';
 import { qoiDecodeInto, qoiEncode } from './qoi';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
 import { optionalSessionStorage } from '@/utils/optionalStorage';
+import { MAP_LIMITS } from '@/constants/mapLimits';
+import type { WallLine } from './paintRoom';
 
 /** The longest Paint goes without writing what is new to its draft. */
 export const DRAFT_INTERVAL_MS = 10_000;
@@ -60,6 +62,8 @@ export interface DraftHeader {
   height: number;
   /** When it was last written, in milliseconds since 1970. */
   savedAt: number;
+  /** The walls of the rooms painted (paintRoom.ts), which Save adds to the map; none in a draft written before Room. */
+  walls?: WallLine[];
 }
 
 /** A tile of a draft: its column and row, and its pixels packed (qoi.ts). */
@@ -239,12 +243,16 @@ export function putDraftTiles(
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
+const isWallLine = (value: unknown): value is WallLine => isRecord(value)
+  && [value.x1, value.y1, value.x2, value.y2].every((n) => typeof n === 'number' && Number.isFinite(n));
+
 export function isDraftHeader(value: unknown): value is DraftHeader {
   if (!isRecord(value)) return false;
-  const { key, userId, campaignId, mapId, tabId, baseUrl, width, height, savedAt } = value;
+  const { key, userId, campaignId, mapId, tabId, baseUrl, width, height, savedAt, walls } = value;
   return typeof key === 'string' && typeof userId === 'string' && typeof campaignId === 'string' && typeof mapId === 'string'
     && typeof tabId === 'string' && typeof baseUrl === 'string' && isCount(width) && isCount(height)
-    && typeof savedAt === 'number' && Number.isFinite(savedAt);
+    && typeof savedAt === 'number' && Number.isFinite(savedAt)
+    && (walls === undefined || (Array.isArray(walls) && walls.length <= MAP_LIMITS.maxWallSegments && walls.every(isWallLine)));
 }
 
 function toDraftTile(value: unknown): DraftTile | null {

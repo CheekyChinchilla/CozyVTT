@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react';
-import { Circle, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
+import { BrickWall, Circle, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
@@ -24,6 +24,7 @@ export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof
   line: { label: 'Line', key: 'L', icon: Minus },
   rect: { label: 'Rectangle', key: 'R', icon: Square },
   ellipse: { label: 'Ellipse', key: 'O', icon: Circle },
+  room: { label: 'Room', key: 'M', icon: BrickWall },
   fill: { label: 'Fill', key: 'F', icon: PaintBucket },
   text: { label: 'Text', key: 'T', icon: Type },
   eyedropper: { label: 'Eyedropper', key: 'I', icon: Pipette },
@@ -35,6 +36,7 @@ export const HINTS: Record<PaintTool, string> = {
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
   rect: 'Drag from one corner to the other.',
   ellipse: 'Drag across the box it fills.',
+  room: 'Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour, and its four walls, which are added to the map when you save.',
   fill: 'Click or tap an area to fill it with the colour. A finger\'s drag moves the map.',
   text: 'Click or tap where the line of text goes, type it, then press Enter. Its size follows the width.',
   eyedropper: 'Click or tap the picture to take its colour there; the tool before comes back.',

@@ -262,6 +262,14 @@ describe('what is read back', () => {
     expect(isDraftHeader({ ...header('m'), tabId: undefined })).toBe(false);
     expect(isDraftHeader(null)).toBe(false);
   });
+
+  it("takes a header's room walls when each has four numbers, and one written before Room, with none", () => {
+    expect(isDraftHeader({ ...header('m'), walls: [{ x1: 0, y1: 0, x2: 50, y2: 0 }] })).toBe(true);
+    expect(isDraftHeader({ ...header('m'), walls: [{ x1: 0, y1: 0, x2: '50', y2: 0 }] })).toBe(false);
+    expect(isDraftHeader({ ...header('m'), walls: [{ x1: 0, y1: 0, x2: Infinity, y2: 0 }] })).toBe(false);
+    expect(isDraftHeader({ ...header('m'), walls: 'none' })).toBe(false);
+    expect(isDraftHeader({ ...header('m'), walls: Array.from({ length: 5001 }, () => ({ x1: 0, y1: 0, x2: 1, y2: 0 })) })).toBe(false);
+  });
 });
 
 describe("the browser's store, over IndexedDB", () => {
