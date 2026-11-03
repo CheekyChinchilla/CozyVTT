@@ -293,6 +293,10 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // started. The table moving under the page is not one: it moves only the
   // table's map, or shows it where the page follows the table.
   const viewSeq = useRef(0);
+  // Each edit of a map on screen (updateMap) is counted too: a read of the
+  // map begun before one is older than it, and would put back what it
+  // replaced (a picture Paint's Save has just deleted, for one).
+  const editSeq = useRef(0);
   const guards = useRef(new Set<ViewedMapGuard>());
   const userIdRef = useRef<string | undefined>(user?.id);
   userIdRef.current = user?.id;
@@ -497,10 +501,25 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     }
   }, [campaign?.id, rereadCampaign]);
 
-  // Re-fetch the current map only — used after a WebSocket reconnect so the
-  // local token/wall/light/fog state catches up with anything that broadcast
-  // while we were disconnected. Cheaper than a full campaign reload and
-  // doesn't blip atmosphere/audio state.
+  /**
+   * Read a map, and read it again when a map on screen was edited
+   * (updateMap) while it was read: the answer is older than the edit and
+   * would put back what it replaced, such as a picture Paint's save has just
+   * deleted. Null after three such reads: the edit stands.
+   */
+  const readMapAfterEdits = useCallback(async (campaignId: string, mapId: string) => {
+    for (let tries = 0; tries < 3; tries += 1) {
+      const edits = editSeq.current;
+      const read = await api.getMap(campaignId, mapId);
+      if (edits === editSeq.current) return read;
+    }
+    return null;
+  }, []);
+
+  // Read the map on screen again, with its tokens: a character's new token
+  // picture is written onto its tokens on the server (character.updated with
+  // tokensChanged). A reconnect reads it in catchUpAfterReconnect. Cheaper
+  // than a full campaign reload, and it leaves the atmosphere and audio alone.
   const refreshCurrentMap = useCallback(async () => {
     const shown = preparedRef.current ?? tableMapRef.current;
     if (!campaign?.id || !shown) return;
@@ -508,7 +527,12 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     const tSeq = tableSeq.current;
     useGameStore.getState().expectTokensOf(shown.id);
     try {
-      const { map, spiritVisible } = await api.getMap(campaign.id, shown.id);
+      const read = await readMapAfterEdits(campaign.id, shown.id);
+      if (!read) {
+        stopExpecting(shown.id);
+        return;
+      }
+      const { map, spiritVisible } = read;
       if (preparedRef.current?.id === map.id && seq === viewSeq.current) {
         setPrepared(map);
       } else if (tableMapRef.current?.id === map.id && !preparedRef.current && seq === viewSeq.current && tSeq === tableSeq.current) {
@@ -523,10 +547,10 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       showTokensOf(map);
     } catch (err) {
       stopExpecting(shown.id);
-      console.error('[CampaignContext] Failed to refresh current map after reconnect:', errorSummary(err));
-      // Non-fatal — user will receive future real-time updates normally
+      console.error('[CampaignContext] Failed to read the map on screen again:', errorSummary(err));
+      // Non-fatal: the live table's updates still arrive.
     }
-  }, [campaign?.id, setPrepared, putTableMap]);
+  }, [campaign?.id, setPrepared, putTableMap, readMapAfterEdits]);
 
   // Events sent while this page was offline are not replayed: a pause or an
   // end, a member's role, a switch to another map, the vibe, the weather and
@@ -609,11 +633,12 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     // One deleted while the page was away ends preparing.
     useGameStore.getState().expectTokensOf(prepared.id);
     try {
-      const { map } = await api.getMap(campaignId, prepared.id);
-      if (!stillShown() || seq !== viewSeq.current) {
+      const read = await readMapAfterEdits(campaignId, prepared.id);
+      if (!read || !stillShown() || seq !== viewSeq.current) {
         stopExpecting(prepared.id);
         return;
       }
+      const { map } = read;
       setPrepared(map);
       showTokensOf(map);
     } catch (err) {
@@ -627,7 +652,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
         console.error('[CampaignContext] Failed to refresh the map being prepared after reconnect:', errorSummary(err));
       }
     }
-  }, [campaign?.id, applyCampaignEffects, setPrepared, putTableMap]);
+  }, [campaign?.id, applyCampaignEffects, setPrepared, putTableMap, readMapAfterEdits]);
 
   // Update currentVibe + activeVibeEffect when vibe.updated WS event arrives
   const updateVibe = useCallback((period: string, hue: string, filter: string) => {
@@ -747,6 +772,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, [endPreparing]);
 
   const updateMap = useCallback((mapId: string, map: CampaignMap | ((current: CampaignMap) => CampaignMap)) => {
+    editSeq.current += 1;
     const next = (current: CampaignMap) => (typeof map === 'function' ? map(current) : map);
     putTableMap((current) => (current && current.id === mapId ? next(current) : current), false);
     const prepared = preparedRef.current;

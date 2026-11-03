@@ -14,6 +14,8 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { Token } from '@/types';
 
 const editor = vi.hoisted(() => ({ onTokenUpdate: null as ((t: Token) => void) | null, mapId: null as string | null }));
+/** The map on screen, which the table moving from elsewhere changes. */
+const view = vi.hoisted(() => ({ mapId: 'map-1' }));
 // The page subscribes to many socket events; each method is a harmless stub.
 const anySocket = vi.hoisted(() => new Proxy({}, { get: () => () => undefined }));
 const tokens = vi.hoisted(() => ({
@@ -39,7 +41,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
     campaign: { id: 'campaign-1', name: 'Test', status: 'ACTIVE', ownerId: 'dm', memberships: [], characters: [] },
     // The table on another map than the one on screen, which the editor saves to.
     currentMap: { id: 'map-table', name: 'Village', tokens: [] },
-    viewedMap: { id: 'map-1', name: 'Map', tokens: [] },
+    viewedMap: { id: view.mapId, name: 'Map', tokens: [] },
     loading: false,
     error: null,
     userRole: 'DM',
@@ -104,6 +106,7 @@ import CampaignPage from '../CampaignPage';
 
 beforeEach(() => {
   editor.onTokenUpdate = null;
+  view.mapId = 'map-1';
 });
 
 const open = (name: string) => fireEvent.click(screen.getByRole('button', { name: `Edit ${name}` }));
@@ -113,6 +116,16 @@ describe('the token quick editor', () => {
   it('saves to the map on screen', () => {
     render(<CampaignPage />);
     open('Goblin A');
+    expect(editor.mapId).toBe('map-1');
+  });
+
+  it('saves to the map its token was opened on when the map on screen changes under it', () => {
+    const { rerender } = render(<CampaignPage />);
+    open('Goblin A');
+    // The table moved from another device: the page follows it.
+    view.mapId = 'map-2';
+    rerender(<CampaignPage />);
+    expect(editorFor('Goblin A')).not.toBeNull();
     expect(editor.mapId).toBe('map-1');
   });
 });

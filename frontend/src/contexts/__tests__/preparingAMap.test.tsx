@@ -251,6 +251,30 @@ describe('a reconnect while preparing', () => {
     expect(latest!.preparingEnded).toEqual({ mapName: 'Crypt', reason: 'deleted' });
   });
 
+  it('never puts back what an edit of the map being prepared replaced while it was read: it reads it again', async () => {
+    await openPage();
+    await prepare('crypt');
+    getCampaign.mockResolvedValueOnce(campaignAs('DM'));
+    // The map being prepared is read slowly; Paint's Save lands meanwhile.
+    let release: () => void = () => undefined;
+    let saved = false;
+    getMap.mockImplementation((_c: string, mapId: string) => {
+      if (mapId !== 'crypt') return Promise.resolve({ map: served(mapId), spiritVisible: false });
+      if (saved) return Promise.resolve({ map: served('crypt', { imageUrl: '/api/assets/maps/saved' }), spiritVisible: false });
+      return new Promise((resolve) => {
+        release = () => resolve({ map: served('crypt', { imageUrl: '/api/assets/maps/old' }), spiritVisible: false });
+      });
+    });
+    let catching: Promise<void> = Promise.resolve();
+    act(() => { catching = latest!.catchUpAfterReconnect(); });
+    await waitFor(() => expect(getMap).toHaveBeenLastCalledWith('c1', 'crypt'));
+    act(() => { latest!.updateMap('crypt', (map) => ({ ...map, imageUrl: '/api/assets/maps/saved' })); });
+    saved = true;
+    await act(async () => { release(); await catching; });
+    expect(latest!.viewedMap?.imageUrl).toBe('/api/assets/maps/saved');
+    expect(shown()).toEqual(['crypt-token']);
+  });
+
   it('keeps a map held by a guard as a prepared map when the table moved while the page was away', async () => {
     await openPage();
     act(() => { latest!.registerViewedMapGuard({ mayLeave: () => false, holds: () => true }); });
@@ -482,6 +506,23 @@ describe('a read of the map on screen while the table plays on', () => {
     act(() => { latest!.receiveTableMap(served('village', { tokens: [token('village-token')].map((t) => ({ ...t, position: { x: 2, y: 2 } })) })); });
     await act(async () => { release(); await refreshing; });
     expect(useGameStore.getState().tokens['village-token'].position).toEqual({ x: 2, y: 2 });
+  });
+
+  it('never puts back what an edit of the map being prepared replaced while it was read: it reads it again', async () => {
+    await openPage();
+    await prepare('crypt');
+    // A character's token picture changed: the map is read again, slowly.
+    const release = heldRead('crypt');
+    let refreshing: Promise<void> = Promise.resolve();
+    act(() => { refreshing = latest!.refreshCurrentMap(); });
+    await waitFor(() => expect(getMap).toHaveBeenLastCalledWith('c1', 'crypt'));
+    // Paint's Save lands meanwhile: the map points at its new picture, and the old one is deleted.
+    act(() => { latest!.updateMap('crypt', (map) => ({ ...map, imageUrl: '/api/assets/maps/saved' })); });
+    getMap.mockImplementation((_c: string, mapId: string) => Promise.resolve({ map: served(mapId, { imageUrl: '/api/assets/maps/saved' }), spiritVisible: false }));
+    await act(async () => { release(); await refreshing; });
+    expect(latest!.viewedMap?.imageUrl).toBe('/api/assets/maps/saved');
+    // Read again, so what the read was for is still caught up.
+    expect(getMap.mock.calls.filter(([, mapId]) => mapId === 'crypt')).toHaveLength(3);
   });
 
   it('counts an edit of the table\'s map as no move of the table', async () => {

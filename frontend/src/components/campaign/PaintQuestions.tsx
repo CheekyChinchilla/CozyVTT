@@ -58,7 +58,7 @@ export function PaintLeaveQuestion({ leaving, mapName, answering, onAnswer }: {
 /** Why the painting was left behind, as the DM is told. */
 export function leftoverWords(leftover: PaintLeftover): string {
   return leftover.reason === 'not-dm'
-    ? `You are no longer the DM, so your painting of ${leftover.mapName} cannot be saved. Download it to keep it as a picture; a draft also stays in this browser, offered back if you are the DM again.`
+    ? `You are no longer the DM, so your painting of ${leftover.mapName} cannot be saved. Download it to keep it as a picture; a draft also stays in this browser until you sign out, offered back if you are the DM again.`
     : `${leftover.mapName} is no longer on your screen, so your painting of it was not saved. Download it to keep it as a picture.`;
 }
 
