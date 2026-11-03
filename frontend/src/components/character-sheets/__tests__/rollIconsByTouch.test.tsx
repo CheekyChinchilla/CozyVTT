@@ -76,7 +76,7 @@ describe('the sheets\' hover-only marks', () => {
     const { container } = render(<DnD5eCharacterView character={dnd5eCharacter({ attacks: [attack] })} onRoll={vi.fn()} />);
     expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBeGreaterThan(20);
     expect(hiddenFromTouch(container)).toEqual([]);
-    await userEvent.click(screen.getByRole('button', { name: 'Combat' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Combat' }));
     expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBeGreaterThan(1);
     expect(hiddenFromTouch(container)).toEqual([]);
   });
@@ -90,7 +90,7 @@ describe('the sheets\' hover-only marks', () => {
   it('show on the Call of Cthulhu sheet\'s characteristics and skills', async () => {
     const { container } = render(<CallOfCthulhu7eCharacterView character={cocCharacter()} onRoll={vi.fn()} />);
     expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBe(8);
-    await userEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Skills' }));
     expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBeGreaterThan(20);
     expect(hiddenFromTouch(container)).toEqual([]);
   });

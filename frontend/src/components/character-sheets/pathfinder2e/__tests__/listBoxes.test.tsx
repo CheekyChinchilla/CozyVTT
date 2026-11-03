@@ -49,7 +49,7 @@ describe('comma-separated boxes', () => {
 
   it('keeps what is typed into the languages box', async () => {
     const onSave = renderEditor();
-    fireEvent.click(screen.getByRole('button', { name: 'Biography' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Biography' }));
     const box = screen.getByPlaceholderText('Common, Elven, Draconic') as HTMLInputElement;
 
     await userEvent.type(box, 'Common, Elven');
@@ -59,7 +59,7 @@ describe('comma-separated boxes', () => {
 
   it('tidies the list once the box is left', async () => {
     renderEditor();
-    fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
     const box = screen.getByPlaceholderText('fire 5') as HTMLInputElement;
 
     await userEvent.type(box, 'fire 5,  cold 5, ');

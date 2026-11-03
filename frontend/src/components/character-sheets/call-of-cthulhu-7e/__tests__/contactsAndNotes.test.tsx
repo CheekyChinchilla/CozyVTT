@@ -30,7 +30,7 @@ function open(overrides: Record<string, unknown> = {}) {
 describe('contacts in the editor', () => {
   it('can be added and filled in', async () => {
     const save = open();
-    fireEvent.click(screen.getByRole('button', { name: /^Possessions$/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Possessions$/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Add Contact' }));
     fireEvent.change(screen.getByLabelText('Name of contact 1'), { target: { value: 'Professor Armitage' } });
     fireEvent.change(screen.getByLabelText('Role of contact 1'), { target: { value: 'Librarian' } });
@@ -41,7 +41,7 @@ describe('contacts in the editor', () => {
 
   it('can be removed', async () => {
     const save = open({ contacts: [{ name: 'Wilbur Whateley' }] });
-    fireEvent.click(screen.getByRole('button', { name: /^Possessions$/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Possessions$/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Wilbur Whateley' }));
     expect((await save()).contacts).toEqual([]);
   });
@@ -51,7 +51,7 @@ describe('the notes on Luck and wealth', () => {
   it('are edited', async () => {
     const save = open();
     fireEvent.change(screen.getByLabelText('Luck notes'), { target: { value: 'Spent 10 at the docks' } });
-    fireEvent.click(screen.getByRole('button', { name: /^Possessions$/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Possessions$/ }));
     fireEvent.change(screen.getByLabelText('Wealth notes'), { target: { value: 'A trust fund' } });
 
     const saved = await save();
@@ -69,7 +69,7 @@ describe('the notes on Luck and wealth', () => {
       />
     );
     expect(screen.getByText('Spent 10 at the docks')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^Possessions$/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Possessions$/ }));
     expect(screen.getByText('A trust fund')).toBeInTheDocument();
   });
 });
@@ -77,7 +77,7 @@ describe('the notes on Luck and wealth', () => {
 describe('a contact with no name', () => {
   it('is shown on the read-only sheet as unnamed', () => {
     render(<CallOfCthulhu7eCharacterView character={cocCharacter({ contacts: [{ name: '', role: 'Librarian' }] })} />);
-    const tabs = screen.getAllByRole('button', { name: /^Possessions$/ });
+    const tabs = screen.getAllByRole('tab', { name: /^Possessions$/ });
     fireEvent.click(tabs[tabs.length - 1]);
     expect(screen.getByText('Unnamed contact')).toBeInTheDocument();
   });

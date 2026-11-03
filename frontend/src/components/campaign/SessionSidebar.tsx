@@ -12,6 +12,7 @@
 
 import { useGameStore } from '@/stores/gameStore';
 import { cn } from '@/utils/cn';
+import { tabKeyTarget } from '@/utils/tabKeys';
 import SessionPanels from './SessionPanels';
 import { SESSION_TABS, SESSION_TAB_LOOKS, unreadBadge } from './sessionTabs';
 import { useTableSlot } from './tableHosts';
@@ -24,12 +25,13 @@ export default function SessionSidebar() {
   const unreadChat = useGameStore((s) => s.unreadChat);
   const panelsSlot = useTableSlot('session');
 
-  // Roving-tabindex keyboard support: Left/Right arrows move between tabs.
+  // Roving-tabindex keyboard support: the arrows, Home and End move between
+  // tabs (tabKeyTarget, which every tab row shares).
   const handleTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const target = tabKeyTarget(e.key, index, TABS.length);
+    if (target === null) return;
     e.preventDefault();
-    const delta = e.key === 'ArrowLeft' ? -1 : 1;
-    const next = TABS[(index + delta + TABS.length) % TABS.length];
+    const next = TABS[target];
     setActiveTab(next.key);
     const tabEl = document.getElementById(`session-tab-${next.key}`);
     tabEl?.focus();

@@ -127,6 +127,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Fixed
 
+- **A character sheet's tabs are tabs to a screen reader and the keyboard.** The tabs of the D&D 5e and Call of Cthulhu sheets and of the D&D 5e, Pathfinder 2e and Call of Cthulhu editors were plain buttons, so a screen reader heard neither tabs nor which one was open, and each tab was a stop for **Tab**. They are now a row of tabs over the sheet as their panel: **Tab** stops on the open tab, the left and right arrows open the tab before or after, round the ends, and **Home** and **End** the first and the last. The Admin Panel's tabs answered no keys either and now do the same, and the session panel's tabs (**Chat**, **Dice** and the rest) take **Home** and **End** as well as the arrows.
+
 - **A token you have picked up keeps its hit-point bar, condition badges and rings.** While a token was held it was drawn only as a faded picture, without its hit-point bar, its condition badges, the gold turn ring or the initiative tracker's ring, which on a tablet, where a token can stay held for a while, hid them for as long as it stayed. While it waits on its own square it is now drawn faded with all of them; carried to another square it is the faded picture, as before.
 
 - **Create Map's and Edit Map's buttons no longer sit over the form.** **Cancel** and **Create Map** or **Save Changes** stood in a see-through bar inside the scrolling form, narrower than the dialog, so on a phone the **Grid Size** box and the fields below it showed through and around them. The form now scrolls on its own, and the buttons stand under it on the dialog's surface.

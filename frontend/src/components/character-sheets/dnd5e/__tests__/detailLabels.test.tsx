@@ -58,7 +58,7 @@ describe.each([
 ])('the %s tab', (_tab, tab, labels) => {
   it.each(labels)('names the %s box', (label) => {
     open();
-    fireEvent.click(screen.getByRole('button', { name: tab }));
+    fireEvent.click(screen.getByRole('tab', { name: tab }));
     expect(screen.getAllByLabelText(label, { exact: true }).length).toBeGreaterThan(0);
   });
 });

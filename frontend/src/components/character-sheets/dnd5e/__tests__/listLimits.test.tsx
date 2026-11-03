@@ -24,7 +24,7 @@ const FULL = /This list is full: a sheet holds at most 2 entries here/;
 
 function open(tab: RegExp, overrides: Record<string, unknown>) {
   render(<DnD5eCharacterEditor character={dnd5eCharacter(overrides)} onSave={vi.fn()} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: tab }));
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
 }
 
 const item = (name: string) => ({ name, quantity: 1, weight: 0, notes: '', equippable: false, equipped: false, requiresAttunement: false, attuned: false, value: 0 });

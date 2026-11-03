@@ -67,7 +67,7 @@ function renderFeaturesTab(sheet: Record<string, unknown>) {
       onCancel={vi.fn()}
     />
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Features' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Features' }));
   return result;
 }
 
@@ -202,7 +202,7 @@ describe('saving', () => {
         onCancel={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Features' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Features' }));
     expect(featureNames()).toEqual(['Ability Score Improvement', 'Ability Score Improvement']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

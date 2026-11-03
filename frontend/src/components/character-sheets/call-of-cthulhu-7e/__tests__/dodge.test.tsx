@@ -77,7 +77,7 @@ describe('Dodge in the editor', () => {
 
   it('can be raised like any other skill', async () => {
     const onSave = renderEditor(withDodge(25, 25));
-    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Skills' }));
 
     const box = dodgeBox();
     expect(box).not.toBeNull();

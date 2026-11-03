@@ -103,7 +103,7 @@ describe('a sheet made from a built-in Pathfinder 2e template', () => {
 
   it('adds a spell to a prepared caster already prepared', async () => {
     const saved = await openAndSave(() => {
-      fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Spells' }));
       fireEvent.click(screen.getByRole('button', { name: 'Add Spell' }));
     });
 

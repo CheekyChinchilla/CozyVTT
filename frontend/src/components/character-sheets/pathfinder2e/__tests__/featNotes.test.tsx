@@ -21,7 +21,7 @@ const feats = (classFeats: Record<string, unknown>[]) => ({ ancestryAndHeritage:
 function open(classFeats: Record<string, unknown>[]) {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<Pathfinder2eCharacterEditor character={pf2eCharacter({ feats: feats(classFeats) })} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: /Feats & Features/ }));
+  fireEvent.click(screen.getByRole('tab', { name: /Feats & Features/ }));
   return async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());

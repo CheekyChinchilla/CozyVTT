@@ -83,7 +83,7 @@ describe('saving typed cantrips', () => {
       <DnD5eCharacterEditor character={character} onSave={onSave} onCancel={vi.fn()} onDirtyChange={onDirtyChange} />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Spells/ }));
     fireEvent.change(screen.getByPlaceholderText(/Enter cantrips separated by commas/), {
       target: { value: 'Fire Bolt, Light' },
     });

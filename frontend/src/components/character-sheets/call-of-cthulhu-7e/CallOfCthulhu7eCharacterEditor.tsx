@@ -5,7 +5,7 @@
  * derived stats, half/fifth values, and validation.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import {
   User,
   Target,
@@ -70,7 +70,7 @@ import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { COLOR_PRESETS } from './colorPresets';
-import { SheetTabs, type SheetTab } from '../SheetTabs';
+import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -164,6 +164,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   allowTokenPicture = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const sheetTabsId = useId();
   const [isSaving, setIsSaving] = useState(false);
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
@@ -1361,7 +1362,7 @@ value={formData.wealth?.cash}
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
-      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
+      <SheetTabs id={sheetTabsId} tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
       {refusals.length > 0 && (
         <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
@@ -1376,7 +1377,7 @@ value={formData.wealth?.cash}
           the tabs. On a phone the sheet scrolls as one, in the shell's own
           scroller, with no second scroller inside it sized from a 100vh that
           is taller than the part of the screen the browser shows. */}
-      <div data-sheet-body className="p-3 sm:p-6 bg-paper sm:max-h-[calc(100vh-200px)] sm:overflow-y-auto">
+      <div data-sheet-body {...sheetTabPanel(sheetTabsId, activeTab)} className="p-3 sm:p-6 bg-paper sm:max-h-[calc(100vh-200px)] sm:overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}

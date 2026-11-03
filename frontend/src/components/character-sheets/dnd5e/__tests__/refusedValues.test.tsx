@@ -25,9 +25,9 @@ function open(overrides: Record<string, unknown> = {}) {
   render(<DnD5eCharacterEditor character={dnd5eCharacter(overrides)} onSave={onSave} onCancel={vi.fn()} />);
   return onSave;
 }
-const tab = (name: RegExp) => fireEvent.click(screen.getByRole('button', { name }));
+const tab = (name: RegExp) => fireEvent.click(screen.getByRole('tab', { name }));
 const pressSave = () => fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-const shownTab = () => screen.getAllByRole('button').find((b) => b.getAttribute('aria-current') === 'page')?.textContent;
+const shownTab = () => screen.getAllByRole('tab').find((b) => b.getAttribute('aria-selected') === 'true')?.textContent;
 const spear = { name: 'Spear', attackBonus: 2, damageRoll: '1d6', damageType: 'piercing', range: 20, properties: [] as string[] };
 
 describe('the boxes', () => {

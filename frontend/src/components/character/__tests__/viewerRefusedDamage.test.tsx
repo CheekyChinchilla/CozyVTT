@@ -41,7 +41,7 @@ beforeEach(() => {
 
 it("says why a D&D 5e attack's damage does not roll, and sends nothing", async () => {
   open(dnd5eCharacter({ attacks: [{ name: 'Longsword', attackBonus: 5, damageRoll: '1d8 slashing', damageType: '', range: 5, properties: [], notes: '' }] }));
-  fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
   fireEvent.click(screen.getByText('1d8 slashing'));
 
   await vi.waitFor(() => expect(showToast).toHaveBeenCalledWith(
@@ -62,7 +62,7 @@ it("says why a Pathfinder 2e strike's damage does not roll, and sends nothing", 
 
 it("says why a Call of Cthulhu weapon's damage does not roll, and sends nothing", async () => {
   open(cocCharacter({ combat: { weapons: [{ name: 'Rock', skill: 'Throw', skillValue: 20, damage: '1d4 thrown', range: 'STR/5 ft', attacks: 1 }] } }));
-  fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
   fireEvent.click(screen.getByText('1d4 thrown'));
 
   await vi.waitFor(() => expect(showToast).toHaveBeenCalledWith(

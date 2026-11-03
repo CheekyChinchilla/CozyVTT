@@ -45,7 +45,7 @@ function open(skill: number, box: number | undefined) {
 describe('Cthulhu Mythos', () => {
   it('typed in the box lowers maximum Sanity and is saved as the skill', async () => {
     const save = open(0, 0);
-    fireEvent.click(screen.getByRole('button', { name: /Backstory/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Backstory/ }));
     fireEvent.change(screen.getByLabelText('Cthulhu Mythos'), { target: { value: '8' } });
 
     const saved = await save();
@@ -63,7 +63,7 @@ describe('Cthulhu Mythos', () => {
 
   it('stops the box at 99, where maximum Sanity reaches 0', () => {
     open(0, undefined);
-    fireEvent.click(screen.getByRole('button', { name: /Backstory/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Backstory/ }));
     expect(screen.getByLabelText('Cthulhu Mythos')).toHaveAttribute('max', '99');
   });
 

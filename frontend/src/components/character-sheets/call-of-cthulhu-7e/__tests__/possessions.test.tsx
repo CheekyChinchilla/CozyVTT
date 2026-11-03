@@ -24,7 +24,7 @@ describe('possessions', () => {
         onCancel={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Possessions' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Possessions' }));
 
     const box = screen.getByPlaceholderText(/List possessions/) as HTMLTextAreaElement;
     expect(box.value).toBe('Knife - sharp - old');

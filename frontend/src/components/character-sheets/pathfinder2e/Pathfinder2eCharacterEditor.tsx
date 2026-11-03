@@ -5,7 +5,7 @@
  * auto-calculation, validation, color customization, and token upload.
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useId } from 'react';
 import {
   Target,
   Swords,
@@ -80,7 +80,7 @@ import {
   SPELL_SLOTS_MAX,
 } from '@/constants/sheetLimits';
 import { COLOR_PRESETS } from './colorPresets';
-import { SheetTabs, type SheetTab } from '../SheetTabs';
+import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
 
 /**
  * The sheet as this editor holds it.
@@ -245,6 +245,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   allowTokenPicture = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
+  const sheetTabsId = useId();
   const [isSaving, setIsSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -1971,7 +1972,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
-      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : selectedColor.hex} />
+      <SheetTabs id={sheetTabsId} tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : selectedColor.hex} />
       {refusals.length > 0 && (
         <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
@@ -1988,7 +1989,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
           keeps the new values.
         </p>
       )}
-      <div data-sheet-body className="p-3 sm:p-6">
+      <div data-sheet-body {...sheetTabPanel(sheetTabsId, activeTab)} className="p-3 sm:p-6">
         {activeTab === 'stats' && renderStatsTab()}
         {activeTab === 'combat' && renderCombatTab()}
         {activeTab === 'spells' && renderSpellsTab()}

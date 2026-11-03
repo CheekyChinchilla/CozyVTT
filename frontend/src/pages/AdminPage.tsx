@@ -92,6 +92,7 @@ import DeletionBlockers from '@/components/admin/DeletionBlockers';
 import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
 import { LogActor, LogChanges } from '@/components/admin/AdminLogDetails';
 import { formatDuration, formatFileSize, formatRelativeTime, type FileSizeOptions } from '@/utils/format';
+import { tabKeyTarget } from '@/utils/tabKeys';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -956,6 +957,16 @@ export default function AdminPage() {
     { id: 'activity',  label: 'Activity',  icon: <Activity className="w-4 h-4" /> },
   ];
 
+  // The open tab is the one stop for Tab; the arrows, Home and End open
+  // another and move the focus to it (tabKeyTarget).
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const target = tabKeyTarget(event.key, index, tabs.length);
+    if (target === null) return;
+    event.preventDefault();
+    setActiveTab(tabs[target].id);
+    document.getElementById(`tab-${tabs[target].id}`)?.focus();
+  };
+
   // ============================================
   // Render
   // ============================================
@@ -1009,14 +1020,16 @@ export default function AdminPage() {
                 scrollFade(tabStripMore, { belowLg: true })
               )}
             >
-              {tabs.map(tab => (
+              {tabs.map((tab, index) => (
                 <button
                   key={tab.id}
                   role="tab"
                   id={`tab-${tab.id}`}
                   aria-selected={activeTab === tab.id}
                   aria-controls={`tabpanel-${tab.id}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
                   onClick={() => setActiveTab(tab.id)}
+                  onKeyDown={(event) => onTabKeyDown(event, index)}
                   // A tab reached with the keyboard comes wholly into view;
                   // the browser stops at one partly shown.
                   onFocus={(e) => { if (tabStripRef.current) keepInStrip(tabStripRef.current, e.currentTarget); }}

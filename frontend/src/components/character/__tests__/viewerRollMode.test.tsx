@@ -68,7 +68,7 @@ describe('Roll mode on a D&D 5e sheet', () => {
     fireEvent.click(screen.getByText('dexterity'));
     fireEvent.click(screen.getByText('Stealth'));
     fireEvent.click(screen.getByText('STR'));
-    fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
     fireEvent.click(screen.getByText('Spear'));
 
     expect(rolled()).toEqual([
@@ -99,7 +99,7 @@ describe('Roll mode on a D&D 5e sheet', () => {
     open(mine(dnd5eCharacter({ attacks: [spear] })));
 
     choose('Advantage');
-    fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
     fireEvent.click(screen.getByTitle('Click to roll damage: 1d6+2'));
     fireEvent.click(screen.getByTitle(/^Spend one hit die/));
 

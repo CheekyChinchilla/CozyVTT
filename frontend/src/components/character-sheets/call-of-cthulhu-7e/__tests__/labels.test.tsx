@@ -21,7 +21,7 @@ const weapon = { name: '.38 Revolver', skill: 'Handgun', skillValue: 20, damage:
 function open(tab: RegExp) {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<CallOfCthulhu7eCharacterEditor character={cocCharacter({ combat: { weapons: [weapon] } })} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: tab }));
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
   return onSave;
 }
 

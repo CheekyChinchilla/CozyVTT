@@ -112,7 +112,7 @@ describe('press and hold a stat', () => {
 
     expect(hold('Stealth', 1)).toBe('Stealth Check');
     expect(hold('STR', 2)).toBe('Strength Check');
-    fireEvent.click(screen.getByRole('button', { name: 'Combat' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Combat' }));
     expect(hold('Spear', 3)).toBe('Spear Attack');
   });
 
