@@ -47,6 +47,9 @@ interface CampaignSettingsModalProps {
 
 type SettingsTab = 'general' | 'chat' | 'members' | 'danger';
 
+/** A switch's press, a finger's height around its 24 px pill on a touch screen. */
+const SWITCH_PRESS = "pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2.5 pointer-coarse:after:content-['']";
+
 export default function CampaignSettingsModal({
   isOpen,
   onClose,
@@ -335,7 +338,7 @@ export default function CampaignSettingsModal({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                className={`touch-target px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                   activeTab === tab.id
                     ? tab.id === 'danger'
                       ? 'bg-danger/10 text-danger-ink border border-danger/20'
@@ -429,7 +432,7 @@ export default function CampaignSettingsModal({
                   aria-checked={playersMayDrawShown ?? campaign.playersMayDraw ?? true}
                   aria-labelledby="cs-players-may-draw"
                   onClick={() => void handlePlayersMayDraw(!(playersMayDrawShown ?? campaign.playersMayDraw ?? true))}
-                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${SWITCH_PRESS} ${
                     (playersMayDrawShown ?? campaign.playersMayDraw ?? true) ? 'bg-moss-green' : 'bg-warm-gray/30'
                   }`}
                 >
@@ -454,15 +457,16 @@ export default function CampaignSettingsModal({
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-stone-gray">Include audio assets</p>
+                    <p id="cs-export-audio" className="text-sm text-stone-gray">Include audio assets</p>
                     <p className="text-xs text-warm-gray">The tracks your atmosphere plays</p>
                   </div>
                   <button
                     type="button"
                     role="switch"
                     aria-checked={exportIncludeAudio}
+                    aria-labelledby="cs-export-audio"
                     onClick={() => setExportIncludeAudio((v) => !v)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${SWITCH_PRESS} ${
                       exportIncludeAudio ? 'bg-moss-green' : 'bg-warm-gray/30'
                     }`}
                   >
