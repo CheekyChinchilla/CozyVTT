@@ -53,9 +53,7 @@ export const SectionEditor: React.FC<SectionEditorProps> = ({
           onClick={onRemove}
           // Shown where nothing can hover, such as a phone, where a finger
           // never brings it up.
-          // TODO(sheets): a keyboard reaches this button but never shows it; it wants
-          // focus-visible:opacity-100, here and on the list, table and stat ones.
-          className="shrink-0 touch-target inline-flex items-center justify-center p-2 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-danger/15"
+          className="shrink-0 touch-target inline-flex items-center justify-center p-2 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-danger/15"
           title="Remove section"
         >
           <Trash2 className="w-4 h-4" />

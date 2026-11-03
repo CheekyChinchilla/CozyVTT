@@ -2240,9 +2240,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     updateField('attacks', newAttacks);
                     removeCustomPropertyDraft(index);
                   }}
-                  // TODO(sheets): this button has no accessible name, so a screen
-                  // reader announces "times"; it wants aria-label "Remove <attack>",
-                  // as the hit dice and feature rows have.
+                  aria-label={`Remove ${attack.name || 'attack'}`}
                   className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×
@@ -2733,8 +2731,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index);
                   updateField('spellcasting.spells', newSpells);
                 }}
-                // TODO(sheets): no accessible name here either; it wants
-                // aria-label "Remove <spell>".
+                aria-label={`Remove ${spell.name || 'spell'}`}
                 className="touch-target inline-flex items-center justify-center px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
               >
                 ×
@@ -2830,8 +2827,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     const newInventory = formData.inventory!.filter((_, i) => i !== index);
                     updateField('inventory', newInventory);
                   }}
-                  // TODO(sheets): no accessible name here either; it wants
-                  // aria-label "Remove <item>".
+                  aria-label={`Remove ${item.name || 'item'}`}
                   className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×

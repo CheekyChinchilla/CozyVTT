@@ -1169,13 +1169,9 @@ aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_
         <div className="space-y-2">
           {(formData.loreSkills || []).map((lore, index) => (
             <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
-              {/* TODO(sheets): this delete button and the ones on strikes, cantrips,
-                  spells, focus spells, innate spells, rituals, items and feats show
-                  only a bin icon and have no accessible name. Each wants an
-                  aria-label naming its row, as Class Features' "Remove <name>" does. */}
               <div className="flex items-center justify-between mb-2">
                 <input type="text" aria-label={`Name of lore skill ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10 font-bold">
+                <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} aria-label={`Remove ${lore.name || 'lore skill'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10 font-bold">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1386,7 +1382,7 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
             <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <input type="text" aria-label={`Name of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} aria-label={`Remove ${strike.name || 'strike'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1532,7 +1528,7 @@ aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_
             {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
               <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
                 <input type="text" aria-label={`Name of cantrip ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} aria-label={`Remove ${cantrip.name || 'cantrip'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1579,7 +1575,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
               <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" aria-label={`Name of spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} aria-label={`Remove ${spell.name || 'spell'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1652,7 +1648,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
             {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
               <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
                 <input type="text" aria-label={`Name of focus spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} aria-label={`Remove ${spell.name || 'focus spell'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1678,7 +1674,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
               <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" aria-label={`Name of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} aria-label={`Remove ${spell.name || 'innate spell'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1711,7 +1707,7 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
                     <option key={r} value={r}>Rank {r}</option>
                   ))}
                 </select>
-                <button onClick={() => { const newRituals = formData.spellcasting!.rituals!.filter((_, i) => i !== index); updateField('spellcasting.rituals', newRituals); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <button onClick={() => { const newRituals = formData.spellcasting!.rituals!.filter((_, i) => i !== index); updateField('spellcasting.rituals', newRituals); }} aria-label={`Remove ${ritual.name || 'ritual'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1766,7 +1762,7 @@ min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} on
             <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
                 <input type="text" aria-label={`Name of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
-                <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} aria-label={`Remove ${item.name || 'item'}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1878,7 +1874,7 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
                       <NumberField
 aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.${key}.${index}.level`, v)} className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={1} />
                     </div>
-                    <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
+                    <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} aria-label={`Remove ${feat.name || `${word} feat`}`} className="touch-target inline-flex items-center justify-center ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
