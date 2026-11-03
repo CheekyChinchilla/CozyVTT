@@ -93,3 +93,26 @@ describe('drawing a shape', () => {
     expect(calls[3].args).toEqual([110, 70]);
   });
 });
+
+describe('polygons and curves', () => {
+  const base = { width: 4, colour: '#111111', second: '#eeeeee' };
+
+  it('draw a polygon through its corners, closed, filled with the second colour inside an outline of the colour', () => {
+    const { ctx, calls } = recordingContext(document.createElement('canvas'));
+    const points: Array<[number, number]> = [[10, 10], [60, 10], [35, 50]];
+    drawShape(ctx, { ...base, kind: 'polygon', from: points[0], to: points[2], points, style: 'both' });
+    expect(calls.filter((c) => c.method === 'moveTo' || c.method === 'lineTo').map((c) => c.args)).toEqual([[10, 10], [60, 10], [35, 50]]);
+    expect(calls.map((c) => c.method)).toEqual(expect.arrayContaining(['closePath', 'fill', 'stroke']));
+    expect(shapeBox({ ...base, kind: 'polygon', from: points[0], to: points[2], points, style: 'both' })).toEqual({ x0: 7, y0: 7, x1: 63, y1: 53 });
+  });
+
+  it('draw a curve from end to end, bent towards its control point, as its outline', () => {
+    const { ctx, calls } = recordingContext(document.createElement('canvas'));
+    const curve = { ...base, kind: 'curve' as const, from: [10, 10] as [number, number], to: [90, 10] as [number, number], control: [50, 60] as [number, number], style: 'fill' as const };
+    drawShape(ctx, curve);
+    expect(calls.find((c) => c.method === 'quadraticCurveTo')?.args).toEqual([50, 60, 90, 10]);
+    expect(calls.some((c) => c.method === 'fill')).toBe(false);
+    expect(shapeBox(curve)).toEqual({ x0: 7, y0: 7, x1: 93, y1: 63 });
+    expect(scaleShape(curve, 2, 3).control).toEqual([100, 180]);
+  });
+});

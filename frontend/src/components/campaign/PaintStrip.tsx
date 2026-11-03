@@ -8,7 +8,7 @@
  *
  * - a header: Paint, Undo, Redo, Save and Done painting;
  * - the tool's hint;
- * - the eleven tools in one row that scrolls sideways, with the shared scroll
+ * - the thirteen tools in one row that scrolls sideways, with the shared scroll
  *   cue (on a short screen, a phone on its side, in the header's row);
  * - Colour and width, a button naming both, which opens a pop-over over the
  *   strip with the two colours, the palette, Another colour and the width,
@@ -264,7 +264,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
         </div>
       )}
 
-      {(tool === 'rect' || tool === 'ellipse') && (
+      {(tool === 'rect' || tool === 'ellipse' || tool === 'polygon') && (
         <div role="radiogroup" aria-label="Shape" className="flex flex-wrap gap-2 pr-2">
           {STYLES.map(({ style, label }) => (
             <label key={style} className={CHIP}>
@@ -281,7 +281,7 @@ export default function PaintStrip({ settings, onSettingsChange, canUndo, canRed
         </div>
       )}
 
-      {(tool === 'line' || tool === 'rect' || tool === 'ellipse') && (
+      {(tool === 'line' || tool === 'rect' || tool === 'ellipse' || tool === 'polygon' || tool === 'curve') && (
         <div className="flex flex-wrap gap-2 pr-2">
           {tool === 'line' && (
             <label className={CHIP}>

@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react';
-import { BrickWall, Circle, SquareDashed, Stamp, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
+import { BrickWall, Circle, Pentagon, Spline, SquareDashed, Stamp, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSelectionActions, PaintSettings, PaintTool } from './map/paint/usePaintSurface';
 import type { ShapeStyle } from './map/paint/paintShapes';
@@ -26,6 +26,8 @@ export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof
   line: { label: 'Line', key: 'L', icon: Minus },
   rect: { label: 'Rectangle', key: 'R', icon: Square },
   ellipse: { label: 'Ellipse', key: 'O', icon: Circle },
+  polygon: { label: 'Polygon', key: 'G', icon: Pentagon },
+  curve: { label: 'Curve', key: 'C', icon: Spline },
   room: { label: 'Room', key: 'M', icon: BrickWall },
   stamp: { label: 'Stamp', key: 'P', icon: Stamp },
   fill: { label: 'Fill', key: 'F', icon: PaintBucket },
@@ -40,6 +42,8 @@ export const HINTS: Record<PaintTool, string> = {
   line: 'Drag from one end to the other. Shift, or 15 degree steps, keeps it to 15 degree steps.',
   rect: 'Drag from one corner to the other.',
   ellipse: 'Drag across the box it fills.',
+  polygon: 'Click or tap each corner; click the first again, or press Enter, to close it. Backspace takes a corner back, Esc drops it.',
+  curve: 'Drag from one end to the other, then drag again to bend it; Enter paints it as it is, Esc drops it.',
   stamp: 'Click or tap a square to paint the stamp chosen into it, outlined in the colour and filled with the second. Turn turns the next one. A finger\'s drag moves the map.',
   room: 'Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour, and its four walls, which are added to the map when you save.',
   fill: 'Click or tap an area to fill it with the colour. A finger\'s drag moves the map.',
@@ -266,7 +270,7 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         />
       </label>
 
-      {(settings.tool === 'rect' || settings.tool === 'ellipse') && (
+      {(settings.tool === 'rect' || settings.tool === 'ellipse' || settings.tool === 'polygon') && (
         <fieldset className="flex flex-col gap-0.5">
           <legend className="text-[10px] text-stone-400 mb-0.5">Shape</legend>
           {STYLES.map(({ style, label }) => (
@@ -285,7 +289,7 @@ export default function PaintControls({ settings, onSettingsChange, canUndo, can
         </fieldset>
       )}
 
-      {(settings.tool === 'line' || settings.tool === 'rect' || settings.tool === 'ellipse') && (
+      {(settings.tool === 'line' || settings.tool === 'rect' || settings.tool === 'ellipse' || settings.tool === 'polygon' || settings.tool === 'curve') && (
         <div className="flex flex-col gap-0.5">
           {settings.tool === 'line' && (
             <label className="touch-target flex items-center gap-2 text-[11px] cursor-pointer select-none">
