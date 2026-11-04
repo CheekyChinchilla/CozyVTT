@@ -129,6 +129,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Fixed
 
+- **On a lit map without fog of war, players no longer see a strip of the map's edge.** With **Enable Dynamic Lighting** on and **Global Illumination** and **Fog of War** off, the darkness's softened edge faded out along the map's borders, so a player saw the picture and the grid there wherever their tokens could not see. The darkness now reaches the map's edges in full; what a token sees keeps its soft edge.
+
 - **A sheet editor's two notes under the portrait no longer overlap.** The message for a refused picture and **Saves as personal token** were both placed at the foot of the portrait, so for a character in no campaign one was drawn over the other. They now stand one under the other, in the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors.
 
 - **A screen reader names every remove button in the sheet editors.** The buttons that remove a D&D 5e attack, spell or inventory item were read as "times", and the Pathfinder 2e editor's buttons that remove a lore skill, a strike, a cantrip, a spell, a focus or innate spell, a ritual, an item or a feat only as "button". Each now names its row, such as "Remove Longsword". In a Flexible sheet's editor the remove buttons, which appear when the pointer is over their row, now appear when the keyboard reaches them too, and a list entry's tick is named after its entry and says whether it is ticked.

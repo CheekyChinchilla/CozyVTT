@@ -151,6 +151,9 @@ function sameComposite(a: LightingComposite | null, b: LightingComposite): boole
     && sameItems(a.map, b.map);
 }
 
+/** How far the darkness's edge is softened, in CSS pixels. */
+const DARKNESS_BLUR_CSS_PX = 4;
+
 /**
  * Player-view darkness pass. Assumes the caller has already decided the
  * viewer should see fog (actual player, or DM in preview mode).
@@ -238,9 +241,22 @@ export function drawDynamicLighting(
   // Composite onto main canvas with soft blur edge. A filter's length is in
   // the canvas's own pixels, so the ratio keeps the edge 4 CSS pixels wide.
   ctx.save();
-  ctx.filter = `blur(${4 * state.dpr}px)`;
+  ctx.filter = `blur(${DARKNESS_BLUR_CSS_PX * state.dpr}px)`;
   ctx.drawImage(offscreen, 0, 0, mapWidthPx, mapHeightPx);
   ctx.filter = 'none';
+  ctx.restore();
+
+  // The blur fades the darkness into the clear space past the map, which
+  // showed a strip of the map's edge. Along the edges, as far as the blur
+  // reaches (three of its lengths, in map pixels at this zoom), the
+  // darkness is drawn again unblurred.
+  const band = (3 * DARKNESS_BLUR_CSS_PX) / viewport.zoom;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, mapWidthPx, mapHeightPx);
+  ctx.rect(band, band, Math.max(0, mapWidthPx - 2 * band), Math.max(0, mapHeightPx - 2 * band));
+  ctx.clip('evenodd');
+  ctx.drawImage(offscreen, 0, 0, mapWidthPx, mapHeightPx);
   ctx.restore();
 
   // Cozy torch-glow: warm radial gradient around each controlled token
