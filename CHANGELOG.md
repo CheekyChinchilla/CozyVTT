@@ -137,7 +137,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The AoE Shape panel no longer covers the map's toolbar with a mouse.** It opened 20 pixels above the foot of the toolbar, over the lower part of **Zoom Out**, the zoom, **Zoom In** and **Fit to Screen**. It now opens under the toolbar with every pointer.
 
-- **Deleting a campaign tells its owner once.** **Delete Campaign** in Campaign Settings showed two notices, the panel's "Campaign deleted" and the page's "This campaign was deleted.", both on the way to the dashboard. It now shows one.
+- **Deleting a campaign tells its owner once.** **Delete Campaign** in Campaign Settings showed two notices, the panel's "Campaign "<name>" deleted" and the page's "This campaign was deleted.", both on the way to the dashboard. It now shows one.
 
 - **Remove from Campaign names the character.** The question in the Campaign Roster asked "Are you sure you want to remove this character from the campaign?", so a menu opened on the wrong row could remove someone the DM did not mean. It now names the character: "Remove Ash's hero from the campaign?"
 
@@ -151,9 +151,9 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A map's spirit layer picture is never drawn over another map.** On a switch to another map with a spirit layer, the last map's spirit picture went on being drawn over the new map until the new one's had loaded, which on a slow connection or a large picture could be some seconds. Only the spirit picture of the map on screen is drawn now.
 
-- **A screen reader names the size boxes in Create Map and Edit Map.** The **Width**, **Height**, **Grid Size** and **Detail** boxes had labels tied to nothing, so a screen reader announced each as an unnamed number box. Each box is now named by its label.
+- **A screen reader names the size boxes in Create Map and Edit Map.** The **Width (grid squares)**, **Height (grid squares)**, **Grid Size (px/square)** and **Detail (pixels per square)** boxes had labels tied to nothing, so a screen reader announced each as an unnamed number box. Each box is now named by its label.
 
-- **Create Map's and Edit Map's buttons no longer sit over the form.** **Cancel** and **Create Map** or **Save Changes** stood in a see-through bar inside the scrolling form, narrower than the dialog, so on a phone the **Grid Size** box and the fields below it showed through and around them. The form now scrolls on its own, and the buttons stand under it on the dialog's surface.
+- **Create Map's and Edit Map's buttons no longer sit over the form.** **Cancel** and **Create Map** or **Save Changes** stood in a see-through bar inside the scrolling form, narrower than the dialog, so on a phone the **Grid Size (px/square)** box and the fields below it showed through and around them. The form now scrolls on its own, and the buttons stand under it on the dialog's surface.
 
 - **The grid preview in Create Map and Edit Map is sharp on a phone.** It was drawn at one pixel per point, so on a phone, a tablet or a high-density monitor the picture and the grid lines were soft, at a third of the screen's pixels on most phones. It is now drawn at the screen's own density, as the map is.
 
