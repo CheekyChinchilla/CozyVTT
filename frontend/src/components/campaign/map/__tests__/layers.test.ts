@@ -873,7 +873,7 @@ describe('drawDynamicLighting', () => {
       fillStyle: '', filter: 'none', globalAlpha: 1, imageSmoothingEnabled: true,
       createRadialGradient: (...args: number[]) => { gradients.push(args); return gradient; },
     } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string; filter: string };
-    for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
+    for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo', 'rect',
       'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage', 'setTransform', 'translate', 'scale']) {
       (ctx as unknown as Record<string, unknown>)[m] = (...args: unknown[]) =>
         ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle), filter: String(ctx.filter), src: args[0], args });
@@ -972,7 +972,7 @@ describe('drawDynamicLighting', () => {
     expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'saturation')).toBe(true);
     expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'source-over' && c.fillStyle === 'rgba(15, 12, 25, 0.65)')).toBe(true);
     expect(memory.ops.some((c) => c.method === 'drawImage' && c.op === 'destination-in')).toBe(true);
-    expect(main.ops.filter((c) => c.method === 'drawImage')).toHaveLength(2); // memory, then the darkness
+    expect(main.ops.filter((c) => c.method === 'drawImage')).toHaveLength(3); // memory, the darkness, its edges
   });
 
   // The memory pass works on screen-sized canvases, whose pixels are the
@@ -999,10 +999,31 @@ describe('drawDynamicLighting', () => {
   // A canvas filter's length is in the canvas's own pixels.
   it('softens the darkness edge over 4 CSS pixels at any ratio', () => {
     const blurAt = (dpr: number) => {
-      const draws = run({ withLight: true, dpr }).main.ops.filter((c) => c.method === 'drawImage');
+      const draws = run({ withLight: true, dpr }).main.ops.filter((c) => c.method === 'drawImage' && c.filter.startsWith('blur'));
       return draws[draws.length - 1]?.filter;
     };
     expect([blurAt(1), blurAt(2), blurAt(3)]).toEqual(['blur(4px)', 'blur(8px)', 'blur(12px)']);
+  });
+
+  // The blur faded the darkness into the clear space past the map, so a
+  // player saw a strip of the map's edge on a lit map without fog of war.
+  // A band along the edges, as wide as the blur reaches, is drawn again
+  // unblurred.
+  it('keeps the darkness whole along the map\'s edges, at any zoom', () => {
+    for (const zoom of [1, 0.25]) {
+      const { main, lighting } = run({ withLight: true, view: { zoom, panOffset: { x: 0, y: 0 } } });
+      const ops = main.ops;
+      const blurred = ops.findIndex((c) => c.method === 'drawImage' && c.filter.startsWith('blur'));
+      const sharp = ops.findIndex((c, i) => i > blurred && c.method === 'drawImage' && c.filter === 'none');
+      expect(blurred).toBeGreaterThan(-1);
+      expect(sharp).toBeGreaterThan(blurred);
+      expect((ops[sharp].src as { getContext: () => unknown }).getContext()).toBe(lighting.ctx);
+      // The band: the map's rectangle less one inset by three blur lengths, in map pixels.
+      const band = 12 / zoom;
+      const rects = ops.slice(blurred, sharp).filter((c) => c.method === 'rect').map((c) => c.args);
+      expect(rects).toEqual([[0, 0, W, H], [band, band, Math.max(0, W - 2 * band), Math.max(0, H - 2 * band)]]);
+      expect(ops.slice(blurred, sharp).find((c) => c.method === 'clip')?.args).toEqual(['evenodd']);
+    }
   });
 
   it('runs no memory pass when nothing is remembered', () => {
@@ -1147,8 +1168,8 @@ describe('drawDynamicLighting', () => {
         .filter((c) => c.method === 'drawImage' && lighting.has(c.src));
       // light into coverage, coverage into light, three into the memory mask,
       // coverage into the darkness, three into the explored cut, the cut into
-      // the darkness, the darkness onto the map
-      expect(composites).toHaveLength(11);
+      // the darkness, the darkness onto the map, and again along its edges
+      expect(composites).toHaveLength(12);
       for (const c of composites) expect(destination(c)).toEqual([5000, 3400]);
     });
 
@@ -1233,7 +1254,8 @@ describe('drawDynamicLighting', () => {
       s.draw({}, { panOffset: { x: 40, y: -10 } });
 
       const offscreen = s.base.lightingCanvas.current;
-      expect(s.main.ops.filter((c) => c.method === 'drawImage' && c.src === offscreen)).toHaveLength(2);
+      // Each frame: the blurred darkness, and its edges again unblurred.
+      expect(s.main.ops.filter((c) => c.method === 'drawImage' && c.src === offscreen)).toHaveLength(4);
       expect(s.memoryMask.ops.filter((c) => c.method === 'setTransform' && c.args[4] === 40)).toHaveLength(1);
     });
 
