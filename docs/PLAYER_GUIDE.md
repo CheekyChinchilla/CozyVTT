@@ -281,7 +281,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it. A roll you make from your sheet, the roster or the map's **Roll...** menu lands there too; if one doesn't go through, a message says why.
 
 **Rolling custom expressions:**
-Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. On a phone the two boxes are under **More options**, below the expression. Supported notation:
+Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. On a phone the two boxes are under **More**, below the expression. Supported notation:
 
 | Expression | What it does |
 |-----------|-------------|
@@ -370,6 +370,8 @@ When the DM has placed your character's token on the map, you can move it: click
 **Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight, two squares in from the edge. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then the **Ping** button if you pressed it, then a token you're holding, then the drawing tools, the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
 
 *GIF pending — Picking up a player token and placing it across the map.*
+
+A token you carry with a mouse past the edge of the map is drawn at the edge, where the rest of the table sees it.
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
@@ -463,7 +465,7 @@ Notes save themselves a moment after you stop typing — there's no Save button 
 
 A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
 
-**If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
+**If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, with each roll's **Character** and **Purpose**, and **Download** in that window to save them all, those included, as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
 
 ### Catching up on last time
 
@@ -509,7 +511,7 @@ If you ping repeatedly in quick succession, some will be quietly ignored — tha
 
 **Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
 
-**Double tap to ping.** On a touch screen, two quick taps on empty ground ping the spot where the second lands. The taps must come within half a second of each other and land within 20 pixels of each other. The first tap still does what a tap does, such as clearing the selection, so there is no wait. A third quick tap starts again: three taps ping once, four twice. It works only while no tool is up: with **Ping**, **Draw**, the **Ruler** or **AoE Shape** up, a tap is that tool's. Two taps on a token, or on a door, do what they always do and ping nothing; to point at a creature, use **Ping**, or press and hold it if it has no menu for you. A stylus double taps the same way; a mouse's double-click pings nothing.
+**Double tap to ping.** A tap that closes a menu does not count toward one. On a touch screen, two quick taps on empty ground ping the spot where the second lands. The taps must come within half a second of each other and land within 20 pixels of each other. The first tap still does what a tap does, such as clearing the selection, so there is no wait. A third quick tap starts again: three taps ping once, four twice. It works only while no tool is up: with **Ping**, **Draw**, the **Ruler** or **AoE Shape** up, a tap is that tool's. Two taps on a token, or on a door, do what they always do and ping nothing; to point at a creature, use **Ping**, or press and hold it if it has no menu for you. A stylus double taps the same way; a mouse's double-click pings nothing.
 
 ### Drawing and pointing
 
@@ -523,7 +525,7 @@ If you ping repeatedly in quick succession, some will be quietly ignored — tha
 | **Polygon** | Click or tap each corner, then the first corner again, or **Done**, to close it. |
 | **Text label** | Click or tap where it goes, type it and press **Enter**. |
 | **Eraser** | Click or tap one of your own drawings to erase it. |
-| **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. |
+| **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. With reduced motion turned on in your system the trail does not fade: it shows whole for 3 seconds, then goes. |
 
 Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the DM can erase anyone's.
 
@@ -760,7 +762,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 ### Keyboard Shortcuts
 
-On the map, once you've clicked it. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see this list on screen.
+On the map, once you've clicked it. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see this list on screen. It shows the keys that do something for you; the DM's also has the wall and undo keys.
 
 | Action | Shortcut |
 |--------|---------|
