@@ -2054,58 +2054,69 @@ Add `-- --dry-run` first if you would like to see what it would change. D&D 5e s
 
 - **A token's hit points, size, conditions and stat block are now checked before they are stored.**
 
-## [1.2.2] — 2026-08-27
-
-### Added
-
-- **Campaign invitation emails are now opt-in.** Inviting a player used to email them every time, with no way to say no — awkward if you're sitting next to them, or if the address on file is stale. The invite dialog has a **Also email them an invitation** checkbox, unticked by default; the invitation still appears on their dashboard either way, which is what they actually act on. On an instance with no mail server configured the box explains itself and stays disabled rather than silently doing nothing
-
-### Changed
-
-- **Clicking a character in your gallery opens it for reading, not for editing.** It used to drop you straight into the editor, so glancing at your own character meant entering a screen you could accidentally change things in and then had to back out of. It now opens the sheet to read, with **Edit** on the sheet when you want it — the same order the campaign screen already used
-- **Players joining and leaving no longer post to chat.** Those notices were written every time a connection was made or lost — so on every page load, every refresh and every brief network blip — and each one was a permanent message, not just a passing notification. On a flaky connection they buried the actual conversation. Who is currently in the session is now shown as a green or grey dot beside each name in the **Campaign Roster**, which is what the messages were trying to tell you. Someone with two tabs open stays green until they close the last one, and moving to another campaign clears them from the one they left. Existing campaigns keep the messages they already have; a DM can clear them with the eraser button on the chat panel, and nothing is deleted on upgrade
-
-### Fixed
-
-- **The Roll button no longer sticks on "Rolling…".** The cause was not in the dice code at all: reconnecting to the server replaced the underlying connection and every live subscription in the app was quietly left attached to the discarded one. Nothing re-subscribed, so the panel stopped hearing about its own rolls — and since the button is only released when the result comes back, it stayed disabled until the page was reloaded. That is why nobody could pin down a trigger: the trigger was a dropped connection, which has no visible sign. Subscriptions now survive a reconnect, so chat, the roster and everything else keep working after a blip too — including tokens moving on the map and the initiative tracker, which subscribed in a way the central repair did not reach and were corrected alongside it. As a backstop, a roll that goes unanswered for ten seconds releases the button and says so rather than leaving you stuck
-- **A character's name now appears on its sheet.** The name typed when creating a character was stored, but the sheet kept its own separate name field and nothing joined the two — so every new character opened showing "New Character". The sheet is now filled in from the name you gave it. **Player Name** is filled in from your display name and is no longer an editable field: it identifies whoever owns the character, so it is not free text. Characters created before this release are not changed
-- **Number fields on character sheets can be cleared and retyped.** Deleting the contents of a box put its default straight back, so the next keystroke was appended to that — selecting an ability score and typing "18" gave you something else entirely. Boxes now stay empty while you type and are only corrected when you leave them, so an out-of-range value is caught without fighting you halfway through entering it. This applies to every numeric field on the sheets, not only ability scores: hit points, experience, level, proficiency bonus, speed, armour class and the rest
-- **Changing a character's token image updates the map.** A token keeps its own copy of the picture from when it was placed, so editing the character sheet left the old one on the map until the DM removed and re-added the token. Tokens bound to that character now update in place, for everyone, without a reload. A token's **name** is deliberately not overwritten — a DM may have renamed it, and losing that on a player's next save would be its own annoyance
-- **Roll history survives a refresh.** ([#25](https://github.com/CheekyChinchilla/CozyVTT/issues/25)) Every roll was already being saved — to a dice table *and* the message log — but nothing ever read them back, so the dice panel was seeded only by rolls that happened while you had the page open. Reloading, navigating away and back, or dropping your connection all started you from an empty list. History now loads from the server on open and re-syncs after a reconnect. **Secret rolls stay secret**: the server decides what each person may see before anything is sent, so a player gets public rolls plus their own hidden ones, and a DM gets everything — refreshing never reveals a roll you were not already entitled to. One limit worth knowing: rolls made while the session is **paused** are still calculated in your browser and never reach the server, so those remain local and will not come back
-- **Clearing roll history now sticks.** The DM's Clear button told every connected client to empty its list but changed nothing on the server, so a reload brought everything straight back. It now records when the history was cleared and serves only rolls newer than that. The rolls themselves are kept rather than deleted — secret rolls are stored deliberately so a DM can audit them later, and an accidental Clear should not destroy that. Ending a session does not clear history; only the DM's Clear does
-- **Leaving the character editor asks before discarding your work — and only then.** Opening a sheet from the campaign screen has always confirmed when you cancel, but the full-page editor at Characters → Edit did not: its confirmation was written and wired up, yet gated on a flag nothing ever set, so the back arrow discarded unsaved edits without a word. The sheet now reports whether it actually holds unsaved edits, so the warning appears when there is genuinely something to lose and stays out of the way otherwise. It no longer interrupts you after a successful save, or when you were only reading a sheet and never changed anything — a prompt that cannot be trusted is one people learn to click straight through. The warning now also covers closing or reloading the browser tab, which the back arrow's confirmation never could
-- **Invitation links now open the "choose a password" screen instead of the sign-in page.** ([#22](https://github.com/CheekyChinchilla/CozyVTT/issues/22)) The email was always correct — it carried a valid one-time token to `/accept-invite` — but the page threw the invitation away before it could be used. The API client redirects to the login page whenever a request comes back unauthorized, skipping that for pages a signed-out visitor is expected to be on. `/accept-invite` was added to the router and never added to that list, so an invited user, who by definition is not signed in yet, was bounced to `/auth/login` the moment the page checked who they were. The redirect discards the query string, which took the token with it, so the link could not even be retried. Invited users could never complete sign-up without an admin issuing them a password by hand
-- **The character sheet no longer shows two Save buttons.** ([#23](https://github.com/CheekyChinchilla/CozyVTT/issues/23)) The editor page drew its own Save above the sheet's, and the page's copy was permanently disabled — nothing ever marked the sheet as having unsaved changes, so it could not be clicked even when it looked available. The sheet's own Save was always the working one, and is now the only one
-- **Save and Cancel no longer sit on top of Experience Points and the colour picker.** ([#23](https://github.com/CheekyChinchilla/CozyVTT/issues/23)) Those buttons are positioned over the sheet header, but the header reserved no room for them, so they landed on whatever was underneath — the experience field on D&D 5e, level and hero points on Pathfinder 2e. The header now reserves the space, and the character name shrinks rather than sliding under the buttons on a narrow window
-- **The character sheet viewer no longer shows two Edit buttons.** The window drew an Edit button and also passed one down to the sheet, which drew its own; both worked, which made it look like they might do different things. Edit now belongs to the sheet alone
-- **The close button on the character sheet window is back on the window.** It was positioned against the page rather than the dialog, so it drifted to the corner of the browser window on a wide screen, and collided with the sheet's colour picker on a narrow one
-- **Players can roll their own initiative.** The die beside a combatant was the DM's alone, so once the DM had added everyone to the tracker there was no way for a player to roll for themselves — the DM had to roll for the whole table, or take numbers called out loud and type them in. A player now gets the same die, on their own row only, and can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. The result goes straight into the turn order and the roll appears in chat, attributed to the player who made it. The option shows only once the DM has put that token in the tracker — rolling is how you take part in a fight you are already in, not a way to add yourself to one. Everything else stays with the DM: who is in the fight, the order, typing a value in by hand, whose turn it is, and ending combat. The DM can still roll for anyone, including players. Two limits on the player's die: it disappears **once combat has started**, because re-rolling re-sorts the order and could skip somebody's turn — ask your DM to change a value mid-fight — and spectators never get it, even on a token that was theirs before they were demoted
-- **Token conditions are readable on the map.** ([#27](https://github.com/CheekyChinchilla/CozyVTT/issues/27)) Each condition was drawn as a single letter in a small dot, which cannot tell most of them apart: Paralyzed, Poisoned, Petrified and Prone all showed **P**, and Incapacitated and Invisible both showed **I**. A player could see that something was wrong with a creature and nothing more — and the dots were tiny enough to be easy to miss at all. Conditions now show as amber badges with a two-letter code, one that is unique to each condition, large enough to read at normal zoom. Beyond four the rest collapse into a grey **+N** badge rather than growing a row wider than the token itself. **Hovering any token now names its conditions in full**, for players as well as the DM, in the same panel that already showed the token's name — the badges are a reminder, and the hover is how you learn what they mean
-- **Initiative rolls now follow each game system's rules.** Every initiative roll in the app was a flat `1d20` — no Dexterity, no bonuses, and the same roll whatever you were playing, so a Dexterity 20 rogue rolled exactly what a Dexterity 8 wizard did. The server now works each combatant's initiative out from their sheet, so the tracker's die and the map's **Roll...** menu always agree:
-  - **D&D 5e** rolls `d20 + your Dexterity modifier`. Because Dexterity is not the whole story — the Alert feat adds a flat +5, Jack of All Trades and Remarkable Athlete add part of your proficiency bonus, some subclasses use another ability entirely — the sheet has a new **Initiative — other bonus** box for everything else, and Initiative itself is now worked out for you rather than typed in. **Characters made before this release keep the total they had**: a hand-typed +7 on a Dexterity 14 character is read back as Dexterity +2 with an other bonus of +5, so nothing changes under you, and it rolls that way immediately without needing to be opened and re-saved. The one exception is a sheet whose Initiative was left at **0** — since it was typed by hand and blank sheets start at zero, that is read as "never filled in" rather than as a real total, so such a character now correctly shows their Dexterity modifier instead of nothing
-  - **Pathfinder 2e** rolls `d20 +` whichever stat the **Uses:** dropdown names — Perception by default, or Stealth when you are sneaking up on someone. That dropdown and the bonus beside it were already on the sheet, but nothing ever calculated the bonus, so **every Pathfinder character has been rolling +0** no matter how good their Perception was
-  - **Call of Cthulhu 7e** does not roll for initiative at all — combatants act in DEX order, highest first — so the menu offers **Set Initiative** rather than Roll, takes your investigator's DEX, and nothing appears in the dice log. The app previously invented a `1d10 + DEX/5` roll that is not a rule in the book. A readied firearm still acts at DEX + 50; that is a property of the round rather than the investigator, so the Keeper sets it
-  - **Shadowrun 6e** rolls the character's own initiative dice and base from the sheet, rather than a d20
-  - **NPCs** with a D&D 5e stat block roll from their recorded Dexterity too. A token with nothing to work from still rolls a plain d20
-  - Not handled yet: things that grant **advantage** on initiative, such as a Sentinel Shield. Roll `2d20kh1` in the dice panel and have the DM type the value in
-- **Passive Perception is right on a D&D 5e sheet, expertise included.** ([#26](https://github.com/CheekyChinchilla/CozyVTT/issues/26))The editor worked out the number from your Perception bonus, but the view read a stored value that nothing ever recalculated — so it kept whatever it was first given. With expertise in Perception it counted your proficiency bonus once instead of twice: a Wisdom 12 character with expertise showed Perception **+5** and a passive score of **13** where it should read **15**. Both sheets now derive it from the Perception bonus shown next to it, so the two cannot disagree, and characters saved before this release read correctly straight away without being re-saved. The stored value is also brought up to date the next time the sheet is saved, so exported characters carry the right number. The sheet also gained an **Other bonus** box beside it, for the things that raise a passive score without changing the skill — the **Observant** feat's +5 above all. A character imported with such a bonus keeps it: the stored total is read back as "the skill, plus the rest"
-- **Renaming a character updates it everywhere.** A character carries two names — the one the gallery and the map know it by, and the one written on the sheet itself — and changing the name on the sheet only ever updated the sheet. The gallery card and the editor's title bar kept showing whatever the character was first created as, so a renamed character was hard to find again. Saving a sheet now carries the new name across, and the two stay in step
-- **Call of Cthulhu characteristics are in the same order whether you are reading or editing.** The view showed them in the order the printed sheet uses, while the editor listed them in whatever order they happened to be stored in — so STR, CON, SIZ, DEX, APP, INT, POW, EDU became something else the moment you clicked Edit, and you had to hunt for the box you meant. Both are now driven by one shared order
-- **The token right-click menu is only as wide as it needs to be, and no longer lists "Roll…" twice.** The menu stretched most of the way across the screen: its items are laid out as a stack, but the browser was sizing the menu as though every label sat side by side on one line, so its width came out as the total of all of them — a little under a thousand pixels on a full menu, against the couple of hundred it actually needs. The duplicate entry came from a second Roll item shown for any NPC token, including the ones that are really a player's character and already had one
+## [1.2.2] - 2026-08-27
 
 ### Upgrading from 1.2.1
 
 `docker compose up -d --build`. No configuration changes.
 
-This release adds one nullable column, which the backend container applies on start — you don't run anything by hand. It is purely additive and touches no existing row: campaigns simply start with no "history cleared" timestamp, which means every roll you have already made stays visible. If the migration fails the backend refuses to start rather than serving against a half-updated database.
+This release adds one nullable column, which the backend container applies on start; you don't run anything by hand. It is purely additive and touches no existing row: campaigns simply start with no "history cleared" timestamp, which means every roll you have already made stays visible. If the migration fails, the backend refuses to start, so it never serves a half-updated database.
 
-As with any release that migrates, take a database dump first — migrations here are forward-only:
+As with any release that migrates, take a database dump first, since migrations here are forward-only:
 
 ```bash
 ./backend/scripts/backup.sh
 ```
 
----
+### Added
+
+- **Campaign invitation emails are now opt-in.** The invite dialog has **Also email them an invitation**, unticked to start; the invitation shows on the player's dashboard either way.
+
+### Changed
+
+- **Clicking a character in your gallery opens it for reading, not for editing,** with **Edit** on the sheet.
+
+- **Players joining and leaving no longer post to chat.** A green or grey dot beside each name in the **Campaign Roster** shows who is in the session. A DM can clear old notices with the eraser button on the chat panel.
+
+### Fixed
+
+- **The Roll button no longer sticks on "Rolling…",** and chat, the roster, the map and the initiative tracker keep working after a dropped connection.
+
+- **A character's name now appears on its sheet,** and **Player Name** is filled in from the owner's display name.
+
+- **Number fields on character sheets can be cleared and retyped.**
+
+- **Changing a character's token image updates the map,** without changing a token's name.
+
+- **Roll history survives a refresh.** ([#25](https://github.com/CheekyChinchilla/CozyVTT/issues/25)) Secret rolls stay secret; rolls made while the session is paused stay in the browser.
+
+- **Clearing roll history now sticks.** The rolls themselves are kept.
+
+- **Leaving the character editor asks before discarding your work, and only then.**
+
+- **Invitation links now open the "choose a password" screen instead of the sign-in page.** ([#22](https://github.com/CheekyChinchilla/CozyVTT/issues/22))
+
+- **The character sheet no longer shows two Save buttons.** ([#23](https://github.com/CheekyChinchilla/CozyVTT/issues/23))
+
+- **Save and Cancel no longer sit on top of Experience Points and the colour picker.** ([#23](https://github.com/CheekyChinchilla/CozyVTT/issues/23))
+
+- **The character sheet viewer no longer shows two Edit buttons.**
+
+- **The close button on the character sheet window is back on the window.**
+
+- **Players can roll their own initiative,** from their row in the tracker or **Roll Initiative** on their token, once the DM has added them and until combat starts. See [Rolling Your Own Initiative](docs/PLAYER_GUIDE.md#rolling-your-own-initiative).
+
+- **Token conditions are readable on the map.** ([#27](https://github.com/CheekyChinchilla/CozyVTT/issues/27)) Each shows as a two-letter badge, and hovering a token names its conditions in full.
+
+- **Initiative rolls now follow each game system's rules.** D&D 5e adds Dexterity and an **Initiative other bonus**, Pathfinder 2e the stat its **Uses:** names, and Call of Cthulhu sets DEX order with no roll. Characters made before keep the total they had.
+
+- **Passive Perception is right on a D&D 5e sheet, expertise included.** ([#26](https://github.com/CheekyChinchilla/CozyVTT/issues/26)) An **Other bonus** box takes the Observant feat and the like.
+
+- **Renaming a character updates it everywhere.**
+
+- **Call of Cthulhu characteristics are in the same order whether you are reading or editing.**
+
+- **The token right-click menu is only as wide as it needs to be, and no longer lists "Roll…" twice.**
 
 ## [1.2.1] — 2026-08-23
 
