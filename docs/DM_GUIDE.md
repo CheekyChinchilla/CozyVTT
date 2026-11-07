@@ -167,7 +167,7 @@ Once your map is in the asset library:
 | **Personal** | You, in your own library. Players see it only once you switch to the map, and whoever is the campaign's DM sees it on every map. | It stays yours, so the table loses it. Once you leave the campaign, nobody in it can load it, the new DM included: maps using it show "Failed to load map image" until the DM picks another picture in **Edit Map**. If you delete your account after handing the DM seat over, the file is kept, owned by no one: when this campaign is the only one using it, it becomes the campaign's own and the table goes on seeing it (if you are still in the campaign); otherwise nobody in the campaign can load it, and only an administrator can open it. |
 | **Campaign** | You and whoever is the campaign's DM, in the campaign's library. Players and spectators see it there only once you switch to a map using it, and no longer once the table moves on. | It stays with the campaign, for the table and whoever runs it next. |
 
-Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. A **Campaign** picture you uploaded becomes the new DM's to delete or move out of the campaign once anything there uses it, such as a map, a creature or a handout; you keep that only for pictures nothing but your own characters, tokens and notes use. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
+Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. A **Campaign** picture you uploaded becomes the new DM's to delete or move out of the campaign once anything there uses it, such as a map, a creature or a handout; you keep that only for pictures nothing but your own characters, the tokens you control and your own documents use. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Walls, doors and lights move with the picture, so they stay on it. Changing the **Width** or **Height** resets that map's fog of war to fully covered and forgets what every player has explored of it; changing only the **Grid Size** keeps both. Whatever you change on the map on screen, its picture and name included, reaches your players at once.
 
@@ -232,7 +232,7 @@ If the picture cannot be made, the window says so and nothing is created: "This 
 | **Room** | `M` | Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour at the **Width**, with its corners always on the grid's corners. Its four walls are added to the map when you save, as if drawn with the wall tool, so sight and fog follow them: until then they are on your screen only, **Undo** takes them back with the floor, and your draft keeps them. A side two rooms share, or a wall the map already has, is added once. |
 | **Stamp** | `P` | Click or tap to paint a stamp: **Door**, **Double door**, **Stairs**, **Pillar**, **Table**, **Chair**, **Bed**, **Chest**, **Barrel**, **Tree**, **Bush**, **Rock**, **Pool**, **Torch**, **Trap** or **Altar**, outlined in the colour and filled with the second. **Size**, in place of the width, makes it half a square to six squares across, for a boulder, a great tree or a gate: a door grows along its wall. With **Snap to grid** (on to start) a stamp an odd number of squares across sits in the middle of the square clicked and an even number on the nearest corner of the grid, a door sits on the grid line nearest the click as a door stands in a wall, and a double door spans twice its size along it; with it off, a stamp's middle is where you click. **Turn** turns the next one a quarter at a time, so a door can stand in a wall running either way. A finger's drag moves the map. |
 | **Fill** | `F` | Click or tap an area to fill it with the colour: it spreads side to side and up and down, not across corners. **Tolerance** (10% to start) takes in colours that far from the one clicked, so the soft edge of a stroke fills too; at 0% only the exact colour fills. On a touch screen a finger's drag moves the map under it. If the device runs short of memory for a very large area, the fill stops with "This device could not fill an area that large.", and **Undo** takes back any part it filled. |
-| **Text** | `T` | Click or tap where a line of text goes, type it, and press `Enter`; `Esc` drops it. It is painted in the colour, its letters four times the **Width** tall, in the app's own type. A finger's drag moves the map under it. |
+| **Text** | `T` | Click or tap where a line of text goes, type up to 200 characters, and press `Enter`; `Esc` drops it. It is painted in the colour, its letters four times the **Width** tall, in the app's own type. A finger's drag moves the map under it. |
 | **Eyedropper** | `I` | Click or tap the picture to make its colour there the colour, and go back to the tool you had. |
 
 **Snap to grid**, for a line, a rectangle, an ellipse, a polygon and a curve, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
@@ -303,6 +303,8 @@ A save never deletes a picture: the drawn picture is written over, and an upload
 Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map the table is on, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again. **Set Active** always takes your own screen with the table, so if you were preparing another map (below), you stop preparing it.
 
 *GIF pending — Switching maps, showing player view update.*
+
+When you choose a new picture for the map on screen in **Edit Map**, everyone keeps the old picture until the new one has loaded, then changes at once. If it cannot be loaded, the old one stays with "Failed to load map image" over it, and the map can still be used.
 
 Plan your map order loosely in advance (forest → cave entrance → dungeon interior), but don't worry about locking anything in. You can switch maps freely during a session.
 
@@ -764,6 +766,7 @@ A large campaign takes as long to export as your connection needs; nothing gives
 - Session records
 - SRD creatures (they're re-imported on the target instance)
 - User accounts or membership data
+- A picture or sound file that is itself a symbolic link on the server; the backend log names it
 
 ### Importing a Campaign
 
@@ -785,7 +788,7 @@ The imported campaign is created fresh with new IDs — it does not interfere wi
 - **Kept as it was:** everything a campaign made in CozyVTT holds, up to the limits the app itself has: maps up to 500 by 500 squares with any grid size from 10 to 500, up to 1,000 tokens, 5,000 walls and doors and 200 lights on each map, and their fog. The Map Library lists the maps in the order the original did, and the campaign opens on the oldest.
 - **Refused as a whole:** an archive of more than 1,000 files (one for each map and each picture or sound file), or with more than 10 MB of creatures, of token templates or of one map's data. Nothing is imported. Exporting checks the same limits and says when a campaign is over them, so a campaign that exports can be imported again.
 - **Creatures and token templates past 2,000:** an archive carries up to 2,000 of each. Any after the first 2,000 are left out and listed under **Left out** as one line. Exporting a campaign with more than 2,000 custom creatures or token templates says so instead of saving an archive.
-- **Shortened:** a map name over 200 characters, a token name over 200 characters, token notes over 5,000 characters, and text or lists in a stat block longer than the creature editor allows (an action's description over 5,000 characters, say, or more than 50 actions). Older versions of CozyVTT stored some of these at any length, and an imported creature that kept them could not be placed on a map or saved.
+- **Shortened:** a map name over 200 characters, a token name over 200 characters, an asset's name over 200 characters or description over 1,000, token notes over 5,000 characters, and text or lists in a stat block longer than the creature editor allows (an action's description over 5,000 characters, say, or more than 50 actions). Older versions of CozyVTT stored some of these at any length, and an imported creature that kept them could not be placed on a map or saved.
 - **Game system:** a campaign or creature whose game system this server does not know, from a hand-edited archive for example, is imported with none.
 - **Moved:** a token that is not on a whole square, or that hangs off the edge of its map, is put on the nearest whole square inside it.
 - **Left out on its own:** a token that CozyVTT cannot store (one with no position, for example), and any tokens past the first 1,000 on a map. The rest of the map is imported. A stat block that cannot be stored even when shortened is left off its token or template, which are kept; a creature, which needs one, is left out.
@@ -826,7 +829,7 @@ The Campaign Roster in the left sidebar gives you a real-time view of all player
 
 ### Removing a Player
 
-To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**.
+To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**. For a spectator the question is **Remove Spectator** and the message "Spectator removed from campaign".
 
 **It takes effect at once**, even if they are in the session at that moment.
 They stop being able to chat, roll or move anything, and stop seeing what the
@@ -944,7 +947,7 @@ Draw is for marking up any map, and the whole table sees it live; to change a ma
 | **Polygon** | Click or tap each corner, then the first corner again, or **Done** in the panel, to close it once it has three. **Cancel**, or **Esc**, drops it. |
 | **Text label** | Click or tap where the label's top left corner goes, type up to 200 characters and press **Enter**. **Esc** drops it, and a click elsewhere on the map keeps it and starts another. Its letters are four times the width tall. |
 | **Eraser** | Click or tap a drawing to erase it. |
-| **Laser pointer** | Drag to point. Everyone sees the trail fade within 3 seconds of where you pointed; nothing is kept. |
+| **Laser pointer** | Drag to point. Everyone sees the trail fade within 3 seconds of where you pointed; nothing is kept. With reduced motion turned on in your system the trail does not fade: it shows whole for 3 seconds, then goes. |
 
 - **Colour**: one of the eight in the panel, or **Another colour** for any other.
 - **Width**: from 1 to 64, in the map's own pixels, so a stroke grows and shrinks with the zoom like the map does.
@@ -1315,7 +1318,7 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
-**How many a map holds.** A map holds at most 5,000 wall segments, doors and windows included, and 200 lights. On a full map the tools draw nothing more and say so, "Maximum 5000 wall segments per map" or "Maximum 200 light sources per map"; a door drawn along a wall, a split, a polygon or a brush stroke that would take the map past the limit is refused whole. Moving, changing and deleting walls and lights still work. A wall, a door, a polygon, a brush stroke, a move of walls or a light you place that the server refuses for another reason, such as a map deleted in another tab, is taken back, with the server's message; one that a later change of yours already carried to the server stays. Other refused changes, such as opening a door or moving a light, stay as you made them until the map is opened again, and the message shows in the Dice panel.
+**How many a map holds.** A map holds at most 5,000 wall segments, doors and windows included, and 200 lights. On a full map the tools draw nothing more and say so, "Maximum 5000 wall segments per map" or "Maximum 200 light sources per map"; a door drawn along a wall, a split, a polygon or a brush stroke that would take the map past the limit is refused whole. Moving, changing and deleting walls and lights still work. A wall, a door, a polygon, a brush stroke, a move of walls or a light you place that the server refuses for another reason, such as a map deleted in another tab, is taken back, with the server's message; one that a later change of yours already carried to the server stays. An **Undo** the server refuses can be pressed again. Other refused changes, such as opening a door or moving a light, stay as you made them until the map is opened again, and the message shows in the Dice panel.
 
 ### Polygon Drawing Mode
 

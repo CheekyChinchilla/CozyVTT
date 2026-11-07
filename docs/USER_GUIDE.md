@@ -196,7 +196,7 @@ You can **drag the dividers** between the columns to resize them, and collapse t
 
 ### The campaign page on a phone or tablet
 
-On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the campaign page shows the map across the whole screen, with a one-line header above it and a bar of buttons along the bottom. Nothing is left out: every panel and tool of the three-column layout is one or two taps away.
+On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the campaign page shows the map across the whole screen, with a one-line header above it and a bar of buttons along the bottom. Nothing is left out: every panel and tool of the three-column layout is one or two taps away. The layout starts below 64 times the browser's text size, which is 1,024 pixels at the usual 16 and 1,280 at Chrome's **Large**. Every button, list and box on the map and in its sheets is at least 44 by 44 pixels.
 
 *Screenshot pending — The campaign page on a phone, with the Chat sheet open.*
 
@@ -354,7 +354,7 @@ Give the character a name and click **Create Character**. The dialog closes, **C
 
 ### The Character Editor
 
-The Character Editor is where you fill in every detail about your character — stats, skills, equipment, backstory, the works. What you see here depends on your game system.
+The Character Editor is where you fill in every detail about your character — stats, skills, equipment, backstory, the works. What you see here depends on your game system. On a screen less than 640 pixels wide, or less than 500 pixels tall such as a phone turned sideways, a sheet and its editor take the whole screen.
 
 *Screenshot pending — Character editor with D&D 5e sheet open.*
 
@@ -523,7 +523,7 @@ Click **Upload Asset** to add a new asset. You'll choose:
 - An optional description, up to 1,000 characters
 - The **scope** — where this asset lives:
   - **Personal** — Only you can see and use it
-  - **Campaign** — Shared with everyone in a specific campaign: one you run, or, for a token picture, one you play in. A map picture is the exception: its campaign's players and spectators see it only while a table they sit at is on a map using it, or in a document shared with the campaign, and it leaves their library when the table moves on, so a map the DM is preparing stays a surprise
+  - **Campaign** — Shared with everyone in a specific campaign: one you run, or, for a token picture, one you play in. A map picture is the exception: its campaign's players and spectators see it only while a table they sit at is on a map using it, or in a document shared with the campaign, and it leaves their library when the table moves on, so a map the DM is preparing stays a surprise. A player who put such a picture in their own notes, or chose it as a character's picture, may stop seeing it there once the table leaves that map, and a browser that has shown it before can go on showing it from its cache
   - **Global** — Available platform-wide (Admin/Global Asset Manager only)
 - Optional tags for easy filtering later: up to 50, each up to 50 characters
 
@@ -537,7 +537,7 @@ Use the **search bar** to find assets across your whole library, by part of a na
 
 Click any asset card to open its **detail panel** on the right, with its preview, description, tags and details. Tags cannot be changed after the upload. The panel also lets you move it to another library with **Move to…** and delete it, where you may: an asset you uploaded (one in a campaign's library while you are still in that campaign; if you do not run that campaign, only while nothing but your own characters, the tokens you control and your own documents use it, and otherwise it is the campaign's DM's to delete or move), any asset in the library of a campaign you run as its DM, and any asset at all for a server admin. Only the person who uploaded an asset can move it to **Personal**, which is their own library. An avatar always stays in your personal library. Press **Escape**, click **Close** (the **×** at its top) or click outside the panel to close it.
 
-**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template, a campaign's ambient sound or the sound of one of a campaign's times of day still uses it, or a text or Markdown document can show it (one that names it by its address, written by someone in the campaign who can see the picture, or by its uploader), nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and documents, global documents and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
+**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template, a campaign's ambient sound or the sound of one of a campaign's times of day still uses it, or a text or Markdown document can show it (one that names it by its address, written by someone in the campaign who can see the picture, or by its uploader), nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and documents, global documents and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. A note that shows a picture by its address is not checked. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
 
 *Screenshot pending — Asset detail panel.*
 
