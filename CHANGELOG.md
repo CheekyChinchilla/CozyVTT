@@ -2118,35 +2118,37 @@ As with any release that migrates, take a database dump first, since migrations 
 
 - **The token right-click menu is only as wide as it needs to be, and no longer lists "Roll…" twice.**
 
-## [1.2.1] — 2026-08-23
-
-### Added
-
-- **Character templates — shareable starter sheets.** A DM preparing a campaign can now build a sheet for a player who hasn't joined yet, and a player new to a system can start from someone else's work rather than a blank page. Publish a template from the new **Character Templates** page on the dashboard, from an existing character sheet with **Save as Template**, while creating a character, or by **importing a character JSON** — including one exported from a different CozyVTT instance, so a sheet built on one server can be shared with a group on another. Every template on the instance is visible to everyone; copying one creates a character that belongs entirely to you, and the original is untouched. You can edit and delete templates you published. A new **template editor** permission, granted per user from the admin panel exactly like Global Assets, lets a trusted user tidy up or correct anyone's — nobody has it until an admin grants it. A template can carry a token image, which must be a global asset: everyone who can see the template needs to be able to load its picture, so the app says so plainly rather than storing an image that would fail for other people
-- **Alt+click places an area template freely.** Not every effect is measured from a caster — a wall of fire is a line dropped wherever you like within range. Holding Alt while clicking an area template skips the grid snap and pins it exactly where you clicked, with the shape turning about that point
-
-### Fixed
-
-- **A global asset manager can delete their own global assets again.** The permission check loaded the flag only when the requester was *not* the asset's uploader, but the rule that consults it also requires that they *are* — so in the one case it was meant to permit, the flag was never actually read and the delete was refused. Anyone holding that permission would have seen every attempt to remove their own global upload fail. Admins were unaffected, which is likely why it went unnoticed
-- **Cone and line templates now sweep around the square you pin them on.** Aiming one moved its own starting point, so rotating a cone made its tip jump between a few fixed spots rather than turning smoothly — and because the old snapping ignored *which way* the shape pointed, a cone or line aimed left came out of the square's right edge and cut back through the caster's own token. Exactly half of all directions were affected. The square you click is now a fixed pivot, and the point the shape leaves it from slides continuously around that square's edge to follow your aim: the middle of an edge along a row or column, the corner on a diagonal, always on the side you're aiming at. This also finishes the grid alignment started in 1.2.0, where the cone still snapped to the nearest intersection and sat half a square off centre. The cone's 53° spread is unchanged
-- **Esc now closes the area template tool, as the DM guide has always said it does.** Nothing was listening for it, so the only way out was to click the toolbar button again. Esc drops the placement, and a second press puts the tool away — the same two-stage escape the wall tools use. Aiming a template also no longer snaps back to pointing right when the cursor crosses onto the tool panel that sits over the map; it holds the direction you left it at
-- **A token with no image no longer shows a heart icon.** The token edit panel used a heart where the image should be, which read as "favourite" and gave no hint that the avatar is a button. It now shows a dashed circle with an upload icon, matching the empty image slot in the token template editor
+## [1.2.1] - 2026-08-23
 
 ### Upgrading from 1.2.0
 
 `docker compose up -d --build`. No configuration changes.
 
-This release adds a database table, which the backend container applies on start — you don't run anything by hand. If the migration fails the backend refuses to start rather than serving against a half-updated database, so a broken upgrade is loud rather than silent.
+This release adds a database table, which the backend container applies on start; you don't run anything by hand. If the migration fails, the backend refuses to start, so a broken upgrade cannot go unnoticed.
 
-The change is additive and touches no existing data: one new table nothing previously read, and one new permission column that defaults to off. **Nobody gains the template editor permission on upgrade** — an admin grants it per user. Your characters, campaigns, maps and creatures are untouched.
+The change is additive and touches no existing data: one new table nothing previously read, and one new permission column that defaults to off. **Nobody gains the template editor permission on upgrade**: an admin grants it per user. Your characters, campaigns, maps and creatures are untouched.
 
-As with any release that migrates, take a database dump first — migrations here are forward-only, so rolling back to 1.2.0 means restoring one:
+As with any release that migrates, take a database dump first. Migrations here are forward-only, so rolling back to 1.2.0 means restoring one:
 
 ```bash
 ./backend/scripts/backup.sh
 ```
 
----
+### Added
+
+- **Character templates, shareable starter sheets.** Publish one from the **Character Templates** page, from a sheet with **Save as Template**, while creating a character, or by importing a character JSON; copying one makes a character of your own. A per-user **template editor** permission, granted in the Admin Panel, lets someone edit anyone's. See [Character Templates](docs/USER_GUIDE.md#character-templates).
+
+- **Alt+click places an area template freely,** off the grid.
+
+### Fixed
+
+- **A global asset manager can delete their own global assets again.**
+
+- **Cone and line templates now sweep around the square you pin them on.**
+
+- **Esc now closes the area template tool,** first dropping the placement, then putting the tool away.
+
+- **A token with no image no longer shows a heart icon.**
 
 ## [1.2.0] — 2026-08-22
 
