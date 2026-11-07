@@ -2150,60 +2150,17 @@ As with any release that migrates, take a database dump first. Migrations here a
 
 - **A token with no image no longer shows a heart icon.**
 
-## [1.2.0] — 2026-08-22
-
-### Added
-
-- **Ping a location on the map with Tab.** Put the cursor where you mean and press Tab: a dot appears with rings radiating out of it, in your own colour and labelled with your name, visible to everyone at the table for about a second and a half. Every player gets a consistent colour automatically — there is nothing to configure and no migration. Tab only pings when the cursor is over the map and you aren't typing or tabbing between controls, so keyboard navigation is unaffected. Pings are drawn above dynamic lighting so pointing into an unlit area works, and repeat pings are rate-limited server-side. Under the OS *reduce motion* setting the rings hold still and simply fade
-- **The acting combatant's token is highlighted on the map.** During initiative, the token whose turn it is gets a pulsing gold ring, visible to everyone at the table — so it's obvious which of five identical goblins is up, without counting rows in the tracker. The ring is a gold band edged in black rather than a single colour, so it stays legible over any map image, light or dark. It respects the same visibility rules as the token itself: a creature hidden from players, or standing in unexplored fog, shows no ring on their screens, so an ambusher's position is never given away by their turn coming around. The operating system's *reduce motion* setting turns off the pulse and keeps the ring
-- **Hovering an initiative row highlights that token on the map, and vice versa.** Pointing at a name in the turn order draws a thin white outline around its token and lifts it slightly — quieter than the turn ring, and both can show at once. Hovering a token on the map tints its row in the tracker the same way. Works for players as well as the DM, is purely a pointer (it never selects or moves anything), and respects the same visibility rules, so hovering a hidden creature's row doesn't give its position away to players
-
-- **Creature saving throws and skills are worked out for you.** Instead of typing a number for each one, tick which saves and skills a creature is proficient or expert in and CozyVTT derives the bonus from its ability score and proficiency. A commoner with Wisdom 14 who is proficient in Perception gets **+4** — +2 Wisdom, +2 proficiency — and expertise doubles the proficiency to +6. All six saves and all eighteen skills are listed, so there is no longer a free-text field where a misspelling silently created a skill called "perceptoin". The proficiency bonus comes from Challenge Rating on the same scale a character's comes from level, and is shown with its source ("From CR 1/4"); changing an ability score or the CR updates every derived bonus at once. Homebrew is still possible: any row can be overridden by hand, and an override that its ability scores and CR cannot support is flagged rather than silently accepted. **Existing creatures keep their exact numbers** — an SRD Goblin opens already showing Stealth as expertise at its printed +6, and values that don't fit the rules, like the Night Hag's, are preserved as overrides
-
-### Changed
-
-- **Creature rolls now depend on your game system.** The right-click NPC roll menu applied D&D 5e maths to every campaign, so a Call of Cthulhu NPC was offered `1d20 + ability modifier` for a percentile game that has neither d20s nor ability modifiers, and a Shadowrun NPC the same for a dice-pool game. D&D 5e and Pathfinder 2e now each get their own correct treatment; Call of Cthulhu and Shadowrun offer the free-form **Custom Roll** input instead of confidently wrong dice, and are noted for a future release
-- **Pathfinder 2e creatures use Pathfinder's own structure.** PF2e stat blocks print final modifiers because creatures are built from level benchmark tables, not from proficiency ranks — so nothing is derived for them, unlike D&D 5e. PF2e creatures now show **Fortitude, Reflex and Will** rather than six ability saves, a **Level** rather than a Challenge Rating, and attribute **modifiers** rather than scores. Values are entered directly and never recalculated; a number far outside the usual range for the creature's level is flagged as a possible typo, nothing more
-- **The Creature Library now shows your campaign's game system by default.** Every campaign saw all ~320 D&D 5e SRD creatures regardless of system, so a Call of Cthulhu table browsed a list of dragons to find its own creatures. The library now defaults to the campaign's system, with an **All game systems** option in Filters for deliberately borrowing a stat block from elsewhere — worth keeping, since only D&D 5e ships SRD content. Creatures saved without a system recorded always appear either way, and the seeding button is now labelled **Import D&D 5e SRD** so it's clear what it fetches in a non-D&D campaign
-- **Challenge Rating is chosen from a list rather than typed.** It sets the proficiency bonus, so a typo used to silently change every derived save and skill
-- **Fog of war is now a box selection instead of a brush.** Drag over the map and the selection snaps to whole grid squares, showing its size (`4 × 7`) as you go, so you reveal exactly the area you meant — the circular brush it replaces caught neighbouring squares by accident, which on a fog tool means showing players a room they weren't supposed to see yet. Click a single square to toggle just that one, drag in any direction, and cancel a drag with Esc or a right-drag. **The brush and its size slider are gone.** Existing maps are unaffected: the fog data was always one cell per grid square, so revealed areas carry over exactly as they were
-
-### Fixed
-
-- **Editing a creature no longer deletes its saving throws and skills.** The creature editor rebuilt the stat block from the fields on screen, and it had no fields for saves or skills — so duplicating an SRD Goblin and renaming it silently removed its Stealth +6, which also removed the skill from the right-click roll menu with nothing to indicate anything had been lost. The same save also dropped XP and notes. Every field the form doesn't show is now carried through untouched
-- **A creature can no longer be given an impossible saving throw.** The creature endpoints accepted whatever they were sent — the only checks were that the name was a string and the stat block was an object — so a commoner could be stored with a +30 Wisdom save and the roll menu would faithfully roll `1d20+30`. Stat blocks are now validated on every write, on creature templates, token templates and campaign import alike
-- **Negative bonuses no longer display as `+-1`,** and multi-word skills read as "Sleight of Hand" rather than "SleightOfHand"
-- **Editing one creature straight after another no longer carries the first one's data across.** Clicking edit on a second creature while the editor was already open reused the open form without reloading it, so the new creature showed the previous one's name, ability scores and stats — and saving wrote them onto it. The same applied to token templates
-- **AoE templates now line up with the grid.** Cube, cone and line were anchored to the *centre* of the hovered square, so they sat half a square off — a 10 ft cube on a 5 ft grid straddled four squares instead of covering two. Each shape now snaps by the rule that puts its edges on grid lines: an even span centres on a grid intersection, an odd one on a square centre. A cube is also axis-aligned now rather than rotating toward the cursor, since a tilted square can't align to a square grid. A cone's point lands on an intersection, though its spreading edges still cross squares — that's the shape itself. Circle is unchanged, as it was already placed correctly
-
-- **Creature token images can be chosen from the asset library, not just uploaded.** Editing a custom or duplicated creature previously offered only **Upload**, so an image you had already uploaded couldn't be reused — the DM guide had described picking from your token assets for some time, but the screen never offered it. There is now a **Browse Assets** grid with search alongside **Upload New**
-- **Creature token images were broken even when uploaded.** The editor's preview pointed at `/api/assets/{id}/file`, an endpoint that has never existed, so the thumbnail silently 404'd. The same defect affected the token template library. Both now use the real serving route
-- **Changing a token's image updates the map immediately for everyone.** The canvas cached token images by token id alone, so a changed image kept rendering the old picture until the page was reloaded — for every player, not just the DM. The cache now also checks the image URL
-- **The NPC Quick Editor's close button is no longer pushed off the panel edge** by a long token name, and the token avatar in its header is larger and easier to see
-- **The initiative tracker no longer freezes after a WebSocket reconnect.** Its listener was attached to a socket instance that gets rebuilt on reconnect, so after a dropped connection the tracker silently kept showing whatever turn was current when the link went down. Combat state is now mirrored into the shared session store by a reconnect-aware subscription, and re-synced from the server each time the socket comes back
-
-### Documentation
-
-- **`docs/GAME_SYSTEMS.md` now covers creatures**, which it had never mentioned — it documented only the player-character pipeline, leaving the entirely separate creature model undocumented. Adds a section on the shared `NpcStatBlock` shape, the four places creature code branches on game system, and the decision a contributor has to make first: whether their system's creature values are *derived* (D&D 5e) or *printed as final* (Pathfinder 2e). Deriving values a system doesn't derive fabricates numbers that look authoritative. A new optional Step 11 covers adding creature support, and records that returning no roll options is a valid, correct outcome
-- Documented the creature stat block object and its validation bounds in the API reference, including the new `proficiencies`, `attributeModifiers` and `level` fields, and why save and skill keys are deliberately not enumerated
-- **Documented character templates** across the user guide (browsing, copying and the three ways to publish), the DM guide (preparing sheets before players join), the API reference (the five endpoints, the permission matrix and the global-image rule), and the deployment guide, which gained a **Per-User Permissions** section covering both Global Assets and Templates — neither had been described for operators
-- **Corrected the roadmap**, which still listed the global asset manager admin toggle as outstanding long after it shipped
-- Documented the asset deletion rules in the API reference — who may delete at each scope was only discoverable by reading the handler
-- **Documented the ruler and AoE Shape tools**, which had never been described in any guide despite being in the map toolbar. Covers how each template snaps to the grid, that a cone's angled edges will still cross squares by nature, and that template sizes follow the map's *feet per square* setting
-- Rewrote the DM guide's NPC roll and creature-library sections: the claim that skills show "only skills the stat block lists explicit bonuses for" no longer held, and there was nothing describing how to give a creature a proficiency. Adds the proficiency-bonus-by-CR table and what differs under Pathfinder 2e
-- Corrected the socket API reference for initiative, which still described the original name-based combatants (`{ name, initiative, hp? }`) years after they became token-based. Documented the `CombatState` payload while there
-- Corrected the DM guide's "Adding Combatants", which described typing a name, initiative and HP by hand rather than picking a token from the map
-- Corrected the README and user guide, which described admin logo/mascot/favicon **upload** as a shipped feature. The instance does honour custom images — they appear on the login page and across the app — but there is no upload screen yet, so the guide now explains how to change branding today (replace the images in `frontend/public/` and rebuild, or set the URLs through the settings API). The upload UI remains on the roadmap
+## [1.2.0] - 2026-08-22
 
 ### Upgrading from 1.1.2
 
-`docker compose up -d --build` is all that is required — **no database migration, and no configuration changes.** Creature stat blocks are stored as JSON and every new field is optional, so existing creatures, tokens, token templates and campaign archives load unchanged.
+`docker compose up -d --build` is all that is required: **no database migration, and no configuration changes.** Creature stat blocks are stored as JSON and every new field is optional, so existing creatures, tokens, token templates and campaign archives load unchanged.
 
 Your existing creatures keep their exact numbers. CozyVTT works backwards from each stored bonus to show the right proficiency checkboxes, so an SRD Goblin opens already showing Stealth as expertise at its printed +6 without anything being rewritten.
 
 One optional follow-up:
 
-- **Record proficiency on your seeded SRD creatures.** The editor infers it on the fly regardless, so this is a tidiness step rather than a fix. It writes the structure into the stored stat blocks so it doesn't have to be re-derived each time:
+- **Record proficiency on your seeded SRD creatures.** The editor infers it on the fly regardless, so this is a tidiness step, not a fix. It writes the structure into the stored stat blocks so it doesn't have to be re-derived each time:
 
   ```bash
   # See what would change without writing anything
@@ -2213,9 +2170,53 @@ One optional follow-up:
   docker compose exec backend node dist/scripts/backfillCreatureProficiency.js
   ```
 
-  It only touches creatures with `source: 'srd'` — **your custom creatures are never read or written** — and it never changes a printed bonus, only records the reasoning behind it. Safe to run more than once; a second run reports everything as already done. Add `--verbose` for a per-creature breakdown. On a full SRD library expect roughly 212 of 322 creatures updated, with a handful of entries left as overrides where the published stat block doesn't follow the CR proficiency table (the Night Hag is one).
+  It only touches creatures with `source: 'srd'` (**your custom creatures are never read or written**) and it never changes a printed bonus, only records the reasoning behind it. Safe to run more than once; a second run reports everything as already done. Add `--verbose` for a per-creature breakdown. On a full SRD library expect roughly 212 of 322 creatures updated, with a handful of entries left as overrides where the published stat block doesn't follow the CR proficiency table (the Night Hag is one).
 
----
+### Added
+
+- **Ping a location on the map with Tab.** A dot with rings, in your colour and labelled with your name, shows to everyone for about a second and a half. See [Pointing at the Map](docs/PLAYER_GUIDE.md#pointing-at-the-map).
+
+- **The acting combatant's token is highlighted on the map** with a pulsing gold ring, never shown for a creature players cannot see.
+
+- **Hovering an initiative row highlights that token on the map, and the other way round.**
+
+- **Creature saving throws and skills are worked out for you** from proficiency, ability scores and Challenge Rating, with overrides for homebrew. Existing creatures keep their exact numbers. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+
+### Changed
+
+- **Creature rolls now depend on your game system.** Call of Cthulhu and Shadowrun offer **Custom Roll** only.
+
+- **Pathfinder 2e creatures use Pathfinder's own structure:** Fortitude, Reflex and Will, a Level, and attribute modifiers, entered as printed.
+
+- **The Creature Library now shows your campaign's game system by default,** with **All game systems** in Filters, and the seeding button reads **Import D&D 5e SRD**.
+
+- **Challenge Rating is chosen from a list.**
+
+- **Fog of war is now a box selection instead of a brush,** snapped to whole squares. The brush and its size slider are gone; revealed areas carry over. See [Revealing and Hiding](docs/DM_GUIDE.md#revealing-and-hiding).
+
+### Fixed
+
+- **Editing a creature no longer deletes its saving throws and skills,** XP or notes.
+
+- **A creature can no longer be given an impossible saving throw.**
+
+- **Negative bonuses no longer display as `+-1`,** and multi-word skills read as "Sleight of Hand".
+
+- **Editing one creature straight after another no longer carries the first one's data across.**
+
+- **AoE templates now line up with the grid.**
+
+- **Creature token images can be chosen from the asset library, not just uploaded.**
+
+- **Creature token images were broken even when uploaded.**
+
+- **Changing a token's image updates the map immediately for everyone.**
+
+- **The NPC Quick Editor's close button is no longer pushed off the panel edge.**
+
+- **The initiative tracker no longer freezes after a WebSocket reconnect.**
+
+- **The documentation covers creatures, character templates, the ruler and the AoE Shape tool, and the asset deletion rules,** and several guide sections were corrected to match the app.
 
 ## [1.1.2] — 2026-08-21
 
