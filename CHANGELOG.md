@@ -4,6 +4,8 @@ All notable changes to CozyVTT will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each release are in `CHANGELOG.md` at its tag, such as [v1.5.4](https://github.com/CheekyChinchilla/CozyVTT/blob/v1.5.4/CHANGELOG.md).
+
 ---
 
 ## [Unreleased]
@@ -295,9 +297,9 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 #### What you will notice
 
 - **The app needs Firefox 128 or newer.** Chrome and Edge 111 and Safari 16.4 are still enough.
-- **A new map, token or avatar picture has size limits.** At most 16,384 pixels on each side, and for an animated GIF or WebP at most 1,000 frames and 200 million pixels across them for a map, 50 million for a token or an avatar. Pictures already uploaded are kept as they are.
-- **Character sheets take your theme.** Every sheet now uses the theme's paper, text and colours, so a dark theme no longer shows a pale card with light text on it.
-- **An invitation sent from the app runs out after 14 days.** Until now it never did. One that has run out can be sent again, and **Campaign Settings → Members** lists the ones still open.
+- **A new map, token or avatar picture has size limits.** At most 16,384 pixels a side, and for an animation at most 1,000 frames; pictures already uploaded are kept as they are.
+- **Character sheets take your theme.** A dark theme no longer shows a pale card with light text on it.
+- **An invitation sent from the app runs out after 14 days.** One that has run out can be sent again, and **Campaign Settings → Members** lists the ones still open.
 - **A player rolls initiative once per fight.** A second roll is refused; the DM can still change the number.
 - **A saved roll that cannot work is refused when it is used,** such as one that could divide by zero, with the reason; edit it to fix it.
 
@@ -311,503 +313,499 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Added
 
-- **The backend's memory limit is a setting.** It was fixed at 512 MB, so giving the backend more room on a larger server meant an override file. Set `BACKEND_MEMORY_LIMIT` in `.env` (`1G`, `2G`) and run `docker compose up -d`; leave it out and 512 MB applies, as before. It cannot go below 256M. See [Backend memory](docs/DEPLOYMENT.md#backend-memory).
+- **The backend's memory limit is a setting.** Set `BACKEND_MEMORY_LIMIT` in `.env` (`1G`, `2G`) and run `docker compose up -d`; without it 512 MB applies, as before, and it cannot go below 256M. See [Backend memory](docs/DEPLOYMENT.md#backend-memory).
 
-- **See and clear an account's sign-in lock from the Admin Panel.** Ten wrong passwords in an hour lock an account from every address, and until now an administrator could open it again only by giving it a new password. In **Admin → Users** a locked account now shows **Locked until** and the time the lock ends by itself, and **Clear lock** on its row lets it sign in at once with its usual password, after asking. Wrong two-factor codes for the account (five in fifteen minutes) are cleared with it. Each clear is a line in **Admin → Activity**. See [Logging In](docs/USER_GUIDE.md#logging-in) in the user guide.
+- **See and clear an account's sign-in lock from the Admin Panel.** In **Admin → Users** a locked account shows **Locked until**, and **Clear lock** lets it sign in at once with its usual password. See [Logging In](docs/USER_GUIDE.md#logging-in).
 
-- **A Call of Cthulhu investigator's contacts, and notes on Luck and wealth, can be edited.** The read-only sheet listed contacts that the editor had no way to add, change or remove; **Edit** now has a **Contacts** list on the **Possessions** tab, with **Add Contact**, a name, role and notes for each, and a remove button. A note under **Luck Score** and **Wealth notes** under **Assets** are new, and the read-only sheet shows both.
+- **A Call of Cthulhu investigator's contacts, and notes on Luck and wealth, can be edited.** **Edit** has a **Contacts** list on the **Possessions** tab, a note under **Luck Score** and **Wealth notes** under **Assets**.
 
-- **Specialised skills can be added to a Call of Cthulhu investigator.** The **Skills** tab of **Edit** showed only the specialised skills a sheet already had, with no way to add, name or remove one. Fighting and Firearms specialisations and sciences can now be added from the rulebook's list at their base values, or as **Other** to be named; **Add Language** and **Add Skill** add another language or a skill of your own. Each added row has a name box and a remove button, and Art/Craft, Pilot, Survival and the investigator's own language each take a specialisation. Added specialisations roll from the sheet and the right-click roll menu by their names.
+- **Specialised skills can be added to a Call of Cthulhu investigator.** Fighting, Firearms and science specialisations come from the rulebook's list at their base values, and **Add Language** and **Add Skill** add others.
 
-- **A D&D 5e sheet shows an item's value, the character's carrying capacity and the player's name.** The **Inventory** tab lists each item's **Value** beside its weight and gives the carrying capacity the rules work out from Strength: 15 pounds a point, and twice that to push, drag or lift, for a Small or Medium character. The header names the player, as the Pathfinder 2e sheet does. All three were recorded in the editor and shown nowhere else.
+- **A D&D 5e sheet shows an item's value, the character's carrying capacity and the player's name.**
 
-- **See and withdraw the invitations you have sent.** **Campaign Settings → Members** now lists the players you have invited who have not answered, under **Invited**, with an **×** to withdraw each one. An invitation sent from the app now runs out after 14 days; until now it never did.
+- **See and withdraw the invitations you have sent.** **Campaign Settings → Members** lists them under **Invited**, with an **×** to withdraw each, and an invitation now runs out after 14 days.
 
-- **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
+- **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the **Desktop Required** notice gained a button that opens the desktop layout; your browser remembers the choice.
 
-- **Jump to newest in the chat and the Dice panel.** While you are scrolled up, neither list pulls you down when something new arrives, and nothing said that anything had. A **Jump to newest** button now appears at the bottom of the list and takes you down to it.
+- **Jump to newest in the chat and the Dice panel.** While you are scrolled up, a button at the bottom of the list takes you down to what has arrived.
 
-- **Open a combatant's sheet and roll for them from the initiative tracker.** ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)) Right-clicking a combatant in the **Initiative** tab offers what right-clicking their token on the map offers about them: **View Character Sheet** for a player's character, and **Roll...** for whoever may roll it, which for the DM includes a creature's rolls from its stat block. Double-clicking a player character's row opens their sheet, and from the keyboard **Enter** on a combatant's name opens the menu. A combatant whose token is on another map offers nothing until the table switches to that map. See [A Combatant's Sheet and Rolls](docs/DM_GUIDE.md#a-combatants-sheet-and-rolls).
+- **Open a combatant's sheet and roll for them from the initiative tracker.** ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)) Right-click a combatant for **View Character Sheet** and **Roll...**, or double-click a player character's row for their sheet. See [A Combatant's Sheet and Rolls](docs/DM_GUIDE.md#a-combatants-sheet-and-rolls).
 
-- **Tokens can be turned to face any direction.** ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)) Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees; the menu stays open for more turns. The DM can turn any token and type an exact angle in **Facing** in **Edit Token**; a player can turn the tokens they control. The token's picture, or its letter, turns, while its rings, hit point bar and condition badges stay upright. Players who don't control an obscured token see it facing up. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
+- **Tokens can be turned to face any direction.** ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)) Right-click a token for **Rotate Left** and **Rotate Right**, 45 degrees a turn; the DM can type an exact **Facing** in **Edit Token**. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
 
 ### Changed
 
 - **Changes for scripts and integrations.** See [API changes in 1.5.4](docs/api-changes/1.5.4.md).
 
-- **A server admin moving someone's personal file into a campaign is written to the activity log.** An admin can move any user's personal file into any campaign, or to **Global**, which puts it in front of that table or of everyone, and nothing recorded it. The move now writes a line to **Recent Admin Actions** on the Admin Panel's **Activity** tab, naming the file, its owner's email address and where it went.
+- **A server admin moving someone's personal file into a campaign is written to the activity log,** under **Recent Admin Actions** on the Admin Panel's **Activity** tab.
 
-- **The placeholders in the D&D 5e and Pathfinder 2e editors' headers take the header's own colour.** **Character Name**, **Class**, **Race** or **Ancestry** and the other header boxes showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
+- **The placeholders in the D&D 5e and Pathfinder 2e editors' headers take the header's own colour.**
 
-- **The Asset Library, the pickers and the Map Library load small previews of maps and tokens.** Every map and token upload has always made a preview of at most 512 pixels, but the library and pickers drew their cards from the full-size pictures, so a library of large maps was slow to open, on a phone or tablet especially. They now load the previews. A picture imported from a campaign archive, or uploaded before previews were made, has none and is still shown full size.
+- **The Asset Library, the pickers and the Map Library load small previews of maps and tokens,** so a library of large maps opens faster. A picture imported from an archive, or uploaded before previews were made, is still shown full size.
 
-- **In Chrome, Edge, Safari and on phones, the document reader offers a PDF as a button to open it in a new tab.** Those browsers will not show a PDF inside the reader: Chrome and Edge showed a page saying the content was blocked, and Safari a blank space. The reader now says so in place of the frame, with **Open this PDF in a new tab**. Firefox on a computer still shows the PDF inside the reader. Showing PDFs inside CozyVTT in every browser is planned.
+- **In Chrome, Edge, Safari and on phones, the document reader offers a PDF as a button to open it in a new tab.** Those browsers will not show a PDF inside the reader; Firefox on a computer still does.
 
-- **Only an asset's uploader can move it to their Personal library.** A campaign's DM could move a player's upload in the campaign's library to **Personal**, which put it in the player's own library, out of the campaign and out of the DM's reach. The DM can still delete such an asset and make the other moves they could. A server admin can still move any asset, except to Personal for an asset whose uploader's account was deleted.
+- **Only an asset's uploader can move it to their Personal library.** A campaign's DM can still delete such an asset and make the other moves.
 
-- **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
+- **The app now needs Firefox 128, from July 2024, or a newer version.** The styles moved to Tailwind CSS 4, which uses features Firefox added in 128. Chrome and Edge 111 and Safari 16.4 are still enough, and Firefox ESR 128 and later are new enough.
 
 ### Removed
 
-- **The backend no longer installs the mathjs package.** The dice roller works out totals itself, so mathjs and the nine packages it brought with it, about 20 MB on disk, are left out of the backend install. Nothing changes in how dice roll.
+- **The backend no longer installs the mathjs package,** about 20 MB with its dependencies. Dice roll as before.
 
-- **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
+- **The Call of Cthulhu read-only sheet no longer has a palette button.** Choose the header colour in **Edit**, as on the other sheets.
 
 ### Fixed
 
-- **Stopping or upgrading CozyVTT during a restore lets the restore finish.** A backup being made from the Admin Panel was already let finish, for up to 10 minutes, but a restore was stopped after a few seconds, which could leave it half done with nothing in the log to say so. The backend now waits for a restore the same way, for up to 10 minutes, and `docker compose logs backend` says `A backup is being restored; waiting up to 10 minutes for it to finish before stopping`.
+- **Stopping or upgrading CozyVTT during a restore lets the restore finish,** for up to 10 minutes, and `docker compose logs backend` says it is waiting.
 
-- **A database password with a `%` that encodes nothing works for every backup and restore.** In `DATABASE_URL`, a password such as `pa%ss` or `100%` broke every backup and restore. **Create Backup** and **Restore** tried to decode it, failed, and reported only that the backup could not be written, with nothing useful in the log; `backup.sh` and `restore.sh` passed it on changed and failed to sign in where the backend connected. All of them now read the password as it is written, as the app does; percent-encoded characters such as `%40` for `@` are decoded as before.
+- **A database password with a `%` that encodes nothing works for every backup and restore.** A password such as `pa%ss` or `100%` broke them all; percent-encoded characters such as `%40` are decoded as before.
 
-- **Backups and restores work on an install whose database address carries settings of the app's, and keep to the schema it names.** **Create Backup** and **Restore** handed the whole `DATABASE_URL` to the database tools, which refuse `?schema=`, `?connection_limit=` and `sslmode=no-verify`, so every backup and restore failed there. The tools now get the address without the settings only CozyVTT reads, and `sslmode=require` for `no-verify`, which also encrypts without checking the certificate. On an install whose address names a schema, a backup holds that schema alone and a restore replaces that schema alone, leaving the rest of the database as it was; a backup of another schema is refused, naming both. The backup and restore scripts work with the `public` schema only, and now refuse an address that names another, pointing to the Admin Panel's backups.
+- **Backups and restores work on an install whose database address carries settings of the app's, and keep to the schema it names.** On an address that names a schema, a backup and a restore cover that schema alone. The backup and restore scripts work with the `public` schema only, and refuse another, pointing to the Admin Panel's backups.
 
-- **A restore sent a damaged upload says so.** A restore whose upload arrived cut off, or garbled on its way, answered "An unexpected error occurred". It now says "The upload could not be read. Nothing was changed.", so you know to send the backup again.
+- **A restore sent a damaged upload says so:** "The upload could not be read. Nothing was changed."
 
-- **A backup no longer holds an empty backups folder among the uploaded files.** On an install that still has the `backend/uploads/backups` folder older releases kept backups in, every backup held an empty `uploads/backups` folder, which a restore then made again. The folder is now left out entirely, as its contents already were.
+- **A backup no longer holds an empty backups folder among the uploaded files.**
 
-- **A restore is listed in Admin → Activity when the database update after it fails.** A restore that loaded the backup but could not bring its database up to this version said so and left no line in the activity log, though the database had been replaced. It is now logged as every other restore is.
+- **A restore is listed in Admin → Activity when the database update after it fails.**
 
-- **A backup the restore refuses part-way gives its disk space back at once.** A backup refused while it was being unpacked, such as one that unpacks to more than 10 GiB, stayed open in the backend after it was deleted, so the space it took was not freed until the backend restarted, and each such restore kept another file open. The restore now closes the backup whenever it stops.
+- **A backup the restore refuses part-way gives its disk space back at once.**
 
-- **The warning about a missing or example session secret names the right file.** Outside production the backend warns when `SESSION_SECRET` is unset or a value it would refuse in production, and said to set it in `backend/.env`. The Docker stacks read it from the `.env` in the CozyVTT folder, so a value put in `backend/.env` changed nothing there. The warning now names that `.env` for Docker and `backend/.env` for a backend run without Docker.
+- **The warning about a missing or example session secret names the right file:** the `.env` in the CozyVTT folder for Docker, and `backend/.env` without Docker.
 
-- **A notes download someone stops part-way is no longer logged as an error.** When a player closed the page, or lost their connection, while **Download** under **Notes From Campaigns You Have Left** was still arriving, the backend's log showed `Error fetching the notes from a campaign left`. It now logs an ordinary information line saying the download ended part-way.
+- **A notes download someone stops part-way is no longer logged as an error.**
 
-- **The backend's log no longer shows an error each time two overlapping changes are sorted out.** When two requests change related records at the same moment, such as two administrators changing roles, the database refuses one and the backend runs it again, which succeeds. Each refusal was logged as a `Database error` although nothing had gone wrong. It is now logged only with `LOG_LEVEL=debug`, and an error is logged when the backend gives up after 5 tries.
+- **The backend's log no longer shows an error each time two overlapping changes are sorted out.** Each retry is logged only with `LOG_LEVEL=debug`, and an error only when the backend gives up after 5 tries.
 
-- **The backend container finds a database whose address names no port.** A `DATABASE_URL` set in `docker-compose.override.yml` without a port, such as `postgresql://cozyvtt:password@db.example.com/cozyvtt`, made the backend wait a minute for the database and then stop, because it asked on a port made of the whole address. It now uses PostgreSQL's usual port, 5432, as the backup and restore scripts already did. The shipped `docker-compose.yml` always names the port.
+- **The backend container finds a database whose address names no port.** It uses PostgreSQL's usual port, 5432.
 
-- **The backend starts when its uploads or logs folder is on a NAS or network share that refuses a change of owner.** It gave those folders to its own user as it started, and stopped there when the folder refused, as a NAS, a Windows share or another network mount can. It now starts, says so in `docker compose logs backend`, and warns if it cannot write to the folder, naming the user ID to give it to. See [the backend's log says it cannot write to `/app/uploads` or `/app/logs`](docs/DEPLOYMENT.md#the-backends-log-says-it-cannot-write-to-appuploads-or-applogs).
+- **The backend starts when its uploads or logs folder is on a NAS or network share that refuses a change of owner.** It warns if it cannot write there, naming the user ID to give the folder to. See [the backend's log says it cannot write to `/app/uploads` or `/app/logs`](docs/DEPLOYMENT.md#the-backends-log-says-it-cannot-write-to-appuploads-or-applogs).
 
-- **A second stop while the backend is stopping no longer logs an error.** Pressing Ctrl+C twice, or a service manager sending its stop again, while the backend wrote out its log files printed an error ending in `write after end` in place of its message. The backend's last messages now go to the console once its log files are closed.
+- **A second stop while the backend is stopping no longer logs an error.**
 
-- **Stopping CozyVTT no longer waits 10 seconds while a player is connected.** With anyone at a table, `docker compose stop`, `restart` and an upgrade waited the full 10 seconds for the bundled nginx and then forced it to stop, because nginx waited for every live game connection to close first. It now stops at once, and players' browsers reconnect when it is back, as they already did.
+- **Stopping CozyVTT no longer waits 10 seconds while a player is connected.**
 
-- **The instance's name and branding arrive once the server answers.** A page opened while CozyVTT was restarting kept the tab title **CozyVTT** and the default logo until it was reloaded. The page now asks again, after 5 seconds and then less often, until the server answers.
+- **The instance's name and branding arrive once the server answers,** on a page opened while CozyVTT was restarting.
 
-- **The two-factor setup page says when the server is not answering.** Opened while CozyVTT was restarting, it showed a spinner until the server came back; it now shows **Can't reach the server** with **Try Again**, as the other pages do.
+- **The two-factor setup page says when the server is not answering.**
 
-- **Copy works for a new user's temporary password on a plain-HTTP instance.** In the Admin Panel, **Copy** beside a temporary password did nothing on an instance reached by `http://` on a home network, where the browser offers no clipboard access, and said nothing either. It now copies there too, and says so when it cannot, so you select the password and copy it yourself.
+- **Copy works for a new user's temporary password on a plain-HTTP instance,** and says so when it cannot.
 
-- **A one-letter display name can be chosen on every page.** The server takes display names of 1 to 50 characters, and Invite Player finds one-letter names, but **Profile**, **Sign Up** and the setup wizard refused names under 2 characters, and **Sign Up** said "less than 50" though 50 is allowed. A screen reader now names the **Display Name** box on **Profile**.
+- **A one-letter display name can be chosen on every page.**
 
-- **Two refusals name their buttons as the app shows them.** Resending an invitation to someone who has already signed in said to use "Send reset link", and an administrator resetting their own password from the Admin Panel was told to use "Change password". They now say **Send Reset Link** and **Change Password**, the buttons' own names.
+- **Two refusals name their buttons as the app shows them:** **Send Reset Link** and **Change Password**.
 
-- **The server refuses a sign-up whose email address holds `<` or `>`.** The **Sign Up** page's browser check already stopped such an address, but one sent another way was saved with those characters taken out, so `jo<x>@example.com` made an account for `jox@example.com` that could not be signed in to with the address as typed. Sign-up now answers **Invalid email format**, as **Create User** in the Admin Panel already did.
+- **The server refuses a sign-up whose email address holds `<` or `>`.**
 
-- **A campaign keeps showing a map or token picture from the personal library of someone who deleted their account.** The file was kept, since the campaign used it, but with no owner nobody at the table could load it, so its maps showed "Failed to load map image" until an administrator moved it. A personal file that only one campaign uses or shares now becomes that campaign's own when the account is deleted, if the account was in that campaign. One that several campaigns use, that a campaign the account was not in uses, or that something outside a campaign uses, stays as before, and the Admin Panel's **Activity** tab gets a line naming it so an administrator can move it. Files kept by a deletion before this version stay as they are: an administrator can find them with the **No Uploader (account deleted)** filter on the **Assets** tab and move them into the campaign.
+- **A campaign keeps showing a map or token picture from the personal library of someone who deleted their account.** A personal file only that campaign uses now becomes the campaign's own; others get a line in **Activity**. Files kept by an earlier deletion show under the **No Uploader (account deleted)** filter on the Admin Panel's **Assets** tab, for an administrator to move.
 
-- **A map you switch to cannot be deleted at the same moment.** Deleting a map while switching to it, from two tabs say, could delete it anyway and leave the campaign with no map on screen; switching to a map being deleted failed with a server error. The delete is now refused for the map that became current, and the switch says the map is gone.
+- **A map you switch to cannot be deleted at the same moment.**
 
-- **The Campaign Roster keeps up with characters deleted, created into the campaign, or moved to another one.** A deleted character stayed listed until the page was reloaded, one created straight into the campaign did not appear, and one moved to another campaign stayed in the old one's roster. Characters brought or taken out at the same moment could also go missing from the roster, and a character moved twice at once could show in two campaigns.
+- **The Campaign Roster keeps up with characters deleted, created into the campaign, or moved to another one.**
 
-- **A campaign's name and description can be as long as the server allows,** 200 and 5,000 characters, in **New Campaign** and **Campaign Settings**. The settings stopped at 100 and 1,000, and **New Campaign** refused a name over 100 characters, or of one letter, and had no limit on the description.
+- **A campaign's name and description can be as long as the server allows,** 200 and 5,000 characters.
 
-- **A campaign that exports can be imported again, however large.** An import refused any archive with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files, though nothing stopped a campaign from holding more, so a large campaign's export could never be imported. The map and picture counts are gone, so maps, pictures and sound files are limited only by the 1,000 files an archive could already hold; custom creatures and token templates may number 2,000 each, within the 10 MB each list already had. **Export Campaign** now says when a campaign is over those, before saving anything. Creatures or templates past 2,000 in an archive are left out and listed.
+- **A campaign that exports can be imported again, however large.** Maps, pictures and sounds are limited only by the archive's 1,000 files, and custom creatures and token templates by 2,000 each; **Export Campaign** says when a campaign is over those.
 
-- **A campaign import keeps picture and sound names within an upload's limits.** A name in the archive could be up to 500 characters and was stored as it was, longer than an uploaded file's name may be and too long for most computers to save the file under. It is now cut to 200 characters for its name, and to 255 for its file name, keeping the extension.
+- **A campaign import keeps picture and sound names within an upload's limits,** 200 characters for a name and 255 for a file name.
 
-- **A new invitation appears on the dashboard without pressing Refresh:** when you come back to the tab, or within a minute while it is open.
+- **A new invitation appears on the dashboard without pressing Refresh.**
 
-- **An invitation names the campaign's DM.** The dashboard and the invitation named the campaign's owner as its DM, which is wrong once the owner has handed the game over.
+- **An invitation names the campaign's DM,** where it named the owner.
 
-- **Campaign Settings shows Danger Zone only to those who may delete the campaign:** its owner and administrators. A DM the game was handed to was offered **Delete Campaign**, which the server refused.
+- **Campaign Settings shows Danger Zone only to those who may delete the campaign:** its owner and administrators.
 
-- **Emptying a campaign's description in Campaign Settings clears it.** The old description stayed, while the panel said the settings were saved.
+- **Emptying a campaign's description in Campaign Settings clears it.**
 
-- **Open Campaign after an import opens the campaign.** It went to an address that is no page, so the app sent you to the dashboard instead.
+- **Open Campaign after an import opens the campaign.**
 
-- **Remove from Campaign in the Campaign Roster removes the character, for the DM too.** Right-clicking a character in the roster and choosing **Remove from Campaign** asked to confirm, but pressing **Remove** did nothing: the character stayed in the campaign, with no message. And although the roster offered it to the DM, as the DM guide says, the server refused anyone but the character's owner. It now works for a DM removing a player's character and for a player removing their own; the character stays with its owner, and a refused removal says why.
+- **Remove from Campaign in the Campaign Roster removes the character, for the DM too.**
 
-- **A character taken out of a campaign leaves the campaign page at once.** Its sheet and rolls stayed on offer there, on the map's token menu and elsewhere, until the page was reloaded.
+- **A character taken out of a campaign leaves the campaign page at once.**
 
-- **A chat cooldown the DM turns on during play reaches the players at the table.** Players already at the table kept the settings their page had loaded: their chat box did not count down, and a second quick message stayed marked "sending…" and never reached the table, until they reloaded. Saved **Campaign Settings** now reach every page at once, the chat cooldown and the campaign's name and description included.
+- **A chat cooldown the DM turns on during play reaches the players at the table,** as do the other saved **Campaign Settings**.
 
-- **Saving Campaign Settings, removing a player and handing over the DM seat leave the table as it is.** Each one rebuilt the whole campaign page: every token picture was fetched again, a chat message being typed was lost, and the settings reopened on **General**. Several saves in a minute could reach the limit of 300 requests a minute, after which token pictures failed to load until it passed.
+- **Saving Campaign Settings, removing a player and handing over the DM seat leave the table as it is.**
 
-- **Sending an invitation leaves the page as it is.** **Invite Player** in the left sidebar reloaded the page, which hid the message saying the invitation was sent; from **Campaign Settings** that message appeared twice.
+- **Sending an invitation leaves the page as it is.**
 
-- **The Campaign Roster keeps its list while it updates.** It went blank with "Loading roster..." whenever someone joined or a character was brought in, which dropped a character you were dragging from it, and two updates close together could leave the older list showing.
+- **The Campaign Roster keeps its list while it updates.**
 
-- **A campaign that is still loading when you open another one can no longer replace it,** and a campaign link that was refused no longer sends you to the dashboard after you have moved on to another page.
+- **A campaign that is still loading when you open another one can no longer replace it.**
 
-- **A character's name reads on a pale header colour.** The read-only D&D 5e and Pathfinder 2e sheets drew their header text white on every colour, so on a pale custom colour such as white, or the mid-tone Amber Gold and Golden presets, the name could hardly be read, and a Pathfinder sheet's header differed from its editor's. The Call of Cthulhu sheet and editor drew theirs in the theme's paper colour, which in a dark theme is dark on the dark header. The header text, its softer lines and its **Edit** button are now dark on a pale colour and light on a dark one, chosen by one rule in the views and editors alike, which gives a few mid-tone custom colours, such as a pure green, dark text where the editors gave white; the Call of Cthulhu editor's header and boxes follow the same rule.
+- **A character's name reads on a pale header colour,** in every system's sheet and editor.
 
-- **The buttons on a character sheet's header read clearly on every header colour.** **Edit** and the colour button on the D&D 5e and Pathfinder 2e headers, and the colour button on the Call of Cthulhu editor's, lightened the header behind white text, and the Call of Cthulhu **Edit** and **Cancel** were a fixed amber and red with white labels, so on some header colours, a dark custom one especially, their labels fell short of readable. They now darken a dark header and lighten a pale one, so their labels read at least as well as the header's own text, in all three systems.
+- **The buttons on a character sheet's header read clearly on every header colour.**
 
-- **A DM opening a player's sheet sees the player's name.** The sheet's header said **Player: Unknown Player** to everyone but the character's owner and an admin, and so did the note that you are viewing the character as DM. Both now name the player.
+- **A DM opening a player's sheet sees the player's name.**
 
-- **A sheet opened from the Characters page no longer offers rolls it cannot make.** Away from a campaign's table the stats on your own D&D 5e, Pathfinder 2e and Call of Cthulhu sheets looked clickable, and D&D hit dice looked spendable, but there is no table there to roll at. They are now shown as plain text there, and roll as before from a sheet opened at the table.
+- **A sheet opened from the Characters page no longer offers rolls it cannot make.**
 
-- **Save and Cancel can be tapped in a character editor on a phone.** On a screen under about 480 pixels wide, the D&D 5e and Pathfinder 2e editors drew the character's picture and the Experience Points or Level boxes over **Save** and **Cancel**, so a tap on **Save** opened the picture chooser instead. On a phone the two buttons now sit above the picture in all three systems.
+- **Save and Cancel can be tapped in a character editor on a phone.**
 
-- **Character sheets follow your theme.** Sheets were fixed paper cards with some text in the theme's colours, so in a dark theme parts were hard to read. Every sheet now takes the theme's paper, text and borders, and its colours that mean something take the theme's: hit points, damage and remove buttons its danger colour, magic and attunement its spirit colour, notes its warning colour, as soft tints readable in every theme. The system colours on buttons (D&D's red "+ Add") are the app's own buttons, and coins are shown in the theme's text. Pathfinder 2e's proficiency ranks take five of the theme's colours, and its Bulk labels are readable. The Call of Cthulhu sheet's sepia paper is the theme's paper like the others', Sanity is a themed panel whose four states differ in colour and word, the two lowest also by an icon, with its points beside the state where they were drawn over the bar.
+- **Character sheets follow your theme,** with the theme's paper, text, borders and colours in every system.
 
-- **The header colour you pick is drawn everywhere a sheet uses it.** On D&D 5e and Pathfinder 2e sheets the open tab was meant to be underlined and labelled in the header colour, and for most colours neither was drawn; it is now underlined in the colour you picked, a custom one included, with its label in the theme's text colour so it reads on a dark theme. Call of Cthulhu headers gain the middle of their gradient, and three colours their amber bottom border; the open tab, always green before, is underlined in the header colour too, and a skill's improvement tick takes a custom colour where it took the first preset's, with a black tick on a pale one.
+- **The header colour you pick is drawn everywhere a sheet uses it.**
 
-- **The built-in character templates follow the rules.** The blank D&D 5e character started with a d8 hit die, 8 hit points and no saving throw proficiencies; it now starts as the rules give a 1st level Fighter with Constitution 10: a d10, 10 hit points and proficiency in Strength and Constitution saves. The D&D 5e Level 1 Fighter in chain mail with a shield and the Defense style has Armor Class 19 (it had 18). The Pathfinder 2e Level 1 Fighter had 21 hit points where a Dwarf Fighter with Constitution +2 has 22, and attack bonuses one short (Warhammer +8, Crossbow +6, as an expert); the blank Pathfinder 2e sheet stored no ancestry or class hit points and now has a Human Fighter's 18. The blank Call of Cthulhu investigator had a major wound threshold of 1 for 10 hit points, and the Private Investigator 13 hit points where CON 60 and SIZ 65 give 12, a major wound of 1, and SIZ, APP and EDU halves rounded up; both now start with the numbers the rules give. Characters already made from a template keep their numbers; the Call of Cthulhu editor works an investigator's out again when it is next saved.
+- **The built-in character templates follow the rules.** Characters already made from a template keep their numbers; the Call of Cthulhu editor works an investigator's out again when it is next saved.
 
-- **The Pathfinder 2e and Call of Cthulhu editors say which name is missing.** Clearing a Pathfinder 2e ancestry, heritage or class, or the name of a strike, lore, spell, ritual, item or feat, or a Call of Cthulhu occupation, era or weapon name, made Save fail with no reason given. Save now lists what to fill in and opens the tab it is on, as the D&D 5e editor does.
+- **The Pathfinder 2e and Call of Cthulhu editors say which name is missing** before a save is refused.
 
-- **A feature listed twice is kept twice.** Two identical entries, such as two Ability Score Improvements written the same way, were shown as one on a D&D 5e sheet when they came from a template, and folded into one when an older sheet's special abilities were moved to its class features.
+- **A feature listed twice is kept twice.**
 
-- **Save as Template works for a character with a picture.** Publishing failed with a message about global assets whenever the character had a picture, because a character's picture is its player's own upload and a template's has to be one everyone can load. The template is now published without the picture, and a message says it was left out; a picture that is already a global asset is kept.
+- **Save as Template works for a character with a picture.** The template is published without the picture, unless it is already a global asset.
 
-- **Two people editing one character template no longer undo each other.** When two people had the same template open, the later save put back the older version over everything the earlier one saved. A save over a newer version is now refused: for the sheet, **Edit Template** carries your changes onto the newest version and shows them before saving, as the character editor does, and for the name and description it says when someone else changed them.
+- **Two people editing one character template no longer undo each other.**
 
-- **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
+- **A copied character keeps "(Copy)" in its name when it is saved.**
 
-- **A Flexible sheet's add buttons stop where the server does.** The server keeps at most 100 sections on a Flexible sheet, 200 stats in a section, 1,000 entries in a list, and 50 columns and 1,000 rows in a table, but **Add Section**, **Add Stat**, **Add Item**, **Add Row** and the **+** button that adds a column went on adding, making a sheet that could not be saved. Each now turns off at its limit, with a note saying why, as the other sheets' lists do.
+- **A Flexible sheet's add buttons stop where the server does:** 100 sections, 200 stats in a section, 1,000 list entries, and 50 columns and 1,000 rows in a table.
 
-- **Game systems are named in words everywhere.** The dashboard's character list, **Delete Character**, the campaign list in **Create New Character** and the note in **Assign to Campaign** showed the stored code, such as `DND_5E`. They now show the system's name, such as "Dungeons & Dragons 5th Edition", as the game system lists do, and "Flexible" for a character with none; a character's sheet and a campaign invitation use the same names.
+- **Game systems are named in words everywhere,** where some places showed a code such as `DND_5E`.
 
-- **You can delete your character while its campaign is being played.** **Delete Character** refused a character in an active or paused campaign and told you to unassign it first, although the server allows the delete. It now deletes it, after a warning that names the campaign and says the character leaves its roster for everyone at the table.
+- **You can delete your character while its campaign is being played,** after a warning naming the campaign.
 
-- **Create & Publish as Template publishes the character you made, and says so when it cannot.** It published the starter sheet the dialog began from, so the template carried the starter's name, such as "New Character" or "Brave Fighter", where the character had the name you gave it; the template now has the character's sheet as it was saved, and the game system it was saved with. When the character was made but the template was not, the message was put in the **Create New Character** window just as it closed, so nobody saw it until the window was next opened, where it greeted the next character; the Characters page now shows a warning that the character was created and was not published, with the server's reason when it gave one, and **Save as Template** in the editor can publish it again. And after a failed **Create & Publish as Template** the dialog remembered the choice, so a plain **Create Character** published a template as well; each button now does only what it says.
+- **Create & Publish as Template publishes the character you made, and says so when it cannot.**
 
-- **Choosing a Flexible campaign in Create New Character makes the character Flexible.** After picking a campaign with a game system, picking one without kept the first campaign's system, so the character was made for a system its campaign does not play. The game system now follows each campaign chosen, a Flexible campaign's included, and stays as the campaign has it; it goes back to the blank sheet when it changes.
+- **Choosing a Flexible campaign in Create New Character makes the character Flexible.**
 
-- **Create New Character says what happens after Create.** Its note promised to take you to the character editor, which creating a character has never done. It now says the character appears in your list and that **Edit Character** on its card's menu fills in the rest of the sheet.
+- **Create New Character says what happens after Create.**
 
-- **Create New Character takes a name as long as the sheet does.** It refused a name over 100 characters, although the server and the sheet editors take 200. It now takes up to 200, and the box stops there.
+- **Create New Character takes a name as long as the sheet does,** 200 characters.
 
-- **A refused template sheet save names the boxes to fix.** **Edit Template** said only "Template data does not match game system schema" when the server turned a sheet down, so whoever was over a limit could not tell which box to shorten. It now names each box the server refused and why, as the character sheet editors do.
+- **A refused template sheet save names the boxes to fix.**
 
-- **Edit Template no longer offers a token picture it cannot use.** The sheet in **Edit Template** had the character sheet's picture box, which uploaded the picture to your own library and then left it off the template, since a template's picture has to be a global one. The box is gone from template sheets; character sheets keep theirs.
+- **Edit Template no longer offers a token picture it cannot use.**
 
-- **A screen reader names every box in the three character editors, and the boxes stop at the length a sheet stores.** Most boxes, among them **Proficiency Bonus**, **Armor Class**, the hit points, an attack's bonus and damage, every Pathfinder 2e proficiency rank and the whole D&D 5e **Biography** tab, were announced by their placeholder or by nothing; each is now named by the label beside it, such as "Proficiency in Athletics" or "Item bonus to Will saves". The improvement checks beside a Call of Cthulhu investigator's skills could only be clicked; they are now checkboxes you can reach with Tab and tick with Space. And only a character's name stopped at the length the server keeps, so a long paste anywhere else got the save refused; every text box in the three editors now stops there.
+- **A screen reader names every box in the three character editors, and the boxes stop at the length a sheet stores.**
 
-- **A Call of Cthulhu investigator whose CON and SIZ add up to less than 10 can be saved.** Their hit points work out to 0, which the server refused along with the whole save. Rolled characteristics never get that low; typed ones can.
+- **A Call of Cthulhu investigator whose CON and SIZ add up to less than 10 can be saved.**
 
-- **A Call of Cthulhu investigator's own language follows EDU.** Language (Own) starts equal to EDU, but changing EDU in the editor left it where it was. Its base now follows EDU, as Dodge's follows half DEX, and points put into it stay above the base.
+- **A Call of Cthulhu investigator's own language follows EDU.**
 
-- **The Call of Cthulhu sheet shows the derived attributes an investigator's characteristics give.** The read-only sheet showed hit points, the major wound threshold, magic points, maximum Sanity, damage bonus, build, move rate and each characteristic's half and fifth as last stored, so an investigator not saved since being made from a template or imported could show numbers its own characteristics do not give. They are now worked out as the editor works them out.
+- **The Call of Cthulhu sheet shows the derived attributes an investigator's characteristics give.**
 
-- **A Call of Cthulhu investigator's token picture is checked and named after the investigator.** The editor took any file as the picture, which was then refused when the sheet was saved, and named every upload "Investigator Token". A file that is not a picture, or is over the token size limit, is now refused when it is chosen, as on the other sheets, and the picture is named after the investigator.
+- **A Call of Cthulhu investigator's token picture is checked and named after the investigator.**
 
-- **A Call of Cthulhu weapon rolls its damage bonus and its skill's current value.** Damage written as the rulebook does, such as "1d3+DB" for a punch, could not be rolled from the sheet and was left out of the right-click roll menu; DB now rolls the investigator's damage bonus, and the legend says firearms take none. Half DB, for thrown weapons and bows, is dropped when the bonus is 0; any other damage the dice cannot read is shown without offering a roll. A weapon's attack used the skill value stored with the weapon, which fell behind as the skill rose; it now uses the value of the skill the weapon names, such as Brawl or Handgun, where the sheet has it.
+- **A Call of Cthulhu weapon rolls its damage bonus and its skill's current value.** Damage such as "1d3+DB" rolls the damage bonus.
 
-- **The Call of Cthulhu read-only sheet reads clearly.** It showed a stray "0" on the **Backstory** tab when Cthulhu Mythos was 0 and no spells were known, and drew the STR to EDU labels in a pale fill colour that was hard to read on the light theme. The labels are now in the theme's secondary text colour.
+- **The Call of Cthulhu read-only sheet reads clearly.**
 
-- **Every Call of Cthulhu skill rolls from the sheet, named once.** The Firearms, Other Language and Science rows did nothing when clicked, where every other skill rolled, and the last two printed their language or specialisation twice, such as "Science (Physics) (Physics)". The roll menu on an investigator's token now offers its Firearms, Other Language and Science skills at 0%, which it skipped.
+- **Every Call of Cthulhu skill rolls from the sheet, named once.**
 
-- **A Call of Cthulhu box can be cleared and retyped.** Clearing a characteristic, skill, Sanity or weapon skill box to type a new number set it to 0 first, so hit points and the half and fifth columns were worked out for 0 in between, and a Sanity left empty stayed at 0. The boxes now hold what you type, and take up to 100 (Sanity up to 99), as a sheet stores them. A weapon's ammunition or malfunction number of 0 shows as 0, where it showed empty.
+- **A Call of Cthulhu box can be cleared and retyped.**
 
-- **A Call of Cthulhu investigator stored without skills can be saved.** Such an investigator, from an import or a program, opened with an empty skills list, which the server refuses on save, so it could never be saved. The editor now fills each skill in at the rulebook's base: Dodge at half DEX, the own language at EDU.
+- **A Call of Cthulhu investigator stored without skills can be saved.**
 
-- **A Call of Cthulhu investigator with POW 100 can be saved, and current Sanity stays within the maximum.** Starting Sanity is POW, but a sheet holds at most 99, so an investigator with POW 100 and no Sanity yet could not be saved; it now starts at 99. Raising Cthulhu Mythos lowers maximum Sanity, and current Sanity now comes down with it, as the rules say it never rises above the maximum. A maximum Sanity of 0 shows as 0, where it showed 99.
+- **A Call of Cthulhu investigator with POW 100 can be saved, and current Sanity stays within the maximum.**
 
-- **Cthulhu Mythos typed on a Call of Cthulhu sheet lowers maximum Sanity.** The sheet kept Cthulhu Mythos twice, and the only box you could type in, under **Spells & Mythos**, changed neither maximum Sanity nor the skill that is rolled. The box now sets the skill, maximum Sanity follows it, and it stops at 99. An investigator whose two copies differ opens with the larger, which is the one you raised.
+- **Cthulhu Mythos typed on a Call of Cthulhu sheet lowers maximum Sanity.**
 
-- **A Call of Cthulhu major wound threshold rounds up.** A major wound is damage of at least half an investigator's maximum hit points in one attack, but the editor halved and rounded down, so at 13 hit points it named 6, which is under half. It now names 7; the threshold is saved the next time the investigator is saved.
+- **A Call of Cthulhu major wound threshold rounds up.**
 
-- **A Pathfinder 2e ancestry or class with 0 hit points counts as 0.** The editor read a 0 typed in **Ancestry HP** or **Class HP/Level** as 6, so the maximum came out 6 higher than the boxes said. A character made from the older blank sheet, which stores neither, keeps its maximum until one is filled in.
+- **A Pathfinder 2e ancestry or class with 0 hit points counts as 0.**
 
-- **An item's value keeps fractions of a gold piece on the D&D 5e and Pathfinder 2e sheets.** **Value (gp)** on the D&D 5e sheet and an item's value box on the Pathfinder 2e sheet took whole numbers only, so 5 sp typed as 0.5 was saved as 0. Both now keep fractions. On the Pathfinder 2e sheet an item's quantity can also be 0, and a strike's range of 0 shows as 0 where it showed an empty box; on the D&D 5e sheet a spell's level box takes 0, and a hit die pool's **Left** stops at its **Max**, with any extra brought down when the sheet is saved.
+- **An item's value keeps fractions of a gold piece on the D&D 5e and Pathfinder 2e sheets.**
 
-- **The Pathfinder 2e sheet and editor agree on more of a character.** The sheet wrote a **DEX Cap** of -1 as "+-1", showed a land Speed of 0 as 30 ft., and ran the paragraphs of personality, backstory, allies and notes together; it now writes them as typed. An innate spell's notes, which the sheet showed, can be edited. A strike's proficiency rank did nothing; the editor now shows what the rank, attribute and item bonus give beside the attack bonus, which stays as typed.
+- **The Pathfinder 2e sheet and editor agree on more of a character.**
 
-- **Pathfinder 2e spell slots never show more used than there are.** Lowering a rank's total slots left its used count above it, which saved, and the sheet then showed a negative number of slots left. Lowering the total now brings the used count down with it, a character stored with more used opens with them brought down and a note saying so, and the sheet never shows fewer than none left. As for D&D 5e, the server now refuses more used than the total.
+- **Pathfinder 2e spell slots never show more used than there are.**
 
-- **A Pathfinder 2e lore named with "Lore" rolls under its own name.** A lore skill named as the rulebook writes them, such as Warfare Lore from the built-in Fighter, rolled as "Warfare Lore Lore Check". "Lore" is now added only to a name without it.
+- **A Pathfinder 2e lore named with "Lore" rolls under its own name.**
 
-- **The Pathfinder 2e sheet shows and rolls the saves, Perception and skills its own numbers give.** The read-only sheet, the right-click roll menu and initiative used the totals last stored, so a character the editor had not saved since, such as one made from a template or imported, showed and rolled numbers that did not follow from its ranks, attributes and bonuses. They are now worked out from those, as AC and Class DC already were.
+- **The Pathfinder 2e sheet shows and rolls the saves, Perception and skills its own numbers give.**
 
-- **A Pathfinder 2e check penalty lowers the skill however it is typed.** The penalty box subtracted what was typed, so a penalty entered as armor prints it, such as -2, raised the skill by 2. The penalty box now takes 0 or below. A skill whose penalty was typed as a negative number goes down by twice that penalty, to what the rules give; one stored as a positive number opens as negative, and a note above the sheet says so.
+- **A Pathfinder 2e check penalty lowers the skill however it is typed.**
 
-- **The Pathfinder 2e focus pool holds what your character has.** **Add Focus Spell** set the pool to 3 points whatever the spells, and the points left could go up to 3 whatever the pool. The pool now has its own box, from 0 to 3; the first focus spell makes it 1 point, as the rules give, and the points left stay within it. A character stored with more points left than its pool opens with them brought down, and a note above the sheet says so.
+- **The Pathfinder 2e focus pool holds what your character has.**
 
-- **A Pathfinder 2e feat with no level is listed first on the sheet.** Such a feat, from an import or a program, landed anywhere in its list and read "Level undefined". It now comes first, with no level shown.
+- **A Pathfinder 2e feat with no level is listed first on the sheet.**
 
-- **A Pathfinder 2e feat from a built-in template opens with its text in the editor.** The templates stored a feat's text where the editor had no box, so a Fighter's Power Attack opened with an empty description and its text could be neither changed nor removed. The editor now puts that text in the description as it opens, after any description already there.
+- **A Pathfinder 2e feat from a built-in template opens with its text in the editor.**
 
-- **A Pathfinder 2e character stored with spellcasting but no spell attack or spell DC can be saved.** Such a character, from an import or a program, saved those two without a rank or item bonus, and every save was refused. The editor now fills them in as it opens.
+- **A Pathfinder 2e character stored with spellcasting but no spell attack or spell DC can be saved.**
 
-- **A Pathfinder 2e spell DC uses its own item bonus, and one spellcasting rank sets both spell attack and spell DC.** The editor offered a rank and an item bonus for each, but worked the DC out from the attack's, so the DC's own boxes did nothing, and the read-only sheet showed the DC with a rank it did not use. The rules give one proficiency for spell attacks and spell DCs, so the Spells tab now has one **Spellcasting proficiency**, and each item bonus counts toward its own total. A character whose attack item bonus was raising the DC, or whose two ranks differed, sees its spell DC change; a note above the sheet names the change when it opens.
+- **A Pathfinder 2e spell DC uses its own item bonus, and one spellcasting rank sets both spell attack and spell DC.** A character whose DC changes because of this gets a note above the sheet when it opens.
 
-- **Pathfinder 2e Bulk follows the rules on the sheet and in the editor.** A Bulk typed in an item's box, such as 2, counted as nothing; a light item counted as 0.1 with nothing rounded down, so a character carrying exactly 5 + Strength, or a few light items more, was marked encumbered; and an item with no Bulk at all stopped the sheet from opening. Ten light items now make 1 Bulk with the rest rounded down, coins count as the rules give (1 Bulk a thousand, of any kind), a character is encumbered only above 5 + Strength, and the sheet works Bulk out from the inventory and Strength. The built-in Level 1 Fighter's stored Bulk is corrected to 5, encumbered above 8, at most 13.
+- **Pathfinder 2e Bulk follows the rules on the sheet and in the editor.**
 
-- **A Pathfinder 2e character whose AC, Class DC or Spell DC works out under 10 can be saved.** All three were refused below 10, although the rules allow less: Dexterity 8 untrained gives AC 9, and such a character could not be saved at all.
+- **A Pathfinder 2e character whose AC, Class DC or Spell DC works out under 10 can be saved.**
 
-- **Every Pathfinder 2e Add Feat button has its colour.** On the **Feats & Features** tab, the **Add Feat** buttons for Ancestry & Heritage, Skill and Bonus feats had no background, so their white text could not be seen.
+- **Every Pathfinder 2e Add Feat button has its colour.**
 
-- **The D&D 5e editor says when it has brought a stored number within range.** A sheet stored with more than 20 spell slots of a level, or a bonus outside -30 to +30, opened with the number lowered or raised, and the next save stored it so, with nothing said. A note above the sheet now names each one, such as "level 3 spell slots (24 to 20)".
+- **The D&D 5e editor says when it has brought a stored number within range.**
 
-- **The D&D 5e editor says what to fix before a save is refused.** It let **Race** or **Class** be emptied, **Armor Class** or maximum hit points go to 0, a custom skill's **Other** take any number, the spell save DC or passive Perception fall below 1, and then the server refused the save, often for a box on another tab. The boxes now stop where a sheet does, and **Save** lists anything still to fix, opens the tab it is on and marks the box. A character stored without hit points saves as it was.
+- **The D&D 5e editor says what to fix before a save is refused.**
 
-- **A row added by mistake no longer stops a D&D 5e sheet from saving.** **+ Add Attack**, **+ Add Item** and **+ Add Spell** made a row with no name, and **+ Add Hit Die** one with no class, and the sheet could not be saved until each was filled in or removed. A row nobody has typed in is now left out when the sheet is saved, and a new hit die starts with the character's class.
+- **A row added by mistake no longer stops a D&D 5e sheet from saving.**
 
-- **A D&D 5e character's Proficiency Bonus follows their level.** Raising **Level** left **Proficiency Bonus** where it was, so every save, skill and spell number worked out from it stayed a level behind. It now moves with **Level** when it was the old level's bonus. A bonus set by hand to something else is kept, and the sheet shows what the level gives under it, with a button to use that. See [Levelling up (D&D 5e)](docs/PLAYER_GUIDE.md#levelling-up-dd-5e).
+- **A D&D 5e character's Proficiency Bonus follows their level.** See [Levelling up (D&D 5e)](docs/PLAYER_GUIDE.md#levelling-up-dd-5e).
 
-- **A D&D 5e sheet stops adding skills and damage rolls where it can still be saved.** A sheet keeps at most 30 skills under **Your Own Skills** and 10 **Other Damage Rolls** on one attack, but **+ Add Skill** and **+ Add Damage Roll** went on adding, and the sheet could not be saved. At the limit each button is now greyed out, with a note saying the list is full.
+- **A D&D 5e sheet stops adding skills and damage rolls where it can still be saved.**
 
-- **Unticking Requires Attunement on a D&D 5e item ends its attunement.** The **Attuned** box was hidden but stayed ticked, so the item went on taking one of the three attunement slots. Unticking **Requires Attunement** now unticks **Attuned** too, and an item already stored attuned shows its **Attuned** box so it can be cleared.
+- **Unticking Requires Attunement on a D&D 5e item ends its attunement.**
 
-- **A D&D 5e sheet's Total Weight counts items with no weight or quantity.** One item with either left out made **Total Weight** read 0.0 for the whole inventory, and the rows showed a bare "lb", or "ft" for an attack with no range. An item with no weight now counts as weighing nothing and one with no quantity as one item, and a number that was never filled in shows as a dash.
+- **A D&D 5e sheet's Total Weight counts items with no weight or quantity.**
 
-- **Naming a D&D 5e spellcasting ability raises the spell save DC and spell attack.** On a sheet saved with **Spellcasting Ability** empty, typing it in afterwards left the DC at 8 plus proficiency and the attack at proficiency, with minus the ability modifier recorded as **Other bonus**. The ability now counts. A sheet already saved this way shows that negative **Other bonus** on its Spells tab; set it back to 0.
+- **Naming a D&D 5e spellcasting ability raises the spell save DC and spell attack.** A sheet saved before with the ability empty shows a negative **Other bonus** on its Spells tab; set it back to 0.
 
-- **A D&D 5e character stored without its saving throws can be saved from the editor.** Such a character, from an import or a program, opened with no saving throws, and ticking one stored that one alone, so every save was refused. The editor now fills in all six as it opens, as it already did the eighteen skills.
+- **A D&D 5e character stored without its saving throws can be saved from the editor.**
 
-- **Coloured messages and labels are readable on their own backgrounds.** Error, warning, success and information boxes, badges and chips draw their text on a light wash of their colour, and the text was worked out only against the plain page, so it fell to about 3.5 to 1 in some themes; muted and secondary text did the same on shaded panels. Each theme now works these colours out against those backgrounds, and the deeper tint some show on hover, too, so they clear the usual readability bar everywhere.
+- **Coloured messages, labels, text and buttons read clearly in every theme.**
 
-- **Text boxes, checkboxes and dropdown lists are dark in a dark theme.** In Obsidian Night, Shadow Realm, Deep Dungeon, Midnight Court and a dark custom theme the browser still drew its own controls light, with the theme's light text inside them. Checkboxes, radio buttons and sliders now take the theme's colour in every theme.
+- **Text boxes, checkboxes and dropdown lists are dark in a dark theme.**
 
-- **Coloured text reads clearly in every theme.** About 150 labels, links and icons across the app, such as the campaign card's status and the asset library's buttons, and the error under a box, the "You've been signed out" notice, the warning icon in confirmations and the errors in the campaign, character and invitation dialogs, were drawn in the theme's fill colours, which fall under 4.5:1 in some themes (the danger colour was about 3.3 to 1 on panels and dialogs, and under 4.5 to 1 on the page, in Obsidian Night, Shadow Realm, Deep Dungeon and Midnight Court). They now use each colour's readable text shade, and their pale backgrounds are a touch lighter where that shade sits on them. On the dark DM tool panels the amber is a fixed light amber, the player's ruler hint on the map is white, and the open panel's button on the table toolbar takes the accent's readable shade, which was faint in the light themes.
+- **The panels show a token's disposition and HP in the map's own colours.**
 
-- **Labels on the app's coloured buttons read clearly in every theme.** White on the brand colour fell to 2.7:1 in Obsidian Night, and under 4.5:1 in Deep Dungeon, Midnight Court and Desert Sand; red buttons such as **Delete** were the same bright red with white text in every theme, at 3.8:1; the amber **Next Turn** button and the amber confirm buttons, such as **Clear** for the chat and **Discard** for unsaved changes, had white text at 2 to 3.9:1 in all but one theme; and the dice panel's **Roll** button, the **Spirit Layer** toggle when it is on, and the amber buttons in the map windows and the Admin Panel had white labels that fall under 4.5:1 in every theme (all but Shadow Realm for the toggle). Brand-coloured buttons and ticks now take a dark grey or black label in those four themes; red buttons use the theme's own red, deepened where white would not read on it; **Next Turn** and the confirm buttons keep their amber with a label in the shade that reads on it; and the **Roll** button, the toggle and the amber buttons in the map windows and the Admin Panel use the soft coloured style of the app's alerts, as the character sheets do. The fog panel's amber **Confirm?** buttons, for **Hide all** and **Reset explored areas**, have dark text, and the outlined secondary button reads in Desert Sand and Shadow Realm.
+- **The Spirit Realm badge over the map can be read over any map.**
 
-- **The panels show a token's disposition and HP in the map's own colours.** The **Friendly**, **Neutral** and **Hostile** buttons in the token editor, Token Manager and Creature Library, the letters on creatures and templates without a picture, and the HP and temporary HP bars in the campaign roster each used colours of their own, close to the map's but not the same; a player or object template's letter was amber in Token Templates, where the map draws it blue or grey, and the list's player badge was teal. They now use the map's colours, with text in a shade that reads in every theme, and the token editor's HP numbers are in the ordinary text colour, which reads on any theme where the green or amber did not.
+- **Personal notes follow your theme.**
 
-- **The Spirit Realm badge over the map can be read over any map.** A player in the spirit realm sees a **Spirit Realm** badge in the map's top corner. It was a faint tint over the map, so on a light or busy map its words were hard to make out. It now has a solid backing, as the zoom controls do.
+- **A screen reader no longer reads out older chat messages as they load.**
 
-- **Personal notes follow your theme.** A link in a note is blue, the text takes the theme's brand colour, and the quote bar and divider lines take its accent; the styles meant for them never applied, so links looked like plain text and the quote bar was always amber.
+- **Three more controls read correctly to a screen reader.**
 
-- **A screen reader no longer reads out older chat messages as they load.** The chat announces each new message, and it also read out every message on a page of older ones from **Load More**, and the messages fetched again after a dropped connection. It now stays quiet while it reads them.
+- **An asset card's View, Download and Delete buttons can be reached with Tab and are always shown on a touch screen.**
 
-- **Three more controls read correctly to a screen reader.** **Edit Token**'s name box is labelled **Token name**; the **Walls** and **Lights** titles read with a space before their count; and each token in **Add Combatant** is read once, where its picture repeated the name.
+- **The DM can reorder initiative and edit a value from the keyboard.**
 
-- **An asset card's View, Download and Delete buttons can be reached with Tab and are always shown on a touch screen.** In the **Asset Library** grid the buttons were drawn only while the mouse was over a card, so the keyboard could not reach them and a phone or tablet showed them only after a first tap. They now appear on hover or while one has the keyboard focus, stay shown on a touch screen as a small strip in the corner of the picture, which stays clear, and a screen reader names each one with the asset's name.
+- **Screen readers hear new dice rolls and the connection status, and the dice panel's boxes and windows have names.**
 
-- **The DM can reorder initiative and edit a value from the keyboard.** The order could only be dragged with a mouse, and a value could only be clicked. Now Tab reaches each row's grip, where the **Up** and **Down** arrow keys move the combatant one place and a screen reader hears its new place, and each value is a button that opens the box to type in. **Add Combatant** is now a proper window: Tab stays inside it, and a screen reader knows its name.
+- **The map's Fog of War, Walls and Lights panels open and fold from the keyboard.**
 
-- **Screen readers hear new dice rolls and the connection status, and the dice panel's boxes and windows have names.** A roll arriving in the **Dice** panel was not announced, and **Connected**, **Disconnected** and **Connection Error** were silent, and on a phone had no text at all. The expression, **Character** and **Purpose** boxes were named only by their placeholder, the roll pickers' close buttons had no name, and the **Secret Roll** popup was not a window a screen reader knew of. Each is now named; the popup is a dialog that Escape closes and that holds the keyboard while open. It now opens over the whole page, as the app's other windows do, where it covered only the dice panel.
+- **The DM's side panels work from the keyboard and are announced as dialogs.**
 
-- **The map's Fog of War, Walls and Lights panels open and fold from the keyboard.** Each panel's title could only be clicked: Tab skipped it and a screen reader did not say whether the panel was open. The title is now a button that Tab reaches, Enter or Space opens and folds the panel, and a screen reader hears whether it is open.
+- **With reduce motion turned on, windows and notifications fade out where they are.**
 
-- **The DM's side panels work from the keyboard and are announced as dialogs.** Campaign Settings, the Map Library, Token Manager, Spirit Layer, Atmosphere, the Creature Library, Token Templates, **Edit Token** and the Asset Library's details panel now close with **Escape**, keep Tab inside them and are read out by name by a screen reader. Each panel's **Close** button is named, where Atmosphere's, the Map Library's and the Asset Library details panel's had no name, and with reduce motion turned on a panel fades in and out, where it appeared and vanished at once.
+- **With one window open over another, Escape and Tab act on the top one only.**
 
-- **With reduce motion turned on, windows and notifications fade out where they are.** Closing a window or a notification first jumped it a short way, up to about 60 pixels for a notification, and then faded it. It now only fades, as it does when it opens. **Invite Player** also fades out on close, where it vanished.
+- **The Desktop Required notice is no longer hidden behind an open window.**
 
-- **With one window open over another, Escape and Tab act on the top one only.** Escape closed every open window at once, such as **Delete saved roll** and the **Saved rolls** window under it, and Tab could not reach the top window's middle controls. Also, the box a window opens on, such as **Email** in **Create User**, keeps the cursor, and closing the window puts the cursor back on the button that opened it.
+- **A screen reader reads a Creature Library row and its favourite star as two controls.**
 
-- **The Desktop Required notice is no longer hidden behind an open window.** When the browser window was made narrower than 1024 pixels with a window open on the campaign page, such as **Create Map** or **Invite Player**, the window stayed drawn over the notice. The notice now covers it, and takes the keyboard while it shows, so Tab reaches **Continue anyway** and Escape no longer closes the window hidden under it.
+- **The Atmosphere panel's volume slider tells the table however it is moved.**
 
-- **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
+- **A document saved twice at the same moment records the size of the text it keeps.**
 
-- **The Atmosphere panel's volume slider tells the table however it is moved,** a screen reader included. The volume was sent only when a pointer or a key was let go, so a value set any other way stayed on your screen alone.
+- **Every sound file and document you may use is offered.**
 
-- **A document saved twice at the same moment records the size of the text it keeps.** Two saves close together, from two tabs say, could leave the document holding one text and its listed size belonging to the other.
+- **The picture pickers can find every picture you may use,** by part of a name or a whole tag, with **Load more**.
 
-- **Every sound file and document you may use is offered.** The Atmosphere panel and the vibe period editor chose from the newest 50 sound files of all your campaigns, so a track of this campaign's past those was not offered, and a campaign's **Share existing** list showed only your newest 100 documents. They now offer all of them.
+- **The Asset Library's search and sort cover the whole library.**
 
-- **The picture pickers can find every picture you may use.** The pickers in **Create Map**, **Edit Map**, the creature editor, the Token Manager and **Edit Token** showed only the newest 50 or 100 pictures, and their search looked only among those, so an older map or token picture could not be chosen. Each now searches your whole library, by part of a name or a whole tag, and **Load more** shows older pictures. The Token Manager and **Edit Token** gain a search box.
+- **An MP1 or MP2 sound file is refused when it is uploaded or imported.** Convert it to MP3, Ogg or WAV.
 
-- **The Asset Library's search and sort cover the whole library.** They worked only on the page of 24 assets on screen, so an asset on another page could not be found, and **Sort by Name** sorted those 24. The search now finds any asset by part of its name or by a whole tag, and the sort orders the whole library. The tag chips are still the tags on the page on screen, and now say so.
+- **A PDF uploaded under another name opens as a PDF.**
 
-- **An MP1 or MP2 sound file is refused when it is uploaded or imported.** Such a file, sometimes named .mp3, was taken and then never played, since browsers do not play it. An upload now refuses it with "Invalid file type", as other files are, and a campaign import leaves it out and says why; convert it to MP3, Ogg or WAV.
+- **A document you stop editing after a refused save shows its text again.**
 
-- **A PDF uploaded under another name opens as a PDF.** A real PDF uploaded as, say, "handout.txt" is stored and served as a PDF, but the Documents page and a campaign's documents labelled it Text, showed its contents as unreadable text and offered **Edit**. They now go by what the file is.
+- **The Upload Asset window's progress bar shows how much of the file has been sent.**
 
-- **A document you stop editing after a refused save shows its text again.** After a save was refused and you pressed **Cancel**, the reader showed the reason the save was refused where the document should be, until it was closed and opened again.
+- **A picture that fails to load no longer breaks the asset pickers.**
 
-- **The Upload Asset window's progress bar shows how much of the file has been sent.** It was a timer that counted to 90% and waited there however slow the connection, and after a refused upload it went on running, so the next upload's bar jumped about.
+- **The Asset Library's detail panel slides away when you close it.**
 
-- **A picture that fails to load no longer breaks the asset pickers.** In a picker such as the one in **Edit Map**, choosing another picture after the chosen one had failed to load could blank the window. The Asset Library's cards now show the asset's type icon where a picture fails, where they showed nothing, and its detail panel says "Preview not available" as before.
+- **In Firefox, the Asset Library's cards fade in once as it opens.**
 
-- **The Asset Library's detail panel slides away when you close it,** as it slides in when it opens. It vanished at once.
+- **An asset you move in the Asset Library takes its new place at once.**
 
-- **In Firefox, the Asset Library's cards fade in once as it opens.** Each card faded in, vanished and faded in again.
+- **The Asset Library offers Campaign as a place to move an asset only when one of your campaigns can take it.**
 
-- **An asset you move in the Asset Library takes its new place at once.** It stayed listed where it had been, under its old library, until the page was loaded again.
+- **The Asset Library offers Delete and Move to whoever may use them.**
 
-- **The Asset Library offers Campaign as a place to move an asset only when one of your campaigns can take it.** A player was offered **Campaign** for their own map, with no campaign to choose, since only a campaign's DM can put a map in its library.
+- **A move the Asset Library refuses says why.**
 
-- **The Asset Library offers Delete and Move to whoever may use them.** It offered both only to an asset's uploader or a server admin. A campaign's DM, whom the server lets delete and move the assets in their campaign's library, was not offered them, and an uploader who had left the campaign, or no longer had Global Assets, was offered them and then refused. The library now offers them by the server's own rule.
+- **A file whose name has accented or other non-ASCII letters keeps its name.** Files uploaded before keep their stored names; upload one again to show its name correctly.
 
-- **A move the Asset Library refuses says why.** The detail panel showed only "Forbidden". It now shows the server's reason, such as "Only the asset owner or campaign DM can move this asset".
+- **The Upload Asset window takes Ogg and WAV sound files in Firefox, and Markdown documents in every browser.**
 
-- **A file whose name has accented or other non-ASCII letters keeps its name.** Uploading "café.png" stored its file name as "cafÃ©.png", shown so under **Original Filename** in the Asset Library's details, and a map imported from a Universal VTT file named "Höhle.uvtt" was called "HÃ¶hle". Names are now read as the browser sends them. Files uploaded before keep the names they were stored with, and still download under the right one; upload a file again to show its file name correctly.
+- **Searching a library for `%` or `_` finds only names that hold one.**
 
-- **The Upload Asset window takes Ogg and WAV sound files in Firefox, and Markdown documents in every browser.** It checked the type the browser reported for a file against a list of its own, and Firefox reports those sound files under other names, as browsers often report Markdown with none. It refused them with "Invalid file type" though the server takes them. The window now goes by the file's extension, using the server's own list, so it also refuses an M4A file at once, where the server refused it after the upload. The file picker offers only those files.
+- **A mistyped `ASSET_UPLOAD_RATE_LIMIT` no longer turns the upload limit off.** A value that is not a number is ignored, with a warning in the log, and the default of 30 uploads a minute per user applies.
 
-- **Searching a library for `%` or `_` finds only names that hold one.** In the Admin Panel's **Assets** tab, the Creature Library, the token templates and the character templates, a `%` in the search matched every name and an `_` any one letter. They are now matched as typed, as in the Invite Player search.
+- **A campaign archive is uploaded once when you import it.**
 
-- **A mistyped `ASSET_UPLOAD_RATE_LIMIT` no longer turns the upload limit off.** A value that was not a number, such as `thirty`, let every upload through. Such a value is now ignored, with a warning in the backend log, and the default of 30 uploads a minute per user applies, as for the other limits.
+- **Changing a creature's ability scores or Challenge Rating moves its saves and skills, and saves them.**
 
-- **A campaign archive is uploaded once when you import it.** The import window sent the whole archive (up to 500 MB) to the server to show what it holds, then sent it again to import it. It now reads that from the archive in your browser, and asks the server only about an archive it cannot read itself, so the server can say what is wrong with it.
+- **A Pathfinder 2e stat block shows the creature's level, its attribute modifiers and Fort, Ref and Will.**
 
-- **Changing a creature's ability scores or Challenge Rating moves its saves and skills, and saves them.** The Creature Library's form showed the new bonuses and saved the old ones, so a Goblin given Dexterity 16 kept rolling Stealth +6; in a token's stat block, typing a score froze the creature's bonuses at the first digit typed. Both now follow the creature's proficiencies, an SRD creature's included.
+- **Stat blocks in Flexible and Shadowrun campaigns print negative saves and skills properly.**
 
-- **A Pathfinder 2e stat block shows the creature's level, its attribute modifiers and Fort, Ref and Will.** It showed no level, ability scores with modifiers worked out from them instead of the modifiers you entered, and saves cut to "for", "ref" and "wil". The Creature Library's Pathfinder form now edits attribute modifiers too, as a token's stat block does. A D&D creature used in a Pathfinder campaign shows its CR as CR, no longer as a level.
+- **The Creature Library and Token Templates say why a save was refused, and their boxes stop at the server's limits.**
 
-- **Stat blocks in Flexible and Shadowrun campaigns print negative saves and skills properly,** as "Dex -1" where they showed "dex +-1", and name skills in full ("Sleight of Hand").
+- **Copying a token template to another campaign says it worked, naming the campaign, or says why it was refused.**
 
-- **The Creature Library and Token Templates say why a save was refused, and their boxes stop at the server's limits.** A creature or template the server turned down, such as one whose stat block is over 64 KB, showed only "Failed to create creature" or "Failed to update template"; so did a refused duplicate or delete of a creature, and a refused delete or picture upload for a template. They now show the server's reason, which names the field it is about. Each text box there and in a token's stat block stops at its limit as you type: 200 characters for a name, a creature type, a speed or a trait's name, 100 for an alignment, 500 for each defence, senses and languages, and 5,000 for a description or notes. Each list of traits or actions stops at 50 entries.
+- **Deleting a favourite creature takes it out of the Creature Library's Favorites too.**
 
-- **Copying a token template to another campaign says it worked, naming the campaign, or says why it was refused.** A copy that worked only closed the menu, a refused one showed "Failed to copy template", and picking the campaign twice in quick succession made two copies.
+- **Edit Token shows changes made elsewhere while it is open, and no longer undoes them.**
 
-- **Deleting a favourite creature takes it out of the Creature Library's Favorites too.** Its row stayed under **Favorites** until the library was reopened.
+- **A token whose controller is no longer a player says so.**
 
-- **Edit Token shows changes made elsewhere while it is open, and no longer undoes them.** It kept the token as it was when opened, so a change that reached the table while it was open did not show, and the next change made in it put the old values back. It now follows the token as the table has it; what you are typing in a box stays there until it is saved.
+- **The Token Manager no longer offers to send an object to the spirit realm.**
 
-- **A token whose controller is no longer a player says so.** A token keeps naming whoever controlled it after they become a spectator or leave the campaign, though they can no longer move it. The Token Manager's list showed it with a **Player** chip, and Edit Token's **Controlled By** showed **Nobody (DM controls)** while its hint said "This player can move the token on the map." Both now name that person as no longer a player (or a former member, once they have left), and the hint says they cannot move it.
+- **The Token Manager says why the server refused.**
 
-- **The Token Manager no longer offers to send an object to the spirit realm,** which the map's right-click menu has never offered. An object already on the spirit layer is offered **Return to Material Plane**.
+- **A Player token from the Token Manager can stand for a character,** chosen from a **Character** list.
 
-- **The Token Manager says why the server refused.** **Place on Map**, hiding, obscuring, moving between the planes, removing a token and uploading a picture each showed a fixed sentence, such as "Failed to add token to map", when the server turned them down. They now show its reason, such as a map already holding 1,000 tokens.
+- **A token's conditions follow the campaign's game system, and you can type your own.** See [Editing Tokens During Play](docs/DM_GUIDE.md#editing-tokens-during-play).
 
-- **A Player token from the Token Manager can stand for a character.** The **Player** type said it linked to a character sheet, then made a token linked to nothing, which opened no sheet and rolled no character's numbers. A **Character** list now picks the character: the token is named after it unless you typed a name, controlled by its owner while they are a player, and given the character's token picture if you chose none.
+- **A token added, changed or removed reaches everyone at once, from wherever it was changed.**
 
-- **A token's conditions follow the campaign's game system, and you can type your own.** Edit Token offered the fifteen D&D 5e conditions in every game system and nothing else. A D&D 5e campaign still gets those fifteen, and a Call of Cthulhu campaign now gets the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. In every game system, Pathfinder 2e and Flexible included, a box adds a condition of your own, such as *Frightened 2* or *Blessed*, up to 60 characters. Conditions already on a token are kept as they are.
+- **A token goes back where it stands when whoever was carrying it loses their connection.**
 
-- **A token added, changed or removed reaches everyone at once, from wherever it was changed.** The app's own pages told the table after each change, so a change from a script, a second tab, or a player editing a token they control (its conditions, say) reached nobody else until the map was next sent.
+- **Damage from the minus buttons takes temporary hit points first, on the roster and in Edit Token.**
 
-- **A token goes back where it stands when whoever was carrying it loses their connection.** Everyone else kept seeing it where it was last carried until it next moved or the map was reloaded.
+- **A player who right-clicks a creature or an object on the map no longer gets an empty menu.**
 
-- **Damage from the minus buttons takes temporary hit points first, on the roster and in Edit Token.** In D&D 5e and Pathfinder 2e, as both games' rules say, damage to a character comes off temporary hit points first, but the roster's minus buttons took it straight off the character's hit points and left the temporary ones untouched; **Edit Token**'s **-10**, **-5** and **-1** did the same to a creature, in any game system. Both now take the temporary hit points first, which go away once spent; healing still restores hit points only.
+- **More actions say why when they fail.**
 
-- **A player who right-clicks a creature or an object on the map no longer gets an empty menu.** The menu has nothing for a player there, so none opens.
+- **Players no longer see walls and doors through the fog of war.**
 
-- **More actions say why when they fail.** Loading, uploading and saving a token picture in Edit Token, making a custom copy of an SRD creature for it, opening a sheet from the Campaign Roster, a creature favourite, the Lights panel's **Global illumination** switch, loading your characters in an invitation, dragging a character from the roster onto a map that cannot take it, and **Hide from Players**, **Obscure Identity**, **Send to Spirit Realm** and **Return to Material Plane** on a token's right-click menu each failed with nothing on screen. They now say what went wrong. A roster that will not load says so, with **Try again**, where it showed *No members yet*, and an invitation says your characters could not be loaded where it said you had none. Switching maps now stops, saying why, when the tokens on the map on screen cannot be read; it switched without offering to bring them.
+- **Moving a token on a lit map with many walls no longer holds up the server.** On a map of 1,000 walls, a move seen by 12 players took about 345 ms of the server's time and now takes about 21.
 
-- **Players no longer see walls and doors through the fog of war.** On a map with fog of war and without dynamic lighting, the walls, doors and grid lines under the fog showed through it as faint lines, so a player could make out the layout of rooms not yet revealed. The fog was drawn square by square, and at most zoom levels the edges between squares let a hairline of the map through; it is now drawn in one piece. The DM's see-through fog loses the same faint lines.
+- **The DM tool panels stay on the map,** and double-clicking the bar above them puts them back in their corner.
 
-- **Moving a token on a lit map with many walls no longer holds up the server.** With dynamic lighting on, every token move works out what each player can see, and the time that took grew with the square of the number of walls, and the server answers one thing at a time. On a map of 1,000 walls and 8 lights, a move seen by 6 players took about 185 ms of the server's time and one seen by 12 about 345 ms. They now take about 13 and 21 ms, and what each light reaches is kept from one move to the next until a wall or a light changes.
+- **A light's colour can be typed into the Lights panel.**
 
-- **The DM tool panels stay on the map.** The stack of Fog of War, Walls and Lights panels, once dragged, was fixed to the window, so it stayed put when the map moved or shrank and could be left off the map, and a tall stack covered the **Preview Player View** button, hiding the Lights panel's **Place** button on a short window. The stack now moves with the map and comes back onto it when the map shrinks, double-clicking the bar above it puts it back in its corner, and it scrolls above **Preview Player View**.
+- **The Spirit Layer panel shows the veil and the style as the server has them.**
 
-- **A light's colour can be typed into the Lights panel.** The box beside the colour swatches undid every key until a whole colour was there, so nothing could be typed into it. It now takes a colour such as `#ff9933`, with or without the `#`, and goes back to the colour in use if you leave it unfinished.
+- **Saving the vibe periods updates everyone's table at once.**
 
-- **The Spirit Layer panel shows the veil and the style as the server has them.** Opening the veil marked it open on your screen before the server answered, so after a refusal your screen said the players could cross while they could not; a refused style stayed picked, though the table kept the old one. The switch now waits for the server, and a refused style goes back to the one in use, with the reason.
+- **Saving the vibe periods keeps the weather, and the ambient track, as they are.**
 
-- **Saving the vibe periods updates everyone's table at once.** Editing the period in force changed nothing on screen until a reload, a period you added and then switched to showed *No vibe set* to the players, and renaming or deleting the period in force left its tint and its track running. Now an edited period in force shows its new colour and plays its new track, and renaming or deleting it ends the vibe for everyone, tint and track; a track you put on from the Atmosphere panel keeps playing. Changing only the capitals of a period's name keeps it in force. If an earlier change of capitals left the tracker showing no vibe, saving the periods again brings it back.
+- **Moving the pointer over the map does less work.**
 
-- **Saving the vibe periods keeps the weather, and the ambient track, as they are.** Weather you had set since opening the page went back to what it was when you saved the periods, and a track or periods changed at the same moment as another save could be put back.
+- **Token pictures load together when a map opens, and one that cannot be loaded is not asked for again every time a token moves.**
 
-- **Moving the pointer over the map does less work.** The whole map page was worked out again for every pixel the pointer moved, and the mouse wheel's listener was taken off and put back each time; now the page updates only when the pointer reaches another square.
+- **A burst of edits to one map no longer holds up the rest of the server.**
 
-- **Token pictures load together when a map opens, and one that cannot be loaded is not asked for again every time a token moves.** They loaded one after another, so a map with many tokens filled in slowly, and a missing picture was requested again on every move.
+- **Fog of war fades away over the squares you reveal.**
 
-- **A burst of edits to one map no longer holds up the rest of the server.** Each edit waiting its turn on a busy map held one of the server's few database connections while it waited, so dragging many walls or tokens at once could leave other pages, on any campaign, waiting too.
+- **The AoE Shape tool's cone has the right shape for your game:** as wide as it is long in D&D 5e, a quarter circle in Pathfinder 2e.
 
-- **Fog of war fades away over the squares you reveal.** The fade was meant to play on each player's screen as fog lifted, but it never drew, and the map was redrawn about 24 times for nothing each time fog changed.
+- **Walls, doors and lights stay on the map's picture when you change its Width, Height or Grid Size.**
 
-- **The AoE Shape tool's cone has the right shape for your game.** In D&D 5e its far corners fell about a tenth short, and its far edge came to a point; it is now as wide at its far end as it is long, as the rules describe. In Pathfinder 2e it is now a quarter circle, the shape that game uses.
+- **Players see an edit to the map on screen straight away.**
 
-- **Walls, doors and lights stay on the map's picture when you change its Width, Height or Grid Size.** They stayed where they were while the picture stretched, so none lined up with the art any more and had to be redrawn. Changing only the **Grid Size** also keeps the fog you revealed and what each player has explored; it used to cover the whole map again.
+- **The map's Zoom In and Zoom Out buttons zoom about the middle of the view.**
 
-- **Players see an edit to the map on screen straight away.** A new picture, size, grid, scale, name or spirit layer reached players only when they next loaded the map. A map made current by a script or a second tab moves every page onto it, as switching in the Map Library does.
+- **A player opening or closing a door while you drag walls keeps their change.**
 
-- **The map's Zoom In and Zoom Out buttons zoom about the middle of the view.** They zoomed about the map's top-left corner, so what you were looking at slid away. The mouse wheel zooms by how far it turns, so a trackpad no longer zooms a whole step for each tiny movement, and a quick turn of the wheel no longer loses steps.
+- **Clicking a token beside a door picks the token up, or puts the one you are holding down there.**
 
-- **A player opening or closing a door while you drag walls keeps their change.** Dropping the dragged walls put the door back as it was for everyone, and undoing a moved wall corner could do the same.
+- **Switching maps lets go of whatever you were holding on the last one,** and **Esc** puts a held token back.
 
-- **Clicking a token beside a door picks the token up, or puts the one you are holding down there.** Zoomed out, as when the map is fitted to the screen, the click opened or closed the door for everyone instead. A click on an empty square still opens the door.
+- **Letting go of the mouse button off the map finishes what you were doing.**
 
-- **Switching maps lets go of whatever you were holding on the last one.** A token you were moving stayed in your hand on the new map, while everyone else still saw it at your pointer on the old one; it now goes back where it was picked up. A half-drawn wall or polygon, and a wall selection, no longer carry over either, so they cannot join the old map's points to the new map's. **Esc** now puts a token you are holding back, as a right-click does.
+- **The ruler counts alternating diagonals at the map's own scale.**
 
-- **Letting go of the mouse button off the map finishes what you were doing.** An erase or brush stroke dragged off the map stayed live, so it went on erasing or painting when the pointer came back with no button held, and a right-button pan left the wall **Select** tool unable to highlight the wall under the pointer. A fog box, a wall drag and a light drag released off the map are finished the same way.
+- **Preview Player View can always be ended.**
 
-- **The ruler counts alternating diagonals at the map's own scale.** On a map using the alternating diagonal rule, each diagonal square was counted as 5 ft, and every second one as 10 ft, whatever the map's **Grid Scale**, so on a map at 10 ft a square diagonals measured half their distance.
+- **The light tool's Select does nothing during a preview.**
 
-- **Preview Player View can always be ended.** Turning off both dynamic lighting and fog of war during a preview hid **DM View**, the button that ends it, and left you in the player's view until one was turned on again or the page was reloaded.
+- **The DM's spirit token button on the map toolbar says what a click does.**
 
-- **The light tool's Select does nothing during a preview.** A click there still picked up and dragged lights, whose markers the preview hides. Placing a light while previewing still works, so you can watch what it lights for the player.
+- **The right mouse button pans the map under every wall, fog and light tool, and opens no menu there.**
 
-- **The DM's spirit token button on the map toolbar says what a click does.** While spirit tokens were shown, its tooltip read "Hiding spirit tokens (click to show)"; it now reads "Spirit tokens shown, click to hide".
+- **Clicking near a polygon's first corner closes the shape.**
 
-- **The right mouse button pans the map under every wall, fog and light tool, and opens no menu there.** With **Reveal** or **Hide** up, a right-button drag left the map where it was, though it pans under the wall and light tools and the DM guide says it does under fog too; and under the fog and light tools a right-button pan ended in a token or door menu, which the wall tools already kept closed. It now pans under all of them, reveals or hides nothing, and opens no menu; press **Esc** to put the tool away and right-click as usual.
+- **Esc puts the light tool away, as it does the wall tools.**
 
-- **Clicking near a polygon's first corner closes the shape.** The **Polygon** wall tool placed one more corner there instead, unless the map happened to start at the very top left of the page, so a double-click was the only way to finish a shape.
+- **Reset explored areas clears every player's memory of the map.**
 
-- **Esc puts the light tool away, as it does the wall tools.** With **Place** or **Select** chosen in the **Lights** panel, pressing it did nothing.
+- **Export as .uvtt file says why a map cannot be exported, and saves only a real file.**
 
-- **Reset explored areas clears every player's memory of the map,** even one whose memory was being saved as you clicked it. That player kept everything they had explored.
+- **Export as .uvtt file works for a map picture of more than 16,383 by 16,383 pixels.**
 
-- **Export as .uvtt file says why a map cannot be exported, and saves only a real file.** The button was a plain download link, so a refusal, such as a map whose picture is not a PNG, JPEG, WebP or GIF image, was never shown and the browser's download failed or saved the error. The file is now fetched first and saved once it has arrived; a refusal shows the server's reason in the Map Library.
+- **Ending a session with Save game state unticked keeps the snapshot taken when you paused.**
 
-- **Export as .uvtt file works for a map picture of more than 16,383 by 16,383 pixels.** The export read the picture's size with a limit of 16,383 by 16,383 pixels in all and answered with an error for anything larger, such as a picture 16,384 pixels on each side; it now exports it.
+- **Starting, pausing and ending a session from two tabs at once can no longer leave two sessions open, or an ended session marked Paused.** A campaign an earlier version left marked **Paused** or **Active** with no session open offers **Start Session**.
 
-- **Ending a session with Save game state unticked keeps the snapshot taken when you paused.** It threw that snapshot away.
+- **The session timer counts from the session's start after Resume Session.**
 
-- **Starting, pausing and ending a session from two tabs at once can no longer leave two sessions open, or an ended session marked Paused.** Two **Start Session** clicks at the same moment started two sessions with the same number, and a **Pause Session** landing beside an **End Session** left the ended session marked **Paused**. Each step now waits for the one before it. If an earlier version left a campaign marked **Paused** or **Active** with no session open, **Session Controls** offer **Start Session**.
+- **The paused-session notices say which rolls stay private:** only rolls from the **Dice** tab.
 
-- **The session timer counts from the session's start after Resume Session.** On the DM's screen it started again from zero, and showed the right time only after a reload.
+- **Advantage, disadvantage and a plain d20 show their critical in the Dice panel.**
 
-- **The paused-session notices say which rolls stay private.** They said a player's dice rolls stay on their own screen, but only rolls from the **Dice** tab do; a roll from a sheet, the roster or the map's **Roll...** menu still goes to the whole table.
+- **Initiative rolls stay in the Dice panel after a reload.**
 
-- **Advantage, disadvantage and a plain d20 show their critical in the Dice panel,** and dice dropped by keep or drop are struck through even when they match a die that was kept. Only a d20 written as `1d20` showed a critical, so **Adv**, **Dis** and a bare `d20` never did, and with equal values, such as two 14s on advantage, nothing was struck through.
-
-- **Initiative rolls stay in the Dice panel after a reload,** where they used to vanish. A roll for a token not every player can see (hidden, on the spirit layer, on a map you have not switched to) is kept as a secret roll, seen by you and whoever rolled it. A player who rolls for their own obscured token now sees their token's name on the roll as it comes in, where it said *Unknown creature*; everyone else still sees *Unknown creature*, and so does the history after a reload.
-
-- **A player rolls initiative once per fight.** They could roll again and again until combat started and keep the best. A second roll is now refused; you can still change their number, and taking their token out of the order and putting it back lets them roll again.
+- **A player rolls initiative once per fight.** Taking their token out of the order and putting it back lets them roll again.
 
 - **A token deleted while its initiative was being rolled no longer appears in the order.**
 
-- **A dice expression is read the same way everywhere, and one that cannot work is refused when it is rolled or saved.** While a session was paused, players' rolls were worked out in the browser by a reader that knew only dice, keep and plus or minus: `4d6dl1` came out as 4, `1d20*2` as 1, and `1d20+5*2` as 1d20+5. They now follow the server's rules exactly. `1d20 5` rolled a 205-sided die, because the space was dropped; two terms now need an operator between them. An expression that could divide by zero, such as `1d20/0`, or whose total could pass about 2.1 billion, such as `9999*9999*9999`, is refused with the reason, where it used to fail with "Failed to roll dice" every time; a saved roll like that could be stored, and now cannot. A saved roll stored before this update that breaks these rules is refused when used, with the reason; edit it to fix it.
+- **A dice expression is read the same way everywhere, and one that cannot work is refused when it is rolled or saved.** A saved roll stored before that breaks the rules is refused when used, with the reason; edit it to fix it.
 
-- **A roll from a character sheet, the roster or the map's Roll... menu says why when it does not go through,** and spending a hit die keeps the die when its roll is refused. When the server turned one of these rolls down (too many rolls at once), the reason showed only in the Dice panel's banner, in a tab you might not have open; a roll sent during a dropped connection gave no sign at all, and the hit die was taken anyway.
+- **A roll from a character sheet, the roster or the map's Roll... menu says why when it does not go through,** and spending a hit die keeps the die when its roll is refused.
 
-- **What the table refuses is shown as a message, and the Dice panel shows only what happened to its own rolls.** Every refusal, such as a token move during a pause or initiative rolled after combat has started, went to the Dice panel's banner, in a tab you might not have open, and a roll still on its way could lose its **Rolling...** state. Refusals now appear as a message at the top right of the page, the same one not shown twice within five seconds, and the Dice panel's banner is for its own rolls. A roll that reached the panel twice is listed once.
+- **What the table refuses is shown as a message, and the Dice panel shows only what happened to its own rolls.**
 
-- **A saved roll shows its name in the dice log.** Clicking a saved roll in the **Dice** tab sent only its dice, so everyone saw "1d20+5" with no name, unless the **Purpose** box happened to hold something. A saved roll now goes out with its name as the roll's purpose; the **Character** box still names who rolled it.
+- **A saved roll shows its name in the dice log.**
 
-- **Coming back after a dropped connection brings back what the DM changed meanwhile:** the vibe and its tint, the weather and the ambient track, the spirit layer, and a dice history the DM cleared. The page kept the old tint, the rain and the music, and every cleared roll, until it was reloaded.
+- **Coming back after a dropped connection brings back what the DM changed meanwhile.**
 
-- **Coming back after a long disconnect fills in the chat messages you missed.** Only the newest 50 were fetched, so after a busy stretch away the messages before them were missing until you reloaded, and **Load More** could not reach them. The chat now reads back up to 500 messages to join up with what you had; after a longer absence it starts again from the newest, and **Load More** reaches the rest.
+- **Coming back after a long disconnect fills in the chat messages you missed,** up to 500.
 
-- **Chat times move on.** A message's time stayed at "just now", or wherever it was when the message arrived, until the page was reloaded; it now updates each minute.
+- **Chat times move on.**
 
-- **Enter no longer sends a chat message or a roll while you are picking characters in an input method,** as Japanese, Chinese and Korean typing does. It now confirms the characters. The same goes for the boxes in the **Saved rolls** window and the **Custom Roll** box in the **Roll...** menu.
+- **Enter no longer sends a chat message or a roll while you are picking characters in an input method.**
 
-- **The Dice and Chat boxes keep the keyboard after you roll or send.** Each roll, and each chat message while the DM's chat cooldown was on, took the cursor out of the box, so you had to click back in every time.
+- **The Dice and Chat boxes keep the keyboard after you roll or send.**
 
-- **A failed Load More in chat no longer leaves its message up for good, or makes the list jump later.** The message clears when the next Load More works and has a close button, and a message that arrives later no longer moves you away from where you were reading.
+- **A failed Load More in chat no longer leaves its message up for good, or makes the list jump later.**
 
-- **A chat message that does not get through says so.** One sent as the connection dropped, or refused by the chat cooldown, stayed marked *sending…* for good. It is now marked **Not sent** with the reason, and **Retry** sends it again; a message that did get through after all is not posted twice if you retry within ten minutes. **Discard** removes it. A message over 2,000 characters can no longer be typed: the box stops there and counts the characters as you near it. Messages that arrive while the chat history is still loading are no longer lost.
+- **A chat message that does not get through says so,** marked **Not sent** with **Retry** and **Discard**. A message stops at 2,000 characters.
 
-- **Firefox no longer logs "Invalid URI. Load of media resource failed" on every campaign page.** The ambient audio player was emptied in a way that pointed it at the page itself.
+- **Firefox no longer logs "Invalid URI. Load of media resource failed" on every campaign page.**
 
-- **Hit point changes during a fight do less work.** Each one redrew everything on the campaign page; now only the roster and the map are redrawn.
+- **Hit point changes during a fight do less work.**
 
-- **The Session tab at the top of the right-hand panel is no longer cut off.** At the panel's usual width the five tabs did not fit, and the last one ran past the edge. When there is no room for every name, the tabs other than the open one show only their icon; point at one to see its name.
+- **The Session tab at the top of the right-hand panel is no longer cut off.**
 
-- **The campaign page no longer scrolls sideways.** A hidden label beside the header's last button made the whole page 32 pixels wider than the window at any size, and at phone width the DM's header ran far off the side; the header now wraps onto a second row.
+- **The campaign page no longer scrolls sideways.**
 
-- **The campaign page opens when the browser refuses to store site data,** as some private windows and blocked-site settings do. It stopped with an error; now the panel sizes and the last tab are simply not remembered.
+- **The campaign page opens when the browser refuses to store site data.**
 
-- **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
+- **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.**
 
-- **A failed save or request no longer copies what it sent into the browser's console.** When saving a character, uploading a token picture, sending an invitation, saving the vibe settings or loading the campaign failed, the page wrote the whole failed request to the browser's developer console, including the sheet or the details sent, where it could end up in a screenshot or a bug report. Only the status and the server's message are written now.
+- **A failed save or request no longer copies what it sent into the browser's console.**
 
-- **Pop-up messages leave one at a time, each after its own few seconds.** A message arriving while others were up made them all wait for it, so messages that came one after another left together; in the Asset Library a message stayed up as long as the page kept changing.
+- **Pop-up messages leave one at a time, each after its own few seconds.**
 
 ### Security
 
-- **Ten security advisories against five of the backend's libraries are cleared.** They were published for the versions of body-parser, multer, zod, nodemailer and fast-uri that 1.5.3 runs, all but zod's on 2026-10-23: body-parser could be kept busy by trailing bytes after a compressed request body, multer by a file check still running after its request had ended, and zod could use up memory checking an oversized list; nodemailer's three concern how a list of email addresses is read, and fast-uri's four how web addresses are read and compared. The updated versions change nothing in how the app behaves, and `npm audit` on the packages an instance runs reports nothing.
+- **Ten security advisories against five of the backend's libraries are cleared,** in body-parser, multer, zod, nodemailer and fast-uri. The updates change nothing in how the app behaves.
 
-- **A map, token or avatar picture is held to limits that keep an animation from swamping players' browsers.** A GIF token, or an animated WebP map, token or avatar, was accepted however many frames it had, and every player's browser unpacks every frame, so a file of a few megabytes could take gigabytes there. A picture uploaded now may be at most 16,384 pixels wide and 16,384 tall, and an animated one at most 1,000 frames and at most 200 million pixels across all its frames for a map, or 50 million for a token or an avatar (its width, times its height, times its frames). The upload window says which limit a picture is over, a campaign import leaves such a picture out and lists it under **Left out** with the reason, and a Universal VTT map import whose picture is over a limit is refused, saying which. A picture whose size cannot be read is refused too. Pictures already uploaded are not affected.
+- **A map, token or avatar picture is held to limits that keep an animation from swamping players' browsers.** At most 16,384 pixels a side, and an animation at most 1,000 frames and 200 million pixels across them for a map, 50 million for a token or an avatar. Pictures already uploaded are not affected.
 
-- **A crafted map in a campaign archive no longer costs the import far more memory than its size.** A map file of 10 MB filled with tiny walls or empty entries holds over a million of them, several times what the largest real map holds, and reading it took a large part of the backend's memory. Such a map is now left out before it is read, and the import says why; real maps are not affected.
+- **A crafted map in a campaign archive no longer costs the import far more memory than its size.**
 
-- **On an install whose database address names a schema, a password change or a removed account ends the other sign-ins.** A `DATABASE_URL` ending in `?schema=<name>` kept every sign-in in the database's `public` schema, while changing or resetting a password, changing a role and deleting an account ended the sign-ins in the named schema, where there were none, so the account's other devices stayed signed in. Sign-ins are now kept in the named schema. The sign-in store keeps its own connections beside the app's; it now opens at most `connection_limit` of them when the address sets it (it opened up to 10 whatever the address said), and gives up on a database that has not answered within 5 seconds, as the rest of the app does. An address that names no schema works as before.
+- **On an install whose database address names a schema, a password change or a removed account ends the other sign-ins.** The sign-in store also keeps to the address's `connection_limit`.
 
-- **The live table connects only to the instance itself.** The pages' security policy let the browser open a live connection to any site; it now allows only the host name the app was loaded from, on any port. A reverse proxy of your own should pass the browser's host name on to CozyVTT (`proxy_set_header Host $host;` in Nginx, as the deployment guide shows); where it does not, the live table still works over a slower connection.
+- **The live table connects only to the instance itself.** A reverse proxy of your own should pass the browser's host name on (`proxy_set_header Host $host;` in Nginx); where it does not, the live table still works over a slower connection.
 
-- **A server admin who runs a campaign can share only their own documents and global ones with it.** A server admin can open every file on the server, and as a DM could share anyone's private document with their table from the campaign's document list, so its players could read it. An admin is now held to the rule every DM is: a document someone else uploaded is refused with **Only the person who uploaded a document can share it with a campaign**. Documents already shared stay shared; **Stop sharing** removes one.
+- **A server admin who runs a campaign can share only their own documents and global ones with it.**
 
-- **An invited administrator has the full 7 days to set up two-factor authentication.** An invitation lasts 7 days, and so did an administrator's time to turn two-factor authentication on, both counted from the invitation, so someone who accepted on the sixth day had one day left before the app would let them do nothing else. The 7 days now start when the invitation link sets their password. An account that has been signed in to before gains nothing.
+- **An invited administrator has the full 7 days to set up two-factor authentication,** counted from when they set their password.
 
-- **Forgot password answers as quickly for an address with an account as for one without.** The reply was the same either way, but for an address with an account it came only after the reset link had been written, a few database steps later, so the time it took could tell which addresses have accounts. It now answers first and issues the link afterwards.
+- **Forgot password answers as quickly for an address with an account as for one without.**
 
-- **A flood of sign-ins can no longer stall the server.** Checking a password takes 64 MB and one of the few threads that also serve files, and a correct password is never counted by the sign-in limits, so many sign-ins at once with one could stall the app and push the backend container towards its memory limit. The server now checks at most 2 passwords at a time, with up to 50 more waiting at most 10 seconds each; past that, sign-in, registration and the other password forms answer "The server is busy, try again in a moment." One address may have only 2 password checks under way at once, so a single visitor cannot fill the queue; a third at the same moment is told "Too many password checks from your address at once. Please try again in a moment." Several people behind one address signing in at the same second may see it once.
+- **A flood of sign-ins can no longer stall the server.** At most 2 passwords are checked at a time, with 50 more waiting; past that the forms say "The server is busy, try again in a moment."
 
-- **A player removed or demoted while their page is switching campaigns loses the access at once.** A live connection moving to another campaign read the player's role there, then told the old campaign it was leaving, and only then joined. A removal or a change of role in that moment missed the connection, which joined with the access it had read until the page was reloaded. The connection now joins at once, so the change reaches it, and checks the membership again once it has joined.
+- **A player removed or demoted while their page is switching campaigns loses the access at once.**
 
-- **A game tab left open is disconnected when its sign-in ends.** The live connection checked the sign-in only when it opened and when it joined a campaign, so a tab left on a campaign stayed connected, with its role, past the 30-day sign-in limit and after the sign-in had expired. It is now ended within a minute of the 30 days, and within five minutes of the sign-in expiring or being removed, and the page says why.
+- **A game tab left open is disconnected when its sign-in ends.**
 
-- **A character saved as a template leaves the player's name and the Keeper's Notes behind.** Every user can read a template, but **Save as Template** kept the sheet's player name and a Call of Cthulhu investigator's Keeper's Notes, so anyone could read notes meant for the Keeper alone. A template is now saved without either, whoever saves it, and one published before is shown without them; a character made from it gets its own player's name, as before.
+- **A character saved as a template leaves the player's name and the Keeper's Notes behind.**
 
-- **A picture whose campaign was deleted no longer has its details shown to everyone.** Asking for the details of a campaign's picture or sound file after its campaign was gone showed them to anyone signed in. They are now the uploader's and the server admin's, as the file itself is.
+- **A picture whose campaign was deleted no longer has its details shown to everyone.**
 
-- **A text document opened from the browser's cache keeps its sandbox.** A document opened directly is served with a policy that stops it running anything as a page. When the browser asked whether its copy was still current, the answer carried the app's own policy instead, which then replaced the document's. Both answers now carry the document's.
+- **A text document opened from the browser's cache keeps its sandbox.**
 
-- **Asking for something you may not see is answered as if it were not there.** Asking for another campaign's token template, creature or map, as a player for a map the DM is still preparing, for someone else's character, a picture or file you may not open, or someone else's invitation answered differently from asking for one that does not exist, so a signed-in user holding an id could tell that it was real. Both now get the same answer. Who may see or change what is unchanged.
+- **Asking for something you may not see is answered as if it were not there.**
 
-- **With fog of war on, a player can open or close only a door beside a square revealed to them.** A door wholly under fog could still be toggled, and the answer, or being told it was locked, told the player a door was there where their screen showed nothing. The DM can still open any door.
+- **With fog of war on, a player can open or close only a door beside a square revealed to them.**
 
-- **The security advisories against the tools that build and test CozyVTT are cleared.** One was in braces, a file-matching package that Tailwind CSS 3 brought with it and that has no fixed release; Tailwind CSS 4 does not use it. The others were in undici, which jsdom, the browser stand-in the app's tests run in, brings with it, and in a copy of zod the code checker brings, both updated. None of them was ever in an instance.
+- **The security advisories against the tools that build and test CozyVTT are cleared.** None of them was ever in an instance.
 
 ## [1.5.3] - 2026-10-17
 
