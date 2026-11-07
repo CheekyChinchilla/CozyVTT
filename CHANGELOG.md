@@ -1263,12 +1263,12 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 #### What you will notice
 
-- **New limits, set far above what a table or a DM preparing a campaign does.** A map can be from 1 to 500 squares on each side and hold 1,000 tokens. A creature's stat block can be up to 64 KB, about ten times the largest monster in the SRD. Each account may preview 20, import 20 and export 20 campaign archives an hour, one at a time, and the live table has a limit per account on nearly every kind of event. Existing maps over these limits keep loading and keep their tokens. Only fog of war and explored areas are refused, on a map with more than 250,000 squares in all (500 by 500), with a message saying why.
-- **Deleting something now asks first,** and deleting a picture or sound that a map, token, sheet or atmosphere still uses shows where it is used before anything is removed.
-- **A PDF is no longer accepted as a map picture.** It could never be shown on the map. PDF map pictures you already have are kept, and PDFs are still welcome as documents.
-- **CozyVTT now accepts a Universal VTT file of up to 75 MB** with the default map limit, room for a 50 MB picture. The bundled nginx still stops a file over 55 MB unless you raise `NGINX_MAX_BODY_SIZE` in `.env`, as [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits) explains.
-- **D&D 5e skills and saving throws have a box beside each total for other bonuses** the sheet cannot work out, such as Jack of All Trades. When an existing sheet is opened in the editor, any difference between its stored totals and the worked-out ones is put in those boxes, and kept when you save, so no total changes.
-- **Edits that were lost before this release are not brought back by it.** That includes features that shared a name, raised Call of Cthulhu Dodge values, token template hit points and walls undone onto another map. A backup from before the loss is the only way back.
+- **New limits, set far above what a table or a DM preparing a campaign does.** A map is 1 to 500 squares a side with up to 1,000 tokens, a stat block up to 64 KB, and each account may preview, import and export 20 campaign archives an hour; existing maps over these keep loading. Fog of war and explored areas are refused on a map of more than 250,000 squares.
+- **Deleting something now asks first,** and shows where a picture or sound is still used.
+- **A PDF is no longer accepted as a map picture.** PDF map pictures you already have are kept.
+- **CozyVTT now accepts a Universal VTT file of up to 75 MB.** The bundled nginx still stops one over 55 MB unless you raise `NGINX_MAX_BODY_SIZE`; see [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
+- **D&D 5e skills and saving throws have a box for other bonuses.** Opening an existing sheet in the editor puts any difference there, so no total changes.
+- **Edits lost before this release are not brought back by it.** A backup from before the loss is the only way back.
 
 #### What to do afterwards, if it applies to you
 
@@ -1279,183 +1279,181 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **Changes for scripts and integrations.** See [API changes in 1.5.1](docs/api-changes/1.5.1.md).
 
-- **PDF files are no longer accepted as a map picture.** Nothing can draw a PDF as a map, so one used as a map's picture gave a blank map that could not be exported. Uploading a map now takes PNG, JPEG or WebP only, from the Asset Library, from a Universal VTT import and through the API; PDFs still go in the Documents library. The upload screens never offered a PDF as a map, so little you can see changes, and a map already stored as a PDF is kept.
+- **PDF files are no longer accepted as a map picture.** A map takes PNG, JPEG or WebP; PDFs still go in the Documents library, and a map already stored as a PDF is kept.
 
-- **Deleting an asset that is still in use now shows where it is used before anything is removed.** If a map, a token, a character, a character template, a creature, a token template or a campaign's ambient sound still uses an image or a sound, the delete is held back and a window lists what would lose it. The file is removed only if you choose **Delete anyway**. This covers the Asset Library, the Documents pages and the Admin Panel's Assets tab, which used to delete on one click and now asks first, naming the asset, who uploaded it and its campaign. An admin sees every campaign by name; anyone else sees names only for the campaigns they run, their own characters and shared character templates, and just a count for the rest. A refused delete now shows the reason instead of a general "failed" message.
+- **Deleting an asset that is still in use now shows where it is used before anything is removed.** The file goes only with **Delete anyway**, in the Asset Library, the Documents pages and the Admin Panel's Assets tab.
 
-- **The Admin Panel asks before deleting a backup or changing someone's role.** The bin beside a backup and the USER / ADMIN pill beside a person used to act on one click. Each now opens a window that names the backup or the person, and the window says what an administrator can do before making one, or that taking the role away removes their access to the Admin Panel. Those buttons also have names a screen reader can read.
+- **The Admin Panel asks before deleting a backup or changing someone's role.**
 
-- **Deleting a custom creature, a token template or a token from the map now asks first.** Delete in the Creature Library and the Token Templates list, and Remove in the Token Roster, the Token Manager and the token's quick editor, and **Remove from Map** in a token's right-click menu, used to act on one click with no undo. Each now names what will be deleted. In the Token Roster the row buttons also show while you tab through them and always on touch screens, are larger, and a failed hide, reveal or remove shows a message instead of nothing, as a failed **Remove from Map** now does too.
+- **Deleting a custom creature, a token template or a token from the map now asks first.**
 
-- **Dice rolls allow far more before the limit.** The limit of 30 rolls a minute per player could be reached by a DM rolling attacks and damage for a group of monsters in one round. It is now 200 a minute, and 50 in any one second, which no table reaches.
+- **Dice rolls allow far more before the limit:** 200 a minute and 50 in any one second, where 30 a minute was reachable.
 
 ### Fixed
 
-- **A Universal VTT import that is refused now says why.** A file with the wrong extension, one over the size limit, one sent under the wrong form field, or a damaged upload answered a generic "An unexpected error occurred". It now answers with a message saying what is wrong, and a file over the limit is told the limit. A map name sent twice, or longer than 200 characters, is refused the same way.
+- **A Universal VTT import that is refused now says why.**
 
-- **A Universal VTT import can no longer exhaust the server's memory.** A file packed with millions of tiny wall points, or with a picture far over the map limit, used to be built into millions of objects before it was refused, which could take the backend down for every campaign. The file's contents are now counted before the server works through them: one holding more than a million points, doors, lights and settings, far more than any map uses, is refused straight away, and within that the walls, doors and lights are counted against the map's limits before anything is built. A picture over the map size limit is refused from its size before it is decoded. The largest file accepted now follows the map size limit instead of a fixed 100 MB, and one person can run one import at a time; a second file sent while the first is still being imported is refused with a message to wait for the first to finish. Importing a folder of maps one after another is not slowed down.
+- **A Universal VTT import can no longer exhaust the server's memory.** One person runs one import at a time.
 
-- **Exporting a map to a Universal VTT file is quick on large maps, and keeps more of the map.** Joining a big map's walls into lines could take many seconds and hold up every other table on the server. It now takes a fraction of a second. Windows are written as open doorways instead of walls, so they no longer block sight in another tool or when imported again, and switched-off lights and each light's bright radius are kept, so an exported map imported again lights the same way. A locked door still comes back as an ordinary closed door.
+- **Exporting a map to a Universal VTT file is quick on large maps, and keeps more of the map.**
 
-- **The proxy size advice now covers Universal VTT imports.** A `.uvtt` file is about a third bigger than its picture, so with the default 55 MB proxy limit a picture over about 40 MB was refused by the proxy with only an error code (413). The deployment guide now explains the sizing rule and gives the value that lets a picture up to the full map limit through.
+- **The proxy size advice now covers Universal VTT imports.** See [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
 
-- **Closing a document you are writing or editing no longer throws the text away without asking.** Pressing Escape, the X or Cancel in the New document window, or in the reader while editing, now asks whether to discard when there is typed text or unsaved changes. With nothing typed it closes straight away.
+- **Closing a document you are writing or editing no longer throws the text away without asking.**
 
-- **The backend's log files say what went wrong.** Almost every error was written as an empty `{}`, so a log kept a label such as "Error adding token" and nothing about the cause. Each error is now written with its message and where in the code it happened, on the console and in the log files, so a log attached to a bug report can be diagnosed. A value longer than 8,000 characters keeps only its start and end, so one oversized request cannot write a huge line.
+- **The backend's log files say what went wrong.**
 
-- **Log files no longer grow until the disk is full.** The backend's two log files, and Docker's log of each container, had no size limit, and the deployment guide's advice to rotate them with logrotate did not free any space, because the backend keeps its files open. The backend now starts a new file at 10 MB and keeps five of each, and Docker keeps five files of 10 MB for each container. There is nothing to set up, and any logrotate rule added for the backend's logs can be removed. The container limits take effect the next time the stack is started with `docker compose up -d`.
+- **Log files no longer grow until the disk is full.** The backend keeps five files of 10 MB each, and Docker the same for each container, from the next `docker compose up -d`.
 
-- **The backend keeps running when the database restarts.** Stopping or restarting PostgreSQL, as a database upgrade or a host reboot does, could stop the backend with it, because the login-session store treated a dropped database connection as a crash. The drop is now logged, and the store opens a new connection for the next request.
+- **The backend keeps running when the database restarts.**
 
-- **Audio tracks are served correctly from any point in the file.** A request for the last part of a track, or for a part beyond its end, failed with a server error, and a request running past the end promised more than it sent. These now get the right part of the file, or a clear "outside the file" answer. Switching or seeking a track also no longer leaves the old file open on the server, which over a long session could stop it opening any more files, and a file that cannot be read part-way through no longer stops the backend.
+- **Audio tracks are served correctly from any point in the file.**
 
-- **Stopping, restarting or upgrading the stack is quick and clean.** The backend ignored the stop signal Docker sends, so every stop, restart and upgrade waited ten seconds and then killed it outright, cutting off whatever it was doing. It now finishes the requests in progress, disconnects everyone at the table, closes its database connections and exits, usually within a second. Players' browsers reconnect by themselves once it is back. A backend run without Docker stops the same way on Ctrl+C or a service manager's stop.
+- **Stopping, restarting or upgrading the stack is quick and clean,** usually within a second.
 
-- **Markdown documents opened from the Documents page are formatted.** Headings, lists and tables showed as plain text there until a campaign had been opened in the same tab, because the reader's styles only loaded with the campaign page.
+- **Markdown documents opened from the Documents page are formatted.**
 
-- **Typing in a token's stat block no longer saves, and resends the whole map to every player, on every keystroke.** Typing a sixty-letter trait meant sixty saves and sixty full map updates sent to every player, and a slow save could land after a later one and leave an earlier keystroke stored. The stat block in the token's quick editor is now saved once you pause typing, or straight away when you click out of it, switch it back to View or close the editor.
+- **Typing in a token's stat block no longer saves, and resends the whole map to every player, on every keystroke.**
 
-- **Dragging the ambient sound's volume slider no longer sends every step to the whole table.** Each step was saved and sent to every player, whose sound restarted its fade each time, so one drag from silent to full was twenty saves and twenty fades. The new volume is now sent once, when you let go of the slider or a key moves it.
+- **Dragging the ambient sound's volume slider no longer sends every step to the whole table.**
 
-- **A chat cooldown longer than a minute now lasts its full length.** With a cooldown of, say, five minutes, a player could sometimes post again after a little over one, whenever the server's routine tidy-up happened to land inside their wait.
+- **A chat cooldown longer than a minute now lasts its full length.**
 
-- **The dice log keeps up with new rolls.** Once a session's log held 50 rolls, the most it shows, a new roll no longer brought the list down to it, so it landed out of sight below the last one you could see. The log now follows every new roll while you are at the bottom, leaves you where you are if you have scrolled up to read older rolls, and brings you down to a roll of your own, as chat does for your own message. Rolls that arrive together, as when the whole table rolls at once, are all followed.
+- **The dice log keeps up with new rolls.**
 
-- **Uploaded file names keep their double quotes.** A file called `Dragon "Smaug".png` was recorded as `Dragon %22Smaug%22.png`, and was offered for download under that name.
+- **Uploaded file names keep their double quotes.**
 
-- **Exporting a large campaign no longer risks stopping the server, and works on slow connections.** The export was built whole in the server's memory before any of it was sent, so a campaign with a few large maps could stop the server, and the browser gave up on any export that took longer than 30 seconds to arrive. The archive is now sent as it is made, and the browser waits for as long as it takes. In Chrome and Edge you choose where to save it and it is written straight there; other browsers download it as before. An export whose pictures and sound add up to more than 500 MB, the most an import accepts, is now refused with a message giving its size and saying whether leaving out audio would bring it under, where it used to make an archive no server could import. The refusal used to show only "Failed to export campaign".
+- **Exporting a large campaign no longer risks stopping the server, and works on slow connections.** An export over 500 MB, the most an import accepts, is refused with its size.
 
-- **Campaign archives up to 500 MB can be imported through the bundled nginx.** Imports had the 55 MB upload size limit every other upload has, so a campaign with a couple of large maps could be exported but not imported again, and the import window said only "Request failed with status code 413". Imports now have a limit of 512 MB there and five minutes to finish unpacking, the import window waits for a slow upload instead of giving up after 30 seconds, and when a proxy refuses an archive as too large the window says so and what whoever runs the server can do about it.
+- **Campaign archives up to 500 MB can be imported through the bundled nginx.**
 
-- **A large campaign import or backup restore on a slow connection is no longer cut off after five minutes.** The server gave every request five minutes to arrive in full, so a 500 MB archive needed an upload speed of about 13 Mbit/s, and a slower one failed with an error after the wait. It now allows an hour, enough for a 500 MB archive at a little over 1 Mbit/s. With the bundled nginx, an upload that stops altogether is still dropped within a minute.
+- **A large campaign import or backup restore on a slow connection is no longer cut off after five minutes.** It now has an hour.
 
-- **The site no longer answers 502 after only the backend is recreated.** When `docker compose up -d` recreated the backend, after a change to `.env` for example, the bundled nginx went on sending to the old container's address until it was restarted itself, so the pages loaded but signing in failed. It now finds a recreated backend or frontend within ten seconds.
+- **The site no longer answers 502 after only the backend is recreated.**
 
-- **The deployment guide's section on the API documentation is corrected.** It recommended publishing the API docs as if CozyVTT had a public API, said every route needs a sign-in when some are public by design, and gave nginx steps that do not work with the bundled Docker setup. It now says what the file is for, how to read it without hosting anything, and what actually protects an instance.
+- **The deployment guide's section on the API documentation is corrected.**
 
-- **The DM Guide's map export and campaign import sections match the app.** It said there was no button to save a map as a Universal VTT file, but the Map Library has one on each map. It now also says that an archive with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files cannot be imported, though such a campaign exports normally.
+- **The DM Guide's map export and campaign import sections match the app.**
 
-- **The Characters page shows a character as you last saved it.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40)) After saving in the Character Editor and going back, the Characters page could go on showing the character from before the save: on its card, in the sheet that opens when you click it, in **Export as JSON**, and in the editor opened from that sheet. Saving from that editor was then refused as out of date, which made it look as if your earlier changes had been lost. A character made from a template now also appears on the Characters page straight away.
+- **The Characters page shows a character as you last saved it.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40))
 
-- **Saving in the Character Editor no longer copies the whole sheet into the browser's console,** where it could end up in a log attached to a bug report.
+- **Saving in the Character Editor no longer copies the whole sheet into the browser's console.**
 
-- **Opening a D&D 5e sheet's editor and cancelling leaves the sheet as it was.** On a sheet whose modifiers, saving throws or skill bonuses did not match its ability scores, an imported one for example, opening the editor wrote the corrected numbers into the sheet behind it and into the Characters page before anything was saved. After **Cancel** they showed numbers that had never been saved, and **Export as JSON** wrote them out.
+- **Opening a D&D 5e sheet's editor and cancelling leaves the sheet as it was.**
 
-- **A D&D 5e sheet with cantrips typed in counts as saved once you save it.** The Character Editor went on saying there were unsaved changes, so leaving asked you to confirm and the time of the last save was not shown.
+- **A D&D 5e sheet with cantrips typed in counts as saved once you save it.**
 
-- **What you type while a sheet is saving is kept.** Every box stays editable while a save, and any new token picture with it, goes through. The sheet went back to its read-only view as soon as the save finished, dropping anything typed in those seconds, and the Character Editor then warned about unsaved changes when there was nothing left on screen to save. The editor now stays open with what you typed, still counted as unsaved, until you save again. This applies to every game system, in the Character Editor and in the editor that opens over a sheet.
+- **What you type while a sheet is saving is kept.**
 
-- **A save refused because the character changed keeps your edits.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40)) When a character changes after you open its editor, for example the DM takes hit points at the table or you save it from another window, your save is refused so that it cannot put the old values back. The editor used to close, or load the newer version over your work, and everything typed since you opened it was lost. It now stays open, puts your changes onto the newest version, and lists them in a box headed **This character has changed**. **Save my changes** saves them; **Keep editing** goes back to the editor with nothing saved. Anything changed both by you and in the newer version is shown with both values, and you pick which to keep before saving. This works in the Character Editor and in the editor that opens over a sheet on the Characters page or at the table.
+- **A save refused because the character changed keeps your edits.** ([#40](https://github.com/CheekyChinchilla/CozyVTT/issues/40)) The editor lists them under **This character has changed**, with **Save my changes** and **Keep editing**.
 
-- **Edit Template keeps your sheet edits when a save fails.** When the server refused a template's sheet, the sheet went back to the template as it was and every edit was lost, with only an error message. It now stays in its editor with your changes. Closing **Edit Template** with sheet changes you haven't saved asks first, and **Save Details** no longer closes the dialog over them. After a sheet save the dialog stays open and shows the saved sheet. A token picture chosen on the sheet cannot be used, since a template's picture has to be a global asset; the message after saving now says so, where before the picture was dropped with no message.
+- **Edit Template keeps your sheet edits when a save fails.**
 
-- **Saving a Flexible sheet keeps everything stored in it.** The Flexible sheet, used for characters with no game system, saved only its sections, so anything else it held, from an imported file or a program using the API, was deleted the first time it was saved.
+- **Saving a Flexible sheet keeps everything stored in it.**
 
-- **A colour you pick for a D&D 5e or Pathfinder 2e sheet stays picked while you edit.** When the character was updated elsewhere during your edit, at the table for example, the colour saved there replaced the one you had just picked in the editor.
+- **A colour you pick for a D&D 5e or Pathfinder 2e sheet stays picked while you edit.**
 
-- **Players can no longer see through a wall that has the same identifier as another.** On a map with more than 200 walls, a second wall or door given the same identifier as another was ignored when working out what players could see, so they saw, and were sent tokens, through it. The map editor never does this, but a script or another client could. Both walls now block sight, and saving a wall or light list with a repeated identifier, or adding one whose identifier is already on the map, is refused.
+- **Players can no longer see through a wall that has the same identifier as another.**
 
-- **Editing one light through the API can no longer leave its dim radius smaller than its bright radius.** A program changing only one of the two radii skipped the check that they make sense together, and the light was then saved in a state that made every later save of the map's lights fail. The change is now refused with a message. Lights edited on the map were always checked.
+- **Editing one light through the API can no longer leave its dim radius smaller than its bright radius.**
 
-- **A single wall can be set to a locked door through the API.** Changing one wall's type through the API refused the locked-door type, which drawing walls, saving the wall list and the DM's wall editing on the map all accept.
+- **A single wall can be set to a locked door through the API.**
 
-- **Tokens always stand on whole squares, with all of them on the map.** The server took a token placed between squares, or one hanging mostly off the edge of the map, from a script or another client, and other players then saw it out of line with the grid. A position between squares is now refused, and a token too big for where it is put is moved back until it fits on the map, as dragging one already does. Placing a large creature from the Creature Library or a template on a small map now lands it fully on the map.
+- **Tokens always stand on whole squares, with all of them on the map.**
 
-- **Wall, door, light and fog changes made at the same moment are all kept.** Placing a door on a wall, or splitting a wall in two, sends several changes at once, and the server could keep only the last of them: everyone's screen showed the door, but after a reload the original wall was back and the door was gone. The same could happen when a player opened a door while the DM was drawing walls, to lights placed or changed in quick succession, and to two fog reveals or hides that overlapped, which could leave part of a room covered again or uncovered. Changes to a map's walls, lights and fog are now saved one after another, so none of them is lost.
+- **Wall, door, light and fog changes made at the same moment are all kept.**
 
-- **Undoing a wall change after switching maps no longer puts the old map's walls on the new one.** The wall undo history carried over from one map to the next, so pressing Ctrl+Z, or Undo in the Walls panel, on the new map replaced all of its walls with the previous map's, for everyone at the table. Each map now starts with nothing to undo.
+- **Undoing a wall change after switching maps no longer puts the old map's walls on the new one.**
 
-- **Typing in the chat box, or any other text box, no longer edits the map's walls.** With the wall Select tool up, pressing Backspace or Delete in the chat box deleted the selected walls for everyone, and the key never reached the box. In the same way Ctrl+Z and Ctrl+Y undid or redid a wall edit, the arrow keys moved the selected walls, and Ctrl+A selected every wall. The map's keyboard shortcuts now apply only when you are not typing.
+- **Typing in the chat box, or any other text box, no longer edits the map's walls.**
 
-- **The DM's map tool panels keep one width.** Opening Fog of War stretched the whole stack of tool panels to fit its notes on a single line, nearly doubling its width, where Walls and Lights left it as it was. The panels now stay the same width whichever is open, and the notes wrap.
+- **The DM's map tool panels keep one width.**
 
-- **Walls, doors and lights can be drawn on a map opened over plain HTTP from another device.** The map editor named each new wall, door and light with a browser function that only exists on a secure page: one served over HTTPS, or opened on the server itself as `localhost`. Opened by the server's address on a home network over plain HTTP, drawing a wall, placing a door or window on one, splitting a wall and placing a light all failed with nothing on screen to say why. They now work on any page, and so does the DM's page keeping track of which wall and light changes are its own.
+- **Walls, doors and lights can be drawn on a map opened over plain HTTP from another device.**
 
-- **The DM's map shows doors players open, and the DM's next wall edit no longer closes them again.** The DM's page ignored every wall, door and light change, taking each for its own, so a player's door toggle, or a wall or light changed through the API, did not appear for the DM until a reload, and the DM's next wall edit sent the old list back and undid the change for everyone. The DM's page now shows these changes as they happen, and undoing the DM's own wall edits leaves them in place. This also holds after the DM seat changes hands without a reload.
+- **The DM's map shows doors players open, and the DM's next wall edit no longer closes them again.**
 
-- **Handing over the DM seat no longer mixes up the spirit realm for the two people involved.** Until they reloaded, the former DM, now a player, was not told when their token crossed into or out of the spirit realm on a map change, so their "Spirit Realm" badge could stay wrong, and the new DM heard the crossing sound meant for players.
+- **Handing over the DM seat no longer mixes up the spirit realm for the two people involved.**
 
-- **Reconnecting brings back doors and lights changed while you were away.** After a dropped connection the page did not fetch the map's walls and lights again, so a door opened in the meantime stayed closed on that screen, blocking the player's sight, and a light added or switched off did not change, until a reload.
+- **Reconnecting brings back doors and lights changed while you were away.**
 
-- **Switching a map's lighting or fog no longer brings back its old picture.** After you changed the picture, grid size or name of the map on show in Edit Map, the next change to its dynamic lighting, fog of war, Global Illumination or explored areas put the old picture, grid and name back on the map until a reload.
+- **Switching a map's lighting or fog no longer brings back its old picture.**
 
-- **Saving Edit Map no longer removes the map's spirit layer picture.** Opened from the Map Library, the dialog showed no spirit layer picture, and saving, even after changing only the name, cleared the picture. The dialog now shows the map's spirit layer picture and changes it only when you pick another or clear it. It also saves only what you changed.
+- **Saving Edit Map no longer removes the map's spirit layer picture.**
 
-- **D&D 5e features that share a name are all kept.** A sheet with two features of the same name, such as Ability Score Improvement at level 4 and again at level 8, showed only the first, and saving it in the editor deleted the second along with its description, without a warning. Every feature is now shown and saved, whatever its name. A feature already lost this way is not brought back by upgrading: the only way to recover it is a backup taken before it was lost.
+- **D&D 5e features that share a name are all kept.** One already lost is only in a backup taken before.
 
-- **Call of Cthulhu: Dodge keeps the points put into it.** Half DEX is only where Dodge starts: skill points and improvements raise it, as with any other skill. The editor set Dodge back to half DEX every time it was opened and offered no way to raise it, so the next save stored half DEX over the investigator's own value, and an investigator with DEX 50 and Dodge 45 was saved with Dodge 25. Dodge can now be changed on the Skills tab, its starting value follows DEX, and when DEX changes the points above it are kept. The sheet's Dodge box shows the same number that is rolled. Upgrading does not bring back a Dodge that was already reset: type it in again, or, if you do not know it, restore a backup taken before it was lost.
+- **Call of Cthulhu: Dodge keeps the points put into it.** A Dodge already reset has to be typed in again, or restored from a backup.
 
-- **Editing a token template no longer deletes its hit points.** The template form treated **Show HP Bar**, which only decides whether players see a token's hit points, as whether the token has any. Saving any change to a template with its bar hidden, even a new name, deleted its hit points, so every token placed from it afterwards had none. Saving also put a wounded template back to full and removed the stat block from a template that is not an NPC. The form now has its own **Max HP** box, shown whether or not the bar is, and saving sends only what you changed. Hit points already deleted this way are not brought back by upgrading: enter them again in **Max HP**.
+- **Editing a token template no longer deletes its hit points.** Hit points already lost have to be entered again in **Max HP**.
 
-- **Pathfinder 2e characters made from a built-in template keep their skill bonuses.** The templates recorded attributes in a short form, such as "str" and "int", that the editor did not recognise. Opening such a character in the editor worked out every skill and lore bonus without its attribute, and saving stored the lower numbers: the Level 1 Fighter's Athletics went from +6 to +3. Its spell attack and spell DC also left out the key attribute, and spells added to a prepared caster started unprepared. The editor now reads both spellings and the templates use the full names. A character already saved with the lower numbers gets them back the next time it is opened in the editor and saved, because they are worked out again from its attributes.
+- **Pathfinder 2e characters made from a built-in template keep their skill bonuses.** One saved with the lower numbers gets them back when next saved in the editor.
 
-- **Typing a list into a character sheet works.** On Pathfinder 2e sheets the senses, speeds, resistances, immunities, weaknesses, conditions, strike traits and languages boxes, and on Call of Cthulhu sheets the possessions and spells boxes, tidied the text after every key, so the comma, space or new line typed after a word disappeared before the next one: "Common, Elven" came out as "CommonElven". Only pasting a whole list worked. What you type now stays as you type it, and the list is tidied when you leave the box.
+- **Typing a list into a character sheet works.**
 
-- **D&D 5e: an older sheet's languages show under Languages.** A sheet saved before the four proficiency boxes existed has its proficiencies sorted into the boxes by guessing from a list of common language names, so a language the list does not know, such as Druidic or Thieves' Cant, was shown under Weapons, and saving the sheet kept it there. Such a sheet also records its languages in a list of their own, and those now go under Languages whatever they are called. A language already saved under Weapons stays where it was saved: move it to the Languages box by hand.
+- **D&D 5e: an older sheet's languages show under Languages.** A language already saved under Weapons has to be moved by hand.
 
-- **D&D 5e: skills and saving throws can include bonuses the sheet cannot work out, and keep them.** The editor works out every skill and saving throw from the ability scores and proficiency, and had nowhere to record anything else, so a Bard's Jack of All Trades, a Paladin's Aura of Protection or a Ring of Protection could not be entered. A character whose totals already included one, from an import or an earlier version, also lost it the first time it was saved in the editor: a Paladin's saves dropped by their Charisma bonus. Each skill and saving throw now has a box beside its total in the editor for other bonuses (pointing at it shows **Other bonus**), and the sheet and the dice include it. When a character from before this update is opened in the editor, any difference between its stored totals and the worked-out ones is put in those boxes, so every total stays exactly as it was. A bonus that an earlier save already removed is not brought back by upgrading: type it into that box, or restore a backup taken before it was lost.
+- **D&D 5e: skills and saving throws can include bonuses the sheet cannot work out, and keep them.** A bonus an earlier save removed has to be typed in again, or restored from a backup.
 
-- **Moving a character's older fields no longer deletes what it has not moved.** Characters made before 1.3.0 keep some content in fields older versions used, and the `migrate:sheet-fields` command, and saving such a character, move it to where the sheet reads it. In several cases the old field was deleted even when the new place already held something different: a Pathfinder 2e character's template attacks when it also had strikes of its own (an attack with the same name as one of its strikes is still not added), top-level senses, resistances and immunities that differed from the sheet's, a D&D 5e character's older personality traits, ideals, bonds, flaws or allies when the new boxes held other text, and a Call of Cthulhu character's older player name when it differed. Each is now added after what is already there. Where there is no room for it, such as a second player name, the command leaves the old field as it is and lists the character in its report; saving such a character in the editor still removes that field, so run the command first and check its report. The command also no longer puts back old values over a save or a hit point change made while it runs, so it is safe to run during play: a character that changes while it is being moved is left as it is and listed, and the command ends with an error status so you know to run it again. Content deleted this way before the upgrade is not brought back: a backup taken before it was lost is the only way to recover it.
+- **Moving a character's older fields no longer deletes what it has not moved.** Run `migrate:sheet-fields` and check its report before saving such a character in the editor; content lost before the upgrade is only in a backup.
 
-- **The character maintenance commands report problems properly.** `validate:characters` reported every character as valid whatever was stored, and its own example, `--system dnd5e`, failed. It now lists each character the server would refuse when next saved, with its id, and with `--verbose` the fields at fault, accepts the game system in either spelling, and refuses an option it does not know. `migrate:characters`, written for characters stored before game systems existed, applied every guess when run with `--execute`, so a Flexible character could be given a game system and stop fitting its Flexible campaign. It now applies only confident guesses, never to a character in a Flexible campaign or a campaign of another system, and lists each change with the character's id. These two commands and `migrate:avatar-scope` now end with an error status when they fail, so a script running them can tell, where before they reported success.
+- **The character maintenance commands report problems properly,** and end with an error status when they fail.
 
-- **A map name set through the API is limited to 200 characters, as everywhere else.** Create Map and Edit Map stop at 100 characters and a Universal VTT import at 200, but a program using the API could give a map a name of any length, and a map named like that was later left out when its campaign was imported. Creating or renaming a map with a name over 200 characters now answers with a message saying so. A map already stored with a longer name keeps it and still saves other edits.
+- **A map name set through the API is limited to 200 characters, as everywhere else.**
 
-- **An uploaded picture, sound file or document is recorded as what it really is.** An upload's content was checked, and then the file was recorded under the type the browser or program sending it declared, which can be wrong, so a real picture could be listed as text in the Asset Library and get no thumbnail. Uploads now record the format their content shows. Files uploaded before this update keep the type they were recorded with. A campaign import works out each file's format from its content, so archives that hold such files still import whole.
+- **An uploaded picture, sound file or document is recorded as what it really is.**
 
-- **A campaign import that fails part-way no longer leaves a half-made campaign behind.** The import created the campaign first and then its pictures, maps, creatures and templates one by one, and kept whatever it had made when a later step failed, so a damaged or unusual archive could leave an incomplete campaign in your list and its pictures on the server. An import now brings in the whole campaign or nothing. When it fails because of the server, for example a database problem, the window says nothing was imported and that the details are in the server log, where it used to show a long technical message.
+- **A campaign import that fails part-way no longer leaves a half-made campaign behind.**
 
-- **Importing a campaign no longer loses whole maps, and says what it changed or left out.** A map was left out of an import, with its walls, tokens and fog, when any one thing on it was over the importer's own limits: more than 500 tokens (a map can now hold 1,000), or a token name over 200 characters or notes over 5,000, which earlier versions stored at any length. The import window then still showed the archive's map count, and only the server log said anything. Now text over a limit is shortened to it, a token or wall that cannot be stored is left out on its own, and a token off its square is moved onto the nearest whole one. Only a map the app could not hold, such as one wider than 500 squares, or one whose file is missing or damaged, is left out whole. When the import finishes, its window lists everything it shortened, and any walls, doors and lights it could not keep, under **Changed to fit**, and the tokens, creatures and anything else it left out under **Left out**, with the reason, and the map count is the maps it made. Walls and lights also get new ids, so two that shared one in the archive no longer edit as one.
+- **Importing a campaign no longer loses whole maps, and says what it changed or left out,** under **Changed to fit** and **Left out**.
 
-- **Imported creatures and templates can be placed on a map and edited.** A campaign archive could hold a creature whose stat block had longer text or more entries than the creature editor allows, which earlier versions let in, and it was imported as it was. Placing it on a map was then refused, and saving it in the editor failed with only "Failed to update creature". An import now shortens such text and lists to what the editor keeps and says so. A game system the server does not know, on the campaign or on a creature, as in a hand-edited archive, no longer stops the import with a long database message: the campaign or creature is imported with no game system, and the import window says so. A map's fog is kept only when it is fog the server can use. A map whose file is built far more deeply than any export writes, as a damaged or hand-made file can be, is left out and listed, and the same goes for the archive's creatures or token templates; in the campaign's own settings it stops the import.
+- **Imported creatures and templates can be placed on a map and edited.**
 
-- **"Include audio assets" now puts your atmosphere's sound in a campaign export.** The option included no sound at all, though the archive said it did, and importing it took away every time-of-day period's track and the ambient track. An export with the option ticked now holds the track of each period and the ambient track, and the imported campaign plays them as the original did, at the same volume. Archives exported before this update hold no sound, so their periods still arrive without a track; the import window now says which, and exporting again brings the sound across.
+- **"Include audio assets" now puts your atmosphere's sound in a campaign export.** An archive exported before holds no sound; export it again.
 
-- **An imported campaign's maps are listed in the order they were in.** The Map Library lists maps newest first, and an export wrote its maps in no particular order, so a campaign imported on another server listed them shuffled, and the map it opened on could be any of them. An export now writes the maps oldest first and an import makes them in that order, so the Map Library lists them as the original did and the campaign opens on its oldest map. Archives exported before this update import in the order they were written.
+- **An imported campaign's maps are listed in the order they were in.**
 
 ### Security
 
-- **One player can no longer flood the chat, hit points, hit dice or token moves.** Chat had no limit unless the DM turned the chat cooldown on, and changing hit points or spending hit dice had none at all, so a script could fill everyone's chat, or tie up the database until the whole instance stalled. Picking a token up and putting it down shared the allowance of the drag itself, so a script could rewrite the map 150 times a second. Each now has a limit per player, counted across all their open tabs, far above anything a real table sends: 50 chat messages a second and 300 a minute, 50 hit point changes a second, 50 hit dice spent a second, and 30 pick-ups and 30 drops a second. Anything past the limit changes nothing, and the sender is told at most once every ten seconds. The DM's chat cooldown still works as before, on top of this.
+- **One player can no longer flood the chat, hit points, hit dice or token moves.** Each has a limit per player far above what a table sends; the DM's chat cooldown still works on top.
 
-- **One account can no longer hold unlimited live connections, or rejoin a campaign in a loop.** Each open campaign page is one live connection, and nothing limited how many one account could have; since the server works out what to send each connection separately, a script holding a thousand of them slowed the game for everyone. An account may now have 40 open at once, across all its campaigns, and a page past that does not connect; the reason, to close a tab or device, shows in its Dice tab if that is open. Joining a campaign is limited to 50 times in ten seconds per account, and a page that rejoins the campaign it is already in no longer makes everyone's player list refresh.
+- **One account can no longer hold unlimited live connections, or rejoin a campaign in a loop.** An account may have 40 open at once.
 
-- **The DM's live controls have limits too.** Anyone can run a campaign of their own, so the DM's controls were as open to a script as a player's, and sending the map to the table had no limit at all, though each send rebuilds the whole map for every member. Sending the map, the atmosphere, ambient sound and vibe, the spirit layer, each initiative tracker action, clearing the dice log and resetting explored areas now each take up to 50 a second per account, far more than any click sends.
+- **The DM's live controls have limits too.**
 
-- **A dice roll's character name and purpose are limited in length.** They were stored and sent to every member exactly as sent, so one roll could carry close to a megabyte of text to every screen at the table and into the dice log. The name may now be up to 200 characters and the purpose up to 300; the dice panel's boxes stop there, and a roll sent with more is refused with a message saying which. A roll's secret setting must be on or off.
+- **A dice roll's character name and purpose are limited in length,** 200 and 300 characters.
 
-- **Exploring a map no longer rewrites a player's whole memory of it several times a second.** Each time a player's view moved, their remembered areas of the map were read and written back in full, even when nothing new had been seen, so a modified page could keep the database busy rewriting a large map's memory indefinitely. What a player sees is now saved at most once a second, and not at all when it adds nothing. A player with the map open in three or more tabs could also lose some of what they explored, because the extra tabs' reports were turned away; they no longer are.
+- **Exploring a map no longer rewrites a player's whole memory of it several times a second.**
 
-- **Signing in with the right password can no longer lock anyone out.** The limit of five failed sign-ins per fifteen minutes from one address also caught correct sign-ins that arrived together, as when a household, a club or a school signs in as a session starts, and each refusal then counted as a failure. A few of those locked everyone at that address out of signing in, resetting a password and changing two-factor settings for fifteen minutes. On an instance behind a proxy that shows every visitor as one address, that was everyone. Now only a wrong password, a wrong two-factor code or a password reset link that no longer works counts, and correct sign-ins arriving together all go through. Five wrong answers from one address still lock it for fifteen minutes, and an email with no account still gets the same answer, and counts the same, as a wrong password. The separate limit on two-factor codes at sign-in is unchanged.
+- **Signing in with the right password can no longer lock anyone out.** Only wrong answers count toward the limit of five in fifteen minutes from one address.
 
-- **A damaged upload can no longer shut the server down or leave it stuck.** The part of CozyVTT that reads uploaded files had known flaws: any signed-in user could send a cut-off or malformed upload that stopped the whole server for everyone at the table, or form data that kept it busy for minutes. It is updated to the current release, which closes them. Uploads also now refuse form data with more than 100 fields, field names over 100 bytes, or deeply nested names, none of which a normal upload comes near. An upload cancelled halfway no longer leaves a part-written file behind.
+- **A damaged upload can no longer shut the server down or leave it stuck.**
 
-- **A signed-in user can no longer fill the server's disk through its log.** A modified page or a script could send the live table a message labelled "error" carrying up to a megabyte of text, as often as it liked, and the server wrote each one to its log files and the console. Such events are now ignored, and nothing they carry is written.
+- **A signed-in user can no longer fill the server's disk through its log.**
 
-- **A malformed request is no longer logged with the text around the mistake.** The log line quoted part of the request, which in a sign-in could include the password. It now records only that a request was refused, why, and where it was sent. The browser never sends such requests; a hand-written script could.
+- **A malformed request is no longer logged with the text around the mistake.**
 
-- **Log files no longer keep full email addresses.** Every address the backend logs, from the emails it sends to the errors it records, is cut to its first letter and its domain, such as `a***@example.com`. That is enough to tell accounts apart, and an account deleted later no longer leaves its address behind in the logs. The database's own error messages, which quote the request that caused them, used to go to the container log in full; they now go through the same masking, and a very long value in them is shortened like any other. Logs written by older versions still hold full addresses; the deployment guide's section on log files says how to remove them.
+- **Log files no longer keep full email addresses,** only the first letter and the domain. See [Persistent Log Files](docs/DEPLOYMENT.md#persistent-log-files) to remove older lines.
 
-- **A specially crafted email address could make the server stop responding for minutes.** Addresses are now checked safely. One over 254 characters, the most the email standards allow, is now refused when registering, during setup, on a profile change, or when an administrator adds or invites a user. No real address is that long, so no existing account is affected.
+- **A specially crafted email address could make the server stop responding for minutes.** An address over 254 characters is refused.
 
-- **A specially crafted atmosphere setting could make the server stop responding for minutes.** Atmosphere filters are now checked safely, both when a DM saves them and when a campaign is imported. Every filter the atmosphere editor makes is accepted as before.
+- **A specially crafted atmosphere setting could make the server stop responding for minutes.**
 
-- **A specially crafted hit dice entry on a character sheet could freeze the browser of anyone who opened the sheet.** Hit dice are now read safely, and every existing sheet shows them as before.
+- **A specially crafted hit dice entry on a character sheet could freeze the browser of anyone who opened the sheet.**
 
-- **Restoring a specially crafted backup from the Admin Panel could make the server stop responding.** Every line of a backup is now read safely, and backups CozyVTT made restore exactly as before.
+- **Restoring a specially crafted backup from the Admin Panel could make the server stop responding.**
 
-- **A very large map can no longer take the whole server down.** Any signed-in user can create a campaign of their own, and the server accepted a map of any size, so a map tens of thousands of squares wide with fog of war on made the server run out of memory and stop. Maps now have the limits Create Map and Edit Map already offered: 1 to 500 squares on each side, a grid size of 10 to 500 pixels, and 1 to 100 feet per square. The same limits apply to Universal VTT and campaign imports, so a campaign archive holding a map with a grid size between 201 and 500, which the app allows, now imports instead of losing that map. A map made before this release that is larger still opens and still saves edits that leave its size alone. On one with more than 250,000 squares in all (500 by 500), fog of war and explored areas cannot be turned on, and fog already on shows nothing; the message gives the map's size and says to make it smaller in Edit Map.
+- **A very large map can no longer take the whole server down.** Maps are 1 to 500 squares a side, with a grid of 10 to 500 pixels and 1 to 100 feet a square; a larger older map still opens.
 
-- **One map can no longer be grown until the server stalls.** A map's tokens are stored together and read in full every time any token on the map is moved, dragged or changed, and nothing limited how many tokens a map could hold or how much a token's stat block could carry, so anyone able to create a campaign could make one map hundreds of megabytes and slow the server for everyone. A map now holds up to 1,000 tokens, and a stat block up to 64 KB, about ten times the largest creature in the SRD. Adding a token past the limit, or moving tokens onto a map that would go past it, is refused with a message. A map that already has more keeps all of them, and they can still be moved, edited and removed.
+- **One map can no longer be grown until the server stalls.** A map holds up to 1,000 tokens and a stat block up to 64 KB; a map that has more keeps them.
 
-- **A wall placed absurdly far away can no longer freeze the server.** Wall and light positions had no limit, and working out what players can see on a map with more than 200 walls walked over every part of the map a wall's ends spanned, so one wall reaching millions of pixels stopped the server, and froze players' browsers too. Walls and lights may now reach up to 500 grid squares past the edge of their map, which leaves plenty of room for drawing past the edge and for Universal VTT files whose walls run outside their picture. One further out is refused with a message when it is drawn or saved, a Universal VTT file holding one is refused on import, and a campaign import leaves that wall or light out of its map and says so. Walls and lights already stored further out are kept, and the wall list still saves with them in it. Working out sight also no longer costs more the further a wall reaches.
+- **A wall placed absurdly far away can no longer freeze the server.** Walls and lights may reach up to 500 grid squares past the map's edge.
 
-- **A crafted campaign archive can no longer crash the server.** Importing a campaign, or only previewing one, unpacked each file inside the archive into memory before checking its size, so any signed-in user could send a small archive that unpacked to gigabytes and stop the server. An archive listing a very large number of files did the same. Archives are now read from disk a piece at a time and stopped as soon as they pass a limit, and one listing more than 1,000 files is refused before it is opened. A picture or sound file inside an archive that is larger than the upload limit for its kind is left out of the import, as it would be refused if uploaded.
+- **A crafted campaign archive can no longer crash the server.** An archive listing more than 1,000 files is refused.
 
-- **Campaign imports and exports are limited per person.** Each one moves up to 500 MB through the server every table shares, and nothing stopped one account from starting dozens at once, which was enough to stop the server. Each person may now preview 20 archives, import 20 campaigns and export 20 campaigns an hour, one at a time; someone who reaches a limit is told how many minutes to wait. Moving a campaign takes one preview and one import, so a real table never comes near this. Players can still import campaigns, under the same limits. The number can be changed with the new optional `CAMPAIGN_ARCHIVE_RATE_LIMIT` setting (see the deployment guide). Picture, sound and document uploads, and Universal VTT map imports, are not affected.
+- **Campaign imports and exports are limited per person:** 20 previews, 20 imports and 20 exports an hour, one at a time, set with the optional `CAMPAIGN_ARCHIVE_RATE_LIMIT`. See [Campaign Import and Export Limits](docs/DEPLOYMENT.md#campaign-import-and-export-limits).
 
-- **Campaign imports take only the files an upload would.** A crafted archive could put any kind of file into a campaign, a program among them, labelled as a PDF handout or a picture, and members could then download it from the campaign's library under whatever name the archive gave it. Each picture and sound file in an archive must now be a format the upload window accepts for its kind, judged by its content, and is stored as what it really is. Anything else is left out of the import. Archives exported by CozyVTT hold nothing else, so they import as before, except a map picture stored as a PDF, which only a program could add, and which is now left out.
-
----
+- **Campaign imports take only the files an upload would.**
 
 ## [1.5.0] — 2026-10-03
 
@@ -1874,7 +1872,6 @@ raise it, raise `NGINX_MAX_BODY_SIZE` to match, or the bundled proxy will reject
 the upload before it reaches CozyVTT.
 
 There is no manual data migration for this release.
-
 
 ### Added
 
