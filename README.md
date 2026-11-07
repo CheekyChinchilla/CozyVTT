@@ -256,6 +256,7 @@ Pictures also have fixed limits: at most 16,384 pixels on each side, and for an 
 | [Contributing](docs/CONTRIBUTING.md) | How to contribute to CozyVTT |
 | [Game Systems](docs/GAME_SYSTEMS.md) | How to add new game system support |
 | [API Reference](docs/API_REFERENCE.md) | REST API and WebSocket event reference |
+| [API changes](docs/api-changes/README.md) | What changed for programs driving CozyVTT, release by release |
 | [WebSocket Events](backend/docs/WEBSOCKET_DOCUMENTATION.md) | Detailed Socket.io event schema |
 | [Future Features](docs/FUTURE_FEATURES.md) | Backlog of planned work |
 | [Security Policy](SECURITY.md) | How to report vulnerabilities |
