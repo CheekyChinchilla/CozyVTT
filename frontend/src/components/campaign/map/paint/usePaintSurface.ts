@@ -47,7 +47,7 @@ import type { MapLayer } from '../useRenderLoop';
 import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
 import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type PaintStepNote, type TileRect } from './paintHistory';
-import { gridCorner, roomBox, roomWalls, wallsToAdd, type WallLine } from './paintRoom';
+import { gridCorner, roomBox, roomWalls, scaleWalls, wallsOnMap, wallsToAdd, type WallLine } from './paintRoom';
 import { drawTextureTile, textureSize, type TextureKind } from './paintTextures';
 import { drawStamp, stampCentre, stampReach, type StampKind, type StampTurn } from './paintStamps';
 import { handleAt, isInside, movedBox, pastedBox, resizedBox, selectedBox, type SelectBox, type SelectHandle } from './paintSelection';
@@ -217,8 +217,9 @@ interface Surface {
 }
 
 /**
- * A room's walls, waiting for Save to add them to the map. Undo takes them
- * back with the room's floor and Redo puts them back (`live`).
+ * A room's walls, waiting for Save to add them to the map. In the picture's
+ * pixels, as its floor is, so they follow the floor when the map's size
+ * changes. Undo takes them back with the floor and Redo puts them back (`live`).
  */
 interface PendingRoom {
   walls: WallLine[];
@@ -874,7 +875,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       }
       // A history just made has no undo under way: the change lands at once.
       // The draft's rooms' walls wait for Save again, and go with the restore on Undo.
-      const restored = how.walls.length > 0 ? pendingRoom([...how.walls]) : null;
+      const restored = how.walls.length > 0 ? pendingRoom(scaleWalls(how.walls, width / how.size.width, height / how.size.height)) : null;
       if (restored) surface.rooms.push(restored.room);
       let put = 0;
       void step.land(() => {
@@ -1249,7 +1250,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // before the save counts as done: until they are in, a reload asks and
       // the draft keeps them. A wall the map has already, or a side two rooms
       // share, is added once.
-      const walls = wallsToAdd(liveWalls(roomsSaved), latest.wallSegments ?? []);
+      const walls = wallsToAdd(wallsOnMap(liveWalls(roomsSaved), ...xy(s)), latest.wallSegments ?? []);
       let added = 0;
       let wallRefused: unknown = null;
       try {
@@ -1291,7 +1292,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [map, campaignId, bump, onSaved, onMapRead, mapsSharing, refuse, clearDrafts, touched]);
+  }, [map, campaignId, bump, onSaved, onMapRead, mapsSharing, refuse, clearDrafts, touched, xy]);
   /** Save, answering whether it saved; pressed again while one is under way, that one's answer. */
   const save = useCallback((overwrite = false): Promise<boolean> => {
     if (savingRef.current && saveRun.current) return saveRun.current;
@@ -1409,7 +1410,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       const m = mapRef.current;
       const box = m && roomBox(under.shape.from, under.shape.to, m.gridSize, m.width * m.gridSize, m.height * m.gridSize);
       if (box) {
-        const pending = pendingRoom(roomWalls(box));
+        const pending = pendingRoom(scaleWalls(roomWalls(box), ...xy(s)));
         s.rooms.push(pending.room);
         note = pending.note;
       }

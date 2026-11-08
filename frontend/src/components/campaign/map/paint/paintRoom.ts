@@ -51,6 +51,16 @@ export function roomWalls(box: RoomBox): WallLine[] {
   ];
 }
 
+/** `walls` with every x times `sx` and every y times `sy`: map pixels to a picture's, or one picture's to another's. */
+export function scaleWalls(walls: readonly WallLine[], sx: number, sy: number): WallLine[] {
+  return walls.map((w) => ({ x1: w.x1 * sx, y1: w.y1 * sy, x2: w.x2 * sx, y2: w.y2 * sy }));
+}
+
+/** `walls` in a picture's pixels as map walls, in whole map pixels, on a map the picture is `sx` by `sy` times as large as. */
+export function wallsOnMap(walls: readonly WallLine[], sx: number, sy: number): WallLine[] {
+  return walls.map((w) => ({ x1: Math.round(w.x1 / sx), y1: Math.round(w.y1 / sy), x2: Math.round(w.x2 / sx), y2: Math.round(w.y2 / sy) }));
+}
+
 /** The same wall whichever way it runs. */
 const wallKey = (w: WallLine) =>
   w.x1 < w.x2 || (w.x1 === w.x2 && w.y1 <= w.y2) ? `${w.x1},${w.y1},${w.x2},${w.y2}` : `${w.x2},${w.y2},${w.x1},${w.y1}`;
