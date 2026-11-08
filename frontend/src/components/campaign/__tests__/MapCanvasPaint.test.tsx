@@ -611,6 +611,29 @@ describe('the brush under the pointer', () => {
     expect(circles()).toEqual([]);
   });
 
+  it('takes the circle away when Mapmaker is put away with paint not saved still on the map', async () => {
+    await showMap();
+    await paintOn();
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
+    mouse.move(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(circles()).toContainEqual([130, 260, 3]);
+    fireEvent.click(panel().getByRole('button', { name: 'Done painting' }));
+    await nextFrame();
+    expect(circles()).toEqual([]);
+  });
+
+  it('draws the circle at a new width as soon as it changes, before the mouse moves', async () => {
+    await showMap();
+    await paintOn();
+    mouse.move(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(circles()).toContainEqual([130, 260, 3]);
+    fireEvent.change(panel().getByRole('slider', { name: 'Width' }), { target: { value: '20' } });
+    await nextFrame();
+    expect(circles()).toContainEqual([130, 260, 10]);
+  });
+
   it('shows no circle for a tool that is no brush', async () => {
     await showMap();
     await paintOn();
