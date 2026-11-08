@@ -12,6 +12,7 @@ import GenericStatBlock from './GenericStatBlock';
 import { formatSaveList, formatSkillList } from './statBlockProficiency';
 import { PF2E_ATTRIBUTE_LABELS, PF2E_SAVES, formatPf2eSaves, readAttributeModifiers } from './pf2eStatBlock';
 import { ABILITY_KEYS, formatModifier } from '@/utils/rules/dnd5e';
+import { scoreLabel } from './creatureModel';
 
 interface StatBlockViewerProps {
   statBlock: NpcStatBlock;
@@ -98,18 +99,14 @@ function CoCStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; token
         )}
       </div>
 
-      {/* Characteristics — CoC uses STR/CON/SIZ/DEX/INT/POW/APP/EDU */}
+      {/* Characteristics, kept in the stat block's six score slots (scoreLabel) */}
       <div className="grid grid-cols-6 gap-1 text-center bg-success/10 rounded-sm p-1.5">
-        {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => {
-          // Map D&D ability names to CoC equivalents for display
-          const cocLabel = ab === 'wis' ? 'POW' : ab === 'cha' ? 'APP' : ab.toUpperCase();
-          return (
-            <div key={ab}>
-              <div className="text-[9px] font-bold text-success-ink uppercase">{cocLabel}</div>
-              <div className="text-ink">{statBlock.abilities[ab]}</div>
-            </div>
-          );
-        })}
+        {ABILITY_KEYS.map((ab) => (
+          <div key={ab}>
+            <div className="text-[9px] font-bold text-success-ink uppercase">{scoreLabel(GameSystem.CALL_OF_CTHULHU_7E, ab)}</div>
+            <div className="text-ink">{statBlock.abilities[ab]}</div>
+          </div>
+        ))}
       </div>
 
       {/* Combat stats */}

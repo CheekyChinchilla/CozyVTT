@@ -229,6 +229,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Text dragged from one box to another in a character sheet opened from the map now lands there.**
 
+- **A Call of Cthulhu creature is no longer given D&D 5e's Challenge Rating and worked-out saves and skills.** The Creature Library and the token editor name its characteristics as its stat block does, and take its skills as printed. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+
 - **Importing a character file made for a game system this CozyVTT doesn't have gives a message.** Choosing the file used to break the preview; it's now refused there, naming the system. See [Character Templates](docs/USER_GUIDE.md#character-templates).
 
 - **The Call of Cthulhu skills list puts its headings over its columns.**

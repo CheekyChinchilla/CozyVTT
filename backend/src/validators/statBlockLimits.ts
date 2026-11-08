@@ -31,4 +31,15 @@ export const STAT_BLOCK_LIMITS = {
   maxEntryDescriptionLength: 5000,
   /** The longest notes on a stat block or token template. */
   maxNotesLength: 5000,
+  /**
+   * The lowest and highest total a save or skill may hold. Wide, because every
+   * system shares them: Pathfinder 2e's pass +33 at high level, so a bound
+   * fitted to D&D 5e would refuse real creatures. A backstop, not a rules check.
+   */
+  minBonus: -50,
+  maxBonus: 50,
+  /** The most saves, or the most skills, one stat block may carry. */
+  maxBonusEntries: 60,
+  /** The longest name of a save or skill. */
+  maxBonusKeyLength: 50,
 } as const;

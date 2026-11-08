@@ -38,6 +38,8 @@ import {
 } from './npc-stat-blocks';
 import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency';
 import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
+import PrintedSkillsEditor from './npc-stat-blocks/PrintedSkillsEditor';
+import { creatureModel, scoreLabel } from './npc-stat-blocks/creatureModel';
 import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
@@ -1050,8 +1052,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
   const [formError, setFormError] = useState<string | null>(null);
 
   // Pathfinder 2e rates creatures by Level rather than Challenge Rating, and
-  // stores printed modifiers instead of deriving them.
-  const isPf2e = gameSystem === GameSystem.PATHFINDER_2E;
+  // stores printed modifiers instead of deriving them; Call of Cthulhu and
+  // Shadowrun 6e have no rating at all, and store what is typed.
+  const model = creatureModel(gameSystem);
+  const isPf2e = model === 'pf2e';
   const [level, setLevel] = useState<number | undefined>(sb?.level);
 
   // The stat block the proficiency editor sees: live ability scores and CR from
@@ -1068,9 +1072,9 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
 
   // Ability scores and CR feed every derived save and skill, so a change
   // moves them, as in the token editor: the form used to show the new totals
-  // and save the old ones. Pathfinder modifiers are printed values, not derived.
+  // and save the old ones. Only D&D 5e works anything out from them.
   const changeNumbers = (changes: Partial<Pick<NpcStatBlock, 'abilities' | 'challengeRating'>>) => {
-    if (isPf2e) return;
+    if (model !== 'derived') return;
     const next = changeAbilitiesOrRating(workingStatBlock, changes);
     setProficiencyFields({ savingThrows: next.savingThrows, skills: next.skills, proficiencies: next.proficiencies });
   };
@@ -1252,7 +1256,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
               className="input-cozy w-full text-xs text-center"
             />
           </div>
-        ) : (
+        ) : model === 'derived' ? (
           <div>
             <label className="text-[10px] text-stone-gray block mb-0.5" htmlFor="creature-cr">CR</label>
             {/* A select, not free text: CR determines the proficiency bonus, so a
@@ -1272,7 +1276,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
               ))}
             </select>
           </div>
-        )}
+        ) : null}
         <div>
           <label className="text-[10px] text-stone-gray block mb-0.5">HP Max</label>
           <input
@@ -1322,9 +1326,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
           <div className="grid grid-cols-6 gap-1.5">
             {ABILITY_KEYS.map((ability) => (
               <div key={ability} className="text-center">
-                <label className="text-[8px] font-bold text-brand-ink block">{ability.toUpperCase()}</label>
+                <label className="text-[8px] font-bold text-brand-ink block">{scoreLabel(gameSystem, ability)}</label>
                 <input
                   type="number"
+                  aria-label={scoreLabel(gameSystem, ability)}
                   value={workingStatBlock.abilities[ability]}
                   onChange={(e) => changeScore(ability, parseInt(e.target.value, 10) || 10)}
                   className="input-cozy w-full text-xs text-center"
@@ -1335,12 +1340,24 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
         </div>
       )}
 
-      {/* Saves & skills — derived from the ability scores and CR above. This
-          form had no fields for these at all, which is why editing a duplicated
-          SRD creature used to delete them. */}
+      {/* Saves & skills: in D&D 5e derived from the ability scores and CR
+          above, elsewhere typed as printed. This form had no fields for these
+          at all, which is why editing a duplicated SRD creature used to delete
+          them. */}
       <div>
-        <label className="text-[10px] text-stone-gray block mb-1">Saving Throws &amp; Skills</label>
-        {isPf2e ? (
+        <label className="text-[10px] text-stone-gray block mb-1">{model === 'printed' ? 'Skills' : <>Saving Throws &amp; Skills</>}</label>
+        {model === 'printed' ? (
+          <PrintedSkillsEditor
+            statBlock={workingStatBlock}
+            onChange={(updated) =>
+              setProficiencyFields({
+                savingThrows: updated.savingThrows,
+                skills: updated.skills,
+                proficiencies: updated.proficiencies,
+              })
+            }
+          />
+        ) : isPf2e ? (
           <Pf2eProficiencyEditor
             statBlock={workingStatBlock}
             onChange={(updated) =>

@@ -30,6 +30,10 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 - `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
 
+### Creatures
+
+- `after the next release` **A Call of Cthulhu creature's characteristics stop at 30 and its skills at 50.** The stat block keeps D&D 5e's ability score bound and one skill bound for every system, so a characteristic over 30 is refused when saved, and the skills box stops at 50. It needs a Call of Cthulhu creature model, with its eight characteristics and percentile skills (`validators/statBlock.ts`).
+
 ### Maps
 
 - `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
