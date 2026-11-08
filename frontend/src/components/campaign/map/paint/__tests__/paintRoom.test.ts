@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { roomBox, roomWalls, wallsToAdd, type WallLine } from '../paintRoom';
+import { roomBox, roomWalls, scaleWalls, wallsOnMap, wallsToAdd, type WallLine } from '../paintRoom';
 
 describe('roomBox', () => {
   it('puts each corner on the nearest corner of the grid, whichever way it was dragged', () => {
@@ -41,5 +41,21 @@ describe('wallsToAdd', () => {
   it('adds no wall the map already has', () => {
     const existing = [line(100, 0, 0, 0)];
     expect(wallsToAdd([line(0, 0, 100, 0), line(100, 0, 100, 100)], existing)).toEqual([line(100, 0, 100, 100)]);
+  });
+});
+
+describe('a room\'s walls on the picture and on the map', () => {
+  const line = (x1: number, y1: number, x2: number, y2: number): WallLine => ({ x1, y1, x2, y2 });
+
+  it('come back to the map\'s whole pixels from a picture of another scale, so a wall the map has is still known', () => {
+    const walls = roomWalls({ x0: 50, y0: 50, x1: 150, y1: 100 });
+    const onPicture = scaleWalls(walls, 2 / 3, 2 / 3);
+    expect(onPicture[0].x1).not.toBe(Math.round(onPicture[0].x1));
+    expect(wallsOnMap(onPicture, 2 / 3, 2 / 3)).toEqual(walls);
+    expect(wallsToAdd(wallsOnMap(onPicture, 2 / 3, 2 / 3), walls)).toEqual([]);
+  });
+
+  it('follow the picture onto a map made larger', () => {
+    expect(wallsOnMap([line(50, 50, 150, 50)], 1000 / 1500, 1000 / 1500)).toEqual([line(75, 75, 225, 75)]);
   });
 });

@@ -62,7 +62,7 @@ export interface DraftHeader {
   height: number;
   /** When it was last written, in milliseconds since 1970. */
   savedAt: number;
-  /** The walls of the rooms painted (paintRoom.ts), which Save adds to the map; none in a draft written before Room. */
+  /** The walls of the rooms painted (paintRoom.ts), in the picture's pixels as its tiles are, which Save adds to the map; none in a draft written before Room. */
   walls?: WallLine[];
 }
 

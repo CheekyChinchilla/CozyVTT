@@ -831,6 +831,18 @@ describe('a room', () => {
     expect(h.updateMap).toHaveBeenCalled();
   });
 
+  it('adds its walls where its floor is when the map is made larger before Save', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    // Edit Map makes it 30 squares each way: the picture, and the floor on it, stretch with it.
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), width: 30, height: 30 } }); });
+    await pressSave();
+    const larger = fourWalls.map((w) => ({ ...w, x1: w.x1 * 1.5, y1: w.y1 * 1.5, x2: w.x2 * 1.5, y2: w.y2 * 1.5 }));
+    await waitFor(() => expect(wallsAdded()).toEqual(larger));
+  });
+
   it('holds a reload while its walls are added, and says it saved once they are', async () => {
     await showMap();
     await paintOn();
