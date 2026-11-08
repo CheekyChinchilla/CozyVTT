@@ -82,9 +82,9 @@ breaking one fails the build:
   dark. The tokens already follow the theme.
 
 Two areas are deliberately exempt from the first rule and listed in that test: the dark tool panels
-that float over the map, the DM's and the drawing tools, and each character sheet's header colour
-presets (`colorPresets.ts`), which are the player's choice and not the theme's. If you add UI there,
-check its contrast by hand — exempt from theming is not exempt from being readable.
+that float over the map, the DM's, the drawing tools and the Mapmaker's, and each character sheet's
+header colour presets (`colorPresets.ts`), which are the player's choice and not the theme's. If you
+add UI there, check its contrast by hand — exempt from theming is not exempt from being readable.
 
 See [ARCHITECTURE.md → Theming](ARCHITECTURE.md#theming) for the full token list.
 

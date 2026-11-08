@@ -111,9 +111,9 @@ export default function DiceRoller() {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * The compact layout's footer: the quick rolls in one row that scrolls
-   * sideways, Roll beside the expression, and Character and Purpose behind
-   * More options, so in a short sheet the log keeps its room.
+   * The compact layout's footer: the seven dice in one row, Roll beside the
+   * expression, and the rest behind More options, so in a short sheet the
+   * log keeps its room.
    */
   const compact = useCompactLayout();
   const [moreOptions, setMoreOptions] = useState(false);
