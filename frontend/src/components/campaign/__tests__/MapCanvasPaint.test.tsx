@@ -848,6 +848,46 @@ describe('a selection', () => {
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
   });
 
+  it('counts pixels moved and not yet put down as paint not saved: Save and Undo are offered, and a reload asks', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    expect(panel().getByRole('button', { name: 'Save' })).toBeDisabled();
+    drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 });
+    expect(panel().getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
+    const reload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(reload);
+    expect(reload.defaultPrevented).toBe(true);
+    // Undo puts them back where they were: nothing to save.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
+    expect(panel().getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('counts a paste not yet put down as paint not saved', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    press('c', { ctrlKey: true });
+    press('Escape');
+    expect(panel().getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.click(panel().getByRole('button', { name: 'Paste' }));
+    expect(panel().getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
+  it('puts moved pixels down when the map leaves the screen, so they are kept with the painting', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Your painting was not saved' })).toBeInTheDocument());
+    expect(drawnAt()).toContainEqual([200, 200, 100, 50]);
+  });
+
   it('resizes by a corner, the corner across from it staying', async () => {
     await showMap();
     await paintOn();
