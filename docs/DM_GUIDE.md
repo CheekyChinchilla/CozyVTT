@@ -670,6 +670,13 @@ changes it. The stat block then reads as Pathfinder prints one: its level, its
 modifiers, and Fort, Ref and Will. A D&D creature used in a Pathfinder campaign
 keeps its Challenge Rating, shown as CR.
 
+**In Call of Cthulhu** nothing is worked out, because the rules have no Challenge
+Rating or proficiency bonus. There's no Challenge Rating box, the six score boxes
+are named as the stat block shows them (STR, DEX, CON, INT, POW and APP), and
+**Skills** takes each skill by name with the number the creature's stat block
+prints. For now a characteristic can be at most 30 and a skill at most 50, so a
+creature with higher numbers can't be entered in full yet.
+
 ### Editing Custom Creatures
 
 Click the **pencil icon** (Edit creature) next to any custom creature in the library to open it for editing. You can update any field — name, stat block, saving throws and skills, image, disposition, display mode, and all advanced stats (traits, actions, legendary actions, etc.).

@@ -165,6 +165,10 @@ question, and getting it wrong invents numbers the designers never intended.
 - **Call of Cthulhu 7e and Shadowrun 6e have no equivalent.** Percentile and
   dice-pool systems have neither ability modifiers nor a proficiency bonus, so
   there is nothing to derive and nothing sensible to offer from this data.
+  The creature editors give their creatures no rating and store their scores
+  and skills as typed (`creatureModel` in `npc-stat-blocks/creatureModel.ts`).
+  The stat block's bounds still fit D&D 5e's scores, so a Call of Cthulhu
+  creature's characteristics stop at 30 and its skills at 50 (a known issue).
 
   **A derived base is not a derived value.** Call of Cthulhu's Dodge is listed
   as "Dodge (half DEX)": half DEX, rounded down, is its *base*, and occupation
@@ -285,7 +289,7 @@ Eight places, all plain conditionals with a fallback:
 
 | Location | What it decides |
 |---|---|
-| `npc-stat-blocks/StatBlockEditor.tsx` | CR vs Level, scores vs modifiers, which proficiency editor: Pathfinder 2e's, or D&D 5e's in every other system |
+| `npc-stat-blocks/StatBlockEditor.tsx` | CR vs Level, scores vs modifiers, which saves and skills editor, by `creatureModel` (`npc-stat-blocks/creatureModel.ts`): D&D 5e's derived one, Pathfinder 2e's printed one, or skills typed and no rating for Call of Cthulhu and Shadowrun 6e. A system with no case gets D&D 5e's |
 | `CreatureLibrary.tsx` (`CreatureForm`) | The Creature Library's own creature form: the same choices as `StatBlockEditor` |
 | `npc-stat-blocks/StatBlockViewer.tsx` | Which read-only stat block renderer |
 | `utils/npcRolls.ts` (`buildNpcRolls`) | What can be rolled. A system with no case is treated as D&D 5e and offered d20 rolls; `CALL_OF_CTHULHU_7E` and `SHADOWRUN_6E` return nothing |
@@ -845,15 +849,16 @@ does not derive fabricates numbers that look authoritative.
 
 1. **Roll building.** Add a `case` to `buildNpcRolls` (`frontend/src/utils/npcRolls.ts`). Its `default` is D&D 5e, so a system without a d20-equivalent structure needs a case of its own returning `EMPTY_ROLLS`, as Call of Cthulhu has; the picker then falls through to a custom roll. `systemSupportsNpcRolls` beside it is read only by its test: keep it in step.
 2. **Stat block renderer.** Add a `case` to `StatBlockViewer.tsx` pointing at a component beside `Dnd5eStatBlock.tsx`. `GenericStatBlock.tsx` is the fallback and is often good enough.
-3. **Editor branches.** If creatures need different fields (a Level in place of a Challenge Rating, modifiers in place of scores), branch on the game system in `StatBlockEditor.tsx`, the token editor's, and in `CreatureForm` in `CreatureLibrary.tsx`, the Creature Library's own form. Both test `isPf2e` today, so every other system gets D&D 5e's fields. Add new fields to `NpcStatBlock` as **optional**, and to `backend/src/validators/statBlock.ts`; never repurpose an existing field, since a campaign can switch systems and the data has to survive.
+3. **Editor branches.** The token editor's form (`StatBlockEditor.tsx`) and the Creature Library's (`CreatureForm` in `CreatureLibrary.tsx`) both branch on `creatureModel` in `npc-stat-blocks/creatureModel.ts`, whose default is D&D 5e's. A system that prints its numbers and has no rating can join `printed`: no rating, the scores stored as typed under the names `scoreLabel` gives them, and skills typed in `PrintedSkillsEditor.tsx`. A system that needs other fields (a Level in place of a Challenge Rating, modifiers in place of scores) needs a model of its own and a branch in both forms. Add new fields to `NpcStatBlock` as **optional**, and to `backend/src/validators/statBlock.ts`; never repurpose an existing field, since a campaign can switch systems and the data has to survive.
 4. **Proficiency editor.** If saves and skills are derived, model it on `ProficiencyEditor.tsx`. If they are printed, model it on `Pf2eProficiencyEditor.tsx`, which computes nothing on purpose.
 5. **Roll mode labels.** The entries in `utils/rollModes.ts` from [Step 11](#step-11-rolls-initiative-and-hit-points) serve the creature pickers too.
 6. **Initiative.** `resolveStatBlockInitiative` in `utils/rules/initiative.ts` (two copies) derives a creature's initiative for D&D 5e only; any other creature rolls a flat d20. Extend it if your stat blocks hold what initiative is worked out from.
 7. **Conditions.** To list the system's conditions in the token editor, add a case to `conditionsOffered` (and to `effectsOffered`, if the system has effects) in `frontend/src/utils/conditions.ts`, with a two-letter code for each in `CONDITION_ABBREVIATIONS`, and add the list to the names `utils/__tests__/conditions.test.ts` checks the codes against. Without it the DM types each condition by hand.
 8. **Area templates.** A cone is drawn Pathfinder 2e's way in a Pathfinder campaign and D&D 5e's in every other (`coneRule` in `MapCanvas.tsx`). Add your system there if its cones differ.
 
-Bounds live in `backend/src/validators/statBlock.ts`. `MIN_STORED_BONUS` /
-`MAX_STORED_BONUS` are deliberately wide (±50) because they cover every system
+Bounds live in `backend/src/validators/statBlock.ts`, the save and skill ones in
+`STAT_BLOCK_LIMITS` (`statBlockLimits.ts`, with a frontend copy kept identical).
+`minBonus` / `maxBonus` are deliberately wide (±50) because they cover every system
 at once — PF2e modifiers pass +33 at high level, so a bound fitted to D&D 5e
 would reject legitimate creatures. It is a backstop against absurd data, not a
 rules check; per-system sanity belongs in the editor.
@@ -961,7 +966,7 @@ Only the maps typed `Record<GameSystem, …>` fail to compile when a system is m
 - [ ] Decided from the rulebook whether creature values are **derived** or **printed**
 - [ ] `utils/npcRolls.ts`: a `case` in `buildNpcRolls` (its default is D&D 5e; `EMPTY_ROLLS` for a system that is not d20-based)
 - [ ] `StatBlockViewer.tsx`: a `case`, or left on `GenericStatBlock`
-- [ ] `StatBlockEditor.tsx` and `CreatureLibrary.tsx`: branches for any system-specific fields
+- [ ] `npc-stat-blocks/creatureModel.ts`: your system's model, and branches in `StatBlockEditor.tsx` and `CreatureLibrary.tsx` for a model of its own
 - [ ] New `NpcStatBlock` fields added as **optional**, mirrored in `validators/statBlock.ts`
 - [ ] `utils/rules/initiative.ts` (two copies): `resolveStatBlockInitiative`, if creature initiative can be worked out
 - [ ] `utils/conditions.ts`: `conditionsOffered`, `CONDITION_ABBREVIATIONS` and the lists in its test
