@@ -725,6 +725,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
+    if (selectionRef.current?.lifted) releaseLifted(selectionRef.current.lifted.canvas, clipboardRef.current?.canvas);
     selectionRef.current = null;
     setSelectionShown(false);
     setSelectionUnsaved(false);
@@ -750,6 +751,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
+    if (selectionRef.current?.lifted) releaseLifted(selectionRef.current.lifted.canvas, clipboardRef.current?.canvas);
     selectionRef.current = null;
     setSelectionShown(false);
     setSelectionUnsaved(false);
@@ -1600,6 +1602,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     const selection = selectionRef.current;
     selectionRef.current = null;
+    // Lifted pixels are not put down, so they are let go of; a cut's copy is kept.
+    if (selection?.lifted) releaseLifted(selection.lifted.canvas, clipboardRef.current?.canvas);
     setSelectionShown(false);
     setSelectionUnsaved(false);
     markDirty('overlay');

@@ -1032,6 +1032,26 @@ describe('a selection', () => {
     expect(lifted?.width).toBe(0);
   });
 
+  it('lets go of the pixels it lifted when they are deleted, or the painting is discarded', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    let made = await canvasesMadeDuring(async () => { drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 }); });
+    const deleted = made.find((c) => c.width === 100 && c.height === 50);
+    press('Delete');
+    await waitFor(() => expect(holes()).toContainEqual([100, 100, 100, 50]));
+    expect(deleted?.width).toBe(0);
+
+    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
+    made = await canvasesMadeDuring(async () => { drag({ clientX: 450, clientY: 420 }, { clientX: 550, clientY: 520 }); });
+    const discarded = made.find((c) => c.width === 100 && c.height === 50);
+    act(() => { leavePageWith(vi.fn()); });
+    const asked = await screen.findByRole('dialog', { name: 'Save your painting?' });
+    await act(async () => { fireEvent.click(within(asked).getByRole('button', { name: 'Discard my painting' })); });
+    expect(discarded?.width).toBe(0);
+  });
+
   it('keeps pixels it lifted that were copied, for Paste, and lets go of a copy another replaces', async () => {
     await showMap();
     await paintOn();
