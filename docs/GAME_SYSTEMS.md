@@ -526,7 +526,7 @@ The template layer powers the "start from a preset" picker and the template API.
 ```typescript
 // backend/src/utils/character-templates/mySystem-templates.ts
 import { GameSystem } from '@prisma/client';
-import type { CharacterTemplate } from './dnd5e-templates'; // the shared shape
+import type { CharacterTemplate } from './types';
 
 export const mySystemBlankTemplate: CharacterTemplate = {
   name: 'Blank My System Character',
@@ -553,7 +553,7 @@ export function getMySystemTemplate(templateName?: string): CharacterTemplate {
 }
 ```
 
-`CharacterTemplate` is `{ name, description, gameSystem, data }`. Then wire the templates in:
+`CharacterTemplate`, in `types.ts` beside the template files, is `{ name, description, gameSystem, data }`. Then wire the templates in:
 
 1. Import `getMySystemTemplate` into `backend/src/utils/character-templates/index.ts` and add a `case GameSystem.MY_SYSTEM:` to **`getCharacterTemplate`**. Its `default` throws, so the compiler does not remind you: without the case `GET /api/characters/templates/MY_SYSTEM/blank` answers 500, and neither a character nor a template of the system can be created.
 2. Add `getMySystemTemplates` to the map in `backend/src/__tests__/helpers/builtInTemplates.ts`, which the template tests check every template from. The type check fails until it is there.

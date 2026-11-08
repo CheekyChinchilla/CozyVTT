@@ -5,14 +5,7 @@
  */
 
 import { GameSystem } from '@prisma/client';
-
-export interface CharacterTemplate {
-  name: string;
-  description: string;
-  gameSystem: GameSystem;
-  /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
-  data: Record<string, unknown>;
-}
+import type { CharacterTemplate } from './types';
 
 /**
  * Blank Pathfinder 2e character template with minimal required fields
