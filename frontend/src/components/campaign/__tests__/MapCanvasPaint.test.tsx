@@ -2008,6 +2008,35 @@ describe('drafts', () => {
   }
   const putBack = () => callsOn(pictureCanvas()).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
 
+  it("keeps a saved room's walls in the draft while they are being added, should the DM paint meanwhile", async () => {
+    await showMap();
+    await paintOn();
+    const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      fireEvent.click(panel().getByRole('button', { name: 'Room' }));
+      drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+      act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+      await settle();
+      let addFirst: () => void = () => undefined;
+      h.addWall.mockImplementationOnce(() => new Promise((resolve) => { addFirst = () => resolve({}); }));
+      await pressSave();
+      for (let i = 0; i < 20 && h.addWall.mock.calls.length === 0; i += 1) await settle();
+      expect(h.addWall).toHaveBeenCalledTimes(1);
+      // The DM paints while the walls go in, and that painting is drafted.
+      const writes = drafts().writes.length;
+      fireEvent.click(panel().getByRole('button', { name: 'Brush' }));
+      drag({ clientX: 300, clientY: 300 }, { clientX: 400, clientY: 320 });
+      act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+      await settle();
+      expect(drafts().writes.length).toBeGreaterThan(writes);
+      expect(drafts().headers.get(key)?.walls).toHaveLength(4);
+      await act(async () => { addFirst(); });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps a room's walls with the draft, takes them out when the room is undone, and adds them when the restored painting is saved", async () => {
     await showMap();
     await paintOn();
