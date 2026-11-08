@@ -117,7 +117,7 @@ CozyVTT does yet.
 
 > **Getting it back.** The new DM can hand it back the same way. And if the
 > campaign is yours — you created it — you keep a way in regardless: an **Owner
-> Settings** button appears in the top bar, holding the two things that stay
+> Settings** button appears in the top bar (on a phone, in **More**, under **Owner**), holding the two things that stay
 > yours, deleting the campaign and taking the DM seat back. It sits in the same
 > place the DM's own settings button occupies. So handing the
 > game over can never lock you out of your own campaign. If you are *not* the owner,
@@ -944,7 +944,7 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 
 ### Drawing on the map
 
-Draw is for marking up any map, and the whole table sees it live; to change a map's own picture, on a map you drew, use **Mapmaker** (see [Drawing a map](#drawing-a-map)). Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
+Draw is for marking up any map with a picture, and the whole table sees it live; to change a map's own picture, on a map you drew, use **Mapmaker** (see [Drawing a map](#drawing-a-map)). On a map with no picture, or one showing "Failed to load map image", **Draw** is not in the toolbar until the map has a picture again. Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
 
 | Tool | How |
 |---|---|
@@ -1082,7 +1082,7 @@ Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-sh
 | Undo the last change to the picture, while **Mapmaker** is on | `Ctrl + Z` |
 | Redo a change to the picture, while **Mapmaker** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
 
-On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Mapmaker** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, and the arrows, `Delete` and `Backspace` do nothing.
+On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Mapmaker** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, the arrows do nothing, and `Delete` and `Backspace` act only on Mapmaker's selection or the polygon you are painting, never on a token or a wall.
 
 ### On a touch screen
 
@@ -1106,6 +1106,7 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 
 | On the desktop | On a phone |
 |---|---|
+| **Owner Settings**, for the owner once someone else is the DM | **More**, under **Owner**: **Owner Settings** |
 | The header's DM toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere**, **Campaign Settings** | **More**, under **DM tools**. Each opens the same panel, which fills the screen; the phone's **Back** closes it |
 | **Campaign documents**, **Keyboard shortcuts** | **More**: **Documents**, **Shortcuts** |
 | The **Session** tab (session controls, the vibe, past sessions) and **Notes** | **More**: **Session**, **Notes** |
@@ -1113,7 +1114,7 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | The **Fog of War**, **Walls** and **Lights** panels at the top right of the map | The map's **More**, then **Show tools**. The panels show at the top right, folded, as on the desktop; **Hide tools**, in the map's **More** or on the bar above the panels, puts them away and puts down the tool you had up |
 | The spirit tokens button in the map's toolbar | The map's **More**: **Show spirit tokens** |
 | **Draw** | **Draw**, in the map's toolbar: its tools open in a strip across the foot of the map, with the map above it to draw on. **Clear…** offers every drawing or one member's, and asks before it clears |
-| **Mapmaker**, and its panel | The map's **More**: **Mapmaker** (**Put Mapmaker away** while it is on). Its tools open in a strip across the foot of the map, with the map above it to paint on: **Undo**, **Redo**, **Save** and **Done** at its top, the tools in a row that scrolls sideways (an end with more past it fades out under an arrow), **Colour and width**, which opens the two colours, the palette and the width over the strip (`Esc` or a tap elsewhere closes it), and **Download picture**. On a phone on its side the tools sit beside **Mapmaker** at the strip's top. Every control is at least 44 pixels |
+| **Mapmaker**, and its panel | The map's **More**: **Mapmaker** (**Put Mapmaker away** while it is on). Its tools open in a strip across the foot of the map, with the map above it to paint on: **Undo**, **Redo**, **Save** and **Done** at its top, the tools in a row that scrolls sideways (an end with more past it fades out under an arrow), the button with the two colours and, for example, **Black, 6 px** on it (a screen reader calls it **Colour and width**), which opens the two colours, the palette and the width over the strip (`Esc` or a tap elsewhere closes it), and **Download picture**. On a phone on its side the tools sit beside **Mapmaker** at the strip's top. Every control is at least 44 pixels |
 | **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
 | The banner over a map you are preparing | The same, across the top of the map: on a phone upright its words take one row and **Back to the table**, **Bring everyone here** and **What reaches the table?** the next; on a phone on its side it is one row, with the buttons reading **Back**, **Bring everyone** and an info button. The phone's **Back** goes back to the table |
 
@@ -1281,6 +1282,7 @@ Fog is drawn over the map in each player's browser, so everything under it has a
 | **Walls, windows and doors** | Every one, because their browser works out what their characters can see from them. Each door arrives open or closed. A **locked** door arrives as an ordinary closed door, so the lock is not given away, and locking or unlocking a closed door sends them nothing at all, whether you change one door or a whole selection with **Change type**; a player who tries it is told it is locked. |
 | **Lights** | Every light that is on: where it is, how far it reaches and its colour. A light you have switched off is not sent until you switch it on, and adding, moving or deleting one that is off sends them nothing at all, **Clear All** included when every light left is off. |
 | **Fog** | Only which squares are revealed to them. |
+| **Drawings** | Every drawing for everyone on the map, wherever it is, fog or no fog. A drawing made with **Only I can see this** is never sent. |
 
 With dynamic lighting on, a change to a wall, door or light also sends each player the tokens their characters can now see. A change that sends them nothing in the table above, such as locking a closed door, does not, so nothing reaches their browser to say that anything happened.
 
@@ -1314,9 +1316,9 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Type | Color | Blocks Vision | Notes |
 |------|-------|---------------|-------|
 | Wall | Orange (customizable) | Yes | Standard blocking wall |
-| Door (Closed) | Purple | Yes | Clickable to open |
-| Door (Open) | Green | No | Click to close |
-| Door (Locked) | Red | Yes | Players cannot open it until you unlock it |
+| Door (closed) | Purple | Yes | Clickable to open |
+| Open Door | Green | No | Click to close |
+| Locked (a locked door) | Red | Yes | Players cannot open it until you unlock it |
 | Window | Blue | No | Transparent to light |
 
 **Colour, snapping and clearing.** The **Wall color** swatches, and the colour box beside them, set the colour walls are drawn in on your screen. **Snap to grid** pulls new points onto the grid, and **Snap to endpoint** pulls them onto the nearest existing wall end; the second is available only while the first is off. **Clear all** deletes every wall on the map, after a second click on **Confirm clear all?**.
@@ -1325,7 +1327,7 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
-**How many a map holds.** A map holds at most 5,000 wall segments, doors and windows included, and 200 lights. On a full map the tools draw nothing more and say so, "Maximum 5000 wall segments per map" or "Maximum 200 light sources per map"; a door drawn along a wall, a split, a polygon or a brush stroke that would take the map past the limit is refused whole. Moving, changing and deleting walls and lights still work. A wall, a door, a polygon, a brush stroke, a move of walls or a light you place that the server refuses for another reason, such as a map deleted in another tab, is taken back, with the server's message; one that a later change of yours already carried to the server stays. An **Undo** the server refuses can be pressed again. Other refused changes, such as opening a door or moving a light, stay as you made them until the map is opened again, and the message shows in the Dice panel.
+**How many a map holds.** A map holds at most 5,000 wall segments, doors and windows included, and 200 lights. On a full map the tools draw nothing more and say so, "Maximum 5000 wall segments per map" or "Maximum 200 light sources per map"; a door drawn along a wall, a split, a polygon or a brush stroke that would take the map past the limit is refused whole. Moving, changing and deleting walls and lights still work. A wall, a door, a polygon, a brush stroke, a move of walls or a light you place that the server refuses for another reason, such as a map deleted in another tab, is taken back, with the server's message; one that a later change of yours already carried to the server stays. An **Undo** the server refuses can be pressed again. Other refused changes, such as opening a door or moving a light, stay as you made them until the map is opened again, and a message pops up saying why.
 
 ### Polygon Drawing Mode
 
@@ -1594,7 +1596,7 @@ As DM you always see all walls, all tokens and the full map. To see what a playe
 
 **Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Previewing one token also shows what the player who controls it remembers, so you see that character's explored ground as well as what they can see now, and moving the token while you preview it adds to that memory, so a game you run alone still builds up each player's explored ground. **All player tokens** shows none, because it is several people at once and their memories laid over each other would describe nobody.
 
-Click the button again to return to your own view.
+Click **DM View**, as the button reads while you preview, to return to your own view.
 
 ### Performance Notes
 
