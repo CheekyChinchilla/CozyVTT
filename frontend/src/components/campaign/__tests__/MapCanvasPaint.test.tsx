@@ -553,6 +553,75 @@ describe('the brush', () => {
   });
 });
 
+describe('the brush under the pointer', () => {
+  const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
+  /** The circles the overlay drew: their middle and radius. */
+  const circles = () => take(input()).filter((c) => c.method === 'arc').map((c) => (c.args as number[]).slice(0, 3));
+
+  it('shows a circle as wide as the brush where a mouse points, following it, and none once it leaves the map', async () => {
+    await showMap();
+    await paintOn();
+    take(input());
+    mouse.move(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(circles()).toContainEqual([130, 260, 3]);
+
+    fireEvent.change(panel().getByRole('slider', { name: 'Width' }), { target: { value: '20' } });
+    mouse.move(input(), { clientX: 300, clientY: 200 });
+    await nextFrame();
+    expect(circles()).toContainEqual([300, 200, 10]);
+
+    mouse.leave(input());
+    await nextFrame();
+    expect(circles()).toEqual([]);
+  });
+
+  it('draws the eraser\'s circle dashed, and a textured brush\'s filled with its pattern', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Eraser' }));
+    take(input());
+    mouse.move(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    const erasing = take(input());
+    expect(erasing.some((c) => c.method === 'arc')).toBe(true);
+    expect(erasing.some((c) => c.method === 'setLineDash' && (c.args[0] as number[]).length > 0)).toBe(true);
+
+    fireEvent.click(panel().getByRole('button', { name: 'Brush' }));
+    fireEvent.change(panel().getByRole('combobox', { name: 'Texture' }), { target: { value: 'grass' } });
+    mouse.move(input(), { clientX: 140, clientY: 260 });
+    await nextFrame();
+    expect(take(input()).some((c) => c.method === 'createPattern')).toBe(true);
+  });
+
+  it('follows a finger as it paints, and is gone once it lifts', async () => {
+    await showMap();
+    await paintOn();
+    take(input());
+    const finger = contact('touch', 1);
+    finger.down(input(), { clientX: 100, clientY: 100 });
+    finger.move(input(), { clientX: 160, clientY: 100 });
+    finger.move(input(), { clientX: 220, clientY: 100 });
+    await nextFrame();
+    expect(circles()).toContainEqual([220, 100, 3]);
+
+    finger.up(input(), { clientX: 220, clientY: 100 });
+    finger.leave(input());
+    await nextFrame();
+    expect(circles()).toEqual([]);
+  });
+
+  it('shows no circle for a tool that is no brush', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Fill' }));
+    take(input());
+    mouse.move(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(circles()).toEqual([]);
+  });
+});
+
 describe('the eraser', () => {
   /** The style the picture's last stroke was drawn in. */
   const lastStrokeStyle = () => pictureCanvas()?.getContext('2d')?.strokeStyle;

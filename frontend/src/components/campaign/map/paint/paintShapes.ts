@@ -132,6 +132,22 @@ export type PaintPreview =
   | { kind: 'shape'; shape: PaintShape }
   /** The stamp a click or a lift would paint, drawn see-through. */
   | { kind: 'stamp'; place: StampPlace }
+  /**
+   * The brush where the pointer is: a circle its width across, half filled
+   * with the colour or a texture's tile (drawn at `tileScale` map pixels to a
+   * tile pixel), outlined to show on any ground; the eraser's dashed.
+   */
+  | {
+    kind: 'brush';
+    at: PaintPoint;
+    radius: number;
+    colour: string;
+    tile: CanvasImageSource | null;
+    tileScale: number;
+    eraser: boolean;
+    /** Map pixels to a screen pixel, so the outline keeps its width at any zoom. */
+    pixel: number;
+  }
   | {
     kind: 'selection';
     box: SelectBox;
@@ -179,10 +195,40 @@ function drawSelection(ctx: CanvasRenderingContext2D, preview: Extract<PaintPrev
   }
 }
 
-/** How strongly a stamp's preview is drawn: see-through, so the ground under it shows. */
+/** How strongly a stamp's preview, and a brush's, is drawn: see-through, so the ground under it shows. */
 const STAMP_PREVIEW_ALPHA = 0.5;
 
-/** Draw a stroke, a shape, a stamp or a selection on its way. */
+/** The brush under the pointer: its circle, filled and outlined in black under white. */
+function drawBrushPreview(ctx: CanvasRenderingContext2D, preview: Extract<PaintPreview, { kind: 'brush' }>): void {
+  const { at, colour, tile, tileScale, eraser, pixel } = preview;
+  // Never smaller than a few screen pixels, so a brush 1 pixel wide still shows.
+  const radius = Math.max(preview.radius, 2 * pixel);
+  ctx.save();
+  try {
+    ctx.beginPath();
+    ctx.arc(at[0], at[1], radius, 0, Math.PI * 2);
+    ctx.globalAlpha = STAMP_PREVIEW_ALPHA;
+    const pattern = tile ? ctx.createPattern(tile, 'repeat') : null;
+    if (pattern && typeof pattern.setTransform === 'function' && typeof DOMMatrix !== 'undefined') {
+      pattern.setTransform(new DOMMatrix([tileScale, 0, 0, tileScale, 0, 0]));
+    }
+    ctx.fillStyle = pattern ?? colour;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.setLineDash(eraser ? [4 * pixel, 3 * pixel] : []);
+    ctx.lineWidth = 2 * pixel;
+    ctx.strokeStyle = '#000000';
+    ctx.stroke();
+    ctx.lineWidth = pixel;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } finally {
+    ctx.restore();
+  }
+}
+
+/** Draw a stroke, a shape, a stamp, the brush or a selection on its way. */
 export function drawPaintPreview(ctx: CanvasRenderingContext2D, preview: PaintPreview): void {
   if (preview.kind === 'stroke') strokePaint(ctx, preview.points, preview.width, preview.colour);
   else if (preview.kind === 'shape') drawShape(ctx, preview.shape);
@@ -194,5 +240,6 @@ export function drawPaintPreview(ctx: CanvasRenderingContext2D, preview: PaintPr
     } finally {
       ctx.restore();
     }
-  } else drawSelection(ctx, preview);
+  } else if (preview.kind === 'brush') drawBrushPreview(ctx, preview);
+  else drawSelection(ctx, preview);
 }

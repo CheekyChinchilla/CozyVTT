@@ -80,6 +80,8 @@ export type PaintTool = 'select' | 'brush' | 'eraser' | PaintShapeKind | 'room' 
 
 /** The tools that act on a tap or a click: a finger's drag pans under them. */
 const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['polygon', 'stamp', 'fill', 'text', 'eyedropper']);
+/** The tools whose stamp or brush a mouse or a pen shows where it hovers. */
+const HOVER_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['stamp', 'brush', 'eraser']);
 
 /** Text's letters: as tall as Draw's labels for the width, in the app's own type. */
 const textFont = (size: number) => `600 ${size}px 'Inter', system-ui, sans-serif`;
@@ -381,8 +383,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const selectionRef = useRef<Selection | null>(null);
   /** A polygon being clicked out, corner by corner, and where the pointer is now, in map pixels. */
   const polygonRef = useRef<{ mapId: string; points: PaintPoint[]; cursor: PaintPoint | null } | null>(null);
-  /** Where a mouse or a pen hovers with Stamp chosen, for the stamp's preview. */
-  const stampHoverRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
+  /** Where a mouse or a pen hovers with Stamp, Brush or Eraser chosen, for the stamp's or the brush's preview. */
+  const hoverRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
   /**
    * A finger's press with Stamp chosen: the stamp's preview follows it, and
    * it is painted where the finger lifts; a second finger drops it.
@@ -1647,7 +1649,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         if (textRef.current) commitText();
         if (at.via === 'drag' && look.tool === 'stamp') {
           stampPressRef.current = { mapId: s.mapId, at: point };
-          stampHoverRef.current = null;
+          hoverRef.current = null;
           markDirty('overlay');
         }
         else if (at.via === 'drag') mapControls.startDrag(at.e);
@@ -1771,9 +1773,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         markDirty('overlay');
         return true;
       }
-      // A mouse or a pen over the map with Stamp chosen: the stamp a click would paint follows it.
-      if (settingsRef.current.tool === 'stamp' && at.via === 'mouse' && map) {
-        stampHoverRef.current = { mapId: map.id, at: [at.mapPx.x, at.mapPx.y] };
+      // A mouse or a pen over the map: the stamp a click would paint, or the brush, follows it.
+      if (HOVER_TOOLS.has(settingsRef.current.tool) && at.via === 'mouse' && map) {
+        hoverRef.current = { mapId: map.id, at: [at.mapPx.x, at.mapPx.y] };
         markDirty('overlay');
       }
       // A polygon being clicked out follows the pointer to its next corner.
@@ -1841,8 +1843,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       }
     },
     leave() {
-      if (stampHoverRef.current) {
-        stampHoverRef.current = null;
+      if (hoverRef.current) {
+        hoverRef.current = null;
         markDirty('overlay');
       }
     },
@@ -1964,7 +1966,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       shown.push({ kind: 'shape', shape });
     }
     if (curveRef.current && curveRef.current.mapId === s.mapId) shown.push({ kind: 'shape', shape: curveRef.current.shape });
-    const stampAtPointer = stampPressRef.current ?? stampHoverRef.current;
+    const stampAtPointer = stampPressRef.current ?? hoverRef.current;
     const m = mapRef.current;
     if (stampAtPointer && stampAtPointer.mapId === s.mapId && m && settingsRef.current.tool === 'stamp') {
       const look = settingsRef.current;
@@ -1973,6 +1975,25 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         kind: 'stamp',
         // In map pixels, as stampAt paints it in the picture's.
         place: { kind: look.stamp, cx, cy, size: m.gridSize * look.stampSize, turn: look.turn, colour: look.colour, second: look.second, lineWidth: Math.max(1, m.gridSize * 0.06) },
+      });
+    }
+    // The brush where it is: under a stroke's last point while one is painted, a finger's too, else where it hovers.
+    const tool = settingsRef.current.tool;
+    const brushAt = stroke ? stroke.points[stroke.points.length - 1] : hoverRef.current?.mapId === s.mapId ? hoverRef.current.at : null;
+    if (brushAt && (tool === 'brush' || tool === 'eraser')) {
+      const look = settingsRef.current;
+      const [sx] = xy(s);
+      const eraser = tool === 'eraser';
+      const texture = !eraser ? look.texture : null;
+      shown.push({
+        kind: 'brush',
+        at: brushAt,
+        radius: look.width / sx / 2,
+        colour: eraser ? s.background : look.colour,
+        tile: texture ? textureTile(s, texture, look.colour) : null,
+        tileScale: 1 / sx,
+        eraser,
+        pixel: 1 / mapControls.zoom,
       });
     }
     const selection = selectionRef.current;
@@ -1986,7 +2007,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       });
     }
     return shown;
-  }, [xy, mapControls.zoom]);
+  }, [xy, mapControls.zoom, textureTile]);
 
   const source = surface && map && surface.mapId === map.id && !stale ? surface.canvas : null;
 
