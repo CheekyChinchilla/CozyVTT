@@ -6,7 +6,9 @@
  * address its lockfile records and refuses one whose contents do not match
  * the recorded hash. An entry pointing anywhere else (a git repository, a
  * file on another server) or carrying no hash would get round both, so every
- * entry must come from the npm registry with a hash.
+ * entry must come from the npm registry with a hash. A package bundled inside
+ * another comes in that package's download, so npm records it with no address
+ * or hash of its own; it passes when the package that bundles it does.
  *
  * A package can also run a script while it is installed: the Prisma packages
  * fetch their database engines that way, and argon2 checks for its prebuilt
@@ -23,7 +25,7 @@ import path from 'path';
 
 const root = path.resolve(__dirname, '../../..');
 
-type LockEntry = { resolved?: string; integrity?: string; link?: boolean; hasInstallScript?: boolean };
+type LockEntry = { resolved?: string; integrity?: string; link?: boolean; hasInstallScript?: boolean; inBundle?: boolean };
 
 describe.each(['backend', 'frontend'])('%s', (project) => {
   const lock = JSON.parse(fs.readFileSync(path.join(root, project, 'package-lock.json'), 'utf8')) as {
@@ -34,11 +36,16 @@ describe.each(['backend', 'frontend'])('%s', (project) => {
   };
   const entries = Object.entries(lock.packages).filter(([where, entry]) => where !== '' && !entry.link);
   const nameOf = (where: string) => where.slice(where.lastIndexOf('node_modules/') + 'node_modules/'.length);
+  const checked = (where: string): boolean => {
+    const entry = lock.packages[where];
+    if (entry?.resolved?.startsWith('https://registry.npmjs.org/') && entry.integrity?.startsWith('sha512-')) return true;
+    return entry?.inBundle === true && checked(where.slice(0, where.lastIndexOf('/node_modules/')));
+  };
 
   it('takes every package from the npm registry, with a hash to check it against', () => {
     expect(entries.length).toBeGreaterThan(100);
     const strays = entries
-      .filter(([, entry]) => !entry.resolved?.startsWith('https://registry.npmjs.org/') || !entry.integrity?.startsWith('sha512-'))
+      .filter(([where]) => !checked(where))
       .map(([where, entry]) => `${where}: ${entry.resolved ?? 'no address'}`);
     expect(strays).toEqual([]);
   });
