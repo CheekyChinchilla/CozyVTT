@@ -301,9 +301,9 @@ One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers 
 **Saved rolls.** Some rolls aren't on your character sheet and never will be — a
 homebrew subsystem your table invented, a recurring `2d6+3` for a house rule,
 `4d6kh3` for rolling up a new character, an attack the sheet can't describe.
-Rather than retyping those every session, save them: press **Saved** under the
-dice buttons (on a phone, at the end of their row, which scrolls sideways), give the roll a name and an expression, and it becomes a button of
-its own. Click it and it rolls, with its name as the roll's purpose (or a
+Rather than retyping those every session, save them: press **Saved** in the row
+under the expression (on a phone, under **More**), give the roll a name and an expression, and it becomes a button of
+its own in that row. Click it and it rolls, with its name as the roll's purpose (or a
 purpose of its own, below), so the **Dice** panel shows "Longsword" and not
 just `1d20+5`. Whatever is in the
 **Character** box goes with it, as for a typed roll.
