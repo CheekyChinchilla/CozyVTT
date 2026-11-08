@@ -977,6 +977,59 @@ describe('a selection', () => {
     expect(panel().getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
+  /** Every canvas a context is asked of while `run` runs, to see which were let go of (width 0). */
+  async function canvasesMadeDuring(run: () => Promise<void>): Promise<HTMLCanvasElement[]> {
+    const made: HTMLCanvasElement[] = [];
+    const making = HTMLCanvasElement.prototype.getContext;
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      writable: true,
+      value(this: HTMLCanvasElement, ...args: Parameters<HTMLCanvasElement['getContext']>) {
+        if (!made.includes(this)) made.push(this);
+        return making.apply(this, args);
+      },
+    });
+    try {
+      await run();
+    } finally {
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { configurable: true, writable: true, value: making });
+    }
+    return made;
+  }
+
+  it('lets go of the pixels it lifted once they are put down', async () => {
+    let lifted: HTMLCanvasElement | undefined;
+    await canvasesMadeDuring(async () => {
+      await showMap();
+      await paintOn();
+      choose('Select');
+      drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+      const before = await canvasesMadeDuring(async () => { drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 }); });
+      lifted = before.find((c) => c.width === 100 && c.height === 50);
+    });
+    expect(lifted).toBeDefined();
+    press('Enter');
+    await waitFor(() => expect(drawnAt()).toContainEqual([200, 200, 100, 50]));
+    expect(lifted?.width).toBe(0);
+  });
+
+  it('keeps pixels it lifted that were copied, for Paste, and lets go of a copy another replaces', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    const made = await canvasesMadeDuring(async () => { drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 }); });
+    const lifted = made.find((c) => c.width === 100 && c.height === 50);
+    press('c', { ctrlKey: true });
+    press('Enter');
+    await waitFor(() => expect(drawnAt()).toContainEqual([200, 200, 100, 50]));
+    expect(lifted?.width).toBe(100);
+    // Another copy takes its place: the first is let go of.
+    drag({ clientX: 400, clientY: 400 }, { clientX: 450, clientY: 450 });
+    press('c', { ctrlKey: true });
+    expect(lifted?.width).toBe(0);
+  });
+
   it('resizes by a corner, the corner across from it staying', async () => {
     await showMap();
     await paintOn();
