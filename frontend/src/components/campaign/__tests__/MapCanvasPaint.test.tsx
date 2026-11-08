@@ -956,6 +956,27 @@ describe('a selection', () => {
     expect(drawnAt()).toContainEqual([200, 200, 100, 50]);
   });
 
+  it('puts a box a finger was moving back where it was when a second finger lands, and moves it no further', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    const first = contact('touch', 1);
+    const second = contact('touch', 2, false);
+    first.down(input(), { clientX: 150, clientY: 120 });
+    first.move(input(), { clientX: 200, clientY: 170 });
+    first.move(input(), { clientX: 250, clientY: 220 });
+    second.down(input(), { clientX: 400, clientY: 400 });
+    second.up(input(), { clientX: 400, clientY: 400 });
+    first.up(input(), { clientX: 250, clientY: 220 });
+    // A mouse passing over with no button down moves nothing.
+    mouse.move(input(), { clientX: 500, clientY: 500 });
+    press('Enter');
+    await nextFrame();
+    expect(holes()).not.toContainEqual([100, 100, 100, 50]);
+    expect(panel().getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
   it('resizes by a corner, the corner across from it staying', async () => {
     await showMap();
     await paintOn();
@@ -1120,6 +1141,26 @@ describe('a stamp', () => {
     finger.up(input(), { clientX: 330, clientY: 260 });
     finger.leave(input());
     expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[325, 275]]);
+  });
+
+  it('leaves a curve a finger was bending straight and waiting when a second finger lands', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Curve' }));
+    drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 100 });
+    const first = contact('touch', 1);
+    const second = contact('touch', 2, false);
+    first.down(input(), { clientX: 200, clientY: 100 });
+    first.move(input(), { clientX: 200, clientY: 150 });
+    first.move(input(), { clientX: 200, clientY: 200 });
+    second.down(input(), { clientX: 400, clientY: 400 });
+    second.up(input(), { clientX: 400, clientY: 400 });
+    first.up(input(), { clientX: 200, clientY: 200 });
+    // A mouse passing over with no button down bends nothing.
+    mouse.move(input(), { clientX: 200, clientY: 300 });
+    press('Enter');
+    await nextFrame();
+    expect(callsOfPicture('quadraticCurveTo').map((c) => c.args.slice(0, 2))).toEqual([[100, 100]]);
   });
 
   it('on a touch screen, paints nothing when a second finger lands before the first lifts', async () => {
