@@ -70,6 +70,11 @@ export default function GameSystemBadge({
     );
   }
 
+  // TODO(ui): a code this build does not know has no colours, and `colors.bg`
+  // throws. ImportCharacterModal passes an imported file's gameSystem straight
+  // in, so a character exported from an instance with another system takes the
+  // import preview down. Draw an unknown code as the Flexible badge is drawn,
+  // labelled with the code.
   const colors = GAME_SYSTEM_COLORS[gameSystem];
   const label = showFull ? getGameSystemLabel(gameSystem) : SHORT_LABELS[gameSystem];
 

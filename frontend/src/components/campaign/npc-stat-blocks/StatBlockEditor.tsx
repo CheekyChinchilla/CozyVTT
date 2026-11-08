@@ -33,6 +33,12 @@ export default function StatBlockEditor({
   onChange,
   gameSystem = 'DND_5E',
 }: StatBlockEditorProps) {
+  // TODO(creatures): every system but Pathfinder 2e gets D&D 5e's Challenge
+  // Rating, ability scores and saves and skills derived from them, so a Call of
+  // Cthulhu or Shadowrun 6e creature is offered numbers its rules do not have
+  // ("Derived versus printed" in docs/GAME_SYSTEMS.md). Those systems should get
+  // no derived editor, as buildNpcRolls offers them no rolls. CreatureForm in
+  // CreatureLibrary.tsx branches the same way.
   const isPf2e = gameSystem === 'PATHFINDER_2E';
   const pf2eModifiers = readAttributeModifiers(statBlock);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['core', 'abilities']));

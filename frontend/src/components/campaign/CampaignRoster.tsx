@@ -340,6 +340,11 @@ export default function CampaignRoster() {
   };
 
   // Get game system short name
+  // TODO(ui): the third copy of each system's short label, after
+  // GAME_SYSTEM_SHORT_LABELS and GameSystemBadge's SHORT_LABELS, and the copies
+  // already disagree on Shadowrun 6e ('SR6e' here, 'SR6' in both others); the
+  // tints above repeat GameSystemBadge's too. Read GAME_SYSTEM_SHORT_LABELS here
+  // and in the badge, and keep the tints in one map.
   const getSystemShortName = (gameSystem: GameSystem | null) => {
     switch (gameSystem) {
       case 'DND_5E':

@@ -24,6 +24,10 @@ export function extractCharacterHp(
   if (!data || !gameSystem) return null;
 
   switch (gameSystem) {
+    // TODO(sheets): 'FLEXIBLE' is unreachable. A Flexible character's
+    // gameSystem is null, which returns above, and nothing passes 'FLEXIBLE'.
+    // Remove the case in both copies, unless a Flexible sheet is meant to
+    // report hit points.
     case 'DND_5E':
     case 'PATHFINDER_2E':
     case 'FLEXIBLE':
