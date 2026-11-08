@@ -119,19 +119,20 @@ export default function ActionSheet({ open, title, items, onClose, subtitle, lea
         data-action-sheet=""
         data-state={open ? 'open' : 'closed'}
         inert={!open}
+        // Only the card and Cancel take a tap: one beside them, as above a
+        // short menu in the sideways column, reaches the backdrop and closes.
         className={cn(
-          'fixed z-50',
+          'fixed z-50 pointer-events-none',
           sideways
             ? 'inset-y-0 right-0 w-88 max-w-full py-2 pl-2 pr-[calc(0.5rem+env(safe-area-inset-right))]'
-            : `inset-x-0 bottom-0 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] ${SHEET_WIDTH}`,
-          !open && 'pointer-events-none'
+            : `inset-x-0 bottom-0 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] ${SHEET_WIDTH}`
         )}
         // A held Enter that opened the menu must not press its first item,
         // which takes the focus as the sheet opens; as the popover's guard.
         onKeyDown={(event) => { if (event.key === 'Enter' && event.repeat) event.preventDefault(); }}
       >
         <motion.div {...motionProps} className={cn('flex flex-col gap-2', sideways ? 'h-full justify-end' : 'max-h-[calc(100dvh-1rem)]')}>
-          <div className="flex min-h-0 flex-col overflow-hidden rounded-cozy-lg border border-brand/20 bg-surface-light shadow-2xl">
+          <div className={cn('flex min-h-0 flex-col overflow-hidden rounded-cozy-lg border border-brand/20 bg-surface-light shadow-2xl', open && 'pointer-events-auto')}>
             <div className="flex shrink-0 items-center gap-3 border-b border-ink/10 px-4 py-3">
               {leading}
               <div className="min-w-0 flex-1">
@@ -174,7 +175,7 @@ export default function ActionSheet({ open, title, items, onClose, subtitle, lea
           <button
             type="button"
             onClick={onClose}
-            className="min-h-13 shrink-0 rounded-cozy-lg border border-brand/20 bg-surface-light text-base font-semibold text-ink shadow-2xl transition-colors hover:bg-ink/5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand"
+            className={cn('min-h-13 shrink-0 rounded-cozy-lg border border-brand/20 bg-surface-light text-base font-semibold text-ink shadow-2xl transition-colors hover:bg-ink/5 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand', open && 'pointer-events-auto')}
           >
             Cancel
           </button>
