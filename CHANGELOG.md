@@ -229,6 +229,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Text dragged from one box to another in a character sheet opened from the map now lands there.**
 
+- **Importing a character file made for a game system this CozyVTT doesn't have gives a message.** Choosing the file used to break the preview; it's now refused there, naming the system. See [Character Templates](docs/USER_GUIDE.md#character-templates).
+
 - **The Call of Cthulhu skills list puts its headings over its columns.**
 
 - **A Call of Cthulhu age saved as text shows in the editor and is kept until you type a number.** An age already replaced by 0 is in a backup taken before that save.

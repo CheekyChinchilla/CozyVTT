@@ -4,7 +4,7 @@
 // ============================================
 
 import type { GameSystem } from '@/types';
-import { getGameSystemLabel } from '@/constants/game-systems';
+import { FLEXIBLE_SYSTEM_LABEL, getGameSystemLabel, isGameSystem } from '@/constants/game-systems';
 
 interface GameSystemBadgeProps {
   gameSystem: GameSystem | null;
@@ -52,38 +52,28 @@ const SHORT_LABELS: Record<GameSystem, string> = {
   CALL_OF_CTHULHU_7E: 'CoC 7e',
 };
 
+/** No game system's colours: a Flexible sheet, or a code this build does not know. */
+const PLAIN_COLORS = { bg: 'bg-surface', text: 'text-ink-muted', border: 'border-ink/20' };
+
 export default function GameSystemBadge({
   gameSystem,
   size = 'md',
   showFull = false,
 }: GameSystemBadgeProps) {
-  // No badge for null/flexible systems
-  if (!gameSystem) {
-    return (
-      <span
-        className={`inline-flex items-center rounded-full px-2.5 py-0.5 border
-                   bg-surface text-ink-muted border-ink/20
-                   ${size === 'sm' ? 'text-xs' : size === 'lg' ? 'text-sm font-medium' : 'text-xs font-medium'}`}
-      >
-        Flexible
-      </span>
-    );
-  }
-
-  // TODO(ui): a code this build does not know has no colours, and `colors.bg`
-  // throws. ImportCharacterModal passes an imported file's gameSystem straight
-  // in, so a character exported from an instance with another system takes the
-  // import preview down. Draw an unknown code as the Flexible badge is drawn,
-  // labelled with the code.
-  const colors = GAME_SYSTEM_COLORS[gameSystem];
-  const label = showFull ? getGameSystemLabel(gameSystem) : SHORT_LABELS[gameSystem];
+  // A code this build does not know, such as one read from a character file
+  // made on an instance with another system, is shown as it is written.
+  const known = isGameSystem(gameSystem) ? gameSystem : null;
+  const colors = known ? GAME_SYSTEM_COLORS[known] : PLAIN_COLORS;
+  const label = known
+    ? showFull ? getGameSystemLabel(known) : SHORT_LABELS[known]
+    : gameSystem || FLEXIBLE_SYSTEM_LABEL;
 
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 border
                  ${colors.bg} ${colors.text} ${colors.border}
                  ${size === 'sm' ? 'text-xs' : size === 'lg' ? 'text-sm font-medium' : 'text-xs font-medium'}`}
-      title={showFull ? undefined : getGameSystemLabel(gameSystem)}
+      title={known && !showFull ? getGameSystemLabel(known) : undefined}
     >
       {label}
     </span>

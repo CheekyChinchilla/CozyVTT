@@ -95,6 +95,14 @@ export function getGameSystemLabel(
     : GAME_SYSTEM_LABELS[gameSystem];
 }
 
+/**
+ * Whether `code` names a game system this build knows. A file made on an
+ * instance with another system can name one it does not.
+ */
+export function isGameSystem(code: unknown): code is GameSystem {
+  return typeof code === 'string' && Object.prototype.hasOwnProperty.call(GAME_SYSTEM_LABELS, code);
+}
+
 /** What a character, template or campaign with no game system is called. */
 export const FLEXIBLE_SYSTEM_LABEL = 'Flexible';
 
