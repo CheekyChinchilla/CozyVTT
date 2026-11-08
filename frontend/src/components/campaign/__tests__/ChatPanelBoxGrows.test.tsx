@@ -39,7 +39,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
-  socket.sendChatMessage.mockReset();
+  // The server's answer to a sent message, as the panel reads it.
+  socket.sendChatMessage.mockReset().mockResolvedValue({ ok: true, id: 'message-1' });
 });
 
 afterEach(() => {
