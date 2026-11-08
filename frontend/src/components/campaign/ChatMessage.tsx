@@ -139,6 +139,23 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
     );
 
   /**
+   * A system notice (a session paused or resumed, the spirit layer shown or
+   * hidden) is one quiet centred line on either layout, so people's
+   * messages stand out; a screen reader hears it named as the system's.
+   */
+  if (isSystem) {
+    return (
+      <div data-message-id={message.id} className="px-2 py-0.5 text-center text-xs text-ink-muted">
+        <Bot className="mr-1 inline h-3 w-3 align-[-0.1em]" aria-hidden="true" />
+        <span className="sr-only">System: </span>
+        <span className="whitespace-pre-wrap wrap-break-word">{message.content}</span>
+        <span className="whitespace-nowrap" title={sentAt}> · {messageAge(message.createdAt, now)}</span>
+        {metadataBlock}
+      </div>
+    );
+  }
+
+  /**
    * The compact layout's chat, where a sheet half a phone's height should
    * show several messages: the sender and the time start the message's own
    * line, at the size they have on the desktop, and the padding is slimmer.

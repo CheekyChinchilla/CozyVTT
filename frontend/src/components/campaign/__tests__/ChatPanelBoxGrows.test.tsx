@@ -81,3 +81,11 @@ it('shrinks back to one line when Enter sends the message', async () => {
   expect(socket.sendChatMessage).toHaveBeenCalled();
   expect(heightOf(box)).toBe(20);
 });
+
+// The placeholder gave the keys the line under the box gives already.
+it('says the keys once on a computer: under the box, and not in its placeholder', async () => {
+  layout.compact = false;
+  const box = await chatBox();
+  expect(box).toHaveAttribute('placeholder', 'Type a message…');
+  expect(screen.getByText('Press Enter to send, Shift+Enter for new line')).toBeTruthy();
+});

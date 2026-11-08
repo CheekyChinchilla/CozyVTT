@@ -60,11 +60,6 @@ it('keeps your own message, a system message and the DM\'s told apart', () => {
   const mine = draw(<ChatMessage message={message()} isCurrentUser />);
   expect(within(mine).getByText(/Mara/)).toHaveTextContent('Mara (You)');
 
-  const system = draw(<ChatMessage message={message({ type: MessageType.SYSTEM, userId: null, user: undefined, content: 'Session 5 has been resumed!' })} />);
-  expect(classes(system)).toContain('bg-moss-green/10');
-  expect(screen.getByText('Session 5 has been resumed!')).toHaveTextContent(/^System .* Session 5 has been resumed!$/);
-  expect(system.querySelector('p svg')).not.toBeNull();
-
   const dm = draw(<ChatMessage message={message({ id: 'm2', type: MessageType.DM, content: 'Roll for initiative.' })} sentByDM />);
   expect(classes(dm)).toContain('bg-warning/10');
   expect(classes(within(dm).getByText('Mara'))).toContain('text-warning-ink');

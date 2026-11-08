@@ -292,7 +292,7 @@ it('lets a whisper\'s name wrap from the left beside icons and a time that keep 
 it('keeps the whisper placeholder short, since the line under the box names the person', async () => {
   await openPanel();
   fireEvent.change(picker(), { target: { value: 'maralee' } });
-  expect(box().placeholder).toBe('Type a whisper... (Enter to send)');
+  expect(box().placeholder).toBe('Type a whisper…');
   expect(screen.getByText('Only you and Mara Lee can see this.')).toBeTruthy();
 });
 
