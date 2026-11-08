@@ -15,7 +15,6 @@ import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
-import { ScrollChevrons, scrollFade, useScrollMore } from '@/components/ui/ScrollCue';
 import DiceMacroManager from './DiceMacroManager';
 import JumpToNewest from './JumpToNewest';
 import { errorSummary } from '@/utils/errors';
@@ -64,13 +63,14 @@ function rollLocally(
 
 // Quick roll button configurations with whimsical forest colors: a 15% tint,
 // 30% under the pointer, on which the theme's ink reads in every theme.
+/** The dice, d20 first: the die rolled most. */
 const QUICK_ROLLS = [
+  { label: 'd20', expression: '1d20', color: 'bg-danger/15 border-danger/50 hover:bg-danger/30' },
   { label: 'd4', expression: '1d4', color: 'bg-warning/15 border-warning/50 hover:bg-warning/30' },
   { label: 'd6', expression: '1d6', color: 'bg-success/15 border-success/50 hover:bg-success/30' },
   { label: 'd8', expression: '1d8', color: 'bg-spirit/15 border-spirit/50 hover:bg-spirit/30' },
   { label: 'd10', expression: '1d10', color: 'bg-warning/15 border-warning/50 hover:bg-warning/30' },
   { label: 'd12', expression: '1d12', color: 'bg-token-friendly/15 border-token-friendly/50 hover:bg-token-friendly/30' },
-  { label: 'd20', expression: '1d20', color: 'bg-danger/15 border-danger/50 hover:bg-danger/30' },
   { label: 'd100', expression: '1d100', color: 'bg-info/15 border-info/50 hover:bg-info/30' },
 ];
 
@@ -116,8 +116,6 @@ export default function DiceRoller() {
    * More options, so in a short sheet the log keeps its room.
    */
   const compact = useCompactLayout();
-  // Which ends of the compact layout's row of quick rolls have more past them.
-  const { ref: quickRowCue, more: quickRowMore } = useScrollMore<HTMLDivElement>();
   const [moreOptions, setMoreOptions] = useState(false);
 
   // Roll history state
@@ -582,10 +580,10 @@ export default function DiceRoller() {
       onClick={() => handleQuickRoll(btn.expression)}
       disabled={isRolling}
       className={`
-        px-2 py-1 rounded-md text-xs font-medium transition-all
+        min-w-0 px-0 py-1.5 rounded-md text-xs font-medium transition-all
         disabled:opacity-50 disabled:cursor-not-allowed
         text-ink
-        ${btn.color}${compact ? ' shrink-0 touch-target' : ''}
+        ${btn.color}${compact ? ' touch-target' : ''}
       `}
     >
       {btn.label}
@@ -659,15 +657,7 @@ export default function DiceRoller() {
   );
 
   const characterAndPurpose = (
-    <div
-      id={compact ? 'dice-more-options' : undefined}
-      // Behind More options on the compact layout. A box here with the
-      // keyboard opens More options, so a turn of a tablet from the desktop's
-      // arrangement leaves the box being typed in on screen.
-      hidden={compact && !moreOptions}
-      onFocus={() => setMoreOptions(true)}
-      className={cn('grid grid-cols-2 gap-1.5', compact && !moreOptions && 'hidden')}
-    >
+    <div className="grid grid-cols-2 gap-1.5">
       <input
         id="characterName"
         type="text"
@@ -701,8 +691,12 @@ export default function DiceRoller() {
     </div>
   );
 
-  // Closed, More options names the boxes the next roll still carries.
-  const optionsInUse = [...(characterName.trim() ? ['Character'] : []), ...(purpose.trim() ? ['Purpose'] : [])];
+  // Closed, More options names what the next roll still carries that it hides.
+  const optionsInUse = [
+    ...(characterName.trim() ? ['Character'] : []),
+    ...(purpose.trim() ? ['Purpose'] : []),
+    ...(compact && isSecret ? ['Secret'] : []),
+  ];
   const moreOptionsLabel = !moreOptions && optionsInUse.length > 0 ? `More options: ${optionsInUse.join(', ')}` : 'More options';
 
   const secretRollBox = (
@@ -743,7 +737,7 @@ export default function DiceRoller() {
     <button
       type="submit"
       disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
-      className={cn(compact ? 'shrink-0 touch-target' : 'flex-1', `
+      className={cn('shrink-0', compact && 'touch-target', `
         flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
         bg-success/15 hover:bg-success/25 border border-success/30 text-success-ink font-semibold text-xs shadow-xs
         disabled:opacity-50 disabled:cursor-not-allowed
@@ -787,6 +781,22 @@ export default function DiceRoller() {
       aria-label="Clear all fields"
     >
       <RotateCcw className="w-4 h-4" />
+    </button>
+  );
+
+  const moreOptionsButton = (
+    <button
+      type="button"
+      onClick={() => setMoreOptions((open) => !open)}
+      aria-expanded={moreOptions}
+      aria-controls="dice-more-options"
+      aria-label={moreOptionsLabel}
+      title={moreOptionsLabel}
+      className={cn('shrink-0 flex items-center justify-center gap-1 px-2 py-1 rounded-md border border-ink-muted/30 text-xs text-ink-secondary hover:bg-surface transition-all', compact && 'touch-target')}
+    >
+      <ChevronDown className={cn('w-3 h-3 transition-transform', moreOptions && 'rotate-180')} aria-hidden="true" />
+      {/* Short, to share the row; what it hides that the next roll carries is counted, and named in its name. */}
+      {!moreOptions && optionsInUse.length > 0 ? `More (${optionsInUse.length})` : 'More'}
     </button>
   );
 
@@ -891,14 +901,14 @@ export default function DiceRoller() {
           // Oldest at the top, newest at the bottom, like the chat panel beside
           // it. `shownRolls` is newest-first in state, so this reverses a copy
           // rather than mutating it.
-          <div className={compact ? 'space-y-1' : 'space-y-2'}>
+          <div className={compact ? 'space-y-1' : 'space-y-1.5'}>
             {[...shownRolls].reverse().map((roll) => (
               <DiceResult
                 key={rollKey(roll)}
                 roll={roll}
                 isCurrentUser={user?.id === roll.userId}
                 rollerIsDM={roll.userId !== null && dmUserIds.has(roll.userId)}
-                dense={compact}
+                dense
               />
             ))}
             {shownRolls.length === 0 && (
@@ -943,118 +953,67 @@ export default function DiceRoller() {
           )}
         </AnimatePresence>
 
-        {/* Quick Roll Buttons */}
-        <div className="mb-2">
-          {compact ? (
-            // One row that scrolls sideways, the saved rolls and Saved with it;
-            // an end with more past it fades under a chevron (ScrollCue.tsx).
-            <div className="relative">
-              <div
-                ref={quickRowCue}
-                role="group"
-                aria-label="Quick Roll"
-                className={cn('flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain', scrollFade(quickRowMore))}
-              >
-                {quickRollButtons}
-                {specialRollButtons}
-                {savedRollButtons}
-                {savedButton}
-              </div>
-              <ScrollChevrons more={quickRowMore} start="left-0" end="right-0" className="text-ink-muted" />
-            </div>
-          ) : (
-            <>
-              <div className="text-xs text-ink-secondary mb-1">
-                Quick Roll:
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {quickRollButtons}
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {specialRollButtons}
-              </div>
-
-              {/* Saved rolls — the player's own, in the order they were saved so a
-                  button does not move when one is edited. The row wraps; the panel
-                  is a 300px rail at its narrowest and this block never scrolls. */}
-              <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                {savedRollButtons}
-                {savedButton}
-              </div>
-            </>
-          )}
+        {/* The seven dice, one row, each a share of the width. */}
+        <div role="group" aria-label="Dice" className="mb-2 grid grid-cols-7 gap-1">
+          {quickRollButtons}
         </div>
 
-        {/* Expression Input */}
+        {/* The expression, Roll and More options, then what More options hides.
+            The two arrangements put the same parts in different places; each
+            part has a key, so a change of arrangement keeps its element and
+            the keyboard (a turned tablet once put the focus from Character on
+            Secret Roll). */}
         <form onSubmit={handleSubmit} className="space-y-1.5">
-          {/* The two arrangements order the same parts differently; each
-              part has a key, so a change of arrangement moves it and keeps
-              its element and the keyboard, and never makes one box of
-              another (a turned tablet once put the focus from Character on
-              Secret Roll). */}
-          {compact ? (
-            <>
-              <div key="expression" className="flex gap-1.5">
-                {expressionInput}
-                {rollButton}
-                {clearFieldsButton}
+          <div key="expression" className="flex gap-1.5">
+            {expressionInput}
+            {rollButton}
+            {compact ? moreOptionsButton : clearFieldsButton}
+          </div>
+          {!compact && (
+            // The other rolls and Secret Roll stay in sight on the desktop.
+            <div key="chips" className="flex flex-wrap items-center gap-1.5">
+              {specialRollButtons}
+              {savedRollButtons}
+              {savedButton}
+              {moreOptionsButton}
+              <span className="ml-auto">{secretRoll}</span>
+            </div>
+          )}
+          <div
+            key="more"
+            id="dice-more-options"
+            hidden={!moreOptions}
+            // A box here with the keyboard opens More options, so a turn of a
+            // tablet leaves the box being typed in on screen.
+            onFocus={() => setMoreOptions(true)}
+            className={cn('space-y-1.5', !moreOptions && 'hidden')}
+          >
+            {compact && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {specialRollButtons}
+                {savedRollButtons}
+                {savedButton}
               </div>
-              {/* Secret Roll, More options, and the header's Secret and Clear on one row. */}
-              <div key="secret" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            )}
+            <Fragment key="character-and-purpose">{characterAndPurpose}</Fragment>
+            {compact && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {secretRoll}
-                <button
-                  type="button"
-                  onClick={() => setMoreOptions((open) => !open)}
-                  aria-expanded={moreOptions}
-                  aria-controls="dice-more-options"
-                  aria-label={moreOptionsLabel}
-                  title={moreOptionsLabel}
-                  className="touch-target flex items-center gap-1 px-2 py-1 rounded-md text-xs text-ink-secondary hover:bg-surface transition-all"
-                >
-                  <ChevronDown className={cn('w-3 h-3 transition-transform', moreOptions && 'rotate-180')} aria-hidden="true" />
-                  {/* Short, to share the row; the options in use are counted, and named in its name. */}
-                  {!moreOptions && optionsInUse.length > 0 ? `More (${optionsInUse.length})` : 'More'}
-                </button>
                 <span className="ml-auto flex items-center gap-1.5">
+                  {clearFieldsButton}
                   {secretRollsToggle}
                   {clearHistoryButton}
                 </span>
               </div>
-              <Fragment key="character-and-purpose">{characterAndPurpose}</Fragment>
-            </>
-          ) : (
-            <>
-              <div key="expression">
-                {expressionInput}
-              </div>
-
-              <Fragment key="character-and-purpose">{characterAndPurpose}</Fragment>
-
-              {/* Secret Roll Checkbox */}
-              <Fragment key="secret">{secretRoll}</Fragment>
-
-              {/* Action Buttons */}
-              <div key="actions" className="flex gap-1.5">
-                {rollButton}
-                {clearFieldsButton}
-              </div>
-            </>
-          )}
+            )}
+          </div>
         </form>
 
-
-
-        {/* Hint / Rate Limit Countdown; the hint is left out of the compact layout's short footer. */}
-        {rateLimitCooldown > 0 ? (
+        {/* The countdown after too many rolls. */}
+        {rateLimitCooldown > 0 && (
           <div className="mt-1.5 text-xs text-danger-ink text-center font-medium">
             You may roll again in: {rateLimitCooldown} second{rateLimitCooldown !== 1 ? 's' : ''}
           </div>
-        ) : (
-          !compact && (
-            <div className="mt-1.5 text-xs text-ink-muted text-center">
-              Press Enter to roll
-            </div>
-          )
         )}
       </div>
 

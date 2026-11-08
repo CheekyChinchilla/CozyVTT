@@ -111,6 +111,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **On a phone or a tablet, the map's toolbar, the menus and many buttons are at least 44 by 44 pixels.** With a mouse they keep their size. See [On a touch screen](docs/PLAYER_GUIDE.md#on-a-touch-screen).
 
+- **The Dice panel shows more rolls.** Each roll takes two lines with its total large beside them, where it repeated its numbers three times. The seven dice share one row, **d20** first, and **Character** and **Purpose** wait behind **More**. See [Rolling Dice](docs/USER_GUIDE.md#rolling-dice).
+
 - **The chat box grows as you type,** up to six lines on a computer and four on a phone, then scrolls, and shrinks back once the message is sent. It stayed two lines tall on a computer. See [The Chat Panel](docs/USER_GUIDE.md#the-chat-panel).
 
 - **The chat holds the newest 400 messages, and Load More brings back older ones.** A long session made the page heavier the longer the table played. Nothing is deleted: the whole history stays on the server. See [The Chat Panel](docs/USER_GUIDE.md#the-chat-panel).

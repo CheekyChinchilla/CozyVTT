@@ -1,16 +1,16 @@
 /**
- * The compact layout's Dice log gets the room for several rolls.
+ * The Dice log gets the room for several rolls.
  *
  * In a sheet half a phone's height the log was about 110 px under the panel's
- * own header row, and one roll took about 150 px. On the compact layout each
- * roll is two lines (DiceResultDense.test.tsx), the header row's title goes,
- * since the sheet's heading names the panel already, and its Secret and Clear
- * move beside Secret Roll, so the log starts at the top of the sheet's body.
- * The log takes the room the controls leave. On the desktop nothing changes.
+ * own header row, and one roll took about 150 px. Each roll is now two lines
+ * (DiceResultDense.test.tsx), on the desktop too. On the compact layout the
+ * header row's title goes, since the sheet's heading names the panel already,
+ * and its Secret and Clear move behind More options, so the log starts at the
+ * top of the sheet's body. The log takes the room the controls leave.
  */
 
 import { it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import type { DiceRolledEvent } from '@/types';
 import { LayoutProvider } from '@/contexts/LayoutContext';
@@ -102,9 +102,10 @@ it('leaves the panel its own title on the desktop, and to the sheet on the compa
   expect(logAndControls().box.previousElementSibling).toBeNull();
 });
 
-it("keeps Secret and the DM's Clear on the compact layout, under the controls", async () => {
+it("keeps Secret and the DM's Clear on the compact layout behind More options, under the controls", async () => {
   renderPanel(true);
   const { controls } = logAndControls();
+  fireEvent.click(within(controls).getByRole('button', { name: /^More options/ }));
   const secret = await within(controls).findByRole('button', { name: 'Secret' });
   const clear = within(controls).getByRole('button', { name: 'Clear' });
   expect(secret).toHaveAttribute('aria-pressed', 'true');
@@ -126,10 +127,11 @@ it('gives the log the room the controls leave on the compact layout, with no flo
   expect(logAndControls().box.className.split(' ')).toEqual(expect.arrayContaining(['flex-1', 'min-h-0']));
 });
 
-it('leaves the desktop panel as it was: its title, Secret and Clear above the log, full cards in it', async () => {
+it('keeps the desktop panel its title, Secret and Clear above the log, and two-line rolls in it', async () => {
   renderPanel(false);
   const { log, box } = logAndControls();
-  await within(log).findAllByText(/Formula/);
+  await within(log).findAllByText('Bram Holt');
+  expect(within(log).queryByText(/Formula/)).toBeNull();
   const header = box.previousElementSibling as HTMLElement;
   expect(within(header).getByRole('heading', { name: 'Dice Roller' })).toBeTruthy();
   expect(within(header).getByRole('button', { name: 'Secret' })).toBeTruthy();

@@ -137,11 +137,11 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
       >
         <div className="min-w-0 flex-1 text-xs leading-4">
           <div className="flex items-center gap-1">
-            {/* Who, cut short from its end where the line is too long, so
-                another's "(rolled by …)" goes before the name does. Your own
-                roll's tag is read out and not shown: the line says whose it
-                is already. */}
-            <span className="min-w-0 truncate text-ink-secondary">
+            {/* Who, cut short from its end only once the purpose has given
+                way, so another's "(rolled by …)" goes before the name does.
+                Your own roll's tag is read out and not shown: the line says
+                whose it is already. */}
+            <span className="min-w-0 shrink truncate text-ink-secondary">
               <span className="font-medium text-ink">{subject}</span>
               {attribution && <span className={isCurrentUser ? 'sr-only' : 'opacity-70'}> {attribution}</span>}
             </span>
@@ -151,9 +151,11 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
                 {secretWhose && <span className="sr-only">{secretWhose}</span>}
               </span>
             )}
-            {/* What for keeps its width, up to a little over half the line. */}
+            {/* What for gives way first on a narrow line: it shrinks a hundred
+                times as fast as the name, and the Secret mark and the time keep
+                their width. */}
             {purpose && (
-              <span className="max-w-[55%] shrink-0 truncate text-ink-secondary">
+              <span className="min-w-0 shrink-[100] truncate text-ink-secondary">
                 <span aria-hidden="true">· </span>
                 {purpose}
               </span>

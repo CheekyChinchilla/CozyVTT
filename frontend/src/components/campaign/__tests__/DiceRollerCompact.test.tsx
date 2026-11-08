@@ -1,16 +1,16 @@
 /**
- * The Dice panel's controls on the compact layout leave the roll log room.
+ * The Dice panel's controls leave the roll log room, on the compact layout
+ * and on the desktop.
  *
- * Below the log sits a block of about 300 pixels: three wrapping rows of
- * quick rolls, the expression, Character and Purpose, Secret Roll, Roll and a
- * hint. In a sheet half a phone's height it took nearly all of the panel and
- * left the log nothing. On the compact layout the quick rolls, the saved rolls
- * and **Saved** sit in one row that scrolls sideways, Roll sits beside the
- * expression, Character and Purpose wait behind **More options**, Secret and
- * Clear sit beside Secret Roll, and the log takes the room the controls
- * leave, the panel's one scroll area: the controls keep their own height and
- * scroll only past 80 percent of the panel (More options open on a very short
- * sheet). On the desktop nothing changes.
+ * A roll's card said its numbers three times and the controls took most of
+ * the panel: an iPhone 13 mini's half-height sheet showed one roll and a
+ * 1280 by 720 screen less than one. Now the seven dice sit in one row, d20
+ * first, each a share of the width; Roll and More options sit beside the
+ * expression; and the rest waits behind More options: on the compact layout
+ * Adv, Dis, the saved rolls, Saved, Character, Purpose, Secret Roll, clearing
+ * the fields, the secret-rolls eye and the DM's Clear; on the desktop
+ * Character and Purpose, the other chips and Secret Roll staying in sight.
+ * The log takes the room the controls leave, the panel's one scroll area.
  *
  * jsdom lays nothing out, so the layout is read from the classes that set
  * it; a browser shows the result.
@@ -21,7 +21,6 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import type { ReactNode } from 'react';
 import type { DiceRollAck, DiceRollEvent } from '@/types';
 import { LayoutProvider } from '@/contexts/LayoutContext';
-import { layScrollRow, readScrollCue } from '@/test/scrollCue';
 
 vi.mock('framer-motion', () => ({
   useReducedMotionConfig: () => false,
@@ -58,7 +57,7 @@ vi.mock('../DiceMacroManager', () => ({ default: () => null }));
 
 import DiceRoller from '../DiceRoller';
 
-const QUICK_ROLL_NAMES = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100', 'Adv', 'Dis', '4d6kh3', 'Longsword', 'Manage saved rolls'];
+const DICE = ['d20', 'd4', 'd6', 'd8', 'd10', 'd12', 'd100'];
 
 function renderCompact() {
   const Compact = ({ children }: { children: ReactNode }) => <LayoutProvider compact>{children}</LayoutProvider>;
@@ -72,6 +71,9 @@ function logAndControls() {
   return { box, controls: box.nextElementSibling as HTMLElement };
 }
 
+/** Whether a control is out of sight: in a closed part of the panel. */
+const tucked = (el: HTMLElement) => el.closest('[hidden]') !== null;
+
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: () => undefined, configurable: true });
 });
@@ -80,127 +82,93 @@ beforeEach(() => {
   rollDice.mockReset().mockResolvedValue({ ok: true, id: 'r1' });
 });
 
-it('puts every quick roll in one row that scrolls sideways', async () => {
-  renderCompact();
-  const row = screen.getByRole('group', { name: 'Quick Roll' });
-  await within(row).findByRole('button', { name: 'Longsword' });
-  for (const name of QUICK_ROLL_NAMES) {
-    const button = within(row).getByRole('button', { name });
-    expect(button.className).toContain('shrink-0');
-  }
-  expect(row.className).toContain('flex-nowrap');
-  expect(row.className).toContain('overflow-x-auto');
-  expect(screen.queryByText('Quick Roll:')).toBeNull();
-});
+it.each([['compact', renderCompact], ['desktop', () => render(<DiceRoller />)]])(
+  'puts the seven dice in one row, d20 first, each a share of the width (%s)',
+  async (_name, show) => {
+    show();
+    const row = screen.getByRole('group', { name: 'Dice' });
+    expect(within(row).getAllByRole('button').map((b) => b.textContent)).toEqual(DICE);
+    expect(row.className.split(' ')).toEqual(expect.arrayContaining(['grid', 'grid-cols-7']));
+    expect(screen.queryByText('Quick Roll:')).toBeNull();
+    expect(screen.queryByText('Press Enter to roll')).toBeNull();
+  },
+);
 
-// The dice buttons alone are wider than a phone, and a phone shows no
-// scrollbar until the row moves, so the row read as all there was.
-it('fades and marks the end of the quick rolls past which more lie, and neither end where all fit', async () => {
-  renderCompact();
-  const row = screen.getByRole('group', { name: 'Quick Roll' });
-  await within(row).findByRole('button', { name: 'Longsword' });
-
-  layScrollRow(row, { width: 330, shown: 330 });
-  expect(readScrollCue(row)).toEqual({ fade: [], marks: [] });
-
-  layScrollRow(row, { width: 760, shown: 330, left: 0 });
-  let { fade, marks } = readScrollCue(row);
-  expect(fade).toHaveLength(1);
-  expect(fade[0]).toContain('to_left');
-  expect(marks).toEqual(['right']);
-
-  layScrollRow(row, { width: 760, shown: 330, left: 430 });
-  ({ fade, marks } = readScrollCue(row));
-  expect(fade[0]).toContain('to_right');
-  expect(fade[0]).not.toContain('calc');
-  expect(marks).toEqual(['left']);
-});
-
-it('keeps Character and Purpose behind More options', async () => {
+it('keeps everything but the dice, the expression and Roll behind More options on the compact layout', async () => {
   renderCompact();
   const toggle = screen.getByRole('button', { name: 'More options' });
   expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  const longsword = await screen.findByRole('button', { name: 'Longsword', hidden: true });
+  for (const el of [longsword, screen.getByRole('button', { name: 'Adv', hidden: true }), screen.getByRole('checkbox', { name: /Secret Roll/, hidden: true })]) {
+    expect(tucked(el)).toBe(true);
+  }
   expect(screen.queryByRole('textbox', { name: 'Character name' })).toBeNull();
-  expect(screen.queryByRole('textbox', { name: 'Purpose' })).toBeNull();
 
   fireEvent.click(toggle);
   expect(toggle.getAttribute('aria-expanded')).toBe('true');
-  expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toBeTruthy();
+  expect(tucked(longsword)).toBe(false);
   fireEvent.change(screen.getByRole('textbox', { name: 'Purpose' }), { target: { value: 'Stealth' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: /Secret Roll/ }));
 
   // Closed again, it names what the next roll still carries.
   fireEvent.click(toggle);
-  expect(screen.queryByRole('textbox', { name: 'Purpose' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'More options: Purpose' })).toBe(toggle);
+  expect(screen.getByRole('button', { name: 'More options: Purpose, Secret' })).toBe(toggle);
 
-  fireEvent.click(toggle);
-  fireEvent.change(screen.getByRole('textbox', { name: 'Character name' }), { target: { value: 'Vex' } });
-  fireEvent.click(toggle);
-  expect(screen.getByRole('button', { name: 'More options: Character, Purpose' })).toBe(toggle);
-
-  fireEvent.click(await screen.findByRole('button', { name: 'd20' }));
+  fireEvent.click(screen.getByRole('button', { name: 'd20' }));
   await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
-  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '1d20', characterName: 'Vex', purpose: 'Stealth' });
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '1d20', purpose: 'Stealth', secret: true });
 });
 
-it('rolls from the expression beside its Roll button, and keeps Secret Roll in sight', async () => {
+it('rolls from the expression beside its Roll and More options buttons', async () => {
   renderCompact();
-  expect(screen.getByRole('checkbox', { name: /Secret Roll/ })).toBeTruthy();
-  fireEvent.click(screen.getByRole('checkbox', { name: /Secret Roll/ }));
   const expression = screen.getByRole('textbox', { name: 'Dice expression' });
   const roll = screen.getByRole('button', { name: 'Roll' });
   expect(roll.parentElement).toBe(expression.parentElement);
+  expect(screen.getByRole('button', { name: 'More options' }).parentElement).toBe(expression.parentElement);
   fireEvent.change(expression, { target: { value: '2d6+3' } });
   fireEvent.click(roll);
   await waitFor(() => expect(rollDice).toHaveBeenCalledTimes(1));
-  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '2d6+3', secret: true });
+  expect(rollDice.mock.calls[0][0]).toMatchObject({ expression: '2d6+3' });
 });
 
-it('gives the log the room the controls leave, the controls keeping their height, and Secret and Clear beside Secret Roll', () => {
+it('gives the log the room the controls leave, the controls keeping their height', () => {
   renderCompact();
   const { box, controls } = logAndControls();
   expect(box.className.split(' ')).toEqual(expect.arrayContaining(['flex-1', 'min-h-0']));
-  expect(box.className).not.toContain('min-h-[55%]');
   expect(controls.className.split(' ')).toEqual(expect.arrayContaining(['shrink-0', 'max-h-[80%]']));
-  const secretRow = screen.getByText(/^Secret Roll/).closest('div[class*="flex-wrap"]') as HTMLElement;
-  expect(within(secretRow).getByRole('button', { name: /More options/ })).toBeTruthy();
-  // The checkbox's label short, its meaning in its title, to share the row.
-  expect(screen.getByText('Secret Roll').closest('label')).toHaveAttribute('title', 'Hidden from other players');
-  expect(screen.queryByText('Press Enter to roll')).toBeNull();
 });
 
-/** The controls under the log, each as a finger presses it: a checkbox by its label. */
+/** The controls under the log a finger can reach now, each as it is pressed: a checkbox by its label. */
 async function footerControls() {
-  await screen.findByRole('button', { name: 'Longsword' });
+  await screen.findByRole('button', { name: 'Longsword', hidden: true });
   const { controls } = logAndControls();
-  const presses = within(controls).getAllByRole('button').filter((b) => !b.closest('[hidden]'));
-  const boxes = within(controls).getAllByRole('checkbox').map((box) => box.closest('label') ?? box);
-  return [...presses, ...within(controls).getAllByRole('textbox'), ...boxes];
+  const shown = (el: HTMLElement) => !tucked(el);
+  const presses = within(controls).queryAllByRole('button').filter(shown);
+  const boxes = within(controls).queryAllByRole('checkbox').filter(shown).map((box) => box.closest('label') ?? box);
+  return [...presses, ...within(controls).queryAllByRole('textbox').filter(shown), ...boxes];
 }
 
-it('gives every control under the log a 44 pixel target on a touch screen', async () => {
+it('gives every control under the log a 44 pixel target on a touch screen, More options open or shut', async () => {
   renderCompact();
+  const shut = await footerControls();
+  expect(shut).toHaveLength(10);
   fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-  const controls = await footerControls();
-  expect(controls.length).toBe(19);
-  for (const control of controls) expect(control.className.split(/\s+/), control.textContent ?? '').toContain('touch-target');
-  // The controls keep their height beside the log.
-  expect(logAndControls().controls.className.split(' ')).toContain('shrink-0');
+  const open = await footerControls();
+  expect(open.length).toBeGreaterThan(shut.length);
+  for (const control of open) expect(control.className.split(/\s+/), control.textContent ?? '').toContain('touch-target');
 });
 
-it('leaves the desktop panel as it was', async () => {
+it('keeps the chips and Secret Roll in sight on the desktop, Character and Purpose behind More options', async () => {
   render(<DiceRoller />);
   await screen.findByRole('button', { name: 'Longsword' });
-  expect(screen.getByText('Quick Roll:')).toBeTruthy();
-  expect(screen.queryByRole('group', { name: 'Quick Roll' })).toBeNull();
-  expect(screen.queryByRole('button', { name: /More options/ })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Adv' })).toBeTruthy();
+  expect(screen.getByRole('checkbox', { name: /Secret Roll/ })).toBeTruthy();
+  expect(screen.queryByRole('textbox', { name: 'Character name' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'More options' }));
   expect(screen.getByRole('textbox', { name: 'Character name' })).toBeTruthy();
   expect(screen.getByRole('textbox', { name: 'Purpose' })).toBeTruthy();
-  expect(screen.getByText('Press Enter to roll')).toBeTruthy();
   const { box, controls } = logAndControls();
   expect(box.className.split(' ')).toContain('min-h-0');
   expect(controls.className.split(' ')).toContain('shrink-0');
   for (const control of await footerControls()) expect(control.className).not.toContain('touch-target');
-  // Its rows wrap, so they carry no sign of scrolling.
-  expect(document.querySelector('[class*="mask-image"]')).toBeNull();
 });

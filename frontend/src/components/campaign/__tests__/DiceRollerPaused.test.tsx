@@ -52,8 +52,9 @@ function roll(expression: string) {
 }
 
 /** The total shown beside a rolled expression. */
+/** A roll's total: the last part of its entry in the log, read "= 3". */
 const totalOf = (expression: string) =>
-  screen.getByText(expression, { selector: 'span' }).closest('div.gap-3')?.textContent?.split('=').pop()?.trim();
+  screen.getByText(expression, { selector: 'span' }).closest('div.rounded-md')?.lastElementChild?.textContent?.split('=').pop()?.trim();
 
 it.each([
   ['4d1dl1', '3'],
