@@ -1218,6 +1218,21 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       });
       const roomsSaved = taken.rooms;
       taken = null;
+      // The rooms' walls, now that their floors are on the map's picture, and
+      // before the save counts as done: until they are in, a reload asks and
+      // the draft keeps them. A wall the map has already, or a side two rooms
+      // share, is added once.
+      const walls = wallsToAdd(liveWalls(roomsSaved), latest.wallSegments ?? []);
+      let added = 0;
+      let wallRefused: unknown = null;
+      try {
+        for (const wall of walls) {
+          await mapService.addWall(campaignId, s.mapId, { ...wall, type: 'wall' });
+          added += 1;
+        }
+      } catch (err) {
+        wallRefused = err;
+      }
 
       if (surfaceRef.current === s) {
         s.saved = asOf;
@@ -1231,19 +1246,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       if (s.changed.size > 0) touched(s, [...s.changed.values()]);
       setAsking(false);
       onSaved(saved, asset);
-      // The rooms' walls, now that their floors are on the map's picture,
-      // after the word that it saved, so a wall refused is said last.
-      // A wall the map has already, or a side two rooms share, is added once.
-      const walls = wallsToAdd(liveWalls(roomsSaved), latest.wallSegments ?? []);
-      let added = 0;
-      try {
-        for (const wall of walls) {
-          await mapService.addWall(campaignId, s.mapId, { ...wall, type: 'wall' });
-          added += 1;
-        }
-      } catch (err) {
-        refuse(roomWallsNotAdded(walls.length - added, walls.length, apiErrorMessage(err) ?? ''));
-      }
+      // After the word that it saved, so a wall refused is said last.
+      if (wallRefused !== null) refuse(roomWallsNotAdded(walls.length - added, walls.length, apiErrorMessage(wallRefused) ?? ''));
       return true;
     } catch (err) {
       if (taken) {
