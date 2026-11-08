@@ -1026,6 +1026,22 @@ describe('drawDynamicLighting', () => {
     }
   });
 
+  // Drawn blurred and then sharp over it, half-dark ground (darkvision, dim
+  // light) was darker in the band than just inside it.
+  it('draws the blurred darkness only inside the band, so each point of it is drawn once', () => {
+    for (const zoom of [1, 0.25]) {
+      const ops = run({ withLight: true, view: { zoom, panOffset: { x: 0, y: 0 } } }).main.ops;
+      const blurred = ops.findIndex((c) => c.method === 'drawImage' && c.filter.startsWith('blur'));
+      const path = ops.slice(0, blurred).map((c) => c.method).lastIndexOf('beginPath');
+      expect(path).toBeGreaterThan(-1);
+      const band = 12 / zoom;
+      const before = ops.slice(path, blurred);
+      expect(before.filter((c) => c.method === 'rect').map((c) => c.args)).toEqual([[band, band, Math.max(0, W - 2 * band), Math.max(0, H - 2 * band)]]);
+      expect(before.some((c) => c.method === 'clip')).toBe(true);
+      expect(before.some((c) => c.method === 'restore')).toBe(false);
+    }
+  });
+
   it('runs no memory pass when nothing is remembered', () => {
     const { memoryMask, memory, lighting } = run({ withLight: false });
     expect(memoryMask.ops).toHaveLength(0);

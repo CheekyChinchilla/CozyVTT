@@ -240,21 +240,27 @@ export function drawDynamicLighting(
 
   // Composite onto main canvas with soft blur edge. A filter's length is in
   // the canvas's own pixels, so the ratio keeps the edge 4 CSS pixels wide.
+  // The blur fades the darkness into the clear space past the map, which
+  // showed a strip of the map's edge, so along the edges, as far as the blur
+  // reaches (three of its lengths, in map pixels at this zoom), the darkness
+  // is drawn unblurred instead. Each point is drawn once: drawn blurred and
+  // then sharp, half-dark ground was darker along the edges.
+  const band = (3 * DARKNESS_BLUR_CSS_PX) / viewport.zoom;
+  const innerWidth = Math.max(0, mapWidthPx - 2 * band);
+  const innerHeight = Math.max(0, mapHeightPx - 2 * band);
   ctx.save();
+  ctx.beginPath();
+  ctx.rect(band, band, innerWidth, innerHeight);
+  ctx.clip();
   ctx.filter = `blur(${DARKNESS_BLUR_CSS_PX * state.dpr}px)`;
   ctx.drawImage(offscreen, 0, 0, mapWidthPx, mapHeightPx);
   ctx.filter = 'none';
   ctx.restore();
 
-  // The blur fades the darkness into the clear space past the map, which
-  // showed a strip of the map's edge. Along the edges, as far as the blur
-  // reaches (three of its lengths, in map pixels at this zoom), the
-  // darkness is drawn again unblurred.
-  const band = (3 * DARKNESS_BLUR_CSS_PX) / viewport.zoom;
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, mapWidthPx, mapHeightPx);
-  ctx.rect(band, band, Math.max(0, mapWidthPx - 2 * band), Math.max(0, mapHeightPx - 2 * band));
+  ctx.rect(band, band, innerWidth, innerHeight);
   ctx.clip('evenodd');
   ctx.drawImage(offscreen, 0, 0, mapWidthPx, mapHeightPx);
   ctx.restore();
