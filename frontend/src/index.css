@@ -269,6 +269,31 @@
   @apply bg-info/10 border border-info/30 text-info-ink rounded-cozy px-3 py-2 text-sm;
 }
 
+@utility toast-danger {
+  /* ── Messages that float over the page ──
+     The status tint the alert-* classes have, mixed into the theme's surface
+     so it is solid: a message lands over a map, a sheet's header or anything
+     else, and must read over all of them. It looks as the tint does over the
+     surface, so the -ink text reads as it does there. */
+  background-color: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+  @apply border-danger/30 text-danger-ink;
+}
+
+@utility toast-success {
+  background-color: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  @apply border-success/30 text-success-ink;
+}
+
+@utility toast-warning {
+  background-color: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  @apply border-warning/30 text-warning-ink;
+}
+
+@utility toast-info {
+  background-color: color-mix(in srgb, var(--color-info) 10%, var(--color-surface));
+  @apply border-info/30 text-info-ink;
+}
+
 @utility badge-danger {
   /* ── Status pills ── */
   @apply inline-flex items-center rounded-full bg-danger/15 text-danger-ink px-2 py-0.5 text-[10px] font-medium;
