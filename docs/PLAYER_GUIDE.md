@@ -268,7 +268,7 @@ Type your message in the input box at the bottom and press **Enter** to send; **
 Chat is for everything: in-character dialogue, out-of-character coordination, questions for the DM, celebrations when you roll a nat 20.
 
 **Chat tips:**
-- **System messages** (gray, slightly different style) announce session events like a session starting, pausing or ending
+- **System notices**, a small grey line centred in the chat, announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - **Whispers** reach one person only: choose them in the **To** list above the box, or start a message with `/w` or `/whisper` and their name (`/w Mara Meet me by the well`). The line under the box names who it will reach before you send it. Only the two of you see it, marked with a lock; the DM does not see whispers between players. See [Whispering to one person](USER_GUIDE.md#whispering-to-one-person)
 - Scroll up to read the history, and press **Load More** at the top for older messages. The chat holds the newest 400 at a time, and the whole log stays on the server

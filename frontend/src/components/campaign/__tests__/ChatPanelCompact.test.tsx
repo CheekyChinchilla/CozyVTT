@@ -102,7 +102,7 @@ it('is as it was on the desktop', async () => {
   expect(box).toHaveAttribute('rows', '2');
   expect(classes(box)).toContain('min-h-[60px]');
   expect(classes(screen.getByText('Press Enter to send, Shift+Enter for new line'))).not.toContain('sr-only');
-  expect(box).toHaveAttribute('placeholder', 'Type a message... (Enter to send, Shift+Enter for new line)');
+  expect(box).toHaveAttribute('placeholder', 'Type a message…');
   expect(classes(screen.getByRole('combobox', { name: 'To' }))).not.toContain('min-h-11');
   expect(classes(screen.getByRole('log', { name: 'Chat messages' }))).toEqual(expect.arrayContaining(['p-4', 'space-y-3']));
   expect(classes(screen.getByRole('heading', { name: 'Chat' }).parentElement!)).toContain('p-4');
