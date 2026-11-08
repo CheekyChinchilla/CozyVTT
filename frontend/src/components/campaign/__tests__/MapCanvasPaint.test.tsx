@@ -882,6 +882,77 @@ describe('a stamp', () => {
     expect(panel().queryByRole('slider', { name: 'Size' })).toBeNull();
   });
 
+  /** Where the overlay last placed a stamp, the middle it was turned about. */
+  const previewAt = () => take(input()).filter((c) => c.method === 'translate').map((c) => c.args);
+
+  it('shows a see-through stamp where a click would put it, following the pointer, and none once it leaves the map', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+
+    mouse.move(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([125, 275]);
+    mouse.move(input(), { clientX: 330, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([325, 275]);
+    expect(callsOfPicture('translate')).toEqual([]);
+
+    mouse.leave(input());
+    await nextFrame();
+    expect(previewAt()).toEqual([]);
+  });
+
+  it('on a touch screen, shows the stamp under a sliding finger and paints it only where the finger lifts', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+    const finger = contact('touch', 1);
+
+    finger.down(input(), { clientX: 130, clientY: 260 });
+    finger.move(input(), { clientX: 200, clientY: 260 });
+    finger.move(input(), { clientX: 330, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([325, 275]);
+    expect(callsOfPicture('translate')).toEqual([]);
+
+    finger.up(input(), { clientX: 330, clientY: 260 });
+    finger.leave(input());
+    expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[325, 275]]);
+  });
+
+  it('on a touch screen, paints nothing when a second finger lands before the first lifts', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    const first = contact('touch', 1);
+    const second = contact('touch', 2, false);
+
+    first.down(input(), { clientX: 130, clientY: 260 });
+    first.move(input(), { clientX: 200, clientY: 260 });
+    second.down(input(), { clientX: 400, clientY: 400 });
+    first.up(input(), { clientX: 200, clientY: 260 });
+    second.up(input(), { clientX: 400, clientY: 400 });
+
+    expect(callsOfPicture('translate')).toEqual([]);
+  });
+
+  it('on a touch screen, paints a stamp where a tap lands', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    const finger = contact('touch', 1);
+    finger.down(input(), { clientX: 130, clientY: 260 });
+    finger.up(input(), { clientX: 130, clientY: 260 });
+    finger.leave(input());
+    expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[125, 275]]);
+  });
+
   it('is chosen by P', async () => {
     await showMap();
     await paintOn();

@@ -51,6 +51,8 @@ export interface MapTool {
    */
   cancel?(): void;
   escape?(): boolean;
+  /** The mouse, or a pen not touching, left the map: drop what follows the pointer (a preview). Every tool is told. */
+  leave?(): void;
 }
 
 /**
