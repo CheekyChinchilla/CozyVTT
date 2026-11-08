@@ -6,10 +6,13 @@
  * <name> <message>` (or `/whisper`) in the box does the same for one message.
  * Display names are not unique and may hold spaces, so the list is keyed by
  * user id, no two members are ever shown alike (chatWhisper.test.ts has the
- * rule), and `/w` reads the longest name the text starts with before a unique
- * beginning of one. While the box holds a `/w`, the line under it names who
- * it will reach, with the DM's shield when it is the DM; one that fits nobody,
- * or more than one person, says so as it is typed, and is refused on send.
+ * rule), and `/w` reads a whole name the text starts with before a unique
+ * beginning of one. When one member's name is another's with a word added
+ * (Mara and Mara Lee), `/w` with either could mean both, and anyone may take
+ * such a name to catch whispers meant for the other, so it is refused. While
+ * the box holds a `/w`, the line under it names who it will reach, with the
+ * DM's shield when it is the DM; one that fits nobody, or more than one
+ * person, says so as it is typed, and is refused on send.
  *
  * The panel never turns a chosen whisper into a message to everyone: the copy
  * shown while sending keeps its recipient, and **Retry** sends it to them
@@ -202,12 +205,16 @@ it('keeps a member who left chosen, says they left, and sends nothing to everyon
   expect(await screen.findByText(/Not sent: That person is not in this campaign/)).toBeTruthy();
 });
 
+const NO_MARA = TABLE.filter((m) => m.userId !== 'mara');
+const NO_MARA_LEE = TABLE.filter((m) => m.userId !== 'maralee');
+
 it.each([
-  ['/w Mara Lee Over here', 'maralee', 'Over here'],
-  ['/w mara  hi there', 'mara', 'hi there'],
-  ['/W Co psst', 'cole', 'psst'],
-  ['/whisper Mara hi', 'mara', 'hi'],
-])('sends %p to the member it names, with the rest as the message', async (text, recipientId, content) => {
+  ['/w Mara Lee Over here', NO_MARA, 'maralee', 'Over here'],
+  ['/w mara  hi there', NO_MARA_LEE, 'mara', 'hi there'],
+  ['/W Co psst', TABLE, 'cole', 'psst'],
+  ['/whisper Mara hi', NO_MARA_LEE, 'mara', 'hi'],
+])('sends %p to the member it names, with the rest as the message', async (text, table, recipientId, content) => {
+  memberships = table;
   await openPanel();
   send(text);
   expect(sendChatMessage.mock.calls[0][0]).toMatchObject({ recipientId, content });
@@ -216,9 +223,11 @@ it.each([
 
 it.each([
   ['/w Ma hi', TABLE, 'That name fits more than one person: Mara, Mara Lee. Choose one in the To list.'],
+  ['/w Mara Lee Over here', TABLE, 'That name fits more than one person: Mara, Mara Lee. Choose one in the To list.'],
+  ['/w Mara hi', TABLE, 'That name fits more than one person: Mara, Mara Lee. Choose one in the To list.'],
   ['/w Mara hi', TWO_MARAS, 'That name fits more than one person: Mara (Player, Vex), mara (Spectator). Choose one in the To list.'],
   ['/w Zed hi', TABLE, 'Nobody in this campaign is called "Zed".'],
-  ['/w Mara', TABLE, 'Write your message after the name.'],
+  ['/w Mara', NO_MARA_LEE, 'Write your message after the name.'],
 ])('refuses %p itself, and sends it to no one', async (text, table, refusal) => {
   memberships = table;
   characters = [character('vex', 'mara', 'Vex')];

@@ -1,9 +1,9 @@
 /**
  * Reading `/w <name> <message>`, past what the chat panel's tests reach: a
  * `/w` with nothing after it, a name ended by a new line, a name with no
- * member, text that only looks like the command, and `/whisper`, its long
- * form. And the names the chat shows for members, which never let two look
- * the same.
+ * member, text that only looks like the command, `/whisper`, its long form,
+ * and a name that is another member's with a word added. And the names the
+ * chat shows for members, which never let two look the same.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -29,8 +29,24 @@ it('asks for a name after a bare /w or /whisper', () => {
 });
 
 it('reads /whisper as the long form of /w', () => {
-  expect(readSlashWhisper('/whisper Mara Lee Over here', TABLE)).toEqual({ kind: 'to', userId: 'maralee', content: 'Over here' });
+  const noMara = TABLE.filter((t) => t.userId !== 'mara');
+  expect(readSlashWhisper('/whisper Mara Lee Over here', noMara)).toEqual({ kind: 'to', userId: 'maralee', content: 'Over here' });
   expect(readSlashWhisper('/WHISPER cole psst', TABLE)).toEqual({ kind: 'to', userId: 'cole', content: 'psst' });
+});
+
+it('does not let a member named after another plus a word catch a /w for the other', () => {
+  const table = [target('dana', 'Dana'), target('trap', 'Dana I')];
+  expect(readSlashWhisper('/w Dana I think Vex is the traitor', table)).toEqual({ kind: 'several', labels: ['Dana', 'Dana I'] });
+});
+
+it('does not let a member named after the first word of another\'s name catch a /w for the other', () => {
+  const table = [target('dana', 'Dana Smith'), target('trap', 'Dana')];
+  expect(readSlashWhisper('/w Dana are you there', table)).toEqual({ kind: 'several', labels: ['Dana Smith', 'Dana'] });
+});
+
+it('reads a whole name that only begins another name, with no space between', () => {
+  const table = [target('mara', 'Mara'), target('marat', 'Marat')];
+  expect(readSlashWhisper('/w Mara hi', table)).toEqual({ kind: 'to', userId: 'mara', content: 'hi' });
 });
 
 it('reads a name ended by a new line', () => {

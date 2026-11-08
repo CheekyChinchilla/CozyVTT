@@ -109,10 +109,12 @@ export function isSlashWhisper(text: string): boolean {
 }
 
 /**
- * Read `/w <name> <message>`, or `/whisper`, its long form: the longest
- * display name the text after it starts with, ignoring case, followed by a
- * space or the end; failing that, one member whose name starts with the
- * first word typed. Two members are named back so the sender can choose;
+ * Read `/w <name> <message>`, or `/whisper`, its long form: a display name
+ * the text after it starts with, ignoring case, followed by a space or the
+ * end; failing that, one member whose name starts with the first word typed.
+ * A name that is another's with a word added, such as Mara and Mara Lee,
+ * reads as both, since anyone may take such a name to catch whispers meant
+ * for the other. Two members are named back so the sender can choose;
  * nobody is too. `targets` holds the members the sender may whisper to.
  */
 export function readSlashWhisper(text: string, targets: readonly WhisperTarget[]): SlashWhisper {
@@ -120,16 +122,16 @@ export function readSlashWhisper(text: string, targets: readonly WhisperTarget[]
   if (!start) return { kind: 'none' };
   const rest = text.slice(start[0].length);
   const lower = rest.toLowerCase();
+  const isNameThenSpaceOrEnd = (s: string, name: string) => s.startsWith(name) && (s.length === name.length || /\s/.test(s[name.length]));
 
-  const fullNames = targets.filter((t) => {
-    const name = t.displayName.toLowerCase();
-    return name.length > 0 && lower.startsWith(name) && (lower.length === name.length || /\s/.test(lower[name.length]));
-  });
+  const fullNames = targets.filter((t) => t.displayName.length > 0 && isNameThenSpaceOrEnd(lower, t.displayName.toLowerCase()));
   if (fullNames.length > 0) {
-    const longest = Math.max(...fullNames.map((t) => t.displayName.length));
-    const named = fullNames.filter((t) => t.displayName.length === longest);
+    // Each name the text starts with begins every longer one, a space after it.
+    const shortest = Math.min(...fullNames.map((t) => t.displayName.length));
+    const name = lower.slice(0, shortest);
+    const named = targets.filter((t) => isNameThenSpaceOrEnd(t.displayName.toLowerCase(), name));
     if (named.length > 1) return { kind: 'several', labels: named.map((t) => t.label) };
-    return { kind: 'to', userId: named[0].userId, content: rest.slice(longest).trim() };
+    return { kind: 'to', userId: named[0].userId, content: rest.slice(shortest).trim() };
   }
 
   const typed = rest.split(/\s/, 1)[0] ?? '';
