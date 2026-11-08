@@ -109,6 +109,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **On a phone or a tablet, the map's toolbar, the menus and many buttons are at least 44 by 44 pixels.** With a mouse they keep their size. See [On a touch screen](docs/PLAYER_GUIDE.md#on-a-touch-screen).
 
+- **The chat box grows as you type,** up to six lines on a computer and four on a phone, then scrolls, and shrinks back once the message is sent. It stayed two lines tall on a computer. See [The Chat Panel](docs/USER_GUIDE.md#the-chat-panel).
+
 - **The chat holds the newest 400 messages, and Load More brings back older ones.** A long session made the page heavier the longer the table played. Nothing is deleted: the whole history stays on the server. See [The Chat Panel](docs/USER_GUIDE.md#the-chat-panel).
 
 - **A backup leaves out a symbolic link in the uploads folder, and the backend log names it.** A restore turned such a link into a small file holding its path, and the files behind it were never in the backup. A campaign export leaves out a linked picture or sound the same way. See [Via the Admin Panel](docs/DEPLOYMENT.md#via-the-admin-panel).
