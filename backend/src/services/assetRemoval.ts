@@ -17,8 +17,8 @@ import { prisma } from '../config/database';
 import { mayChangeAsset } from './permissions';
 import { usedByOthersThan } from './assetUsage';
 
-/** Why a removal is refused: not the caller's to change, or used by others in the campaign. */
-export type AssetRemovalVerdict = { allowed: true } | { allowed: false; reason: 'not-theirs' | 'used-by-others' };
+/** Why a removal is refused: not the caller's to change, used by others in the campaign, or by a character template alone. */
+export type AssetRemovalVerdict = { allowed: true } | { allowed: false; reason: 'not-theirs' | 'used-by-others' | 'used-by-a-template' };
 
 /** Whether `userId` may delete the asset, or move it out of its scope. */
 export async function mayRemoveAsset(
@@ -34,5 +34,8 @@ export async function mayRemoveAsset(
   });
   if (membership?.role === 'DM') return { allowed: true };
   // The uploader, a member who does not run the campaign.
-  return (await usedByOthersThan(asset.id, userId)) ? { allowed: false, reason: 'used-by-others' } : { allowed: true };
+  const using = await usedByOthersThan(asset.id, userId);
+  if (using === 'others') return { allowed: false, reason: 'used-by-others' };
+  if (using === 'character-template') return { allowed: false, reason: 'used-by-a-template' };
+  return { allowed: true };
 }
