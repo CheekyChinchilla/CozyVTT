@@ -215,6 +215,8 @@ interface Surface {
   rooms: PendingRoom[];
   /** The map's own colour, read off the picture's top-left pixel as Paint opens: what the eraser paints. */
   background: string;
+  /** The map's size in map pixels while it was last on screen: the picture's scale once the page has moved on. */
+  mapPx: [number, number];
 }
 
 /**
@@ -444,12 +446,17 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const mapRef = useRef(map);
   useEffect(() => {
     mapRef.current = map;
+    const s = surfaceRef.current;
+    if (s && map && s.mapId === map.id) s.mapPx = [map.width * map.gridSize, map.height * map.gridSize];
   });
-  /** Picture pixels to a map pixel, across and down, from the map's size now. */
+  /**
+   * Picture pixels to a map pixel, across and down, from the map's size now,
+   * or, once the page has moved on to another map, from its size then.
+   */
   const xy = useCallback((s: Surface): [number, number] => {
     const m = mapRef.current;
-    if (!m || m.id !== s.mapId) return [1, 1];
-    return [s.canvas.width / (m.width * m.gridSize), s.canvas.height / (m.height * m.gridSize)];
+    const [width, height] = m && m.id === s.mapId ? [m.width * m.gridSize, m.height * m.gridSize] : s.mapPx;
+    return [s.canvas.width / width, s.canvas.height / height];
   }, []);
   /** Each texture's tile, by texture, colour and size: drawn once and kept, a few dozen at most. */
   const texturesRef = useRef(new Map<string, HTMLCanvasElement>());
@@ -867,6 +874,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       ownsDraft: false,
       rooms: [],
       background,
+      mapPx: [map.width * map.gridSize, map.height * map.gridSize],
     };
     made = surface;
     canvasesMade.current += 1;

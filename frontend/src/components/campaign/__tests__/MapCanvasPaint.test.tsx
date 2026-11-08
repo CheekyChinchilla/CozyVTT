@@ -945,6 +945,19 @@ describe('a selection', () => {
     expect(panel().getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
+  it('puts moved pixels down at the picture\'s own scale when the map leaves the screen', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    // 30 squares each way: the picture, 1,000 pixels, now covers 1,500 map pixels.
+    act(() => { h.set({ currentMap: { ...(h.state.currentMap as CampaignMap), width: 30, height: 30 } }); });
+    drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 });
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Your painting was not saved' })).toBeInTheDocument());
+    expect(drawnAt()).toContainEqual([133, 133, 67, 34]);
+  });
+
   it('puts moved pixels down when the map leaves the screen, so they are kept with the painting', async () => {
     await showMap();
     await paintOn();
