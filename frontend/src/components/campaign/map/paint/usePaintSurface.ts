@@ -297,6 +297,11 @@ function selectionPending(selection: Selection | null): boolean {
   return !from || from.x0 !== box.x0 || from.y0 !== box.y0 || from.x1 !== box.x1 || from.y1 !== box.y1;
 }
 
+/** Let go of a selection's lifted pixels, unless they are what was copied, kept for Paste. */
+const releaseLifted = (canvas: HTMLCanvasElement, clipboard: HTMLCanvasElement | undefined) => {
+  if (canvas !== clipboard) releaseCanvas(canvas);
+};
+
 /** Paint on `s` not saved. */
 const paintUnsaved = (s: Surface | null) => s !== null && s.revision !== s.saved;
 
@@ -1525,12 +1530,20 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     markDirty('overlay');
     const s = surfaceRef.current;
     const lifted = selection.lifted;
-    if (!place || !lifted || !selection.box || !s || s.mapId !== selection.mapId) return;
+    // Its pixels are let go of once they are put down, or at once when they are not.
+    const letGo = () => { if (lifted) releaseLifted(lifted.canvas, clipboardRef.current?.canvas); };
+    if (!place || !lifted || !selection.box || !s || s.mapId !== selection.mapId) {
+      letGo();
+      return;
+    }
     const to = pictureBoxOf(s, selection.box, false);
     const from = lifted.from ? pictureBoxOf(s, lifted.from, true) : null;
     const same = (a: PaintBox, b: PaintBox) => a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1;
     // Lifted and put back as it was: nothing changed.
-    if (from && same(from, to)) return;
+    if (from && same(from, to)) {
+      letGo();
+      return;
+    }
     const step = s.history.begin();
     if (from) step.cover(from);
     step.cover(to);
@@ -1540,6 +1553,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         s.ctx.fillRect(from.x0, from.y0, from.x1 - from.x0, from.y1 - from.y0);
       }
       s.ctx.drawImage(lifted.canvas, to.x0, to.y0, to.x1 - to.x0, to.y1 - to.y0);
+      // Redo puts back the tiles kept, not this drawing, so the pixels are done with.
+      letGo();
     });
   }, [markDirty, land, pictureBoxOf]);
   useEffect(() => {
@@ -1553,6 +1568,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!s || !selection?.box || selection.mapId !== s.mapId) return;
     const canvas = selection.lifted ? selection.lifted.canvas : copyOut(s, selection.box);
     if (!canvas) return;
+    // The copy this one replaces is let go of, unless the selection is still lifting it.
+    const before = clipboardRef.current?.canvas;
+    if (before && before !== canvas && before !== selection.lifted?.canvas) releaseCanvas(before);
     clipboardRef.current = { canvas, box: selection.box };
     setCanPaste(true);
   }, [copyOut]);
@@ -1639,6 +1657,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       setSelectionShown(false);
       setSelectionUnsaved(false);
       markDirty('overlay');
+      if (selection.lifted) releaseLifted(selection.lifted.canvas, clipboardRef.current?.canvas);
     }
     if (selection?.lifted && direction === 'undo') return;
     void s.history[direction]().then((done) => {
