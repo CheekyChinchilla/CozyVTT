@@ -33,8 +33,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 #### What you will notice
 
 - **The chat has a To list above the message box.** It starts at **Everyone**, so a message goes to the whole table until someone chooses a person.
-- **On a phone or a tablet, buttons, menus and the map's toolbar are bigger, and text in boxes is at least 16 pixels high.** With a mouse they look as before.
-- **Players can draw on the map.** **Players may draw** is on in every campaign after the upgrade; turn it off in **Campaign Settings**, on the **General** tab.
+- **On a phone or a tablet, the map's toolbar, the menus and many buttons are bigger, and text in boxes is at least 16 pixels high.** With a mouse they look as before.
+- **Players can draw on the map.** **Players may draw** is on in every campaign after the upgrade (turn it off in **Campaign Settings**, on the **General** tab), and drawings show over fog and the dark for everyone, so a note to keep from players needs **Only I can see this**.
 - **A D&D 5e or Pathfinder 2e sheet you can roll from has Roll mode in its header.** It starts at **Normal** each time the sheet opens, so a click rolls as before.
 - **In a long session the chat holds the newest 400 messages.** **Load More**, at the top of the chat, brings back older ones.
 - **A player can no longer turn their token while the session is paused or has ended.** The DM turns any token at any time.
@@ -53,11 +53,11 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Whisper to one person in the chat.** ([#45](https://github.com/CheekyChinchilla/CozyVTT/issues/45)) Choose someone in the **To** list above the chat box, or type `/w` and their name; only the two of you see it, and the DM sees a whisper only when they are one of the two. Whispers are stored like the rest of the chat, so whoever runs the server can read them in its database and backups. See [Whispering to one person](docs/USER_GUIDE.md#whispering-to-one-person).
 
-- **Draw on the map.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Draw**, in the map's toolbar, has a pen, lines, arrows, shapes and text labels that everyone on the map sees, over tokens, fog and the dark. The DM can keep a drawing to themselves with **Only I can see this**, and players draw while **Players may draw** is on. See [Drawing on the map](docs/DM_GUIDE.md#drawing-on-the-map) and [Drawing and pointing](docs/PLAYER_GUIDE.md#drawing-and-pointing).
+- **Draw on the map.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Draw**, in the map's toolbar, has a pen, lines, arrows, shapes and text labels that everyone on the map sees, over tokens, fog and the dark. The DM can keep a drawing to themselves with **Only I can see this**, and players draw while **Players may draw** is on, except while the session is paused or has ended. See [Drawing on the map](docs/DM_GUIDE.md#drawing-on-the-map) and [Drawing and pointing](docs/PLAYER_GUIDE.md#drawing-and-pointing).
 
 - **A laser pointer for the map.** **Laser pointer**, in the drawing tools, draws a trail everyone sees as you drag, which fades within 3 seconds and is never kept. See [Drawing and pointing](docs/PLAYER_GUIDE.md#drawing-and-pointing).
 
-- **Draw a map in CozyVTT.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Create Map** has **Draw a map**, a blank map you paint with **Mapmaker**: brushes, shapes, textures, rooms that add their own walls, stamps, fill, text and more. **Save** writes the painting over the map's picture, after asking, and an unsaved painting is kept as a draft in the browser. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+- **Draw a map in CozyVTT.** ([#46](https://github.com/CheekyChinchilla/CozyVTT/issues/46)) **Create Map** has **Draw a map**, a blank map you paint with **Mapmaker**: brushes, shapes, textures, rooms that add their own walls, stamps, fill, text and more. **Save** writes the painting over the map's picture after asking and keeps no earlier version, so download the picture first to keep it; an unsaved painting is kept as a draft in the browser. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
 - **Prepare a map while your players keep playing.** **Open to prepare**, on a map's card in the **Map Library**, opens a map on the DM's screen only; players are sent nothing of it until **Bring everyone here**. See [Preparing a map while the table plays](docs/DM_GUIDE.md#preparing-a-map-while-the-table-plays).
 
@@ -69,7 +69,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Double tap the map to ping it on a touch screen.** Two quick taps on empty ground ping the spot for the whole table, while no tool is up. See [Pointing at the Map](docs/PLAYER_GUIDE.md#pointing-at-the-map).
 
-- **Roll with advantage or disadvantage from a sheet on a phone or a tablet.** Press and hold a stat for its **Normal**, **Advantage** and **Disadvantage** menu. A D&D 5e or Pathfinder 2e sheet also has **Roll mode** in its header on every device, which applies to every check, save, skill and attack you roll from it until you change it or close the sheet. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
+- **Roll with advantage or disadvantage from a sheet on a phone or a tablet.** On a D&D 5e or Pathfinder 2e sheet, press and hold a stat for its **Normal**, **Advantage** and **Disadvantage** menu. A D&D 5e or Pathfinder 2e sheet also has **Roll mode** in its header on every device, which applies to every check, save, skill and attack you roll from it until you change it or close the sheet. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
 
 - **Move, turn and step through tokens from the keyboard.** Click a token to select it, then use the arrow keys to move it, **[** and **]** to turn it, **,** and **.** to step to the next token and **Enter** for its menu. Keyboard moves follow the same rules as the mouse. See [Moving Your Token](docs/PLAYER_GUIDE.md#moving-your-token).
 
@@ -145,7 +145,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **A token someone is carrying goes back to its square when they are removed from the campaign.**
 
-- **Players' pages stop hearing about a map once the table has left it.** For up to a second after a switch, a few updates for the old map could still arrive; they carried nothing players had not just been shown.
+- **Players' pages stop hearing about a map once the table has left it.** For up to a second after a switch made from another tab or by a script, a few updates for the old map could still arrive; they carried nothing players had not just been shown.
 
 - **A map's spirit layer picture is never drawn over another map.**
 
@@ -203,13 +203,13 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The Dice panel's colours follow the app's theme whether your computer is set to light or dark, and its quick dice stay readable under the pointer.**
 
-- **Damage and hit dice the dice cannot roll are no longer offered as a roll.** In the **Roll...** pickers and on a sheet, damage such as `1d8 slashing` shows as written and says why it cannot roll, and **Custom Roll** explains a refusal before sending. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
+- **Damage and hit dice the dice cannot roll are no longer offered as a roll.** The **Roll...** pickers leave such damage out, and on a sheet damage such as `1d8 slashing` shows as written and says why it cannot roll; **Custom Roll** explains a refusal before sending. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
 
 - **A character sheet's roll menu stays on the screen, and Esc closes only the menu.**
 
 - **On a phone or a tablet a character sheet shows which stats roll.** The dice icons that showed only under a mouse pointer now show all the time.
 
-- **Character sheets and their editors fit a phone.** Below 640 pixels wide or 500 tall they take the whole screen, and the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible layouts no longer run past the sheet's edge. See [The Character Editor](docs/USER_GUIDE.md#the-character-editor).
+- **Character sheets and their editors fit a phone.** Below 640 pixels wide or 500 tall they take the whole screen, and the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible layouts are rearranged to fit a phone. See [The Character Editor](docs/USER_GUIDE.md#the-character-editor).
 
 - **Every tab of a character sheet can be reached on a phone.** Tabs wrap onto a second row where they do not fit.
 
@@ -397,7 +397,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The server refuses a sign-up whose email address holds `<` or `>`.**
 
-- **A campaign keeps showing a map or token picture from the personal library of someone who deleted their account.** A personal file only that campaign uses now becomes the campaign's own; others get a line in **Activity**. Files kept by an earlier deletion show under the **No Uploader (account deleted)** filter on the Admin Panel's **Assets** tab, for an administrator to move.
+- **A campaign keeps showing a map or token picture from the personal library of someone who deleted their account.** A personal file used only by one campaign the account was in now becomes that campaign's own; others get a line in **Activity**. Files kept by an earlier deletion show under the **No Uploader (account deleted)** filter on the Admin Panel's **Assets** tab, for an administrator to move.
 
 - **A map you switch to cannot be deleted at the same moment.**
 
@@ -970,7 +970,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **Changes for scripts and integrations.** See [API changes in 1.5.2](docs/api-changes/1.5.2.md).
 
-- **Deleting an account now deletes its avatar and the personal files nothing uses.** Campaign files and shared documents stay, with no owner. Accounts deleted earlier keep their files; find them with **No Uploader (account deleted)** on the Admin Panel's **Assets** tab.
+- **Deleting an account now deletes its avatar and the personal files nothing uses.** Campaign files and shared documents stay, with no owner, and so does a personal file a campaign uses, which the campaign cannot show until an administrator moves it there. Accounts deleted earlier keep their files; find them with **No Uploader (account deleted)** on the Admin Panel's **Assets** tab.
 
 - **A player removed from a campaign can still read their notes and saved rolls from it,** on their dashboard under **Notes From Campaigns You Have Left**. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
 
@@ -988,7 +988,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **The Timezone setting is gone from the setup wizard and from Admin Panel → Settings.** Nothing used it; times are shown in each viewer's own time zone.
 
-- **`.env.example` no longer offers `VITE_API_URL` and `VITE_SOCKET_URL`.** A backend on another address left pictures, sounds and PDFs blank. If you set them, empty them and have your proxy send `/api/` and `/socket.io/` to the backend on the page's own address. See [Using an External Reverse Proxy](docs/DEPLOYMENT.md#using-an-external-reverse-proxy).
+- **`.env.example` no longer offers `VITE_API_URL` and `VITE_SOCKET_URL`.** A backend on another address left pictures, sounds and PDFs blank. If you set them, empty them, have your proxy send `/api/` and `/socket.io/` to the backend on the page's own address, and run `docker compose up -d --build`. See [Using an External Reverse Proxy](docs/DEPLOYMENT.md#using-an-external-reverse-proxy).
 
 ### Fixed
 
@@ -1008,7 +1008,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **The name written on a character sheet is held to 200 characters, like the name a character is created with.**
 
-- **Every box on a character sheet now has a length limit:** 100,000 characters for notes and other long text, 1,000 for most boxes. A sheet stored with more keeps loading.
+- **Every box on a character sheet now has a length limit:** 100,000 characters for notes and other long text, 1,000 for most boxes. A sheet stored with more keeps loading, but the longer box must be shortened before the sheet can be saved again.
 
 - **The Import Campaign window works with a screen reader and the keyboard.**
 
@@ -1198,7 +1198,7 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **Pictures in a document or note load only from the asset library, and links open in a new tab.** See [Safety](docs/USER_GUIDE.md#safety).
 
-- **A map picture uploaded from Create Map goes to your personal library unless you choose the campaign's.** See [Adding Maps to Your Campaign](docs/DM_GUIDE.md#adding-maps-to-your-campaign).
+- **A map picture uploaded from Create Map goes to your personal library unless you choose the campaign's.** Pictures already in the campaign's library stay there; to hide one, move it to **Personal** in the Asset Library. See [Adding Maps to Your Campaign](docs/DM_GUIDE.md#adding-maps-to-your-campaign).
 
 - **A DM can have the instance send 20 invitation emails an hour, and the email's subject no longer quotes the campaign.**
 
@@ -1266,7 +1266,7 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 - **New limits, set far above what a table or a DM preparing a campaign does.** A map is 1 to 500 squares a side with up to 1,000 tokens, a stat block up to 64 KB, and each account may preview, import and export 20 campaign archives an hour; existing maps over these keep loading. Fog of war and explored areas are refused on a map of more than 250,000 squares.
 - **Deleting something now asks first,** and shows where a picture or sound is still used.
 - **A PDF is no longer accepted as a map picture.** PDF map pictures you already have are kept.
-- **CozyVTT now accepts a Universal VTT file of up to 75 MB.** The bundled nginx still stops one over 55 MB unless you raise `NGINX_MAX_BODY_SIZE`; see [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
+- **CozyVTT now accepts a Universal VTT file of up to 75 MB** with the default map limit. The bundled nginx still stops one over 55 MB unless you raise `NGINX_MAX_BODY_SIZE`; see [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
 - **D&D 5e skills and saving throws have a box for other bonuses.** Opening an existing sheet in the editor puts any difference there, so no total changes.
 - **Edits lost before this release are not brought back by it.** A backup from before the loss is the only way back.
 
@@ -1303,7 +1303,7 @@ If you use your own proxy instead of the bundled nginx, give `/api/campaigns/imp
 
 - **The backend's log files say what went wrong.**
 
-- **Log files no longer grow until the disk is full.** The backend keeps five files of 10 MB each, and Docker the same for each container, from the next `docker compose up -d`.
+- **Log files no longer grow until the disk is full.** The backend keeps five 10 MB files of each of its two logs, and Docker five of 10 MB for each container, from the next `docker compose up -d`.
 
 - **The backend keeps running when the database restarts.**
 
@@ -1477,11 +1477,11 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 #### What you will notice
 
 - **Fog of war now hides the map completely.** Players see solid black where nothing has been revealed; existing maps keep fog on, with the same areas revealed.
-- **Existing lit maps keep line-of-sight lighting.** They get **Global Illumination** switched on; turn it off in Edit Map or the Lights panel when you want lights and darkvision to matter.
+- **Existing lit maps keep line-of-sight lighting.** They get **Global Illumination** switched on, though unlit ground is now fully dark where it was nearly dark; turn it off in Edit Map or the Lights panel when you want lights and darkvision to matter.
 - **A player or spectator with no token on a lit map sees nothing.** To let a spectator watch a lit map, turn dynamic lighting off for that map.
 - **Players' maps remember explored areas,** in grey, on lit maps. It is on for existing maps.
-- **A token belongs to whoever is set as its controller.** If a player should have a token set to **Nobody (DM controls)**, choose them in **Edit Token → Controlled By**.
-- **Character sheets drop fields their game system does not define,** the next time each sheet is saved. Older fields are moved to where the sheet reads them first.
+- **A token belongs to whoever is set as its controller.** A character's token set to **Nobody (DM controls)**, or to someone else, gives its player no sight on a lit map and cannot be seen by them through fog; choose them in **Edit Token → Controlled By** if they should have it.
+- **Character sheets drop fields their game system does not define,** the next time each sheet is saved. Fields written by sheets before 1.3.0 are moved to where the sheet reads them, and where that place already holds something, the older copy is dropped.
 
 #### What to do afterwards, if it applies to you
 
@@ -1517,7 +1517,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Obscure a token's identity.** Right-click a token for **Obscure Identity**: players who do not control it see a grey shape called "Unknown creature", and nothing else about it reaches their browsers. See [Obscuring a Token's Identity](docs/DM_GUIDE.md#obscuring-a-tokens-identity).
 
-- **Maps remember what each player has explored.** **Remember Explored Areas** in Edit Map turns it on for a map, and **Reset explored areas** in the Fog of War panel clears it. See [Explored Areas](docs/DM_GUIDE.md#explored-areas).
+- **Maps remember what each player has explored.** On a map with dynamic lighting, **Remember Explored Areas** in Edit Map turns it on for a map, and **Reset explored areas** in the Fog of War panel clears it. See [Explored Areas](docs/DM_GUIDE.md#explored-areas).
 
 - **Tokens have darkvision,** set in grid squares in the Token Manager or Edit Token. See [Darkvision](docs/DM_GUIDE.md#darkvision).
 
@@ -1663,7 +1663,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Player Preview looks only through tokens the players would have.**
 
-- **Player Preview hides the DM's light markers.**
+- **Player Preview hides the DM's light markers.** Leave the preview to move or edit a light.
 
 - **Backups made from the Admin Dashboard restore again,** including backups made on 1.4.0 and backups from an older version into a newer one.
 
@@ -1745,7 +1745,7 @@ If you have edited `nginx/nginx.conf`, for example to turn on HTTPS, `git pull` 
 
 - **Saving someone else's character no longer reveals its game system.**
 
-- **Maps the DM has not shown yet are private to the DM.** Players and spectators get only the campaign's current map.
+- **Maps the DM has not shown yet are private to the DM.** Players and spectators get only the campaign's current map, though art in the campaign's asset library stays visible to every member.
 
 - **Players are not told about combatants on a map the table is not showing.**
 
@@ -1886,7 +1886,7 @@ There is no manual data migration for this release.
 
 - **Instance branding images must live on your own instance.** If you set a link to another site, replace it with your own file.
 
-- **The app now tells your browser what it is allowed to do.** A reverse proxy of your own must pass response headers through. See [Minimum proxy requirements](docs/DEPLOYMENT.md#minimum-proxy-requirements).
+- **The app now tells your browser what it is allowed to do.** A reverse proxy of your own must pass response headers through, and over HTTPS one more header can be turned on by hand, commented in `nginx/nginx.conf`. See [Minimum proxy requirements](docs/DEPLOYMENT.md#minimum-proxy-requirements).
 
 - **An asset's scope is spelled out everywhere it appears.**
 
@@ -2082,7 +2082,7 @@ As with any release that migrates, take a database dump first, since migrations 
 
 - **The Roll button no longer sticks on "Rolling…",** and chat, the roster, the map and the initiative tracker keep working after a dropped connection.
 
-- **A character's name now appears on its sheet,** and **Player Name** is filled in from the owner's display name.
+- **A character's name now appears on its sheet,** and **Player Name** is filled in from the owner's display name. Characters created before this release are not changed.
 
 - **Number fields on character sheets can be cleared and retyped.**
 
@@ -2108,7 +2108,7 @@ As with any release that migrates, take a database dump first, since migrations 
 
 - **Token conditions are readable on the map.** ([#27](https://github.com/CheekyChinchilla/CozyVTT/issues/27)) Each shows as a two-letter badge, and hovering a token names its conditions in full.
 
-- **Initiative rolls now follow each game system's rules.** D&D 5e adds Dexterity and an **Initiative other bonus**, Pathfinder 2e the stat its **Uses:** names, and Call of Cthulhu sets DEX order with no roll. Characters made before keep the total they had.
+- **Initiative rolls now follow each game system's rules.** D&D 5e adds Dexterity and an **Initiative other bonus**, Pathfinder 2e the stat its **Uses:** names, and Call of Cthulhu sets DEX order with no roll. D&D 5e characters made before keep the total they had.
 
 - **Passive Perception is right on a D&D 5e sheet, expertise included.** ([#26](https://github.com/CheekyChinchilla/CozyVTT/issues/26)) An **Other bonus** box takes the Observant feat and the like.
 
@@ -2306,7 +2306,7 @@ Two optional follow-ups:
 
 - **SRD monsters now carry their real hit points.** Re-running **Seed SRD** fills them in for creatures already imported.
 
-- **Upload size limits set in `.env` are now applied,** `MAX_MAP_SIZE_MB`, `MAX_TOKEN_SIZE_MB`, `MAX_AUDIO_SIZE_MB` and `MAX_AVATAR_SIZE_MB` among them.
+- **Upload size limits set in `.env` are now applied:** `MAX_MAP_SIZE_MB`, `MAX_TOKEN_SIZE_MB`, `MAX_AUDIO_SIZE_MB` and `MAX_AVATAR_SIZE_MB`.
 
 - **An oversize upload names the asset type and its real limit.**
 
@@ -2392,10 +2392,10 @@ Initial public release.
 
 - **The Asset Library,** with Global, Campaign and personal files and upload limits per type.
 
-- **Atmosphere:** the vibe tracker, six weather effects, spirit layer styles and ambient audio.
+- **Atmosphere:** the vibe tracker, six atmosphere effects (rain, mist, leaves, sparkles, snow and wind), spirit layer styles and ambient audio.
 
 - **Chat, a dice roller with secret rolls, and an initiative tracker.**
 
 - **Docker Compose deployment** with an internal network, a development stack, structured logs, a `/health` check, configurable ports, and support for a reverse proxy of your own.
 
-Known limitations at release: assets could not be moved between scopes, the global asset manager permission had no admin control, branding had no upload screen, there was no built-in log rotation, the Shadowrun 6e sheet was unfinished, and accessibility had not been audited.
+Known limitations at release: assets could not be moved between scopes, the global asset manager permission had no admin control, branding had no upload screen, a campaign could not be imported without its tokens, there was no built-in log rotation, the Shadowrun 6e sheet was unfinished, and accessibility had not been audited.
