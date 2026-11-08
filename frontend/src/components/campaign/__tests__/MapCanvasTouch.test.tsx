@@ -2191,18 +2191,35 @@ describe('one finger', () => {
     expect(closed?.segments).toHaveLength(3);
   });
 
-  it('adds a wall for a quick tap on the next corner, however close the corners are on screen', () => {
+  it('adds a wall for a quick tap on the next corner where a square is a fingertip across or more', () => {
+    h.set({ currentMap: mapWith({ gridSize: 20 }) });
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(120, 300));
+    tap(3, px(400, 400));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 120, y2: 300 }),
+      expect.objectContaining({ x1: 120, y1: 300, x2: 400, y2: 400 }),
+    ]);
+  });
+
+  // At a low zoom a square is a few pixels across, and a fingertip's second
+  // tap landed on another corner and added a wall where it meant to end.
+  it('ends a line with a double tap a fingertip apart where a square is smaller than a fingertip', () => {
     h.set({ currentMap: mapWith({ gridSize: 10 }) });
     render(<MapCanvas />);
     wallTool('Wall draw mode');
 
     tap(1, px(100, 300));
-    tap(2, px(110, 300));
-    tap(3, px(400, 400));
+    tap(2, px(200, 300));
+    tap(3, px(212, 306));
+    tap(4, px(400, 400));
 
     expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
-      expect.objectContaining({ x1: 100, y1: 300, x2: 110, y2: 300 }),
-      expect.objectContaining({ x1: 110, y1: 300, x2: 400, y2: 400 }),
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
     ]);
   });
 

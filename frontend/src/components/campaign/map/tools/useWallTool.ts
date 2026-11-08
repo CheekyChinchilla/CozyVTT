@@ -20,6 +20,7 @@ import type { OwnEdits } from '../ownEdits';
 import { answeredWithin, pastWallCap, refusalIn, WallSendLog, WALL_LIGHT_ANSWER_TIMEOUT_MS } from '../wallLightCaps';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
+import { DOUBLE_TAP_PX } from '../mapPointer';
 
 interface UseWallToolArgs {
   isDM: boolean;
@@ -397,13 +398,20 @@ export function useWallTool({
 
   /**
    * Whether a second click or tap ends what is being drawn. A finger's or a
-   * pen's taps count as one within a fingertip's room, which at a low zoom
-   * spans more than one snapped corner, so with Snap to grid their second
-   * must land on the corner the first placed: two taps there would add a
-   * wall of no length. A mouse's double-click ends it as it always has.
+   * pen's taps count as one within a fingertip's room (DOUBLE_TAP_PX). With
+   * Snap to grid, where a square on screen is that wide or wider, their
+   * second must land on the corner the first placed, so two quick taps on
+   * neighbouring corners add the wall between them; two taps on one corner
+   * would add a wall of no length. Where a square is narrower, as at a low
+   * zoom, a fingertip cannot pick out a corner, and the second tap within the
+   * room ends the line. A mouse's double-click ends it as it always has.
    */
-  const secondPressEnds = (e: PointerAt['e'], snapped: { x: number; y: number }, last: { x: number; y: number } | undefined) =>
-    e.detail >= 2 && (e.kind === 'mouse' || !snapToGrid || (last !== undefined && last.x === snapped.x && last.y === snapped.y));
+  const secondPressEnds = (e: PointerAt['e'], snapped: { x: number; y: number }, last: { x: number; y: number } | undefined) => {
+    if (e.detail < 2) return false;
+    if (e.kind === 'mouse' || !snapToGrid) return true;
+    if (currentMap && currentMap.gridSize * mapControls.zoom < DOUBLE_TAP_PX) return true;
+    return last !== undefined && last.x === snapped.x && last.y === snapped.y;
+  };
 
   /** The walls with those selected carried by (dx, dy). */
   const selectionMovedBy = (walls: WallSegment[], selection: ReadonlySet<string>, dx: number, dy: number) =>
