@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { render, fireEvent } from '@testing-library/react';
-import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, pointerKind, DOUBLE_TAP_PX, type MapPointer } from '../mapPointer';
+import { buttonBit, clickRoom, createClickCounter, fromMouseEvent, fromPointerEvent, pointerKind, DOUBLE_TAP_PX, type MapPointer } from '../mapPointer';
 
 /** A canvas that records what each handler made of its event. */
 function canvas(options: { preventDown?: boolean; preventMove?: boolean } = {}) {
@@ -118,6 +118,17 @@ describe('the click count', () => {
     clicks.count('touch', 0, 100, 100);
     expect(clicks.count('touch', 200, 104, 100)).toBe(2);
     expect(clicks.count('touch', 400, 109, 100)).toBe(1);
+  });
+  // The count that ends a wall line: a mouse's double-click and a finger's
+  // or a pen's double tap, each with its own room.
+  it('gives each kind of pointer its own room when given clickRoom', () => {
+    const clicks = createClickCounter(clickRoom);
+    clicks.count('mouse', 0, 100, 100);
+    expect(clicks.count('mouse', 200, 112, 100)).toBe(1);
+    clicks.count('touch', 1000, 100, 100);
+    expect(clicks.count('touch', 1200, 112, 100)).toBe(2);
+    clicks.count('pen', 2000, 100, 100);
+    expect(clicks.count('pen', 2200, 120, 100)).toBe(2);
   });
 });
 

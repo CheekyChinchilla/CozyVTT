@@ -2161,6 +2161,82 @@ describe('one finger', () => {
     expect(sentOf('wall:add')).toHaveLength(1);
   });
 
+  // A fingertip's two taps on one corner land several pixels apart, past a
+  // mouse's 4, and the second added a wall of no length there.
+  it('ends a wall line with two taps on its last corner a fingertip apart', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(210, 306));
+    tap(4, px(400, 400));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
+    ]);
+  });
+
+  it('closes a wall polygon with two taps on its last corner a fingertip apart', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    tap(1, px(100, 100));
+    tap(2, px(300, 100));
+    tap(3, px(300, 300));
+    tap(4, px(306, 312));
+
+    const replaces = sentOf('walls:replace');
+    const closed = replaces[replaces.length - 1] as { segments: WallSegment[] } | undefined;
+    expect(closed?.segments).toHaveLength(3);
+  });
+
+  it('adds a wall for a quick tap on the next corner, however close the corners are on screen', () => {
+    h.set({ currentMap: mapWith({ gridSize: 10 }) });
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(110, 300));
+    tap(3, px(400, 400));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 110, y2: 300 }),
+      expect.objectContaining({ x1: 110, y1: 300, x2: 400, y2: 400 }),
+    ]);
+  });
+
+  it('with Snap to grid off, ends a line with taps up to 20 pixels apart and not 21', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    fireEvent.click(screen.getByLabelText('Snap wall points to grid'));
+
+    tap(1, px(100, 300));
+    tap(2, px(203, 300));
+    tap(3, px(223, 300));
+    expect(sentOf('wall:add')).toHaveLength(1);
+
+    // A new line: its second tap lands 21 pixels from its first corner.
+    tap(4, px(100, 100));
+    tap(5, px(200, 100));
+    tap(6, px(221, 100));
+    expect(sentOf('wall:add')).toHaveLength(3);
+  });
+
+  it('leaves a mouse its 4 pixels: two clicks 12 pixels apart do not end the line', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    for (const at of [px(100, 300), px(200, 300), px(210, 306), px(400, 400)]) {
+      mouse.down(surface(), at);
+      mouse.up(surface(), at);
+    }
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toContainEqual(
+      expect.objectContaining({ x1: 200, y1: 300, x2: 400, y2: 400 }),
+    );
+  });
+
   it('opens a door with a tap, and never with a drag that starts beside it', () => {
     h.set({ currentMap: mapWith({ wallSegments: [seg('d1', 100, 100, 200, 100, 'door-closed')] }) });
     render(<MapCanvas />);
