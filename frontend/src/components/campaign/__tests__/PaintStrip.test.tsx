@@ -64,6 +64,12 @@ describe('the strip', () => {
     expect(region()).toHaveTextContent('Click or tap the picture to take its colour there');
   });
 
+  it('tells a finger on Stamp that it slides the stamp, and two fingers move the map', () => {
+    strip({}, { tool: 'stamp' });
+    expect(region()).not.toHaveTextContent("A finger's drag moves the map");
+    expect(region()).toHaveTextContent('slide a finger to move the stamp and lift it to paint');
+  });
+
   it('puts Undo, Redo, Save and Done in the header, as the panel has them', () => {
     const { props } = strip();
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));

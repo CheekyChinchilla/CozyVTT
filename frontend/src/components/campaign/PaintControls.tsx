@@ -45,7 +45,7 @@ export const HINTS: Record<PaintTool, string> = {
   ellipse: 'Drag across the box it fills.',
   polygon: 'Click or tap each corner; click the first again, or press Enter, to close it. Backspace takes a corner back, Esc drops it.',
   curve: 'Drag from one end to the other, then drag again to bend it; Enter paints it as it is, Esc drops it.',
-  stamp: 'Click or tap a square to paint the stamp chosen into it, outlined in the colour and filled with the second. Turn turns the next one. A finger\'s drag moves the map.',
+  stamp: 'Click or tap a square to paint the stamp chosen into it, outlined in the colour and filled with the second. Turn turns the next one. On a touch screen, slide a finger to move the stamp and lift it to paint; two fingers move the map.',
   room: 'Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour, and its four walls, which are added to the map when you save.',
   fill: 'Click or tap an area to fill it with the colour. A finger\'s drag moves the map.',
   text: 'Click or tap where the line of text goes, type it, then press Enter. Its size follows the width.',

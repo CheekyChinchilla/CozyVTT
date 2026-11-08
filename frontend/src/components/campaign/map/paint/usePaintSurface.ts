@@ -78,7 +78,7 @@ import {
 /** The tools Paint offers. */
 export type PaintTool = 'select' | 'brush' | 'eraser' | PaintShapeKind | 'room' | 'stamp' | 'fill' | 'text' | 'eyedropper';
 
-/** The tools that act on a tap or a click: a finger's drag pans under them. */
+/** The tools that act on a tap or a click: a finger's drag pans under them, or slides Stamp's stamp. */
 const TAP_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['polygon', 'stamp', 'fill', 'text', 'eyedropper']);
 /** The tools whose stamp or brush a mouse or a pen shows where it hovers. */
 const HOVER_TOOLS: ReadonlySet<PaintTool> = new Set<PaintTool>(['stamp', 'brush', 'eraser']);
@@ -1680,7 +1680,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         return true;
       }
       if (TAP_TOOLS.has(look.tool)) {
-        // A finger's drag moves the map; a tap or a click acts.
+        // A finger's drag moves the map, or slides Stamp's stamp; a tap or a click acts.
         // A line of text being written is painted as the next press lands.
         if (textRef.current) commitText();
         if (at.via === 'drag' && look.tool === 'stamp') {
