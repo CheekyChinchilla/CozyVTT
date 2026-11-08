@@ -120,6 +120,19 @@ describe('an action sheet', () => {
     expect(anyMenuShown()).toBe(false);
   });
 
+  // On a phone held sideways the sheet stands in a column the screen's height,
+  // its card at the foot: a tap above a short menu landed on the column and
+  // did nothing. jsdom does no hit testing, so the classes that decide it are
+  // read here; sideways-sheet.js drove the tap in a browser.
+  it('takes a tap only on its card and Cancel, so one beside them reaches the backdrop', () => {
+    render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} />);
+    const sheet = screen.getByRole('dialog', { name: 'Goblin Scout' });
+    expect(sheet.className).toContain('pointer-events-none');
+    const card = within(sheet).getByRole('heading', { name: 'Goblin Scout' }).closest('.rounded-cozy-lg') as HTMLElement;
+    expect(card.className).toContain('pointer-events-auto');
+    expect(within(sheet).getByRole('button', { name: 'Cancel' }).className).toContain('pointer-events-auto');
+  });
+
   it('closes on the browser’s Back', async () => {
     const onClose = vi.fn();
     render(<Sheet items={tokenMenuItems(token(), { ...DM_VIEW, actions: tokenActions() })} onClose={onClose} />);
