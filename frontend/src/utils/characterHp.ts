@@ -24,13 +24,8 @@ export function extractCharacterHp(
   if (!data || !gameSystem) return null;
 
   switch (gameSystem) {
-    // TODO(sheets): 'FLEXIBLE' is unreachable. A Flexible character's
-    // gameSystem is null, which returns above, and nothing passes 'FLEXIBLE'.
-    // Remove the case in both copies, unless a Flexible sheet is meant to
-    // report hit points.
     case 'DND_5E':
     case 'PATHFINDER_2E':
-    case 'FLEXIBLE':
       return readHp(record(data.hp), false);
     case 'CALL_OF_CTHULHU_7E':
       // Call of Cthulhu keeps hit points under derived stats, and has no
