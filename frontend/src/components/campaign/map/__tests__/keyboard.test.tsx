@@ -6,7 +6,9 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, createEvent, fireEvent } from '@testing-library/react';
-import { keyBelongsToMap, mapKeyAction, createRepeatPacer, ARROW_REPEAT_MS, type KeyPress } from '../keyboard';
+import { keyBelongsToMap, mapKeyAction, createRepeatPacer, ARROW_REPEAT_MS, MAP_SHORTCUTS, type KeyPress } from '../keyboard';
+import { PAINT_TOOL_KEYS } from '../paint/paintToolKeys';
+import type { PaintTool } from '../paint/usePaintSurface';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 /** The key event a press on `target` makes, after anything on the page has had it. */
@@ -208,5 +210,15 @@ describe('the pace of a held arrow key', () => {
     expect(pacer.allow(true, 1000 + ARROW_REPEAT_MS - 1)).toBe(false);
     expect(pacer.allow(true, 1000 + ARROW_REPEAT_MS)).toBe(true);
     expect(pacer.allow(true, 1000 + ARROW_REPEAT_MS + 60)).toBe(false);
+  });
+});
+
+describe("Mapmaker's tool keys", () => {
+  it('are each listed in the shortcuts window, and no two tools share one', () => {
+    const tools = Object.keys(PAINT_TOOL_KEYS) as PaintTool[];
+    for (const tool of tools) {
+      expect(MAP_SHORTCUTS.filter((row) => row.who === 'dm' && row.keys.length === 1 && row.keys[0] === PAINT_TOOL_KEYS[tool] && row.does.endsWith('while Mapmaker is on'))).toHaveLength(1);
+    }
+    expect(new Set(tools.map((tool) => PAINT_TOOL_KEYS[tool])).size).toBe(tools.length);
   });
 });

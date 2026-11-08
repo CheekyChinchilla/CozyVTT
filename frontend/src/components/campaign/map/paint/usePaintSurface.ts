@@ -53,6 +53,7 @@ import { drawStamp, stampCentre, stampReach, type StampKind, type StampTurn } fr
 import { handleAt, isInside, movedBox, pastedBox, resizedBox, selectedBox, type SelectBox, type SelectHandle } from './paintSelection';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
 import { releaseCanvas, type MakeCanvas } from './blankPicture';
+import { PAINT_TOOL_KEYS } from './paintToolKeys';
 import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './drawnMapSize';
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
 import { hexToRgba, readColour } from './pixelColour';
@@ -142,7 +143,7 @@ export const DEFAULT_PAINT_SETTINGS: PaintSettings = {
 };
 
 /** The tool each letter key chooses while Paint is on. */
-const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map([['s', 'select'], ['b', 'brush'], ['e', 'eraser'], ['l', 'line'], ['r', 'rect'], ['o', 'ellipse'], ['g', 'polygon'], ['c', 'curve'], ['m', 'room'], ['p', 'stamp'], ['f', 'fill'], ['t', 'text'], ['i', 'eyedropper']]);
+const TOOL_KEYS: ReadonlyMap<string, PaintTool> = new Map((Object.keys(PAINT_TOOL_KEYS) as PaintTool[]).map((tool) => [PAINT_TOOL_KEYS[tool].toLowerCase(), tool]));
 
 /** The most the undo tiles may take, packed; the oldest steps go first past it. */
 export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
