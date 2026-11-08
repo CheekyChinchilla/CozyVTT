@@ -29,6 +29,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 ### Play and connection
 
 - `after the next release` **A tab that reconnects after its member was removed, or left, stays on the campaign page.** A computer that slept through it is refused with a plain "You are not a member of this campaign" and the page does not move. It should be told, and go to the dashboard, as a tab that was open at the time is (`websocket/events.ts`).
+- `after the next release` **A member who leaves a campaign while one of their tabs is joining it sees that tab told they were removed.** The join finds no membership and takes the tab out with the removal's sentence, "You were removed from this campaign.", where it should say "You left this campaign." (`websocket/events.ts`).
 
 ### Creatures
 
@@ -124,7 +125,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   connect-pg-simple 10, dotenv 18 and file-type 22. mathjs is no longer used,
   since the dice parser needs no library, nor is archiver 8: yazl 3 writes the
   backups and campaign exports.
-  **Done** for React: React 19.3 with React Router 8.4, and for framer-motion
+  **Done** for React: React 19.3 with React Router 8.5, and for framer-motion
   14, lucide-react 1 and react-markdown 10. React Router 6 had two moderate
   advisories that could not be reached in CozyVTT, a single-page app with no
   server rendering whose one address taken from a link, the page to go back to
@@ -282,7 +283,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   Intelligence modifier while the read-only view shows a plain 10. Only sheets
   that never set it are affected, and the DM can correct it by hand.
 
-- **`docs/API_REFERENCE.md` covers 85 of the 168 routes.** Deliberate: it is a
+- **`docs/API_REFERENCE.md` covers 86 of the 169 routes.** Deliberate: it is a
   hand-written guide to the endpoints people ask about, and
   `backend/docs/API_DOCUMENTATION.yaml` is the complete list.
   `scripts/spec-coverage.py` enforces the split and prints the current counts:

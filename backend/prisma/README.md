@@ -99,7 +99,7 @@ Several models use Prisma's `Json` type for flexibility:
 |---|---|
 | `Campaign.vibeSettings` | Vibe periods with color/audio config |
 | `Map.tokens` | Array of token objects (position, image, HP, conditions, stat block, etc.) |
-| `Map.annotations` | Unused: nothing reads it, members are sent it as `[]`, and new maps and imports write `[]`. A map imported from an archive by 1.5.4 or earlier can still hold up to 500 records that archive carried, which the DM's replies that return the stored row whole include. Drawings are rows of `MapDrawing`, which a campaign archive carries under each map file's `drawings` (fog is `Map.fogData`) |
+| `Map.annotations` | Shown nowhere: members are sent it as `[]`, and new maps and imports write `[]`. The session snapshot (`captureGameState` in `services/sessionState.ts`) still copies the current map's into `Session.savedState`, which nothing reads back. A map imported from an archive by 1.5.4 or earlier can still hold up to 500 records that archive carried, which the DM's replies that return the stored row whole include. Drawings are rows of `MapDrawing`, which a campaign archive carries under each map file's `drawings` (fog is `Map.fogData`) |
 | `Map.wallSegments` | Wall geometry (`WallSegment[]`) |
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |
