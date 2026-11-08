@@ -381,6 +381,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const selectionRef = useRef<Selection | null>(null);
   /** A polygon being clicked out, corner by corner, and where the pointer is now, in map pixels. */
   const polygonRef = useRef<{ mapId: string; points: PaintPoint[]; cursor: PaintPoint | null } | null>(null);
+  /** Where a mouse or a pen hovers with Stamp chosen, for the stamp's preview. */
+  const stampHoverRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
+  /**
+   * A finger's press with Stamp chosen: the stamp's preview follows it, and
+   * it is painted where the finger lifts; a second finger drops it.
+   */
+  const stampPressRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
   /** A curve dragged end to end, waiting for a second drag to bend it (`bending` while that drag is under way). */
   const curveRef = useRef<{ mapId: string; shape: PaintShape; bending: boolean } | null>(null);
   /** What Copy or Cut took, for Paste, on any map Paint opens on. */
@@ -1638,7 +1645,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         // A finger's drag moves the map; a tap or a click acts.
         // A line of text being written is painted as the next press lands.
         if (textRef.current) commitText();
-        if (at.via === 'drag') mapControls.startDrag(at.e);
+        if (at.via === 'drag' && look.tool === 'stamp') {
+          stampPressRef.current = { mapId: s.mapId, at: point };
+          stampHoverRef.current = null;
+          markDirty('overlay');
+        }
+        else if (at.via === 'drag') mapControls.startDrag(at.e);
         else if (look.tool === 'fill') fillAt(point);
         else if (look.tool === 'stamp') stampAt(point);
         else if (look.tool === 'polygon') {
@@ -1753,6 +1765,17 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         markDirty('overlay');
         return true;
       }
+      const stampPress = stampPressRef.current;
+      if (stampPress) {
+        stampPress.at = [at.mapPx.x, at.mapPx.y];
+        markDirty('overlay');
+        return true;
+      }
+      // A mouse or a pen over the map with Stamp chosen: the stamp a click would paint follows it.
+      if (settingsRef.current.tool === 'stamp' && at.via === 'mouse' && map) {
+        stampHoverRef.current = { mapId: map.id, at: [at.mapPx.x, at.mapPx.y] };
+        markDirty('overlay');
+      }
       // A polygon being clicked out follows the pointer to its next corner.
       const polygon = polygonRef.current;
       if (polygon && at.via === 'mouse' && map) {
@@ -1766,6 +1789,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return true;
     },
     up() {
+      const stampPress = stampPressRef.current;
+      if (stampPress) {
+        stampPressRef.current = null;
+        stampAt(stampPress.at);
+        markDirty('overlay');
+        return;
+      }
       if (curveRef.current?.bending) {
         finishCurve();
         return;
@@ -1805,6 +1835,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     },
     cancel() {
       dropStroke();
+      if (stampPressRef.current) {
+        stampPressRef.current = null;
+        markDirty('overlay');
+      }
+    },
+    leave() {
+      if (stampHoverRef.current) {
+        stampHoverRef.current = null;
+        markDirty('overlay');
+      }
     },
     escape() {
       if (dropStroke()) return true;
@@ -1924,6 +1964,17 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       shown.push({ kind: 'shape', shape });
     }
     if (curveRef.current && curveRef.current.mapId === s.mapId) shown.push({ kind: 'shape', shape: curveRef.current.shape });
+    const stampAtPointer = stampPressRef.current ?? stampHoverRef.current;
+    const m = mapRef.current;
+    if (stampAtPointer && stampAtPointer.mapId === s.mapId && m && settingsRef.current.tool === 'stamp') {
+      const look = settingsRef.current;
+      const [cx, cy] = stampCentre(look.stamp, look.turn, stampAtPointer.at, m.gridSize, m.width * m.gridSize, m.height * m.gridSize, look.stampSnap, look.stampSize);
+      shown.push({
+        kind: 'stamp',
+        // In map pixels, as stampAt paints it in the picture's.
+        place: { kind: look.stamp, cx, cy, size: m.gridSize * look.stampSize, turn: look.turn, colour: look.colour, second: look.second, lineWidth: Math.max(1, m.gridSize * 0.06) },
+      });
+    }
     const selection = selectionRef.current;
     if (selection?.box && selection.mapId === s.mapId) {
       shown.push({

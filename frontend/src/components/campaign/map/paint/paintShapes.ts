@@ -11,6 +11,7 @@ import type { PaintBox } from './paintHistory';
 import { strokePaint, type PaintPoint } from './paintStroke';
 import type { SelectBox } from './paintSelection';
 import type { TextureKind } from './paintTextures';
+import { drawStamp, type StampPlace } from './paintStamps';
 
 export type PaintShapeKind = 'line' | 'rect' | 'ellipse' | 'polygon' | 'curve';
 export type ShapeStyle = 'outline' | 'fill' | 'both';
@@ -129,6 +130,8 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: PaintShape, fill
 export type PaintPreview =
   | { kind: 'stroke'; points: readonly PaintPoint[]; width: number; colour: string }
   | { kind: 'shape'; shape: PaintShape }
+  /** The stamp a click or a lift would paint, drawn see-through. */
+  | { kind: 'stamp'; place: StampPlace }
   | {
     kind: 'selection';
     box: SelectBox;
@@ -176,9 +179,20 @@ function drawSelection(ctx: CanvasRenderingContext2D, preview: Extract<PaintPrev
   }
 }
 
-/** Draw a stroke, a shape or a selection on its way. */
+/** How strongly a stamp's preview is drawn: see-through, so the ground under it shows. */
+const STAMP_PREVIEW_ALPHA = 0.5;
+
+/** Draw a stroke, a shape, a stamp or a selection on its way. */
 export function drawPaintPreview(ctx: CanvasRenderingContext2D, preview: PaintPreview): void {
   if (preview.kind === 'stroke') strokePaint(ctx, preview.points, preview.width, preview.colour);
   else if (preview.kind === 'shape') drawShape(ctx, preview.shape);
-  else drawSelection(ctx, preview);
+  else if (preview.kind === 'stamp') {
+    ctx.save();
+    try {
+      ctx.globalAlpha = STAMP_PREVIEW_ALPHA;
+      drawStamp(ctx, preview.place);
+    } finally {
+      ctx.restore();
+    }
+  } else drawSelection(ctx, preview);
 }

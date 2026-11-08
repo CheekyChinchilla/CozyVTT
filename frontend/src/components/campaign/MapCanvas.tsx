@@ -3202,6 +3202,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
     // Clear hover state, unless a finger or a pen is still pressing
     if (e.kind === 'mouse' || e.buttons === 0) {
+      for (const tool of pointerTools) tool.leave?.();
       setHoverCoords(null);
       setHoverToken(null);
       setHoveredDoorId(null);
