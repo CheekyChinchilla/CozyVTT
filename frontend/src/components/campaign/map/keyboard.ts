@@ -1,6 +1,9 @@
 // ============================================
 // The map's keys: when a token key press belongs to the map, what each key
-// asks for, and MAP_SHORTCUTS, the list the ? window shows.
+// asks for, and MAP_SHORTCUTS, the list the ? window shows. Its keys are
+// written out, as the guides' tables are read against them (documentedFacts
+// in the backend); Mapmaker's tool keys are held to paintToolKeys.ts by the
+// keyboard test.
 //
 // The map listens on the window, so it hears every key on the page. The keys
 // it has always had (Tab, Escape, the wall and undo keys) keep their own
@@ -15,7 +18,6 @@
 import { isTypingInto } from './typingTarget';
 import { isAnyTrapOpen } from '@/hooks/useFocusTrap';
 import { isArrowKey, type ArrowKey, type StepDirection } from './selection';
-import { PAINT_TOOL_KEYS } from './paint/paintToolKeys';
 
 /**
  * Focused elements that take keys of their own: an arrow on a radio button,
@@ -162,21 +164,21 @@ export const MAP_SHORTCUTS: readonly MapShortcut[] = [
   { keys: ['Double-click'], does: 'Finish a wall line', who: 'dm' },
   { keys: ['Ctrl + Z'], does: 'Undo the last wall change', who: 'dm' },
   { keys: ['Ctrl + Y', 'Ctrl + Shift + Z'], does: 'Redo a wall change', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.select], does: 'Select part of the picture, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.brush], does: 'Paint with the brush, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.eraser], does: 'Erase to the map\'s own colour, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.line], does: 'Paint a line, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.rect], does: 'Paint a rectangle, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.ellipse], does: 'Paint an ellipse, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.polygon], does: 'Paint a polygon, corner by corner, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.curve], does: 'Paint a curve, bent by a second drag, while Mapmaker is on', who: 'dm' },
+  { keys: ['S'], does: 'Select part of the picture, while Mapmaker is on', who: 'dm' },
+  { keys: ['B'], does: 'Paint with the brush, while Mapmaker is on', who: 'dm' },
+  { keys: ['E'], does: 'Erase to the map\'s own colour, while Mapmaker is on', who: 'dm' },
+  { keys: ['L'], does: 'Paint a line, while Mapmaker is on', who: 'dm' },
+  { keys: ['R'], does: 'Paint a rectangle, while Mapmaker is on', who: 'dm' },
+  { keys: ['O'], does: 'Paint an ellipse, while Mapmaker is on', who: 'dm' },
+  { keys: ['G'], does: 'Paint a polygon, corner by corner, while Mapmaker is on', who: 'dm' },
+  { keys: ['C'], does: 'Paint a curve, bent by a second drag, while Mapmaker is on', who: 'dm' },
   { keys: ['Enter'], does: 'Close a polygon or paint a curve as it is, while Mapmaker is on', who: 'dm' },
   { keys: ['Backspace'], does: 'Take a polygon\'s last corner back, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.room], does: 'Paint a room, whose walls are added when it is saved, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.stamp], does: 'Paint a stamp into a square, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.fill], does: 'Fill an area, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.text], does: 'Paint a line of text, while Mapmaker is on', who: 'dm' },
-  { keys: [PAINT_TOOL_KEYS.eyedropper], does: 'Take a colour from the picture, while Mapmaker is on', who: 'dm' },
+  { keys: ['M'], does: 'Paint a room, whose walls are added when it is saved, while Mapmaker is on', who: 'dm' },
+  { keys: ['P'], does: 'Paint a stamp into a square, while Mapmaker is on', who: 'dm' },
+  { keys: ['F'], does: 'Fill an area, while Mapmaker is on', who: 'dm' },
+  { keys: ['T'], does: 'Paint a line of text, while Mapmaker is on', who: 'dm' },
+  { keys: ['I'], does: 'Take a colour from the picture, while Mapmaker is on', who: 'dm' },
   { keys: ['Ctrl + C', 'Ctrl + X', 'Ctrl + V'], does: 'Copy, cut or paste the selection, while Mapmaker is on', who: 'dm' },
   { keys: ['Ctrl + A'], does: 'Select the whole picture, while Mapmaker is on', who: 'dm' },
   { keys: ['Delete', 'Backspace'], does: 'Erase the selection to the map\'s own colour, while Mapmaker is on', who: 'dm' },

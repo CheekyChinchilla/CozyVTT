@@ -1,7 +1,8 @@
 // ============================================
 // Each Mapmaker tool's key: what picks the tool while Mapmaker is on
-// (usePaintSurface), what its button's title says (PaintControls) and what
-// the shortcuts window lists (MAP_SHORTCUTS in keyboard.ts).
+// (usePaintSurface) and what its button's title says (PaintControls). The
+// shortcuts window writes them out (MAP_SHORTCUTS in keyboard.ts), and the
+// keyboard test holds it to this.
 // ============================================
 
 import type { PaintTool } from './usePaintSurface';
