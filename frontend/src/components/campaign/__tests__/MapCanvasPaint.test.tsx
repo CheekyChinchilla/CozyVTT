@@ -806,6 +806,24 @@ describe('a room', () => {
     expect(await screen.findByText('The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: Maximum 5000 wall segments per map. Draw them with the wall tool.')).toBeInTheDocument();
     expect(h.updateMap).toHaveBeenCalled();
   });
+
+  it('holds a reload while its walls are added, and says it saved once they are', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    let addFirst: () => void = () => undefined;
+    h.addWall.mockImplementationOnce(() => new Promise((resolve) => { addFirst = () => resolve({}); }));
+    await pressSave();
+    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(1));
+    const reload = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(reload);
+    expect(reload.defaultPrevented).toBe(true);
+    expect(screen.queryByText('Saved. Players on this map see the new picture.')).toBeNull();
+    await act(async () => { addFirst(); });
+    expect(await screen.findByText('Saved. Players on this map see the new picture.')).toBeInTheDocument();
+    expect(wallsAdded()).toEqual(fourWalls);
+  });
 });
 
 describe('a selection', () => {
