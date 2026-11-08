@@ -357,6 +357,12 @@ describe('where Paint is offered', () => {
     expect(screen.queryByText('This map has no picture.')).toBeNull();
   });
 
+  it('opens a drawn map whose picture is gone blank in the colour it was made in, as the eraser paints', async () => {
+    await showMap(mapWith({ imageUrl: '', drawnBackground: '#2b3a4c' }), { load: false });
+    await paintOn();
+    expect(pictureCanvas()?.getContext('2d')?.fillStyle).toBe('#2b3a4c');
+  });
+
   it('paints at the map\'s squares and grid size, whatever the picture\'s own size: a new drawn map\'s is a pixel a square', async () => {
     h.set({ currentMap: mapWith() });
     render(<MapCanvas />);
