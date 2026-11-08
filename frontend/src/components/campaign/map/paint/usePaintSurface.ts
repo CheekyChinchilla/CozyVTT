@@ -288,6 +288,21 @@ interface Selection {
   lifted: { canvas: HTMLCanvasElement; from: SelectBox | null; hole: string } | null;
 }
 
+/** Pixels lifted and moved or resized, or pasted: paint on the map not yet put down. */
+function selectionPending(selection: Selection | null): boolean {
+  const box = selection?.box;
+  const from = selection?.lifted?.from;
+  if (!selection?.lifted || !box) return false;
+  return !from || from.x0 !== box.x0 || from.y0 !== box.y0 || from.x1 !== box.x1 || from.y1 !== box.y1;
+}
+
+/** Paint on `s` not saved. */
+const paintUnsaved = (s: Surface | null) => s !== null && s.revision !== s.saved;
+
+/** Paint on `s` not saved, or `selection` moved or pasted on its map. */
+const unsavedWith = (s: Surface | null, selection: Selection | null) =>
+  paintUnsaved(s) || (s !== null && selection?.mapId === s.mapId && selectionPending(selection));
+
 /** What Select offers besides the drag: for the panel's buttons and the keys. */
 export interface PaintSelectionActions {
   /** There is a selection. */
@@ -398,6 +413,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const endSelectionRef = useRef<(place?: boolean) => void>(() => undefined);
   /** Whether there is a selection, and something to paste, for the panel's buttons. */
   const [selectionShown, setSelectionShown] = useState(false);
+  /** The selection's pixels are moved or pasted and not yet put down, for Save, Undo and the guards. */
+  const [selectionUnsaved, setSelectionUnsaved] = useState(false);
   const [canPaste, setCanPaste] = useState(false);
   const [textBox, setTextBox] = useState<PaintTextBox | null>(null);
   const textRef = useRef<(PaintTextBox & { mapId: string }) | null>(null);
@@ -692,6 +709,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     shapeRef.current = null;
     selectionRef.current = null;
     setSelectionShown(false);
+    setSelectionUnsaved(false);
     polygonRef.current = null;
     curveRef.current = null;
     s.history.clear();
@@ -702,7 +720,6 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     markDirty('terrain', 'overlay');
   }, [show, markDirty]);
 
-  const unsavedOf = (s: Surface | null) => s !== null && s.revision !== s.saved;
 
   const [leftover, setLeftover] = useState<PaintLeftover | null>(null);
   /**
@@ -717,6 +734,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     shapeRef.current = null;
     selectionRef.current = null;
     setSelectionShown(false);
+    setSelectionUnsaved(false);
     polygonRef.current = null;
     curveRef.current = null;
     s.history.clear();
@@ -740,7 +758,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!map || !isDM) return false;
     const held = surfaceRef.current;
     // Paint held over a picture changed elsewhere: asked about first.
-    if (held && held.mapId === map.id && (map.imageUrl ?? '') !== held.baseUrl && unsavedOf(held)) {
+    if (held && held.mapId === map.id && (map.imageUrl ?? '') !== held.baseUrl && unsavedWith(held, selectionRef.current)) {
       setAsking(true);
       return false;
     }
@@ -911,8 +929,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   useEffect(() => {
     const s = surfaceRef.current;
     if (s && (s.mapId !== mapId || !isDM)) {
+      // Pixels moved or pasted and not yet put down join the painting kept.
+      endSelectionRef.current();
       writeDraft(s);
-      if (unsavedOf(s)) strand(s, isDM ? 'map' : 'not-dm');
+      if (unsavedWith(s, selectionRef.current)) strand(s, isDM ? 'map' : 'not-dm');
       else dispose();
       setOn(false);
       onRef.current = false;
@@ -956,7 +976,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   });
 
   // What the rest of the page reads.
-  const unsaved = unsavedOf(surface);
+  const unsaved = paintUnsaved(surface) || selectionUnsaved;
   // The map's picture was changed elsewhere since the canvas was made or
   // last saved: the canvas is no longer what the map shows. The picture a
   // save under way uploaded is this page's own.
@@ -1490,6 +1510,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     selectionRef.current = null;
     if (!selection) return;
     setSelectionShown(false);
+    setSelectionUnsaved(false);
     markDirty('overlay');
     const s = surfaceRef.current;
     const lifted = selection.lifted;
@@ -1535,6 +1556,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const selection = selectionRef.current;
     selectionRef.current = null;
     setSelectionShown(false);
+    setSelectionUnsaved(false);
     markDirty('overlay');
     if (!s || !selection?.box || selection.mapId !== s.mapId) return;
     const area = selection.lifted ? selection.lifted.from : selection.box;
@@ -1568,6 +1590,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       lifted: { canvas: clip.canvas, from: null, hole: '' },
     };
     setSelectionShown(true);
+    setSelectionUnsaved(true);
     setSettings((prev) => ({ ...prev, tool: 'select' }));
     markDirty('overlay');
   }, [endSelection, markDirty]);
@@ -1580,6 +1603,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     endSelection();
     selectionRef.current = { mapId: s.mapId, box: { x0: 0, y0: 0, x1: m.width * m.gridSize, y1: m.height * m.gridSize }, drag: null, lifted: null };
     setSelectionShown(true);
+    setSelectionUnsaved(false);
     setSettings((prev) => ({ ...prev, tool: 'select' }));
     markDirty('overlay');
   }, [endSelection, markDirty]);
@@ -1598,6 +1622,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     selectionRef.current = null;
     if (selection) {
       setSelectionShown(false);
+      setSelectionUnsaved(false);
       markDirty('overlay');
     }
     if (selection?.lifted && direction === 'undo') return;
@@ -1811,6 +1836,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         selection.drag = null;
         if (!selection.box) selectionRef.current = null;
         setSelectionShown(selectionRef.current !== null);
+        setSelectionUnsaved(selectionPending(selectionRef.current));
         markDirty('overlay');
         return;
       }
@@ -2064,12 +2090,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     save,
     /** A save is under way. */
     saving,
-    canUndo: surface?.history.canUndo() ?? false,
+    // Undo with pixels moved or pasted puts them back.
+    canUndo: (surface?.history.canUndo() ?? false) || selectionUnsaved,
     canRedo: surface?.history.canRedo() ?? false,
     /** Paint on the map that is not saved. */
     unsaved,
     /** Paint not saved now, read as it is, for a question asked after an await. */
-    isUnsaved: () => unsavedOf(surfaceRef.current),
+    isUnsaved: () => unsavedWith(surfaceRef.current, selectionRef.current),
     /** Settles once a save under way has, at once with none. */
     whenSaved: (): Promise<unknown> => saveRun.current ?? Promise.resolve(),
     discard,
