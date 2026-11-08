@@ -56,6 +56,7 @@ import { TokenType } from '@/types';
 import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/utils/tokenDisplayName';
 import { controlsToken } from '@/utils/tokenOwnership';
 import { campaignHasCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -486,6 +487,7 @@ export default function InitiativeTracker() {
   // hovered on the map. Either way the matching row tints.
   const peekTokenId = usePeekTokenId();
   const [collapsed, setCollapsed] = useState(false);
+  const compact = useCompactLayout();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
@@ -753,6 +755,21 @@ export default function InitiativeTracker() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   const hasCombatants = combatState.combatants.length > 0;
+  /** Where the fight is: its round, or how many are ready before it starts. */
+  const statusBadges = (
+    <>
+      {combatState.active && (
+        <span className="text-xs font-bold text-accent-ink bg-warm-amber/10 border border-warm-amber/20 rounded-sm px-1.5 py-0.5">
+          Round {combatState.round}
+        </span>
+      )}
+      {hasCombatants && !combatState.active && (
+        <span className="text-xs text-stone-gray bg-stone-gray/10 rounded-sm px-1.5 py-0.5">
+          {combatState.combatants.length} ready
+        </span>
+      )}
+    </>
+  );
 
   return (
     <>
@@ -765,7 +782,16 @@ export default function InitiativeTracker() {
             <p role="status" aria-live="polite" className="sr-only">{moveAnnouncement}</p>
           </>
         )}
-        {/* Header */}
+        {/* Header. The compact layout's sheet names the panel already, and
+            folding the tracker there would only hide it: the round, or the
+            count ready, stands alone. */}
+        {compact ? (
+          (combatState.active || hasCombatants) && (
+            <div className="flex items-center gap-2 px-3 pt-3">
+              {statusBadges}
+            </div>
+          )
+        ) : (
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="w-full flex items-center justify-between px-4 py-3 bg-parchment/40 hover:bg-parchment/60 transition-colors"
@@ -773,16 +799,7 @@ export default function InitiativeTracker() {
           <div className="flex items-center gap-2">
             <Swords className="w-4 h-4 text-brand-ink" />
             <span className="font-semibold text-brand-ink text-sm">Initiative Tracker</span>
-            {combatState.active && (
-              <span className="text-xs font-bold text-accent-ink bg-warm-amber/10 border border-warm-amber/20 rounded-sm px-1.5 py-0.5">
-                Round {combatState.round}
-              </span>
-            )}
-            {hasCombatants && !combatState.active && (
-              <span className="text-xs text-stone-gray bg-stone-gray/10 rounded-sm px-1.5 py-0.5">
-                {combatState.combatants.length} ready
-              </span>
-            )}
+            {statusBadges}
           </div>
           {collapsed ? (
             <ChevronDown className="w-4 h-4 text-stone-gray" />
@@ -790,8 +807,9 @@ export default function InitiativeTracker() {
             <ChevronUp className="w-4 h-4 text-stone-gray" />
           )}
         </button>
+        )}
 
-        {!collapsed && (
+        {(compact || !collapsed) && (
           <div className="p-3 space-y-3">
             {/* Active turn banner */}
             {combatState.active && currentCombatant && (
