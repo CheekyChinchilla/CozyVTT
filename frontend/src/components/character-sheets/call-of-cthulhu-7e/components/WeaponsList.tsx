@@ -15,7 +15,7 @@ import type { CoC7eWeapon } from '@/types/game-systems';
 import { cocDamageWithBonus, cocWeaponSkillValue } from '@/utils/rules/callOfCthulhu7e';
 import { diceExpressionProblem } from '@/utils/diceExpression';
 import { damagePurpose } from '@/utils/rollPurposes';
-import { notARoll } from '../../useSheetRolls';
+import { notARoll, sheetRoll } from '../../useSheetRolls';
 
 // The weapon shape lives in types/game-systems. This file used to keep its own
 // copy, which required `skill`, `damage` and the rest that the backend schema
@@ -149,6 +149,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                   className={`border-b border-ink/20 group ${isClickable ? 'cursor-pointer hover:not-has-[[data-not-a-roll]:hover]:bg-ink/5 select-none' : 'hover:bg-ink/5'}`}
                   onClick={isClickable ? () => onRoll!('1d100', skillPurpose) : undefined}
                   title={isClickable ? `Click to roll ${weapon.skill} (target: ${skillValue}%)` : undefined}
+                  {...(isClickable ? sheetRoll : undefined)}
                 >
                   {/* Name */}
                   <td className="px-3 py-2">
@@ -218,6 +219,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     onClick={isClickable ? (e) => { e.stopPropagation(); if (damageRoll !== '') onRoll!(damageRoll, damagePurpose(weapon.name)); } : undefined}
                     title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
                     {...(damageProblem ? notARoll(damageProblem) : undefined)}
+                    {...(rollsDamage ? sheetRoll : undefined)}
                   >
                     {editable ? (
                       <input

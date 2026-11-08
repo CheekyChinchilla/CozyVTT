@@ -22,6 +22,7 @@ import { errorSummary } from '@/utils/errors';
 import { rollLabels, savedRollDetail } from '@/utils/savedRolls';
 import { MAX_ROLL_CHARACTER_NAME_LENGTH, MAX_ROLL_PURPOSE_LENGTH } from '@/constants/diceLimits';
 import { cn } from '@/utils/cn';
+import { useDiceLogOnScreen } from '@/utils/diceLogOnScreen';
 
 /**
  * Stable identity for a roll, used to dedupe the live socket stream against
@@ -136,6 +137,8 @@ export default function DiceRoller() {
   /** Scroll anchor, so a new roll brings the list to the bottom. */
   const rollsEndRef = useRef<HTMLDivElement>(null);
   const rollsContainerRef = useRef<HTMLDivElement>(null);
+  // A roll from a character sheet says its result while this log is off the screen.
+  useDiceLogOnScreen(rollsContainerRef);
   const wasAtBottomRef = useRef(true);
   /** Rolls that arrived live while the history was being read, by key. */
   const liveDuringRead = useRef<Set<string> | null>(null);

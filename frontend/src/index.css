@@ -513,3 +513,21 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* A stat pressed on a character sheet gives a short pulse as its roll goes
+   (hooks/useRollFeedback.ts). With reduced motion the animation above is
+   collapsed to nothing, and the stat is highlighted while the class stays. */
+@keyframes roll-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.05) rotate(-1deg); }
+  70% { transform: scale(1.02) rotate(1deg); }
+  100% { transform: scale(1); }
+}
+.roll-pulse {
+  animation: roll-pulse 250ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .roll-pulse {
+    background-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+}

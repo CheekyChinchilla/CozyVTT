@@ -48,7 +48,7 @@ import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
 import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
-import { rollTarget, useSheetRolls, type SheetRollHandler } from '../useSheetRolls';
+import { rollTarget, sheetRoll, useSheetRolls, type SheetRollHandler } from '../useSheetRolls';
 import type { RollMode } from '@/utils/rollModes';
 
 interface DnD5eCharacterViewProps {
@@ -386,6 +386,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                   }`}
                   onClick={spendable ? () => spendHitDie(expr, purpose, idx) : undefined}
                   title={spendable ? `Spend one hit die: roll ${expr}` : undefined}
+                  {...(spendable ? sheetRoll : undefined)}
                 >
                   <div className="text-xs text-ink-muted capitalize">{hd.class}</div>
                   <div className="font-semibold text-ink flex items-center gap-1">

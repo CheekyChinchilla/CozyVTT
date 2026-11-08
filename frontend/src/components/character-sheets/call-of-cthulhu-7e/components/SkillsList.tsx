@@ -20,6 +20,7 @@ import {
 } from '../specialisations';
 import { readCoC7eSkillList, type CoC7eSkillList } from '../skillEdits';
 import { shouldUseWhiteText } from '@/utils/themeColor';
+import { sheetRoll } from '../../useSheetRolls';
 import type {
   CoC7eSkill,
   CoC7eSkills,
@@ -215,6 +216,7 @@ const SkillRow: React.FC<{
       className={`${ROW} py-1.5 rounded-sm group ${isClickable ? 'cursor-pointer hover:bg-ink/5 select-none' : 'hover:bg-ink/5'}`}
       onClick={isClickable ? () => onRoll!('1d100', purpose) : undefined}
       title={isClickable ? `Click to roll ${displayName} (target: ${skill.currentValue}%)` : undefined}
+      {...(isClickable ? sheetRoll : undefined)}
     >
       {/* Improvement Checkbox: a checkbox the keyboard reaches in the editor,
           a mark on the read-only sheet. */}

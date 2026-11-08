@@ -10,7 +10,7 @@ import { Sword, Target, Zap, Dices } from 'lucide-react';
 import ProficiencyIndicator, { ProficiencyRank } from './ProficiencyIndicator';
 import { diceExpressionProblem } from '@/utils/diceExpression';
 import { damagePurpose, strikePurpose } from '@/utils/rollPurposes';
-import { notARoll, rollTarget } from '../../useSheetRolls';
+import { notARoll, rollTarget, sheetRoll } from '../../useSheetRolls';
 
 /**
  * A strike, as the schema actually declares it.
@@ -141,6 +141,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRollStrike,
                 onClick={onRollDamage && damageRoll !== '' ? (e) => { e.stopPropagation(); onRollDamage(damageRoll, damagePurpose(strike.name)); } : undefined}
                 title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
                 {...(damageProblem ? notARoll(damageProblem) : undefined)}
+                {...(rollsDamage ? sheetRoll : undefined)}
               >
                 <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                   Damage
