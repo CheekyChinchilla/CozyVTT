@@ -10,7 +10,7 @@ import { ImportVibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, DrawnBackgroundSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
 import { TOKEN_LIMITS } from './tokenLimits';
 import { CAMPAIGN_LIMITS } from './campaignLimits';
 import { ASSET_LIMITS } from './assetLimits';
@@ -203,6 +203,8 @@ export const ImportMapSchema = z.object({
   gridSize: GridSizeSchema,
   feetPerSquare: FeetPerSquareSchema,
   diagonalRule: z.enum(['flat', 'alternating']).optional().catch(undefined),
+  // Absent in archives from before 1.6.0, and from a map made from a picture.
+  drawnBackground: DrawnBackgroundSchema.nullable().optional().catch(null),
   tokens: z.unknown().optional(),
   // The map's drawings, each checked as drawing:add checks one. An export
   // writes them under `drawings` and `annotations` empty (campaignExporter.ts).

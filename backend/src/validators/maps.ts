@@ -42,6 +42,9 @@ export const FeetPerSquareSchema = z
   .min(MAP_LIMITS.minFeetPerSquare, FEET_MESSAGE)
   .max(MAP_LIMITS.maxFeetPerSquare, FEET_MESSAGE);
 
+/** The colour a map drawn in CozyVTT was made in, as #rrggbb. */
+export const DrawnBackgroundSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
 /**
  * What a map name over MAP_LIMITS.maxNameLength answers, on every path that
  * names a map. A campaign archive import shortens one instead.

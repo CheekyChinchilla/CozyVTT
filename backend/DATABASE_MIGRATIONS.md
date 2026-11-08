@@ -188,6 +188,12 @@ about; the list is not exhaustive.
   it. 1.5.4 runs on an upgraded database: it reads neither the table nor the
   column. A document saved by 1.5.4 keeps the rows of its earlier text until
   it is next saved on this version.
+- `20261108215941_add_map_drawn_background` - `Map.drawnBackground`, the
+  colour a map drawn in CozyVTT is made in, written `#rrggbb`, which
+  Mapmaker's eraser paints. One `ALTER TABLE ... ADD COLUMN` with no default,
+  so every existing map gets null; Mapmaker then reads the colour off the
+  picture's top-left pixel, as before. No existing row is changed or removed.
+  1.5.4 runs on an upgraded database: it reads no such column.
 
 ## Data migrations (one-off scripts)
 

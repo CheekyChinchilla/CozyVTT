@@ -50,7 +50,7 @@ import { readTokens, toJson } from '../utils/prisma-json';
 import { drawingsFor, resendDrawings, scaleDrawings } from '../services/mapDrawings';
 import type { Map as MapRow, Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE, SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, geometryRegion, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, DrawnBackgroundSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE, SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, geometryRegion, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
 /**
  * The largest UVTT file accepted. The picture travels as base64 text, about
@@ -172,8 +172,8 @@ const UVTT_IMPORT_TOO_SLOW_MESSAGE =
 
 const router = Router({ mergeParams: true }); // Important: Merge params from parent router
 
-/** A grid size or feet-per-square value usable as sent, or undefined for the default. */
-function usable(schema: typeof GridSizeSchema | typeof FeetPerSquareSchema, value: unknown): number | undefined {
+/** A grid size, feet-per-square or drawn colour value usable as sent, or undefined for the default. */
+function usable<T>(schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } }, value: unknown): T | undefined {
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : undefined;
 }
@@ -302,7 +302,7 @@ async function resendInitiativeFor(campaignId: string, tokenId: string): Promise
 router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { name, imageUrl, width, height, gridSize, spiritLayerUrl, feetPerSquare, diagonalRule } = req.body;
+    const { name, imageUrl, width, height, gridSize, spiritLayerUrl, feetPerSquare, diagonalRule, drawnBackground } = req.body;
 
     // Validation
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -337,6 +337,9 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
 
     // diagonalRule: must be "flat" or "alternating", defaults to "flat"
     const mapDiagonalRule = diagonalRule === 'flat' || diagonalRule === 'alternating' ? diagonalRule : 'flat';
+
+    // drawnBackground: the colour a drawn map was made in, as #rrggbb; anything else keeps none
+    const mapDrawnBackground = usable(DrawnBackgroundSchema, drawnBackground) ?? null;
 
     // Normalize asset URLs to full paths
     const normalizedImageUrl = normalizeAssetUrl(imageUrl, 'maps');
@@ -387,6 +390,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
         gridSize: mapGridSize,
         feetPerSquare: mapFeetPerSquare,
         diagonalRule: mapDiagonalRule,
+        drawnBackground: mapDrawnBackground,
         spiritLayerUrl: normalizedSpiritLayerUrl,
         tokens: [], // Initialize empty tokens array
         annotations: [], // Initialize empty annotations array
@@ -963,6 +967,7 @@ export const MAP_FIELDS_THAT_DO_NOT_RESEND_THE_MAP = {
   id: 'never changes',
   campaignId: 'never changes',
   createdAt: 'never changes',
+  drawnBackground: 'set when a drawn map is made, and never changed',
   updatedAt: 'changes with every edit, and tells a member nothing the edit does not',
   fogEnabled: 'reaches every reader in map:settings:updated, and decides no token',
   explorationEnabled: 'reaches every reader in map:settings:updated, and decides no token',

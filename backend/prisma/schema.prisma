@@ -515,6 +515,10 @@ model Map {
   gridSize      Int    @default(50) // Pixels per grid square
   feetPerSquare Int    @default(5)  // Feet represented by one grid square
   diagonalRule  String @default("flat") // "flat" (D&D 5e) or "alternating" (PF2e 5/10)
+  // The colour a map drawn in CozyVTT was made in, as #rrggbb: what
+  // Mapmaker's eraser paints. Null for a map made from a picture, and for one
+  // drawn before this was kept.
+  drawnBackground String?
 
   // Layers
   baseLayerUrl   String // Main map image

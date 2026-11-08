@@ -331,7 +331,7 @@ interface Stroke {
 
 export interface PaintSurfaceOptions {
   /** The map on screen. */
-  map: Pick<CampaignMap, 'id' | 'name' | 'width' | 'height' | 'gridSize' | 'imageUrl'> | null;
+  map: Pick<CampaignMap, 'id' | 'name' | 'width' | 'height' | 'gridSize' | 'imageUrl' | 'drawnBackground'> | null;
   campaignId: string | undefined;
   /** Told of a save: the map as pointed at its new picture, and the picture. */
   onSaved: (map: CampaignMap, picture: Asset) => void;
@@ -411,6 +411,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const clipboardRef = useRef<{ canvas: HTMLCanvasElement; box: SelectBox } | null>(null);
   /** Put the selection down (or, with false, let it go), from callbacks made before it. */
   const endSelectionRef = useRef<(place?: boolean) => void>(() => undefined);
+  /** The map whose own colour the second colour last started at. */
+  const secondStartedFor = useRef<string | null>(null);
   /** Whether there is a selection, and something to paste, for the panel's buttons. */
   const [selectionShown, setSelectionShown] = useState(false);
   /** The selection's pixels are moved or pasted and not yet put down, for Save, Undo and the guards. */
@@ -818,10 +820,15 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       capture: (tile) => remember(tile, tileStore.capture(tile)),
       keep: (tile, pixels) => remember(tile, tileStore.keep(tile, pixels)),
     };
-    // The map's own colour, read off the picture's top-left pixel: what the
-    // eraser paints, and the second colour to start with.
-    const background = readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
-    setSettings((prev) => ({ ...prev, second: background }));
+    // The map's own colour: what the eraser paints, and the second colour to
+    // start with the first time this map is opened, the DM's after. Kept with
+    // a map drawn in CozyVTT; read off the picture's top-left pixel for one
+    // drawn before it was kept.
+    const background = map.drawnBackground ?? readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
+    if (secondStartedFor.current !== map.id) {
+      secondStartedFor.current = map.id;
+      setSettings((prev) => ({ ...prev, second: background }));
+    }
     let made: Surface | null = null;
     const history: PaintHistory<KeptTile> = createPaintHistory(store, {
       width,

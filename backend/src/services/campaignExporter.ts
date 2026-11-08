@@ -213,6 +213,7 @@ export async function prepareCampaignExport(
       gridSize: map.gridSize,
       feetPerSquare: map.feetPerSquare,
       diagonalRule: map.diagonalRule,
+      drawnBackground: map.drawnBackground,
       tokens,
       // Empty: releases up to 1.5.4 store an archive's annotations and send
       // them to every member of the campaign, so a drawing for the DM alone

@@ -19,10 +19,11 @@ git pull origin main
 docker compose up -d --build
 ```
 
-There is a database change, made by itself on the first start in four steps, one after another. All of it is added; no message, map, campaign, saved roll or document you have is changed or removed:
+There is a database change, made by itself on the first start in five steps, one after another. All of it is added; no message, map, campaign, saved roll or document you have is changed or removed:
 
 - Chat messages gain a column for the person a whisper is for, and an index, and the kinds of chat message gain one, the whisper.
 - Maps gain a table for what is drawn on them, and campaigns a column for whether players may draw, which is on for every campaign you have.
+- Maps gain a column for the colour a map drawn with **Mapmaker** is made in, empty on every map you have.
 - Saved rolls gain two columns, for the character a roll is made as and what it is for. Both are empty on every saved roll you have, so each rolls as it did.
 - Documents gain a table of the pictures each one shows by its address, and uploads a column for when a document was last read for it; both start empty. The server fills them as a document is uploaded, written or saved. It reads the plain text and Markdown documents you already have after the upgrade, each once, five at a time whenever a player opens their Asset Library or a picture or anyone deletes an asset, until all have been read.
 
