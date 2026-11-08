@@ -5,17 +5,7 @@
  */
 
 import { GameSystem } from '@prisma/client';
-
-// TODO(typing): CharacterTemplate is declared again in each of the other three
-// template files, and index.ts exports this one. Declare it once and import it
-// in the four.
-export interface CharacterTemplate {
-  name: string;
-  description: string;
-  gameSystem: GameSystem;
-  /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
-  data: Record<string, unknown>;
-}
+import type { CharacterTemplate } from './types';
 
 /**
  * Blank D&D 5e character template with minimal required fields
