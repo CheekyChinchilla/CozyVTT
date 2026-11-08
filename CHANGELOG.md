@@ -179,6 +179,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Edit Token offers no 51st condition.** At 50, the conditions a token does not carry are greyed out, with a note saying why.
 
+- **A token turned several times in quick succession ends up facing the way it was turned last.** Each turn was sent at once, so the server could store them out of order, and two refused turns could leave the token showing a facing never stored. A refused turn now puts back the facing the server last stored.
+
 - **A token's or a door's menu, and a Roll... picker opened from it, close when the map changes.**
 
 - **A token's or a door's menu closes when a character's menu opens.**

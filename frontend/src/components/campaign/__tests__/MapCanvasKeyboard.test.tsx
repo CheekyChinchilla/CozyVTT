@@ -691,6 +691,75 @@ describe('the turn keys', () => {
   });
 });
 
+describe('turns sent close together', () => {
+  /** A reply the test answers when it chooses. */
+  function deferred() {
+    let resolve!: () => void;
+    let reject!: (err: Error) => void;
+    const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  }
+
+  // Two turns sent at once were separate requests that could be written out
+  // of order, leaving the earlier facing stored.
+  it('go one at a time, the newest waiting until the one before is answered', async () => {
+    const first = deferred();
+    h.updateToken.mockReturnValueOnce(first.promise);
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    select('tok-goblin');
+
+    await act(async () => { press(']'); });
+    await act(async () => { press(']'); });
+    await act(async () => { press(']'); });
+    expect(h.updateToken).toHaveBeenCalledTimes(1);
+    expect(rotationOf('tok-goblin')).toBe(135);
+
+    await act(async () => { first.resolve(); });
+    expect(h.updateToken).toHaveBeenCalledTimes(2);
+    expect(h.updateToken).toHaveBeenLastCalledWith('campaign-1', 'map-a', 'tok-goblin', { rotation: 135 });
+    expect(rotationOf('tok-goblin')).toBe(135);
+  });
+
+  // Each refusal put back the facing before its own request, so the second
+  // put back the first's turn, a facing the server never stored.
+  it('put back the facing the server last stored when they are refused', async () => {
+    const second = deferred();
+    const third = deferred();
+    h.updateToken.mockResolvedValueOnce({}).mockReturnValueOnce(second.promise).mockReturnValueOnce(third.promise);
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    select('tok-goblin');
+
+    await act(async () => { press(']'); });
+    await act(async () => { press(']'); });
+    await act(async () => { press(']'); });
+    expect(rotationOf('tok-goblin')).toBe(135);
+
+    await act(async () => { second.reject(new Error('Session paused')); });
+    expect(h.updateToken).toHaveBeenLastCalledWith('campaign-1', 'map-a', 'tok-goblin', { rotation: 135 });
+    await act(async () => { third.reject(new Error('Session paused')); });
+
+    expect(rotationOf('tok-goblin')).toBe(45);
+    expect(h.updateToken).toHaveBeenCalledTimes(3);
+  });
+
+  it('keep the newest facing when the one before it is refused and it is stored', async () => {
+    const first = deferred();
+    h.updateToken.mockReturnValueOnce(first.promise).mockResolvedValueOnce({});
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    select('tok-goblin');
+
+    await act(async () => { press(']'); });
+    await act(async () => { press(']'); });
+    await act(async () => { first.reject(new Error('Busy')); });
+
+    expect(h.updateToken).toHaveBeenLastCalledWith('campaign-1', 'map-a', 'tok-goblin', { rotation: 90 });
+    expect(rotationOf('tok-goblin')).toBe(90);
+  });
+});
+
 describe('stepping through tokens with , and .', () => {
   const row = () => [token('c', 'Cultist', 8, 12), token('a', 'Archer', 1, 15), token('b', 'Bandit', 6, 15)];
 
