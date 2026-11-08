@@ -758,7 +758,7 @@ export function lightRemovalSentTo(
  */
 export const MAP_FIELDS_SENT_TO_EVERYONE = [
   'id', 'campaignId', 'name', 'imageUrl', 'baseLayerUrl', 'width', 'height', 'gridSize', 'feetPerSquare', 'diagonalRule',
-  'lightingEnabled', 'fogEnabled', 'globalIllumination', 'explorationEnabled', 'createdAt', 'updatedAt',
+  'drawnBackground', 'lightingEnabled', 'fogEnabled', 'globalIllumination', 'explorationEnabled', 'createdAt', 'updatedAt',
 ] as const satisfies readonly (keyof MapRow)[];
 
 /** Decided for each recipient by filterMapData; MapFieldsDecided says what each may be. */

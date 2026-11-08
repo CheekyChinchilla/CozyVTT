@@ -22,7 +22,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 24 models grouped by dom
 
 **Game content**
 - `Character` — flexible JSON-backed character sheets, optionally bound to a campaign + game system
-- `Map` — base + spirit layer, tokens, walls, lights, fog, annotations; per-map switches for fog of war, Global Illumination and explored memory (`fogEnabled`, `globalIllumination`, `explorationEnabled`, all default on so existing maps keep their behaviour)
+- `Map` — base + spirit layer, tokens, walls, lights, fog, annotations; per-map switches for fog of war, Global Illumination and explored memory (`fogEnabled`, `globalIllumination`, `explorationEnabled`, all default on so existing maps keep their behaviour); `drawnBackground`, the colour a map drawn in CozyVTT is made in (null for one made from a picture)
 - `MapExploration` — one player's explored cells on one map; never read when deciding which tokens to send
 - `MapDrawing` — one drawing on one map (a stroke, a shape or a text label): its kind, colours, width and points in whole map pixels from the top-left, who drew it (`authorId`, null once their account is deleted) and who is sent it (`audience`, `ALL` or `DM`). It goes with its map. `layer` is `MARKUP` for everything drawn so far; `GROUND`, `pattern` and `stamp` are kept for DM-drawn map art and not accepted yet
 - `CreatureTemplate` — SRD bestiary + custom creatures (campaign-scoped or global). `source` says which; `createdById` is the author, null for SRD creatures and once the author's account is deleted

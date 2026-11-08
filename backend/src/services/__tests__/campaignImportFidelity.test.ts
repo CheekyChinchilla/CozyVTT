@@ -106,7 +106,7 @@ describe('a campaign exported and imported again', () => {
     await prisma.map.create({
       data: {
         campaignId: source.id, name: 'h'.repeat(200), imageUrl: `/api/assets/maps/${picture.id}`, baseLayerUrl: `/api/assets/maps/${picture.id}`,
-        width: 40, height: 25, gridSize: 256, feetPerSquare: 100, diagonalRule: 'alternating', tokens, annotations: [],
+        width: 40, height: 25, gridSize: 256, feetPerSquare: 100, diagonalRule: 'alternating', drawnBackground: '#2b3a4c', tokens, annotations: [],
         wallSegments: walls as unknown as object[], lights: lights as unknown as object[], fogData,
         lightingEnabled: true, fogEnabled: true, globalIllumination: false, explorationEnabled: false,
       },
@@ -121,7 +121,7 @@ describe('a campaign exported and imported again', () => {
     expect(result).toMatchObject({ mapCount: 1, tokenCount: 1000, warnings: [], skipped: [] });
     const [map] = await importedMaps(result.campaignId);
     expect(map).toMatchObject({
-      name: 'h'.repeat(200), width: 40, height: 25, gridSize: 256, feetPerSquare: 100, diagonalRule: 'alternating',
+      name: 'h'.repeat(200), width: 40, height: 25, gridSize: 256, feetPerSquare: 100, diagonalRule: 'alternating', drawnBackground: '#2b3a4c',
       lightingEnabled: true, fogEnabled: true, globalIllumination: false, explorationEnabled: false, fogData,
     });
     expect(map.imageUrl).toMatch(/^\/api\/assets\/maps\//);

@@ -178,6 +178,7 @@ export default function CreateMapModal({
         gridSize: drawnSize.pixelsPerSquare,
         feetPerSquare,
         diagonalRule,
+        drawnBackground: background,
       });
       onCreated(map, uploaded);
       onClose();

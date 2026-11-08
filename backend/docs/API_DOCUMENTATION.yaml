@@ -2468,6 +2468,7 @@ paths:
                                 gridSize: { type: integer }
                                 feetPerSquare: { type: integer }
                                 diagonalRule: { type: string, enum: [flat, alternating] }
+                                drawnBackground: { type: string, nullable: true }
                                 baseLayerUrl: { type: string }
                                 spiritLayerUrl: { type: string, nullable: true }
                                 lightingEnabled: { type: boolean }
@@ -7165,6 +7166,7 @@ paths:
                         gridSize: { type: integer }
                         feetPerSquare: { type: integer }
                         diagonalRule: { type: string, enum: [flat, alternating] }
+                        drawnBackground: { type: string, nullable: true }
                         lightingEnabled: { type: boolean }
                         fogEnabled: { type: boolean }
                         globalIllumination: { type: boolean }
@@ -7211,9 +7213,9 @@ paths:
         either is not asked this.
 
 
-        `gridSize`, `feetPerSquare` and `diagonalRule` are never rejected: a
-        missing or out-of-range value is replaced with its default (50, 5,
-        `flat`). `gridSize` is in range as a whole number from 10 to 500,
+        `gridSize`, `feetPerSquare`, `diagonalRule` and `drawnBackground` are
+        never rejected: a missing or out-of-range value is replaced with its
+        default (50, 5, `flat`, null). `gridSize` is in range as a whole number from 10 to 500,
         `feetPerSquare` as a whole number from 1 to 100. Only `name`,
         `imageUrl`, `spiritLayerUrl`, `width` and `height` can make this route answer 400;
         `width` and `height` must be whole numbers from 1 to 500, and `name`
@@ -7266,6 +7268,10 @@ paths:
                   enum: [flat, alternating]
                   default: flat
                   description: Falls back to flat when omitted or not one of these two values.
+                drawnBackground:
+                  type: string
+                  example: '#e8dcc4'
+                  description: For a map drawn in CozyVTT, the colour its picture is made in, as `#rrggbb`. Null when omitted or written any other way.
                 spiritLayerUrl:
                   type: string
                   description: Asset id or exact asset address. Omitted or empty means none.
@@ -13206,6 +13212,10 @@ components:
           type: string
           enum: [flat, alternating]
           default: flat
+        drawnBackground:
+          type: string
+          nullable: true
+          description: The colour a map drawn in CozyVTT was made in, as `#rrggbb`, which Mapmaker's eraser paints. Null for a map made from a picture.
         tokens:
           type: array
           items:

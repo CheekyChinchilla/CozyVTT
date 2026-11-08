@@ -157,7 +157,7 @@ describe('Draw a map', () => {
     expect((file as File).type).toBe('image/png');
 
     expect(h.createMap).toHaveBeenCalledWith('campaign-1', expect.objectContaining({
-      name: 'The Crypt', imageUrl: 'drawn-1', width: 100, height: 50, gridSize: 57, feetPerSquare: 5, diagonalRule: 'flat',
+      name: 'The Crypt', imageUrl: 'drawn-1', width: 100, height: 50, gridSize: 57, feetPerSquare: 5, diagonalRule: 'flat', drawnBackground: '#9b958a',
     }));
     expect(h.createMap.mock.calls[0][1]).not.toHaveProperty('spiritLayerUrl');
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'map-new' }), picture);

@@ -654,6 +654,30 @@ describe('the eraser', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
     expect(lastStrokeStyle()).toBe('#1a1a1a');
   });
+
+  it('erases to the colour the map was made in, as the map keeps it, and starts the second colour there', async () => {
+    await showMap(mapWith({ drawnBackground: '#2b3a4c' }));
+    await paintOn();
+    press('e');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 120 });
+    expect(lastStrokeStyle()).toBe('#2b3a4c');
+    press('b');
+    expect(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: /^Second colour/ })).toHaveAccessibleName('Second colour: #2b3a4c');
+  });
+
+  it('keeps the second colour chosen when Mapmaker is opened again', async () => {
+    await showMap();
+    await paintOn();
+    const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
+    fireEvent.click(panel().getByRole('button', { name: /^Second colour/ }));
+    fireEvent.click(panel().getByRole('button', { name: 'Stone' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Done painting' }));
+    // The canvas is let go once the map's own picture is back, so the next open makes a new one.
+    pictures[1].load();
+    await pictures[1].decoded();
+    await paintOn();
+    expect(panel().getByRole('button', { name: /^Second colour/ })).toHaveAccessibleName('Second colour: Stone');
+  });
 });
 
 describe('lines, rectangles and ellipses', () => {
@@ -834,9 +858,17 @@ describe('a selection', () => {
   const drawnAt = () => callsOfPicture('drawImage').map((c) => c.args.slice(-4));
   const holes = () => callsOfPicture('fillRect').map((c) => c.args);
 
+  /** Choose a second colour that is not the map's own, so a hole in the second colour would show. */
+  const chooseStone = () => {
+    fireEvent.click(panel().getByRole('button', { name: /^Second colour/ }));
+    fireEvent.click(panel().getByRole('button', { name: 'Stone' }));
+  };
+  const lastFillStyle = () => pictureCanvas()?.getContext('2d')?.fillStyle;
+
   it('moves the pixels dragged inside it, putting them down where it is let go and leaving where they were in the map\'s own colour, as one change', async () => {
-    await showMap();
+    await showMap(mapWith({ drawnBackground: '#2b3a4c' }));
     await paintOn();
+    chooseStone();
     choose('Select');
     drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
     drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 });
@@ -845,6 +877,7 @@ describe('a selection', () => {
     press('Enter');
     await waitFor(() => expect(drawnAt()).toContainEqual([200, 200, 100, 50]));
     expect(holes()).toContainEqual([100, 100, 100, 50]);
+    expect(lastFillStyle()).toBe('#2b3a4c');
     expect(screen.getByRole('button', { name: 'Undo' })).toBeEnabled();
   });
 
@@ -898,9 +931,10 @@ describe('a selection', () => {
     await waitFor(() => expect(drawnAt()).toContainEqual([100, 100, 200, 150]));
   });
 
-  it('paints the box over with the second colour on Delete, and offers Copy, Cut and Delete only with a box', async () => {
-    await showMap();
+  it('paints the box over in the map\'s own colour on Delete, and offers Copy, Cut and Delete only with a box', async () => {
+    await showMap(mapWith({ drawnBackground: '#2b3a4c' }));
     await paintOn();
+    chooseStone();
     choose('Select');
     expect(panel().getByRole('button', { name: 'Delete' })).toBeDisabled();
     expect(panel().getByRole('button', { name: 'Paste' })).toBeDisabled();
@@ -908,6 +942,7 @@ describe('a selection', () => {
     expect(panel().getByRole('button', { name: 'Copy' })).toBeEnabled();
     press('Delete');
     await waitFor(() => expect(holes()).toContainEqual([100, 100, 100, 50]));
+    expect(lastFillStyle()).toBe('#2b3a4c');
     expect(panel().getByRole('button', { name: 'Delete' })).toBeDisabled();
   });
 

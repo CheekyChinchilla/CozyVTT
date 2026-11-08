@@ -237,6 +237,7 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
       gridSize: map.gridSize,
       feetPerSquare: map.feetPerSquare,
       diagonalRule: map.diagonalRule ?? 'flat',
+      drawnBackground: map.drawnBackground ?? null,
       tokens: tokens as unknown as Prisma.InputJsonValue,
       // Unused: a map's drawings are rows of MapDrawing.
       annotations: [],
