@@ -43,6 +43,13 @@ export function rollTarget(expression: string, purpose: string, gameSystem: stri
   };
 }
 
+/**
+ * The mark of an element that rolls when pressed and is no d20 test (a
+ * damage roll, a hit die, a Call of Cthulhu skill), so the roll's feedback
+ * pulses it as it does a test (hooks/useRollFeedback.ts).
+ */
+export const sheetRoll = { 'data-sheet-roll': '' } as const;
+
 /** What `rollTarget` gives a row. */
 export type RollTargetProps = ReturnType<typeof rollTarget>;
 

@@ -9,6 +9,7 @@ import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOptionalWebSocket } from '@/contexts/WebSocketContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
+import { useRollFeedback } from '@/hooks/useRollFeedback';
 import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
 import type { Campaign, Character, CampaignMembership } from '@/types';
@@ -78,6 +79,7 @@ export default function CharacterSheetViewerModal({
   const ws = useOptionalWebSocket();
   const socket = ws?.socket;
   const tableRoll = useTableRoll(socket);
+  const rollFeedback = useRollFeedback(socket);
   const [character, setCharacter] = useState(initialCharacter);
   const [showEditor, setShowEditor] = useState(false);
   // Roll mode, for every test a click or a tap rolls on this sheet: held
@@ -167,8 +169,15 @@ export default function CharacterSheetViewerModal({
   // Handle click-to-roll: rolls at the table, and says so when refused.
   // Named so the panel heads the entry with the character whose sheet this
   // is, not with whoever happens to be reading it.
-  const handleRoll = (expression: string, purpose: string) =>
-    tableRoll({ expression, purpose, characterName: publicName ?? character.name, ...(secretRolls ? { secret: true } : {}) });
+  // The stat pressed pulses, and the result is said where the Dice log
+  // cannot be seen (hooks/useRollFeedback.ts).
+  const handleRoll = (expression: string, purpose: string) => {
+    rollFeedback.sent();
+    return tableRoll(
+      { expression, purpose, characterName: publicName ?? character.name, ...(secretRolls ? { secret: true } : {}) },
+      (id) => rollFeedback.made(id, purpose || expression),
+    );
+  };
 
   // Passed to the sheet views only when this viewer may roll and there is a
   // table to roll at; without it the stats render as plain text. The
@@ -278,7 +287,7 @@ export default function CharacterSheetViewerModal({
             inside the dialog, and not across the whole page; a new version of
             the character tries it again. Keyed on the character alone, so a
             sheet that is drawn keeps its open tab through every update. */}
-        <div data-sheet-shell="content" className="flex-1 overflow-y-auto p-3 sm:p-6 short:p-3">
+        <div data-sheet-shell="content" className="flex-1 overflow-y-auto p-3 sm:p-6 short:p-3" onClickCapture={rollFeedback.onClickCapture}>
           <CharacterSheetErrorBoundary key={character.id} resetKey={character.updatedAt}>
             {renderCharacterSheet()}
           </CharacterSheetErrorBoundary>

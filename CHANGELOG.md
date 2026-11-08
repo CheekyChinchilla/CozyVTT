@@ -69,6 +69,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Double tap the map to ping it on a touch screen.** Two quick taps on empty ground ping the spot for the whole table, while no tool is up. See [Pointing at the Map](docs/PLAYER_GUIDE.md#pointing-at-the-map).
 
+- **A roll from a character sheet shows that it went.** The stat pressed gives a short pulse, a phone that allows it gives a short buzz, and while the **Dice** panel is off the screen a message gives the result, such as "Longsword Attack: 17". See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
+
 - **Roll with advantage or disadvantage from a sheet on a phone or a tablet.** On a D&D 5e or Pathfinder 2e sheet, press and hold a stat for its **Normal**, **Advantage** and **Disadvantage** menu. A D&D 5e or Pathfinder 2e sheet also has **Roll mode** in its header on every device, which applies to every check, save, skill and attack you roll from it until you change it or close the sheet. See [Rolling from your sheet](docs/PLAYER_GUIDE.md#rolling-from-your-sheet).
 
 - **Move, turn and step through tokens from the keyboard.** Click a token to select it, then use the arrow keys to move it, **[** and **]** to turn it, **,** and **.** to step to the next token and **Enter** for its menu. Keyboard moves follow the same rules as the mouse. See [Moving Your Token](docs/PLAYER_GUIDE.md#moving-your-token).

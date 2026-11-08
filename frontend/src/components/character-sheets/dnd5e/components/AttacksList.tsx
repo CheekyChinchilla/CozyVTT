@@ -9,7 +9,7 @@ import { Sword, Zap, Dices } from 'lucide-react';
 import type { DnD5eAttack } from '@/types/game-systems/dnd5e';
 import { diceExpressionProblem } from '@/utils/diceExpression';
 import { attackPurpose, damagePurpose } from '@/utils/rollPurposes';
-import { notARoll, rollTarget } from '../../useSheetRolls';
+import { notARoll, rollTarget, sheetRoll } from '../../useSheetRolls';
 
 /**
  * The attack shape was declared again here, a copy of `DnD5eAttack` that had to
@@ -103,6 +103,7 @@ const AttackRow: React.FC<{
           className={rollsDamage ? 'cursor-pointer hover:text-danger-ink' : damageProblem ? 'cursor-default' : ''}
           onClick={onRollDamage && attack.damageRoll ? handleDamageClick : undefined}
           title={rollsDamage ? `Click to roll damage: ${attack.damageRoll}` : undefined}
+          {...(rollsDamage ? sheetRoll : undefined)}
           {...(damageProblem ? notARoll(damageProblem) : undefined)}
         >
           <span className="text-xs text-ink-muted">Damage</span>
@@ -155,6 +156,7 @@ const AttackRow: React.FC<{
                   }
                   title={rollable ? `Click to roll ${label}: ${roll}` : undefined}
                   {...(problem ? notARoll(problem) : undefined)}
+                  {...(rollable ? sheetRoll : undefined)}
                 >
                   <span className="text-xs text-ink-muted">{label}</span>
                   <span className="font-semibold text-ink-secondary">{roll}</span>
