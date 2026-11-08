@@ -263,7 +263,7 @@ Chat and dice are your two most-used tools. They each have their own tab in the 
 
 *Screenshot pending — Chat panel with a few messages.*
 
-Type your message in the input box at the bottom and press **Enter** to send. Your display name appears next to your messages.
+Type your message in the input box at the bottom and press **Enter** to send; **Shift+Enter** starts a new line. The box grows as you type, up to six lines on a computer and four on a phone. Your display name appears next to your messages.
 
 Chat is for everything: in-character dialogue, out-of-character coordination, questions for the DM, celebrations when you roll a nat 20.
 

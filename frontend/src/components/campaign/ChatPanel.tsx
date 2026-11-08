@@ -12,6 +12,7 @@ import { useOnRejoin } from '@/hooks/useOnRejoin';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useCompactLayout } from '@/contexts/LayoutContext';
+import { useGrowingTextarea } from '@/hooks/useGrowingTextarea';
 import { getMessages } from '@/services/message.service';
 import { mergeMessages } from '@/utils/messageMerge';
 import { cursorBefore } from '@/utils/messageHistory';
@@ -196,6 +197,9 @@ export default function ChatPanel() {
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const [messageInput, setMessageInput] = useState('');
+  // The box grows with what is typed: 4 lines in the compact layout's Chat
+  // sheet, where the log gives up the rows, and 6 on a computer.
+  useGrowingTextarea(textareaRef, messageInput, compact ? 4 : 6);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -822,7 +826,7 @@ export default function ChatPanel() {
       placeholder={compact ? (recipient ? 'Whisper…' : 'Message…') : recipient ? 'Type a whisper... (Enter to send)' : 'Type a message... (Enter to send, Shift+Enter for new line)'}
       aria-label="Chat message"
       aria-describedby="chat-hint"
-      className={`input-cozy flex-1 text-sm resize-none ${compact ? 'min-w-0 min-h-11 px-2.5' : 'min-h-[60px]'} max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
+      className={`input-cozy flex-1 text-sm resize-none ${compact ? 'min-w-0 min-h-11 px-2.5' : 'min-h-[60px]'} ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
       rows={compact ? 1 : 2}
       maxLength={slashInBox ? MAX_CHAT_MESSAGE_LENGTH + WHISPER_PREFIX_ROOM : MAX_CHAT_MESSAGE_LENGTH}
       // Read-only through the cooldown, not disabled: disabling the
@@ -1003,7 +1007,8 @@ export default function ChatPanel() {
               row, so the log keeps the room. */}
           {compact ? (
             <>
-              <div key="compose" className="flex items-stretch gap-2">
+              {/* At the foot of the row, so To and Send stay one line as the box grows. */}
+              <div key="compose" className="flex items-end gap-2">
                 {toLabel}
                 {toList}
                 {messageBox}
