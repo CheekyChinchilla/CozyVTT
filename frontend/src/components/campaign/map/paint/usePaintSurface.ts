@@ -915,6 +915,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
+    // No brush or stamp is left showing where the pointer was.
+    hoverRef.current = null;
+    stampPressRef.current = null;
     setOn(false);
     onRef.current = false;
     markDirty('overlay');
@@ -1620,6 +1623,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   useEffect(() => {
     if (settings.tool !== 'select') endSelectionRef.current();
   }, [settings.tool]);
+  // A new tool, width, stamp or colour: what shows under the pointer is drawn as it now is.
+  useEffect(() => {
+    markDirty('overlay');
+  }, [settings, markDirty]);
 
   const step = useCallback((direction: 'undo' | 'redo') => {
     const s = surfaceRef.current;
