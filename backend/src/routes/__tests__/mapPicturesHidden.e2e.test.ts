@@ -328,7 +328,8 @@ describe('the asset list of a player in a campaign of many maps', () => {
     jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
       const [first] = args;
       const sql = typeof first === 'string' ? first : first && typeof first === 'object' && 'text' in first ? String(first.text) : '';
-      const reading = /^\s*SELECT/i.test(sql) && /FROM "public"\."Map"/.test(sql);
+      // Prisma's own reads name the table "public"."Map", the asset list's raw query (mapsNamingOtherFiles) "Map".
+      const reading = /^\s*SELECT/i.test(sql) && /FROM\s+(?:"public"\.)?"Map"\s/.test(sql);
       const done = args[args.length - 1];
       if (reading && typeof done === 'function') {
         // The driver passes a callback: count the rows it is handed.
