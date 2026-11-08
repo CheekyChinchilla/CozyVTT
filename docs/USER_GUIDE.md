@@ -726,7 +726,7 @@ bottom, and it follows along as they come in unless you have scrolled up to read
 something earlier. A roll of your own always brings you down to it. The list
 survives a refresh.
 
-**Secret rolls.** Tick **Secret Roll** before rolling and the other players
+**Secret rolls.** Tick **Secret Roll** (on a phone, under **More**) before rolling and the other players
 never see it. Your DM does — deliberately, so they can settle an argument about
 what was really rolled — and the checkbox says so. Your own secret rolls stay in
 your list marked **🔒 Secret**, so you can look back at them; the **Secret**
