@@ -9,6 +9,7 @@ import { useMotionExit } from '@/utils/motion';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { useToastStack } from '@/contexts/ToastContext';
 import type { ToastItem } from '@/contexts/ToastContext';
+import { TOAST_TONE } from '@/components/Toast';
 
 // ============================================
 // Individual Toast Card
@@ -39,7 +40,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
         role="alert"
         aria-live="assertive"
         aria-atomic="true"
-        className={`glass-panel border-2 ${styles} shadow-lg rounded-lg p-4 flex items-start gap-3 min-w-[280px] max-w-sm`}
+        className={`border-2 ${styles} shadow-lg rounded-lg p-4 flex items-start gap-3 min-w-[280px] max-w-sm`}
       >
         <div className="shrink-0 mt-0.5" aria-hidden="true">
           {icon}
@@ -68,22 +69,22 @@ function getToastAppearance(type: ToastItem['type']) {
     case 'success':
       return {
         icon: <CheckCircle className="w-5 h-5 text-success-ink" />,
-        styles: 'bg-success/10 border-success/30 text-success-ink',
+        styles: TOAST_TONE.success,
       };
     case 'error':
       return {
         icon: <AlertCircle className="w-5 h-5 text-danger-ink" />,
-        styles: 'bg-danger/10 border-danger/30 text-danger-ink',
+        styles: TOAST_TONE.error,
       };
     case 'warning':
       return {
         icon: <AlertTriangle className="w-5 h-5 text-warning-ink" />,
-        styles: 'bg-warning/10 border-warning/30 text-warning-ink',
+        styles: TOAST_TONE.warning,
       };
     default:
       return {
         icon: <Info className="w-5 h-5 text-info-ink" />,
-        styles: 'bg-info/10 border-info/30 text-info-ink',
+        styles: TOAST_TONE.info,
       };
   }
 }

@@ -116,6 +116,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **System notices in the chat take one quiet line.** A session paused or resumed, or the spirit layer shown or hidden, is a small centred line in place of a card like a message, and the message box's placeholder no longer repeats the keys written under it.
 
+- **Pop-up messages have a solid background.** They were see-through, so one over the map or a character sheet's heading was hard to read.
+
 - **The chat box grows as you type,** up to six lines on a computer and four on a phone, then scrolls, and shrinks back once the message is sent. It stayed two lines tall on a computer. See [The Chat Panel](docs/USER_GUIDE.md#the-chat-panel).
 
 - **The chat holds the newest 400 messages, and Load More brings back older ones.** A long session made the page heavier the longer the table played. Nothing is deleted: the whole history stays on the server. See [The Chat Panel](docs/USER_GUIDE.md#the-chat-panel).

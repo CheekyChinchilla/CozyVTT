@@ -11,6 +11,14 @@ import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
+/** Each kind of message's solid colours (index.css), for this toast and ToastContainer's. */
+export const TOAST_TONE: Record<ToastType, string> = {
+  success: 'toast-success',
+  error: 'toast-danger',
+  warning: 'toast-warning',
+  info: 'toast-info',
+};
+
 export interface ToastProps {
   message: string;
   type?: ToastType;
@@ -60,20 +68,6 @@ export default function Toast({
     }
   };
 
-  const getStyles = () => {
-    switch (type) {
-      case 'success':
-        return 'bg-success/10 border-success/30 text-success-ink';
-      case 'error':
-        return 'bg-danger/10 border-danger/30 text-danger-ink';
-      case 'warning':
-        return 'bg-warning/10 border-warning/30 text-warning-ink';
-      case 'info':
-      default:
-        return 'bg-info/10 border-info/30 text-info-ink';
-    }
-  };
-
   return (
     <AnimatePresence>
       {show && (
@@ -92,7 +86,7 @@ export default function Toast({
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
-            className={`glass-panel border-2 ${getStyles()} shadow-lg rounded-lg p-4 flex items-start gap-3`}
+            className={`border-2 ${TOAST_TONE[type]} shadow-lg rounded-lg p-4 flex items-start gap-3`}
           >
             <div className="shrink-0 mt-0.5">{getIcon()}</div>
             <div className="flex-1 min-w-0">

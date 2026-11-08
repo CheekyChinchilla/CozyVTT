@@ -30,6 +30,17 @@ describe('Toast', () => {
     expect(screen.getByText('Goblin Sniper is already standing there.')).toBeInTheDocument();
   });
 
+  // A see-through tint was hard to read over a sheet's header on a phone.
+  it('draws each kind of message on a solid colour, so it reads over a map or a sheet', () => {
+    for (const [type, tone] of [['success', 'toast-success'], ['error', 'toast-danger'], ['warning', 'toast-warning'], ['info', 'toast-info']] as const) {
+      const { unmount } = render(<Toast show type={type} message="Saved" onClose={noop} />);
+      const card = screen.getByRole('alert');
+      expect(card.className).toContain(tone);
+      expect(card.className).not.toMatch(/glass-panel|bg-[a-z]+\/\d+/);
+      unmount();
+    }
+  });
+
   it('renders nothing when not shown', () => {
     render(<Toast show={false} message="Hidden" onClose={noop} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

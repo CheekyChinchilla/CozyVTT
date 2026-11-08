@@ -69,3 +69,11 @@ it('keeps the stack 16 px from both edges of a narrow screen', () => {
   expect(screen.getByLabelText('Notifications').className.split(/\s+/))
     .toEqual(expect.arrayContaining(['fixed', 'right-4', 'max-w-[calc(100vw-2rem)]']));
 });
+
+it('draws a message on the solid colour of its kind, as the single toast does', () => {
+  render(<ToastProvider><Trigger /><ToastContainer /></ToastProvider>);
+  act(() => show('The wall was not added', 'error', 0));
+  const card = screen.getByRole('alert');
+  expect(card.className).toContain('toast-danger');
+  expect(card.className).not.toMatch(/glass-panel|bg-[a-z]+\/\d+/);
+});
