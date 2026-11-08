@@ -213,6 +213,8 @@ interface Surface {
   ownsDraft: boolean;
   /** The rooms painted and not saved, whose walls Save adds to the map. */
   rooms: PendingRoom[];
+  /** The rooms a save under way took, until it has added their walls: the draft keeps them meanwhile. */
+  roomsSaving: PendingRoom[];
   /** The map's own colour, kept with the map, or read off the picture's top-left pixel for one drawn before it was kept: what the eraser paints. */
   background: string;
   /** The map's size in map pixels while it was last on screen: the picture's scale once the page has moved on. */
@@ -582,7 +584,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const header: DraftHeader = {
       key, userId: user, campaignId: campaign, mapId: s.mapId, tabId: tabRef.current.id(), baseUrl: s.baseUrl,
       width: s.canvas.width, height: s.canvas.height, savedAt: Date.now(),
-      ...(liveWalls(s.rooms).length > 0 ? { walls: liveWalls(s.rooms) } : {}),
+      ...(liveWalls([...s.roomsSaving, ...s.rooms]).length > 0 ? { walls: liveWalls([...s.roomsSaving, ...s.rooms]) } : {}),
     };
     void inDraftQueue(async (store) => {
       // A canvas's first write goes over this tab's draft of the map only
@@ -723,6 +725,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
+    if (selectionRef.current?.lifted) releaseLifted(selectionRef.current.lifted.canvas, clipboardRef.current?.canvas);
     selectionRef.current = null;
     setSelectionShown(false);
     setSelectionUnsaved(false);
@@ -748,6 +751,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
+    if (selectionRef.current?.lifted) releaseLifted(selectionRef.current.lifted.canvas, clipboardRef.current?.canvas);
     selectionRef.current = null;
     setSelectionShown(false);
     setSelectionUnsaved(false);
@@ -874,6 +878,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       takenFrom: how !== undefined && how !== 'fresh' ? how.from : null,
       ownsDraft: false,
       rooms: [],
+      roomsSaving: [],
       background,
       mapPx: [map.width * map.gridSize, map.height * map.gridSize],
     };
@@ -1241,6 +1246,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       s.changed = new Map();
       s.asSaved = new Map();
       s.unwritten = new Map();
+      s.roomsSaving = s.rooms;
       s.rooms = [];
       const { map: saved, asset } = await savePaint({
         previous,
@@ -1279,6 +1285,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       } catch (err) {
         wallRefused = err;
       }
+      s.roomsSaving = [];
 
       if (surfaceRef.current === s) {
         s.saved = asOf;
@@ -1303,6 +1310,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         for (const [at, packed] of taken.asSaved) s.asSaved.set(at, packed);
         s.rooms = [...taken.rooms, ...s.rooms];
       }
+      s.roomsSaving = [];
       refuse(err instanceof DrawnPictureRefused ? err.message : apiErrorMessage(err) || 'Could not save the picture. Try again.');
       return false;
     } finally {
@@ -1594,6 +1602,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     const selection = selectionRef.current;
     selectionRef.current = null;
+    // Lifted pixels are not put down, so they are let go of; a cut's copy is kept.
+    if (selection?.lifted) releaseLifted(selection.lifted.canvas, clipboardRef.current?.canvas);
     setSelectionShown(false);
     setSelectionUnsaved(false);
     markDirty('overlay');

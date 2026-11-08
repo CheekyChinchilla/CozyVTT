@@ -1032,6 +1032,26 @@ describe('a selection', () => {
     expect(lifted?.width).toBe(0);
   });
 
+  it('lets go of the pixels it lifted when they are deleted, or the painting is discarded', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    let made = await canvasesMadeDuring(async () => { drag({ clientX: 150, clientY: 120 }, { clientX: 250, clientY: 220 }); });
+    const deleted = made.find((c) => c.width === 100 && c.height === 50);
+    press('Delete');
+    await waitFor(() => expect(holes()).toContainEqual([100, 100, 100, 50]));
+    expect(deleted?.width).toBe(0);
+
+    drag({ clientX: 400, clientY: 400 }, { clientX: 500, clientY: 450 });
+    made = await canvasesMadeDuring(async () => { drag({ clientX: 450, clientY: 420 }, { clientX: 550, clientY: 520 }); });
+    const discarded = made.find((c) => c.width === 100 && c.height === 50);
+    act(() => { leavePageWith(vi.fn()); });
+    const asked = await screen.findByRole('dialog', { name: 'Save your painting?' });
+    await act(async () => { fireEvent.click(within(asked).getByRole('button', { name: 'Discard my painting' })); });
+    expect(discarded?.width).toBe(0);
+  });
+
   it('keeps pixels it lifted that were copied, for Paste, and lets go of a copy another replaces', async () => {
     await showMap();
     await paintOn();
@@ -2007,6 +2027,35 @@ describe('drafts', () => {
     drafts().kept.set(at, new Map([['0,0', { tx: 0, ty: 0, packed: blank }], ['1,0', { tx: 1, ty: 0, packed: blank }]]));
   }
   const putBack = () => callsOn(pictureCanvas()).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
+
+  it("keeps a saved room's walls in the draft while they are being added, should the DM paint meanwhile", async () => {
+    await showMap();
+    await paintOn();
+    const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      fireEvent.click(panel().getByRole('button', { name: 'Room' }));
+      drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+      act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+      await settle();
+      let addFirst: () => void = () => undefined;
+      h.addWall.mockImplementationOnce(() => new Promise((resolve) => { addFirst = () => resolve({}); }));
+      await pressSave();
+      for (let i = 0; i < 20 && h.addWall.mock.calls.length === 0; i += 1) await settle();
+      expect(h.addWall).toHaveBeenCalledTimes(1);
+      // The DM paints while the walls go in, and that painting is drafted.
+      const writes = drafts().writes.length;
+      fireEvent.click(panel().getByRole('button', { name: 'Brush' }));
+      drag({ clientX: 300, clientY: 300 }, { clientX: 400, clientY: 320 });
+      act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
+      await settle();
+      expect(drafts().writes.length).toBeGreaterThan(writes);
+      expect(drafts().headers.get(key)?.walls).toHaveLength(4);
+      await act(async () => { addFirst(); });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it("keeps a room's walls with the draft, takes them out when the room is undone, and adds them when the restored painting is saved", async () => {
     await showMap();
