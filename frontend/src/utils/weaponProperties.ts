@@ -16,6 +16,8 @@
  * mistake that filed a player's Thieves' Cant under Weapons.
  */
 
+import { DND5E_WEAPON_PROPERTY_LENGTH_MAX } from '@/constants/sheetLimits';
+
 export const DND5E_WEAPON_PROPERTIES = [
   'ammunition',
   'finesse',
@@ -77,9 +79,6 @@ export function customWeaponProperties(properties: readonly string[]): string[] 
   return properties.filter((entry) => entry.trim().length > 0 && !isCanonicalWeaponProperty(entry));
 }
 
-/** Longest property a weapon will accept, so the field cannot be used as storage. */
-export const MAX_WEAPON_PROPERTY_LENGTH = 60;
-
 /**
  * Add a property of the player's own.
  *
@@ -97,7 +96,7 @@ export function addCustomWeaponProperty(
   value: string
 ): string[] {
   const trimmed = value.trim();
-  if (!trimmed || trimmed.length > MAX_WEAPON_PROPERTY_LENGTH) return [...properties];
+  if (!trimmed || trimmed.length > DND5E_WEAPON_PROPERTY_LENGTH_MAX) return [...properties];
   if (hasWeaponProperty(properties, trimmed)) return [...properties];
 
   // Canonical names are always stored lowercase, however they were typed, so

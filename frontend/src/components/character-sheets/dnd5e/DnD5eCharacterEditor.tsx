@@ -62,7 +62,6 @@ import {
 import { readProficiencyGroups, flattenProficiencyGroups } from '@/utils/proficiencies';
 import {
   DND5E_WEAPON_PROPERTIES,
-  MAX_WEAPON_PROPERTY_LENGTH,
   hasWeaponProperty,
   toggleWeaponProperty,
   customWeaponProperties,
@@ -72,7 +71,13 @@ import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText, headerInk } from
 import {
   DND5E_ATTACK_DAMAGE_ROLLS_MAX,
   DND5E_CUSTOM_SKILLS_MAX,
+  DND5E_CUSTOM_SKILL_NAME_MAX,
+  DND5E_DAMAGE_ROLL_TEXT_MAX,
+  DND5E_DAMAGE_TYPE_MAX,
+  DND5E_HIT_DIE_MAX,
+  DND5E_PROFICIENCY_BOX_MAX,
   DND5E_WEAPON_PROPERTIES_MAX,
+  DND5E_WEAPON_PROPERTY_LENGTH_MAX,
   SHEET_LIST_MAX,
   SHEET_NAME_MAX,
   SHEET_SHORT_TEXT_MAX,
@@ -290,9 +295,6 @@ function withoutOrphanLanguages(sheet: DnD5eFormData): DnD5eFormData {
   delete (settled as Record<string, unknown>).languages;
   return settled;
 }
-
-/** The most one proficiency box holds, as the schema stores it. */
-const PROFICIENCY_BOX_MAX = 2000;
 
 /** The ability each of the eighteen skills uses. */
 const SKILL_ABILITIES: Record<keyof DnD5eSkills, keyof DnD5eStats> = {
@@ -1716,7 +1718,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   onChange={(e) => updateField(`customSkills.${index}.name`, e.target.value)}
                   placeholder="e.g. Thieves' Tools"
                   aria-label={`Name of skill ${index + 1}`}
-                  maxLength={60}
+                  maxLength={DND5E_CUSTOM_SKILL_NAME_MAX}
                   className="flex-1 min-w-36 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
 
@@ -2011,7 +2013,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 onChange={(e) => updateField(`hitDice.${index}.die`, e.target.value)}
                 placeholder="d10"
                 aria-label={`Hit die of row ${index + 1}`}
-                maxLength={50}
+                maxLength={DND5E_HIT_DIE_MAX}
                 title="One hit die — d10 for a fighter. Something like 2d6 works too if your game uses it."
                 className="min-w-0 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
               />
@@ -2354,7 +2356,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         commitCustomProperty(index, attack.properties || []);
                       }
                     }}
-                    maxLength={MAX_WEAPON_PROPERTY_LENGTH}
+                    maxLength={DND5E_WEAPON_PROPERTY_LENGTH_MAX}
                     placeholder="Add your own property"
                     aria-label="Add a custom weapon property"
                     className="min-w-0 flex-1 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
@@ -2410,7 +2412,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       }
                       placeholder="When (e.g. Two-handed)"
                       aria-label={`When damage roll ${dmgIndex + 1} applies`}
-                      maxLength={60}
+                      maxLength={DND5E_DAMAGE_ROLL_TEXT_MAX}
                       className="min-w-0 flex-1 basis-full sm:basis-0 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <input
@@ -2424,7 +2426,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       }
                       placeholder="1d10+3"
                       aria-label={`Damage roll ${dmgIndex + 1}`}
-                      maxLength={60}
+                      maxLength={DND5E_DAMAGE_ROLL_TEXT_MAX}
                       className="min-w-0 flex-1 sm:flex-initial w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <input
@@ -2438,7 +2440,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       }
                       placeholder="slashing"
                       aria-label={`Damage type of roll ${dmgIndex + 1}`}
-                      maxLength={40}
+                      maxLength={DND5E_DAMAGE_TYPE_MAX}
                       className="min-w-0 flex-1 sm:flex-initial w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <button
@@ -2950,7 +2952,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-armor" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Armor</label>
               <textarea
                 id="dnd5e-proficiencies-armor"
-                maxLength={PROFICIENCY_BOX_MAX}
+                maxLength={DND5E_PROFICIENCY_BOX_MAX}
                 value={profs.armor}
                 onChange={(e) => updateField('proficiencies.armor', e.target.value)}
                 placeholder="Light Armor, Medium Armor, Shields"
@@ -2964,7 +2966,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-weapons" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Weapons</label>
               <textarea
                 id="dnd5e-proficiencies-weapons"
-                maxLength={PROFICIENCY_BOX_MAX}
+                maxLength={DND5E_PROFICIENCY_BOX_MAX}
                 value={profs.weapons}
                 onChange={(e) => updateField('proficiencies.weapons', e.target.value)}
                 placeholder="Simple Weapons, Martial Weapons, or specific weapons (Daggers, Longswords, Shortbows)"
@@ -2978,7 +2980,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-tools" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Tools</label>
               <textarea
                 id="dnd5e-proficiencies-tools"
-                maxLength={PROFICIENCY_BOX_MAX}
+                maxLength={DND5E_PROFICIENCY_BOX_MAX}
                 value={profs.tools}
                 onChange={(e) => updateField('proficiencies.tools', e.target.value)}
                 placeholder="Thieves' Tools, Smith's Tools, Calligrapher's Supplies, Musical Instruments, Vehicles (Land/Water)"
@@ -2992,7 +2994,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-languages" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Languages</label>
               <textarea
                 id="dnd5e-proficiencies-languages"
-                maxLength={PROFICIENCY_BOX_MAX}
+                maxLength={DND5E_PROFICIENCY_BOX_MAX}
                 value={profs.languages}
                 onChange={(e) => updateField('proficiencies.languages', e.target.value)}
                 placeholder="Common, Elvish, Dwarvish, Draconic"

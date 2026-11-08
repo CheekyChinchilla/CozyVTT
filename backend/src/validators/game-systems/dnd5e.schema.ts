@@ -14,8 +14,14 @@ import { featureEntrySchema } from './featureEntry.schema';
 import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
 import {
   DND5E_ATTACK_DAMAGE_ROLLS_MAX,
+  DND5E_CUSTOM_SKILL_NAME_MAX,
   DND5E_CUSTOM_SKILLS_MAX,
+  DND5E_DAMAGE_ROLL_TEXT_MAX,
+  DND5E_DAMAGE_TYPE_MAX,
+  DND5E_HIT_DIE_MAX,
+  DND5E_PROFICIENCY_BOX_MAX,
   DND5E_WEAPON_PROPERTIES_MAX,
+  DND5E_WEAPON_PROPERTY_LENGTH_MAX,
   SPELL_SLOTS_MAX,
 } from './sheetLimits';
 import { sheetList } from './sheetLists';
@@ -33,12 +39,7 @@ const manualBonusSchema = z.number().int().min(MIN_BONUS_OVERRIDE).max(MAX_BONUS
  * One of the four proficiency boxes. The flattened list below is split from
  * them at commas, so one of its entries can be a whole box.
  */
-// TODO(sheets): 2000 here, and 60 for a weapon property in the attack schema,
-// are written again in the editor (PROFICIENCY_BOX_MAX in
-// DnD5eCharacterEditor.tsx, MAX_WEAPON_PROPERTY_LENGTH in
-// utils/weaponProperties.ts), and nothing checks that they agree. Move both
-// into sheetLimits.ts, whose frontend copy keepInStep.test.ts holds to it.
-const proficiencyBoxSchema = z.string().max(2000);
+const proficiencyBoxSchema = z.string().max(DND5E_PROFICIENCY_BOX_MAX);
 
 /**
  * Ability score with modifier
@@ -116,7 +117,7 @@ const skillSchema = z.object({
  * drop them.
  */
 const customSkillSchema = z.object({
-  name: z.string().max(60),
+  name: z.string().max(DND5E_CUSTOM_SKILL_NAME_MAX),
   ability: z.enum([
     'strength',
     'dexterity',
@@ -176,7 +177,7 @@ const hitDiceSchema = z.object({
   // sheets written before them keep saving.
   total: shortText.optional(),
   /** One hit die's roll — "d10", or "2d6" for a pool that is not a single die. */
-  die: z.string().max(50).optional(),
+  die: z.string().max(DND5E_HIT_DIE_MAX).optional(),
   /** How many dice the pool holds at full. */
   maximum: z.number().int().min(0).optional(),
   remaining: z.number().int().min(0),
@@ -206,9 +207,9 @@ const deathSavesSchema = z.object({
  * and is filled in afterwards. Readers skip a row with no dice in it.
  */
 const additionalDamageSchema = z.object({
-  label: z.string().max(60).optional(),
-  damageRoll: z.string().max(60).optional(),
-  damageType: z.string().max(40).optional(),
+  label: z.string().max(DND5E_DAMAGE_ROLL_TEXT_MAX).optional(),
+  damageRoll: z.string().max(DND5E_DAMAGE_ROLL_TEXT_MAX).optional(),
+  damageType: z.string().max(DND5E_DAMAGE_TYPE_MAX).optional(),
 });
 
 const attackSchema = z.object({
@@ -221,7 +222,7 @@ const attackSchema = z.object({
   // common case, not the limit — a homebrew game may name any number more, and
   // the sheet draws a badge for whatever is stored. Bounded only so the field
   // cannot be used as storage, the same reason token conditions are bounded.
-  properties: z.array(z.string().max(60)).max(DND5E_WEAPON_PROPERTIES_MAX).optional(),
+  properties: z.array(z.string().max(DND5E_WEAPON_PROPERTY_LENGTH_MAX)).max(DND5E_WEAPON_PROPERTIES_MAX).optional(),
   notes: longText.optional(),
   additionalDamage: z.array(additionalDamageSchema).max(DND5E_ATTACK_DAMAGE_ROLLS_MAX).optional(),
 });
