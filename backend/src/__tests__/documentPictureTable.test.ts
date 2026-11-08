@@ -17,9 +17,11 @@ describe('the add_document_picture_links migration', () => {
   const sql = MIGRATION ? fs.readFileSync(path.join(MIGRATIONS, MIGRATION, 'migration.sql'), 'utf8') : '';
   const statements = sql.replace(/--.*$/gm, '');
 
-  it('exists, after every migration before it', () => {
+  // Later migrations may follow it; none may come between it and the one it was written after.
+  it('exists, right after the migration before it', () => {
     expect(MIGRATION).toBeDefined();
-    expect(fs.readdirSync(MIGRATIONS).filter((name) => /^\d{14}_/.test(name)).sort().at(-1)).toBe(MIGRATION);
+    const names = fs.readdirSync(MIGRATIONS).filter((name) => /^\d{14}_/.test(name)).sort();
+    expect(names[names.indexOf(MIGRATION!) - 1]).toBe('20261101181352_add_dice_macro_character');
   });
 
   it('only adds: it drops, renames, retypes, updates and deletes nothing', () => {
