@@ -12,7 +12,7 @@ import GenericStatBlock from './GenericStatBlock';
 import { formatSaveList, formatSkillList } from './statBlockProficiency';
 import { PF2E_ATTRIBUTE_LABELS, PF2E_SAVES, formatPf2eSaves, readAttributeModifiers } from './pf2eStatBlock';
 import { ABILITY_KEYS, formatModifier } from '@/utils/rules/dnd5e';
-import { scoreLabel } from './creatureModel';
+import { creatureModel, scoreLabel } from './creatureModel';
 
 interface StatBlockViewerProps {
   statBlock: NpcStatBlock;
@@ -29,7 +29,7 @@ export default function StatBlockViewer({ statBlock, tokenName, gameSystem }: St
     case GameSystem.CALL_OF_CTHULHU_7E:
       return <CoCStatBlock statBlock={statBlock} tokenName={tokenName} />;
     default:
-      return <GenericStatBlock statBlock={statBlock} tokenName={tokenName} />;
+      return <GenericStatBlock statBlock={statBlock} tokenName={tokenName} showRating={creatureModel(gameSystem) !== 'printed'} />;
   }
 }
 

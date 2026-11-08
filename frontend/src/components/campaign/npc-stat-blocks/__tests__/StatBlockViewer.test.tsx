@@ -43,6 +43,11 @@ it('calls a D&D challenge rating borrowed into a Pathfinder campaign a CR', () =
   expect(container.textContent).not.toContain('Level');
 });
 
+it('shows no challenge rating on a Shadowrun creature, which has none, even one kept from before', () => {
+  const { container } = render(<StatBlockViewer statBlock={{ ...base, challengeRating: '1' }} tokenName="Ganger" gameSystem={GameSystem.SHADOWRUN_6E} />);
+  expect(container.textContent).not.toContain('CR');
+});
+
 it('prints negative saves and skills with a minus, and names them, in a Flexible campaign', () => {
   const statBlock: NpcStatBlock = { ...base, savingThrows: { dex: -1, wis: 3 }, skills: { sleightOfHand: 3, stealth: -2 } };
   const { container } = render(<StatBlockViewer statBlock={statBlock} tokenName="Thug" gameSystem={null} />);
