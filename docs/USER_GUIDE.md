@@ -237,23 +237,34 @@ Menus open as a list from the bottom of the screen: press and hold a token, a do
 
 CozyVTT can sit on a phone's or a tablet's home screen like an app: it opens full screen, without the browser's address bar, at your dashboard. It is the same CozyVTT, from your server; nothing is installed or kept offline.
 
-**On an iPhone or an iPad (Safari):**
+**The option is in your browser's own menu, not inside CozyVTT.** CozyVTT has no button for it, because each browser adds a site to the home screen in its own way.
+
+**On an iPhone or an iPad, in Safari:**
 
 1. Open your CozyVTT in Safari and sign in.
-2. Tap **Share** (the square with an arrow pointing up), then **Add to Home Screen**.
-3. Tap **Add**.
+2. Tap **Share** (the square with an arrow pointing up), at the foot of the screen on an iPhone or at the top on an iPad.
+3. Scroll down the list that opens and tap **Add to Home Screen**. If it is not there, tap **Edit Actions…** at the very end of the list and add it.
+4. Tap **Add**.
 
 You should see the CozyVTT icon on your home screen. Tapping it opens your dashboard full screen.
 
-**On Android (Chrome):**
+**On an iPhone or an iPad, in Chrome:**
 
 1. Open your CozyVTT in Chrome and sign in.
-2. Tap **⋮** (top right), then **Add to Home screen** or **Install app**.
+2. Tap **Share** in the address bar (the square with an arrow pointing up).
+3. Tap **Add to Home Screen**, then **Add**.
+
+**On Android, in Chrome:**
+
+1. Open your CozyVTT in Chrome and sign in.
+2. Tap **⋮** (top right), then **Install app** or **Add to Home screen**.
 3. Tap **Install** or **Add**.
 
 You should see the CozyVTT icon on your home screen or in your app list.
 
-If **Install app** is missing on Android, your CozyVTT is probably reached over plain `http://`: Chrome installs only from `https://`, and offers a home-screen shortcut that opens in the browser instead. Setting up HTTPS is in [the deployment guide](DEPLOYMENT.md).
+**Full screen on Android needs `https://`.** Chrome installs CozyVTT as an app, opening full screen, only from an address that starts with `https://`. Over plain `http://` it offers **Add to Home screen** in place of **Install app**, and the icon then opens CozyVTT in an ordinary browser tab with the address bar showing. To get the full-screen app, serve CozyVTT over HTTPS, as [SSL/TLS with Let's Encrypt](DEPLOYMENT.md#ssltls-with-lets-encrypt) in the deployment guide describes, or through a tunnel that gives it an `https://` address.
+
+Other browsers have the same option in their own menu, often named **Add to Home screen** or **Install**.
 
 ---
 
