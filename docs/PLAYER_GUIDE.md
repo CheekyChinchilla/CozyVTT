@@ -200,7 +200,7 @@ You can keep documents of your own too, from **Documents** on your dashboard: up
 
 ### Connection Status
 
-When you first load the campaign page, CozyVTT connects to the live session. Look for the **connection indicator** in the header — it turns green when you're successfully connected. If you see a loading spinner, just wait a moment.
+When you first load the campaign page, CozyVTT connects to the live session. Look for the **connection indicator** in the header — it turns green when you're successfully connected. On a phone the header shows the connection only while it is not working: a spinning icon while it connects, and an icon with a red dot when it has dropped. If you see a loading spinner, just wait a moment.
 
 If you lose connection (WiFi hiccup, a server restart), CozyVTT keeps trying to reconnect by itself for as long as it takes: every few seconds at first, then every 30 seconds, and at once when you come back to the tab. The indicator shows **Connecting...** while it tries. When it shows **Disconnected** or **Connection Error** in red, the **Retry** button beside it tries straight away.
 
@@ -281,7 +281,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 Click one of the seven dice in the row under the roll list, **d20** first, then **d4**, **d6**, **d8**, **d10**, **d12** and **d100**, to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three; on a computer they sit in the row under the expression, and on a phone under **More**. Your result appears in the **Dice** panel immediately, where everyone at the table can see it. A roll you make from your sheet, the roster or the map's **Roll...** menu lands there too; if one doesn't go through, a message says why.
 
 **Rolling custom expressions:**
-Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes, under **More** beside the expression, put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage"; while **More** is closed it counts how many of them still hold text. The circular-arrow button (**Clear all fields**), beside **Roll** on a computer and under **More** on a phone, empties all the boxes. Supported notation:
+Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes, under **More** (in the row under the expression on a computer, beside it on a phone), put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage"; while **More** is closed it counts how many of them still hold text. The circular-arrow button (**Clear all fields**), beside **Roll** on a computer and under **More** on a phone, empties all the boxes. Supported notation:
 
 | Expression | What it does |
 |-----------|-------------|
@@ -335,7 +335,7 @@ that never works.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
 
-**Secret rolls.** Tick **Secret Roll** (on a phone, under **More**) and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel (on a phone, at the foot of the Dice sheet), which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
+**Secret rolls.** Tick **Secret Roll** (on a phone, under **More**) and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel (on a phone, the eye under **More**), which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
@@ -710,7 +710,7 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 ### Setting Up Your Profile
 
-**Display Name:** Click **Edit** beside **Profile Information** to change it, then **Save Changes**. This is what everyone else sees, and it can be 2 to 50 characters.
+**Display Name:** Click **Edit** beside **Profile Information** to change it, then **Save Changes**. This is what everyone else sees, and it can be 1 to 50 characters.
 
 **Avatar:** Click your avatar (or the placeholder), or reach it with **Tab** and press **Enter**, to upload a profile picture, a JPEG, PNG or WebP image. Use the built-in crop tool to frame it:
 - Drag the image with the mouse, a finger or a pen to reposition it, or use the arrow keys (with **Shift** to move it further)
@@ -764,7 +764,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 ### Keyboard Shortcuts
 
-On the map, once you've clicked it. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see this list on screen. It shows the keys that do something for you; the DM's also has the wall and undo keys.
+On the map, once you've clicked it. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see this list on screen. It shows the keys that do something for you; the DM's also has the wall, undo and Mapmaker keys.
 
 | Action | Shortcut |
 |--------|---------|

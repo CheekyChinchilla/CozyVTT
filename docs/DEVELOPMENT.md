@@ -64,7 +64,7 @@ cozyvtt/
 │   │   │   └── character-sheets/  Game system sheet components
 │   │   ├── constants/     Game system labels, and limits copied from the backend (keepInStep.test.ts compares them)
 │   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Layout, Theme, Toast)
-│   │   ├── stores/        Zustand store for live session state
+│   │   ├── stores/        Zustand stores: live session state, and the Mapmaker's
 │   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
 │   │   ├── lib/           React Query client setup
 │   │   ├── pages/         Top-level page components
@@ -438,7 +438,7 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 
 > **The run refuses a database without `test` in its name.** The suites
 > write to the database freely: they add accounts and campaigns, several
-> change the instance's settings, and five create and drop schemas of their
+> change the instance's settings, and some create and drop schemas of their
 > own. So
 > jest stops before any suite starts unless the database `DATABASE_URL` names
 > has `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
@@ -458,8 +458,7 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 
 ```bash
 cd frontend
-npm test                  # Interactive watch mode
-npm run test:run          # Run once (CI mode)
+npx vitest run            # Run once
 npm run test:coverage     # Generate coverage report
 ```
 
@@ -604,7 +603,7 @@ Some of those deserve a note:
 - **A test that needs a brand new instance gets a schema of its own.** The
   suites share one database and run at once, so none can count on it being
   empty. The setup wizard suite, the first-admin and last-admin race tests,
-  the admin settings log suite and the sign-in table's own test need exactly
+  the admin settings log suite and the two sign-in table suites need exactly
   that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
   schema in the same test database from `schema.prisma`, and drops it at the
   end. The file sets `DATABASE_URL` to that schema before it loads the app,
@@ -852,9 +851,9 @@ Dependabot, since its data has to be dumped and restored. A new release
 waits before Dependabot proposes it (`cooldown`): an npm package 3 days for a
 patch, 7 for a minor and 14 for a major, an action or base image 7 days, so
 a hijacked publish is usually pulled first. Security updates do not wait.
-Dependabot alerts for published advisories are on. Its automatic security pull requests are
-turned on in the repository's settings once 1.5.3 is on `main`; GitHub opens
-those against `main` whatever `target-branch` says.
+Dependabot alerts for published advisories are on. Its automatic security pull requests,
+turned on in the repository's settings, are opened against `main` whatever
+`target-branch` says.
 
 A pull request into `main` cannot merge until the Frontend, Backend, Docs,
 Dependency advisories, and Production images, nginx and smoke tests jobs pass
@@ -966,7 +965,8 @@ ESLint's recommended rules from `@eslint/js`, the recommended rules of the
 in the frontend, the React hooks rules. Only TypeScript files are linted, apart from
 the frontend's `vite.config.ts`. A rule that is switched off says why beside
 it. In the frontend the ones waiting to be turned on are marked
-`TODO(ratchet)`; the backend's three are listed in the comment above them.
+`TODO(ratchet)`; the backend has none waiting, and its one rule switched
+off, for tests, says why.
 
 There is no enforced code formatter (Prettier), but follow the existing style in the file you're editing:
 - 2-space indentation
@@ -984,7 +984,7 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 - **Pages** in `src/pages/` — one file per route, thin orchestration layer
 - **Components** in `src/components/` — reusable UI; they reach the API through the clients in `src/services/` (the document reader's `fetch` of a document's text is the one exception)
-- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign, Theme, Toast)
+- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign, Layout, Theme, Toast)
 - **Services** in `src/services/` — all API calls go through `api.ts` or `auth.service.ts`
 - **No `any`** — if you need to escape the type system, use `unknown` and narrow it
 

@@ -446,8 +446,7 @@ describe("the DM's token menu", () => {
 
 /**
  * In Player Preview the DM still opens the DM's menu, on a token the preview
- * draws and on one it does not (MapCanvas's openMenuAt has a TODO(play) for
- * the second).
+ * draws and on one it does not: the DM previewing is still the DM.
  */
 describe('the token menu in Player Preview', () => {
   beforeEach(() => {

@@ -36,7 +36,7 @@ Read the brief intro and click **Next** to begin. The whole process takes about 
 Create the administrator account. This is the most powerful account on the platform — keep these credentials safe!
 
 - **Setup token** — Proves you run this server, so a stranger who finds a new instance first cannot make themselves its administrator. The backend prints it in its log when it starts: on the server, `docker compose logs backend | grep "setup token"` shows it. If you set `SETUP_TOKEN` in `.env`, enter that value instead. See [Complete the setup wizard](DEPLOYMENT.md#4-complete-the-setup-wizard)
-- **Display Name** — What other users will see (2–50 characters)
+- **Display Name** — What other users will see (1 to 50 characters)
 - **Email Address** — Your login email address
 - **Password** — Must be at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character: one of `! @ # $ % ^ & * ( ) _ + - = [ ] { } ; ' : " \ | , . < > / ?` (a space, `~` or an accented letter does not count)
 - **Confirm Password** — The same password again
@@ -219,7 +219,7 @@ In the **Chat** sheet **To**, the message box and **Send** share one line (the b
 
 In the **Dice** sheet each roll takes two lines, as it does on a computer, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. On a narrow line the purpose is shortened first, so the name and the secret mark stay whole. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top. Under the list the seven dice share one row, **d20** first, and **Roll** and **More** sit beside the expression. Everything else is under **More**: **Adv**, **Dis**, **4d6kh3**, your saved rolls and **Saved**, **Character** and **Purpose**, **Secret Roll**, **Clear all fields**, the eye (show or hide secret rolls, once the list holds one) and, for the DM, the bin (**Clear**). While it is closed, **More** counts how many of **Character**, **Purpose** and **Secret Roll** the next roll still carries. The roll list is the sheet's one scroll area: the controls under it stay put.
 
-The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Mapmaker** on a map they can paint, **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** and **Mapmaker** open their tools in a strip across the bottom of the map, with the map above it to draw or paint on; while Mapmaker is on, **Ping** and **Draw** leave the toolbar. The drawing and painting tools, and the buttons of the **Dice** sheet, sit in a row that scrolls sideways; an end of the row with more past it fades out under an arrow. A token's details show at the bottom of the map when you tap it.
+The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Mapmaker** on a map they can paint, **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** and **Mapmaker** open their tools in a strip across the bottom of the map, with the map above it to draw or paint on; while Mapmaker is on, **Ping** and **Draw** leave the toolbar. The drawing and painting tools sit in a row that scrolls sideways; an end of the row with more past it fades out under an arrow. A token's details show at the bottom of the map when you tap it.
 
 Menus open as a list from the bottom of the screen: press and hold a token, a door, a character in the roster or a combatant in the initiative tracker. Tap an item, or **Cancel**.
 
@@ -279,6 +279,7 @@ As the DM, click **Map Library** (the map icon) in the campaign header.
 From here you can:
 - **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); **Draw a map** in the same window, which starts a blank map of the size and colour you choose (see [Drawing a map](DM_GUIDE.md#drawing-a-map)); or **Import UVTT** from a mapping tool
 - **Set Active** to switch to a different map — this updates the view for all connected players immediately
+- **Open to prepare** to open a map on your own screen only, while the table stays where it is (see [Preparing a map while the table plays](DM_GUIDE.md#preparing-a-map-while-the-table-plays))
 - **Edit** a map's settings, export it, or delete it
 
 *GIF pending — Switching the active map mid-session.*
@@ -431,7 +432,7 @@ Once assigned, that character becomes available as a token in the campaign, and 
 
 CozyVTT includes sheets for several popular game systems. Here's a quick overview of what each one covers:
 
-Every box on a sheet has a length limit, far above what a sheet needs: a character's name can be up to 200 characters, notes, descriptions, backstories and features up to 100,000, the D&D 5e proficiency boxes up to 2,000, and any other box up to 1,000.
+Every box on a sheet has a length limit, far above what a sheet needs: a character's name can be up to 200 characters, notes, descriptions, backstories and features up to 100,000, the D&D 5e proficiency boxes up to 2,000, a few short D&D 5e boxes (a skill of your own's name, a further damage line, a hit die, a weapon property) up to 40 to 60, and any other box up to 1,000.
 
 #### Dungeons & Dragons 5th Edition
 
@@ -730,7 +731,7 @@ survives a refresh.
 never see it. Your DM does — deliberately, so they can settle an argument about
 what was really rolled — and the checkbox says so. Your own secret rolls stay in
 your list marked **🔒 Secret**, so you can look back at them; the **Secret**
-button at the top of the panel, which appears once the list holds a secret roll,
+button at the top of the panel (on a phone, the eye under **More**), which appears once the list holds a secret roll,
 hides them from your own view if you would rather
 keep the list to open rolls, which changes nothing for anyone else.
 
@@ -771,7 +772,7 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
 | **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging. On a touch screen, two quick taps on empty ground ping too, while no tool is up |
 | **Draw** | Opens the drawing tools: a pen, lines, arrows, rectangles, ellipses, polygons, text labels, an eraser and a laser pointer, in a colour and width you choose. The table sees what you draw as you draw it. The DM always has it; a player has it while the DM lets players draw, except while the session is paused or has ended; while they may not draw, it offers only the **Eraser** and **Clear mine**, and only while the map holds drawings of theirs; a spectator does not have it, and nobody has it on a map with no picture or one whose picture failed to load (see [Drawing and pointing](PLAYER_GUIDE.md#drawing-and-pointing) and, for the DM, [Drawing on the map](DM_GUIDE.md#drawing-on-the-map)) |
-| **Mapmaker** | The DM's, on a map drawn in CozyVTT or one with no picture: paints the map's picture with a brush, an eraser, lines, rectangles, ellipses, a fill bucket, text and an eyedropper, on the DM's screen until **Save** makes it the map's picture (see [Drawing a map](DM_GUIDE.md#drawing-a-map)) |
+| **Mapmaker** | The DM's, on a map drawn in CozyVTT or one with no picture: paints the map's picture with brushes and textures, shapes, rooms that add their own walls, stamps, a fill bucket, text and more, on the DM's screen until **Save** makes it the map's picture (see [Drawing a map](DM_GUIDE.md#drawing-a-map)) |
 
 To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.
 
@@ -874,7 +875,9 @@ Changes preview live as you configure them.
 already honours custom images — they appear on the login page and across the app, system-wide
 regardless of each user's theme — but there is no upload screen, so a self-hoster sets them by
 **replacing the default images** in `frontend/public/` (`default-logo.png`, `default-mascot.png`,
-`favicon-32.png`, `favicon-192.png`) and rebuilding.
+`favicon-32.png`, `favicon-192.png`, and for the home-screen icon `apple-touch-icon.png`, 180 by
+180 pixels, and `icon-512.png`, 512 by 512) and rebuilding. The name under the home-screen icon is
+`name` and `short_name` in `frontend/public/manifest.webmanifest`.
 
 The branding settings on `PUT /api/admin/settings` name a path this instance serves, such as
 `/default-logo.png`. An address on another website is refused: it would have every visitor's
@@ -895,7 +898,7 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 Click **Edit** beside **Profile Information** to change your display name or bio, then click **Save Changes**. Your email address is shown there but cannot be changed (see [How do I change my email address?](#how-do-i-change-my-email-address)).
 
-The Profile page takes a display name of 2 to 50 characters, and a bio of up to 500. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
+The Profile page takes a display name of 1 to 50 characters, and a bio of up to 500. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
 
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder), or press **Tab** until it is outlined and then **Enter**, to choose an image file (JPEG, PNG or WebP). The **Crop Avatar** window opens: drag the picture with the mouse, a finger or a pen to frame it, or move it with the arrow keys (hold **Shift** to move it further), and use the zoom slider to dial in exactly the right framing, then click **Apply & Upload** to save. **Cancel** or **Esc** closes the window without changing your avatar. On a phone turned on its side the picture and its controls sit side by side, so the whole window fits on the screen.
@@ -960,7 +963,7 @@ CozyVTT needs Chrome or Edge 111, Firefox 128 or Safari 16.4 (iPadOS 16.4 on an 
 ### I can't connect to my campaign
 
 - Check that you have an active internet connection
-- Look at the connection indicator in the campaign header; it turns green once you're connected. You don't need a live session to connect
+- Look at the connection indicator in the campaign header; it turns green once you're connected. On a phone the header shows the connection only while it is not working: a spinning icon while it connects, and an icon with a red dot when it has dropped. You don't need a live session to connect
 - Try refreshing the page — CozyVTT will reconnect automatically
 - If the problem persists, check with your platform administrator that the server is running
 

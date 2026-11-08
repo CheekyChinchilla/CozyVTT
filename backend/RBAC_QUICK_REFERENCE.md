@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31._
+_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31. The sections on saving over a drawn picture, a campaign's map pictures, deleting an asset as its uploader and temporary hit points were added after that, and were read against the code on 2026-11-08, as was the section on what ends a live socket._
 
 ## Middleware Cheat Sheet
 
@@ -10,11 +10,12 @@ _Last verified against the code on 2026-10-13: the files and helpers it names ex
 router sees it, in this order (see `docs/ARCHITECTURE.md`, Request Flow):
 
 1. The origin check: `403` for a change a browser sent from another site (`middleware/originCheck.ts`)
-2. The restore gate: `503` while a restore replaces the database (`middleware/restoreGate.ts`)
-3. The session lookup
-4. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
-5. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address, an IPv6 address counted by its /56 network
-6. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
+2. The null-character check: `400` for a request whose body, path or query string holds U+0000, the password fields of the routes that read one excepted (`middleware/nulCharacter.ts`)
+3. The restore gate: `503` while a restore replaces the database (`middleware/restoreGate.ts`)
+4. The session lookup
+5. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
+6. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address, an IPv6 address counted by its /56 network
+7. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
 
 ### Import Statement
 ```typescript
@@ -959,7 +960,7 @@ written:
 | `POST /api/campaigns/:id/leave` | The same, with reason `left` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
-The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`; a restore ends every socket on the instance through `endEveryLiveSocket`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
+The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`; a restore ends every socket on the instance through `endEveryLiveSocket`. Two other things end them. A guarded request or `GET /api/auth/me` that finds a sign-in past `REMEMBER_ME_MAX_AGE` ends that sign-in's sockets with it (`withinSignInLimitOr401` in `middleware/auth.ts`). And a sweep (`websocket/signInSweep.ts`) runs every minute: it ends each socket whose sign-in is past the limit, and every fifth minute it also reads each socket's session from the store and ends those whose session is gone, leaving a socket connected when the store cannot be read. A socket's sign-in is also checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline. So a session that expires from inactivity keeps its open socket until the next store check, at most about five minutes.
 
 | Route | Which sockets end |
 |---|---|
