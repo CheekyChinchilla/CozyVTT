@@ -63,7 +63,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **The campaign page fits a phone.** ([#31](https://github.com/CheekyChinchilla/CozyVTT/issues/31)) Below 1,024 pixels wide the map fills the screen, with **Map**, **Chat**, **Dice**, **Initiative**, **Party** and **More** along the bottom, each opening its panel as a sheet over the map. Every control there is at least 44 by 44 pixels, and the on-screen keyboard never covers what you type. See [The campaign page on a phone or tablet](docs/USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet).
 
-- **CozyVTT can go on a phone's or a tablet's home screen.** It opens full screen at the dashboard, without the browser's address bar; Chrome installs it only from an `https://` address. See [Adding CozyVTT to your home screen](docs/USER_GUIDE.md#adding-cozyvtt-to-your-home-screen).
+- **CozyVTT can go on a phone's or a tablet's home screen,** from the browser's own menu. It opens full screen at the dashboard, without the browser's address bar; on Android, Chrome installs it full screen only from an `https://` address. See [Adding CozyVTT to your home screen](docs/USER_GUIDE.md#adding-cozyvtt-to-your-home-screen).
 
 - **The table works by touch on a tablet.** Pinch to zoom, drag to move the view, slide a finger to carry a token, and press and hold a token or a door for its menu or empty ground to ping it. A tap on a token shows its card, and the new **Ping** button pings the next spot you tap. See [On a touch screen](docs/PLAYER_GUIDE.md#on-a-touch-screen).
 
