@@ -1886,6 +1886,24 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         stampPressRef.current = null;
         markDirty('overlay');
       }
+      // What the press changed is put back: a box being marked goes, one
+      // being moved or resized goes back where the press found it.
+      const selection = selectionRef.current;
+      if (selection?.drag) {
+        if (selection.drag.kind === 'mark') selectionRef.current = null;
+        else selection.box = selection.drag.start;
+        selection.drag = null;
+        setSelectionShown(selectionRef.current !== null);
+        setSelectionUnsaved(selectionPending(selectionRef.current));
+        markDirty('overlay');
+      }
+      // A curve being bent is left straight, waiting to be bent again.
+      const curve = curveRef.current;
+      if (curve?.bending) {
+        curve.bending = false;
+        curve.shape = { ...curve.shape, control: undefined };
+        markDirty('overlay');
+      }
     },
     leave() {
       if (hoverRef.current) {
