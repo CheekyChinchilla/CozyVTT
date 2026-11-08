@@ -888,7 +888,7 @@ export default function DiceRoller() {
         aria-live={historyIn ? 'polite' : 'off'}
         aria-label="Dice rolls"
         aria-relevant="additions"
-        className={compact ? 'flex-1 overflow-y-auto px-2 py-1.5 min-h-0' : 'flex-1 overflow-y-auto p-3 min-h-0'}
+        className={compact ? 'flex-1 overflow-y-auto px-2 py-1 min-h-0' : 'flex-1 overflow-y-auto p-3 min-h-0'}
       >
         {rolls.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -926,7 +926,7 @@ export default function DiceRoller() {
       {/* Input Area */}
       {/* The controls never scroll as they are; only More options open on a
           very short half sheet can take them past four fifths of the panel. */}
-      <div className={cn('shrink-0', compact && 'max-h-[80%] overflow-y-auto overscroll-contain', 'border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs')}>
+      <div className={cn('shrink-0', compact ? 'max-h-[80%] overflow-y-auto overscroll-contain p-2' : 'p-3', 'border-t border-ink-muted/20 bg-surface/80 backdrop-blur-xs')}>
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-accent-ink text-center mb-2 italic">
@@ -954,7 +954,7 @@ export default function DiceRoller() {
         </AnimatePresence>
 
         {/* The seven dice, one row, each a share of the width. */}
-        <div role="group" aria-label="Dice" className="mb-2 grid grid-cols-7 gap-1">
+        <div role="group" aria-label="Dice" className={cn('grid grid-cols-7 gap-1', compact ? 'mb-1.5' : 'mb-2')}>
           {quickRollButtons}
         </div>
 

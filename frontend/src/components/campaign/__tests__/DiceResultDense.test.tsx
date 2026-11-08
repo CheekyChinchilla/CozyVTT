@@ -150,7 +150,10 @@ it('shortens the purpose before the name, and never the Secret mark or the time'
   };
   expect(purpose.className).toContain('truncate');
   expect(purpose.className).not.toContain('max-w-');
-  expect(shrinkOf(purpose)).toBeGreaterThan(shrinkOf(name));
+  expect(shrinkOf(purpose)).toBeGreaterThan(0);
+  // The name gives way only past two thirds of the line, never to make room for the purpose.
+  expect(shrinkOf(name)).toBe(0);
+  expect(name.className).toContain('max-w-[65%]');
   expect(shrinkOf(badge)).toBe(0);
   expect(shrinkOf(time)).toBe(0);
 });

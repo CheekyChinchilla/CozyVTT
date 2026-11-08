@@ -133,15 +133,16 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
         initial={{ opacity: 0, y: -10, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className={`flex items-center gap-2 rounded-md border ${getBorderColor()} ${getBgColor()} px-2 py-0.5`}
+        className={`flex items-center gap-2 rounded-md border ${getBorderColor()} ${getBgColor()} px-2 py-px`}
       >
         <div className="min-w-0 flex-1 text-xs leading-4">
           <div className="flex items-center gap-1">
-            {/* Who, cut short from its end only once the purpose has given
-                way, so another's "(rolled by …)" goes before the name does.
-                Your own roll's tag is read out and not shown: the line says
-                whose it is already. */}
-            <span className="min-w-0 shrink truncate text-ink-secondary">
+            {/* Who keeps its width up to two thirds of the line, so it is
+                cut only when it is that long, from its end, another's
+                "(rolled by …)" going before the name does. Your own roll's
+                tag is read out and not shown: the line says whose it is
+                already. */}
+            <span className="min-w-0 max-w-[65%] shrink-0 truncate text-ink-secondary">
               <span className="font-medium text-ink">{subject}</span>
               {attribution && <span className={isCurrentUser ? 'sr-only' : 'opacity-70'}> {attribution}</span>}
             </span>
@@ -151,11 +152,10 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = fa
                 {secretWhose && <span className="sr-only">{secretWhose}</span>}
               </span>
             )}
-            {/* What for gives way first on a narrow line: it shrinks a hundred
-                times as fast as the name, and the Secret mark and the time keep
-                their width. */}
+            {/* What for gives way on a narrow line; the name, the Secret mark
+                and the time keep their width. */}
             {purpose && (
-              <span className="min-w-0 shrink-[100] truncate text-ink-secondary">
+              <span className="min-w-0 shrink truncate text-ink-secondary">
                 <span aria-hidden="true">· </span>
                 {purpose}
               </span>
