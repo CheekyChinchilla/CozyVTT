@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { BrickWall, Circle, Pentagon, Spline, SquareDashed, Stamp, Download, Eraser, Loader2, Minus, PaintBucket, Paintbrush, Pipette, Redo2, Square, Type, Undo2, X } from 'lucide-react';
 import { PAINT_COLOURS, pickedColour } from './map/paint/paintColours';
 import type { PaintSelectionActions, PaintSettings, PaintTool } from './map/paint/usePaintSurface';
+import { PAINT_TOOL_KEYS } from './map/paint/paintToolKeys';
 import type { ShapeStyle } from './map/paint/paintShapes';
 import { PAINT_STAMPS, STAMP_SIZE, type StampTurn } from './map/paint/paintStamps';
 import { PAINT_TEXTURES, type TextureKind } from './map/paint/paintTextures';
@@ -21,19 +22,19 @@ import SignedOutNotice from '@/components/common/SignedOutNotice';
 
 /** Each tool's name, as its button is called, its key and its icon. */
 export const TOOLS: Record<PaintTool, { label: string; key: string; icon: typeof Paintbrush }> = {
-  select: { label: 'Select', key: 'S', icon: SquareDashed },
-  brush: { label: 'Brush', key: 'B', icon: Paintbrush },
-  eraser: { label: 'Eraser', key: 'E', icon: Eraser },
-  line: { label: 'Line', key: 'L', icon: Minus },
-  rect: { label: 'Rectangle', key: 'R', icon: Square },
-  ellipse: { label: 'Ellipse', key: 'O', icon: Circle },
-  polygon: { label: 'Polygon', key: 'G', icon: Pentagon },
-  curve: { label: 'Curve', key: 'C', icon: Spline },
-  room: { label: 'Room', key: 'M', icon: BrickWall },
-  stamp: { label: 'Stamp', key: 'P', icon: Stamp },
-  fill: { label: 'Fill', key: 'F', icon: PaintBucket },
-  text: { label: 'Text', key: 'T', icon: Type },
-  eyedropper: { label: 'Eyedropper', key: 'I', icon: Pipette },
+  select: { label: 'Select', key: PAINT_TOOL_KEYS.select, icon: SquareDashed },
+  brush: { label: 'Brush', key: PAINT_TOOL_KEYS.brush, icon: Paintbrush },
+  eraser: { label: 'Eraser', key: PAINT_TOOL_KEYS.eraser, icon: Eraser },
+  line: { label: 'Line', key: PAINT_TOOL_KEYS.line, icon: Minus },
+  rect: { label: 'Rectangle', key: PAINT_TOOL_KEYS.rect, icon: Square },
+  ellipse: { label: 'Ellipse', key: PAINT_TOOL_KEYS.ellipse, icon: Circle },
+  polygon: { label: 'Polygon', key: PAINT_TOOL_KEYS.polygon, icon: Pentagon },
+  curve: { label: 'Curve', key: PAINT_TOOL_KEYS.curve, icon: Spline },
+  room: { label: 'Room', key: PAINT_TOOL_KEYS.room, icon: BrickWall },
+  stamp: { label: 'Stamp', key: PAINT_TOOL_KEYS.stamp, icon: Stamp },
+  fill: { label: 'Fill', key: PAINT_TOOL_KEYS.fill, icon: PaintBucket },
+  text: { label: 'Text', key: PAINT_TOOL_KEYS.text, icon: Type },
+  eyedropper: { label: 'Eyedropper', key: PAINT_TOOL_KEYS.eyedropper, icon: Pipette },
 };
 
 export const HINTS: Record<PaintTool, string> = {
