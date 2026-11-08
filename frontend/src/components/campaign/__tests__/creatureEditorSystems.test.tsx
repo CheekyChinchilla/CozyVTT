@@ -12,7 +12,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { NpcStatBlock } from '@/types';
+import { TokenDisposition } from '@/types';
+import type { CreatureTemplate, GameSystem, NpcStatBlock } from '@/types';
 
 const campaign = vi.hoisted(() => ({ id: 'campaign-1', gameSystem: 'DND_5E' }));
 
@@ -91,5 +92,22 @@ describe('the Creature Library\'s form', () => {
     render(<CreatureLibrary isOpen onClose={() => {}} />);
     await userEvent.click(await screen.findByRole('button', { name: /Create Custom/ }));
     expect(screen.getByLabelText('CR')).toBeTruthy();
+  });
+});
+
+describe('the Creature Library\'s list', () => {
+  const row = (id: string, name: string, gameSystem: string, challengeRating: string): CreatureTemplate => ({
+    id, name, gameSystem: gameSystem as GameSystem, source: 'custom', challengeRating, creatureType: null, alignment: null, imageUrl: null,
+    statBlock: cultist, size: { width: 1, height: 1 }, disposition: TokenDisposition.HOSTILE, displayMode: 'pog', createdById: null, campaignId: 'campaign-1',
+    createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
+  });
+
+  it('shows no rating on a Call of Cthulhu creature that kept one from before, and still shows a D&D creature\'s', async () => {
+    campaign.gameSystem = 'CALL_OF_CTHULHU_7E';
+    api.listCreatures.mockResolvedValue({ creatures: [row('cultist', 'Cultist', 'CALL_OF_CTHULHU_7E', '1'), row('goblin', 'Goblin', 'DND_5E', '1/4')], total: 2 });
+    render(<CreatureLibrary isOpen onClose={() => {}} />);
+    expect(await screen.findByText('Cultist')).toBeTruthy();
+    expect(screen.queryByText('CR 1')).toBeNull();
+    expect(screen.getByText('CR 1/4')).toBeTruthy();
   });
 });

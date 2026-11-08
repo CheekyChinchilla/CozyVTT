@@ -168,6 +168,8 @@ question, and getting it wrong invents numbers the designers never intended.
   there is nothing to derive and nothing sensible to offer from this data.
   The creature editors give their creatures no rating and store their scores
   and skills as typed (`creatureModel` in `npc-stat-blocks/creatureModel.ts`).
+  A rating stored before is kept and shown nowhere: the Creature Library's
+  list and the generic stat block leave it out for these systems.
   The stat block's bounds still fit D&D 5e's scores, so a Call of Cthulhu
   creature's characteristics stop at 30 and its skills at 50 (a known issue).
 

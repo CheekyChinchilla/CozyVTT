@@ -11,11 +11,13 @@ import { formatSaveList, formatSkillList } from './statBlockProficiency';
 interface Props {
   statBlock: NpcStatBlock;
   tokenName: string;
+  /** False in a system with no rating (Shadowrun 6e), where one kept from before stays stored, unshown. */
+  showRating?: boolean;
 }
 
 const abilityMod = (score: number) => formatModifier(abilityModifier(score));
 
-export default function GenericStatBlock({ statBlock, tokenName }: Props) {
+export default function GenericStatBlock({ statBlock, tokenName, showRating = true }: Props) {
   return (
     <div className="space-y-2 text-xs text-ink">
       {/* Header */}
@@ -37,7 +39,7 @@ export default function GenericStatBlock({ statBlock, tokenName }: Props) {
           </div>
         )}
         <div><span className="font-semibold text-brand-ink">Speed</span> {statBlock.speed}</div>
-        {statBlock.challengeRating && (
+        {showRating && statBlock.challengeRating && (
           <div>
             <span className="font-semibold text-brand-ink">CR</span> {statBlock.challengeRating}
             {statBlock.xp != null && ` (${statBlock.xp.toLocaleString()} XP)`}

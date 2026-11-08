@@ -812,7 +812,8 @@ function CreatureRow({
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-ink-black truncate">{creature.name}</div>
             <div className="text-[10px] text-stone-gray/60 flex gap-2">
-              {creature.challengeRating && <span>CR {creature.challengeRating}</span>}
+              {/* A rating kept from before on a creature of a system with none (creatureModel) stays stored, unshown. */}
+              {creature.challengeRating && creatureModel(creature.gameSystem) !== 'printed' && <span>CR {creature.challengeRating}</span>}
               {statBlock.creatureType && <span className="truncate">{statBlock.creatureType}</span>}
             </div>
           </div>
