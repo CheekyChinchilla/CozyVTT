@@ -98,9 +98,6 @@ export function buttonBit(button: number): number {
   return BUTTON_BITS[button] ?? 0;
 }
 
-// TODO(play): a finger's double tap ends a wall line only with its two taps within 4 pixels, which a fingertip
-// rarely manages. Widening it to DOUBLE_TAP_PX could end a quick two-point line by itself at low zoom, where two
-// snapped corners a square apart are that close; the Walls panel's Done is the dependable way to finish a line.
 /**
  * Downs this close in time and place count as one more click. A page cannot
  * read the system's double-click settings; these are the usual ones.
@@ -110,11 +107,16 @@ export const CLICK_COUNT_PX = 4;
 
 /**
  * How far apart, in page pixels, a finger's or a pen's two taps may land and
- * still be a double tap to ping, in CLICK_COUNT_MS. Two taps meant for one
- * spot land several pixels apart, past a mouse's 4; 20 is Chromium's own
- * distance for a touch screen's double tap.
+ * still be a double tap, in CLICK_COUNT_MS. Two taps meant for one spot land
+ * several pixels apart, past a mouse's 4; 20 is Chromium's own distance for a
+ * touch screen's double tap.
  */
 export const DOUBLE_TAP_PX = 20;
+
+/** The room a pointer of this kind has between two clicks: a mouse's 4 pixels, a finger's or a pen's 20. */
+export function clickRoom(kind: PointerKind): number {
+  return kind === 'mouse' ? CLICK_COUNT_PX : DOUBLE_TAP_PX;
+}
 
 export interface ClickCounter {
   /** A primary-button down or a tap at time `t`: its click count, 1 for the first. */
@@ -123,13 +125,17 @@ export interface ClickCounter {
   reset(): void;
 }
 
-/** Counts downs within CLICK_COUNT_MS of each other and `px` page pixels of the last. */
-export function createClickCounter(px = CLICK_COUNT_PX): ClickCounter {
+/**
+ * Counts downs within CLICK_COUNT_MS of each other and `px` page pixels of
+ * the last, a number or one for each kind of pointer.
+ */
+export function createClickCounter(px: number | ((kind: PointerKind) => number) = CLICK_COUNT_PX): ClickCounter {
   let last: { kind: PointerKind; t: number; x: number; y: number; count: number } | null = null;
   return {
     count(kind, t, x, y) {
+      const room = typeof px === 'number' ? px : px(kind);
       const again = last !== null && last.kind === kind && t - last.t <= CLICK_COUNT_MS
-        && Math.hypot(x - last.x, y - last.y) <= px;
+        && Math.hypot(x - last.x, y - last.y) <= room;
       const count = again && last ? last.count + 1 : 1;
       last = { kind, t, x, y, count };
       return count;

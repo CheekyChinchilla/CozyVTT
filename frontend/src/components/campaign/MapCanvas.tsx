@@ -81,7 +81,7 @@ import { releaseCanvas } from './map/paint/blankPicture';
 import { draftTime, dropDrafts, paintDraftStore } from './map/paint/paintDrafts';
 import { mapInputOwner } from './map/inputOwner';
 import { usePaintStore } from '@/stores/paintStore';
-import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, DOUBLE_TAP_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
+import { buttonBit, clickRoom, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, DOUBLE_TAP_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
 import { createGestureRecognizer, type Gesture } from './map/gestures';
 import { createClickSwallow } from './map/clickSwallow';
 import {
@@ -2730,7 +2730,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // pan stops at the edge, a stroke or a box gets no moves past it, and the
   // window hears the release. A pen or a finger is captured from down to
   // lift, so its moves and its lift come here wherever it goes.
-  const clickCounterRef = useRef(createClickCounter());
+  const clickCounterRef = useRef(createClickCounter(clickRoom));
 
   /** Where a pointer is in the canvas's, the map's and the grid's spaces. */
   const pointerAt = (e: MapPointer, via: PointerAt['via']): PointerAt | undefined => {
@@ -2744,8 +2744,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   /**
    * A press at time `t` with its click count. A pointer event's own count is
-   * always 0, so the downs are counted here, for the double-click that ends
-   * a wall line. Another button starts the count again.
+   * always 0, so the downs are counted here, for the double-click or double
+   * tap that ends a wall line, a finger's or a pen's with a fingertip's room
+   * between its taps. Another button starts the count again.
    */
   const withClickCount = (e: MapPointer, t: number): MapPointer => {
     const clicks = clickCounterRef.current;

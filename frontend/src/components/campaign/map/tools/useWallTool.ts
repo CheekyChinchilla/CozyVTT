@@ -395,6 +395,16 @@ export function useWallTool({
     if (next !== null) sendWalls(next, wallSegments, { from: from + 1, to: from });
   };
 
+  /**
+   * Whether a second click or tap ends what is being drawn. A finger's or a
+   * pen's taps count as one within a fingertip's room, which at a low zoom
+   * spans more than one snapped corner, so with Snap to grid their second
+   * must land on the corner the first placed: two taps there would add a
+   * wall of no length. A mouse's double-click ends it as it always has.
+   */
+  const secondPressEnds = (e: PointerAt['e'], snapped: { x: number; y: number }, last: { x: number; y: number } | undefined) =>
+    e.detail >= 2 && (e.kind === 'mouse' || !snapToGrid || (last !== undefined && last.x === snapped.x && last.y === snapped.y));
+
   /** The walls with those selected carried by (dx, dy). */
   const selectionMovedBy = (walls: WallSegment[], selection: ReadonlySet<string>, dx: number, dy: number) =>
     walls.map((seg) => (selection.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg));
@@ -405,12 +415,8 @@ export function useWallTool({
       if (wallMode === 'wall-draw' && isDM) {
         const snapped = snapPoint(mapPx);
 
-        if (e.detail >= 2) {
-          // Double-click: finish polyline without adding a duplicate final point
-          if (wallInProgress.length >= 2) {
-            // The last clicked point was already added on the first click of this double-click;
-            // just end the polyline
-          }
+        if (secondPressEnds(e, snapped, wallInProgress[wallInProgress.length - 1])) {
+          // The first click of the double-click placed the last point; end the line there.
           setWallInProgress([]);
           return true;
         }
@@ -486,8 +492,7 @@ export function useWallTool({
       if (wallMode === 'wall-polygon' && isDM) {
         const snapped = snapPoint(mapPx);
 
-        if (e.detail >= 2) {
-          // Double-click closes the polygon
+        if (secondPressEnds(e, snapped, polygonPoints[polygonPoints.length - 1])) {
           closePolygon();
           return true;
         }
