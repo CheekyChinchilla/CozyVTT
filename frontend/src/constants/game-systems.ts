@@ -28,6 +28,20 @@ export const GAME_SYSTEM_SHORT_LABELS: Record<GameSystem, string> = {
 /**
  * Descriptions for each game system
  */
+/**
+ * The tint each system's badge is drawn in, wherever a system is labelled.
+ *
+ * These use the semantic tokens purely as a set of distinguishable, themed
+ * hues: a D&D badge is not "danger", it just needs to look different from a
+ * Pathfinder one and stay readable on every theme.
+ */
+export const GAME_SYSTEM_TINTS: Record<GameSystem, { bg: string; text: string; border: string }> = {
+  [GameSystem.DND_5E]: { bg: 'bg-danger/10', text: 'text-danger-ink', border: 'border-danger/30' },
+  [GameSystem.PATHFINDER_2E]: { bg: 'bg-info/10', text: 'text-info-ink', border: 'border-info/30' },
+  [GameSystem.SHADOWRUN_6E]: { bg: 'bg-spirit/10', text: 'text-spirit-ink', border: 'border-spirit/30' },
+  [GameSystem.CALL_OF_CTHULHU_7E]: { bg: 'bg-success/10', text: 'text-success-ink', border: 'border-success/30' },
+};
+
 export const GAME_SYSTEM_DESCRIPTIONS: Record<GameSystem, string> = {
   [GameSystem.DND_5E]:
     'The world\'s most popular tabletop RPG. High fantasy adventures with heroic characters.',

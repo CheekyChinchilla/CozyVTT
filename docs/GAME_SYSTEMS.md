@@ -47,7 +47,7 @@ So a "game system" in CozyVTT is really seven coordinated pieces:
 | 6 | **Display metadata + registration** (labels, the creation dropdown, the places a sheet opens) | `frontend/src/constants/game-systems.ts`, `CharacterSheetRouter.tsx` and the two sheet windows in `frontend/src/components/character/` |
 | 7 | **Table rules** (rolls, initiative, hit points) | `frontend/src/utils/characterRolls.ts`, and `utils/characterHp.ts` and `utils/rules/` in both projects |
 
-Pieces 3 and 4 each have a per-system file **and** an `index.ts` with a `switch` you extend. Those switches, like most of the places a system is named, have a `default` branch, so the compiler does not notice a missing case. Adding the enum value breaks the build only where a map is typed `Record<GameSystem, …>`: `SHEET_NAME_FIELD` in `validators/game-systems/index.ts` and the test helper `__tests__/helpers/builtInTemplates.ts` in the backend, and the three label maps in `constants/game-systems.ts` and the two in `components/common/GameSystemBadge.tsx` in the frontend. Every other place falls back without an error; the [Full checklist](#full-checklist) lists them all.
+Pieces 3 and 4 each have a per-system file **and** an `index.ts` with a `switch` you extend. Those switches, like most of the places a system is named, have a `default` branch, so the compiler does not notice a missing case. Adding the enum value breaks the build only where a map is typed `Record<GameSystem, …>`: `SHEET_NAME_FIELD` in `validators/game-systems/index.ts` and the test helper `__tests__/helpers/builtInTemplates.ts` in the backend, and the four maps in `constants/game-systems.ts` (three labels and the badge tints) in the frontend. Every other place falls back without an error; the [Full checklist](#full-checklist) lists them all.
 
 ### Design principle: almost everything is optional
 
@@ -587,7 +587,7 @@ The frontend keeps its own copy of the types: its image is built from `frontend/
 
 ## Step 8: Frontend labels and colours
 
-Edit `frontend/src/constants/game-systems.ts` and add your system to **four** places. The first three are labels; the fourth, `GAME_SYSTEM_OPTIONS`, is what makes the system **selectable**: in New Campaign, New Character and New Template, and in the Character Templates page's filter.
+Edit `frontend/src/constants/game-systems.ts` and add your system to **five** places: three labels, the tint its badge is drawn in, and `GAME_SYSTEM_OPTIONS`, which is what makes the system **selectable**: in New Campaign, New Character and New Template, and in the Character Templates page's filter.
 
 ```typescript
 export const GAME_SYSTEM_LABELS: Record<GameSystem, string> = {
@@ -598,6 +598,11 @@ export const GAME_SYSTEM_LABELS: Record<GameSystem, string> = {
 export const GAME_SYSTEM_SHORT_LABELS: Record<GameSystem, string> = {
   // …
   [GameSystem.MY_SYSTEM]: 'MySys',
+};
+
+export const GAME_SYSTEM_TINTS: Record<GameSystem, { bg: string; text: string; border: string }> = {
+  // …
+  [GameSystem.MY_SYSTEM]: { bg: 'bg-warning/10', text: 'text-warning-ink', border: 'border-warning/30' },
 };
 
 export const GAME_SYSTEM_DESCRIPTIONS: Record<GameSystem, string> = {
@@ -616,14 +621,9 @@ export const GAME_SYSTEM_OPTIONS: GameSystemOption[] = [
 ];
 ```
 
-> The three `Record<GameSystem, …>` maps are exhaustive, so TypeScript forces you to add the first three. `GAME_SYSTEM_OPTIONS` is a plain array: nothing forces you to add it, so **this is the step that's easy to forget.** If your system doesn't appear in the dropdown, this is why (see the commented-out Shadowrun 6e entry).
+> The four `Record<GameSystem, …>` maps are exhaustive, so TypeScript forces you to add them. `GAME_SYSTEM_OPTIONS` is a plain array: nothing forces you to add it, so **this is the step that's easy to forget.** If your system doesn't appear in the dropdown, this is why (see the commented-out Shadowrun 6e entry).
 
-Two more files draw a system's name and colour:
-
-- `frontend/src/components/common/GameSystemBadge.tsx`: a colour in `GAME_SYSTEM_COLORS` and a short label in `SHORT_LABELS`. Both are `Record<GameSystem, …>`, so the build fails until yours is there.
-- `frontend/src/components/campaign/CampaignRoster.tsx`: a case in `getSystemBadgeColor` and in `getSystemShortName`. Their `default` labels a character **Flex**, in grey, so without them your system's characters look like Flexible ones in the roster.
-
-Give the system a tint no other system uses, the same in both files. The four systems so far use the `danger`, `info`, `spirit` and `success` tints (`bg-info/10 text-info-ink` and the like).
+The game system badge (`components/common/GameSystemBadge.tsx`) and the roster read the short label and the tint from here. Give the system a tint no other system uses: the four so far use `danger`, `info`, `spirit` and `success`.
 
 ---
 
@@ -950,8 +950,7 @@ Only the maps typed `Record<GameSystem, …>` fail to compile when a system is m
 - [ ] `types/gameSystem.ts`: the `GameSystem` value, in the order of `schema.prisma`
 - [ ] `types/game-systems/mySystem.ts`: the sheet type, extending `SheetChrome`
 - [ ] `types/game-systems/index.ts`: `export *`, `CharacterDataBySystem`, `GameSystemCharacterData`; `types/index.ts`: the `CharacterData` union
-- [ ] `constants/game-systems.ts`: `GAME_SYSTEM_LABELS`, `GAME_SYSTEM_SHORT_LABELS`, `GAME_SYSTEM_DESCRIPTIONS`, **and `GAME_SYSTEM_OPTIONS`**
-- [ ] `components/common/GameSystemBadge.tsx` and `components/campaign/CampaignRoster.tsx`: the short label and the tint
+- [ ] `constants/game-systems.ts`: `GAME_SYSTEM_LABELS`, `GAME_SYSTEM_SHORT_LABELS`, `GAME_SYSTEM_TINTS`, `GAME_SYSTEM_DESCRIPTIONS`, **and `GAME_SYSTEM_OPTIONS`**
 - [ ] `components/character/NewCharacterModal.tsx`: `TEMPLATE_OPTIONS_BY_SYSTEM`
 - [ ] `components/character-sheets/mySystem/`: the sheet, view, editor and components; the editor takes `allowTokenPicture`; the view takes `onRoll` and marks what rolls
 - [ ] `CharacterSheetRouter.tsx`, `CharacterSheetViewerModal.tsx` and `CharacterSheetEditorModal.tsx`: a case each

@@ -16,6 +16,7 @@ import { useCoarsePointer } from '@/hooks/useMediaQuery';
 import { useLongPress, type LongPressPoint } from '@/hooks/useLongPress';
 import { showRowWhileDraggedByGrip } from '@/utils/rowDrag';
 import { api } from '@/services/api';
+import { GAME_SYSTEM_SHORT_LABELS, GAME_SYSTEM_TINTS, isGameSystem } from '@/constants/game-systems';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin, GripVertical, ShieldPlus } from 'lucide-react';
@@ -29,7 +30,7 @@ import TemporaryHpDialog from './TemporaryHpDialog';
 import { characterTemporaryHp } from '@/utils/temporaryHp';
 import Toast, { useToast } from '@/components/Toast';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import type { CampaignRole, GameSystem, Character, RosterMember, User, CampaignMembership } from '@/types';
+import type { CampaignRole, Character, RosterMember, User, CampaignMembership } from '@/types';
 import type { FlatMenuItem } from '@/components/ui/menu';
 import { TokenLayer } from '@/types';
 
@@ -323,43 +324,6 @@ export default function CampaignRoster() {
     }
   };
 
-  // Get game system badge color
-  const getSystemBadgeColor = (gameSystem: GameSystem | null) => {
-    switch (gameSystem) {
-      case 'DND_5E':
-        return 'bg-danger/10 text-danger-ink';
-      case 'PATHFINDER_2E':
-        return 'bg-info/10 text-info-ink';
-      case 'SHADOWRUN_6E':
-        return 'bg-spirit/10 text-spirit-ink';
-      case 'CALL_OF_CTHULHU_7E':
-        return 'bg-success/10 text-success-ink';
-      default:
-        return 'bg-ink/10 text-ink';
-    }
-  };
-
-  // Get game system short name
-  // TODO(ui): the third copy of each system's short label, after
-  // GAME_SYSTEM_SHORT_LABELS and GameSystemBadge's SHORT_LABELS, and the copies
-  // already disagree on Shadowrun 6e ('SR6e' here, 'SR6' in both others); the
-  // tints above repeat GameSystemBadge's too. Read GAME_SYSTEM_SHORT_LABELS here
-  // and in the badge, and keep the tints in one map.
-  const getSystemShortName = (gameSystem: GameSystem | null) => {
-    switch (gameSystem) {
-      case 'DND_5E':
-        return 'D&D 5e';
-      case 'PATHFINDER_2E':
-        return 'PF2e';
-      case 'SHADOWRUN_6E':
-        return 'SR6e';
-      case 'CALL_OF_CTHULHU_7E':
-        return 'CoC 7e';
-      default:
-        return 'Flex';
-    }
-  };
-
   // Group members by role
   const groupedRoster = {
     DM: roster.filter((m) => m.role === 'DM'),
@@ -405,7 +369,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.DM.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -419,7 +383,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.PLAYER.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -433,7 +397,7 @@ export default function CampaignRoster() {
               </h4>
               <div className="space-y-2">
                 {groupedRoster.SPECTATOR.map((member) => (
-                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} getSystemBadgeColor={getSystemBadgeColor} getSystemShortName={getSystemShortName} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
+                  <MemberCard key={member.userId} member={member} getRoleIcon={getRoleIcon} onCharacterClick={handleCharacterClick} onCharacterMenu={handleCharacterMenu} coarsePointer={coarsePointer} isDM={userRole === 'DM'} currentUserId={user?.id ?? ''} canAdjustOwn={userMembership?.role === 'PLAYER'} characterHpCache={characterHpCache} onHpDelta={handleHpDelta} isOnline={onlineUserIds.has(member.userId)} />
                 ))}
               </div>
             </div>
@@ -522,8 +486,6 @@ export default function CampaignRoster() {
 interface MemberCardProps {
   member: RosterMember;
   getRoleIcon: (role: CampaignRole) => LucideIcon;
-  getSystemBadgeColor: (gameSystem: GameSystem | null) => string;
-  getSystemShortName: (gameSystem: GameSystem | null) => string;
   onCharacterClick: (characterId: string) => void;
   /** Open a character's menu at a point: a right-click, or a finger's long-press. */
   onCharacterMenu: (at: LongPressPoint, characterId: string, characterUserId: string) => void;
@@ -539,7 +501,7 @@ interface MemberCardProps {
   isOnline: boolean;
 }
 
-function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortName, onCharacterClick, onCharacterMenu, coarsePointer, isDM, currentUserId, canAdjustOwn, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
+function MemberCard({ member, getRoleIcon, onCharacterClick, onCharacterMenu, coarsePointer, isDM, currentUserId, canAdjustOwn, characterHpCache, onHpDelta, isOnline }: MemberCardProps) {
   const RoleIcon = getRoleIcon(member.role);
 
   return (
@@ -611,8 +573,6 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                 coarsePointer={coarsePointer}
                 onClick={() => onCharacterClick(character.id)}
                 onMenu={(at) => onCharacterMenu(at, character.id, character.userId)}
-                badgeColor={getSystemBadgeColor(character.gameSystem)}
-                systemShortName={getSystemShortName(character.gameSystem)}
               />
 
             {/* HP bar + controls — shown when character has HP data and user can edit */}
@@ -700,8 +660,6 @@ interface CharacterRowProps {
   coarsePointer: boolean;
   onClick: () => void;
   onMenu: (at: LongPressPoint) => void;
-  badgeColor: string;
-  systemShortName: string;
 }
 
 /**
@@ -711,9 +669,13 @@ interface CharacterRowProps {
  * from the grip at its start only, which never long-presses: an iPad's own
  * drag would otherwise lift the line at about the time the menu opens.
  */
-function CharacterRow({ character, canDrag, coarsePointer, onClick, onMenu, badgeColor, systemShortName }: CharacterRowProps) {
+function CharacterRow({ character, canDrag, coarsePointer, onClick, onMenu }: CharacterRowProps) {
   const longPress = useLongPress(onMenu);
   const dragTitle = `Drag ${character.name} onto the map`;
+  // A code this build does not know is shown as written, untinted.
+  const system = isGameSystem(character.gameSystem) ? character.gameSystem : null;
+  const systemTint = system ? `${GAME_SYSTEM_TINTS[system].bg} ${GAME_SYSTEM_TINTS[system].text}` : 'bg-ink/10 text-ink';
+  const systemLabel = system ? GAME_SYSTEM_SHORT_LABELS[system] : character.gameSystem;
   const rowDrags = canDrag && !coarsePointer;
   return (
     <div
@@ -783,8 +745,8 @@ function CharacterRow({ character, canDrag, coarsePointer, onClick, onMenu, badg
           {character.name}
         </p>
         {character.gameSystem && (
-          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${badgeColor}`}>
-            {systemShortName}
+          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${systemTint}`}>
+            {systemLabel}
           </span>
         )}
       </div>
