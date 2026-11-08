@@ -686,6 +686,12 @@ const USED_BY_OTHERS = {
   move: "Others in the campaign use this asset, so only the campaign's DM can move it out of the campaign",
 };
 
+/** The same, when the only such use is a character template, which everyone on the instance is offered. */
+const USED_BY_A_TEMPLATE = {
+  delete: "A character template uses this asset, so only the campaign's DM can delete it",
+  move: "A character template uses this asset, so only the campaign's DM can move it out of the campaign",
+};
+
 /**
  * DELETE /api/assets/:id
  * Delete an asset
@@ -722,6 +728,9 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
     if (!removal.allowed) {
       if (removal.reason === 'used-by-others') {
         return res.status(403).json({ error: 'Forbidden', message: USED_BY_OTHERS.delete });
+      }
+      if (removal.reason === 'used-by-a-template') {
+        return res.status(403).json({ error: 'Forbidden', message: USED_BY_A_TEMPLATE.delete });
       }
       // One the caller may not even read is answered as if it were not there.
       if (!(await canReadAssetFile(asset, req))) {
@@ -1682,7 +1691,9 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       // asset others there use is its DM's alone, a former DM's included.
       const removal = await mayRemoveAsset(asset, userId, false);
       if (!removal.allowed) {
-        const message = removal.reason === 'used-by-others' ? USED_BY_OTHERS.move : MOVE_REFUSALS[asset.scope];
+        const message = removal.reason === 'used-by-others' ? USED_BY_OTHERS.move
+          : removal.reason === 'used-by-a-template' ? USED_BY_A_TEMPLATE.move
+          : MOVE_REFUSALS[asset.scope];
         return res.status(403).json({ error: 'Forbidden', message });
       }
 

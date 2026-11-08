@@ -124,6 +124,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.map.deleteMany({ where: { campaignId: { in: campaignIds } } });
   await prisma.character.deleteMany({ where: { userId: { in: userIds } } });
+  await prisma.characterTemplate.deleteMany({ where: { createdById: { in: userIds } } });
   await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
   await cleanupCampaigns(campaignIds);
   await cleanupUsers(userIds);
@@ -210,5 +211,30 @@ describe('a player who uploaded token art', () => {
 
     expect((await player.delete(`/api/assets/${art.id}?force=true`)).status).toBe(403);
     expect(await stillThere(art.id)).not.toBeNull();
+  });
+
+  // A character template is offered to everyone on the instance, so even
+  // the uploader's own keeps the art; the refusal says that is why.
+  it('may not delete or move it while their own character template uses it, and is told a template does', async () => {
+    const art = await makeAsset(playerId, 'TOKEN');
+    await prisma.characterTemplate.create({ data: { name: 'Pip, as a template', tokenImageUrl: art.address, data: {}, createdById: playerId } });
+
+    const deleted = await player.delete(`/api/assets/${art.id}?force=true`);
+    expect(deleted.status).toBe(403);
+    expect(deleted.body.message).toBe("A character template uses this asset, so only the campaign's DM can delete it");
+    const moved = await player.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+    expect(moved.status).toBe(403);
+    expect(moved.body.message).toBe("A character template uses this asset, so only the campaign's DM can move it out of the campaign");
+    expect(await stillThere(art.id)).toEqual({ scope: 'CAMPAIGN', campaignId });
+  });
+
+  it('is told others in the campaign use it when a template and another member\'s character both do', async () => {
+    const art = await makeAsset(playerId, 'TOKEN');
+    await prisma.characterTemplate.create({ data: { name: 'Pip again', tokenImageUrl: art.address, data: {}, createdById: playerId } });
+    await prisma.character.create({ data: { userId: formerDmId, campaignId, name: 'Borrowed too', tokenImageUrl: art.address, data: {} } });
+
+    const deleted = await player.delete(`/api/assets/${art.id}?force=true`);
+    expect(deleted.status).toBe(403);
+    expect(deleted.body.message).toBe("Others in the campaign use this asset, so only the campaign's DM can delete it");
   });
 });

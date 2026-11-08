@@ -6145,7 +6145,10 @@ paths:
             control, a creature, a template, a campaign's sound, another
             member's document), is told "Others in the campaign use this
             asset, so only the campaign's DM can delete it", with or without
-            `force`.
+            `force`; when the only such use is a character template, which
+            everyone on the instance is offered, their own included, "A
+            character template uses this asset, so only the campaign's DM can
+            delete it".
           content:
             application/json:
               schema:
@@ -6342,7 +6345,9 @@ paths:
             asset"), or by a campaign asset's uploader who does not run the
             campaign while others there use it ("Others in the campaign use
             this asset, so only the campaign's DM can move it out of the
-            campaign"); a move to USER by anyone but the asset's uploader or an
+            campaign", or "A character template uses this asset, so only the
+            campaign's DM can move it out of the campaign" when a character
+            template is the only such use); a move to USER by anyone but the asset's uploader or an
             admin ("Only the asset's uploader can move it to their personal
             library"), since the asset would land in the uploader's library;
             or a move into a campaign the caller may not upload this type to

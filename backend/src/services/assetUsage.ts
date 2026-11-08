@@ -356,19 +356,23 @@ export async function isAssetInUse(assetId: string): Promise<boolean> {
 }
 
 /**
- * Whether anything but `userId`'s own things uses the asset: anything
- * findUses finds other than their characters, a token on a map that they do
- * not control, or a document that can show it (documentsShowing) written by
- * someone else. Their own characters, the tokens they control and their own
+ * Whether anything but `userId`'s own things uses the asset, and what:
+ * `others` for anything findUses finds other than their characters and a
+ * character template, a token on a map that they do not control, or a
+ * document that can show it (documentsShowing) written by someone else;
+ * `character-template` when the only such use is a character template,
+ * which is offered to everyone on the instance, theirs included; null for
+ * none. Their own characters, the tokens they control and their own
  * documents are theirs to lose.
  */
-export async function usedByOthersThan(assetId: string, userId: string): Promise<boolean> {
+export async function usedByOthersThan(assetId: string, userId: string): Promise<'others' | 'character-template' | null> {
   const uses = await findUses(assetId);
-  if (uses.some((use) => use.kind !== 'token' && !(use.kind === 'character' && use.ownerId === userId))) return true;
+  if (uses.some((use) => use.kind !== 'token' && use.kind !== 'characterTemplate' && !(use.kind === 'character' && use.ownerId === userId))) return 'others';
   if (uses.some((use) => use.kind === 'token')) {
     const names = (address: string | null | undefined): boolean => extractAssetId(address) === assetId;
     const maps = await mapsWithTokensMentioning(assetId);
-    if (maps.some((m) => readTokens(m.tokens).some((t) => names(t?.imageUrl) && t.controlledBy !== userId))) return true;
+    if (maps.some((m) => readTokens(m.tokens).some((t) => names(t?.imageUrl) && t.controlledBy !== userId))) return 'others';
   }
-  return (await documentsShowing(assetId)).some((doc) => doc.uploadedById !== userId);
+  if ((await documentsShowing(assetId)).some((doc) => doc.uploadedById !== userId)) return 'others';
+  return uses.some((use) => use.kind === 'characterTemplate') ? 'character-template' : null;
 }
