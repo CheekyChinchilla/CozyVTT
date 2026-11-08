@@ -57,6 +57,15 @@ it('does not take a name that only begins a longer word', () => {
   expect(readSlashWhisper('/w Marathon runs', TABLE)).toEqual({ kind: 'nobody', typed: 'Marathon' });
 });
 
+it('reads a name with a letter whose lower case is longer, such as İ', () => {
+  expect(readSlashWhisper('/w İlker hi', [target('ilker', 'İlker')])).toEqual({ kind: 'to', userId: 'ilker', content: 'hi' });
+});
+
+it('does not let a name written with i and a combining dot catch a /w for a name with İ', () => {
+  const table = [target('ilker', 'İlker'), target('trap', 'i̇lke')];
+  expect(readSlashWhisper('/w İlker hi', table)).toEqual({ kind: 'to', userId: 'ilker', content: 'hi' });
+});
+
 describe('the names the chat shows for members', () => {
   const at = (day: number) => `2026-10-${String(day).padStart(2, '0')}T12:00:00.000Z`;
   const member = (userId: string, displayName: string, role: CampaignRole, joined: string, characterIds: string[] = []): CampaignMembership => ({

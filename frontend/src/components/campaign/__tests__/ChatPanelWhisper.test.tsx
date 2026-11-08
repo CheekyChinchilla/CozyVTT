@@ -261,6 +261,13 @@ it('names, under the box, whoever a typed /w will reach, whatever the To list sa
   expect(screen.getByText('Only you and Mara can see this.')).toBeTruthy();
 });
 
+it('names a member whose capital İ is two letters in lower case as their /w is typed', async () => {
+  memberships = [...TABLE, membership('ilker', 'İlker', CampaignRole.PLAYER)];
+  await openPanel();
+  type('/w İlker hi');
+  expect(screen.getByText('Only you and İlker can see this.')).toBeTruthy();
+});
+
 it('shows a whisper with the other person\'s name, a lock, and the DM\'s shield on the DM\'s', async () => {
   getMessages.mockResolvedValue(page([
     stored({ id: 'w-3', content: 'From the DM', userId: 'dm', user: { id: 'dm', displayName: 'Dana' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),

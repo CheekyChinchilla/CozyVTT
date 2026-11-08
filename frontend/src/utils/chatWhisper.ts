@@ -103,6 +103,15 @@ export type SlashWhisper =
 
 const SLASH_WHISPER = /^\/w(?:hisper)?(?:\s+|$)/i;
 
+/**
+ * `s` in lower case a character at a time, keeping a character whose lower
+ * case is longer (İ is i and a dot), so every place in it is the same place in `s`.
+ */
+const lowerKeepingLength = (s: string) => Array.from(s, (c) => {
+  const lower = c.toLowerCase();
+  return lower.length === c.length ? lower : c;
+}).join('');
+
 /** True while the box's text starts with `/w` or `/whisper`. */
 export function isSlashWhisper(text: string): boolean {
   return SLASH_WHISPER.test(text);
@@ -121,21 +130,21 @@ export function readSlashWhisper(text: string, targets: readonly WhisperTarget[]
   const start = SLASH_WHISPER.exec(text);
   if (!start) return { kind: 'none' };
   const rest = text.slice(start[0].length);
-  const lower = rest.toLowerCase();
+  const lower = lowerKeepingLength(rest);
   const isNameThenSpaceOrEnd = (s: string, name: string) => s.startsWith(name) && (s.length === name.length || /\s/.test(s[name.length]));
 
-  const fullNames = targets.filter((t) => t.displayName.length > 0 && isNameThenSpaceOrEnd(lower, t.displayName.toLowerCase()));
+  const fullNames = targets.filter((t) => t.displayName.length > 0 && isNameThenSpaceOrEnd(lower, lowerKeepingLength(t.displayName)));
   if (fullNames.length > 0) {
     // Each name the text starts with begins every longer one, a space after it.
     const shortest = Math.min(...fullNames.map((t) => t.displayName.length));
     const name = lower.slice(0, shortest);
-    const named = targets.filter((t) => isNameThenSpaceOrEnd(t.displayName.toLowerCase(), name));
+    const named = targets.filter((t) => isNameThenSpaceOrEnd(lowerKeepingLength(t.displayName), name));
     if (named.length > 1) return { kind: 'several', labels: named.map((t) => t.label) };
     return { kind: 'to', userId: named[0].userId, content: rest.slice(shortest).trim() };
   }
 
   const typed = rest.split(/\s/, 1)[0] ?? '';
-  const begun = typed ? targets.filter((t) => t.displayName.toLowerCase().startsWith(typed.toLowerCase())) : [];
+  const begun = typed ? targets.filter((t) => lowerKeepingLength(t.displayName).startsWith(lowerKeepingLength(typed))) : [];
   if (begun.length === 1) return { kind: 'to', userId: begun[0].userId, content: rest.slice(typed.length).trim() };
   if (begun.length > 1) return { kind: 'several', labels: begun.map((t) => t.label) };
   return { kind: 'nobody', typed };
