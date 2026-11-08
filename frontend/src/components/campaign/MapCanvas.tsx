@@ -116,6 +116,7 @@ import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { controlsToken } from '@/utils/tokenOwnership';
 import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
+import { createTokenTurns } from './map/tokenTurns';
 import { tokenMenuHasItems, tokenMenuItems, type TokenMenuActions, type TokenMenuView } from './map/tokenMenuItems';
 import { doorMenuItems } from './map/doorMenuItems';
 import { mapControlItems, mapControlsTitle, gridColorLabel, rulerColorLabel, type MapControlsActions } from './map/mapControlItems';
@@ -3337,28 +3338,25 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     busy: { crossing: isMovingTokenLayer, moving: isMoveToMapLoading },
   });
 
+  /** What a refused turn says; a ref, so the turns made once keep the newest. */
+  const turnRefusedRef = useRef<(err: unknown) => void>(() => undefined);
+  turnRefusedRef.current = (err) => showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
+  /** A token's turns, sent one at a time (map/tokenTurns.ts). */
+  const [tokenTurns] = useState(() => createTokenTurns({
+    send: ({ campaignId, mapId, tokenId }, rotation) => api.updateToken(campaignId, mapId, tokenId, { rotation }),
+    show: ({ mapId, tokenId }, rotation) => useGameStore.getState().patchToken(tokenId, { rotation }, mapId),
+    refused: (err) => turnRefusedRef.current(err),
+  }));
+
   /**
-   * Turn a token one step, shown at once and put back if the server refuses.
-   * Read from the store, so presses in a menu that stays open add up.
+   * Turn a token one step, shown at once. Read from the store, so presses in
+   * a menu that stays open add up.
    */
-  const rotateToken = async (tokenId: string, step: number) => {
+  const rotateToken = (tokenId: string, step: number) => {
     if (!campaign?.id || !currentMap?.id) return;
     const token = useGameStore.getState().tokens[tokenId];
     if (!token) return;
-    const before = token.rotation;
-    const rotation = turned(before, step);
-    useGameStore.getState().patchToken(tokenId, { rotation }, currentMap.id);
-    try {
-      await api.updateToken(campaign.id, currentMap.id, tokenId, { rotation });
-    } catch (err) {
-      // TODO(play): two turns refused in quick succession are put back as their answers arrive, so the
-      // second puts back the first's turn and the token shows a facing the server never stored. On a
-      // refusal, once no turn of that token is still waiting, put back the last facing the server
-      // confirmed (from a successful reply or the next map resend). And two successful turns sent close
-      // together are separate requests that can be written out of order, leaving the earlier facing.
-      useGameStore.getState().patchToken(tokenId, { rotation: before }, currentMap.id);
-      showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
-    }
+    tokenTurns.turn({ campaignId: campaign.id, mapId: currentMap.id, tokenId }, turned(token.rotation, step), token.rotation);
   };
 
   // ============================================
@@ -3494,7 +3492,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         break;
       case 'turn':
         if (!selected || !canRotateToken(selected)) return false;
-        if (!e.repeat) void rotateToken(selected.id, action.step * ROTATION_STEP);
+        if (!e.repeat) rotateToken(selected.id, action.step * ROTATION_STEP);
         break;
       case 'step':
         if (!stepSelection(action.direction, e.repeat)) return false;
@@ -3564,7 +3562,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       });
     },
     grantTemporaryHp: (token) => setTemporaryHpTokenId(token.id),
-    rotate: (token, step) => { void rotateToken(token.id, step); },
+    rotate: (token, step) => { rotateToken(token.id, step); },
     rollCreature: (token) => setNpcRollPicker({ tokenId: token.id, at: menuPointRef.current }),
     edit: (token) => onEditToken?.(token),
     addToInitiative: (token, mapId) => socket?.emitInitiativeAdd({ tokenId: token.id, mapId }),
