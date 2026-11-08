@@ -213,7 +213,7 @@ interface Surface {
   ownsDraft: boolean;
   /** The rooms painted and not saved, whose walls Save adds to the map. */
   rooms: PendingRoom[];
-  /** The map's own colour, read off the picture's top-left pixel as Paint opens: what the eraser paints. */
+  /** The map's own colour, kept with the map, or read off the picture's top-left pixel for one drawn before it was kept: what the eraser paints. */
   background: string;
   /** The map's size in map pixels while it was last on screen: the picture's scale once the page has moved on. */
   mapPx: [number, number];
@@ -817,7 +817,8 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (ownPicture) {
       ctx.drawImage(ownPicture.image, 0, 0, width, height);
     } else {
-      ctx.fillStyle = DRAWN_MAP_BACKGROUND;
+      // Blank, in the colour the map was made in, as the eraser paints.
+      ctx.fillStyle = map.drawnBackground ?? DRAWN_MAP_BACKGROUND;
       ctx.fillRect(0, 0, width, height);
     }
     // Each tile as the picture saved had it, as a change first reaches it:
