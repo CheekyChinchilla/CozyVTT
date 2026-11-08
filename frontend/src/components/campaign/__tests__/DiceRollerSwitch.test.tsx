@@ -75,6 +75,8 @@ describe('a box with the keyboard, as the arrangement changes', () => {
   for (const name of ['Character name', 'Purpose', 'Dice expression']) {
     it(`keeps ${name}, focused, typed into and in sight, from the desktop to the compact layout`, async () => {
       await openPanel();
+      // Character and Purpose wait behind More options on the desktop too.
+      if (name !== 'Dice expression') fireEvent.click(screen.getByRole('button', { name: /^More options/ }));
       fireEvent.change(box(name), { target: { value: 'Brother Ansel' } });
       const typed = box(name);
       typed.focus();

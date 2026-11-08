@@ -217,7 +217,7 @@ Each opens as a sheet that rises over the map. **Chat**, **Dice**, **Initiative*
 
 In the **Chat** sheet **To**, the message box and **Send** share one line (the box grows to four lines as you type, with **To** and **Send** at its foot), and each message is one block that starts with its sender and time, with the text running on after them, so several short messages show at once. Whispers, the DM's messages, system messages and a message marked **Not sent** keep their colours and icons. The count of messages shown, **Load More** and, for the DM, **Clear old join and leave messages** are at the top of the chat: scroll up to reach them.
 
-In the **Dice** sheet each roll takes two lines, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top. Under the list the dice buttons and your saved rolls are one row that scrolls sideways, and **Roll** sits beside the expression. **Character** and **Purpose** are under **More**, which while it is closed counts how many of the two still hold text. **Secret Roll**, **More**, and the eye (show or hide secret rolls, once the list holds one) and, for the DM, the bin (**Clear**) share the last row. The roll list is the sheet's one scroll area: the controls under it stay put.
+In the **Dice** sheet each roll takes two lines, as it does on a computer, so several show at once: who rolled it, what for and when, then the expression and the dice it threw, with the total beside them in large type. On a narrow line the purpose is shortened first, so the name and the secret mark stay whole. A die that advantage or disadvantage dropped is struck through, a critical or a fumble is coloured and named, and a secret roll is marked **🔒 Secret**. The sheet's own heading names the panel, so the roll list starts at its top. Under the list the seven dice share one row, **d20** first, and **Roll** and **More** sit beside the expression. Everything else is under **More**: **Adv**, **Dis**, **4d6kh3**, your saved rolls and **Saved**, **Character** and **Purpose**, **Secret Roll**, **Clear all fields**, the eye (show or hide secret rolls, once the list holds one) and, for the DM, the bin (**Clear**). While it is closed, **More** counts how many of **Character**, **Purpose** and **Secret Roll** the next roll still carries. The roll list is the sheet's one scroll area: the controls under it stay put.
 
 The map's toolbar is one row at its top: **Zoom Out**, the zoom, **Zoom In**, **Ping**, **Draw** and **More**. That **More** opens **Map controls**: **Fit to Screen**, the grid and its colour, the **Ruler**, the **AoE Shape**, and for the DM **Mapmaker** on a map they can paint, **Show tools** (the **Fog of War**, **Walls** and **Lights** panels) and the spirit tokens. **Draw** and **Mapmaker** open their tools in a strip across the bottom of the map, with the map above it to draw or paint on; while Mapmaker is on, **Ping** and **Draw** leave the toolbar. The drawing and painting tools, and the buttons of the **Dice** sheet, sit in a row that scrolls sideways; an end of the row with more past it fades out under an arrow. A token's details show at the bottom of the map when you tap it.
 
@@ -679,13 +679,14 @@ If the person leaves the campaign, the **To** list keeps them and says they are 
 
 ### Rolling Dice
 
-The **Dice Roller** has its own **Dice** tab beside Chat. Click one of the dice under **Quick Roll** (d4 to d100) to roll it, or type a custom expression and press **Enter** or **Roll**.
+The **Dice Roller** has its own **Dice** tab beside Chat. Each roll in its list takes two lines: who rolled it, what for and when, then the expression and the dice, with the total large beside them. Click one of the seven dice under the list (**d20** first, then d4 to d100) to roll it, or type a custom expression and press **Enter** or **Roll**. **Adv**, **Dis**, **4d6kh3**, your saved rolls, **Saved** and **Secret Roll** sit in the row under the expression; **More** opens the **Character** and **Purpose** boxes.
 
 *GIF pending — Rolling dice and seeing the result in the Dice panel.*
 
-**Saving a roll you use often.** Press **Saved** below the dice buttons to keep a
+**Saving a roll you use often.** Press **Saved**, in the row under the expression
+(on a phone, under **More**), to keep a
 named roll — a house rule, a homebrew subsystem, `4d6kh3` for rolling up a
-character. It becomes a one-click button beside the dice. Saved rolls are private
+character. It becomes a one-click button in that row. Saved rolls are private
 to you and belong to the one campaign, and the same button is where you rename,
 edit or delete them.
 

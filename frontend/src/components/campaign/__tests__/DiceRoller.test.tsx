@@ -96,6 +96,7 @@ describe('DiceRoller for a screen reader', () => {
 
   it('names the three roll boxes', () => {
     render(<DiceRoller />);
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.getByRole('textbox', { name: 'Dice expression' })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'Character name' })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'Purpose' })).toBeTruthy();

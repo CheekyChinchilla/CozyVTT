@@ -133,6 +133,28 @@ it('marks a secret roll as secret, yours or one the DM is shown', () => {
   expect(within(parts(theirs).first).getByText(/Secret/)).toHaveTextContent('🔒 Secret (DM view)');
 });
 
+// On a narrow line the name and the Secret mark were cut through while the
+// purpose kept its width (seen at 1280 by 720): the purpose now gives way first.
+it('shortens the purpose before the name, and never the Secret mark or the time', () => {
+  const entry = renderDense(roll({ secret: true, purpose: 'Longsword attack against the goblin chief' }));
+  const { first } = parts(entry);
+  const name = within(first).getByText("Aria's Sellsword").parentElement as HTMLElement;
+  const purpose = within(first).getByText(/Longsword attack against/) as HTMLElement;
+  const badge = within(first).getByText(/Secret/);
+  const time = within(first).getByText('8m ago');
+  const shrinkOf = (el: HTMLElement) => {
+    const found = el.className.split(' ').find((c) => c === 'shrink' || c.startsWith('shrink-'));
+    if (found === 'shrink') return 1;
+    if (found === 'shrink-0') return 0;
+    return Number(found?.match(/shrink-\[(\d+)\]/)?.[1] ?? 1);
+  };
+  expect(purpose.className).toContain('truncate');
+  expect(purpose.className).not.toContain('max-w-');
+  expect(shrinkOf(purpose)).toBeGreaterThan(shrinkOf(name));
+  expect(shrinkOf(badge)).toBe(0);
+  expect(shrinkOf(time)).toBe(0);
+});
+
 it('keeps the purpose that says a roll is damage, and the working of every group', () => {
   const entry = renderDense(roll({
     expression: '1d8+1d6-2',
