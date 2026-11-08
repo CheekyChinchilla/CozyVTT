@@ -6,6 +6,9 @@
 
 import { GameSystem } from '@prisma/client';
 
+// TODO(typing): CharacterTemplate is declared again in each of the other three
+// template files, and index.ts exports this one. Declare it once and import it
+// in the four.
 export interface CharacterTemplate {
   name: string;
   description: string;

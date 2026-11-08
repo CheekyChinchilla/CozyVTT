@@ -33,6 +33,11 @@ const manualBonusSchema = z.number().int().min(MIN_BONUS_OVERRIDE).max(MAX_BONUS
  * One of the four proficiency boxes. The flattened list below is split from
  * them at commas, so one of its entries can be a whole box.
  */
+// TODO(sheets): 2000 here, and 60 for a weapon property in the attack schema,
+// are written again in the editor (PROFICIENCY_BOX_MAX in
+// DnD5eCharacterEditor.tsx, MAX_WEAPON_PROPERTY_LENGTH in
+// utils/weaponProperties.ts), and nothing checks that they agree. Move both
+// into sheetLimits.ts, whose frontend copy keepInStep.test.ts holds to it.
 const proficiencyBoxSchema = z.string().max(2000);
 
 /**
