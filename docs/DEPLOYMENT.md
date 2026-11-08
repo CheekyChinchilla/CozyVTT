@@ -55,7 +55,7 @@ cd CozyVTT
 cp .env.example .env
 ```
 
-Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, and while `SESSION_SECRET` is a placeholder, is the example value shown here, or is shorter than 32 characters):
+Edit `.env` and fill in all required values. At minimum (the production stack refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, and while `SESSION_SECRET` is a placeholder, is the example value shown here, or is shorter than 32 characters):
 
 ```env
 # Database — paste the output of: openssl rand -hex 16
@@ -66,8 +66,6 @@ SESSION_SECRET=<paste the 64 characters that command prints>
 
 # Your public URL (used for CORS and email links)
 CORS_ORIGIN=https://your-domain.com
-
-NODE_ENV=production
 ```
 
 **Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `/`, `#`, `?` or `%` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Database connection successful`, because that first check does not use the password, and then `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first. A `$` has a different problem: Docker Compose reads a `$` in `.env` as the start of a variable name, so the password it uses is not the one you typed.
@@ -346,7 +344,7 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 ### Visitor addresses and sign-in limits
 
-CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment. Only two passwords from one address are checked at once, though: a third person pressing **Sign In** in the same second is asked to try again in a moment, which counts for nothing.
+CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password counts (so does a wrong password or code when changing two-factor settings, and a password reset link that no longer works). Typing the right password never does, even when everyone in a household signs in at the same moment. Only two passwords from one address are checked at once, though: a third person pressing **Sign In** in the same second is asked to try again in a moment, which counts for nothing.
 
 Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with the **Forgot password?** link, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in. You can also open it without changing the password: a locked account shows **Locked until** on its row in **Admin → Users**, and **Clear lock** there clears it after asking. The counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
 
@@ -447,6 +445,7 @@ Docker can give a network a new range when it makes it again, after `docker comp
 Whatever proxy you use, it must:
 - Forward `/api/*` and `/socket.io/*` to the backend, and everything else to the frontend
 - Support WebSocket upgrades (`Upgrade: websocket` / `Connection: upgrade`) on the `/socket.io/` path
+- Pass the `Host` header visitors used through unchanged (in nginx, `proxy_set_header Host $host;`, as every example in this guide does). The app page's security policy names the live table's connection by that host, and some browsers need it named
 - Pass `X-Forwarded-Proto` to the backend, and `X-Forwarded-For` with the visitor's own address last (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits))
 - Allow request bodies of at least **55 MB** (covers the default `MAX_MAP_SIZE_MB=50` plus overhead), and more if you raise any `MAX_*_SIZE_MB` — see [Upload Size Limits](#upload-size-limits)
 - For importing campaigns: allow `/api/campaigns/import` (which also covers `/api/campaigns/import/preview`) a request body of at least **505 MB**, the 500 MB largest archive plus overhead, and give it about **300 seconds** to answer, since a large archive takes minutes to unpack. The bundled nginx allows 512 MB there whatever `NGINX_MAX_BODY_SIZE` says. Without this, importing an archive bigger than your body limit shows "This archive is larger than the server accepts", and a slow import shows an error while the backend carries on and finishes it. Where your proxy can, pass the upload straight through instead of saving it first (`proxy_request_buffering off` in nginx)
@@ -1841,7 +1840,7 @@ Before going live:
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
-- [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limits are 5 failed sign-ins per 15 minutes per visitor address and 10 per hour per account from everywhere (each lock is noted in **Admin → Activity**), but a host-level ban catches scanners earlier
+- [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limits are 5 failed sign-ins per 15 minutes per visitor address and 10 per hour per account from everywhere (a locked account is noted in **Admin → Activity**; a locked address is not), but a host-level ban catches scanners earlier
 - [ ] **Visitor addresses** — CozyVTT sees each visitor's own address, not your tunnel's or proxy's. Check it as described in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)
 - [ ] **Stable update plan** — You watch the [CozyVTT repo](https://github.com/CheekyChinchilla/CozyVTT) for releases and apply security patches promptly (no auto-update is bundled — that's your choice)
 - [ ] **Vulnerability reporting path** — You've read [SECURITY.md](../SECURITY.md) and know how to report issues responsibly
@@ -1948,4 +1947,4 @@ The routes are the same whether the file is published or not, since the web clie
 - rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 300 requests a minute from one address, 30 uploads a minute per user, 20 campaign imports, 20 import previews and 20 campaign exports an hour per user, one at a time, 20 campaign invitation emails an hour per DM, and a limit per account on every kind of event sent to the live table (chat, dice, token moves, the DM's controls), set far above what a game sends
 - uploads checked by what the file contains, not by its name or the type it claims
 - Argon2id password hashing and a strong `SESSION_SECRET`
-- security headers on every response: from helmet on the API, and from the bundled nginx on the app page
+- security headers on every response: from helmet on the API, and from the frontend container on the app page (the manual install's Nginx example sets them itself)
