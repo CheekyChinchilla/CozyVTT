@@ -64,12 +64,11 @@ describe('extractCharacterHp', () => {
 
   // ---- FLEXIBLE ----
 
+  // A Flexible character has no game system (null, above). 'FLEXIBLE' is no
+  // system code, so it reads no hit points, as any unknown code does.
   describe('FLEXIBLE', () => {
-    it('extracts hp identically to DND_5E', () => {
-      const result = extractCharacterHp('FLEXIBLE', {
-        hp: { maximum: 20, current: 15 },
-      });
-      expect(result).toEqual({ current: 15, max: 20, temp: 0 });
+    it('is not a game system, so no hit points are read', () => {
+      expect(extractCharacterHp('FLEXIBLE', { hp: { maximum: 20, current: 15 } })).toBeNull();
     });
   });
 

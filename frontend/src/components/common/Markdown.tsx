@@ -38,6 +38,7 @@ import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { PICTURE_VERSION_QUERY } from '@/constants/assetLimits';
 
 const plugins = [remarkGfm, remarkBreaks];
 
@@ -46,14 +47,19 @@ const PICTURE_PATH = /^\/api\/assets\/(?:maps|tokens|avatars)\/[0-9a-f]{8}-[0-9a
 
 /**
  * True for a map, token or avatar picture on this instance, given as a path
- * or as this instance's full address, with nothing after the id. As written,
- * so a `..` that the browser would resolve elsewhere is refused.
+ * or as this instance's full address, with nothing after the id but a map
+ * picture's version (PICTURE_VERSION_QUERY), which a drawn map's address
+ * carries. As written, so a `..` that the browser would resolve elsewhere is
+ * refused.
  */
 function isOwnPicture(src: string): boolean {
   try {
     const url = new URL(src, window.location.origin);
-    if (url.origin !== window.location.origin || url.search !== '' || url.hash !== '') return false;
-    const path = src.startsWith(window.location.origin) ? src.slice(window.location.origin.length) : src;
+    if (url.origin !== window.location.origin || url.hash !== '') return false;
+    const written = src.startsWith(window.location.origin) ? src.slice(window.location.origin.length) : src;
+    const query = written.indexOf('?');
+    const path = query === -1 ? written : written.slice(0, query);
+    if (query !== -1 && !(PICTURE_VERSION_QUERY.test(written.slice(query)) && path.toLowerCase().startsWith('/api/assets/maps/'))) return false;
     return PICTURE_PATH.test(path);
   } catch {
     return false;

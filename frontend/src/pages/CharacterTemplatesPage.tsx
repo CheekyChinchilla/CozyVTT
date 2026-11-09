@@ -108,7 +108,7 @@ export default function CharacterTemplatesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-page bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       <div className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
@@ -144,7 +144,7 @@ export default function CharacterTemplatesPage() {
               </Button>
               <Button onClick={() => setShowCreate(true)} className="flex items-center gap-2">
                 <Plus className="w-5 h-5" />
-                <span className="hidden sm:inline">New Template</span>
+                <span className="max-sm:sr-only">New Template</span>
               </Button>
             </div>
           </div>

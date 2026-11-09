@@ -11,6 +11,14 @@ import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
+/** Each kind of message's solid colours (index.css), for this toast and ToastContainer's. */
+export const TOAST_TONE: Record<ToastType, string> = {
+  success: 'toast-success',
+  error: 'toast-danger',
+  warning: 'toast-warning',
+  info: 'toast-info',
+};
+
 export interface ToastProps {
   message: string;
   type?: ToastType;
@@ -60,20 +68,6 @@ export default function Toast({
     }
   };
 
-  const getStyles = () => {
-    switch (type) {
-      case 'success':
-        return 'bg-success/10 border-success/30 text-success-ink';
-      case 'error':
-        return 'bg-danger/10 border-danger/30 text-danger-ink';
-      case 'warning':
-        return 'bg-warning/10 border-warning/30 text-warning-ink';
-      case 'info':
-      default:
-        return 'bg-info/10 border-info/30 text-info-ink';
-    }
-  };
-
   return (
     <AnimatePresence>
       {show && (
@@ -83,14 +77,16 @@ export default function Toast({
           exit={toastExit}
           transition={{ duration: 0.2 }}
           // Above dialogs and side panels, which render at the end of <body>,
-          // as ToastContainer's notifications are
-          className="fixed top-4 right-4 z-9998 max-w-md"
+          // as ToastContainer's notifications are. At most 448 px wide, and
+          // 16 px inside both edges of a screen too narrow for that, such as
+          // a phone's.
+          className="fixed top-4 right-4 z-9998 max-w-[min(28rem,calc(100vw-2rem))]"
         >
           <div
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
-            className={`glass-panel border-2 ${getStyles()} shadow-lg rounded-lg p-4 flex items-start gap-3`}
+            className={`border-2 ${TOAST_TONE[type]} shadow-lg rounded-lg p-4 flex items-start gap-3`}
           >
             <div className="shrink-0 mt-0.5">{getIcon()}</div>
             <div className="flex-1 min-w-0">
@@ -98,7 +94,7 @@ export default function Toast({
             </div>
             <button
               onClick={onClose}
-              className="shrink-0 ml-2 hover:opacity-70 transition-opacity"
+              className="shrink-0 ml-2 touch-target inline-flex items-center justify-center hover:opacity-70 transition-opacity"
               aria-label="Close notification"
             >
               <X className="w-4 h-4" />

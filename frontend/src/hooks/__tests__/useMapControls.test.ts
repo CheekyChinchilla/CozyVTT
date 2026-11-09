@@ -155,3 +155,65 @@ describe('zooming', () => {
     expect(result.current.zoom).toBeCloseTo(1.11);
   });
 });
+
+describe('pinching', () => {
+  // Each step scales the zoom the pinch began at, so the steps never compound.
+  it('zooms by the scale from the zoom the pinch began at, about the fingers', () => {
+    const { result } = setup();
+    const centre = { x: 400, y: 300 };
+    act(() => {
+      result.current.pinchStart();
+      result.current.pinchBy(1.5, centre, 0, 0);
+      result.current.pinchBy(2, centre, 0, 0);
+    });
+    expect(result.current.zoom).toBe(2);
+    expect(result.current.panOffset).toEqual({ x: -400, y: -300 });
+  });
+
+  // Zooming about the new centre before moving the pan drifted the map out
+  // from under the fingers by the centre's move times the zoom's change.
+  it('keeps the map under the fingers while their centre moves as they spread', () => {
+    const { result } = setup();
+    act(() => {
+      result.current.pinchStart();
+      result.current.pinchBy(2, { x: 110, y: 100 }, 10, 0);
+      result.current.pinchBy(3, { x: 130, y: 120 }, 20, 20);
+    });
+    // Map pixel (100, 100) began under (100, 100), and is under the centre now.
+    const { zoom, panOffset } = result.current;
+    expect({ x: (130 - panOffset.x) / zoom, y: (120 - panOffset.y) / zoom }).toEqual({ x: 100, y: 100 });
+  });
+
+  it('stays within the zoom bounds, as the wheel does', () => {
+    const { result } = setup();
+    act(() => {
+      result.current.pinchStart();
+      result.current.pinchBy(10, { x: 0, y: 0 }, 0, 0);
+    });
+    expect(result.current.zoom).toBe(result.current.maxZoom);
+    act(() => { result.current.pinchBy(0.01, { x: 0, y: 0 }, 0, 0); });
+    expect(result.current.zoom).toBe(result.current.minZoom);
+  });
+});
+
+// The keyboard pans a selected token back into sight.
+describe('panning by an amount', () => {
+  it('moves the view by that many canvas pixels, keeping the zoom', () => {
+    const { result } = setup();
+    act(() => result.current.zoomIn());
+    act(() => result.current.panBy(30, -20));
+
+    expect(result.current.panOffset).toEqual({ x: 30, y: -20 });
+    expect(result.current.zoom).toBe(1.25);
+  });
+
+  it('adds up two pans made before the next render', () => {
+    const { result } = setup();
+    act(() => {
+      result.current.panBy(10, 0);
+      result.current.panBy(5, 5);
+    });
+
+    expect(result.current.panOffset).toEqual({ x: 15, y: 5 });
+  });
+});

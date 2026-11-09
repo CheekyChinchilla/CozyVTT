@@ -81,6 +81,25 @@ it('deletes a player who has rolled and uploaded, keeping the rolls and campaign
   expect((await prisma.asset.findUniqueOrThrow({ where: { id: campaignArt.id } })).uploadedById).toBeNull();
 });
 
+it('keeps what a deleted player drew on a map, with no author', async () => {
+  const dm = await member('Deletion DM');
+  const leaver = await member('Deletion Artist');
+  const campaignId = await campaignRunBy(dm.user.id, dm.user.id, [leaver.user.id]);
+  const map = await prisma.map.create({
+    data: { campaignId, name: 'Sketched', imageUrl: '', baseLayerUrl: '', width: 5, height: 5, tokens: [], annotations: [] },
+  });
+  const drawing = await prisma.mapDrawing.create({
+    data: { mapId: map.id, authorId: leaver.user.id, kind: 'pen', color: '#3d8bd9', width: 3, points: [[1, 1], [9, 4], [20, 2]] },
+  });
+
+  const res = await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD });
+  expect(res.status).toBe(200);
+
+  const kept = await prisma.mapDrawing.findUniqueOrThrow({ where: { id: drawing.id } });
+  expect(kept.authorId).toBeNull();
+  expect(kept.points).toEqual([[1, 1], [9, 4], [20, 2]]);
+});
+
 // A person deleting their account to remove their data had their avatar and
 // their private uploads kept on the server for good, readable by admins
 // alone. Those go with the account now: the avatar always, and a personal
@@ -263,15 +282,18 @@ describe('the personal files of a deleted account', () => {
     });
 
     it('through a document the account shared into a campaign, which counts as a use there', async () => {
-      const { leaver, taker, shared, theirs, theirMap } = await scene('Taken Document');
+      const { leaver, taker, shared, theirMap } = await scene('Taken Document');
       const handout = await personalFile(leaver.user.id, 'DOCUMENT');
       await prisma.campaignDocument.create({ data: { campaignId: shared, assetId: handout.id, linkedById: leaver.user.id } });
       const url = `/api/assets/tokens/${handout.id}`;
       expect((await taker.agent.get(`/api/assets/${handout.id}`)).status).toBe(200);
-      const placed = await taker.agent
-        .post(`/api/campaigns/${theirs}/maps/${theirMap.id}/tokens`)
-        .send({ name: 'Taken', position: { x: 1, y: 1 }, imageUrl: url });
-      expect(placed.status).toBe(201);
+      // Stored as a release before a token's picture had to be a token
+      // picture, or a direct write, may have stored it: the token routes now
+      // refuse a document.
+      await prisma.map.update({
+        where: { id: theirMap.id },
+        data: { tokens: [{ id: randomUUID(), name: 'Taken', imageUrl: url, position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, layer: 'token', visible: true, rotation: 0, conditions: [], metadata: {}, type: 'npc' }] },
+      });
 
       expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
       await personalFilesBeingRemoved.finished();

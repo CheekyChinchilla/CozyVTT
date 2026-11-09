@@ -535,6 +535,16 @@
       ]
     },
     {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/leave",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
       "method": "PUT",
       "path": "/api/campaigns/:campaignId/members/:userId/role",
       "handlers": [
@@ -733,6 +743,7 @@
         "oneCampaignArchiveAtATime",
         "<anonymous>",
         "takeImportUpload",
+        "refuseNulCharacters",
         "<anonymous>"
       ]
     },
@@ -967,6 +978,7 @@
         "requireAuth",
         "<anonymous>",
         "<anonymous>",
+        "refuseNulCharacters",
         "<anonymous>",
         "validateFileSize",
         "validateFileType",
@@ -1011,6 +1023,20 @@
       "path": "/api/assets/documents/:id/content",
       "handlers": [
         "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/assets/:id/picture",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>",
+        "<anonymous>",
+        "<anonymous>",
+        "refuseNulCharacters",
+        "validateFileSize",
+        "validateFileType",
         "<anonymous>"
       ]
     },
@@ -1108,6 +1134,7 @@
         "<anonymous>",
         "<anonymous>",
         "receiveUvtt",
+        "refuseNulCharacters",
         "<anonymous>"
       ]
     },
@@ -1206,6 +1233,16 @@
     {
       "method": "GET",
       "path": "/api/campaigns/:campaignId/maps/:id/walls",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps/:id/drawings",
       "handlers": [
         "requireAuth",
         "loadCampaignMembership",
@@ -1526,6 +1563,11 @@
     },
     {
       "name": "emptyBodyWhenNone",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "refuseNulCharacters",
       "path": "",
       "route": false
     },

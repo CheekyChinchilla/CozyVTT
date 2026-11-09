@@ -43,7 +43,7 @@ fi
 # ------------------------------------------------------------------
 # Prepare the file psql loads, and refuse anything that is not a backup.
 #
-# This mirrors what the Admin Dashboard's restore does (backend/src/utils/
+# This mirrors what the Admin Panel's restore does (backend/src/utils/
 # pgRestore.ts explains each rule). The dump is written to a temporary file
 # first, never streamed straight into psql: a check that stopped a stream
 # halfway would hand psql a cut-short file, which is the exact thing being
@@ -253,7 +253,7 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
   if [[ "$HOST_PORT" == *:* ]]; then DB_PORT="${HOST_PORT##*:}"; fi
   # This script backs up and restores the public schema. An address ending in
   # ?schema=<name> keeps CozyVTT's data in a schema of its own, which the
-  # Admin Dashboard's Create Backup and Restore handle.
+  # Admin Panel's Create Backup and Restore handle.
   DB_SCHEMA=public
   if [[ "$DATABASE_URL" == *\?* ]]; then
     IFS='&' read -ra DB_OPTIONS <<< "${DATABASE_URL#*\?}"
@@ -264,7 +264,7 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
   if [[ -n "$DB_SCHEMA" && "$DB_SCHEMA" != public ]]; then
     echo "❌ DATABASE_URL names the database schema \"$DB_SCHEMA\", and this script works"
     echo "   with the public schema only. Nothing was changed. Use Create Backup and"
-    echo "   Restore in the Admin Dashboard, which keep to the schema DATABASE_URL names."
+    echo "   Restore in the Admin Panel, which keep to the schema DATABASE_URL names."
     exit 1
   fi
 else

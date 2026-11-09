@@ -85,11 +85,14 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiDeletionBlockers } from '@/utils/errors';
 import Modal from '@/components/ui/Modal';
+import { ScrollChevrons, scrollFade, useScrollMore } from '@/components/ui/ScrollCue';
+import { cn } from '@/utils/cn';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import DeletionBlockers from '@/components/admin/DeletionBlockers';
 import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
 import { LogActor, LogChanges } from '@/components/admin/AdminLogDetails';
 import { formatDuration, formatFileSize, formatRelativeTime, type FileSizeOptions } from '@/utils/format';
+import { tabKeyTarget } from '@/utils/tabKeys';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -102,6 +105,9 @@ interface AppearanceColors {
 // ============================================
 // Helpers
 // ============================================
+
+/** How long a new backup's warning that the restore would refuse it stays up: long enough to read. */
+const BACKUP_WARNING_MS = 20_000;
 
 /** How the Admin Panel writes a size: "512.0 B", "1.5 KB", up to TB. */
 const ADMIN_SIZES: FileSizeOptions = { byteDecimals: 1, largest: 'TB' };
@@ -122,6 +128,21 @@ function formatDate(dateStr: string | null): string {
     month: 'short',
     day: 'numeric',
   });
+}
+
+/**
+ * Scroll a strip that scrolls sideways, as the row of tabs does on a narrow
+ * screen, just far enough to show `item` inside its padding. Only the strip
+ * moves: scrollIntoView would scroll the page too.
+ */
+function keepInStrip(strip: HTMLElement, item: HTMLElement) {
+  const style = getComputedStyle(strip);
+  const box = strip.getBoundingClientRect();
+  const left = box.left + (parseFloat(style.paddingLeft) || 0);
+  const right = box.right - (parseFloat(style.paddingRight) || 0);
+  const shown = item.getBoundingClientRect();
+  if (shown.left < left) strip.scrollLeft -= left - shown.left;
+  else if (shown.right > right) strip.scrollLeft += shown.right - right;
 }
 
 /** The time of day a sign-in lock ends, as the user list shows it. */
@@ -159,6 +180,18 @@ export default function AdminPage() {
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+
+  // The open tab stays in view in a row of tabs scrolled sideways, however
+  // it was opened (Assets also opens from a link in Delete User).
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    const tab = strip?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (strip && tab) keepInStrip(strip, tab);
+  }, [activeTab]);
+
+  // Which ends of the row have tabs past them, as it scrolls or resizes.
+  const { ref: tabStripCue, more: tabStripMore } = useScrollMore(tabStripRef);
 
   // ---- Dashboard ----
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -834,8 +867,11 @@ export default function AdminPage() {
     setCreatingBackup(true);
     setBackupCreateError('');
     try {
-      const backup = await adminService.createBackup();
+      const { warning, ...backup } = await adminService.createBackup();
       setBackups(prev => [backup, ...prev]);
+      // Made and kept, but past what the restore takes: said now, not on the
+      // day it is needed.
+      if (warning) showToast(warning, 'warning', BACKUP_WARNING_MS);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setBackupCreateError(apiErrorMessage(e) ?? 'Failed to create backup');
@@ -927,12 +963,22 @@ export default function AdminPage() {
     { id: 'activity',  label: 'Activity',  icon: <Activity className="w-4 h-4" /> },
   ];
 
+  // The open tab is the one stop for Tab; the arrows, Home and End open
+  // another and move the focus to it (tabKeyTarget).
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const target = tabKeyTarget(event.key, index, tabs.length);
+    if (target === null) return;
+    event.preventDefault();
+    setActiveTab(tabs[target].id);
+    document.getElementById(`tab-${tabs[target].id}`)?.focus();
+  };
+
   // ============================================
   // Render
   // ============================================
 
   return (
-    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-page bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
 
       {/* ---- Header ---- */}
       <header className="bg-moss-green/10 border-b border-moss-green/20">
@@ -955,24 +1001,45 @@ export default function AdminPage() {
                 <p className="text-xs text-warm-gray mt-0.5">Platform administration</p>
               </div>
             </div>
-            <span className="text-sm text-warm-gray">
+            {/* A name of one long word breaks where it must, so on a phone
+                it never pushes the header past the screen's edge. */}
+            <span className="min-w-0 wrap-anywhere text-sm text-warm-gray">
               Signed in as{' '}
               <span className="font-medium text-brand-ink">{user?.displayName}</span>
             </span>
           </div>
 
           {/* Tab Navigation */}
-          <nav aria-label="Admin panel sections">
-            <div role="tablist" aria-label="Admin tabs" className="flex gap-1 mt-4">
-              {tabs.map(tab => (
+          <nav aria-label="Admin panel sections" className={tabStripMore === 'none' ? undefined : 'relative'}>
+            {/* The seven tabs need about 820 px. Below 1024 px they scroll
+                sideways in their own strip, which runs to the screen's
+                edges, so the page never does; its padding keeps a focus
+                ring and the open tab's lower edge inside it, and an end
+                with more tabs past it fades under a chevron that is only
+                for the eye (ScrollCue.tsx). */}
+            <div
+              ref={tabStripCue}
+              role="tablist"
+              aria-label="Admin tabs"
+              className={cn(
+                'flex gap-1 mt-4 max-lg:-mx-4 max-lg:px-4 max-lg:py-1 max-lg:overflow-x-auto max-lg:overscroll-x-contain',
+                scrollFade(tabStripMore, { belowLg: true })
+              )}
+            >
+              {tabs.map((tab, index) => (
                 <button
                   key={tab.id}
                   role="tab"
                   id={`tab-${tab.id}`}
                   aria-selected={activeTab === tab.id}
                   aria-controls={`tabpanel-${tab.id}`}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
+                  onKeyDown={(event) => onTabKeyDown(event, index)}
+                  // A tab reached with the keyboard comes wholly into view;
+                  // the browser stops at one partly shown.
+                  onFocus={(e) => { if (tabStripRef.current) keepInStrip(tabStripRef.current, e.currentTarget); }}
+                  className={`flex items-center gap-2 shrink-0 px-4 py-2 pointer-coarse:min-h-11 rounded-t-lg text-sm font-medium transition-colors ${
                     activeTab === tab.id
                       ? 'bg-paper text-brand-ink border border-b-paper border-moss-green/20 -mb-px'
                       : 'text-warm-gray hover:text-brand-ink hover:bg-paper/50'
@@ -983,6 +1050,7 @@ export default function AdminPage() {
                 </button>
               ))}
             </div>
+            <ScrollChevrons more={tabStripMore} start="-left-3" end="-right-3" className="text-warm-gray lg:hidden" />
           </nav>
         </div>
       </header>

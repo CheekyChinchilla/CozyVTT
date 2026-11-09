@@ -5,8 +5,9 @@
  * and importing characters from JSON files.
  */
 
-import type { Character, CharacterData } from '@/types';
+import type { Character, CharacterData, GameSystem } from '@/types';
 import { downloadTextFile } from '@/utils/download';
+import { isGameSystem } from '@/constants/game-systems';
 
 export interface ExportMetadata {
   cozyVttVersion: string;
@@ -61,7 +62,7 @@ export function validateImportedCharacter(data: unknown): {
   error?: string;
   character?: {
     name: string;
-    gameSystem: string | null;
+    gameSystem: GameSystem | null;
     data: CharacterData;
   };
 } {
@@ -106,12 +107,19 @@ export function validateImportedCharacter(data: unknown): {
     return { valid: false, error: 'Character data is required' };
   }
 
+  // A file made on an instance with another game system: this one cannot
+  // store the character, so it is refused here, before the preview.
+  const gameSystem = candidate.character.gameSystem || null;
+  if (gameSystem !== null && !isGameSystem(gameSystem)) {
+    return { valid: false, error: `This character is for a game system this CozyVTT does not have: ${String(gameSystem)}` };
+  }
+
   // Return validated character data
   return {
     valid: true,
     character: {
       name: candidate.character.name as string,
-      gameSystem: (candidate.character.gameSystem as string | null) || null,
+      gameSystem,
       data: candidate.character.data as CharacterData,
     },
   };

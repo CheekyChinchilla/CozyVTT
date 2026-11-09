@@ -31,6 +31,7 @@ import {
 } from '../validators/characterTemplates';
 import { extractAssetId, isExactAssetAddress, normalizeAssetUrl } from '../utils/asset-urls';
 import { toJson } from '../utils/prisma-json';
+import { TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { holdOwnerCreates } from '../utils/ownerLimit';
 import logger from '../utils/logger';
 import { escapeLikePattern } from '../utils/likePattern';
@@ -104,10 +105,14 @@ async function canModifyTemplate(
  * CAMPAIGN-scoped asset would 403 for everyone but its owner or that campaign's
  * members, leaving a broken image on a template other people are copying.
  *
+ * It must be a token picture as well, as a character's must, unless it is
+ * the address already stored on the template (`stored`), sent back as it is.
+ *
  * Returns the normalised URL, or an error message to send back as a 400.
  */
 async function resolveTemplateImage(
-  tokenImageUrl: string | null | undefined
+  tokenImageUrl: string | null | undefined,
+  stored?: string | null
 ): Promise<{ url: string | null } | { error: string }> {
   if (!tokenImageUrl) return { url: null };
 
@@ -121,7 +126,7 @@ async function resolveTemplateImage(
 
   const asset = await prisma.asset.findUnique({
     where: { id: assetId },
-    select: { scope: true },
+    select: { scope: true, type: true },
   });
 
   if (!asset) {
@@ -135,7 +140,11 @@ async function resolveTemplateImage(
     };
   }
 
-  return { url: normalizeAssetUrl(tokenImageUrl, 'tokens') };
+  const url = normalizeAssetUrl(tokenImageUrl, 'tokens');
+  if (asset.type !== 'TOKEN' && !(stored !== undefined && url === stored)) {
+    return { error: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE };
+  }
+  return { url };
 }
 
 /**
@@ -375,7 +384,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     let imageUrl: string | null | undefined;
     if (data.tokenImageUrl !== undefined) {
-      const image = await resolveTemplateImage(data.tokenImageUrl);
+      const image = await resolveTemplateImage(data.tokenImageUrl, existing.tokenImageUrl);
       if ('error' in image) {
         return res.status(400).json({ error: 'Validation Error', message: image.error });
       }

@@ -392,3 +392,84 @@ describe('Call of Cthulhu weapons in the roll menu', () => {
     expect(labels).toContain('.38 Revolver (Handgun, target: 60%)');
   });
 });
+
+// A value is offered as a roll only when the dice parser rolls what would be
+// sent, which is what the server and a paused table roll by. The check looked
+// at which characters a value held, so these were offered and then refused.
+describe('values the dice cannot roll', () => {
+  const dndStats = {
+    strength:     { score: 10, modifier: 0 },
+    dexterity:    { score: 10, modifier: 0 },
+    constitution: { score: 14, modifier: 2 },
+    intelligence: { score: 10, modifier: 0 },
+    wisdom:       { score: 10, modifier: 0 },
+    charisma:     { score: 10, modifier: 0 },
+  };
+  const purposes = (options: { purpose: string }[]) => options.map((o) => o.purpose);
+
+  it('are not offered as D&D 5e damage', () => {
+    const data = {
+      stats: dndStats,
+      attacks: [
+        { name: 'Spear', attackBonus: 4, damageRoll: '2d6+', additionalDamage: [{ label: 'Two hands', damageRoll: 'dddd' }] },
+        { name: 'Dagger', attackBonus: 4, damageRoll: '1d4+2', additionalDamage: [{ label: 'Thrown', damageRoll: '1d4 + 2' }] },
+      ],
+    } as unknown as CharacterData;
+    expect(purposes(getCharacterRolls('DND_5E', data).combat)).toEqual([
+      'Spear Attack', 'Dagger Attack', 'Dagger Damage', 'Dagger Damage (Thrown)',
+    ]);
+  });
+
+  it('are not offered as Pathfinder 2e strike damage', () => {
+    const data = {
+      ...pf2eBase,
+      strikes: [
+        { name: 'Longsword', attackBonus: 11, damageRoll: '1d8+4 S' },
+        { name: 'Dagger', attackBonus: 10, damageRoll: '1d4+4' },
+      ],
+    } as unknown as CharacterData;
+    expect(purposes(getCharacterRolls('PATHFINDER_2E', data).combat)).toEqual([
+      'Longsword Strike', 'Dagger Strike', 'Dagger Damage',
+    ]);
+  });
+
+  it('are not offered as Call of Cthulhu weapon damage', () => {
+    const data = {
+      ...cocBase,
+      combat: { weapons: [
+        { name: 'Knife', skill: 'Brawl', skillValue: 25, damage: '1d4+' },
+        { name: 'Club', skill: 'Brawl', skillValue: 25, damage: '1d6+DB' },
+      ] },
+    } as unknown as CharacterData;
+    expect(purposes(getCharacterRolls('CALL_OF_CTHULHU_7E', data).combat).filter((p) => p.endsWith('Damage'))).toEqual(['Club Damage']);
+  });
+
+  it('are not offered as a D&D 5e hit die', () => {
+    const data = {
+      stats: dndStats,
+      hitDice: [
+        { class: 'fighter', die: 'dddd', maximum: 3, remaining: 3 },
+        { class: 'monk', die: '200d6', maximum: 3, remaining: 3 },
+        { class: 'rogue', die: 'd8', maximum: 3, remaining: 3 },
+      ],
+    } as unknown as CharacterData;
+    expect(getCharacterRolls('DND_5E', data).hitDice.map((h) => h.expression)).toEqual(['d8+2']);
+  });
+
+  // A hit die written with a + at its end rolled as the die plus Constitution
+  // (`1d10++2`), and still does, without the stray sign.
+  it('roll a hit die written with a + at its end as the die plus Constitution', () => {
+    const data = { stats: dndStats, hitDice: [{ class: 'fighter', die: '1d10+', maximum: 3, remaining: 3 }] } as unknown as CharacterData;
+    const [spend] = getCharacterRolls('DND_5E', data).hitDice;
+    expect(spend.expression).toBe('1d10+2');
+    expect(spend.label).toBe('fighter 1d10 (3/3)');
+  });
+
+  it('are not offered as a D&D 5e hit die that ends in another sign', () => {
+    const data = {
+      stats: dndStats,
+      hitDice: ['d10/', '1d10-', 'd10*', '+'].map((die) => ({ class: 'fighter', die, maximum: 3, remaining: 3 })),
+    } as unknown as CharacterData;
+    expect(getCharacterRolls('DND_5E', data).hitDice).toEqual([]);
+  });
+});

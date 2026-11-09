@@ -10,6 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AssetUploadModal from '../AssetUploadModal';
+import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
 import { AssetType } from '@/types';
 import type { Campaign } from '@/types';
 
@@ -85,13 +86,29 @@ describe('switching to a kind of asset the chosen campaign does not take', () =>
   });
 });
 
+// A map picture is kept from players until a map using it is on screen,
+// whichever library it is in, and the Campaign line says so.
+describe('what Campaign says about a map picture', () => {
+  beforeEach(() => { campaigns = [campaign('home', 'DM')]; });
+
+  it('says players see it once its map is on screen, and token art is shared at once', async () => {
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} />);
+    fireEvent.click(await screen.findByText('Campaign'));
+    expect(screen.getByText('Shared with the selected campaign. Players see it once a map using it is on screen.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Token'));
+    fireEvent.click(await screen.findByText('Campaign'));
+    expect(screen.getByText('Shared with all members of the selected campaign.')).toBeInTheDocument();
+  });
+});
+
 // Create Map's Upload New: a picture for a map the DM may be preparing in
 // secret. Personal is chosen at first; the campaign's library is a click
 // away. Nothing else is offered, not even Global to a global asset manager,
 // and the campaign is the one the map is for.
 describe('choosing Personal or the campaign, as Create Map offers', () => {
   const PERSONAL_HINT = 'Players see it once its map is on screen, while you are in the campaign.';
-  const CAMPAIGN_HINT = 'Everyone in the campaign can browse it now, and it stays if you leave.';
+  const CAMPAIGN_HINT = 'Players see it once its map is on screen, and it stays if you leave.';
 
   beforeEach(() => {
     campaigns = [campaign('home', 'DM'), campaign('friday', 'DM')];
@@ -164,6 +181,55 @@ describe('the name, description and tags', () => {
     expect(screen.getByText('tag49')).toBeInTheDocument();
     expect(screen.queryByText('tag50')).not.toBeInTheDocument();
     expect(screen.getByText('An asset can have at most 50 tags.')).toBeInTheDocument();
+  });
+
+  // A picture tagged DRAWN_MAP_TAG is one Paint may change and a save may
+  // delete, so a picture uploaded here never carries the tag, whatever its case.
+  it(`keeps the ${DRAWN_MAP_TAG} tag for maps drawn in CozyVTT`, async () => {
+    open();
+    const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
+    for (const tag of [DRAWN_MAP_TAG, 'CozyVTT-Drawn-Map', ` ${DRAWN_MAP_TAG.toUpperCase()} `]) {
+      fireEvent.change(tagBox, { target: { value: tag } });
+      fireEvent.keyDown(tagBox, { key: 'Enter' });
+    }
+    expect(screen.getByText(`The tag ${DRAWN_MAP_TAG} is kept for maps drawn in CozyVTT.`)).toBeInTheDocument();
+    fireEvent.change(tagBox, { target: { value: 'dungeon' } });
+    fireEvent.keyDown(tagBox, { key: 'Enter' });
+    expect(screen.queryByText(new RegExp(`^${DRAWN_MAP_TAG}$`, 'i'))).not.toBeInTheDocument();
+    expect(screen.getByText('dungeon')).toBeInTheDocument();
+  });
+
+  // Any other spelling a DM may type, drawn-map among them, is an ordinary tag.
+  it('takes drawn-map as an ordinary tag', async () => {
+    open();
+    const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
+    fireEvent.change(tagBox, { target: { value: 'drawn-map' } });
+    fireEvent.keyDown(tagBox, { key: 'Enter' });
+    expect(screen.getByText('drawn-map')).toBeInTheDocument();
+    expect(screen.queryByText(/is kept for maps drawn in CozyVTT/)).not.toBeInTheDocument();
+  });
+
+  // The server splits tags at their commas, so a piece of a typed list is
+  // a tag of its own: each is one chip, and DRAWN_MAP_TAG is refused as a piece too.
+  it(`adds each piece of a comma list as a tag of its own, never ${DRAWN_MAP_TAG}, and sends none`, async () => {
+    uploadAsset.mockReset();
+    uploadAsset.mockResolvedValue({ asset: { id: 'new' } });
+    open();
+    const tagBox = await screen.findByPlaceholderText('Type a tag and press Enter...');
+    for (const typed of [`dungeon,${DRAWN_MAP_TAG}`, `${DRAWN_MAP_TAG.toUpperCase()}, cave`, ' , ']) {
+      fireEvent.change(tagBox, { target: { value: typed } });
+      fireEvent.keyDown(tagBox, { key: 'Enter' });
+    }
+    expect(screen.getByText('dungeon')).toBeInTheDocument();
+    expect(screen.getByText('cave')).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(`${DRAWN_MAP_TAG},|,\\s*${DRAWN_MAP_TAG}|^${DRAWN_MAP_TAG}$`, 'i'))).not.toBeInTheDocument();
+    expect(screen.getByText(`The tag ${DRAWN_MAP_TAG} is kept for maps drawn in CozyVTT.`)).toBeInTheDocument();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['png'], 'Cave.png', { type: 'image/png' })] } });
+    fireEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+    await waitFor(() => expect(uploadAsset).toHaveBeenCalledTimes(1));
+    const form = uploadAsset.mock.calls[0][0] as FormData;
+    expect(form.get('tags')).toBe('dungeon,cave');
   });
 
   it('names an upload after its file, cut to 200 characters', async () => {

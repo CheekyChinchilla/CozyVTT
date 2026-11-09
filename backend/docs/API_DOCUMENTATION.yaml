@@ -42,6 +42,23 @@ info:
     a browser sends no such header and is unaffected. Request bodies are JSON;
     a form-encoded body is not read.
 
+    A request holding U+0000, the null character, which the database cannot
+    store, is refused with 400
+    `{ error: 'Validation Error', message: 'Text cannot contain the null character (U+0000).' }`
+    before any route reads it: anywhere in its JSON body, a key included, or
+    as `%00` in its path or query string, and before the sign-in is checked.
+    The upload routes (`POST /api/assets/upload`, `POST /api/campaigns/import`
+    and `POST /api/campaigns/{campaignId}/maps/import-uvtt`) refuse one in a
+    form field or the file's name the same way, keeping nothing of the upload.
+    A password is the exception, taken as it is sent: the `password` of
+    `POST /api/auth/login`, `/api/auth/register`, `/api/setup/init`,
+    `DELETE /api/auth/account` and `POST /api/auth/mfa/setup`, `mfa/disable`
+    and `mfa/backup-codes`; the `newPassword` of `POST /api/auth/reset-password`;
+    the `currentPassword` and `newPassword` of `POST /api/auth/change-password`;
+    and the `currentPassword` of `PUT /api/users/{id}`. Each only as text at
+    the top of its own route's body; anything else in the same body is
+    checked.
+
     ## MFA Flow
     If a user has MFA enabled, `/api/auth/login` returns `{ mfaRequired: true }` instead of a full session.
     The client must then call `/api/auth/mfa/verify-login` with a TOTP code or backup code to complete authentication.
@@ -223,7 +240,7 @@ info:
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     The event reference is `backend/docs/WEBSOCKET_DOCUMENTATION.md`.
 
-  version: 1.5.4
+  version: 1.6.0
   contact:
     name: CozyVTT
     url: https://cozyvtt.com
@@ -1525,7 +1542,9 @@ paths:
         was not in, or outside a campaign, stays `USER` and an activity log
         line names it. Their chat messages, dice rolls, campaign assets and
         the personal assets that stay are kept with the user field set to
-        null, and documents they shared into a campaign stay shared (the
+        null, as are what they drew on maps (`authorId` null; the DM's to
+        erase) and the whispers sent to them (`recipientId` null; their
+        sender's alone), and documents they shared into a campaign stay shared (the
         share passes to the campaign's DM, or its owner). Character
         templates they published, and token templates and creatures they
         made, stay with no author: their `createdById` is set to null.
@@ -2443,17 +2462,18 @@ paths:
                                 id: { type: string, format: uuid }
                                 campaignId: { type: string, format: uuid }
                                 name: { type: string }
-                                imageUrl: { type: string, nullable: true }
-                                width: { type: number }
-                                height: { type: number }
-                                gridSize: { type: number }
-                                feetPerSquare: { type: number }
-                                diagonalRule: { type: string }
-                                baseLayerUrl: { type: string, nullable: true }
+                                imageUrl: { type: string }
+                                width: { type: integer }
+                                height: { type: integer }
+                                gridSize: { type: integer }
+                                feetPerSquare: { type: integer }
+                                diagonalRule: { type: string, enum: [flat, alternating] }
+                                drawnBackground: { type: string, nullable: true }
+                                baseLayerUrl: { type: string }
                                 spiritLayerUrl: { type: string, nullable: true }
                                 lightingEnabled: { type: boolean }
                                 fogEnabled: { type: boolean }
-                                globalIllumination: { type: number }
+                                globalIllumination: { type: boolean }
                                 explorationEnabled: { type: boolean }
                                 createdAt: { type: string, format: date-time }
                                 updatedAt: { type: string, format: date-time }
@@ -2497,8 +2517,17 @@ paths:
         such as `Invalid input: expected string, received number`.
         Unknown fields are ignored. Changing `gameSystem` after characters
         have been created logs a warning, but the change is still allowed.
-        Nothing is broadcast, except for `vibeSettings` (below); open pages
-        see the other changes on their next fetch.
+        A request that carries `name`, `description`, `gameSystem`,
+        `chatCooldownEnabled`, `chatCooldownSeconds` or `playersMayDraw`,
+        changed or not, sends every connected member
+        `campaign.settings.updated` with `campaignId`, `name`,
+        `description`, `gameSystem`, `chatCooldownEnabled`,
+        `chatCooldownSeconds` and `playersMayDraw` as stored, so open pages
+        follow them without a reload. A refused request sends nothing, and a
+        send that fails is logged and the change stays saved. `vibeSettings`
+        is broadcast as described below. Open pages see a change to
+        `status`, `spiritLayerEnabled` or `spiritLayerStyle` on their next
+        fetch.
       operationId: updateCampaign
       security:
         - cookieAuth: []
@@ -2586,6 +2615,14 @@ paths:
                   type: integer
                   minimum: 1
                   maximum: 300
+                playersMayDraw:
+                  type: boolean
+                  description: >-
+                    Whether players may draw on the map (`drawing:add`,
+                    `drawing:preview`); the DM always may. A player's own
+                    drawings stay theirs to erase while it is off. Anything
+                    but `true` or `false` answers 400 with "playersMayDraw
+                    must be true or false".
       responses:
         '200':
           description: Campaign updated
@@ -2975,9 +3012,10 @@ paths:
         its owner has left is readable and editable by its owner alone. The
         removed member's open connections leave the campaign and receive
         `campaign.access.revoked` (`{ campaignId, reason: 'removed', message:
-        'You were removed from this campaign.' }`), and the campaign
-        receives `roster.updated` (`{ action: 'member.left', userId,
-        campaignId }`).
+        'You were removed from this campaign.' }`), a token one of them is
+        carrying is sent back to its square, and the campaign receives
+        `presence.state` (who is online now) and `roster.updated` (`{ action:
+        'member.left', userId, campaignId }`).
       operationId: removeMember
       security:
         - cookieAuth: []
@@ -3010,6 +3048,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/campaigns/{campaignId}/leave:
+    post:
+      tags:
+        - Campaigns
+      summary: Leave the campaign
+      description: >-
+        Leave the campaign, as a player or a spectator: what the DM's
+        Remove does, asked by the member. No body. The caller's characters
+        are taken out of the campaign in the same step (their `campaignId`
+        becomes null); their tokens, combatants, drawings, notes and dice
+        macros stay with the campaign, and the notes and macros are listed
+        under `GET /api/campaigns/left`. The caller's open connections leave
+        the campaign and receive `campaign.access.revoked` (`{ campaignId,
+        reason: 'left', message: 'You left this campaign.' }`), a token one
+        of them is carrying is sent back to its square, and the campaign
+        receives `presence.state` and `roster.updated` (`{ action:
+        'member.left', userId, campaignId }`). The campaign's owner and its
+        DM are refused with 409, the owner first, so an owner sitting as DM
+        is told they own it; the role is read in the same serializable
+        transaction as the change, so a hand-over at the same moment is
+        caught. Only the DM can invite the caller back.
+      operationId: leaveCampaign
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: The caller has left the campaign
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: You left this campaign.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            `You are not a member of this campaign`, also when the DM removed
+            the caller just before this request was handled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: >-
+            The owner: `You own this campaign, so you cannot leave it. If you
+            no longer want it, delete it in the campaign's settings.` The DM:
+            `You run this campaign. Hand the DM seat to someone else in the
+            campaign's settings, then leave it.`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/campaigns/{campaignId}/members/{userId}/role:
     put:
       tags:
@@ -3027,8 +3123,8 @@ paths:
         characters. Their open connections take the new role at once, and
         `campaign.role.changed` (`{ campaignId, userId, role }`) goes to
         everyone in the campaign so open pages follow it, with a
-        `roster.updated`; the initiative order and the map on screen are sent
-        again as the new role sees it.
+        `roster.updated`; the initiative order, the map on screen and its
+        drawings (`drawings:state`) are sent again as the new role sees them.
       operationId: changeMemberRole
       security:
         - cookieAuth: []
@@ -3090,7 +3186,9 @@ paths:
         (even when they are not the DM), or a platform admin. Both members'
         open connections take their new roles at once; `campaign.dm.transferred`
         and a `roster.updated` for each go to the campaign, and the initiative
-        order and the map on screen are sent again as each new role sees it.
+        order, the map on screen and its drawings (`drawings:state`) are sent
+        again as each new role sees them, so a drawing for the DM alone goes
+        with the seat.
         The caller need not be a member when they own the campaign or are an
         admin, so the route answers for itself: a campaign that does not exist,
         or one the caller is neither a member of, its owner nor an admin,
@@ -3583,6 +3681,11 @@ paths:
         Dice rolls are not chat messages and are never returned here — they are
         served by `GET /api/campaigns/{campaignId}/dice-rolls`, which is the
         only path that applies the secret-roll rules.
+
+        A whisper (`type` WHISPER) is returned only to its sender and its
+        recipient; whispers between other people are left out of every page,
+        the DM's included. One whose recipient's account was deleted has a
+        null `recipientId` and is returned to its sender alone.
       operationId: getMessages
       security:
         - cookieAuth: []
@@ -3816,8 +3919,13 @@ paths:
         `1d20 5` with no operator between the terms — is refused here, with 400,
         and does not become a button that fails every time it is pressed; so is
         one that could divide by zero (`1d20/0`) or whose total could pass a
-        32-bit integer for any roll of its dice (`9999*9999*9999`). Both fields
-        are trimmed and must not be empty. Any
+        32-bit integer for any roll of its dice (`9999*9999*9999`). The name
+        and the expression are trimmed and must not be empty. `characterName`
+        and `purpose` are optional free text, trimmed; left out, empty or
+        `null`, each is stored as `null`. The dice panel rolls a saved roll as
+        `characterName` while its own Character box is empty, and sends
+        `purpose`, or the name when there is none, as what the roll is for.
+        `characterName` names no character record. Any
         member, spectators included, may save macros. A player may keep 50 per
         campaign; saving another answers 400.
       operationId: createDiceMacro
@@ -3843,6 +3951,22 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 200
+                characterName:
+                  type: string
+                  nullable: true
+                  maxLength: 200
+                  description: >
+                    Over 200 characters after trimming answers 400 with
+                    "Character name must be 200 characters or fewer".
+                  example: Goblin boss
+                purpose:
+                  type: string
+                  nullable: true
+                  maxLength: 200
+                  description: >
+                    Over 200 characters after trimming answers 400 with
+                    "Purpose must be 200 characters or fewer".
+                  example: Scimitar attack
       responses:
         '201':
           description: Macro saved
@@ -3898,12 +4022,14 @@ paths:
     put:
       tags:
         - Dice Macros
-      summary: Rename a macro or correct its expression
+      summary: Rename a macro, correct its expression, or set its character name and purpose
       description: >
-        Either field alone is a valid edit; a body with neither answers 400. A
-        new expression is checked the same way it was on creation, so an edit
-        cannot make a macro unrollable. A macro belonging to someone else
-        answers 404.
+        Any field alone is a valid edit, and a field left out keeps its value;
+        a body with none answers 400 with "Nothing to update: send a name, an
+        expression, a character name or a purpose". A new expression is
+        checked the same way it was on creation, so an edit cannot make a
+        macro unrollable. `characterName` or `purpose` sent empty or `null`
+        clears it. A macro belonging to someone else answers 404.
       operationId: updateDiceMacro
       security:
         - cookieAuth: []
@@ -3929,6 +4055,14 @@ paths:
                 expression:
                   type: string
                   minLength: 1
+                  maxLength: 200
+                characterName:
+                  type: string
+                  nullable: true
+                  maxLength: 200
+                purpose:
+                  type: string
+                  nullable: true
                   maxLength: 200
       responses:
         '200':
@@ -3988,9 +4122,10 @@ paths:
       summary: List your notes and dice macros from campaigns you have left
       description: >-
         The campaigns the caller is no longer a member of and still has
-        personal notes or dice macros in, sorted by name. Removing a member
-        deletes neither, but the notes and macros routes ask for membership,
-        so this is how a removed player reads their own. Each campaign carries
+        personal notes or dice macros in, sorted by name. Removing a member,
+        or their leaving (`POST /api/campaigns/{campaignId}/leave`), deletes
+        neither, but the notes and macros routes ask for membership, so this
+        is how a member who is out of the campaign reads their own. Each campaign carries
         the titles of the caller's notes (most recently edited first, no
         `content`) and their macros (oldest first); a note's text comes from
         `GET /api/campaigns/left/{campaignId}/notes/{noteId}`, one note at a
@@ -4880,6 +5015,10 @@ paths:
           `/api/assets/<maps|tokens|avatars|audio|documents>/<id>` with nothing
           after the id. The asset must be one the caller can read, or one that
           does not exist; otherwise the answer is 403 and nothing is created.
+          An existing asset must also be one uploaded as a token picture (type
+          `TOKEN`), whatever folder the address gives, or the answer is 400
+          (`The token image must be a token picture from the asset library.`)
+          and nothing is created.
         - One account may own at most 1,000 characters, copies included. Past
           that the request answers 400 with the message `You already have 1000
           characters, the most one account can. Delete one you no longer need
@@ -5056,8 +5195,9 @@ paths:
           `investigatorName` for `CALL_OF_CTHULHU_7E`) holds a non-blank value
           different from the stored `name`, the `name` column is set to that
           value, trimmed. An explicit `name` in the body always wins.
-        - A new `tokenImageUrl` follows the rule on create (403 otherwise); the
-          address already stored may be sent back unchanged.
+        - A new `tokenImageUrl` follows the rule on create (403, or 400 for an
+          asset that is not a token picture); the address already stored may
+          be sent back unchanged, whatever it names.
         - Send `updatedAt` exactly as the character was loaded with, as a UTC
           ISO timestamp ending in `Z`, to have the save refused with 409 if the
           character has changed since, by another save or by a hit point or
@@ -5510,9 +5650,18 @@ paths:
         campaigns is not listed, though the file routes serve it to them.
 
         For anyone but a platform admin, and for an admin who sends
-        `usable=true` without `campaignId`, a spirit-layer image of a map in
-        a campaign where the caller is not the DM, and whose spirit plane is
-        still closed to them, is left out.
+        `usable=true` without `campaignId`, a campaign's map pictures are
+        left out where the caller is a member who is not the DM (a player or
+        a spectator): a CAMPAIGN asset that a map of its campaign names as
+        its image, base layer or spirit layer, and any MAP asset of the
+        campaign, unless a map they may read shows it to them (see
+        `GET /api/assets/maps/{id}`), a document its campaign's DM shared
+        with the campaign embeds it, or they uploaded it. This is the read rule of the file
+        routes, so such a member is listed an asset exactly when its read
+        answers 200. Token art and other assets are listed as before. A
+        platform admin is otherwise held to none of this: with no
+        `campaignId` and no `usable=true` they are listed every asset on the
+        instance, and with `campaignId` every asset of that campaign.
 
         A `type` or `scope` outside its enum, or either sent more than once,
         answers 400. A `page` below 1, or one that is not a number, is
@@ -5789,7 +5938,11 @@ paths:
                   description: >-
                     Comma-separated tags; each is trimmed, empty ones are
                     dropped and a repeated one is kept once. At most 50 tags of
-                    at most 50 characters each.
+                    at most 50 characters each. `cozyvtt-drawn-map`, in any
+                    case, marks a picture Mapmaker made, which Mapmaker may change
+                    and a later save writes over in place
+                    (`PUT /api/assets/{id}/picture`): it is taken only on a MAP of
+                    CAMPAIGN scope, which only the campaign's DM may upload.
       responses:
         '201':
           description: Asset uploaded.
@@ -5827,9 +5980,13 @@ paths:
             `description` over 1,000 ("The asset description must be 1000
             characters or fewer"), more than 50 tags ("An asset can have at
             most 50 tags") or a tag over 50 characters ("Each tag must be 50
-            characters or fewer"); or `name`, `description` or `tags` sent
+            characters or fewer"); the tag `cozyvtt-drawn-map` on anything
+            but a CAMPAIGN MAP ("The tag cozyvtt-drawn-map is kept for maps
+            drawn in CozyVTT."); or `name`, `description` or `tags` sent
             more than once ("Send the name once, as text.", and so on; this
-            answered 500 before). `error` is `File Too Large` when
+            answered 500 before); or a field or the file's name holding
+            U+0000 ("Text cannot contain the null character (U+0000).";
+            this answered 500 too). `error` is `File Too Large` when
             the file exceeds its type's limit, which is checked before its
             content, so a file over it gets this answer whatever it holds. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
@@ -5867,7 +6024,7 @@ paths:
       description: >-
         Decided by the same read rule as the file-serving routes below, so a
         caller who may load the file may read its details: its uploader, an
-        admin, a member of its campaign (with the spirit-layer check for a
+        admin, a member of its campaign (with the map-picture check for a
         non-DM member), or a member of a campaign that uses it (a DM's
         personal map the table is showing, a token's art, a document shared
         with the campaign, the atmosphere track); GLOBAL to anyone signed in.
@@ -5914,9 +6071,10 @@ paths:
       summary: Delete asset
       description: |
         Delete asset. A personal asset, its owner or an admin; a campaign
-        asset, its uploader while still a member of that campaign, the
-        campaign's DM, or an admin; a global asset, an admin or the uploading
-        global asset manager.
+        asset, the campaign's DM, an admin, or its uploader while still a
+        member of that campaign and while nothing but their own characters,
+        the tokens they control and the documents they wrote uses it; a
+        global asset, an admin or the uploading global asset manager.
 
         Removes the database row, the file and its thumbnail (if any), and
         for a document every share of it with a campaign. Deleting a user's
@@ -5926,15 +6084,21 @@ paths:
         While a map (its image, base layer or spirit layer), a token on a map,
         a character's token picture, a character template, a creature, a token
         template, a campaign's atmosphere track or the sound of one of a
-        campaign's times of day still names the asset, the route answers
-        **409** with `code: ASSET_IN_USE` and the list of uses,
+        campaign's times of day still names the asset, or a plain text or
+        Markdown document names it by its address in its first 1 MiB (as
+        read when the document was uploaded, written or saved) whose uploader,
+        the asset's own uploader or a member of its campaign, can read the
+        asset now, the route
+        answers **409** with `code: ASSET_IN_USE` and the list of uses,
         and deletes nothing. Those records are not told when an asset goes, so
         deleting one anyway leaves them pointing at nothing. Send
         `force=true` to delete it regardless; any other value of `force` is
         ignored. Permissions are checked first, so only someone who may delete
         the asset is told where it is used. An admin sees every record by name;
         anyone else sees a name and campaign only for what is in a campaign
-        they are the DM of, a character they own, or a character template. The
+        they are the DM of, a character they own, or a character template,
+        and a document by name where it is their own, a global one, or one
+        written in or shared with a campaign they run. The
         rest is counted per kind with `name` and `campaignName` null. Only an
         address that names this asset counts: one that merely contains its id
         (a longer id, a query string) is not a use. Profile pictures are not
@@ -5975,7 +6139,16 @@ paths:
             for its scope: "Only admins or the uploading global asset manager
             can delete global assets", "Only the owner can delete personal
             assets" or "Only the uploader while a member of the campaign, its
-            DM, or an admin can delete campaign assets".
+            DM, or an admin can delete campaign assets". A campaign asset's
+            uploader who does not run the campaign, while anything else uses
+            it (a map, another member's character, a token they do not
+            control, a creature, a template, a campaign's sound, another
+            member's document), is told "Others in the campaign use this
+            asset, so only the campaign's DM can delete it", with or without
+            `force`; when the only such use is a character template, which
+            everyone on the instance is offered, their own included, "A
+            character template uses this asset, so only the campaign's DM can
+            delete it".
           content:
             application/json:
               schema:
@@ -6019,7 +6192,9 @@ paths:
                       one map, character, template, creature or campaign, a
                       map's tokens together (`count`), or a campaign's
                       time-of-day period whose sound it is (`vibePeriod`, named
-                      by the period, since 1.5.2), or, where the caller may
+                      by the period, since 1.5.2), a document whose text
+                      names it (`document`, with its campaign when it was
+                      written in one), or, where the caller may
                       not see the record, every use of one kind folded into a
                       single entry with `name`, `campaignId` and `campaignName`
                       null.
@@ -6028,11 +6203,11 @@ paths:
                       properties:
                         kind:
                           type: string
-                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting, vibePeriod]
+                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting, vibePeriod, document]
                         name:
                           type: string
                           nullable: true
-                          description: The map, character, template, creature or campaign, or the time-of-day period for `vibePeriod`.
+                          description: The map, character, template, creature, campaign or document, or the time-of-day period for `vibePeriod`.
                         campaignId:
                           type: string
                           nullable: true
@@ -6067,7 +6242,7 @@ paths:
         | Either the current or the new scope is GLOBAL | Caller has `globalAssetManager` |
         | Current scope is GLOBAL | Caller is the asset's uploader, as for deleting it |
         | Current scope is USER | Caller is the asset's owner |
-        | Current scope is CAMPAIGN | Caller is the asset's owner and still a member of that campaign, or is that campaign's DM; a CAMPAIGN asset with no campaign recorded is an admin's alone |
+        | Current scope is CAMPAIGN | Caller is that campaign's DM, or the asset's owner while still a member of that campaign and while nothing but their own characters, tokens and documents uses it; a CAMPAIGN asset with no campaign recorded is an admin's alone |
         | New scope is CAMPAIGN | Caller may place an asset of this type in the target campaign: its DM, or a player placing TOKEN art only |
 
         The "current scope" rows are the rule for deleting the asset, so a
@@ -6167,7 +6342,12 @@ paths:
             admins or the uploading global asset manager can move a global
             asset out of the library", "Only the asset owner can move personal
             assets" or "Only the asset owner or campaign DM can move this
-            asset"); a move to USER by anyone but the asset's uploader or an
+            asset"), or by a campaign asset's uploader who does not run the
+            campaign while others there use it ("Others in the campaign use
+            this asset, so only the campaign's DM can move it out of the
+            campaign", or "A character template uses this asset, so only the
+            campaign's DM can move it out of the campaign" when a character
+            template is the only such use); a move to USER by anyone but the asset's uploader or an
             admin ("Only the asset's uploader can move it to their personal
             library"), since the asset would land in the uploader's library;
             or a move into a campaign the caller may not upload this type to
@@ -6196,6 +6376,118 @@ paths:
                 message: Asset not found
         '500':
           $ref: '#/components/responses/ServerError'
+
+  /api/assets/{id}/picture:
+    put:
+      tags:
+        - Assets
+      summary: Save a new painting over a drawn map's picture
+      description: >-
+        What **Save** in Mapmaker calls. Writes the uploaded picture over the
+        file of an existing picture drawn in CozyVTT: a `MAP` asset of
+        `CAMPAIGN` scope tagged exactly `cozyvtt-drawn-map`. The asset keeps
+        its id, so every address naming it (a map, a shared Document, a
+        note) shows the new picture; no earlier version is kept. Only the
+        current DM of the asset's campaign may call it; a platform admin who
+        is not that DM is refused like anyone else. The multipart body has
+        one `file` part and is checked as `POST /api/assets/upload` checks a
+        map picture: within `MAX_MAP_SIZE_MB`, a PNG, JPEG, WebP or GIF by
+        its bytes, within the picture limits. It must also be of the format
+        of the picture it replaces (a drawn picture is a PNG). The new file
+        is copied beside the old one and renamed over it, so a reader gets
+        one or the other whole; a refused or failed save leaves the old
+        picture and its thumbnail as they were, and nothing behind. The
+        thumbnail is made again, `fileSize` and `mimeType` are updated, and
+        the picture is then served with a new ETag (see
+        `GET /api/assets/maps/{id}`). Saves of one picture run one at a time.
+        The answer's `imageUrl` is the address to give the map with
+        `PUT /api/campaigns/{campaignId}/maps/{id}`: the picture's address with
+        `?v=<the time in ms>`, which changes on every save, so each open table
+        loads the new picture. The route changes no map itself. Counted
+        against the upload rate limit (`ASSET_UPLOAD_RATE_LIMIT`, 30 a minute
+        by default).
+      operationId: replaceDrawnPicture
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Picture saved
+                  asset:
+                    $ref: '#/components/schemas/Asset'
+                  imageUrl:
+                    type: string
+                    example: /api/assets/maps/3f1c2a4e-8b7d-4c1e-9f2a-1b2c3d4e5f60?v=1730000000000
+        '400':
+          description: >-
+            The asset is not a drawn picture of a campaign ("Only a picture
+            drawn in CozyVTT can be saved over. Upload a new picture
+            instead."), checked before the file is read; or the file is
+            refused as the map upload refuses it (no file, "MAP files must be
+            smaller than <n>MB", "Could not determine file type. File may be
+            corrupted or invalid.", a type that is not a map picture, the
+            picture limits), or is of another format than the picture it
+            replaces ("The new picture must be a PNG file, as the picture it
+            replaces is.").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Only a picture drawn in CozyVTT can be saved over. Upload a new picture instead.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: >-
+            The caller may read the picture but is not the DM of its campaign:
+            a player or spectator at the table, or a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the campaign's DM can save over its drawn pictures
+        '404':
+          description: >-
+            No asset with this id, one the caller may not read, or one deleted
+            while this save was being written (nothing of the save is kept).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Asset not found
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /api/assets/{id}/download:
     get:
@@ -6492,10 +6784,25 @@ paths:
 
         - a platform admin may read any asset;
         - GLOBAL: anyone signed in;
-        - CAMPAIGN: any member of that campaign, except that a non-DM member
-          is refused a spirit-layer image of one of its maps while the spirit
-          plane is closed to them (unless the same image is a layer of the
-          map the campaign is showing);
+        - CAMPAIGN: any member of that campaign, except that a member who is
+          not the DM (a player or a spectator) is refused the campaign's map
+          pictures: an asset a map of the campaign names as its image, base
+          layer or spirit layer, and any MAP asset of the campaign. Such a
+          picture is readable to them only while one of these shows it: the
+          campaign's current map (as its image or base layer, or as its
+          spirit layer while the spirit plane is open to them); the current
+          map of another campaign they are a member of, played in or run,
+          with the same spirit rule, while the asset's uploader is a member
+          of that campaign too; or a plain text or Markdown document that
+          the asset's campaign's current DM uploaded, written or uploaded in
+          that campaign or shared with it from their own library or the
+          global one (not a document of another campaign), whose first 1 MiB
+          names the asset
+          (`/api/assets/<kind>/<id>`, among its first 200 such addresses),
+          as read when the document was uploaded, written or saved.
+          One they uploaded is always readable. For such a member this is final: no
+          other use of the asset (a character's picture, a token, a
+          template) opens it;
         - USER: its uploader.
 
         Beyond its scope, an asset is readable by someone who shares a
@@ -6514,7 +6821,13 @@ paths:
         as maps; anything else as
         `application/octet-stream`) and `X-Content-Type-Options: nosniff`.
         It is cached as `private, max-age=31536000, immutable` with the ETag
-        `"<asset id>"`; send that in `If-None-Match` for a 304.
+        `"<asset id>"`; send that in `If-None-Match` for a 304. A picture
+        drawn in CozyVTT (tagged `cozyvtt-drawn-map`) is written over in place
+        by `PUT /api/assets/{id}/picture`, so it is served
+        `private, no-cache` instead, with the ETag
+        `"<asset id>-<size in bytes>-<modified time in ms>"`, which changes
+        with the file. A query after the id, such as a map's `?v=<n>`, is
+        ignored.
       operationId: serveMap
       security:
         - cookieAuth: []
@@ -6598,7 +6911,8 @@ paths:
         its longer side, made at upload, for the Asset Library's cards and the
         pickers. The same read rule, 404 for a refused read, content types,
         `nosniff` and caching as `GET /api/assets/maps/{id}`, with an ETag
-        of its own. An asset with no thumbnail (one imported from a campaign
+        of its own (`"<asset id>-thumbnail"`, or for a drawn picture
+        `"<asset id>-thumbnail-<size>-<modified time>"`). An asset with no thumbnail (one imported from a campaign
         archive, or uploaded before thumbnails were made) is sent its full
         picture, with the full picture's ETag.
       operationId: serveMapThumbnail
@@ -6834,9 +7148,9 @@ paths:
       responses:
         '200':
           description: >-
-            List of maps. Each item is a summary of 14 fields, and for the DM
-            a 15th, `spiritLayerUrl`; not the full Map object: no tokens,
-            annotations, walls, lights, fog or `campaignId`.
+            List of maps. Each item is a summary of 16 fields, and for the DM
+            a 17th, `spiritLayerUrl`; not the full Map object: no tokens,
+            annotations, walls, lights or fog.
           content:
             application/json:
               schema:
@@ -6848,13 +7162,16 @@ paths:
                       type: object
                       properties:
                         id: { type: string, format: uuid }
+                        campaignId: { type: string, format: uuid }
                         name: { type: string }
                         imageUrl: { type: string }
+                        baseLayerUrl: { type: string }
                         width: { type: integer }
                         height: { type: integer }
                         gridSize: { type: integer }
                         feetPerSquare: { type: integer }
                         diagonalRule: { type: string, enum: [flat, alternating] }
+                        drawnBackground: { type: string, nullable: true }
                         lightingEnabled: { type: boolean }
                         fogEnabled: { type: boolean }
                         globalIllumination: { type: boolean }
@@ -6879,9 +7196,12 @@ paths:
 
 
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
-        address (`/api/assets/<kind>/<id>`). A bare id is stored as
-        `/api/assets/maps/<id>`. Anything else, an outside URL included, is
-        given the same prefix and so answers 403. An address naming an
+        address (`/api/assets/<kind>/<id>`). A map picture's address may carry
+        a version, `/api/assets/maps/<id>?v=<digits>` (up to 16 digits, as
+        `PUT /api/assets/{id}/picture` answers it), and is stored as given; it
+        names the same asset. A bare id is stored as
+        `/api/assets/maps/<id>`. Anything else, an outside URL or any other
+        query included, is given the same prefix and so answers 403. An address naming an
         existing asset must name one the caller can read, or the request
         answers 403 (`You do not have access to that image`), unless this
         campaign already stores that exact address somewhere, as a copy of a
@@ -6898,9 +7218,9 @@ paths:
         either is not asked this.
 
 
-        `gridSize`, `feetPerSquare` and `diagonalRule` are never rejected: a
-        missing or out-of-range value is replaced with its default (50, 5,
-        `flat`). `gridSize` is in range as a whole number from 10 to 500,
+        `gridSize`, `feetPerSquare`, `diagonalRule` and `drawnBackground` are
+        never rejected: a missing or out-of-range value is replaced with its
+        default (50, 5, `flat`, null). `gridSize` is in range as a whole number from 10 to 500,
         `feetPerSquare` as a whole number from 1 to 100. Only `name`,
         `imageUrl`, `spiritLayerUrl`, `width` and `height` can make this route answer 400;
         `width` and `height` must be whole numbers from 1 to 500, and `name`
@@ -6953,6 +7273,10 @@ paths:
                   enum: [flat, alternating]
                   default: flat
                   description: Falls back to flat when omitted or not one of these two values.
+                drawnBackground:
+                  type: string
+                  example: '#e8dcc4'
+                  description: For a map drawn in CozyVTT, the colour its picture is made in, as `#rrggbb`. Null when omitted or written any other way.
                 spiritLayerUrl:
                   type: string
                   description: Asset id or exact asset address. Omitted or empty means none.
@@ -6977,14 +7301,14 @@ paths:
         - Maps
       summary: Get map
       description: |
-        Get a map with its tokens, annotations, walls and lights. The DM gets
-        the stored map whole. Anyone else gets it filtered as the Map schema
-        describes: only the tokens on their plane that are not hidden (and on
-        a lit map only those in their sight plus their own), each cut down to
-        the fields they may see; `spiritLayerUrl` null unless the spirit layer
-        is visible to them; `fogData` always null; every wall, with a
-        `door-locked` door sent as `door-closed`; and only the lights whose
-        `enabled` is true. Annotations are sent to everyone.
+        Get a map with its tokens, walls and lights. The DM gets the stored
+        map whole, except `annotations`, which is sent empty to everyone.
+        Anyone else gets it filtered as the Map schema describes: only the
+        tokens on their plane that are not hidden (and on a lit map only those
+        in their sight plus their own), each cut down to the fields they may
+        see; `spiritLayerUrl` null unless the spirit layer is visible to them;
+        `fogData` always null; every wall, with a `door-locked` door sent as
+        `door-closed`; and only the lights whose `enabled` is true.
 
 
         A player or spectator may fetch only the campaign's current map; any
@@ -7080,10 +7404,19 @@ paths:
         `lights:replaced`, as for a bulk replace and with no `opId`, so open
         pages draw them where they now are.
 
+        Drawings are stored in map pixels too, and are scaled under the same
+        lock, every drawing on the map in one statement: each point by the
+        same factor on each axis, rounded to whole pixels and kept within 500
+        squares of the resized map's edges, and each width by the mean of
+        the two factors, kept to 1 to 64. Every member who may read the map
+        is then sent `drawings:state` with the drawings they may have, read
+        under the map's lock.
+
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
-        address (`/api/assets/<kind>/<id>`); a bare id is stored as
-        `/api/assets/maps/<id>`, and anything else, an outside URL included,
-        answers 403. One naming an existing asset must name one the caller
+        address (`/api/assets/<kind>/<id>`), a map picture's with a version
+        (`?v=<digits>`, up to 16 digits) or without, stored as given; a bare
+        id is stored as `/api/assets/maps/<id>`, and anything else, an outside
+        URL or any other query included, answers 403. One naming an existing asset must name one the caller
         can read, or the request answers 403 (the right to read an asset
         follows its use, so storing a reference is checked like reading it),
         unless this campaign already stores that exact address somewhere, as
@@ -7179,11 +7512,13 @@ paths:
       description: >-
         Delete a map (DM only). The campaign's current map cannot be deleted:
         that answers 400 (`Cannot delete the current map. Set a different map
-        as current first.`). The map's tokens, walls, lights and fog go with
-        it, as does every player's explored-area memory of it; its image
+        as current first.`). The map's tokens, walls, lights, fog and
+        drawings go with it, as does every player's explored-area memory of it; its image
         asset is kept. If any combatant stood on it, those combatants leave
         the initiative order and the order is sent again to every connected
-        member (`initiative.state`).
+        member (`initiative.state`). The DM's connected sockets are then sent
+        `map.deleted` with the map's `mapId`, so a page preparing that map
+        goes back to the table's; players are sent nothing.
       operationId: deleteMap
       security:
         - cookieAuth: []
@@ -7297,6 +7632,11 @@ paths:
         it), unless this campaign already stores that exact address
         somewhere, as a copy of a token, template or creature does. An
         address naming an asset that no longer exists is accepted.
+        It must also name an asset uploaded as a token picture (type
+        `TOKEN`): the asset's own type is read, whatever folder the address
+        gives, so any other answers 400 (`The token image must be a token
+        picture from the asset library.`). A request refused 403 for it is
+        not asked this.
 
         While anything is in the initiative order it is sent again to every
         connected member (`initiative.state`), since a player's spirit-layer
@@ -7356,8 +7696,11 @@ paths:
         token layer`). A spectator may not
         update a token at all, even one that still names them from before they
         were demoted. While the session is paused or has ended (campaign status
-        `PAUSED` or `INACTIVE`), a player's `position` change answers 403; the
-        DM may move tokens at any time. On a map the campaign is not showing, a
+        `PAUSED` or `INACTIVE`), a player's `position` or `rotation` change
+        answers 403 (`Players cannot move tokens while the session is paused
+        or ended`) and nothing in the request is stored; their `conditions`
+        alone still go through, and the DM may move and turn tokens at any
+        time. On a map the campaign is not showing, a
         player's update answers 404, as fetching that map does, even for a
         token they control; the DM may update tokens on any map. A token on
         the spirit plane answers 403 (`You cannot interact with spirit layer
@@ -7374,6 +7717,10 @@ paths:
         stores that exact address somewhere, as a copy of a token, template
         or creature does. An address naming an asset that no longer exists is
         accepted, and so is the address already stored, sent back unchanged.
+        A new picture must name an asset uploaded as a token picture (type
+        `TOKEN`), as on adding a token, or the request answers 400 (`The
+        token image must be a token picture from the asset library.`); the
+        address already stored is accepted whatever it names.
 
         `metadata` is merged into what the token already holds, and the
         merged object must stay within 8 KB. `characterId` cannot be changed
@@ -7916,6 +8263,46 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /api/campaigns/{campaignId}/maps/{id}/drawings:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    get:
+      tags:
+        - Maps
+      summary: List the drawings on a map
+      description: |
+        The map's drawings as the caller may be sent them, in the order they
+        are drawn: by `sortKey`, then the time each was made, then `id`. The
+        DM is given every drawing; a player or spectator only those whose
+        `audience` is `ALL`. Available to the DM for any map of the
+        campaign, and to other members for the campaign's current map only
+        (404 otherwise, the answer for a map that does not exist).
+        Drawings are made, erased and cleared over the live table
+        (`drawing:add`, `drawing:remove`, `drawing:clear_mine`,
+        `drawing:clear`; see the WebSocket guide).
+      operationId: listDrawings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The drawings the caller may be sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drawings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Drawing'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /api/campaigns/{campaignId}/maps/{id}/lights:
     parameters:
       - $ref: '#/components/parameters/CampaignId'
@@ -8222,7 +8609,11 @@ paths:
         DM, and `fog:cells` with the revealed cells to every other member,
         for the map the campaign is showing; for any other map, only the DM's
         connections are told. The body is checked first, so one that is not
-        a valid operation answers 400 even while fog is off. A valid one is
+        a valid operation answers 400 even while fog is off. A `reveal` or
+        `hide` naming more than 250,000 cells, the most grid squares any map
+        has, is not valid: it answers 400 (`A fog operation can name at most
+        250,000 cells. Use reveal_all or hide_all for the whole map.`) and
+        nothing is stored. A valid one is
         then refused with 409 (`Fog of war is off for this map`) while
         `fogEnabled` is off for the map, and with 409 and nothing stored for
         a map with more than 250,000 grid squares, which is too large for
@@ -8426,7 +8817,10 @@ paths:
         name one the caller can read (403 otherwise), unless this campaign
         already stores that exact address somewhere, as a copy of a token,
         template or creature does; an address naming an asset that no longer
-        exists is accepted. An empty `imageUrl` means no picture.
+        exists is accepted. An empty `imageUrl` means no picture. The picture must also be an asset uploaded as a token picture (type
+        `TOKEN`), whatever folder the address gives, or the request answers
+        400 (`The token image must be a token picture from the asset
+        library.`).
       operationId: createCreature
       security:
         - cookieAuth: []
@@ -8565,8 +8959,9 @@ paths:
         creature answers 403; a creature of another campaign answers 404, as
         an unknown id does and as the read routes do. The body is
         validated before the creature is looked up. `imageUrl` is normalised
-        and checked as on create, and `""` or `null` clears it; the address
-        already stored may be sent back unchanged.
+        and checked as on create, a token picture included, and `""` or
+        `null` clears it; the address already stored may be sent back
+        unchanged, whatever it names.
       operationId: updateCreature
       security:
         - cookieAuth: []
@@ -8735,7 +9130,10 @@ paths:
         `<name> (Custom)`, with `source: custom`, and copies the stat block
         and every other field; an older bare-id
         `imageUrl` is normalised to `/api/assets/tokens/<id>`. A creature
-        belonging to another campaign answers 404.
+        belonging to another campaign answers 404. A creature stored before
+        the token-picture rule whose `imageUrl` names an asset that is not a
+        token picture (type TOKEN) is not copied: 400 (`The token image must
+        be a token picture from the asset library.`).
       operationId: duplicateCreature
       security:
         - cookieAuth: []
@@ -8754,6 +9152,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreatureTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -9041,7 +9441,10 @@ paths:
         naming an asset that no longer exists is accepted. `imageUrl` is
         normalised as the creature routes normalise it: a bare asset id is
         stored as `/api/assets/tokens/<id>`, and any other address that is
-        not an asset's is refused with 403.
+        not an asset's is refused with 403. The picture must also be an asset uploaded as a token picture (type
+        `TOKEN`), whatever folder the address gives, or the request answers
+        400 (`The token image must be a token picture from the asset
+        library.`).
       operationId: createTokenTemplate
       security:
         - cookieAuth: []
@@ -9124,7 +9527,10 @@ paths:
         sent back unchanged. `imageUrl` is normalised as the creature
         routes normalise it: a bare asset id is stored as
         `/api/assets/tokens/<id>`, and any other address that is not an
-        asset's is refused with 403.
+        asset's is refused with 403. A new picture must also be an asset
+        uploaded as a token picture (type `TOKEN`), or the request answers
+        400 (`The token image must be a token picture from the asset
+        library.`); the address already stored is accepted whatever it names.
       operationId: updateTokenTemplate
       security:
         - cookieAuth: []
@@ -9212,7 +9618,10 @@ paths:
         exists is accepted. `imageUrl` is normalised as the creature
         routes normalise it: a bare asset id is stored as
         `/api/assets/tokens/<id>`, and any other address that is not an
-        asset's is refused with 403.
+        asset's is refused with 403. The picture must also be an asset uploaded as a token picture (type
+        `TOKEN`), whatever folder the address gives, or the request answers
+        400 (`The token image must be a token picture from the asset
+        library.`).
       operationId: saveTokenAsTemplate
       security:
         - cookieAuth: []
@@ -9256,11 +9665,16 @@ paths:
         of, including one that does not exist, answers 403. The template's
         picture is checked as a new reference in the target campaign: an
         existing asset the caller cannot read, and the target campaign does
-        not already use, answers 403 and nothing is copied.
+        not already use, answers 403 and nothing is copied. A picture that
+        is not an asset uploaded as a token picture (type `TOKEN`), which a
+        template stored before this rule may have, answers 400 (`The token
+        image must be a token picture from the asset library.`) and nothing
+        is copied.
 
         Checked in this order: the same campaign as source and target (400);
         DM of the target (403); the template exists in the source campaign
-        (404, for one of another campaign too); the picture (403).
+        (404, for one of another campaign too); the picture (403, then
+        400).
       operationId: copyTokenTemplate
       security:
         - cookieAuth: []
@@ -9281,7 +9695,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          description: Cannot copy a template to the same campaign.
+          description: >-
+            Cannot copy a template to the same campaign, or the template's
+            picture is not a token picture.
           content:
             application/json:
               schema:
@@ -9319,7 +9735,24 @@ paths:
         holds only the asset files the caller may read; a picture the campaign
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
-        without a picture. Each user may export 20 campaigns an hour
+        without a picture. Each asset's entry in `assets/asset-manifest.json`
+        gives its `originalName`, `mimeType`, `type` and `fileSize`, and for
+        an asset of the campaign's own library (CAMPAIGN scope, this
+        campaign) or of the exporter's own (USER scope, uploaded by them)
+        its `name`, `description` (`null` when it has none) and `tags` as
+        well; another user's USER asset, or a GLOBAL one, that the campaign
+        uses has none of those three.
+        Each map file (`maps/map-<n>.json`, written without
+        indentation) carries the map's drawings in `drawings`, in drawing
+        order, each with the `Drawing` fields but `id`, `authorId` and
+        `createdAt`, and `share`, `DM` for every drawing for the DM alone
+        and the campaign's DM's own, and `PLAYERS` for every other, the share
+        of the map's markup layer it counts to; a drawing for the DM alone keeps `audience: DM`. Its
+        `annotations` is written as `[]`: releases up to 1.5.4 store an
+        archive's `annotations` and send them to every member, and leave out
+        a key they do not know, such as `drawings`. A map file over 10 MB is
+        refused with 422 as above; a map holding all the drawing it may, a
+        full fog and 5,000 walls writes about 5 MB. Each user may export 20 campaigns an hour
         (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from imports and
         previews, and run one archive operation at a time.
       operationId: exportCampaign
@@ -9566,9 +9999,34 @@ paths:
         is still imported, and `warnings` says so (`Map "<name>": left out
         its picture, which was not uploaded as a map picture.`, and the same
         for its spirit layer picture).
+        A token's, a creature's and a token template's picture keep only an
+        asset imported as TOKEN: one naming a MAP or AUDIO asset is dropped,
+        the asset is still imported, and `warnings` says so (`Map "<name>":
+        left out the pictures of 2 tokens, which were not uploaded as token
+        pictures.`, `Creature "<name>": left out its picture, which was not
+        uploaded as a token picture.`, and the same for a `Token template`).
+        Each asset keeps the `tags` its entry gives, held to what
+        `POST /api/assets/upload` stores: each trimmed and split at commas,
+        empty ones dropped, each kept once. A tag that is not text or is over
+        50 characters is left out on its own. Of what is
+        left, the first 50 are kept, in order, so a picture tagged on 1.5.1
+        or earlier, which allowed more, keeps as many as an upload may have.
+        A `tags` of more than 1,000 entries, or one that is not a list,
+        imports as none. Nothing is reported for tags left out. An archive
+        made before tags were carried imports its assets with none.
+        Each asset keeps the `name` and `description` its entry gives, held
+        to what `POST /api/assets/upload` stores: trimmed, and none when
+        empty or not text. A name over 200 characters or a description over
+        1,000 is cut to fit, and `warnings` says so (`Asset "<file name>":
+        shortened its name to 200 characters.`, and `its description to
+        1,000 characters.`); U+0000 is taken out. An asset with no name, as
+        in an archive made before names were carried, is named after its
+        file without the extension, and one with no description has none.
 
         The campaign starts in PREPARATION with the first imported map as its
-        current map. Maps and assets are created in the archive's order, each
+        current map, and with `playersMayDraw` as the archive's
+        `campaign.json` gives it: on for an archive made before the
+        setting existed. Maps and assets are created in the archive's order, each
         a millisecond after the last, and an export lists maps oldest first,
         so the map list comes back in the original's order and the first map
         is the oldest. Imported tokens are linked to no character and
@@ -9578,7 +10036,12 @@ paths:
         imported can be edited and saved again. Text or a list over its limit
         is cut to it and reported in `warnings`: a map name over 200
         characters, a token name over 200 or notes over 5,000, and text or
-        lists in a stat block over the creature routes' limits. A stat block
+        lists in a stat block over the creature routes' limits. U+0000,
+        which the database cannot store, is taken out of every text and key
+        in each data file as it is read, and `warnings` says how many from
+        which file (`campaign.json: removed 2 null characters (U+0000) from
+        its text, which the app cannot store.`); a name left empty by it is
+        treated as one that was empty. A stat block
         that still does not fit is left off its token or template; a
         creature without one is listed in `skipped`. A game system that is
         not a `GameSystem` value, on the campaign or a creature, imports as
@@ -9590,7 +10053,25 @@ paths:
         cannot store is left out on its own: a token is listed in `skipped`,
         and walls, doors and lights are counted in `warnings`, as are those
         more than 500 squares outside their map. A map keeps its first 1,000
-        tokens, 5,000 walls and 200 lights. Fog whose grid does not match its
+        tokens, 5,000 walls and 200 lights. A map's drawings come from its
+        file's `drawings`, and from `annotations`, which an older archive may
+        hold: each entry is held to what `drawing:add` takes and to the map's
+        region, imported with a new id, as the importing DM's when its `share`
+        is `DM` and with no author when it is `PLAYERS` (a drawing for the DM
+        alone goes to the DM's share whatever it names, and one for everyone
+        without `share` to the players'), and one that is not is left out and
+        counted in `warnings`: one that `drawing:add` would refuse, a drawing
+        on the ground layer or a record of another shape included, as `Map
+        "<name>": left out 1 drawing the app cannot store.`, and one more than
+        500 squares outside its map as `Map "<name>": left out 1 drawing more
+        than 500 squares outside the map.` So are those past the 1,000
+        drawings each share of a map's markup layer holds (`Map "<name>": left
+        out the last 3 drawings of the players' share: each share of a map's
+        markup layer holds 1,000.`) or past its 100,000 points (`Map
+        "<name>": left out 2 drawings of the players' share past the 100,000
+        points each share of a map's markup layer holds.`), and a `drawings`
+        or `annotations` that is not a list (`Map "<name>": left out its
+        drawings, which could not be read.`, or `its annotations`). Fog whose grid does not match its
         map is dropped, as the server would rebuild it anyway. A map is
         left out whole when its width, height, grid size or feet per square
         are outside the map limits (1 to 500 squares, grid size 10 to 500,
@@ -9690,7 +10171,8 @@ paths:
         '400':
           description: >-
             The upload errors of the preview route, a `campaignName` out of
-            range (`Validation Error`), or an archive the server refuses
+            range or a form field or file name holding U+0000
+            (`Validation Error`), or an archive the server refuses
             (`Import Failed`, with the reason in `message`). Nothing is
             created.
           content:
@@ -9741,7 +10223,7 @@ paths:
   /api/admin/health:
     get:
       tags: [Admin]
-      summary: Check the server's parts, for the dashboard's status card
+      summary: Check the server's parts, for the Admin Panel's status card
       description: >-
         Platform ADMIN only. Asks the database for an answer and checks that the
         live-connection (Socket.io) server is running. Answers 200 whatever it
@@ -9833,7 +10315,7 @@ paths:
                       How full the disk holding the uploads folder is (the
                       nearest folder that exists, before the first upload), or
                       null when the server cannot read it. No per-user storage
-                      quota is enforced; the dashboard warns from this instead.
+                      quota is enforced; the Admin Panel warns from this instead.
                     properties:
                       totalBytes:
                         type: integer
@@ -10623,7 +11105,12 @@ paths:
         - cookieAuth: []
       responses:
         '201':
-          description: Backup created
+          description: >-
+            Backup created. A backup the Admin Panel's restore would refuse
+            (larger than 4 GB, more than 100,000 files, or more than 10 GiB
+            unpacked) is still made and kept, and its answer carries a
+            `warning` saying which limit it passes; the activity log and the
+            backend log say the same.
           content:
             application/json:
               schema:
@@ -10636,6 +11123,9 @@ paths:
                   createdAt:
                     type: string
                     format: date-time
+                  warning:
+                    type: string
+                    description: Present only for a backup the restore would refuse.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -11015,9 +11505,10 @@ paths:
         answers 400. A `tokenImageUrl`, when given, must be
         an existing GLOBAL-scoped asset, named by its bare id (stored as
         `/api/assets/tokens/<id>`) or by its exact address
-        (`/api/assets/<kind>/<id>`, with nothing after the id); anything else
-        answers 400. An empty string or null leaves the template without an
-        image. One account may author at most 500 templates; past that the
+        (`/api/assets/<kind>/<id>`, with nothing after the id), and uploaded
+        as a token picture (type `TOKEN`; `The token image must be a token
+        picture from the asset library.` otherwise); anything else answers
+        400. An empty string or null leaves the template without an image. One account may author at most 500 templates; past that the
         request answers 400 with the message `You have already published 500
         character templates, the most one account can. Delete one you no
         longer need to make room.`
@@ -11151,7 +11642,9 @@ paths:
         top-level `notes`, as on create; a refused sheet answers 400 with
         `validationErrors` and the message the create route gives.
         `tokenImageUrl` follows the
-        rule on create, and null or an empty string removes the image. Send
+        rule on create, except that the address already stored may be sent
+        back unchanged whatever kind of asset it names, and null or an empty
+        string removes the image. Send
         `updatedAt` exactly as the template was loaded with, as a UTC ISO
         timestamp ending in `Z`, to have the save refused with 409 if the
         template has changed since; of two saves sent with the same
@@ -12266,6 +12759,10 @@ components:
           type: integer
           default: 5
           description: 1 to 300 when written.
+        playersMayDraw:
+          type: boolean
+          default: true
+          description: Whether players may draw on the map while the session is live; the DM always may.
         rollHistoryClearedAt:
           type: string
           format: date-time
@@ -12434,7 +12931,8 @@ components:
       type: object
       description: >
         A player's saved dice roll for one campaign — a name and an expression,
-        shown as a one-click button in the dice panel. Private to whoever saved
+        shown as a one-click button in the dice panel, with an optional
+        character name and purpose of its own. Private to whoever saved
         it, the DM included. The expression is validated when written against the
         same code that rolls it, so a stored macro can always be rolled.
       properties:
@@ -12455,6 +12953,21 @@ components:
           type: string
           maxLength: 200
           example: 4d6kh3
+        characterName:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: >
+            Who the dice panel rolls it as while its Character box is empty;
+            free text, naming no character record. `null` for none.
+          example: Goblin boss
+        purpose:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: >
+            What the roll is for; `null` sends the name in its place.
+          example: Scimitar attack
         createdAt:
           type: string
           format: date-time
@@ -12704,6 +13217,10 @@ components:
           type: string
           enum: [flat, alternating]
           default: flat
+        drawnBackground:
+          type: string
+          nullable: true
+          description: The colour a map drawn in CozyVTT was made in, as `#rrggbb`, which Mapmaker's eraser paints. Null for a map made from a picture.
         tokens:
           type: array
           items:
@@ -12720,6 +13237,12 @@ components:
           type: array
           items:
             type: object
+          description: >
+            Empty for everyone in a map a member is sent: the map fetch, a
+            token update's reply and `map.changed`. The DM's replies to
+            `PUT .../maps/{id}` and `POST .../maps/{id}/tokens` return the
+            stored row, which can hold what a campaign import brought in.
+            Nothing in the app reads them.
         lightingEnabled:
           type: boolean
           description: Dynamic lighting on this map (default off)
@@ -13176,10 +13699,28 @@ components:
               format: uuid
             displayName:
               type: string
+        recipientId:
+          type: string
+          format: uuid
+          nullable: true
+          description: The one member a WHISPER is for. Null on every other message, and on a whisper whose recipient's account was deleted.
+        recipientName:
+          type: string
+          nullable: true
+          description: The recipient's display name; null when there is no recipient.
+        recipient:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            displayName:
+              type: string
         type:
           type: string
-          enum: [PLAYER, DM, SYSTEM, DICE_ROLL, CHARACTER_ACTION]
-          description: DICE_ROLL messages are never returned by the message history; dice have their own history.
+          enum: [PLAYER, DM, SYSTEM, DICE_ROLL, CHARACTER_ACTION, WHISPER]
+          description: DICE_ROLL messages are never returned by the message history; dice have their own history. A WHISPER is returned to its sender and its recipient alone.
         content:
           type: string
         metadata:
@@ -13422,6 +13963,82 @@ components:
             * `window` — does not block vision.
       required: [id, x1, y1, x2, y2, type]
 
+    Drawing:
+      type: object
+      description: |
+        One drawing on a map: a stroke, a shape or a text label. Made over
+        the live table with `drawing:add`, which takes the same fields but
+        `id`, `authorId` and `createdAt`, the server's to set.
+      properties:
+        id:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Who drew it; null once that account is deleted.
+        audience:
+          type: string
+          enum: [ALL, DM]
+          description: Who is sent it. A player's drawing is always `ALL`.
+        layer:
+          type: string
+          enum: [MARKUP]
+          description: Drawings are made on the markup layer, over the grid.
+        kind:
+          type: string
+          enum: [pen, line, arrow, rect, ellipse, polygon, text]
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+        fillColor:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          nullable: true
+          description: The fill of a `rect`, an `ellipse` or a `polygon`; null for none.
+        width:
+          type: integer
+          minimum: 1
+          maximum: 64
+          description: The stroke's width in map pixels.
+        rotation:
+          type: integer
+          minimum: 0
+          maximum: 359
+        sortKey:
+          type: integer
+          minimum: -1000000
+          maximum: 1000000
+          description: The drawing's place in its layer's order; drawings with the same one are drawn in the order they were made.
+        points:
+          type: array
+          minItems: 1
+          maxItems: 2000
+          description: |
+            `[x, y]` pairs in whole map pixels from the map's top-left
+            corner, each within 250,000 of it and 500 grid squares of the
+            map's edges. A `pen` has 2 or more, a `polygon` 3 or more, a
+            `line`, `arrow`, `rect` and `ellipse` exactly 2, a `text` label 1.
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: integer
+              minimum: -250000
+              maximum: 250000
+          example: [[120, 80], [340, 80]]
+        text:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: A `text` label's words, without control characters; null for every other kind.
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, authorId, audience, layer, kind, color, fillColor, width, rotation, sortKey, points, text, createdAt]
+
     WallInput:
       type: object
       description: A wall segment. The server assigns `id` when none is sent.
@@ -13539,7 +14156,8 @@ components:
             cells:
               type: array
               items: { type: integer, minimum: 0 }
-              description: Cell indices to flip
+              maxItems: 250000
+              description: Cell indices to flip, at most 250,000 (one per grid square of the largest map)
           required: [op, cells]
         - type: object
           properties:

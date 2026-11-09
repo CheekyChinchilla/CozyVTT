@@ -33,6 +33,7 @@ import path from 'path';
 import { shortenFileName, MAX_ORIGINAL_NAME_LENGTH } from '../validators/assets';
 import { ASSET_LIMITS } from '../validators/assetLimits';
 import { cutText } from '../utils/cutText';
+import { removeNulCharacters } from '../validators/nulCharacter';
 import fs from 'fs';
 import type { File as ArchiveEntry } from 'unzipper';
 import { Prisma } from '@prisma/client';
@@ -168,19 +169,33 @@ async function readEntryText(archivePath: string, entry: ArchiveEntry, total: Un
   return text;
 }
 
-function parseEntryText(text: string, entry: ArchiveEntry): unknown {
+/**
+ * A data file's text, parsed. U+0000 is taken out of every text in it, keys
+ * included, as it is read: PostgreSQL cannot store the character
+ * (validators/nulCharacter.ts), and one anywhere in an archive failed the
+ * whole import. The report, when there is one, says how many were taken.
+ */
+function parseEntryText(text: string, entry: ArchiveEntry, report?: ImportReport): unknown {
+  let data: unknown;
   try {
-    return JSON.parse(text);
+    data = JSON.parse(text);
   } catch {
     throw new ArchiveRefusedError(`${entry.path} in the archive is damaged: it is not readable data.`);
   }
+  const { value, removed } = removeNulCharacters(data);
+  if (removed > 0) {
+    report?.warn(
+      `${entry.path}: removed ${removed.toLocaleString('en-US')} null ${removed === 1 ? 'character' : 'characters'} (U+0000) from its text, which the app cannot store.`
+    );
+  }
+  return value;
 }
 
 /** Why a map holding more values than an export ever writes is left out. */
 const TOO_MANY_VALUES_REASON = `It holds more than ${IMPORT_LIMITS.MAX_MAP_VALUES.toLocaleString('en-US')} values, far more than CozyVTT ever writes for one map.`;
 
-async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
-  return parseEntryText(await readEntryText(archivePath, entry, total), entry);
+async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal, report?: ImportReport): Promise<unknown> {
+  return parseEntryText(await readEntryText(archivePath, entry, total), entry, report);
 }
 
 /** Why an item whose data nests too deeply is left out. */
@@ -316,14 +331,14 @@ async function readListEntry(
     return [];
   }
   const cut = jsonListCut(text, limit.max);
-  if (cut?.cutAt == null) return parseEntryText(text, entry);
+  if (cut?.cutAt == null) return parseEntryText(text, entry, report);
   const over = cut.items - limit.max;
   report.skip(
     kind,
     `${over.toLocaleString('en-US')} ${over === 1 ? limit.one : limit.many}`,
     `An archive can carry ${limit.max.toLocaleString('en-US')} ${limit.many}. These were the last in its list.`
   );
-  return parseEntryText(`${text.slice(0, cut.cutAt)}]`, entry);
+  return parseEntryText(`${text.slice(0, cut.cutAt)}]`, entry, report);
 }
 
 /** Say in words which limit an archive passed, or pass any other error on. */
@@ -547,6 +562,10 @@ interface StagedAsset {
   originalName: string;
   mimeType: string;
   fileSize: number;
+  /** Its own name and description, when its entry gives them. */
+  name?: string;
+  description?: string;
+  tags: string[];
 }
 
 /** Each kind of asset an archive carries, in words. */
@@ -644,6 +663,13 @@ async function stageAssets(
     const stagedPath = path.join(staging, filename);
     await fs.promises.rename(unpackedPath, stagedPath);
     const typeDir = folderFor(assetInfo.type);
+    // Its own name and description, held to what an upload may set: one an
+    // older release stored longer is cut to fit, and the import says so.
+    const fit = (text: string | undefined, max: number, what: string): string | undefined => {
+      if (text === undefined || text.length <= max) return text;
+      report.warn(`Asset "${label(assetInfo.originalName, oldId)}": shortened its ${what} to ${max.toLocaleString('en-US')} characters.`);
+      return cutText(text, max);
+    };
     staged.push({
       oldId,
       newId,
@@ -656,6 +682,9 @@ async function stageAssets(
       originalName: displayName(assetInfo.originalName, assetInfo.type, content.ext),
       mimeType: content.mime,
       fileSize,
+      name: fit(assetInfo.name, ASSET_LIMITS.maxNameLength, 'name'),
+      description: fit(assetInfo.description, ASSET_LIMITS.maxDescriptionLength, 'description'),
+      tags: assetInfo.tags ?? [],
     });
   }
   return staged;
@@ -731,14 +760,15 @@ export async function importCampaign(
 
   // Everything unpacked from the archive, against its limit (zip bomb protection).
   const total = new UnpackedTotal(maxSize);
+  const report = new ImportReport();
 
-  const manifestData = parseArchiveFile(ManifestSchema, await readJsonEntry(archivePath, manifestEntry, total), 'manifest.json');
+  const manifestData = parseArchiveFile(ManifestSchema, await readJsonEntry(archivePath, manifestEntry, total, report), 'manifest.json');
 
   // 3. Extract campaign settings
   const campaignEntry = directory.files.find((f) => f.path === 'campaign.json');
   if (!campaignEntry) throw new ArchiveRefusedError('Invalid archive: missing campaign.json');
 
-  const campaignSettings = parseArchiveFile(CampaignSettingsSchema, await readJsonEntry(archivePath, campaignEntry, total), 'campaign.json');
+  const campaignSettings = parseArchiveFile(CampaignSettingsSchema, await readJsonEntry(archivePath, campaignEntry, total, report), 'campaign.json');
 
   // 4. Extract asset manifest
   const assetManifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
@@ -746,13 +776,12 @@ export async function importCampaign(
   if (assetManifestEntry) {
     assetManifest = parseArchiveFile(
       AssetManifestSchema,
-      await readJsonEntry(archivePath, assetManifestEntry, total),
+      await readJsonEntry(archivePath, assetManifestEntry, total, report),
       'assets/asset-manifest.json'
     );
   }
 
   const newCampaignId = randomUUID();
-  const report = new ImportReport();
   const staging = path.join(importTempDirectory(), `${newCampaignId}.staging`);
   await fs.promises.mkdir(path.resolve(staging), { recursive: true });
 
@@ -768,6 +797,8 @@ export async function importCampaign(
     const remapAsset = (ref: string | null | undefined): string | null => (ref ? (assetRefMap.get(ref) ?? null) : null);
     const mapPictureIds = new Set(assets.filter((a) => a.type === 'MAP').map((a) => a.oldId));
     const isMapPicture = (ref: string): boolean => mapPictureIds.has(ref);
+    const tokenPictureIds = new Set(assets.filter((a) => a.type === 'TOKEN').map((a) => a.oldId));
+    const isTokenPicture = (ref: string): boolean => tokenPictureIds.has(ref);
 
     // The same presets a new campaign gets, so an archive with no atmosphere
     // settings imports with the atmosphere the allowlists accept.
@@ -811,6 +842,7 @@ export async function importCampaign(
               currentVibe: campaignSettings.currentVibe || null,
               spiritLayerEnabled: campaignSettings.spiritLayerEnabled ?? false,
               spiritLayerStyle: campaignSettings.spiritLayerStyle ?? 'wispy',
+              playersMayDraw: campaignSettings.playersMayDraw ?? true,
             },
           });
           await tx.campaignMembership.create({
@@ -829,7 +861,11 @@ export async function importCampaign(
                 mimeType: a.mimeType,
                 fileSize: a.fileSize,
                 filePath: a.finalPath.replace(/\\/g, '/'),
-                name: cutText(a.originalName.replace(/\.[^.]+$/, ''), ASSET_LIMITS.maxNameLength),
+                // An archive made before names were carried has none: the
+                // asset is named after its file.
+                name: a.name ?? cutText(a.originalName.replace(/\.[^.]+$/, ''), ASSET_LIMITS.maxNameLength),
+                description: a.description ?? null,
+                tags: a.tags,
                 createdAt: new Date(importedAt + i),
               })),
             });
@@ -855,19 +891,30 @@ export async function importCampaign(
                 report.skip('map', `Map ${i + 1}`, TOO_MANY_VALUES_REASON);
                 continue;
               }
-              mapRaw = parseEntryText(mapText, mapEntry);
+              mapRaw = parseEntryText(mapText, mapEntry, report);
             } catch (error) {
               if (!(error instanceof NestedTooDeepError)) throw error;
               report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);
               continue;
             }
-            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, isMapPicture, report });
+            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, isMapPicture, isTokenPicture, report });
             if (!prepared) continue;
 
             const mapId = randomUUID();
             await tx.map.create({
               data: { ...prepared.data, id: mapId, campaignId: newCampaignId, createdAt: new Date(importedAt + assets.length + i) },
             });
+            // In one statement, after their map, with no author and each a
+            // millisecond after the last, so drawings with the same sortKey
+            // keep the archive's order.
+            if (prepared.drawings.length > 0) {
+              await tx.mapDrawing.createMany({
+                // The DM's share goes back to the importing DM, the players' with no author.
+                data: prepared.drawings.map(({ share, ...drawing }, n) => ({
+                  ...drawing, mapId, authorId: share === 'DM' ? importingUserId : null, createdAt: new Date(importedAt + n),
+                })),
+              });
+            }
             firstMapId ??= mapId;
             mapCount++;
             tokenCount += prepared.tokenCount;
@@ -885,7 +932,7 @@ export async function importCampaign(
               { max: IMPORT_LIMITS.MAX_CREATURES, one: 'creature', many: 'creatures' });
             if (Array.isArray(creaturesRaw)) {
               creatureCount = await inBatches(creaturesRaw, (raw) => {
-                const row = prepareCreature(raw, { remapAsset, report });
+                const row = prepareCreature(raw, { remapAsset, isTokenPicture, report });
                 return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
               }, (data: Prisma.CreatureTemplateCreateManyInput[]) => tx.creatureTemplate.createMany({ data }));
             }
@@ -899,7 +946,7 @@ export async function importCampaign(
               { max: IMPORT_LIMITS.MAX_TOKEN_TEMPLATES, one: 'token template', many: 'token templates' });
             if (Array.isArray(templatesRaw)) {
               tokenTemplateCount = await inBatches(templatesRaw, (raw) => {
-                const row = prepareTokenTemplate(raw, { remapAsset, report });
+                const row = prepareTokenTemplate(raw, { remapAsset, isTokenPicture, report });
                 return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
               }, (data: Prisma.TokenTemplateCreateManyInput[]) => tx.tokenTemplate.createMany({ data }));
             }

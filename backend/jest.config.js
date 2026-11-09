@@ -6,10 +6,7 @@
  * otplib (authenticator codes) is CommonJS, and loads @noble/hashes for
  * HMAC-SHA1 and @scure/base for base32. file-type, which identifies an
  * upload or a stored picture by its bytes, is an ES module, and so are the
- * four packages it reads with and the one they decode text with. archiver,
- * which writes campaign exports and instance backups, is an ES module, and so
- * are zip-stream, compress-commons and crc32-stream under it and the is-stream
- * they all check their inputs with.
+ * four packages it reads with and the one they decode text with.
  */
 const ESM_ONLY = [
   '@noble/hashes',
@@ -20,17 +17,13 @@ const ESM_ONLY = [
   '@tokenizer/inflate',
   'uint8array-extras',
   '@borewit/text-codec',
-  'archiver',
-  'zip-stream',
-  'compress-commons',
-  'crc32-stream',
-  'is-stream',
 ].join('|');
 
 module.exports = {
   preset: 'ts-jest',
-  // Node's, removing each file's temporary uploads folder after the file's
-  // last hook; see the file.
+  // Node's, which ends each file after its last hook (letting the work the
+  // server started finish, then the database clients go) and removes its
+  // temporary uploads folder; see the file.
   testEnvironment: '<rootDir>/src/__tests__/helpers/jest.environment.ts',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],

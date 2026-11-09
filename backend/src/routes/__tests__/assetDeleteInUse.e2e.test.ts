@@ -15,6 +15,7 @@
  */
 
 import request from 'supertest';
+import { Client } from 'pg';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { personalFilesBeingRemoved } from '../../services/accountDeletion';
 import {
@@ -183,6 +184,168 @@ describe('an asset a map uses', () => {
 
     expect(res.status).toBe(409);
     expect(res.body.usage.map((u: Use) => u.name)).toEqual(['Haunted Hall']);
+  });
+});
+
+describe('a picture a document shows', () => {
+  /** A Markdown document naming `text`, written through the app as `agent`'s. */
+  async function documentOf(agent: ReturnType<typeof request.agent>, name: string, content: string, where: { campaignId?: string } = {}) {
+    const res = await agent.post('/api/assets/documents').send({
+      name, format: 'md', content, scope: where.campaignId ? 'CAMPAIGN' : 'USER', ...(where.campaignId ? { campaignId: where.campaignId } : {}),
+    });
+    expect(res.status).toBe(201);
+    assetIds.push(res.body.asset.id);
+    return res.body.asset.id as string;
+  }
+
+  it('is refused with the document named, and is still there', async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    await documentOf(dm, 'The road to Thornwall', `![The road](/api/assets/maps/${id})`, { campaignId });
+
+    const res = await dm.delete(`/api/assets/${id}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.usage).toEqual([
+      { kind: 'document', name: 'The road to Thornwall', campaignId, campaignName: 'Lost Mine', count: 1 },
+    ]);
+    expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
+  });
+
+  // A document counts only when it can show the picture: its writer can
+  // read the picture, or it is a handout the campaign's DM shared. Only the
+  // picture's uploader's documents and its campaign's members' are looked at.
+  let player: ReturnType<typeof request.agent>;
+  let playerId: string;
+  beforeAll(async () => {
+    const user = await createTestUser({ email: `inuse-player-${Date.now()}@test.invalid`, displayName: 'In Use Player' });
+    playerId = user.id;
+    userIds.push(playerId);
+    await prisma.campaignMembership.create({ data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] } });
+    player = await login(user.email);
+  });
+
+  it("does not count a stranger's document", async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    await documentOf(stranger, 'Their notes', `![x](/api/assets/maps/${id})`);
+    await documentOf(stranger, 'More of their notes', `![x](/api/assets/maps/${id})`);
+
+    const res = await dm.delete(`/api/assets/${id}`);
+
+    expect(res.status).toBe(200);
+  });
+
+  it("does not count a player's note naming a picture they can no longer read", async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    const shown = await makeMap(campaignId, 'Shown for a while', { imageUrl: `/api/assets/maps/${id}` });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: shown.id } });
+    try {
+      expect((await player.get(`/api/assets/${id}`)).status).toBe(200);
+      await documentOf(player, 'My copy of the map', `![x](/api/assets/maps/${id})`);
+    } finally {
+      await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
+    }
+    await prisma.map.delete({ where: { id: shown.id } });
+    expect((await player.get(`/api/assets/${id}`)).status).toBe(404);
+
+    const res = await dm.delete(`/api/assets/${id}`);
+
+    expect(res.status).toBe(200);
+  });
+
+  it("counts, without naming it, a player's note naming a picture they can read", async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'TOKEN' });
+    await documentOf(player, 'Party notes', `![x](/api/assets/tokens/${id})`);
+
+    const res = await dm.delete(`/api/assets/${id}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.usage).toEqual([{ kind: 'document', name: null, campaignId: null, campaignName: null, count: 1 }]);
+  });
+
+  it("counts a handout the DM shared, and the DM's own note", async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    const handout = await documentOf(dm, 'Shared handout', `![x](/api/assets/maps/${id})`);
+    await prisma.campaignDocument.create({ data: { campaignId, assetId: handout, linkedById: dmId } });
+    await documentOf(dm, 'My notes', `![x](/api/assets/maps/${id})`);
+    await documentOf(stranger, 'Their notes', `![x](/api/assets/maps/${id})`);
+
+    const res = await dm.delete(`/api/assets/${id}`);
+
+    expect(res.status).toBe(409);
+    expect(res.body.usage).toEqual(expect.arrayContaining([
+      { kind: 'document', name: 'Shared handout', campaignId: null, campaignName: null, count: 1 },
+      { kind: 'document', name: 'My notes', campaignId: null, campaignName: null, count: 1 },
+    ]));
+    expect(res.body.usage).toHaveLength(2);
+    expect(res.body.omitted).toBe(0);
+  });
+
+  // No statement of the check joins what documents name to the documents:
+  // its plan would come from statistics PostgreSQL gathers now and then,
+  // and stale ones made such a join read every document's pictures.
+  it('reads what documents name one table at a time', async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    await documentOf(dm, 'Handout', `![x](/api/assets/maps/${id})`, { campaignId });
+    const sent: string[] = [];
+    const realQuery = Client.prototype.query;
+    jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: unknown[]) {
+      const [first] = args;
+      sent.push(typeof first === 'string' ? first : first && typeof first === 'object' && 'text' in first ? String(first.text) : '');
+      return (realQuery as (...a: unknown[]) => unknown).apply(this, args);
+    } as never);
+    try {
+      expect((await dm.delete(`/api/assets/${id}`)).status).toBe(409);
+    } finally {
+      jest.restoreAllMocks();
+    }
+    const documentReads = sent.filter((sql) => /"DocumentPicture"|"CampaignDocument"/.test(sql) && /^\s*SELECT/i.test(sql));
+    expect(documentReads.length).toBeGreaterThan(0);
+    for (const sql of documentReads) expect(sql).not.toMatch(/\bJOIN\b|EXISTS\s*\(/i);
+  });
+
+  // Just after the upgrade the caller's own documents from before are read
+  // first, so a note of theirs keeps the picture even with newer ones waiting.
+  it("reads the caller's own documents from before first", async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    const fs = await import('fs');
+    const os = await import('os');
+    const path = await import('path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-inuse-docs-'));
+    const unread = async (uploadedById: string, text: string) => {
+      const filename = `note-${Math.random().toString(36).slice(2)}.md`;
+      const filePath = path.join(dir, filename);
+      fs.writeFileSync(filePath, text);
+      const doc = await prisma.asset.create({
+        data: {
+          type: 'DOCUMENT', scope: 'USER', uploadedById, filename, originalName: filename, mimeType: 'text/markdown',
+          fileSize: text.length, filePath, name: 'Old note',
+        },
+      });
+      assetIds.push(doc.id);
+    };
+    try {
+      await unread(dmId, `![x](/api/assets/maps/${id})`);
+      for (let i = 0; i < 6; i += 1) await unread(strangerId, 'Nothing here');
+
+      const res = await dm.delete(`/api/assets/${id}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body.usage).toEqual([{ kind: 'document', name: 'Old note', campaignId: null, campaignName: null, count: 1 }]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is deleted once no document names it any more, or with force=true', async () => {
+    const id = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    const docId = await documentOf(dm, 'Handout', `![x](/api/assets/maps/${id})`, { campaignId });
+    expect((await dm.put(`/api/assets/documents/${docId}/content`).send({ content: 'The picture is gone.' })).status).toBe(200);
+    expect((await dm.delete(`/api/assets/${id}`)).status).toBe(200);
+
+    const forced = await makeAsset({ scope: 'CAMPAIGN', uploadedById: dmId, campaignId, type: 'MAP' });
+    await documentOf(dm, 'Handout', `![x](/api/assets/maps/${forced})`, { campaignId });
+    expect((await dm.delete(`/api/assets/${forced}?force=true`)).status).toBe(200);
+    expect(await prisma.documentPicture.count({ where: { pictureId: forced } })).toBe(0);
   });
 });
 

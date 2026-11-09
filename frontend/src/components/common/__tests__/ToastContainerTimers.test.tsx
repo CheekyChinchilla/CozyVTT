@@ -5,6 +5,8 @@
  * each card was handed a new dismiss function each time. A message that
  * arrived while others were up made them all wait out its time, so messages
  * that came one after another all left together.
+ *
+ * A card's close button is big enough for a finger on a touch screen.
  */
 
 import { it, expect, vi, afterEach } from 'vitest';
@@ -45,4 +47,33 @@ it('takes the first message away after its own time, while a later one stays', (
 
   expect(screen.queryByText('Saved the map')).toBeNull();
   expect(screen.getByText('Token placed')).toBeTruthy();
+});
+
+// The close button was the 16-pixel cross alone. jsdom cannot show a touch
+// screen's size, so the classes are what is checked.
+it('gives a card a close button big enough for a finger, with its cross in the middle', () => {
+  render(<ToastProvider><Trigger /><ToastContainer /></ToastProvider>);
+  act(() => show('Saved the map', 'success', 5000));
+
+  expect(screen.getByRole('button', { name: 'Dismiss notification' }).className.split(/\s+/))
+    .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+});
+
+// Placed 16 px from the right, the stack was as wide as the screen left it, so
+// a long message met a phone's left edge. jsdom does no layout, so the class
+// that keeps it 16 px from both edges is what is checked.
+it('keeps the stack 16 px from both edges of a narrow screen', () => {
+  render(<ToastProvider><Trigger /><ToastContainer /></ToastProvider>);
+  act(() => show('Saved the map', 'success', 5000));
+
+  expect(screen.getByLabelText('Notifications').className.split(/\s+/))
+    .toEqual(expect.arrayContaining(['fixed', 'right-4', 'max-w-[calc(100vw-2rem)]']));
+});
+
+it('draws a message on the solid colour of its kind, as the single toast does', () => {
+  render(<ToastProvider><Trigger /><ToastContainer /></ToastProvider>);
+  act(() => show('The wall was not added', 'error', 0));
+  const card = screen.getByRole('alert');
+  expect(card.className).toContain('toast-danger');
+  expect(card.className).not.toMatch(/glass-panel|bg-[a-z]+\/\d+/);
 });

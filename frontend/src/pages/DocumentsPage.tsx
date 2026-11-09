@@ -76,7 +76,7 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="min-h-page p-4 sm:p-6 lg:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -107,7 +107,7 @@ export default function DocumentsPage() {
               className="flex items-center gap-2"
             >
               <FilePlus className="w-4 h-4" />
-              <span className="hidden sm:inline">Write one</span>
+              <span className="max-sm:sr-only">Write one</span>
             </Button>
             <Button type="button" onClick={() => setShowUpload(true)} className="flex items-center gap-2">
               <Upload className="w-4 h-4" />
@@ -176,13 +176,13 @@ export default function DocumentsPage() {
                       className="flex items-center gap-2 text-sm"
                     >
                       <BookOpen className="w-4 h-4" />
-                      <span className="hidden sm:inline">Read</span>
+                      <span className="max-sm:sr-only">Read</span>
                     </Button>
                     <a
                       href={api.getDocumentUrl(doc.id)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-2 rounded-lg text-ink-secondary hover:bg-surface transition-colors"
+                      className="touch-target inline-flex items-center justify-center p-2 rounded-lg text-ink-secondary hover:bg-surface transition-colors"
                       aria-label={`Open ${doc.name} in a new tab`}
                       title="Open in a new tab"
                     >
@@ -193,7 +193,7 @@ export default function DocumentsPage() {
                         type="button"
                         onClick={() => setToDelete(doc)}
                         disabled={deletingId === doc.id}
-                        className="p-2 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                        className="touch-target inline-flex items-center justify-center p-2 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                         aria-label={`Delete ${doc.name}`}
                         title="Delete"
                       >

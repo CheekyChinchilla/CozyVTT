@@ -5,8 +5,9 @@
  * the busiest real use of its event, by the web client at a fast table or by
  * the community MCP bridge, whichever is higher. This plays that use at the
  * rates the clients actually send, measures the busiest window for each user
- * and event from what was sent, and fails if any ceiling is under five times
- * it, or if anything sent was refused or lost.
+ * and event from what was sent, and for each socket every event together,
+ * and fails if any ceiling is under five times it, or if anything sent was
+ * refused or lost.
  *
  * The web client, at its fastest:
  * - a drag is a pick-up, a frame at most every 16 ms, and a drop; a fast
@@ -19,6 +20,11 @@
  *   may have the map open on two devices;
  * - the DM's controls are a click apiece: ten map updates in a second while
  *   clicking through token edits;
+ * - drawing, a quick stroke takes a quarter of a second, with twenty preview
+ *   frames a second while it is drawn, so a player sketching a plan adds
+ *   four drawings a second at most; the eraser is a tap apiece, four a
+ *   second at most; Clear mine and the DM's Clear drawings are a click and a
+ *   confirmation;
  * - a player who opens the campaign on four devices, each of which then drops
  *   and reconnects, joins eight times and holds eight sockets until the
  *   dropped ones time out.
@@ -33,7 +39,8 @@
  *
  * Windows of a minute cannot be played in a test, so the busiest real minute
  * is stated: a chatty player and the bridge's narration on one account, 60
- * messages; a DM clicking through a mob's attacks and damage, 40 rolls.
+ * messages; a DM clicking through a mob's attacks and damage, 40 rolls; a
+ * player sketching a plan for a minute, one stroke a second, 60 drawings.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -42,8 +49,9 @@ import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { createWsTestServer, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
+import type { AckAnswer } from '../ack';
 import { toJson, readTokens } from '../../utils/prisma-json';
-import { SOCKET_CEILINGS, MAX_SOCKETS_PER_USER, type CeilingEvent } from '../shared';
+import { SOCKET_CEILINGS, MAX_SOCKETS_PER_USER, SOCKET_EVENTS_PER_SECOND, type CeilingEvent } from '../shared';
 import { REVEALS_PER_SECOND } from '../handlers/exploration';
 
 jest.setTimeout(90000);
@@ -56,6 +64,7 @@ const MINUTE = 60 * 1000;
 const BUSIEST_MINUTE: Partial<Record<CeilingEvent, number>> = {
   'chat.message': 60,
   'dice.roll': 40,
+  'drawing:add': 60,
 };
 
 let server: WsTestServer;
@@ -73,7 +82,7 @@ const players: Player[] = [];
  * the two, since a table run by the bridge is not also clicked through by
  * hand at full speed.
  */
-const sent: Array<{ user: string; event: string; at: number }> = [];
+const sent: Array<{ user: string; event: string; at: number; socket?: string }> = [];
 /** Every error any socket received. */
 const errors: string[] = [];
 /** The most sockets each user held open at once. */
@@ -84,7 +93,7 @@ const sockets: ClientSocket[] = [];
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function send(user: string, socket: ClientSocket, event: string, payload?: unknown): void {
-  sent.push({ user, event, at: Date.now() });
+  sent.push({ user, event, at: Date.now(), socket: socket.id });
   if (payload === undefined) socket.emit(event);
   else socket.emit(event, payload);
 }
@@ -102,13 +111,28 @@ async function join(user: string, cookie: string, label = user): Promise<ClientS
 
 /** The most of `event` one user sent in any `windowMs`. */
 function busiest(event: string, windowMs: number): number {
-  let peak = 0;
   const byUser = new Map<string, number[]>();
   for (const entry of sent) {
     if (entry.event !== event) continue;
     byUser.set(entry.user, [...(byUser.get(entry.user) ?? []), entry.at]);
   }
-  for (const times of byUser.values()) {
+  return busiestOf(byUser.values(), windowMs);
+}
+
+/** The most events of any kind one socket sent in any `windowMs`. */
+function busiestSocket(windowMs: number): number {
+  const bySocket = new Map<string, number[]>();
+  for (const entry of sent) {
+    if (!entry.socket) continue;
+    bySocket.set(entry.socket, [...(bySocket.get(entry.socket) ?? []), entry.at]);
+  }
+  return busiestOf(bySocket.values(), windowMs);
+}
+
+/** The most times of one list in any `windowMs`. */
+function busiestOf(lists: Iterable<number[]>, windowMs: number): number {
+  let peak = 0;
+  for (const times of lists) {
     times.sort((a, b) => a - b);
     let start = 0;
     for (let end = 0; end < times.length; end += 1) {
@@ -117,6 +141,40 @@ function busiest(event: string, windowMs: number): number {
     }
   }
   return peak;
+}
+
+/** Send an event with an acknowledgement; a refusal counts as an error. */
+async function sendWithAck(user: string, socket: ClientSocket, event: string, payload: unknown): Promise<AckAnswer> {
+  sent.push({ user, event, at: Date.now(), socket: socket.id });
+  const answer = (await socket.timeout(10000).emitWithAck(event, payload)) as AckAnswer;
+  if (!answer.ok) errors.push(`${event}: ${answer.error}`);
+  return answer;
+}
+
+/**
+ * A player sketching a plan: eight quick strokes, each drawn with preview
+ * frames twenty a second, four strokes a second; then half of them erased a
+ * tap at a time, and Clear mine for the rest.
+ */
+async function sketch(player: Player, socket: ClientSocket): Promise<void> {
+  const drawn: string[] = [];
+  for (let i = 0; i < 8; i += 1) {
+    const previewId = `${player.id}-${i}`;
+    for (let f = 0; f < 4; f += 1) {
+      send(player.id, socket, 'drawing:preview', { mapId, preview: { previewId, kind: 'pen', color: '#3d8bd9', width: 3, points: [[f * 10, i * 10]] } });
+      await sleep(50);
+    }
+    const answer = await sendWithAck(player.id, socket, 'drawing:add', {
+      mapId, previewId, drawing: { kind: 'pen', color: '#3d8bd9', width: 3, points: [[0, i * 10], [30, i * 10], [60, i * 12]] },
+    });
+    if (answer.ok) drawn.push(String(answer.id));
+    await sleep(50);
+  }
+  for (const drawingId of drawn.slice(0, 4)) {
+    await sendWithAck(player.id, socket, 'drawing:remove', { mapId, drawingId });
+    await sleep(250);
+  }
+  await sendWithAck(player.id, socket, 'drawing:clear_mine', { mapId });
 }
 
 /** `count` of `step`, `everyMs` apart. */
@@ -197,6 +255,7 @@ afterAll(async () => {
   await prisma.message.deleteMany({ where: { campaignId } });
   await prisma.diceRoll.deleteMany({ where: { campaignId } });
   await prisma.mapExploration.deleteMany({ where: { mapId } });
+  await prisma.mapDrawing.deleteMany({ where: { mapId } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.character.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
@@ -217,6 +276,9 @@ describe('a fast combat', () => {
     const p1 = players[0];
     const play: Array<Promise<void>> = [];
 
+    // The DM clears the last session's markup before anyone draws.
+    await sendWithAck(dm.id, dmTabs[0], 'drawing:clear', { mapId, layer: 'MARKUP' });
+
     // One player opens the campaign on two more devices; then all four of
     // theirs drop and reconnect, the dropped ones lingering.
     play.push((async () => {
@@ -231,6 +293,7 @@ describe('a fast combat', () => {
       play.push(repeat(10, 100, (i) => send(player.id, laptop, 'character.hp.update', { characterId: player.characterId, delta: i % 2 ? 1 : -1 })));
       play.push(repeat(6, 500, (i) => send(player.id, laptop, 'chat.message', { content: `${player.id} says ${i}` })));
       play.push(repeat(2, 2000, () => send(player.id, laptop, 'dice.roll', { expression: '1d20+5', purpose: 'Longsword Attack' })));
+      play.push(sketch(player, tablet));
       for (const device of [laptop, tablet]) {
         play.push(repeat(10, 300, () => {
           cellCounter += 1;
@@ -246,6 +309,15 @@ describe('a fast combat', () => {
     play.push(repeat(3, 1000, (i) => send(dm.id, dmLaptop, 'dice.roll', { expression: '1d20+4', purpose: `Goblin ${i} Scimitar Attack` })));
     play.push(repeat(4, 500, (i) => send(dm.id, dmLaptop, 'chat.message', { content: `The goblins shriek ${i}` })));
     play.push(repeat(2, 1000, (i) => send(dm.id, dmLaptop, 'atmosphere.effect.set', { effect: i % 2 ? 'mist' : 'rain' })));
+    // The DM marks up the map, a shape a second, half of them for the DM alone.
+    play.push((async () => {
+      for (let i = 0; i < 4; i += 1) {
+        await sendWithAck(dm.id, dmLaptop, 'drawing:add', {
+          mapId, drawing: { kind: 'rect', color: '#d94f3d', width: 2, points: [[0, 0], [100 + i, 100]], audience: i % 2 ? 'DM' : 'ALL' },
+        });
+        await sleep(1000);
+      }
+    })());
 
     // The bridge: turns of parallel tool calls, two seconds apart.
     play.push((async () => {
@@ -273,6 +345,9 @@ describe('a fast combat', () => {
     const count = (event: string, user?: string) => sent.filter((e) => e.event === event && (!user || e.user === user)).length;
     expect(await prisma.message.count({ where: { campaignId } })).toBe(count('chat.message'));
     expect(await prisma.diceRoll.count({ where: { campaignId } })).toBe(count('dice.roll'));
+    // Each player erased half their strokes and cleared the rest; the DM's four stay.
+    expect(await prisma.mapDrawing.count({ where: { mapId, authorId: dm.id } })).toBe(4);
+    expect(await prisma.mapDrawing.count({ where: { mapId } })).toBe(4);
     for (const player of players) {
       // Each player's own clicks cancel out; the DM took ten, a quarter each
       // way round the table, and the bridge's two turns cancel out.
@@ -297,6 +372,7 @@ describe('a fast combat', () => {
     }
     measured.push({ event: 'exploration:reveal', window: '1s', peak: busiest('exploration:reveal', 1000), ceiling: REVEALS_PER_SECOND });
     measured.push({ event: 'sockets per user', window: 'open at once', peak: Math.max(...peakSockets.values()), ceiling: MAX_SOCKETS_PER_USER });
+    measured.push({ event: 'every event, per socket', window: '1s', peak: busiestSocket(1000), ceiling: SOCKET_EVENTS_PER_SECOND });
     if (process.env.PRINT_PEAKS) console.table(measured);
 
     for (const row of measured) {

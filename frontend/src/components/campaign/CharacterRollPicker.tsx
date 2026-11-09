@@ -6,22 +6,30 @@
  * Shows: Abilities | Skills | Saving Throws | Combat
  * For d20 systems also shows a roll-mode selector: Normal / Advantage / Disadvantage
  * (labelled Fortune / Misfortune for Pathfinder 2e).
+ *
+ * Drawn on the body (components/ui/FloatingLayer.tsx), where the panel
+ * dividers cannot take the presses on it. On the compact layout it is a
+ * full-height sheet (compact/BottomSheet.tsx) with rows a finger can press,
+ * which closes itself: the popover's placing and closers are off there.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Dices, X, ChevronDown } from 'lucide-react';
 import { api } from '@/services/api';
 import type { Character } from '@/types';
 import {
   getCharacterRolls,
-  withAdvantage,
-  withDisadvantage,
   type RollOption,
   type CharacterRolls,
 } from '@/utils/characterRolls';
 import { resolveCharacterInitiative } from '@/utils/rules/initiative';
-import { getModeLabels, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
+import { applyRollMode, getModeLabels, ROLL_MODES, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 import CustomRollFooter from './CustomRollFooter';
+import FloatingLayer from '@/components/ui/FloatingLayer';
+import { flipOntoScreen } from '@/components/ui/menu';
+import { menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import { BottomSheet } from '@/components/campaign/compact/BottomSheet';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,9 +88,15 @@ interface SectionProps {
   rolls: RollOption[];
   mode: RollMode;
   onRoll: (option: RollOption) => void;
+  /** Rows a finger can press, in the compact layout's sheet. */
+  compact?: boolean;
 }
 
-const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll }) => {
+/** A roll's row; in the compact layout's sheet, 44 px tall or more. */
+const ROLL_ROW = 'w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left';
+const rollRow = (compact: boolean) => `${ROLL_ROW}${compact ? ' min-h-11' : ''}`;
+
+const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll, compact = false }) => {
   if (rolls.length === 0) return null;
 
   return (
@@ -94,7 +108,7 @@ const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll }) 
         <button
           key={i}
           onClick={() => onRoll(opt)}
-          className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
+          className={rollRow(compact)}
         >
           <Dices className="w-3 h-3 text-brand-ink shrink-0" />
           <span className="flex-1">{opt.label}</span>
@@ -119,6 +133,7 @@ export default function CharacterRollPicker({
   anchorX,
   anchorY,
 }: CharacterRollPickerProps) {
+  const compact = useCompactLayout();
   const pickerRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -150,42 +165,51 @@ export default function CharacterRollPicker({
 
   // Position picker, flipping if needed
   useEffect(() => {
-    if (!pickerRef.current) return;
+    if (compact || !pickerRef.current) return;
     const rect = pickerRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const x = anchorX + rect.width > vw ? Math.max(0, anchorX - rect.width) : anchorX;
-    const y = anchorY + rect.height > vh ? Math.max(0, anchorY - rect.height) : anchorY;
-    setPos({ x, y });
-  }, [rolls, anchorX, anchorY]);
+    setPos(flipOntoScreen({ x: anchorX, y: anchorY }, rect, { width: window.innerWidth, height: window.innerHeight }));
+  }, [rolls, anchorX, anchorY, compact]);
+
+  // A menu on the screen while it is open, so the tap on the map that
+  // closes it is not the first of a double tap to ping. Its opening closes
+  // any other menu, and another's opening closes it, from after its own: a
+  // long-press that opens one brings no mousedown here (openMenus.ts).
+  useEffect(() => {
+    menuOpened();
+    return menuShown();
+  }, []);
+  const closeOnOtherMenu = useEffectEvent(() => onClose());
+  useEffect(() => whenMenuOpens(() => closeOnOtherMenu()), []);
 
   // Close on click outside
   useEffect(() => {
+    if (compact) return;
     const handler = (e: MouseEvent) => {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
+  }, [onClose, compact]);
 
-  // Close on Escape
+  // Close on Escape, which is used up: the map hears keys after this and
+  // would otherwise also put its tool away on the same press.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (compact) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      onClose();
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [onClose, compact]);
 
   const handleRollOption = (opt: RollOption) => {
-    let expr = opt.expression;
-    let purpose = opt.purpose;
+    const { expression, purpose } = opt.supportsAdvantage
+      ? applyRollMode(opt.expression, opt.purpose, mode, character?.gameSystem ?? null)
+      : opt;
 
-    if (opt.supportsAdvantage && mode !== 'normal') {
-      expr = mode === 'advantage' ? withAdvantage(expr) : withDisadvantage(expr);
-      const modeLabel = getModeLabels(character?.gameSystem ?? null)[mode];
-      purpose = `${purpose} (${modeLabel})`;
-    }
-
-    const made = onRoll(expr, purpose, publicName ?? character?.name);
+    const made = onRoll(expression, purpose, publicName ?? character?.name);
     // Spent once the roll is made: a refused roll used to take the die
     // anyway. After the roll, so a failure to decrement cannot swallow it.
     const hitDiceIndex = opt.hitDiceIndex;
@@ -215,32 +239,10 @@ export default function CharacterRollPicker({
     rolls.combat.length > 0
   );
 
-  return (
-    <div
-      ref={pickerRef}
-      className="fixed z-60 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden flex flex-col"
-      style={{
-        left:       pos ? pos.x : anchorX,
-        top:        pos ? pos.y : anchorY,
-        visibility: pos ? 'visible' : 'hidden',
-        minWidth:   240,
-        maxWidth:   300,
-        maxHeight:  520,
-      }}
-    >
-      {/* Header */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
-        <div className="flex items-center gap-2">
-          <Dices className="w-4 h-4 text-brand-ink" />
-          <span className="text-sm font-semibold text-stone-gray truncate">
-            Roll for {characterName}
-          </span>
-        </div>
-        <button type="button" onClick={onClose} aria-label="Close" className="p-0.5 rounded-sm hover:bg-moss-green/10 transition-colors">
-          <X className="w-4 h-4 text-warm-gray" aria-hidden="true" />
-        </button>
-      </div>
-
+  // Everything below the popover's header: the sheet on the compact layout
+  // draws the same under its own.
+  const body = (
+    <>
       {/* Roll Mode Selector (d20 systems only) */}
       {hasAdvantage && !loading && hasAnyRolls && (
         <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
@@ -248,7 +250,7 @@ export default function CharacterRollPicker({
           <div className="relative">
             <button
               onClick={() => setModeOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
+              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors${compact ? ' min-h-11' : ''}`}
             >
               <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
                 {modeLabels[mode]}
@@ -257,11 +259,11 @@ export default function CharacterRollPicker({
             </button>
             {modeOpen && (
               <div className="absolute left-0 right-0 mt-1 bg-paper border border-ink-muted/20 rounded-lg shadow-lg z-10">
-                {(['normal', 'advantage', 'disadvantage'] as RollMode[]).map((m) => (
+                {ROLL_MODES.map((m) => (
                   <button
                     key={m}
                     onClick={() => { setMode(m); setModeOpen(false); }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-moss-green/10 transition-colors first:rounded-t-lg last:rounded-b-lg${compact ? ' min-h-11' : ''} ${
                       mode === m ? 'font-semibold text-brand-ink' : 'text-stone-gray'
                     }`}
                   >
@@ -275,7 +277,7 @@ export default function CharacterRollPicker({
       )}
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className={`flex-1 min-h-0 overflow-y-auto${compact ? ' overscroll-contain' : ''}`}>
         {loading && (
           <div className="flex items-center justify-center py-8 text-warm-gray text-sm">
             Loading rolls…
@@ -298,7 +300,7 @@ export default function CharacterRollPicker({
             </div>
             <button
               onClick={() => { onRollInitiative(); onClose(); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
+              className={rollRow(compact)}
             >
               <Dices className="w-3 h-3 text-brand-ink shrink-0" />
               {/* The wording follows the system. Call of Cthulhu ranks
@@ -324,13 +326,13 @@ export default function CharacterRollPicker({
 
         {!loading && !error && rolls && (
           <div className="divide-y divide-moss-green/10">
-            <Section title="Abilities" rolls={rolls.abilities} mode={mode} onRoll={handleRollOption} />
-            <Section title="Skills" rolls={rolls.skills} mode={mode} onRoll={handleRollOption} />
+            <Section title="Abilities" rolls={rolls.abilities} mode={mode} onRoll={handleRollOption} compact={compact} />
+            <Section title="Skills" rolls={rolls.skills} mode={mode} onRoll={handleRollOption} compact={compact} />
             {rolls.savingThrows.length > 0 && (
-              <Section title="Saving Throws" rolls={rolls.savingThrows} mode={mode} onRoll={handleRollOption} />
+              <Section title="Saving Throws" rolls={rolls.savingThrows} mode={mode} onRoll={handleRollOption} compact={compact} />
             )}
-            <Section title="Combat" rolls={rolls.combat} mode={mode} onRoll={handleRollOption} />
-            <Section title="Hit Dice" rolls={rolls.hitDice} mode={mode} onRoll={handleRollOption} />
+            <Section title="Combat" rolls={rolls.combat} mode={mode} onRoll={handleRollOption} compact={compact} />
+            <Section title="Hit Dice" rolls={rolls.hitDice} mode={mode} onRoll={handleRollOption} compact={compact} />
           </div>
         )}
       </div>
@@ -343,9 +345,50 @@ export default function CharacterRollPicker({
           their name, and there is nothing to file it under until then. */}
       {!loading && !error && character && (
         <CustomRollFooter
+          compact={compact}
           onRoll={(expression, purpose) => { onRoll(expression, purpose, publicName ?? character.name); onClose(); }}
         />
       )}
-    </div>
+    </>
+  );
+
+  if (compact) {
+    return (
+      <BottomSheet open title={`Roll for ${characterName}`} height="full" onClose={onClose}>
+        <div className="flex h-full min-h-0 flex-col">{body}</div>
+      </BottomSheet>
+    );
+  }
+
+  return (
+    <FloatingLayer>
+      <div
+        ref={pickerRef}
+        className="fixed z-60 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden flex flex-col"
+        style={{
+          left:       pos ? pos.x : anchorX,
+          top:        pos ? pos.y : anchorY,
+          visibility: pos ? 'visible' : 'hidden',
+          minWidth:   240,
+          maxWidth:   300,
+          maxHeight:  520,
+        }}
+      >
+        {/* Header */}
+        <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
+          <div className="flex items-center gap-2">
+            <Dices className="w-4 h-4 text-brand-ink" />
+            <span className="text-sm font-semibold text-stone-gray truncate">
+              Roll for {characterName}
+            </span>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="p-0.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 transition-colors">
+            <X className="w-4 h-4 text-warm-gray" aria-hidden="true" />
+          </button>
+        </div>
+
+        {body}
+      </div>
+    </FloatingLayer>
   );
 }

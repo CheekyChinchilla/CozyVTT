@@ -13,8 +13,11 @@ import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
 import { MAP_LIMITS } from '@/constants/mapLimits';
 import { withinMapLimits, feetPerSquareWithinLimits } from '@/utils/mapSize';
+import { diagonalStepCosts } from '@/utils/geometry';
 import { Button, Modal } from '@/components/ui';
 import { extractAssetId } from '@/utils/assetUrl';
+import MapGridPreview from './MapGridPreview';
+import MapDimensionField from './MapDimensionField';
 
 interface EditMapModalProps {
   isOpen: boolean;
@@ -22,155 +25,6 @@ interface EditMapModalProps {
   campaignId: string;
   onClose: () => void;
   onUpdated: (map: CampaignMap) => void;
-}
-
-// ============================================
-// MapPreviewCanvas
-// Renders the map image with a grid overlay so the DM can verify
-// their Width/Height/GridSize settings line up with the image.
-// ============================================
-
-const PREVIEW_PX = 280;
-
-function MapPreviewCanvas({
-  imageUrl,
-  width,
-  height,
-  gridSize,
-  zoom,
-}: {
-  imageUrl: string | null;
-  width: number;
-  height: number;
-  gridSize: number;
-  zoom: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-    ctx.fillStyle = '#E8E0D0';
-    ctx.fillRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-
-    if (!imageUrl) {
-      ctx.fillStyle = '#9C8E7A';
-      ctx.font = '13px Georgia, serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Select a map image', PREVIEW_PX / 2, PREVIEW_PX / 2 - 10);
-      ctx.fillText('to preview the grid', PREVIEW_PX / 2, PREVIEW_PX / 2 + 10);
-      return;
-    }
-
-    const mapPixelW = width * gridSize;
-    const mapPixelH = height * gridSize;
-    const baseScale = Math.min(PREVIEW_PX / mapPixelW, PREVIEW_PX / mapPixelH);
-    const scale = baseScale * zoom;
-
-    const drawW = mapPixelW * scale;
-    const drawH = mapPixelH * scale;
-    const offsetX = (PREVIEW_PX - drawW) / 2;
-    const offsetY = (PREVIEW_PX - drawH) / 2;
-
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      if (!canvasRef.current) return;
-      const c = canvasRef.current;
-      const cx = c.getContext('2d');
-      if (!cx) return;
-
-      cx.clearRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-      cx.fillStyle = '#E8E0D0';
-      cx.fillRect(0, 0, PREVIEW_PX, PREVIEW_PX);
-      cx.drawImage(img, offsetX, offsetY, drawW, drawH);
-
-      // Grid overlay — clipped to the map bounds
-      const cellSize = gridSize * scale;
-      cx.save();
-      cx.beginPath();
-      cx.rect(offsetX, offsetY, drawW, drawH);
-      cx.clip();
-
-      cx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-      cx.lineWidth = 1;
-
-      for (let x = 0; x <= width; x++) {
-        cx.beginPath();
-        cx.moveTo(offsetX + x * cellSize, offsetY);
-        cx.lineTo(offsetX + x * cellSize, offsetY + drawH);
-        cx.stroke();
-      }
-      for (let y = 0; y <= height; y++) {
-        cx.beginPath();
-        cx.moveTo(offsetX, offsetY + y * cellSize);
-        cx.lineTo(offsetX + drawW, offsetY + y * cellSize);
-        cx.stroke();
-      }
-
-      cx.restore();
-    };
-    img.src = imageUrl;
-  }, [imageUrl, width, height, gridSize, zoom]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      width={PREVIEW_PX}
-      height={PREVIEW_PX}
-      className="w-full rounded-sm border border-moss-green/30 bg-parchment/50"
-      style={{ aspectRatio: '1 / 1' }}
-      aria-label="Grid alignment preview"
-    />
-  );
-}
-
-// ============================================
-// DimensionField
-// Number input paired with a range slider for easier adjustment
-// ============================================
-
-function DimensionField({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-}) {
-  const clamp = (v: number) => Math.max(min, Math.min(max, v));
-  return (
-    <div>
-      <label className="block text-xs text-stone-gray/70 mb-1">{label}</label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(clamp(parseInt(e.target.value) || min))}
-        min={min}
-        max={max}
-        className="input-cozy"
-      />
-      <input
-        type="range"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => onChange(parseInt(e.target.value))}
-        className="w-full mt-1.5 accent-moss-green cursor-pointer"
-        aria-label={`${label} slider`}
-      />
-    </div>
-  );
 }
 
 // ============================================
@@ -369,10 +223,33 @@ export default function EditMapModal({
 
   if (!isOpen) return null;
 
+  // Cancel and the submit button, in the Modal's footer under the scrolling body.
+  const footer = (
+    <>
+      <Button
+        type="button"
+        onClick={onClose}
+        variant="secondary"
+        disabled={isSubmitting}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="button"
+        onClick={handleSubmit}
+        disabled={!canSubmit}
+        className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+        Save Changes
+      </Button>
+    </>
+  );
+
   return (
-    <Modal open={isOpen} onClose={handleClose} title="Edit Map" icon={MapPin} size="xl" closeDisabled={isSubmitting}>
-            {/* Body */}
-            <div className="space-y-6">
+    <Modal open={isOpen} onClose={handleClose} title="Edit Map" icon={MapPin} size="xl" closeDisabled={isSubmitting} fitViewport footer={footer}>
+            {/* Body: it scrolls, between the header and the Modal's footer */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-6">
               <p className="text-xs text-ink-muted -mt-4 truncate">{map.name}</p>
               {error && (
                 <div role="alert" className="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm">
@@ -427,21 +304,21 @@ export default function EditMapModal({
                       Map Dimensions
                     </label>
                     <div className="space-y-3">
-                      <DimensionField
+                      <MapDimensionField
                         label="Width (grid squares)"
                         value={width}
                         onChange={setWidth}
                         min={MAP_LIMITS.minSide}
                         max={MAP_LIMITS.maxSide}
                       />
-                      <DimensionField
+                      <MapDimensionField
                         label="Height (grid squares)"
                         value={height}
                         onChange={setHeight}
                         min={MAP_LIMITS.minSide}
                         max={MAP_LIMITS.maxSide}
                       />
-                      <DimensionField
+                      <MapDimensionField
                         label="Grid Size (px/square)"
                         value={gridSize}
                         onChange={setGridSize}
@@ -532,11 +409,9 @@ export default function EditMapModal({
                             className="mt-0.5 accent-moss-green"
                           />
                           <div>
-                            {/* TODO(ui): this reads 5/10/5/10 ft whatever the Grid Scale;
-                                at 10 ft a square it is 10/20/10/20 ft. Word it from the
-                                scale, or as "every second diagonal costs double". */}
+                            {/* At the Grid Scale chosen: 10/20/10/20 ft on 10 ft squares. */}
                             <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                              Alternating — 5/10/5/10 ft diagonals
+                              Alternating — {diagonalStepCosts(feetPerSquare, 'alternating').join('/')} ft diagonals
                             </span>
                             <p className="text-xs text-stone-gray/50">Pathfinder 2e default</p>
                           </div>
@@ -544,84 +419,6 @@ export default function EditMapModal({
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Dynamic Lighting */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={lightingEnabled}
-                      onChange={(e) => setLightingEnabled(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Enable dynamic lighting"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Enable Dynamic Lighting
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Raycasting visibility — players only see what their tokens can see through walls</p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Fog of War */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={fogEnabled}
-                      onChange={(e) => setFogEnabled(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Fog of war on this map"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Fog of War
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Cover the map and reveal it by hand from the Fog panel. Off, players see the whole map (dynamic lighting still applies)</p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Global Illumination */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
-                    <input
-                      type="checkbox"
-                      checked={globalIllumination}
-                      disabled={!lightingEnabled}
-                      onChange={(e) => setGlobalIllumination(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Global illumination"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Global Illumination
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Everything in line of sight is lit. Untick to make lights and darkvision matter</p>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Explored memory */}
-                <div className="mt-3 pt-3 border-t border-stone-gray/20">
-                  <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
-                    <input
-                      type="checkbox"
-                      checked={explorationEnabled}
-                      disabled={!lightingEnabled}
-                      onChange={(e) => setExplorationEnabled(e.target.checked)}
-                      className="w-4 h-4 accent-moss-green"
-                      aria-label="Remember explored areas"
-                    />
-                    <div>
-                      <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
-                        Remember Explored Areas
-                      </span>
-                      <p className="text-xs text-stone-gray/50">Places a player has seen stay on their map, greyed, until they see them again</p>
-                    </div>
-                  </label>
                 </div>
 
                 {/* ── Right: Grid Preview + Zoom ── */}
@@ -639,7 +436,7 @@ export default function EditMapModal({
                     </div>
                   </div>
 
-                  <MapPreviewCanvas
+                  <MapGridPreview
                     imageUrl={previewImageUrl}
                     width={width}
                     height={height}
@@ -701,28 +498,94 @@ export default function EditMapModal({
                   </p>
                 </div>
               </div>
+
+              {/* Lighting and fog: their own section under the grid and its
+                  preview, so the preview stays beside the grid's settings. */}
+              <div role="group" aria-labelledby="edit-map-lighting-fog" className="border-t border-stone-gray/20 pt-4 space-y-1">
+                <h3 id="edit-map-lighting-fog" className="text-sm font-medium text-brand-ink">Lighting and Fog</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                  <div>
+                    {/* Dynamic Lighting */}
+                    <div className="py-2">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={lightingEnabled}
+                          onChange={(e) => setLightingEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Enable dynamic lighting"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Enable Dynamic Lighting
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Raycasting visibility — players only see what their tokens can see through walls</p>
+                        </div>
+                      </label>
+                    </div>
+                    {/* Global Illumination */}
+                    <div className="py-2">
+                      <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                        <input
+                          type="checkbox"
+                          checked={globalIllumination}
+                          disabled={!lightingEnabled}
+                          onChange={(e) => setGlobalIllumination(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Global Illumination"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Global Illumination
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Everything in line of sight is lit. Untick to make lights and darkvision matter</p>
+                        </div>
+                      </label>
+                    </div>
+                    {/* Explored memory */}
+                    <div className="py-2">
+                      <label className={`flex items-center gap-3 group ${lightingEnabled ? 'cursor-pointer' : 'opacity-50'}`}>
+                        <input
+                          type="checkbox"
+                          checked={explorationEnabled}
+                          disabled={!lightingEnabled}
+                          onChange={(e) => setExplorationEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Remember explored areas"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Remember Explored Areas
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Places a player has seen stay on their map, greyed, until they see them again</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    {/* Fog of War */}
+                    <div className="py-2">
+                      <label className="flex items-center gap-3 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={fogEnabled}
+                          onChange={(e) => setFogEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-moss-green"
+                          aria-label="Fog of war on this map"
+                        />
+                        <div>
+                          <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
+                            Fog of War
+                          </span>
+                          <p className="text-xs text-stone-gray/50">Cover the map and reveal it by hand from the Fog panel. Off, players see the whole map (dynamic lighting still applies)</p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Footer */}
-            <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-xs border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
-              <Button
-                type="button"
-                onClick={onClose}
-                variant="secondary"
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                Save Changes
-              </Button>
-            </div>
     </Modal>
   );
 }

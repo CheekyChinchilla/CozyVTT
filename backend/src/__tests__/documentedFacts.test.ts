@@ -10,7 +10,9 @@ import fs from 'fs';
 import path from 'path';
 import { isSmtpConfigured } from '../services/email';
 import { createApp } from '../app';
+import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../routes/admin';
 import { appLayers } from './helpers/routeInventory';
+import { BACKGROUND_WAIT_MS, backgroundLeftMessage } from '../utils/shutdown';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -259,6 +261,27 @@ describe('where the uploads folder is changed under Docker', () => {
     expect(row).toContain('`docker-compose.override.yml`');
     expect(row).not.toContain('`docker-compose.yml`');
     expect(read('.env.example')).toContain('uploads volume in docker-compose.override.yml');
+  });
+});
+
+describe('what a backup leaves out of the uploads folder, in the deployment guide', () => {
+  const guide = section('docs/DEPLOYMENT.md', '### Via the Admin Panel', '\n### ');
+
+  it('says a symbolic link is left out, with the line the backend logs for it', () => {
+    expect(guide).toContain(`\`${LEFT_OUT_OF_BACKUP}\``);
+  });
+
+  it('says a name a restore refuses is left out, with the line the backend logs for it', () => {
+    expect(guide).toContain(`\`${NAME_LEFT_OUT_OF_BACKUP}\``);
+  });
+});
+
+describe('what stopping the backend waits for, in the deployment guide', () => {
+  const guide = section('docs/DEPLOYMENT.md', '### Stopping and Starting', '\n## ');
+
+  it('gives the wait for work still going on after a change, with the line the backend logs past it', () => {
+    expect(guide).toContain(`stopping waits up to ${BACKGROUND_WAIT_MS / 1000} seconds for it`);
+    expect(guide).toContain(`\`${backgroundLeftMessage(BACKGROUND_WAIT_MS)}\``);
   });
 });
 
@@ -728,5 +751,99 @@ describe('the install-script list the guides describe', () => {
       expect(`${rel}: ${text}`).toMatch(/the install fails/);
       expect(`${rel}: ${text}`).not.toMatch(/still runs the script of a package|does not turn on/);
     }
+  });
+});
+
+describe('the keyboard shortcuts the guides list', () => {
+  // MAP_SHORTCUTS is what the map's ? window shows. The guides spell each
+  // key the same way, as a code span, so a key added, changed or dropped
+  // there fails here until the guide's table says the same. What is held is
+  // the keys and who they are for (which guide's table); the descriptions
+  // are not compared, since each guide words them for its readers. Read as
+  // text: Jest cannot import the frontend's modules. One shortcut per line,
+  // and every row of the list is counted, so a row written another way
+  // fails here.
+  const source = read('frontend/src/components/campaign/map/keyboard.ts');
+  const listStart = source.indexOf('export const MAP_SHORTCUTS');
+  const listEnd = source.indexOf('\n];', listStart);
+  if (listStart === -1 || listEnd === -1) throw new Error('keyboard.ts no longer declares MAP_SHORTCUTS as a list closed by ];');
+  const declared = source.slice(listStart, listEnd);
+  const shortcuts = declared
+    .split('\n')
+    .filter((line) => /^\s*\{ keys: \[/.test(line))
+    .map((line) => {
+      const keys = /keys: \[(.*?)\], does:/.exec(line)?.[1] ?? '';
+      return {
+        keys: [...keys.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1].replace(/\\(.)/g, '$1')).sort(),
+        who: /who: '(\w+)'/.exec(line)?.[1],
+      };
+    });
+
+  /** The keys of each row of the first table after `heading`, from the row's code spans. */
+  function tableKeys(rel: string, heading: string): string[][] {
+    const guide = read(rel);
+    const start = guide.indexOf(heading);
+    if (start === -1) throw new Error(`${rel} no longer has the heading ${heading}`);
+    const lines = guide.slice(start).split('\n');
+    const first = lines.findIndex((line) => line.startsWith('|'));
+    const end = lines.findIndex((line, i) => i > first && !line.startsWith('|'));
+    return lines
+      .slice(first + 2, end)
+      .map((row) => [...row.matchAll(/`([^`]+)`/g)].map((m) => m[1]).sort())
+      .filter((keys) => keys.length > 0);
+  }
+
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((k, i) => k === b[i]);
+  const tables = [
+    { rel: 'docs/PLAYER_GUIDE.md', mine: (who?: string) => who === 'everyone' || who === 'actors' },
+    { rel: 'docs/DM_GUIDE.md', mine: (who?: string) => who === 'dm' },
+  ];
+
+  it('are read from the source in its one-line form, every row of it', () => {
+    expect(shortcuts.length).toBe((declared.match(/\bwho:/g) ?? []).length);
+    expect(shortcuts.length).toBeGreaterThanOrEqual(15);
+    for (const s of shortcuts) {
+      expect(s.keys.length).toBeGreaterThan(0);
+      expect(['everyone', 'actors', 'dm']).toContain(s.who);
+    }
+  });
+
+  // The map's screen-reader hint names the token keys in words. Every key a
+  // player can use on the map, but Tab, the clicks and the taps, is named
+  // there. A screen reader takes a double tap for its own, so the hint does
+  // not offer one.
+  const spoken: Record<string, string> = {
+    'Arrow keys': 'arrow keys',
+    'Shift + arrow keys': 'with shift',
+    ',': 'comma',
+    '<': 'comma',
+    '.': 'full stop',
+    '>': 'full stop',
+    '[': 'square brackets',
+    ']': 'square brackets',
+    Enter: 'enter',
+    Esc: 'escape',
+    '?': 'question mark',
+  };
+  it("are each named in the map's screen-reader hint", () => {
+    const hint = /export const MAP_KEYS_HINT =\s*'([^']*)'/.exec(source)?.[1];
+    if (hint === undefined) throw new Error('keyboard.ts no longer declares MAP_KEYS_HINT as one quoted string');
+    const named = shortcuts
+      .filter((s) => s.who !== 'dm')
+      .flatMap((s) => s.keys)
+      .filter((k) => k !== 'Tab' && !k.includes('click') && !k.includes('tap'));
+    for (const k of named) {
+      const word = spoken[k];
+      if (word === undefined) throw new Error(`no spoken name for the key ${k}: add it here and to MAP_KEYS_HINT`);
+      expect(hint.toLowerCase()).toContain(word);
+    }
+  });
+
+  it.each(tables)("are each a row of $rel's Keyboard Shortcuts table, and the table lists no others", ({ rel, mine }) => {
+    const rows = tableKeys(rel, '### Keyboard Shortcuts');
+    const listed = shortcuts.filter((s) => mine(s.who));
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed.filter((s) => !rows.some((row) => same(row, s.keys))).map((s) => s.keys)).toEqual([]);
+    expect(rows.filter((row) => !listed.some((s) => same(row, s.keys)))).toEqual([]);
   });
 });

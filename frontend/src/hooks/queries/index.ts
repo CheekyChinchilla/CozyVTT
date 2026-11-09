@@ -115,6 +115,19 @@ export function storeCharacterInList(client: QueryClient, stored: Character): vo
 }
 
 /**
+ * Mark the dashboard's lists for a refetch once the user is out of a
+ * campaign: the campaigns (its card goes), their characters (the ones that
+ * were in it now name none) and the campaigns they have left (where its
+ * notes now are). A list fetched less than 30 seconds earlier would
+ * otherwise be shown from the cache, the campaign still in it.
+ */
+export function refreshAfterLeavingCampaign(client: QueryClient): void {
+  void client.invalidateQueries({ queryKey: queryKeys.campaigns });
+  void client.invalidateQueries({ queryKey: queryKeys.characters });
+  void client.invalidateQueries({ queryKey: queryKeys.leftCampaigns });
+}
+
+/**
  * The player's invitations. The dashboard has no live connection to hear one
  * arrive, so this list alone is fetched again whenever the page regains focus
  * and every minute while it is in view; the app's other queries stay still.

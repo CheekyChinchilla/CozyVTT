@@ -94,6 +94,8 @@ that is acting as that user, with exactly that user's permissions — see
 
 All endpoints are prefixed with `/api`. Requests and responses use JSON (`Content-Type: application/json`) unless noted otherwise (file uploads use multipart/form-data).
 
+A request holding U+0000, the null character, anywhere in its body, a key included, as `%00` in its path or query string, or in an upload's form field or file name, answers `400` with `{ "error": "Validation Error", "message": "Text cannot contain the null character (U+0000)." }` and changes nothing, whichever endpoint it is for: the database cannot store the character. A password is the exception, and is taken as it is sent: `password`, `newPassword` and `currentPassword` on the sign-in, registration, setup, password, account deletion and two-factor routes, and `currentPassword` on `PUT /api/users/:id`, each only at the top of its own route's body. The live table refuses an event holding one with the same message.
+
 ### Base URL
 
 | Environment | URL |
@@ -261,9 +263,11 @@ A wrong `currentPassword` answers `401`. Ten wrong passwords in 15 minutes for t
 Permanently delete the authenticated user's account, with their memberships,
 characters, notes and dice macros, their avatar, and every personal (`USER`
 scope) upload that nothing names and no campaign shares, row and file. Chat
-messages, dice rolls, campaign uploads, shared documents and personal uploads
-something still names stay, with no owner, as do the character templates they
-published and the token templates and creatures they made. A personal upload
+messages, dice rolls, what they drew on maps, campaign uploads, shared
+documents and personal uploads something still names stay, with no owner, as
+do the character templates they published and the token templates and
+creatures they made, and whispers sent to them stay with their senders, with
+no recipient. A personal upload
 that only one campaign uses or shares, a campaign they were in, becomes that
 campaign's.
 Every sign-in of the account ends, on every device, and any open game connection
@@ -365,7 +369,7 @@ Get a single campaign's details. The embedded `maps` and `characters` arrays con
 
 ### `PUT /api/campaigns/:id`
 
-Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status` (`PREPARATION`, `COMPLETED` or `ARCHIVED`, and only while no session is running or paused; starting, pausing and ending a session set the others), `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
+Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status` (`PREPARATION`, `COMPLETED` or `ARCHIVED`, and only while no session is running or paused; starting, pausing and ending a session set the others), `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300), `playersMayDraw` (whether players may draw on the map; the DM always may). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
 
 **Request:** Partial campaign fields.
 
@@ -423,13 +427,24 @@ Dice rolls are not chat messages and never appear here — see
 `GET /api/campaigns/:id/dice-rolls`, which is the only path that applies the
 secret-roll rules.
 
+A whisper (`type: "WHISPER"`) is returned only to the two people it is
+between: its sender (`userId`) and its recipient (`recipientId`, with
+`recipientName` and `recipient`). Whispers between other people are left out
+of every page, the DM's included. Every other message has `recipientId`,
+`recipientName` and `recipient` set to `null`. A whisper whose recipient's
+account was deleted has `recipientId: null` and is returned to its sender
+alone.
+
 ### `GET|POST /api/campaigns/:campaignId/macros`
 
 A player's saved dice rolls for one campaign. **Requires campaign membership.**
 
 `GET` returns your own macros, **oldest first** — that is the order they appear
 as buttons, and people aim at those without looking, so an edit must not move
-one. `POST` takes `{ name, expression }`.
+one. `POST` takes `{ name, expression }`, and may add `characterName` and
+`purpose`: free text of up to 200 characters each, trimmed, and stored as
+`null` when left out, empty or `null`. The character name names no character
+record.
 
 **They are private to whoever saved them, the DM included.** Every query is
 scoped by the session's own user id; a macro belonging to someone else answers
@@ -442,16 +457,17 @@ to 50 per campaign per player.
 
 ### `GET|PUT|DELETE /api/campaigns/:campaignId/macros/:macroId`
 
-Read, edit or delete one of your own. `PUT` accepts `name`, `expression` or both;
-a body changing neither is refused so a mistake is visible. A new expression is
-checked exactly as it was on creation, so an edit cannot leave a macro
-unrollable.
+Read, edit or delete one of your own. `PUT` accepts any of `name`,
+`expression`, `characterName` and `purpose`, and keeps any field it is not
+sent; a body with none of them is refused so a mistake is visible. A new
+expression is checked exactly as it was on creation, so an edit cannot leave a
+macro unrollable. `characterName` or `purpose` sent empty or `null` clears it.
 
 
 ### `GET /api/campaigns/left`, `GET /api/campaigns/left/:campaignId`, `GET /api/campaigns/left/:campaignId/notes` and `GET /api/campaigns/left/:campaignId/notes/:noteId`
 
-Removing a member keeps their personal notes and dice macros, but the notes and
-macros routes above answer only members. `GET /api/campaigns/left` lists the
+Removing a member, or their leaving, keeps their personal notes and dice
+macros, but the notes and macros routes above answer only members. `GET /api/campaigns/left` lists the
 campaigns you are no longer in and still have notes or macros in, by name, each
 with your note titles (newest edit first, no text) and your macros.
 `GET /api/campaigns/left/:campaignId` returns `campaign` (`id`, `name`), your
@@ -536,7 +552,7 @@ facts, which is what allows an owner to hand the game to a co-DM or to an
 automated account and remain at the table as an ordinary player. Deleting the
 campaign stays with the owner, and so does handing the DM seat on, so an owner
 sitting as a player can take the seat back; the owner also cannot be removed
-from the campaign. Everything else a DM does follows the role.
+from the campaign, or leave it. Everything else a DM does follows the role.
 
 Rejected with `400` if `userId` is text that is not a user id ("A campaign
 member must be named by their user id"; a missing `userId`, or one that is not
@@ -549,6 +565,31 @@ above ("Only the DM, the campaign owner, or an admin can transfer the DM role").
 Note the generic role endpoint still refuses to change a DM's role or create a
 second one — this is the only supported way to move the seat, so that there is
 one atomic path rather than two.
+
+### `POST /api/campaigns/:campaignId/leave`
+
+Leave the campaign as a player or a spectator: what the DM's removal of a
+member does, asked by the member. **Requires membership of the campaign, any
+role.** No body.
+
+**Response `200`:** `{ message: "You left this campaign." }`
+
+The caller's characters in the campaign go back to their own list (their
+`campaignId` becomes null); their tokens, initiative entries, drawings, notes
+and saved rolls stay with the campaign, and the notes and saved rolls are
+listed under `GET /api/campaigns/left`. Each of the caller's live connections
+to the campaign is sent `campaign.access.revoked` with reason `left` and the
+same message, and leaves it; the campaign is sent `presence.state` and
+`roster.updated` (`member.left`). Only the DM can invite them back.
+
+Rejected with `409` for the campaign's owner, whatever their role ("You own
+this campaign, so you cannot leave it. If you no longer want it, delete it in
+the campaign's settings."), and for the DM ("You run this campaign. Hand the DM
+seat to someone else in the campaign's settings, then leave it."); `403` for
+anyone who is not a member ("You are not a member of this campaign"), also when
+the DM removed them a moment before; `401` when not signed in. The role is read
+in the same transaction as the change, so a hand-over of the seat to the caller
+at the same moment is refused as for any DM.
 
 ### `DELETE /api/campaigns/:campaignId/messages/join-leave`
 
@@ -581,6 +622,8 @@ In the web client, a player's rolls while the session is **paused** are made in 
 ## Token Template Endpoints
 
 All token template endpoints are scoped under a campaign and require DM role.
+
+An `imageUrl` naming an existing asset must name one uploaded as a token picture (type `TOKEN`), or the request answers `400` with `The token image must be a token picture from the asset library.` An update accepts the address already stored, sent back unchanged; a copy to another campaign is held to the rule.
 
 ### `GET /api/campaigns/:campaignId/token-templates`
 
@@ -677,7 +720,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
   "preview": {
     "formatVersion": 1,
     "exportedAt": "2026-04-18T12:00:00.000Z",
-    "exportedFrom": "CozyVTT v1.5.4",
+    "exportedFrom": "CozyVTT v1.6.0",
     "campaignName": "The Lost Mines",
     "gameSystem": "DND_5E",
     "mapCount": 5,
@@ -717,7 +760,7 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
 }
 ```
 
-The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors and lights left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, U+0000 is taken out of every text and counted in `warnings` by file, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors, lights and drawings left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A token's, creature's or token template's picture that was not uploaded as a token picture is left out the same way. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
@@ -760,6 +803,8 @@ the most one account can. Delete one you no longer need to make room."
 ```
 
 For a character with a game system, `name` is written into the sheet's `characterName` (`investigatorName` in Call of Cthulhu), and your display name into `playerName`, before the sheet is checked; a Flexible sheet (no game system) gets neither. A D&D 5e sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
+
+A `tokenImageUrl` naming an existing asset must name one uploaded as a token picture (type `TOKEN`), whatever folder the address gives, or the request answers `400` with `The token image must be a token picture from the asset library.` `PUT` checks a new one the same way, and accepts the address already stored, sent back unchanged.
 
 ---
 
@@ -832,7 +877,7 @@ Create a new map (DM only).
 
 `width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `name` may be at most 200 characters once trimmed, or the request answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default; a name or size equal to the one already stored is accepted as it is.
 
-`imageUrl` and the optional `spiritLayerUrl` may not name an asset of another kind: one that is not a map picture (type `MAP`), whatever folder an address gives, answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An address naming no existing asset is stored as sent. An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged.
+`imageUrl` and the optional `spiritLayerUrl` may not name an asset of another kind: one that is not a map picture (type `MAP`), whatever folder an address gives, answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An address naming no existing asset is stored as sent. An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged. A map picture's address may carry a version, `/api/assets/maps/:id?v=<digits>` (up to 16 digits), as a drawn map's picture does after **Save** in Mapmaker; it is stored as sent and names the same asset. Any other query answers `403`.
 
 ---
 
@@ -901,6 +946,8 @@ into a character or editing it.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.
+  It must be a token picture (type `TOKEN`) as well, or the answer is `400`
+  with `The token image must be a token picture from the asset library.`
 - One account may author at most 500 templates. Past that the request answers
   `400`: "You have already published 500 character templates, the most one
   account can. Delete one you no longer need to make room."
@@ -937,8 +984,10 @@ All creature endpoints are mounted under `/api/campaigns/:campaignId/creatures`.
 **`imageUrl` on create and update** accepts a bare asset id, stored as `/api/assets/tokens/:id`, or
 an asset's own `/api/assets/<kind>/:id` address, stored as sent. Anything else, an address on another
 site included, answers `403`, as does an asset the DM may not read unless this campaign already uses
-that exact address. Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
-as the full path. Rows written before this normalisation may still hold a bare id, so clients should
+that exact address. An existing asset that is not a token picture (type `TOKEN`) answers `400` with
+`The token image must be a token picture from the asset library.` Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
+as the full path, and refuses with the same `400` a creature stored before this rule whose picture is
+not a token picture. Rows written before this normalisation may still hold a bare id, so clients should
 tolerate both when reading.
 
 ### `GET /api/campaigns/:id/creatures`
@@ -1152,7 +1201,7 @@ SRD creatures stored before hit points were tracked are updated in place with `h
 
 ### `GET /api/assets`
 
-List assets accessible to the authenticated user (Global + their own User scope + Campaign scope for their campaigns).
+List assets accessible to the authenticated user (Global + their own User scope + Campaign scope for their campaigns). In a campaign where you are a player or a spectator, its map pictures are left out except those you uploaded, those embedded in a plain text or Markdown handout the campaign's DM wrote or uploaded and shared with the campaign, and those the current map of a table you sit at shows you: this campaign's, or another of your campaigns' while the picture's uploader is a member of it too. The same pictures answer `404` when read.
 
 **Query params:**
 - `type` — filter by `MAP`, `TOKEN`, `AUDIO`, `AVATAR`, `DOCUMENT`. With no `type`, documents are left out: they have their own page in the app, and a rulebook does not belong among map thumbnails
@@ -1320,6 +1369,24 @@ live refresh.
 
 ---
 
+### `PUT /api/assets/:id/picture`
+
+Write a new picture over a picture drawn in CozyVTT, as **Save** in Mapmaker
+does: a campaign map picture tagged `cozyvtt-drawn-map`. The asset keeps its
+id, so every address naming it shows the new picture; no earlier version is
+kept. **Only the DM of the asset's campaign**, a platform admin included in
+the refusal (`403`). An asset the caller may not read answers `404`; any other
+picture answers `400` with `Only a picture drawn in CozyVTT can be saved over.
+Upload a new picture instead.` The multipart body carries one `file`, checked
+as a map upload is (`MAX_MAP_SIZE_MB`, the type from its bytes, the picture
+limits), and of the same format as the picture it replaces. A refused save
+leaves the old picture as it was. Answers `{ asset, imageUrl }`, where
+`imageUrl` is `/api/assets/maps/:id?v=<n>`, a version that changes on every
+save: give it to the map with `PUT /api/campaigns/:id/maps/:mapId` so open
+tables load the new picture. Counted against the upload rate limit.
+
+---
+
 ### `DELETE /api/assets/:id`
 
 Delete an asset and its files from disk.
@@ -1330,19 +1397,22 @@ Who may delete depends on the asset's scope:
 |---|---|
 | `GLOBAL` | A platform admin, or the uploader if they hold `globalAssetManager`. The permission covers your own global uploads — it does not let you remove another manager's |
 | `USER` | The owner, or a platform admin |
-| `CAMPAIGN` | The uploader while still a member of that campaign, its DM, or a platform admin |
+| `CAMPAIGN` | Its DM, a platform admin, or the uploader while still a member of that campaign and while nothing but their own characters, the tokens they control and the documents they wrote uses it (otherwise 403, "Others in the campaign use this asset, so only the campaign's DM can delete it", or "A character template uses this asset, so only the campaign's DM can delete it" when a character template, which everyone on the instance is offered, is the only other use) |
 
 `globalAssetManager` is read from the database on each request rather than the
 session, so revoking it takes effect immediately.
 
 While a map, a token, a character, a character template, a creature, a token
 template, a campaign's atmosphere track or the sound of one of a campaign's
-times of day still uses the asset, the route
+times of day still uses the asset, or a text or Markdown document names it by
+its address and its writer, the asset's uploader or a member of its campaign,
+can read the asset now, the route
 answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
 nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
 what the caller may see: an admin sees everything, anyone else sees only the
 campaigns they are the DM of, their own characters and shared character
-templates, and the rest is counted without names.
+templates, and documents of their own, global ones and those of campaigns they
+run, and the rest is counted without names.
 
 ---
 
@@ -1510,7 +1580,7 @@ change their own password with `POST /api/auth/change-password`, which asks for 
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A personal upload that only one campaign uses or shares, a campaign they were in, becomes that campaign's. A campaign they own passes to its sitting DM.
+Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, drawings on maps, other uploads, published character templates, token templates and creatures stay with no owner, and whispers sent to them stay with their senders. A personal upload that only one campaign uses or shares, a campaign they were in, becomes that campaign's. A campaign they own passes to its sitting DM.
 
 **409** while they sit in the DM seat of any campaign, whether or not they own it, or own a campaign whose DM seat is empty. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
 
@@ -1585,7 +1655,7 @@ Get platform statistics (user count, active campaigns, storage usage, etc.).
 ### `GET /api/admin/health` *(Admin only)*
 
 Whether the database answers and the live-connection server is running, for the
-dashboard's status card: `{ status, services: { api, database, websocket }, connections }`,
+**Status** card on the Admin Panel's **Dashboard** tab: `{ status, services: { api, database, websocket }, connections }`,
 with `status` `healthy` only when every part is `ok`. Always `200`; the public
 `GET /health` is the one for uptime monitors.
 

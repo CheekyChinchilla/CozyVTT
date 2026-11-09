@@ -119,6 +119,19 @@ describe('buildNpcRolls — D&D 5e', () => {
   });
 });
 
+// The dice in an action's text are offered only when the parser rolls them;
+// more than 100 dice, a die over d1000 or a bonus over 9,999 the server refuses.
+describe('buildNpcRolls — dice the parser refuses', () => {
+  it('offers no damage roll for them', () => {
+    const titan: NpcStatBlock = {
+      ...goblin,
+      actions: [{ name: 'Crush', description: 'Melee Weapon Attack: +12 to hit. Hit: 700 (200d6) bludgeoning damage, or 3 (1d6) on a miss.' }],
+    };
+    const damage = buildNpcRolls(titan, 'DND_5E').combat.filter((o) => o.purpose.startsWith('Crush Damage'));
+    expect(damage.map((o) => o.expression)).toEqual(['1d6']);
+  });
+});
+
 describe('buildNpcRolls — Pathfinder 2e', () => {
   // PF2e prints final modifiers; nothing is derived from ranks or level.
   const pf2eCreature: NpcStatBlock = {
@@ -145,6 +158,16 @@ describe('buildNpcRolls — Pathfinder 2e', () => {
 
   it('uses the printed skill modifier verbatim', () => {
     expect(find(rolls.skills, 'Athletics')?.expression).toBe('1d20+12');
+  });
+
+  // The stat block takes any save key; the label table was read as a plain
+  // object, so "constructor" found Object and labelled the roll with its text.
+  it('names a save of its own by its key, whatever the key is', () => {
+    const odd = buildNpcRolls({ ...pf2eCreature, savingThrows: { constructor: 3, Reflex: 7 } }, 'PATHFINDER_2E');
+    expect(odd.savingThrows.map((r) => [r.label, r.purpose])).toEqual([
+      ['constructor +3', 'constructor Save'],
+      ['Reflex +7', 'Reflex Save'],
+    ]);
   });
 
   it('falls back to deriving from scores for a creature entered 5e-style', () => {

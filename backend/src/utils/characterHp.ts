@@ -26,7 +26,6 @@ export function extractCharacterHp(
   switch (gameSystem) {
     case 'DND_5E':
     case 'PATHFINDER_2E':
-    case 'FLEXIBLE':
       return readHp(record(data.hp), false);
     case 'CALL_OF_CTHULHU_7E':
       // Call of Cthulhu keeps hit points under derived stats, and has no

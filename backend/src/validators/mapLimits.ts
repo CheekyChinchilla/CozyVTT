@@ -18,6 +18,42 @@ export const MAP_LIMITS = {
   maxFeetPerSquare: 100,
   /** Tokens on one map. */
   maxTokens: 1000,
+  /** Wall segments on one map, doors and windows included. */
+  maxWallSegments: 5000,
+  /** Light sources on one map. */
+  maxLightSources: 200,
   /** Characters in a map's name. */
   maxNameLength: 200,
 } as const;
+
+/**
+ * What a wall or light past the map's cap answers, from a whole list and
+ * from an add, over the socket and the REST routes alike; the map's wall
+ * and light tools say the same before they send one.
+ */
+export const TOO_MANY_WALLS_MESSAGE = `Maximum ${MAP_LIMITS.maxWallSegments} wall segments per map`;
+export const TOO_MANY_LIGHTS_MESSAGE = `Maximum ${MAP_LIMITS.maxLightSources} light sources per map`;
+
+/**
+ * The most fog cells one map may have: one per grid square of the largest
+ * map, 500 by 500. Fog and explored areas are stored as one entry per cell,
+ * so this bounds what loading either can allocate.
+ */
+export const MAX_FOG_CELLS = MAP_LIMITS.maxSide * MAP_LIMITS.maxSide;
+
+/** The most fog cells one report of what a player's vision covered may name. */
+export const MAX_EXPLORATION_REPORT_CELLS = 20000;
+
+/**
+ * The most bytes one live-table message may hold, as the server reads it.
+ * A longer one never reaches its handler, so a fog operation or a report of
+ * explored ground that would be longer is sent in parts.
+ */
+export const MAX_SOCKET_MESSAGE_BYTES = 1000000;
+
+/**
+ * The furthest any wall end or light may be from the map's corner, in
+ * pixels, either way: the far side of the largest map at the largest grid
+ * size (500 squares of 500 pixels).
+ */
+export const MAX_COORDINATE = MAP_LIMITS.maxSide * MAP_LIMITS.maxGridSize;

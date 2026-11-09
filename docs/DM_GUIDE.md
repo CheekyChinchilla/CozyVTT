@@ -44,14 +44,14 @@ Click **Create Campaign** and you're taken directly to the campaign page.
 
 Once inside the campaign, click the **Campaign Settings** button (gear icon in the header) to open the Campaign Settings panel. It has four tabs:
 
-- **General** — the **Campaign Name** and **Description**, saved with **Save Changes**, and **Export Campaign** (see [Exporting a Campaign](#exporting-a-campaign))
+- **General** — the **Campaign Name** and **Description**, saved with **Save Changes**; **Players may draw**, on in every campaign until you turn it off and saved as soon as you switch it (see [Drawing on the map](#drawing-on-the-map)); and **Export Campaign** (see [Exporting a Campaign](#exporting-a-campaign))
 - **Chat** — **Enable message cooldown**, off by default, makes everyone in the chat, you included, wait between messages, for the **Cooldown duration** you set (1 to 300 seconds). While someone waits, a line under their chat box counts down, such as "Wait 5s before sending another message"
 - **Members** — everyone in the campaign, the players you have invited who have not answered yet (under **Invited**, each with the date it runs out and an **×** to withdraw it), with **Invite Player**, the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
 - **Danger Zone** — **Delete Campaign**, shown only to the campaign's owner (whether or not they are still its DM) and to administrators, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
 
 *Screenshot pending — Campaign settings panel.*
 
-Campaign Settings and the other side panels, the Map Library, Token Manager, Spirit Layer, Atmosphere, the Creature Library, Token Templates and the token editor, close the same way: press **Escape**, click **Close** (the **×** at the top of the panel) or click outside the panel. While one is open, Tab moves only among its controls. A window a panel opens, such as **Invite Player**, closes alone on Escape and leaves the panel open.
+Campaign Settings and the other side panels, the Map Library, Token Manager, Spirit Layer, Atmosphere, the Creature Library, Token Templates and the token editor, close the same way: press **Escape**, click **Close** (the **×** at the top of the panel, at least 44 pixels square on a phone or a tablet) or click outside the panel. While one is open, Tab moves only among its controls. A window a panel opens, such as **Invite Player**, closes alone on Escape and leaves the panel open.
 
 ### Inviting Players
 
@@ -82,9 +82,9 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 **Moving a token to another map.** Switching maps offers to bring tokens along, a token's right-click menu offers **Move to Map…**, and in the Token Manager the map icon (**Move to another map**) opens **Move to which map?**. A token that moves keeps everything about it: its type, who controls it, its darkvision, hit points, conditions, notes and stat block.
 
-**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
+**Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. On a touch screen, drag it by the grip at the start of its row, or press and hold the row for the menu. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
 
-**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. The minus buttons are damage: in D&D 5e and Pathfinder 2e they take temporary hit points first, as the rules do, and only what is left comes off the character's hit points. The plus buttons heal and never add temporary hit points. Click a character to read its sheet, or right-click it for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner; you can do it to any player's character, and the player can bring it back with **Assign to Campaign** on their Characters page.
+**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. The minus buttons are damage: in D&D 5e and Pathfinder 2e they take temporary hit points first, as the rules do, and only what is left comes off the character's hit points. The plus buttons heal and never add temporary hit points. Click a character to read its sheet, or right-click it (on a touch screen, press and hold it) for **View Character Sheet**, **Roll...**, **Temporary HP...** (see [Granting Temporary Hit Points](#granting-temporary-hit-points)), **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner; you can do it to any player's character, and the player can bring it back with **Assign to Campaign** on their Characters page.
 
 **Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. Players only know a creature is down if they can see its hit points, so for them this applies to characters, their own tokens and creatures whose **Show HP bar** is on; a creature whose bar you keep off still looks standing to them, and still blocks its square, until you remove it. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
@@ -117,11 +117,18 @@ CozyVTT does yet.
 
 > **Getting it back.** The new DM can hand it back the same way. And if the
 > campaign is yours — you created it — you keep a way in regardless: an **Owner
-> Settings** button appears in the top bar, holding the two things that stay
+> Settings** button appears in the top bar (on a phone, in **More**, under **Owner**), holding the two things that stay
 > yours, deleting the campaign and taking the DM seat back. It sits in the same
 > place the DM's own settings button occupies. So handing the
 > game over can never lock you out of your own campaign. If you are *not* the owner,
 > ask the new DM, or your instance's administrator can move it for you.
+
+**Leaving a campaign you run.** The DM cannot leave a campaign, so hand the seat
+to another member first; **Leave Campaign** then appears for you in the
+**Campaign Info** panel, as it does for every player. Whoever owns the campaign
+cannot leave it at all, since only the DM could let them back in: if it is
+yours and you no longer want it, delete it from the **Danger Zone** tab of
+**Campaign Settings** (**Owner Settings** once someone else is the DM).
 
 ---
 
@@ -137,9 +144,9 @@ Before you can use a map in your campaign, it needs to live in the **Asset Libra
 2. Click **Upload Asset**
 3. Choose your image file (JPEG, PNG, and WebP work great), at most 16,384 pixels on each side. An animated WebP map has limits on its frames as well (see [Asset Types](USER_GUIDE.md#asset-types) in the User Guide)
 4. Set the type to **Map**
-5. Set the scope to **Campaign** (shared with everyone in that campaign, who can browse it in the asset library straight away) or **Personal** (private to you until the players are shown something that uses it)
+5. Set the scope to **Campaign** (shared with the campaign: its players and spectators see a map picture in the asset library only while the table is on a map using it) or **Personal** (private to you until the players are shown something that uses it)
 6. Give it a descriptive name — you'll thank yourself later when you have twenty maps
-7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern")
+7. Add tags if you like (e.g., "dungeon", "outdoor", "tavern"). The tag `cozyvtt-drawn-map` is kept for maps drawn in CozyVTT, and the window does not add it
 8. Click **Upload**
 
 *GIF pending — Uploading a map to the asset library.*
@@ -150,7 +157,7 @@ Once your map is in the asset library:
 
 1. Inside your campaign, click **Map Library** (the map icon) in the header
 2. The Map Library panel opens
-3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings
+3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings. Or click **Draw a map** at the top of that window to draw one in CozyVTT (see [Drawing a map](#drawing-a-map))
 4. The map is now available to switch to at any time
 
 **Where an Upload New picture goes.** The upload window offers two places for the map picture, and for the spirit layer picture, with a line under each saying what it means. **Personal** is selected at first.
@@ -158,9 +165,9 @@ Once your map is in the asset library:
 | Choice | Who can see the picture | When you leave the campaign or delete your account |
 |---|---|---|
 | **Personal** | You, in your own library. Players see it only once you switch to the map, and whoever is the campaign's DM sees it on every map. | It stays yours, so the table loses it. Once you leave the campaign, nobody in it can load it, the new DM included: maps using it show "Failed to load map image" until the DM picks another picture in **Edit Map**. If you delete your account after handing the DM seat over, the file is kept, owned by no one: when this campaign is the only one using it, it becomes the campaign's own and the table goes on seeing it (if you are still in the campaign); otherwise nobody in the campaign can load it, and only an administrator can open it. |
-| **Campaign** | Everyone in the campaign, in the campaign's library, at once, before you switch to the map too. | It stays with the campaign, for the table and whoever runs it next. |
+| **Campaign** | You and whoever is the campaign's DM, in the campaign's library. Players and spectators see it there only once you switch to a map using it, and no longer once the table moves on. | It stays with the campaign, for the table and whoever runs it next. |
 
-Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
+Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. A **Campaign** picture you uploaded becomes the new DM's to delete or move out of the campaign once anything there uses it, such as a map, a creature or a handout; you keep that only for pictures nothing but your own characters, the tokens you control and your own documents use. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Walls, doors and lights move with the picture, so they stay on it. Changing the **Width** or **Height** resets that map's fog of war to fully covered and forgets what every player has explored of it; changing only the **Grid Size** keeps both. Whatever you change on the map on screen, its picture and name included, reaches your players at once.
 
@@ -172,7 +179,7 @@ You can change a map's **Width**, **Height** and **Grid Size** later with the **
 | Grid Size (pixels per square) | 10 | 500 |
 | Feet per square (**Grid Scale**) | 1 | 100 |
 
-Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it.
+Create Map and Edit Map offer nothing outside these, and applying a **Grid detected** suggestion keeps it inside them. A Universal VTT file whose map is more than 500 squares on a side is refused when you import it. A map you draw in CozyVTT has a limit of its own besides (see [Drawing a map](#drawing-a-map)).
 
 A map holds up to **1,000 tokens**. Adding one more, or moving tokens onto a map that would take it past 1,000, is refused with a message; a map that already had more before version 1.5.1 keeps them, and you can still move, edit and remove them.
 
@@ -180,22 +187,162 @@ A map made before version 1.5.1 may be larger than this. It still opens, and Edi
 
 *Screenshot pending — Map Library panel with multiple maps.*
 
+### Drawing a map
+
+No map ready for the scene? Draw one in CozyVTT: a room or a clearing sketched while your players wait, or a dungeon drawn with care before the session. A drawn map is a map like any other: tokens, walls, lights, fog of war, export and import work on it as on an uploaded one.
+
+**Making one**
+
+1. Open the **Map Library** and click **Create Map**.
+2. Click **Draw a map** at the top of the window.
+3. Fill in the map's name, its **Width** and **Height** in grid squares, its **Detail (pixels per square)** (70 at first), the **Grid Settings**, and a **Background colour**: parchment at first, one of the colours offered, or any colour with **Another colour**.
+4. Click **Create Map**. CozyVTT puts a blank picture of that colour in the campaign's Asset Library, and opens the new map on your screen only, as **Open to prepare** does (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)), with **Mapmaker** on (below). Your players stay where they are. When it is ready, click **Bring everyone here** on the banner, or **Set Active** in the Map Library.
+
+If the picture cannot be made, the window says so and nothing is created: "This browser could not make the map's picture" means the device ran short, so choose fewer squares and try again.
+
+**How large a drawn map can be.** It is painted at its squares times its pixels per square. So that it can be painted on any device, a phone or a tablet included, that is kept within 16,777,216 pixels (4,096 by 4,096) and within 16,384 pixels on each side. Where the squares you ask for would make it larger, the window draws it at fewer pixels a square and says so, for example "Drawn at 40 px a square so it can be edited on any device.", and the map's **Grid Size** is that number. It never goes below 10 pixels a square, so a drawn map has at most 167,772 squares; a larger one is refused with a message and **Create Map** stays greyed out.
+
+| Squares | Drawn at |
+|---|---|
+| 20 by 20 | 70 pixels a square, as asked |
+| 59 by 59 | 69 |
+| 100 by 100 | 40 |
+| 409 by 409, or 500 by 335 | 10 |
+| 410 by 410, or 500 by 336 | Refused |
+
+**Its picture in the Asset Library.** Each drawn map's picture is in the campaign's library, named **Drawn map** and tagged `cozyvtt-drawn-map`. Until what you paint is saved, it is one pixel a square of the map's colour, which the map stretches over its grid, so a new drawn map takes almost no room. So **Save** a drawn map at least once before you export it to Universal VTT: until then the export carries that one-pixel-a-square picture, and another tabletop shows a picture as many pixels across as the map has squares. As with every map picture, your players do not see it there until the table is on its map.
+
+**Painting it**
+
+**Mapmaker**, the paintbrush in the map's toolbar, is yours on a map you drew, and on a map with no picture, or whose picture has been deleted from the Asset Library, where it starts a blank parchment picture the map's size: that is how such a map gets a picture again. It is not offered on a map whose picture you uploaded; mark one of those up with **Draw** (see [Drawing on the map](#drawing-on-the-map)).
+
+1. Click **Mapmaker**. Its panel opens at the top of your tool panels (on a phone, **Mapmaker** is in the map's **More**, and its tools are a strip at the foot of the map: see [On a phone](#on-a-phone)), and the map shows its material plane without your fog of war or the spirit layer, so you see the picture as you paint it. **Draw**, the ruler, the area template, **Ping** and **Preview Player View** are put away while Mapmaker is on; choosing a wall, fog or light tool puts Mapmaker away.
+2. Choose a tool (below) and a colour: the earth tones first, then the drawing colours, or any colour with **Another colour**. Mapmaker has two colours: **Colour** and **Second colour** above the colours say which one the palette sets. The second colour fills a rectangle, an ellipse, a polygon, a room's floor and a stamp. Set the **Width**, from 1 to 64 pixels, for the tools that paint a line; Select, Fill and the Eyedropper have none, and a stamp has a **Size**.
+3. Paint with the tool. A stroke shows as you drag, and goes into the picture when you let go.
+
+| Tool | Key | How |
+|---|---|---|
+| **Select** | `S` | Drag a box around part of the picture. Drag inside it to move it, or a corner to resize it: where it was is left in the map's own colour. Click or tap outside it, press `Enter`, choose another tool, **Save** or put Mapmaker away to put it down; **Undo** while it is moving puts it back. Pixels moved or pasted and not yet put down count as painting not saved, so **Save** is offered and leaving asks first. `Delete` erases the box to the map's own colour. `Ctrl + C`, `Ctrl + X` and `Ctrl + V` copy, cut and paste (a paste lands a square right and down, to move where you want it), and `Ctrl + A` selects the whole picture; the same are buttons under the tools, for a phone or a tablet. Select moves the picture only: a room's walls stay where the room was drawn, so move a room before you save it by undoing it and drawing it again, or move its walls with the wall tool after. |
+| **Brush** | `B` | Drag to paint in the colour, or click or tap for a dot. With a mouse or a pen, a circle as wide as the brush shows where it would paint, half filled with the colour or the texture; on a touch screen it shows under your finger as you paint. |
+| **Eraser** | `E` | Drag to erase back to the map's own colour: the one it was made in (for a map drawn before 1.6.0 kept it, the colour of the picture's top-left corner). It has no colour of its own, so the colours are hidden while it is chosen; the **Width** sets how wide it erases, and its circle under the pointer, in the map's own colour, is dashed. |
+| **Line** | `L` | Drag from one end to the other. Tick **15 degree steps**, or hold `Shift` as you drag, to keep it to 15 degree steps. |
+| **Rectangle**, **Ellipse** | `R`, `O` | Drag from one corner to the other. Choose **Outline** (in the colour), **Filled** (with the colour) or **Outline and fill** (outlined in the colour, filled with the second colour). |
+| **Polygon** | `G` | Click or tap each corner. Click the first corner again, or press `Enter`, to close it; `Backspace` takes the last corner back and `Esc` drops it. It is outlined, filled or both, as a rectangle is, and **Snap to grid** puts its corners on the grid. |
+| **Curve** | `C` | Drag from one end to the other, then drag again anywhere to bend it towards the pointer: it is painted when that second drag ends. `Enter` paints it straight, `Esc` drops it. |
+| **Room** | `M` | Drag from one corner of the grid to another: a floor in the second colour, outlined in the colour at the **Width**, with its corners always on the grid's corners. Its four walls are added to the map when you save, as if drawn with the wall tool, so sight and fog follow them: until then they are on your screen only, **Undo** takes them back with the floor, and your draft keeps them. Once saved they are the map's walls: **Undo** after **Save** takes back the floor alone, and the walls are removed with the wall tool. A side two rooms share, or a wall the map already has, is added once. |
+| **Stamp** | `P` | Click or tap to paint a stamp: **Door**, **Double door**, **Stairs**, **Pillar**, **Table**, **Chair**, **Bed**, **Chest**, **Barrel**, **Tree**, **Bush**, **Rock**, **Pool**, **Torch**, **Trap** or **Altar**, outlined in the colour and filled with the second. **Size**, in place of the width, makes it half a square to six squares across, for a boulder, a great tree or a gate: a door grows along its wall. With **Snap to grid** (on to start) a stamp an odd number of squares across sits in the middle of the square clicked and an even number on the nearest corner of the grid, a door sits on the grid line nearest the click as a door stands in a wall, and a double door spans twice its size along it; with it off, a stamp's middle is where you click. **Turn** turns the next one a quarter at a time, so a door can stand in a wall running either way. With a mouse or a pen, a see-through stamp shows where a click would put it, at its size and turn and in its colours. On a touch screen, slide a finger to move the see-through stamp and lift it to paint the stamp there, or tap where it goes; a second finger landing first paints nothing. |
+| **Fill** | `F` | Click or tap an area to fill it with the colour: it spreads side to side and up and down, not across corners. **Tolerance** (10% to start) takes in colours that far from the one clicked, so the soft edge of a stroke fills too; at 0% only the exact colour fills. On a touch screen a finger's drag moves the map under it. If the device runs short of memory for a very large area, the fill stops with "This device could not fill an area that large.", and **Undo** takes back any part it filled. |
+| **Text** | `T` | Click or tap where a line of text goes, type up to 200 characters, and press `Enter`; `Esc` drops it. It is painted in the colour, its letters four times the **Width** tall, in the app's own type. A finger's drag moves the map under it. |
+| **Eyedropper** | `I` | Click or tap the picture to make its colour there the colour, and go back to the tool you had. |
+
+**Snap to grid**, for a line, a rectangle, an ellipse, a polygon and a curve, puts their ends and corners on the grid's corners and the middles of its squares, as Draw's does.
+
+**Texture**, for the **Brush**, a **Rectangle**, **Ellipse** or **Polygon**'s fill, a **Room**'s floor and **Fill**: **Stone**, **Bricks**, **Cobbles**, **Tiles**, **Wood**, **Grass**, **Sand** or **Water**, drawn in lighter and darker shades of the colour it paints, so grey stone, red brick or blue water are a colour away. Each texture is one square of the grid across and lines up with it, so neighbouring areas join. **None** paints the plain colour. A shape's outline, a line, a curve, a stamp and the eraser are never textured.
+
+4. **Undo** and **Redo** in the panel, or `Ctrl + Z` and `Ctrl + Y`, take back a stroke, a shape (a polygon or a curve too), a room, a stamp, a fill or a moved selection and put it back.
+5. Click **Done** at the top of the Mapmaker panel, press `Esc` or click **Mapmaker** again to put Mapmaker away. A first `Esc` while you drag drops that stroke instead.
+
+While Mapmaker is on, it takes the map: a click or a tap paints, so no token is picked up, no door opened and no wall drawn, and a right-click or holding a finger opens no menu. The right mouse button, or two fingers, move and zoom the map; a second finger landing while you paint drops that stroke. Tokens, walls and lights stay drawn over the paint, and so does the grid, which **Toggle Grid** hides.
+
+Undo keeps up to 50 changes. It keeps only the part of the picture each change touched, packed small, so even strokes across the whole map leave at least 30 to take back; on a picture with a great deal of fine detail the oldest may go sooner.
+
+**Saving.** What you paint is on your screen only until you click **Save**, at the top of the Mapmaker panel beside **Done** (on a phone, in the strip's header). Until then it stays on the map when you put Mapmaker away, and your browser keeps a draft of it (below). The map's size and grid do not change when you save, so its tokens, walls, lights and fog stay where they are. Players on the map see the new picture as the save lands; otherwise they see it when you bring them there. What you paint while a save is under way stays to be saved next time.
+
+**Rooms' walls.** Saving adds the walls of the rooms you painted since the last save, once the picture is saved; players on the map then see by them. If the map refuses some of them, such as past its 5,000 walls, Mapmaker says how many were not added, and you draw those with the wall tool. Undoing a room after it is saved takes back its floor but leaves its walls: remove them with the wall tool.
+
+**Save overwrites the picture.** Saving writes your painting over the map's picture: the same picture in the Asset Library, not a new one. So everything that shows that picture shows your newest painting: the map, a shared Document or a note that shows it by its address, and any other map using it. **No earlier version is kept**, and a save cannot be undone. That is why **Save** asks, every time you press it, "Overwrite the map's picture?": "Saving will overwrite the current picture of Crypt, and no earlier version is kept. Are you sure you want to continue?" If another map of the campaign uses the same picture, it names it, for example "Crypt by night uses the same picture and will change too.", and that map changes too. Click **Save over it** to save, or **Not now** (or press `Esc`) to keep painting with nothing saved. A map with no picture yet is given one without the question: its first save puts a new **Drawn map** picture in the campaign's Asset Library.
+
+**To keep the picture as it was**, or to give another map a copy of its own before you paint, make the copy first:
+
+1. Download the picture: in the Asset Library, click **Download** on the map's **Drawn map** picture, or in Mapmaker, click **Download picture** before you paint anything. Your browser saves it as a PNG file.
+2. Upload it as a new picture: in the Asset Library, click **Upload Asset**, choose **Map** and **Campaign**, and pick the file. Or, to start a new map on it, use **Upload New** in **Create Map**. It shows in the Asset Library as an ordinary map picture.
+3. If it is for another map, pick the uploaded picture for that map in **Edit Map**.
+
+An uploaded picture is never painted over, so the copy stays as it is. (Mapmaker is not offered on it; mark it up with **Draw**.)
+
+**Drafts.** While you have paint not saved, your browser keeps a draft of it: at least every 10 seconds, and at once when you switch to another tab or app or your phone's screen goes off. If the page is reloaded or closed, or your phone drops it, open the map again and click **Mapmaker**. It asks "Restore your unsaved painting from 14:05?" (the time the draft was last written, and the day if it was not today):
+
+| Answer | What happens |
+|---|---|
+| **Restore my painting** | Mapmaker opens with your painting put back, not yet saved. **Undo** takes the restore back |
+| **Discard it** | The draft is dropped and Mapmaker opens on the picture as it was saved |
+| **Not now** (or `Esc`) | Nothing changes: the draft stays and Mapmaker stays off, until you click **Mapmaker** again |
+
+If the map's picture was saved or changed since the draft was written, or **Edit Map** changed the map's squares or grid size, the question says the painting "was painted on an older picture of this map". **Restore it over this picture** puts back what you painted, and only that, over the picture the map has now: what the newer picture holds around your strokes stays as it is. If the map's size changed, your painting is stretched with the picture, so it lands where you painted it on the map. **Undo** takes the restore back. **Save**, **Discard my painting** and deleting the map in the Map Library clear the draft, and a draft of a map deleted from another device is dropped the next time you open the campaign.
+
+A draft is kept in that browser only, for you and that map, and for each tab: two tabs painting one map keep a draft each, and neither touches the other's. **Mapmaker** offers the newest draft of the map from that tab, or from a tab you have closed since; a tab still open keeps its own. If **Mapmaker** opened before your browser had looked a draft up (it waits at most 3 seconds), that draft is kept, and offered once what you paint now is saved or discarded. (Over plain `http://`, unless the server is on the same computer, a browser cannot tell which tabs are open, so it offers the newest draft of any tab.) Another browser or device has its own drafts. Signing out deletes your drafts in that browser, so the next person to use it cannot find your unsaved painting there: save what you want to keep first (leaving the campaign page with paint not saved asks you first, as below). A tab still open with paint on screen keeps that paint, and keeps its draft too, except over plain `http://` with the server on another computer, where its draft is deleted with the rest and written again only after your next stroke in that tab. Clearing the browser's site data clears them too, and Safari (on a Mac, an iPhone or an iPad) may clear what a site keeps after seven days in which you have not used it, so do not leave a painting unsaved for a week. If the browser cannot keep drafts (some private windows), Mapmaker says "This browser cannot keep a draft of your painting, so save it often: what is not saved is lost if the page closes." once, and you paint on as before; if it is out of room it says "This browser has no room left to keep a draft of your painting" instead.
+
+**Asked before paint not saved goes.** With paint not saved on the map, Mapmaker asks "Save your painting?" before anything takes it off your screen: **Open to prepare** on another map, **Back to the table** (and your phone's **Back** while you prepare a map), **Set Active** on another map, the header's way back to the dashboard, and your browser's **Back**, on a computer or a phone. On a phone, **Back** closes any sheet or window that is open first, as it always does, and asks only after that.
+
+| Answer | What happens |
+|---|---|
+| **Save my painting** | It is saved over the map's picture, without the question **Save** asks (the question's own words say "Saving overwrites the map's picture."), then what you asked for happens. If the save is refused, nothing else happens and your paint stays |
+| **Discard my painting** | Your paint and its draft are dropped, then what you asked for happens |
+| **Not now** (or `Esc`) | Nothing happens, and your paint stays |
+
+Deleting the map in the Map Library asks "Discard your painting?" with **Discard my painting** and **Not now** only: a picture saved then would go with the map. **Bring everyone here**, and **Set Active** on the map you are on, ask nothing: the map stays on your screen and your paint with it, not yet saved, so your players see the picture as it was last saved until you click **Save** (if a save is under way, they are brought once it has landed).
+
+Reloading the page, closing the tab or typing another address gets your browser's own question instead, in the browser's words; if the browser does not ask, the draft keeps your painting. While you have paint not saved, CozyVTT keeps you signed in, and if you are signed out anyway the page stays where it is and the Mapmaker panel says so: sign in again in a new tab, then click **Save**.
+
+If the table is moved to another map from somewhere else (another tab of yours, say) while you have paint not saved on its map, your screen stays on that map, as a map you are preparing, with your paint. If the map leaves your screen without asking (it is deleted from another tab or device, or someone else becomes the DM), CozyVTT says "Your painting was not saved" and offers **Download my painting**, which saves it on your device as a PNG picture, or **Discard my painting**; until you choose, leaving the page is asked about as with paint not saved.
+
+**Download picture**, in the Mapmaker panel, saves the picture as it is now on your device, as a PNG named after the map, with what you painted and whether or not it is saved. It is the way to keep paint that cannot be saved: a picture over the server's size limit, a campaign deleted while you paint, or a sign-in that must be changed before anything else is saved.
+
+**Painting during play.** **Mapmaker** works on the map the table is on as well as on one you are preparing, so you can add a side passage while your players play. They see none of your strokes, and keep moving their tokens meanwhile: a token moved while you paint moves on your screen too, and your stroke and your paint not yet saved stay as they are. When you click **Save**, their picture changes where they are, without moving their view or dropping a token they are holding.
+
+A save can be refused: the picture must be within your server's size limit for a map picture (`MAX_MAP_SIZE_MB`, 50 MB unless your administrator changed it), and a painted picture of a large map with much detail can pass it, which the message says with both sizes.
+
+A save never deletes a picture: the drawn picture is written over, and an uploaded picture is never written over. If the map's picture was changed to an uploaded one elsewhere (below) and you save your painting over it, the painting becomes a new **Drawn map** picture and the uploaded one stays as it was in the Asset Library.
+
+**If the picture changes elsewhere.** If the map's picture is changed somewhere else while you have paint here not saved (in **Edit Map**, or by a save from another tab or device), your screen shows the new picture and asks what to do with your painting: **Save my painting over it**, **Discard my painting**, or **Not now**, which keeps it; **Mapmaker** then asks again when you press it. **Save** checks the map first, so a picture saved meanwhile from another tab is never replaced without asking. With nothing unsaved, Mapmaker simply gives way to the new picture. While a new picture is still loading on your screen, after a save from another device for instance, the picture before it stays on the map and **Mapmaker** is not offered until the new one has loaded; if it fails to load, the map says "Failed to load map image" and **Mapmaker** stays away until you reload the page. If that picture has been deleted from the Asset Library, **Mapmaker** is offered and starts a blank picture, as on a map with no picture. Mapmaker only ever opens on the map's picture as it is now, or blank.
+
+**Deleting a drawn map.** The **Delete Map** question in the Map Library offers **Also delete its picture from the Asset Library**, unticked, for a map you drew (never for one whose picture you uploaded). Tick it and the picture goes with the map, unless something else still uses it: then it stays, and the Map Library says so. Left unticked, the picture stays in the Asset Library for you to delete there.
+
 ### Switching Maps
 
-Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map on screen, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again.
+Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map the table is on, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again. **Set Active** always takes your own screen with the table, so if you were preparing another map (below), you stop preparing it.
 
 *GIF pending — Switching maps, showing player view update.*
 
+When you choose a new picture for the map on screen in **Edit Map**, everyone keeps the old picture until the new one has loaded, then changes at once. If it cannot be loaded, the old one stays with "Failed to load map image" over it, and the map can still be used.
+
 Plan your map order loosely in advance (forest → cave entrance → dungeon interior), but don't worry about locking anything in. You can switch maps freely during a session.
+
+### Preparing a map while the table plays
+
+You can work on any map of the campaign on your own screen while your players stay on theirs: draw its walls, place lights and creatures, hide tokens, paint fog and draw on it, then bring the table there when it is ready.
+
+1. Open the **Map Library** and click **Open to prepare** on the map you want. Every card but the active map's has it.
+2. The Map Library closes and the map opens on your screen. A banner over it reads, for example, "Preparing **Crypt**. The table is on **Village**." The map's card in the Map Library says **Preparing**.
+3. Work on it as on any map. Your players are sent nothing of it: not its picture, its tokens, its walls, lights and fog, its drawings or its name, and nothing tells them you are preparing a map. One thing of yours does show: a token picture you upload into the campaign's library for a creature there is in their Asset Library at once (see **Prepare ahead** below).
+4. When you are done, either:
+   - click **Back to the table** to see the table's map again. The map you prepared stays as you left it; or
+   - click **Bring everyone here** to make it the active map, as **Set Active** does. You are asked which of the tokens on the table's map to bring along, and everyone, you included, is then on the new map.
+
+While you prepare a map:
+
+| What | How it works then |
+|---|---|
+| The table's map | Your players keep playing on it. Their token moves, pings and drawings are not shown on your screen; **Back to the table** loads the table's map again, as it is by then |
+| **Preview Player View** | Off, greyed out and marked **Off while you prepare a map**. Your players have never seen this map, so there is nothing to preview. After **Back to the table** it is offered again, and starts off |
+| Rolls from its tokens | A roll from a token's **Roll...**, from its sheet, or from its row in the initiative tracker goes to you alone, as a secret roll, so the creature's name never reaches the dice log |
+| The initiative tracker | Shows the table's fight. **Add Combatant** lists the tokens of the map you are preparing; your players are not sent a combatant you add there until the table comes to that map |
+| The campaign's own controls | Still change every player's screen, as **What reaches the table?** on the banner says: the **Spirit Layer** (opening it, its style, who is in the realm), **Atmosphere**, the vibe and the session controls. Anything you do to the map itself (its walls, lights, fog, tokens, drawings and settings) is for the map you are preparing |
+| Reloading the page | Brings you back to the map you were preparing, in that tab only. Another tab of yours stays on the table's map, unless you made it by duplicating this one, which copies what it was showing |
+| Two of your tabs on one prepared map | Each shows the other's walls, lights, fog and drawings as you make them, but not an **Edit Map** save, a token's switches or a placement; open the map again in the other tab to see those |
+| Your phone's **Back** | Takes you back to the table, as **Back to the table** does, asking first about paint not saved (see [Drawing a map](#drawing-a-map)) |
+| Another tab, or a handover of the DM seat | Making the map you are preparing active from anywhere ends preparing and shows it with the table. If someone else becomes the DM, or the map is deleted, your screen goes back to the table's map and a message says why; paint not saved on it is offered to you as a picture to download |
+
+A map picture you upload while preparing stays out of your players' Asset Library until the table is on a map using it (see **Prepare ahead** below).
 
 ### Map Best Practices
 
 - **Resolution matters** — Maps look best at 70–100 pixels per grid square. Going higher increases load time without visible benefit at normal zoom levels.
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
-- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign**, so a map you prepare stays a surprise (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, so a map picture you upload as **Campaign** from the Asset Library can be seen there before you switch to the map, as can a token image uploaded from inside the campaign. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
+- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play, or prepare the next one during play with **Open to prepare** (see [Preparing a map while the table plays](#preparing-a-map-while-the-table-plays)). Players cannot see a map until you switch to it: its picture, walls, lights and tokens stay yours alone while you prepare it. A map picture stays out of your players' Asset Library until the table is on a map using it, whether it is in your **Personal** library or the campaign's, and leaves it again when the table moves on. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Token images are not hidden: one uploaded into the campaign's library, for a creature you mean to bring in later, can be seen there at once, and neither is a picture in the **Global** library, which is everyone's. Your instance's administrators can open every picture on it, a prepared map's included
 - **Keep backups** — Export important maps so you can recover them if needed
 - **Your campaign's library** — In the Asset Library you can delete or move any asset in your campaign's library, the ones your players uploaded included. Only the player who uploaded one can move it to **Personal**, since that is their own library and would take it out of the campaign
-- **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
+- **Deleting art a map uses** — Nothing deletes art without asking. Saving a drawn map writes over its picture, after asking (see [Drawing a map](#drawing-a-map)). Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, or a document that someone in the campaign who can see the picture wrote shows it by its address, a second window lists them (you see names for the campaigns you run, your own characters, your own documents, global documents, the documents of the campaigns you run and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
 
 ---
 
@@ -228,7 +375,7 @@ The Token Manager opens on the form for a new token. Fill in what applies, then 
 
 ### Token Roster
 
-The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them. If an action fails, a message pops up saying what went wrong. Removing a token, here, in the Token Manager, in the quick editor or with **Remove from Map** in the token's right-click menu, asks first and names the token.
+The **Token Roster** (visible only to you, in the left sidebar) lists all tokens on the current map. Point at a token in the list for its actions: edit it, hide or show it, obscure or reveal its identity, duplicate it, or remove it. The buttons stay visible on a touch screen and while you tab through them. On a phone or a tablet they are bigger, at least 44 pixels square, and go on a line under the token's name when the panel is narrow; so do a combatant's die and bin in the initiative tracker, whose grip and name are as big (see the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen)). If an action fails, a message pops up saying what went wrong. Removing a token, here, in the Token Manager, in the quick editor or with **Remove from Map** in the token's right-click menu, asks first and names the token.
 
 ### Placing Tokens on the Map
 
@@ -238,7 +385,11 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 - **NPCs and monsters** — the **Place on Map** button on a creature in the **Creature Library**, or on a token template.
 - **Anything you built yourself** — **Place on Map** in the **Token Manager**.
 
-Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
+Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. While you hold one, the bottom left of the map shows how far it has come from its square, such as "Carried 15 ft (3 sq)", measured as the ruler measures (the player guide's [Moving Your Token](PLAYER_GUIDE.md#moving-your-token) has it in full); in Player Preview it shows only for a token the preview draws. You can move any token at any time, a paused or ended session included. On a touch screen, put your finger on a token and slide it to the square, or tap it and then tap the square, as the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) describes; with a wall, fog or light tool or **Draw** up, your finger goes to the tool instead.
+
+Clicking a token also selects it, with a dashed light-blue ring, and right-clicking a token selects the one whose menu opens. A click on empty ground clears the selection; dragging the map leaves it alone. While a wall, fog or light tool, **Draw**, the ruler or the area template is up, or **Ping** is pressed, a click goes to that tool, so the selection stays as it was. Switching maps starts with nothing selected.
+
+**From the keyboard.** Once you have clicked the map, the arrow keys move the selected token a square, or five with **Shift**, with the view following it, and **[** and **]** turn it 45 degrees. **,** and **.** (or **<** and **>**) step through every token the map shows you, hidden ones included: in the turn order during a fight, the rest row by row from the top, and the view pans to keep the selection in sight, two squares in from the edge. **Enter** opens the token's menu at the token, panning it into view first and keeping the menu inside the map. **Esc** lets go of one thing a press: the menu, the armed **Ping**, a held token, your tool, then the selection. While the wall **Select** tool holds walls, the arrow keys move the walls instead (see [Selecting and Moving Walls](#selecting-and-moving-walls)). The keys go to the map only while it has the keyboard: a click anywhere else, such as on the chat or a panel, gives them to that, a window open over the map takes them, and **Shift+Tab** takes the keyboard back to the page. A selected token your screen no longer draws, such as one in a preview that the previewed player cannot see, stays selected and the keys leave it alone.
 
 *GIF pending — Placing a token and moving it into position.*
 
@@ -268,9 +419,21 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
 - Set which way the token faces in **Facing**, in degrees clockwise (see [Turning a Token](#turning-a-token))
-- Apply or remove conditions. A D&D 5e campaign is offered all fifteen D&D 5e conditions, the same set the character sheet uses, and a Call of Cthulhu campaign the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. In every game system you can also type a condition of your own, such as *Frightened 2* or *Blessed*, and press Enter or **+** to add it; it can be up to 60 characters, and a token can carry up to 50 conditions. Typing a listed condition adds the listed one, and one the token already has is not added twice. Click a condition above the list to take it off. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
+- Apply or remove conditions. A D&D 5e campaign is offered all fifteen D&D 5e conditions, the same set the character sheet uses, and a Call of Cthulhu campaign the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. Under the D&D 5e conditions, an **Effects** group offers the states a spell, a class feature or an action leaves a creature in, which the rules do not count as conditions: **Baned**, **Blessed**, **Concentrating**, **Dodging**, **Hasted**, **Hexed**, **Hunter's Mark**, **Raging** and **Slowed**. An effect goes on and comes off as a condition does. In every game system you can also type a condition of your own, such as *Frightened 2* or *Marked*, and press Enter or **+** to add it; it can be up to 60 characters, and a token can carry up to 50 conditions and effects. At 50, the listed ones it doesn't carry and the **+** button are greyed out, with a note saying so, until you take one off. Typing a listed condition or effect adds the listed one, in any capitals and with a straight or a curly apostrophe, and one the token already has, spelled either way, is not added twice. Click a condition above the list to take it off. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. The effects have codes of their own: **BA** Baned, **BS** Blessed, **CO** Concentrating, **DO** Dodging, **HA** Hasted, **HX** Hexed, **HM** Hunter's Mark, **RG** Raging and **SL** Slowed. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, or tap it on a touch screen, players included — they can't act around a condition they can't identify
 
 If a change cannot be saved, for example while the connection is down, a message says why. A button or a list goes back to what it was; what you typed into a box (the name, initiative, notes or the stat block) stays there, so you can put it right and save it again. Changes made to the token elsewhere while the editor is open, by you in another tab or by a player on their own token, show as they arrive. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
+
+### Granting Temporary Hit Points
+
+Right-click a token (on a touch screen, press and hold it), or a character in the **Campaign Roster**, and choose **Temporary HP...**. Type how many, from 1 to 99,999, and press **Grant**.
+
+Temporary hit points don't add together, in D&D 5e or in Pathfinder 2e. When the creature already has some, the window offers **Keep N**, which leaves the ones it has, and **Take M**, which swaps them for the new ones. The rules let the creature decide, and whoever grants them chooses for it: you choose for the table's creatures, and for a player's character, so ask the player. With none, the new ones are given at once.
+
+- **On a creature's token** they go on the token's own hit points, the ones **Edit Token** shows. It's offered once the token has hit points; add them in **Edit Token** first.
+- **On a character's token, or a character in the roster,** they go on the character's sheet, and every token of that character shows them.
+- **Players** get the item on their own characters, from the roster or from their token, but not on a creature they control or on another player's character.
+
+A Call of Cthulhu sheet keeps no temporary hit points: its rules give one only while First Aid keeps a dying investigator stable, which the sheet doesn't track. So the item isn't offered there, nor in a campaign with no game system.
 
 *Screenshot pending — NPC quick editor popup with image picker.*
 
@@ -279,9 +442,10 @@ If a change cannot be saved, for example while the connection is down, a message
 A token can face any direction, to show which way a creature is looking or a cart is pointing ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)):
 
 - **Right-click the token** and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees. The menu stays open, so press again to keep turning.
+- **Select the token and press [ or ]** to turn it 45 degrees anticlockwise or clockwise, held or not.
 - **For an exact angle,** open **Edit Token** and type it in **Facing**, in degrees clockwise: 0 is the picture as uploaded, 90 a quarter turn to the right. A full turn wraps round, so 405 becomes 45.
 
-The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
+The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. Quick turns are sent one after another, so the token ends facing the way it was turned last; a turn the server refuses goes back to the facing it last stored, with a message saying why. A player can turn a token they control the same way, from its right-click menu or with **[** and **]**, whenever they can move it; while the session is paused or has ended, as with moving, they can't. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
 
 #### Changing a Token's Image
 
@@ -317,7 +481,9 @@ Right-click an NPC token on the map (DM only) and choose **Roll...** to open the
 - **Skills** — the skills the stat block records a bonus for, each labelled with the ability it uses. Anything else is covered by the ability checks above
 - **Combat** — attack rolls (`+N to hit` parsed from action descriptions) and damage rolls (every `XdY+Z` expression extracted from each action)
 
-For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage** selector that rewrites the dice expression before rolling (`2d20kh1` / `2d20kl1`). Pathfinder 2e shows the same selector labeled **Fortune / Misfortune**.
+For d20 systems (D&D 5e, PF2e) the picker also has a **Roll mode** list of **Normal**, **Advantage** and **Disadvantage**, which rewrites the dice expression before rolling (`2d20kh1` / `2d20kl1`). In Pathfinder 2e it reads **Normal**, **Fortune** and **Misfortune**.
+
+> **Rolling from a player's sheet.** You can roll from any player character's sheet, opened from the **Campaign Roster**, as its player can: a click rolls a stat, a right-click on an ability, a save, a skill or an attack (on a touch screen, press and hold it) offers **Normal**, **Advantage** and **Disadvantage** for that roll, and **Roll mode** in the sheet's header sets one of them for every such roll until you change it or close the sheet. It starts at **Normal** each time the sheet opens and is not saved. A Pathfinder 2e sheet names them **Fortune** and **Misfortune**; a Call of Cthulhu sheet has neither. The roll goes to the dice log under the character's name. See [Rolling from your sheet](PLAYER_GUIDE.md#rolling-from-your-sheet).
 
 > **Tokens linked to a player's character** are the exception. They roll from the character sheet rather than from a stat block, so their menu offers the sheet's own **Roll...** and a **View Character Sheet** entry instead of the NPC picker. Both used to be listed at once, which put two identical-looking **Roll...** entries on the same menu. Both are offered only while the character is in this campaign: a token keeps its character after the character leaves, and then offers neither. A sheet that cannot be loaded says why.
 
@@ -347,7 +513,7 @@ The **Dice** tab keeps the rolls made in your campaign in a scrolling list, olde
 
 Your players are told this plainly now. The secret-roll checkbox used to read "only you can see", which was not true and set an expectation you could not keep; it reads "hidden from other players" instead, and the confirmation says your DM can still see it. Nobody is going to be surprised later that you were watching.
 
-**Clearing it.** Only you can, using the **Clear** button (with a trash icon) at the top of the Dice panel, and confirming with **Clear History**. It empties the panel for everyone and stays empty when they reload. The rolls aren't destroyed — they're hidden from the panel from that point on, so a dispute about what someone rolled an hour ago is still settleable from the database. Ending a session does *not* clear history; if you want a clean slate, clear it yourself.
+**Clearing it.** Only you can, using the **Clear** button (with a trash icon) at the top of the Dice panel, or on a phone under **More**, beside the expression, and confirming with **Clear History**. It empties the panel for everyone and stays empty when they reload. The rolls aren't destroyed — they're hidden from the panel from that point on, so a dispute about what someone rolled an hour ago is still settleable from the database. Ending a session does *not* clear history; if you want a clean slate, clear it yourself.
 
 > **One exception.** While a session is **paused**, players' rolls from the **Dice** tab are worked out in their own browser and never sent to the server — that's deliberate, so a paused table can still fiddle with dice without it counting. Those rolls aren't in the history and won't survive a refresh. A roll from a character sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
@@ -419,7 +585,7 @@ Click any creature in the library to expand its details, then click **Place on M
 
 ### Creating Custom Creatures
 
-Click **Create Custom** at the top of the Creature Library to create a custom creature template. Fill in:
+Click **Create Custom** at the top of the Creature Library to create a custom creature template. On a screen narrower than 1,024 pixels, such as a phone or most tablets held upright, the form opens in place of the list, and **Back to the list** at its top, **Cancel** or saving takes you back to the list; on a wider screen it opens under the list. **Edit** on a custom creature opens the same form. Fill in:
 
 - **Name** — Required
 - **Stat Block** — The creature's combat stats (AC, speed, ability scores, attacks, etc.)
@@ -504,6 +670,14 @@ changes it. The stat block then reads as Pathfinder prints one: its level, its
 modifiers, and Fort, Ref and Will. A D&D creature used in a Pathfinder campaign
 keeps its Challenge Rating, shown as CR.
 
+**In Call of Cthulhu** nothing is worked out, because the rules have no
+Challenge Rating or proficiency bonus. There's no Challenge Rating box, and a
+rating a creature was given before 1.6.0 is kept but no longer shown. The six
+score boxes are named as the stat block shows them (STR, DEX, CON, INT, POW and
+APP), and **Skills** takes each skill by name with the number the creature's
+stat block prints. For now a characteristic can be at most 30 and a skill at
+most 50, so a creature with higher numbers can't be entered in full yet.
+
 ### Editing Custom Creatures
 
 Click the **pencil icon** (Edit creature) next to any custom creature in the library to open it for editing. You can update any field — name, stat block, saving throws and skills, image, disposition, display mode, and all advanced stats (traits, actions, legendary actions, etc.).
@@ -546,7 +720,7 @@ Click **Token Templates** (the stamp icon) in the campaign header. The panel sli
 
 There are two ways to create a template:
 
-1. **From the library** — Click **New Template** and fill in the form: name, image, type (NPC/player/object), disposition, display mode, size, HP, notes, and optional stat block.
+1. **From the library** — Click **New Template** and fill in the form: name, image, type (NPC/player/object), disposition, display mode, size, HP, notes, and optional stat block. On a screen less than 1,024 pixels wide the form, and the one **Edit template** opens, take the list's place, as in the Creature Library: **Back to the list**, **Cancel** or saving takes you back.
 2. **From the map** — Right-click any token on the map and select **Save as Template**. This captures the token's current image, type, disposition, display mode, size, HP, notes, and stat block.
 
 **Max HP** is the template's hit points. **Show HP Bar** only decides whether players see them, so a monster can have hit points with its bar hidden. Leave Max HP empty for something that has no hit points, such as a chest.
@@ -586,12 +760,12 @@ A large campaign takes as long to export as your connection needs; nothing gives
 **Size limit.** A campaign archive can hold up to **500 MB** of pictures, sound and campaign data, which is the most an import accepts. If the campaign's files add up to more, **Export Campaign** says how large they are instead of making an archive no server could import. If leaving out audio would bring it under the limit, the message says so; otherwise remove maps or pictures the campaign no longer uses and export again. Each person can export 20 campaigns an hour, one at a time.
 
 **What's included:**
-- All maps (images, grid settings, wall segments, fog, lighting)
+- All maps (images, grid settings, wall segments, fog, lighting, and the drawings, those for you alone included)
 - All tokens placed on maps
 - Custom creatures and their stat blocks
 - Token templates
-- All associated asset files (map images, token images) that you can open yourself. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact. Such a map shows "This map has no picture" until you choose one in **Edit Map**; a token without one is drawn as a plain marker until you choose one in **Edit Token**
-- Campaign settings (name, description, game system, vibe settings, spirit layer)
+- All associated asset files (map images, token images) that you can open yourself. Those in the campaign's own library and in your own **Personal** library go with their name, description and tags, so the Asset Library shows them in the imported campaign as it does here, and its search and tag chips find them as they did. A picture from another member's own library that the campaign uses, such as a player's token art, goes as its file alone, named after it in the imported campaign: what its owner called it stays theirs. A picture that has been deleted, or that someone uploaded to their own library and who has since left the campaign, is left out: the map or token that used it arrives without a picture, with everything else intact. Such a map shows "This map has no picture" until you choose one in **Edit Map**; a token without one is drawn as a plain marker until you choose one in **Edit Token**
+- Campaign settings (name, description, game system, vibe settings, spirit layer, **Players may draw**)
 - With **Include audio assets** ticked, the sound files the atmosphere uses, so each period and the ambient track play again in the imported campaign. Without it, the imported campaign's periods and ambient sound have no track, the import window says which, and you can choose new ones in the Atmosphere panel
 
 **What's NOT included:**
@@ -600,6 +774,7 @@ A large campaign takes as long to export as your connection needs; nothing gives
 - Session records
 - SRD creatures (they're re-imported on the target instance)
 - User accounts or membership data
+- A picture or sound file that is itself a symbolic link on the server; the backend log names it
 
 ### Importing a Campaign
 
@@ -621,7 +796,7 @@ The imported campaign is created fresh with new IDs — it does not interfere wi
 - **Kept as it was:** everything a campaign made in CozyVTT holds, up to the limits the app itself has: maps up to 500 by 500 squares with any grid size from 10 to 500, up to 1,000 tokens, 5,000 walls and doors and 200 lights on each map, and their fog. The Map Library lists the maps in the order the original did, and the campaign opens on the oldest.
 - **Refused as a whole:** an archive of more than 1,000 files (one for each map and each picture or sound file), or with more than 10 MB of creatures, of token templates or of one map's data. Nothing is imported. Exporting checks the same limits and says when a campaign is over them, so a campaign that exports can be imported again.
 - **Creatures and token templates past 2,000:** an archive carries up to 2,000 of each. Any after the first 2,000 are left out and listed under **Left out** as one line. Exporting a campaign with more than 2,000 custom creatures or token templates says so instead of saving an archive.
-- **Shortened:** a map name over 200 characters, a token name over 200 characters, token notes over 5,000 characters, and text or lists in a stat block longer than the creature editor allows (an action's description over 5,000 characters, say, or more than 50 actions). Older versions of CozyVTT stored some of these at any length, and an imported creature that kept them could not be placed on a map or saved.
+- **Shortened:** a map name over 200 characters, a token name over 200 characters, an asset's name over 200 characters or description over 1,000, token notes over 5,000 characters, and text or lists in a stat block longer than the creature editor allows (an action's description over 5,000 characters, say, or more than 50 actions). Older versions of CozyVTT stored some of these at any length, and an imported creature that kept them could not be placed on a map or saved.
 - **Game system:** a campaign or creature whose game system this server does not know, from a hand-edited archive for example, is imported with none.
 - **Moved:** a token that is not on a whole square, or that hangs off the edge of its map, is put on the nearest whole square inside it.
 - **Left out on its own:** a token that CozyVTT cannot store (one with no position, for example), and any tokens past the first 1,000 on a map. The rest of the map is imported. A stat block that cannot be stored even when shortened is left off its token or template, which are kept; a creature, which needs one, is left out.
@@ -662,7 +837,7 @@ The Campaign Roster in the left sidebar gives you a real-time view of all player
 
 ### Removing a Player
 
-To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**.
+To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**. For a spectator the question is **Remove Spectator** and the message "Spectator removed from campaign".
 
 **It takes effect at once**, even if they are in the session at that moment.
 They stop being able to chat, roll or move anything, and stop seeing what the
@@ -675,7 +850,23 @@ dashboard. Deleting a campaign does the same for everyone at its table, with
 the campaign: it stays theirs, but you and the other players can no longer open
 or edit its sheet, and nothing they change on it reaches your table except its
 picture. A token on the map that was bound to one of those characters stays
-where it is, still shows the character's picture, and follows it if they change it.
+where it is, and follows the character's picture if they change it. Whether
+someone at your table can see that picture depends on which campaign the
+character was in when the picture was saved:
+
+- **Your campaign:** the picture is in your campaign's library, and everyone at
+  your table goes on seeing it.
+- **No campaign:** it is the player's own file, which someone at your table can
+  see only while they share a campaign with the player.
+- **Another campaign:** it is that campaign's file, which someone at your table
+  can see only while they share a campaign with the player, or are in that
+  other campaign themselves.
+
+So once the player is out, the token shows its placeholder on every screen that
+can no longer see its picture. A picture they choose after they are out is
+saved the same way, as their own file while the character is in no campaign or
+as the other campaign's file while it is in one, so your table cannot see it
+either, apart from the cases above.
 
 **Their personal notes and saved rolls stay theirs.** Nothing they wrote in the
 **Notes** tab or saved under **Saved** is deleted. They can still read it, and
@@ -683,9 +874,18 @@ download it, from their dashboard, and it is back in the campaign if you invite
 them again. You still cannot see any of it. If you delete the campaign, their
 notes and saved rolls for it are deleted with it, along with everyone else's.
 
+**Players and spectators can also leave on their own**, with **Leave
+Campaign** in their **Campaign Info** panel; you are not asked. Leaving does
+what removing does: their characters leave with them, their notes and saved
+rolls stay theirs, their page says "You left this campaign.", and the rest of
+the table sees them go as after a removal. Their tokens stay where they are on
+the map, and their entries in the initiative order stay, for you to keep or
+remove. To have them back, invite them again.
+
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
-a player and you cannot remove them. Hand the seat back if you want to step away
+a player and you cannot remove them, so the remove button is not shown beside
+them. Hand the seat back if you want to step away
 (see [Handing the game to someone else](#handing-the-game-to-someone-else)).
 
 ### Call of Cthulhu: Keeper's Notes
@@ -710,7 +910,7 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 
 **Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking; if something still uses the document, a second window says where and removes it only if you choose **Delete anyway**. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
-A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers. **Edit** shows in the reader only for someone who can edit that document: who can is who can delete it (see [Editing](USER_GUIDE.md#editing) in the user guide).
+A picture in the campaign's library, uploaded with **Campaign**, that you embed in a handout by its address as the User Guide shows, shows to every member of the campaign in that handout, even a map picture of a map the table is not on: sharing the handout is showing the picture. That holds for a handout you wrote or uploaded yourself, written in the campaign or shared with it from your own documents or the global ones, while you are the campaign's DM; a handout of another campaign of yours shared with this one does not show this one's pictures; after the DM seat is handed over, it holds for the new DM's handouts and no longer for yours. A picture in your **Personal** library is not shown this way, and nor is a global document someone else wrote. A document is read for its pictures when you upload, write or save it: only its first 1 MB, and its first 200 addresses, far more than a handout holds, so a picture named after those does not count. Take a picture out of the handout, or stop sharing it, and players see it only while the table is on a map using it again. A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers. **Edit** shows in the reader only for someone who can edit that document: who can is who can delete it (see [Editing](USER_GUIDE.md#editing) in the user guide).
 
 As the DM you can edit any of the campaign's own documents, whoever wrote them, for example a co-DM who has since left. A DM who hands the seat on and leaves the campaign can no longer edit the documents they wrote there. A document shared in from someone's own library stays theirs to edit.
 
@@ -726,13 +926,13 @@ Two tools in the map toolbar help you work out what a spell or a move actually r
 
 **Your players have both tools too**, working the same way on their own screens, so a player can check their own spell's reach without asking you to measure it for them. The one difference is the ruler, below.
 
-**Ruler** (the ruler icon) — click a start point, then move the cursor to measure the distance between two squares in feet, using the map's own scale and its diagonal rule. For a player there's nothing to click: their ruler always measures from their own token.
+**Ruler** (the ruler icon) — click a start point, then move the cursor to measure the distance between two squares in feet, using the map's own scale and its diagonal rule. For a player there's nothing to click: their ruler always measures from their own token. On a touch screen, tap the start, which shows as a dot, and then the end, and the line stays; the third tap starts again. Or put your finger on the start and slide it to the end. While the ruler is up a finger measures and does not move the map; use two fingers for that. While you hold a token you tapped, a tap puts it down, as it would with the ruler away.
 
 **AoE Shape** (the lightning icon) — overlays a spell area on the map. Pick **Circle**, **Cone**, **Line** or **Cube**, set the size in feet (or use a preset), and move the cursor to position it. Click the map to pin the shape in place; with a shape pinned, moving the cursor aims cone and line templates. Press **Esc** to drop the placement, and again to put the tool away.
 
 **Aiming a cone or line.** Click the square the effect comes from — usually the caster's token — and that square becomes the pivot. Moving the cursor then swings the shape around it, and the point it starts from slides around that square's edge to follow: straight out the middle of an edge when you aim along a row or column, out the corner when you aim diagonally. It always leaves on the side you're aiming at, so the shape sweeps *around* the token rather than back through it. The pivot stays put however far you swing, so you can keep turning until you've found what the attack actually catches.
 
-**Placing something away from the caster.** Some effects aren't measured from anyone — a wall of fire is a line you drop wherever you like within range. **Alt+click** places the shape freely: it ignores the grid and pins the origin exactly where you clicked, and the shape then turns about that point.
+**Placing something away from the caster.** Some effects aren't measured from anyone — a wall of fire is a line you drop wherever you like within range. **Alt+click** places the shape freely: it ignores the grid and pins the origin exactly where you clicked, and the shape then turns about that point. Unticking **Snap to grid** in the AoE panel does the same for every click or tap until you tick it again, which is the way on a touch screen.
 
 Otherwise templates snap to your map's grid, so a shape covers whole squares rather than straddling them:
 
@@ -742,6 +942,34 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 - **Circle** — centred on the square under the cursor
 
 > Sizes use the map's **feet per square** setting (**Grid Scale** in Edit Map), which defaults to 5 ft. If your templates look twice or half the size you expect, check that value first.
+
+### Drawing on the map
+
+Draw is for marking up any map with a picture, and the whole table sees it live; to change a map's own picture, on a map you drew, use **Mapmaker** (see [Drawing a map](#drawing-a-map)). On a map with no picture, or one showing "Failed to load map image", **Draw** is not in the toolbar until the map has a picture again. Click **Draw** (the pencil, after **Ping** in the map's toolbar) to open the drawing tools at the top of your tool panels, with the pen chosen. What you draw shows on every screen that has the map, live as you draw it, and stays on the map until it is erased. Click **Draw** again, the **×** on the panel, or press **Esc** with nothing half-drawn to put the tools away.
+
+| Tool | How |
+|---|---|
+| **Pen** | Drag to draw freehand. A click makes a dot. |
+| **Line**, **Arrow** | Drag from one end to the other. An arrow's head is where you let go, and grows with the width. |
+| **Rectangle**, **Ellipse** | Drag from one corner of the box to the other. |
+| **Polygon** | Click or tap each corner, then the first corner again, or **Done** in the panel, to close it once it has three. **Cancel**, or **Esc**, drops it. |
+| **Text label** | Click or tap where the label's top left corner goes, type up to 200 characters and press **Enter**. **Esc** drops it, and a click elsewhere on the map keeps it and starts another. Its letters are four times the width tall. |
+| **Eraser** | Click or tap a drawing to erase it. |
+| **Laser pointer** | Drag to point. Everyone sees the trail fade within 3 seconds of where you pointed; nothing is kept. With reduced motion turned on in your system the trail does not fade: it shows whole for 3 seconds, then goes. |
+
+- **Colour**: one of the eight in the panel, or **Another colour** for any other.
+- **Width**: from 1 to 64, in the map's own pixels, so a stroke grows and shrinks with the zoom like the map does.
+- **Fill shapes**: fills a rectangle, an ellipse or a polygon with its colour, which the map shows through.
+- **Snap to grid**: puts the ends of lines and arrows, and the corners of shapes and polygons, on the nearest corner or middle of a square.
+- **Only I can see this**: the drawing is yours alone. On your screen it is dashed and faded, so you can tell it from what the table sees; it never reaches a player's browser, and it is left out of **Preview Player View**. The box is not offered with the laser pointer, which goes to everyone.
+
+While the drawing tools are up a click draws: it picks up no token and opens no door. The right mouse button moves the map, and with a finger two fingers move and pinch it. One finger draws; for the eraser, the text label and the polygon a tap acts and a slide moves the map. A second finger, or **Esc**, drops a stroke you are drawing from every screen; the laser pointer's trail fades as it would.
+
+Drawings are the topmost layer of the map: they show over the tokens, and over a player's fog and the dark of a lit map, so the table can plan over ground it cannot see yet ("we'll head this way"). A drawing for everyone shows to every player wherever it is; to keep a note from the players, tick **Only I can see this**. **Preview Player View** shows the drawings over its fog, as a player sees them, and none of yours alone.
+
+Players can draw too, while **Players may draw** is on in Campaign Settings' **General** tab, except while the session is paused or has ended; a spectator cannot. The switch is on in every campaign until you turn it off. While a player may not draw, their **Draw** offers only the eraser and **Clear mine**, for drawings of their own on the map, and is gone when they have none. When you turn the switch off, a stroke a player is drawing fades from the other screens within about 4 seconds, and the drawings players made stay until erased. A player can erase only their own drawings, with the eraser or **Clear mine**, and you can erase anyone's. **Clear drawings** erases every drawing on the map, yours and the players', after asking. Under it, your **Draw** panel lists each other member with drawings on the map, with how many, as **Clear Mara's drawings (3)**: it erases that member's drawings alone, for everyone, after asking, and leaves everyone else's. Someone who has left the campaign is listed as **Clear the drawings of someone who has left**.
+
+A map's drawing is shared out: your drawings, and every drawing for you alone, have room of their own, and the players' drawings share the rest, so one player cannot fill the map and stop you drawing. Each share holds 1,000 drawings, and 100,000 points between them, so that a map always fits in a campaign export. Past either, a new drawing is refused, "Your share of this map's drawing is full. Erase some first." for you and "The players' share of this map's drawing is full. Erase some first." for a player, and the stroke goes from the map. The drawings for everyone of someone who has left the DM's seat, or the campaign, count to the players' share; their drawings for the DM alone stay in yours, so the players' share holds only drawings the players can see. A pen stroke keeps only the points it needs to follow its line to within 2 pixels on screen. A campaign export carries every drawing, yours alone among them, and an import brings them back; a Universal VTT export does not carry drawings. When **Edit Map** changes a map's size, its drawings are stretched with it, as its walls are.
 
 ### Starting a Session
 
@@ -761,7 +989,7 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
-- Disables token movement for players
+- Stops players moving and turning their tokens and drawing on the map; they can still erase their own drawings
 - Shows players a banner above the map: *Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*
@@ -770,7 +998,7 @@ Click **Resume Session** when you're ready to continue. The same session carries
 
 ### Ending a Session
 
-Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens until you start the next session. Nothing needs saving: token positions, fog, walls, lights, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
+Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens or draw until you start the next session. Nothing needs saving: token positions, fog, walls, lights, drawings, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
 
 Untick **Save game state** in the dialog to take no new snapshot. If you paused during the session, the snapshot taken then stays with the record. An ended session cannot be resumed; the next game is a new session.
 
@@ -805,6 +1033,8 @@ As the DM, chat works the same as it does for players — type and hit Enter to 
 
 This is perfect for behind-the-screen perception checks, wandering monster rolls, and dramatic reveals.
 
+**Whispers.** Choose one member in the **To** list above the message box, or start a message with `/w` or `/whisper` and their name, and only the two of you see it (see [Whispering to one person](USER_GUIDE.md#whispering-to-one-person)). Your whispers keep the DM's shield, and players find you in a **DM** group of your own at the top of their **To** list, so nobody can pass for you by taking your name. Players can whisper to you and to each other, and a whisper between two players is theirs alone: you do not see it, live or in the chat history. Whispers are stored like all chat, so whoever runs the server can read them in its database and its backups. If someone uses whispers to harass another member, removing them from the campaign stops it at once (see [Removing a Player](#removing-a-player)).
+
 *Screenshot pending — Secret dice roll option.*
 
 ### The Vibe Tracker
@@ -814,6 +1044,82 @@ The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time
 Switching the period as the story moves on, from a bright afternoon to a cold night on the road, sets the mood before you say a word.
 
 *GIF pending — DM changing the vibe and player view updating.*
+
+### Keyboard Shortcuts
+
+Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo, and for **Mapmaker** (see [Drawing a map](#drawing-a-map)):
+
+| Action | Shortcut |
+|--------|---------|
+| Nudge the selected walls one pixel | `Arrow keys` |
+| Nudge the selected walls one square | `Shift + arrow keys` |
+| Select every wall, in **Select** mode | `Ctrl + A` |
+| Add a wall to the selection, or take it out | `Shift + click` |
+| Delete the selected walls | `Delete` `Backspace` |
+| Finish a wall line | `Double-click` |
+| Undo the last wall change | `Ctrl + Z` |
+| Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
+| Select part of the picture, while **Mapmaker** is on | `S` |
+| Paint with the brush, while **Mapmaker** is on | `B` |
+| Erase to the map's own colour, while **Mapmaker** is on | `E` |
+| Paint a line, while **Mapmaker** is on | `L` |
+| Paint a rectangle, while **Mapmaker** is on | `R` |
+| Paint an ellipse, while **Mapmaker** is on | `O` |
+| Paint a polygon, corner by corner, while **Mapmaker** is on | `G` |
+| Paint a curve, bent by a second drag, while **Mapmaker** is on | `C` |
+| Close a polygon or paint a curve as it is, while **Mapmaker** is on | `Enter` |
+| Take a polygon's last corner back, while **Mapmaker** is on | `Backspace` |
+| Paint a room, whose walls are added when it is saved, while **Mapmaker** is on | `M` |
+| Paint a stamp into a square, while **Mapmaker** is on | `P` |
+| Fill an area, while **Mapmaker** is on | `F` |
+| Paint a line of text, while **Mapmaker** is on | `T` |
+| Take a colour from the picture, while **Mapmaker** is on | `I` |
+| Copy, cut or paste the selection, while **Mapmaker** is on | `Ctrl + C` `Ctrl + X` `Ctrl + V` |
+| Select the whole picture, while **Mapmaker** is on | `Ctrl + A` |
+| Erase the selection to the map's own colour, while **Mapmaker** is on | `Delete` `Backspace` |
+| Put the selection down, while **Mapmaker** is on | `Enter` |
+| Keep a painted line to 15 degree steps | `Shift + drag` |
+| Make the brush narrower or wider, while **Mapmaker** is on | `[` `]` |
+| Undo the last change to the picture, while **Mapmaker** is on | `Ctrl + Z` |
+| Redo a change to the picture, while **Mapmaker** is on | `Ctrl + Y` `Ctrl + Shift + Z` |
+
+On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token. While **Mapmaker** is on, `[` and `]` change the brush's width and turn no token, `Ctrl + Z` undoes a stroke and no wall change, the arrows do nothing, and `Delete` and `Backspace` act only on Mapmaker's selection or the polygon you are painting, never on a token or a wall.
+
+### On a touch screen
+
+On a tablet, everything the player guide's [On a touch screen](PLAYER_GUIDE.md#on-a-touch-screen) describes works for you, on every token. And:
+
+| To | Do this |
+|---|---|
+| Open a token's menu, for **Edit Token**, **Hide from Players** and the rest | Press and hold the token for half a second. It is the menu a right-click opens there, item for item. |
+| Lock or unlock a door | Press and hold the door for its menu. A tap opens or closes it, as a click does. |
+| Put a character on the map | Drag it by the grip at the start of its row in the **Campaign Roster**, or press and hold the row and choose **Add to Map**. |
+| Reorder the initiative tracker | Drag a combatant by the grip at the left of its row, or tap the up and down arrows on its row to move it one place. |
+| Put the tool panels back in their corner | Tap **Reset position** on the bar above them, there once you have moved them. |
+| Paint a map you drew | One finger paints and a tap makes a dot; two fingers move and zoom the map, and a second finger landing while you paint drops that stroke. A stylus paints as a finger does. See [Drawing a map](#drawing-a-map). |
+| Use a wall, fog or light tool, or **Draw** | Your finger is the mouse (see [The Wall Drawing Tool](#the-wall-drawing-tool) and [Drawing on the map](#drawing-on-the-map)). While one of these tools is up, holding a finger still opens no menu and pings nothing, so you can rest it on a wall's end and then drag, and a double tap pings nothing either. To finish a wall line, tap **Done** in the Walls panel. Put the tool away to open a menu by holding, or to ping by a double tap. |
+
+A stylus never opens a menu by holding; use a finger.
+
+### On a phone
+
+On a phone, on most tablets held upright and in a browser window narrower than 1,024 pixels, the campaign page has its compact layout: the map across the screen, a bar of buttons along the bottom and everything else in sheets that rise over the map (see [The campaign page on a phone or tablet](USER_GUIDE.md#the-campaign-page-on-a-phone-or-tablet)). Your tools are all there:
+
+| On the desktop | On a phone |
+|---|---|
+| **Owner Settings**, for the owner once someone else is the DM | **More**, under **Owner**: **Owner Settings** |
+| The header's DM toolbar: **Map Library**, **Token Manager**, **Creature Library**, **Token Templates**, **Spirit Layer**, **Atmosphere**, **Campaign Settings** | **More**, under **DM tools**. Each opens the same panel, which fills the screen; the phone's **Back** closes it |
+| **Campaign documents**, **Keyboard shortcuts** | **More**: **Documents**, **Shortcuts** |
+| The **Session** tab (session controls, the vibe, past sessions) and **Notes** | **More**: **Session**, **Notes** |
+| The left column: **Campaign Info**, the **Campaign Roster**, the **Token Roster** | **Party** |
+| The **Fog of War**, **Walls** and **Lights** panels at the top right of the map | The map's **More**, then **Show tools**. The panels show at the top right, folded, as on the desktop; **Hide tools**, in the map's **More** or on the bar above the panels, puts them away and puts down the tool you had up |
+| The spirit tokens button in the map's toolbar | The map's **More**: **Show spirit tokens** |
+| **Draw** | **Draw**, in the map's toolbar: its tools open in a strip across the foot of the map, with the map above it to draw on. **Clear…** offers every drawing or one member's, and asks before it clears |
+| **Mapmaker**, and its panel | The map's **More**: **Mapmaker** (**Put Mapmaker away** while it is on). Its tools open in a strip across the foot of the map, with the map above it to paint on: **Undo**, **Redo**, **Save** and **Done** at its top, the tools in a row that scrolls sideways (an end with more past it fades out under an arrow), the button with the two colours and, for example, **Black, 6 px** on it (a screen reader calls it **Colour and width**), which opens the two colours, the palette and the width over the strip (`Esc` or a tap elsewhere closes it), and **Download picture**. On a phone on its side the tools sit beside **Mapmaker** at the strip's top. Every control is at least 44 pixels |
+| **Preview Player View** | Stays on the map, at its bottom right, so the way back is always in sight |
+| The banner over a map you are preparing | The same, across the top of the map: on a phone upright its words take one row and **Back to the table**, **Bring everyone here** and **What reaches the table?** the next; on a phone on its side it is one row, with the buttons reading **Back**, **Bring everyone** and an info button. The phone's **Back** goes back to the table |
+
+A token's menu, a door's and a character's open as a list from the bottom of the screen, item for item the menus a right-click opens on the desktop. To put a character on the map, press and hold it in **Party**'s roster and choose **Add to Map**. Turning a tablet between upright and sideways keeps everything as it was, **Preview Player View** and **Mapmaker** with what you have painted included, so a tablet propped up for the table stays in the players' view.
 
 ---
 
@@ -855,7 +1161,7 @@ Since values are saved on the token, you can always click a number and correct i
 
 ### Managing Turn Order
 
-Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances.
+Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances; on a touch screen, drag a combatant by the grip at the left of its row, since holding the rest of the row opens its menu, or tap the up and down arrows beside its dice button, which move it one place, as the arrow keys below do. A browser that cannot drag by touch still has the arrows.
 
 To reorder from the keyboard:
 
@@ -888,21 +1194,23 @@ This works for players too, and it's read-only — hovering never selects, moves
 
 You can roll for a combatant, or look something up on their sheet, straight from the tracker, without finding their token on the map ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)):
 
-- **Right-click a combatant's row** for the same sheet and roll choices as right-clicking their token on the map: **View Character Sheet** for a player's character, and **Roll...**, which opens the character's rolls or, for a creature, the rolls from its stat block.
-- **Double-click a player character's row** to open their sheet at once. Double-clicking a creature does nothing.
+- **Click or tap a combatant's name, or right-click its row,** for the same sheet and roll choices as right-clicking their token on the map: **View Character Sheet** for a player's character, and **Roll...**, which opens the character's rolls or, for a creature, the rolls from its stat block. On a touch screen you can also press and hold the row. The menu opens under the name.
+- **Double-click a player character's row** to open their sheet at once; on the name, the menu its first click opened closes as the sheet opens. Double-clicking a creature does nothing.
 - **From the keyboard**, press **Tab** until the combatant's name has the focus and press **Enter** to open the same menu.
 
-This works for combatants on the map you are showing. One whose token is on another map offers nothing until you switch to that map. Players get the same menu: any character's sheet, and rolls for their own character.
+**View Character Sheet** works whatever map a combatant's token is on: one on a map you are preparing, or one at the table while you prepare another. **Roll...** needs the token itself, so it is offered only for a combatant on the map on your screen; switch to its map, or open it to prepare, to roll for it. Rolls for a combatant on a map the table is not on, from **Roll...** or from its sheet, go to you alone. Players get the same menu: the sheet of any character whose token their map shows them, and rolls for their own character. On a map with lighting, a character out of a player's sight is listed in their tracker with no sheet to open, so the order never tells them who a combatant is before the map does.
 
 ### Pinging a Location
 
-Put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
+Click the map, put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
 
-- The cursor has to be over the map; Tab does nothing over the sidebar or chat.
-- Tab still behaves normally when you're typing or navigating with the keyboard, so it won't interfere with the rest of the interface.
+- The cursor has to be over the map's picture; Tab does nothing over the sidebar, the chat or the empty space around the map.
+- Tab pings only once you have clicked the map. While you type, or with a button or a panel divider focused, Tab moves between controls as usual, and **Shift+Tab** leaves the map.
 - Everyone can ping, and each person's colour is assigned automatically and stays consistent.
 - Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
 - Rapid repeat pings are rate-limited server-side and quietly dropped.
+
+Without a keyboard, click or tap **Ping** in the map's toolbar, then the spot. On a touch screen you can also tap an empty part of the map twice, quickly, while no tool is up, or press and hold it for half a second; a press and hold on a token or a door opens its menu instead (see [On a touch screen](#on-a-touch-screen)). Two taps on a token pick it up and put it back, as they always have, and ping nothing, so to point at a token use **Ping** or **Tab**. The player guide's [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map) has the double tap in full.
 
 ### Updating HP
 
@@ -934,7 +1242,7 @@ Maps made before this setting existed have fog on, exactly as they always did.
 
 ### Revealing and Hiding
 
-Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
+Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map, below the toolbar where the toolbar reaches that corner (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map, with a finger too on a tablet; double-click the bar, or click **Reset position** on it once the stack has moved, to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
 
 - **Reveal** — drag a box over the map to show that area to players
 - **Hide** — drag a box to cover an area back up
@@ -948,7 +1256,7 @@ To toggle a single square, just click it without dragging. Before you start a dr
 Some details worth knowing:
 
 - **Drag in any direction.** Right-to-left and bottom-to-top work exactly like dragging forward.
-- **Cancel a drag** with **Esc**, or by right-dragging (which pans the map instead). Neither reveals anything.
+- **Cancel a drag** with **Esc**, or by right-dragging (which pans the map instead). On a touch screen, put a second finger down: the box is dropped and the two fingers zoom the map. None of these reveals anything.
 - **Dragging off the edge is fine** — the box clamps to the map.
 - Only the DM sees the fog controls and the selection box. Players just see areas appear.
 
@@ -975,6 +1283,7 @@ Fog is drawn over the map in each player's browser, so everything under it has a
 | **Walls, windows and doors** | Every one, because their browser works out what their characters can see from them. Each door arrives open or closed. A **locked** door arrives as an ordinary closed door, so the lock is not given away, and locking or unlocking a closed door sends them nothing at all, whether you change one door or a whole selection with **Change type**; a player who tries it is told it is locked. |
 | **Lights** | Every light that is on: where it is, how far it reaches and its colour. A light you have switched off is not sent until you switch it on, and adding, moving or deleting one that is off sends them nothing at all, **Clear All** included when every light left is off. |
 | **Fog** | Only which squares are revealed to them. |
+| **Drawings** | Every drawing for everyone on the map, wherever it is, fog or no fog. A drawing made with **Only I can see this** is never sent. |
 
 With dynamic lighting on, a change to a wall, door or light also sends each player the tokens their characters can now see. A change that sends them nothing in the table above, such as locking a closed door, does not, so nothing reaches their browser to say that anything happened.
 
@@ -994,21 +1303,23 @@ Walls define the physical boundaries of your map — they block line of sight an
 
 Open the **Walls** panel, one of the DM tool panels stacked at the top right of the map. While a wall, fog or light tool is up, the right mouse button pans the map and no right-click menu opens; press **Esc** to put the tool away first. The panel has six tool modes:
 
-- **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click to finish. Each pair of consecutive points creates a wall segment.
+- **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click, or click **Done** in the panel, to finish. Each pair of consecutive points creates a wall segment.
 - **Select** — Click a wall segment to select it and change its type or delete it. Click an endpoint to select it; drag an endpoint to move it (all connected segments move together). Click **Merge point** to remove a bend point and join two segments into one.
 - **Split** — Click on a wall segment to add a midpoint, splitting it into two segments.
 - **Erase** — Click and drag to brush-erase wall segments.
-- **Polygon** — Click to place corners of a room; click near the starting point to close the shape and create all wall segments at once.
+- **Polygon** — Click to place corners of a room; click near the starting point, or click **Done** in the panel, to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
+
+On a touch screen every tool works with one finger: a tap is a click, and dragging a finger is dragging the mouse. Finish a line, or close a polygon, with a double tap on its last corner, or with **Done** in the panel. The two taps come within half a second and land within 20 pixels of each other. With **Snap to grid** on and a grid square 20 pixels across or more on screen, the second must also land on the same corner as the first, so two quick taps on neighbouring corners still add a wall between them; zoomed out further, a fingertip cannot pick out a corner, and any second tap that close ends the line. Nothing needs a keyboard: the panel's **Done**, **Cancel**, **Add to selection**, **Delete segment** and **Undo** do what a double-click, **Esc**, **Shift**, the **Delete** key and **Ctrl+Z** do. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 
 | Type | Color | Blocks Vision | Notes |
 |------|-------|---------------|-------|
 | Wall | Orange (customizable) | Yes | Standard blocking wall |
-| Door (Closed) | Purple | Yes | Clickable to open |
-| Door (Open) | Green | No | Click to close |
-| Door (Locked) | Red | Yes | Players cannot open it until you unlock it |
+| Door (closed) | Purple | Yes | Clickable to open |
+| Open Door | Green | No | Click to close |
+| Locked (a locked door) | Red | Yes | Players cannot open it until you unlock it |
 | Window | Blue | No | Transparent to light |
 
 **Colour, snapping and clearing.** The **Wall color** swatches, and the colour box beside them, set the colour walls are drawn in on your screen. **Snap to grid** pulls new points onto the grid, and **Snap to endpoint** pulls them onto the nearest existing wall end; the second is available only while the first is off. **Clear all** deletes every wall on the map, after a second click on **Confirm clear all?**.
@@ -1017,15 +1328,17 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
+**How many a map holds.** A map holds at most 5,000 wall segments, doors and windows included, and 200 lights. On a full map the tools draw nothing more and say so, "Maximum 5000 wall segments per map" or "Maximum 200 light sources per map"; a door drawn along a wall, a split, a polygon or a brush stroke that would take the map past the limit is refused whole. Moving, changing and deleting walls and lights still work. A wall, a door, a polygon, a brush stroke, a move of walls or a light you place that the server refuses for another reason, such as a map deleted in another tab, is taken back, with the server's message; one that a later change of yours already carried to the server stays. An **Undo** the server refuses can be pressed again. Other refused changes, such as opening a door or moving a light, stay as you made them until the map is opened again, and a message pops up saying why.
+
 ### Polygon Drawing Mode
 
 The **Polygon** tool lets you draw complex wall shapes by clicking corners:
 
 1. Select **Polygon** mode from the Walls panel
 2. Click to place each corner point — a preview line follows your cursor
-3. To close the shape, click near your starting point (within the snap radius) — all edges are committed as wall segments in one action
-4. Press **Escape** to cancel the polygon without placing any walls
-5. Press **Ctrl+Z** to remove the last point while drawing
+3. To close the shape, click near your starting point (within the snap radius), double-click, or click **Done** in the Walls panel once there are three corners — all edges are committed as wall segments in one action
+4. Press **Escape**, or click **Cancel** in the panel, to cancel the polygon without placing any walls
+5. Press **Ctrl+Z**, or click the panel's **Undo**, to remove the last point while drawing
 
 Polygon mode is great for tracing irregular room shapes without drawing each wall segment individually.
 
@@ -1079,12 +1392,12 @@ a wall set that does not line up with its artwork.
 | To do this | Do that |
 |---|---|
 | Select one wall | Click it |
-| Add or remove one | **Shift**+click |
-| Select an area | Drag a box over empty space; anything it touches comes with it |
+| Add or remove one | **Shift**+click, or tick **Add to selection** in the panel and click |
+| Select an area | Drag a box over empty space; anything it touches comes with it. With **Shift** held, or **Add to selection** ticked, it adds to what is already selected |
 | Select every wall | **Ctrl+A** (**Cmd+A** on a Mac) |
 | Move what is selected | Drag any of it, or nudge with the **arrow keys** |
 | Move by a whole square | **Shift** + an arrow key |
-| Delete what is selected | **Delete** or **Backspace** |
+| Delete what is selected | **Delete** or **Backspace**, or the panel's **Delete segment** button (**Delete 3 segments** with three selected), whatever their types |
 | Let go | **Escape** once clears the selection, again puts the tool away |
 
 These keys, like **Ctrl+Z** and **Ctrl+Y** below, act on the map only while you
@@ -1118,14 +1431,12 @@ any lights, all placed for you. If the file brings lights, the map starts with
 dynamic lighting on; otherwise it starts off, like any new map.
 
 **The picture goes into the campaign's library.** Import UVTT files the
-map's picture as a **Campaign** asset, so everyone in the campaign can browse it
-in the Asset Library as soon as the import finishes, even though the map itself
-stays yours until you switch to it. There is no option to import it as
-Personal. To keep a surprise map's picture hidden, open it in the Asset Library
-straight after importing (it has the map's name), and under **Move to…** choose
-**Personal**, then **Move to Personal**. The map keeps its picture, and your
-players can see it once you switch to that map. Until you move it, anyone
-browsing the library can see it.
+map's picture as a **Campaign** asset, with the map's name. Your players and
+spectators do not see it in the Asset Library until you switch to that map,
+as with any map picture, so an imported map stays a surprise. There is no
+option to import it as Personal; moving it to **Personal** afterwards (under
+**Move to…** in the Asset Library) changes only what happens to it if you
+leave the campaign (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign)).
 
 **Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it), and at most 16,384 pixels on each side. An animated WebP also has the frame limits an uploaded map has (see [Asset Types](USER_GUIDE.md#asset-types) in the User Guide). A file whose picture is over a limit is refused with a message saying which, and nothing is imported. It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. A file holding more than a million points, doors, lights and settings in all, far more than any map uses even with its furniture walls left in the file, is refused straight away. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
 
@@ -1170,7 +1481,7 @@ A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture
 Wall edits support full undo/redo:
 - **Ctrl+Z** (or Cmd+Z) — Undo last wall change
 - **Ctrl+Y** / **Ctrl+Shift+Z** — Redo
-- The undo/redo buttons are also in the Walls panel
+- The undo/redo buttons are also in the Walls panel. Like **Ctrl+Z**, the panel's **Undo** takes back the last corner of a polygon you are drawing first, then a line you are drawing, and only then the last wall change
 
 Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again. Nor is anything someone else changes: when a player opens a door, your map shows it at once, and undoing your own last edit leaves it open.
 
@@ -1276,15 +1587,17 @@ Switch to **Select** mode to click on a light. You can then drag it to repositio
 
 As DM you always see all walls, all tokens and the full map. To see what a player is actually seeing:
 
-- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on, and stays while you preview), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, or **All player tokens**
+- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on, and stays while you preview), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, **All player tokens**, or **Follow my selection** (below)
 - Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors they can actually see (in their line of sight and lit, within their darkvision, or under Global Illumination), the fog exactly as it is revealed, and the ground that player remembers, kept up to date as their token moves. Tokens that view would not have been sent are not drawn
-- Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first
+- Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first. In the same way a click picks up only a token the preview shows, so to move a hidden creature, return to your own view
 - The preview is on the plane that viewer is on: a player whose token you have sent to the spirit layer is previewed in the spirit realm, with the spirit layer image, the spirit tint and only spirit-plane tokens, seeing through their spirit token, exactly as their own screen shows it. So is a single token on the spirit layer (the picker marks those *(spirit)*), and every view while the spirit layer is open to everyone. **All player tokens** stays on the material plane unless the spirit layer is open to everyone
 - The preview shows exactly what that viewer is sent, the hover card and a token being moved included: a creature's hit points only once its HP bar is on, and an obscured token as the grey shape. **All player tokens** masks every obscured token, since nobody at a shared screen is its sole controller
 
+**Follow my selection.** Pick it at the top of the box and the preview looks through whichever token you have selected, so clicking a token, or stepping with **,** and **.**, shows the table what that token sees. While you follow, **,** and **.** step through the party's tokens on the plane you are previewing, wherever each one stands, and through whatever else the preview shows, even before you have selected anything, so a split party is always in reach. A creature hidden from the players, or one the preview does not show, is never among them, and the view pans only to what the steps reach. Clearing the selection with **Esc** or a click on empty ground keeps the last token you followed on this map; until you select one, the preview shows what a player with no token would see. It never drops back to your own view, which would show the table every hidden token and the whole fog. Switching maps starts again with nothing followed.
+
 **Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Previewing one token also shows what the player who controls it remembers, so you see that character's explored ground as well as what they can see now, and moving the token while you preview it adds to that memory, so a game you run alone still builds up each player's explored ground. **All player tokens** shows none, because it is several people at once and their memories laid over each other would describe nobody.
 
-Click the button again to return to your own view.
+Click **DM View**, as the button reads while you preview, to return to your own view.
 
 ### Performance Notes
 
@@ -1397,11 +1710,12 @@ CozyVTT remembers your campaign between sessions, so you can pick up exactly whe
 
 Everything is stored as you play, so there is no save step and nothing is lost by closing the page:
 
-- **Token positions**, fog, walls and lights — everyone stays put on the map
-- **Chat and dice history** — the full log is there when players rejoin
-- **Map selection** — the active map remains active
-- **Atmosphere settings** — audio, effects and the vibe are remembered
-- **Explored areas** — each player's memory of a lit map
+- **Token positions**, fog, walls and lights: everyone stays put on the map
+- **Drawings**: what you and the players drew on each map stays there until it is erased
+- **Chat and dice history**: the full log is there when players rejoin
+- **Map selection**: the active map remains active
+- **Atmosphere settings**: audio, effects and the vibe are remembered
+- **Explored areas**: each player's memory of a lit map
 
 The one exception is an **initiative order**, which lives only while the server is running: a restart or an upgrade forgets it, though the initiative values stay on the tokens.
 

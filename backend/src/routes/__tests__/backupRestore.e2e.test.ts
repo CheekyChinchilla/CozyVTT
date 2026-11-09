@@ -18,6 +18,7 @@ jest.mock('child_process', () => ({
 }));
 
 import { execFile } from 'child_process';
+import crypto from 'crypto';
 import fsSync from 'fs';
 import fs, { type FileHandle } from 'fs/promises';
 import os from 'os';
@@ -34,7 +35,6 @@ process.env.BACKUP_DIR = BACKUP_DIR;
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { PassThrough } from 'stream';
-import { ZipArchive } from 'archiver';
 import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
@@ -45,6 +45,7 @@ import { io as ioc } from 'socket.io-client';
 import * as archive from '../../utils/archive';
 import { removeLeftoverRestoreUploads } from '../../services/restoreState';
 import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
+import { zipBuffer } from '../../__tests__/helpers/zipFixtures';
 import {
   clearState as clearCombatState,
   getState as getCombatState,
@@ -52,6 +53,7 @@ import {
 } from '../../websocket/initiativeState';
 import logger from '../../utils/logger';
 import * as setupGate from '../../middleware/setup';
+import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../admin';
 
 /**
  * The migration run: the project's own Prisma, from the folder the backend
@@ -77,8 +79,11 @@ interface ToolCall {
 
 type Done = (err: Error | null, out?: { stdout: string; stderr: string }) => void;
 
-/** Stand in for pg_dump, psql and the migration run; `fail` makes one of them exit non-zero. */
-function stubTools(fail?: { cmd: string; stderr: string }): ToolCall[] {
+/**
+ * Stand in for pg_dump, psql and the migration run; `fail` makes one of them
+ * exit non-zero, and pg_dump writes `dump`.
+ */
+function stubTools(fail?: { cmd: string; stderr: string }, dump = SAFETY_DUMP): ToolCall[] {
   const calls: ToolCall[] = [];
   execFileMock.mockImplementation((cmd: string, args: string[], ...rest: unknown[]) => {
     const done = rest[rest.length - 1] as Done;
@@ -97,7 +102,7 @@ function stubTools(fail?: { cmd: string; stderr: string }): ToolCall[] {
     const touch = async () => {
       if (file === undefined) return;
       // pg_dump creates its file with the default mode, as this does.
-      if (cmd === 'pg_dump') await fs.writeFile(file, SAFETY_DUMP);
+      if (cmd === 'pg_dump') await fs.writeFile(file, dump);
       else if (cmd === 'psql') call.sqlLoaded = await fs.readFile(file, 'utf8');
       else return;
       const dir = path.dirname(file);
@@ -159,23 +164,33 @@ async function leftIn(dir: string): Promise<string[]> {
   return fs.readdir(dir);
 }
 
+/** Write each file under `root`, making the folders it needs. */
+async function writeFiles(root: string, files: Record<string, string | Buffer>): Promise<void> {
+  for (const [name, body] of Object.entries(files)) {
+    await fs.mkdir(path.dirname(path.join(root, name)), { recursive: true });
+    await fs.writeFile(path.join(root, name), body);
+  }
+}
+
+/** Every file under `root`, by its path from there with forward slashes, and what it holds. */
+async function filesIn(root: string): Promise<Record<string, Buffer>> {
+  const found: Record<string, Buffer> = {};
+  for (const entry of await fs.readdir(root, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    const file = path.join(entry.parentPath, entry.name);
+    found[path.relative(root, file).split(path.sep).join('/')] = await fs.readFile(file);
+  }
+  return found;
+}
+
+/** The unfinished files in the backups folder. */
+const partialsIn = async () => (await fs.readdir(BACKUP_DIR)).filter((f) => f.endsWith('.partial'));
+
 /** What the stubbed pg_dump writes when the route takes its safety copy. */
 const SAFETY_DUMP = '-- the database as it was before the restore\n';
 
 /** A backup archive holding the given files. */
-async function backupZip(entries: Record<string, string>): Promise<Buffer> {
-  const archive = new ZipArchive();
-  const chunks: Buffer[] = [];
-  archive.on('data', (chunk: Buffer) => chunks.push(chunk));
-  const ended = new Promise<void>((resolve, reject) => {
-    archive.on('end', () => resolve());
-    archive.on('error', reject);
-  });
-  for (const [name, body] of Object.entries(entries)) archive.append(body, { name });
-  await archive.finalize();
-  await ended;
-  return Buffer.concat(chunks);
-}
+const backupZip = zipBuffer;
 
 /** What pg_dump 18 writes for a PostgreSQL 15 database: the header names a setting 15 rejects. */
 const DUMP_FROM_NEWER_CLIENT = [
@@ -235,10 +250,6 @@ afterAll(async () => {
   try {
     await cleanupUsers([adminId, userId]);
   } finally {
-    // The shared afterAll in helpers/jest.afterEnv.ts is declared first, so it
-    // has already let the clients go, and the clean-up above opened this one
-    // again.
-    await prisma.$disconnect();
     await fs.rm(SCRATCH, { recursive: true, force: true });
   }
 });
@@ -398,9 +409,13 @@ describe('POST /api/admin/backups/restore', () => {
       return stream;
     });
     try {
+      const before = await fs.readdir(BACKUP_DIR).catch(() => []);
       const res = await admin.post('/api/admin/backups');
       expect(res.status).toBe(500);
       expect(res.body.message).toMatch(/backups folder/);
+      // Nothing it wrote is left, under a backup's name or as an unfinished file.
+      expect(await partialsIn()).toEqual([]);
+      expect(await fs.readdir(BACKUP_DIR)).toEqual(before);
     } finally {
       failing.mockRestore();
     }
@@ -859,6 +874,8 @@ describe('POST /api/admin/backups', () => {
     }
     const made = await making;
     expect(made.status).toBe(201);
+    // Well within what the restore takes, so no warning.
+    expect(made.body.warning).toBeUndefined();
     const name = made.body.filename;
     expect(named(await fs.readdir(BACKUP_DIR))).toContain(name);
     expect((await fs.readdir(BACKUP_DIR)).filter((f) => f.endsWith('.partial'))).toEqual([]);
@@ -977,11 +994,149 @@ describe('POST /api/admin/backups', () => {
         'uploads/tokens/campaigns/c1/goblin.png': 'a token',
         'uploads/documents/global/.notes.md': 'a name starting with a dot',
       });
+      // The database compressed; the uploads stored as they are, since
+      // pictures and sound are compressed already.
+      expect(zip.files.map((f) => [f.path, f.compressionMethod])).toEqual([
+        ['database.sql', 8],
+        ['uploads/documents/global/.notes.md', 0],
+        ['uploads/maps/global/cellar.png', 0],
+        ['uploads/maps/global/thumb_cellar.png', 0],
+        ['uploads/tokens/campaigns/c1/goblin.png', 0],
+      ]);
       // Not even the folder itself, which would restore as an empty one.
       const backupsEntries = zip.files.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
       expect(backupsEntries).toEqual([]);
     } finally {
       if (made) await fs.rm(made, { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // A backup is only as good as the restore that reads it back.
+  it('restores to the database and the uploaded files it was made from', async () => {
+    const calls = stubTools(undefined, DUMP_FROM_NEWER_CLIENT);
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    const uploads: Record<string, Buffer> = {
+      // Random, so deflate cannot shrink it, and larger than one read.
+      'maps/global/cellar.png': crypto.randomBytes(300 * 1024),
+      'maps/global/thumb_cellar.png': Buffer.from('its thumbnail '.repeat(1000)),
+      'tokens/campaigns/c1/Göblin König.png': Buffer.from('a name with a space and letters outside ASCII'),
+      'documents/global/.notes.md': Buffer.from('a name starting with a dot'),
+      'audio/global/silence.ogg': Buffer.alloc(0),
+    };
+    await writeFiles(UPLOAD_DIR, uploads);
+    const made: string[] = [];
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      made.push(res.body.filename);
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+
+      const restored = await restore(admin, await fs.readFile(path.join(BACKUP_DIR, res.body.filename)));
+
+      expect(restored.status).toBe(200);
+      made.push(restored.body.safetyBackup);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'pg_dump', 'psql', MIGRATE]);
+      expect(calls[2].sqlLoaded).toContain('CREATE TABLE public."Note"');
+      expect(calls[2].sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
+      expect(await filesIn(UPLOAD_DIR)).toEqual(uploads);
+    } finally {
+      for (const name of made) await fs.rm(path.join(BACKUP_DIR, name), { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // A link in the uploads folder can point anywhere on the server. A backup
+  // holds what is in the folder, never what a link reaches.
+  it('never follows a symbolic link out of the uploads folder', async () => {
+    stubTools();
+    const outside = path.join(SCRATCH, 'outside');
+    const secrets = ['outside the uploads folder', 'further outside it'];
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await writeFiles(outside, { 'secret.txt': secrets[0], 'deeper/also.txt': secrets[1] });
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map' });
+    await fs.symlink(path.join(outside, 'secret.txt'), path.join(UPLOAD_DIR, 'maps/global/link.png'));
+    await fs.symlink(outside, path.join(UPLOAD_DIR, 'linked'));
+    const warned = jest.spyOn(logger, 'warn');
+    let made: string | undefined;
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      made = path.join(BACKUP_DIR, res.body.filename);
+
+      const zip = await unzipper.Open.file(made);
+      const held = await Promise.all(zip.files.map(async (f) => ({ path: f.path, body: (await f.buffer()).toString('utf8') })));
+      expect(held.filter((f) => secrets.includes(f.body))).toEqual([]);
+      expect(held.filter((f) => f.path.startsWith('uploads/linked/'))).toEqual([]);
+      expect(held).toContainEqual({ path: 'uploads/maps/global/cellar.png', body: 'a map' });
+      // Nor the links themselves, which a restore would put back as files
+      // holding where they pointed.
+      expect(held.filter((f) => f.path === 'uploads/linked' || f.path === 'uploads/maps/global/link.png')).toEqual([]);
+      // And the log says so, as the deployment guide tells a reader it will.
+      expect(warned).toHaveBeenCalledWith(LEFT_OUT_OF_BACKUP, { path: 'linked' });
+      expect(warned).toHaveBeenCalledWith(LEFT_OUT_OF_BACKUP, { path: 'maps/global/link.png' });
+    } finally {
+      warned.mockRestore();
+      if (made) await fs.rm(made, { force: true });
+      await fs.rm(outside, { recursive: true, force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // The app names every file it stores itself, but one copied in by hand can
+  // have a name the restore refuses, and the restore then refuses the whole
+  // backup.
+  it('leaves out a file whose name a restore would refuse, so the backup still restores', async () => {
+    const calls = stubTools(undefined, DUMP_FROM_NEWER_CLIENT);
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map', 'maps/global/my..map.png': 'copied in by hand' });
+    const warned = jest.spyOn(logger, 'warn');
+    const made: string[] = [];
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      made.push(res.body.filename);
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+
+      const restored = await restore(admin, await fs.readFile(path.join(BACKUP_DIR, res.body.filename)));
+
+      expect(restored.status).toBe(200);
+      made.push(restored.body.safetyBackup);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'pg_dump', 'psql', MIGRATE]);
+      expect(await filesIn(UPLOAD_DIR)).toEqual({ 'maps/global/cellar.png': Buffer.from('a map') });
+      expect(warned).toHaveBeenCalledWith(NAME_LEFT_OUT_OF_BACKUP, { path: 'maps/global/my..map.png' });
+    } finally {
+      warned.mockRestore();
+      for (const name of made) await fs.rm(path.join(BACKUP_DIR, name), { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // Root reads a file whatever its mode, so the refusal below cannot be set
+  // up for it.
+  const asAnAccount = process.getuid?.() === 0 ? it.skip : it;
+  // Such as a file copied into the uploads folder by another account.
+  asAnAccount('fails, and leaves nothing behind, when an uploaded file cannot be read', async () => {
+    stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map', 'maps/global/locked.png': 'not for the backend' });
+    await fs.chmod(path.join(UPLOAD_DIR, 'maps/global/locked.png'), 0o000);
+    const before = await fs.readdir(BACKUP_DIR);
+    try {
+      const res = await admin.post('/api/admin/backups');
+
+      expect(res.status).toBe(500);
+      // The uploads folder's problem, not the backups folder's.
+      expect(res.body).toEqual({ error: 'Internal Server Error', message: 'Failed to create backup' });
+      expect(await partialsIn()).toEqual([]);
+      expect(await fs.readdir(BACKUP_DIR)).toEqual(before);
+    } finally {
       await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
       await fs.mkdir(UPLOAD_DIR, { recursive: true });
     }

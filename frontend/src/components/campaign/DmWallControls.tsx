@@ -6,7 +6,7 @@
  * and inline type picker for selected segments.
  */
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { WallType } from '@/types/walls';
 
 export type WallToolMode = 'wall-draw' | 'wall-select' | 'wall-split' | 'wall-erase' | 'wall-polygon' | 'wall-brush' | null;
@@ -40,7 +40,20 @@ export interface DmWallControlsProps {
   onWallColorChange: (color: string) => void;
   selectedSegmentType?: WallType | null;
   onSelectedTypeChange?: (type: WallType) => void;
+  /** How many walls the Select tool holds, of whatever types. */
+  selectedCount?: number;
   onDeleteSelected?: () => void;
+  /** A click or a box adds to the selection, as Shift does. */
+  addToSelection?: boolean;
+  onAddToSelectionChange?: (on: boolean) => void;
+  /** A line is being drawn: Done ends it, as a double-click or Esc does. */
+  lineInProgress?: boolean;
+  onFinishLine?: () => void;
+  /** Corners placed of a polygon not yet closed. */
+  polygonCorners?: number;
+  /** Close the polygon, as a double-click does; Cancel drops it, as Esc does. */
+  onClosePolygon?: () => void;
+  onDropPolygon?: () => void;
   selectedEndpoint?: { x: number; y: number } | null;
   onMergeEndpoint?: () => void;
   brushSize?: number;
@@ -65,6 +78,9 @@ const WALL_TYPE_LABELS: Record<WallType, string> = {
 
 const ALL_WALL_TYPES: WallType[] = ['wall', 'door-closed', 'door-open', 'door-locked', 'window'];
 
+/** Done, which ends a line or closes a polygon. */
+const FINISH_BUTTON = 'touch-target px-2 py-1.5 rounded text-xs font-medium transition-colors border bg-emerald-600/30 text-emerald-300 border-emerald-500/50 hover:bg-emerald-600/40 disabled:opacity-40 disabled:cursor-not-allowed';
+
 export default function DmWallControls({
   wallMode,
   onWallModeChange,
@@ -84,7 +100,15 @@ export default function DmWallControls({
   onWallColorChange,
   selectedSegmentType,
   onSelectedTypeChange,
+  selectedCount = 0,
   onDeleteSelected,
+  addToSelection = false,
+  onAddToSelectionChange,
+  lineInProgress = false,
+  onFinishLine,
+  polygonCorners = 0,
+  onClosePolygon,
+  onDropPolygon,
   selectedEndpoint,
   onMergeEndpoint,
   brushSize = 20,
@@ -92,6 +116,15 @@ export default function DmWallControls({
   onCollapse,
 }: DmWallControlsProps) {
   const [confirmClear, setConfirmClear] = useState(false);
+  // Done, and Cancel for a polygon, come in under the mode buttons as the
+  // first point is placed. The stack is capped and scrolls on a short
+  // screen, which left them out of sight; each time they appear they are
+  // brought into view, and left alone while they stay.
+  const finishing = (wallMode === 'wall-draw' && lineInProgress && !!onFinishLine) || (wallMode === 'wall-polygon' && polygonCorners > 0);
+  const finishRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (finishing) finishRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [finishing]);
   // Folded away to begin with, like the other map tools: a DM arriving at the
   // table wants to see the map, not three open panels over it.
   const [collapsed, setCollapsed] = useState(true);
@@ -211,6 +244,46 @@ export default function DmWallControls({
             </button>
           </div>
 
+          {/* What a double-click or Esc ends, as buttons: a finger or a pen
+              has no Esc, and a double tap is easy to miss. A line's walls
+              are sent click by click, so only a polygon has anything to
+              cancel. These and the controls below are named by what they
+              show, so a voice command finds them; the longer wording is
+              the tooltip. */}
+          {wallMode === 'wall-draw' && lineInProgress && onFinishLine && (
+            <div ref={finishRef}>
+              <button
+                type="button"
+                onClick={onFinishLine}
+                className={`w-full ${FINISH_BUTTON}`}
+                title="Finish the line, as a double-click or Esc does"
+              >
+                Done
+              </button>
+            </div>
+          )}
+          {wallMode === 'wall-polygon' && polygonCorners > 0 && (
+            <div ref={finishRef} className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={onClosePolygon}
+                disabled={polygonCorners < 3}
+                className={FINISH_BUTTON}
+                title={polygonCorners < 3 ? 'Place at least three corners first' : 'Close the shape, as a double-click does'}
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                onClick={onDropPolygon}
+                className="touch-target px-2 py-1.5 rounded text-xs font-medium transition-colors border bg-stone-700/50 text-stone-300 border-stone-600/50 hover:bg-stone-700"
+                title="Drop the corners, as Esc does"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
           {/* Brush size slider (brush mode) */}
           {wallMode === 'wall-brush' && onBrushSizeChange && (
             <div className="flex flex-col gap-0.5">
@@ -231,34 +304,52 @@ export default function DmWallControls({
             </div>
           )}
 
-          {/* Selected segment type picker (wall-select mode with a segment chosen) */}
-          {wallMode === 'wall-select' && selectedSegmentType != null && (
+          {/* The selection: its type, when it is all one, and Delete, for
+              any selection, as the Delete key. */}
+          {wallMode === 'wall-select' && selectedCount > 0 && (
             <div className="flex flex-col gap-1 pt-1 border-t border-sky-500/30">
-              <span className="text-xs text-sky-300 px-1">Change type</span>
-              <div className="grid grid-cols-2 gap-1">
-                {ALL_WALL_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => onSelectedTypeChange?.(t)}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
-                      selectedSegmentType === t
-                        ? WALL_TYPE_COLORS[t]
-                        : 'bg-stone-700/50 text-stone-400 border-stone-600/50 hover:bg-stone-700'
-                    }`}
-                    aria-label={`Set type: ${WALL_TYPE_LABELS[t]}`}
-                  >
-                    {WALL_TYPE_LABELS[t]}
-                  </button>
-                ))}
-              </div>
+              {selectedSegmentType != null && (
+                <>
+                  <span className="text-xs text-sky-300 px-1">Change type</span>
+                  <div className="grid grid-cols-2 gap-1">
+                    {ALL_WALL_TYPES.map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => onSelectedTypeChange?.(t)}
+                        className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${
+                          selectedSegmentType === t
+                            ? WALL_TYPE_COLORS[t]
+                            : 'bg-stone-700/50 text-stone-400 border-stone-600/50 hover:bg-stone-700'
+                        }`}
+                        aria-label={`Set type: ${WALL_TYPE_LABELS[t]}`}
+                      >
+                        {WALL_TYPE_LABELS[t]}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               <button
                 onClick={onDeleteSelected}
-                className="w-full px-2 py-1 mt-0.5 rounded-sm text-xs font-medium bg-red-700/30 text-red-400 border border-red-500/40 hover:bg-red-700/50 transition-colors"
-                aria-label="Delete selected wall segment"
+                className="w-full touch-target px-2 py-1 mt-0.5 rounded-sm text-xs font-medium bg-red-700/30 text-red-400 border border-red-500/40 hover:bg-red-700/50 transition-colors"
+                title={selectedCount === 1 ? 'Delete the selected wall segment' : `Delete the ${selectedCount} selected wall segments`}
               >
-                Delete segment
+                {selectedCount === 1 ? 'Delete segment' : `Delete ${selectedCount} segments`}
               </button>
             </div>
+          )}
+
+          {/* Shift's adding to the selection, for a finger or a pen. */}
+          {wallMode === 'wall-select' && onAddToSelectionChange && (
+            <label className="flex items-center gap-2 px-1 cursor-pointer touch-target" title="Add to the selection, as Shift does">
+              <input
+                type="checkbox"
+                checked={addToSelection}
+                onChange={(e) => onAddToSelectionChange(e.target.checked)}
+                className="accent-sky-500"
+              />
+              <span className="text-xs text-stone-300">Add to selection</span>
+            </label>
           )}
 
           {/* Selected endpoint — merge option (wall-select mode, endpoint clicked) */}
@@ -306,7 +397,7 @@ export default function DmWallControls({
                 onClick={onUndo}
                 disabled={!canUndo}
                 className="flex-1 px-2 py-1 rounded-sm text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                title="Undo last wall change (Ctrl+Z)"
+                title="Undo the last corner, the line being drawn or the last wall change (Ctrl+Z)"
                 aria-label="Undo wall edit"
               >
                 ↩ Undo

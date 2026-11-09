@@ -215,7 +215,8 @@ describe("a character's token image", () => {
 
 describe('what the asset library tells a member', () => {
   it('never includes where a file is stored on the server', async () => {
-    const id = await makeAsset('MAP', 'CAMPAIGN', dmId, 'listed-map');
+    // Token art: a map picture no map shows is not listed to a player at all.
+    const id = await makeAsset('TOKEN', 'CAMPAIGN', dmId, 'listed-art');
     const list = await player.get(`/api/assets?campaignId=${campaignId}`);
     expect(list.status).toBe(200);
     const listed = list.body.assets.find((a: { id: string }) => a.id === id);
@@ -224,7 +225,7 @@ describe('what the asset library tells a member', () => {
     expect(listed).not.toHaveProperty('thumbnailPath');
     const one = await player.get(`/api/assets/${id}`);
     expect(one.status).toBe(200);
-    expect(one.body.asset).toMatchObject({ id, name: 'listed-map' });
+    expect(one.body.asset).toMatchObject({ id, name: 'listed-art' });
     expect(one.body.asset).not.toHaveProperty('filePath');
     expect(one.body.asset).not.toHaveProperty('thumbnailPath');
   });
@@ -291,13 +292,14 @@ describe('what the asset library tells a member', () => {
 
   it('keeps the spirit layer image from a player who has not crossed over, and shows it once they have', async () => {
     const spirit = await makeAsset('MAP', 'CAMPAIGN', dmId, 'secret-spirit-realm');
-    await prisma.map.create({
+    const twoPlanes = await prisma.map.create({
       data: {
         campaignId, name: 'Two Planes', imageUrl: '/api/assets/maps/placeholder', baseLayerUrl: '/api/assets/maps/placeholder',
         spiritLayerUrl: `/api/assets/maps/${spirit}`, width: 10, height: 10, gridSize: 50, tokens: [], annotations: [],
       },
     });
-    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
+    // On the table: a map the table is not on keeps every picture of its own.
+    await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false, currentMapId: twoPlanes.id } });
 
     const hidden = await player.get(`/api/assets?campaignId=${campaignId}&type=MAP`);
     expect(hidden.body.assets.map((a: { id: string }) => a.id)).not.toContain(spirit);
@@ -311,6 +313,7 @@ describe('what the asset library tells a member', () => {
     const shown = await player.get(`/api/assets?campaignId=${campaignId}&type=MAP`);
     expect(shown.body.assets.map((a: { id: string }) => a.id)).toContain(spirit);
     expect((await player.get(`/api/assets/maps/${spirit}`)).status).toBe(200);
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   });
 });
 

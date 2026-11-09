@@ -9,27 +9,13 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
-import { ZipArchive } from 'archiver';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { importCampaign } from '../campaignImporter';
 import { prisma, createTestUser, cleanupUsers, cleanupCampaigns } from '../../__tests__/helpers/db';
-
-async function zipOf(entries: Record<string, string>): Promise<Buffer> {
-  const archive = new ZipArchive();
-  const chunks: Buffer[] = [];
-  archive.on('data', (chunk: Buffer) => chunks.push(chunk));
-  const ended = new Promise<void>((resolve, reject) => {
-    archive.on('end', () => resolve());
-    archive.on('error', reject);
-  });
-  for (const [name, body] of Object.entries(entries)) archive.append(body, { name });
-  await archive.finalize();
-  await ended;
-  return Buffer.concat(chunks);
-}
+import { zipBuffer } from '../../__tests__/helpers/zipFixtures';
 
 /** A map 20 by 20 squares at 50 px: 1,000 px square, with 25,000 px of margin. */
 const map = (name: string, geometry: { walls?: unknown[]; lights?: unknown[] }) => ({
@@ -49,7 +35,7 @@ function archive(maps: object[]): Promise<Buffer> {
     'campaign.json': JSON.stringify({ name: 'Geometry' }),
   };
   maps.forEach((m, i) => { entries[`maps/map-${i}.json`] = JSON.stringify(m); });
-  return zipOf(entries);
+  return zipBuffer(entries);
 }
 
 /** The importer reads an archive from disk, as the import route saves it. */

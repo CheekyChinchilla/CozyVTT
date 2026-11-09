@@ -41,7 +41,7 @@ function open() {
   };
 }
 
-const tab = (name: RegExp) => fireEvent.click(screen.getByRole('button', { name }));
+const tab = (name: RegExp) => fireEvent.click(screen.getByRole('tab', { name }));
 const add = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
 describe('rows added and never filled in', () => {

@@ -7,7 +7,7 @@
  * disagree on an empty string.
  */
 
-import { errorCode, errorMessage, errorStack } from './errors';
+import { errorCode, errorMessage, errorStack, foreignKeyConstraint } from './errors';
 
 describe('errorMessage', () => {
   it('reads a real Error', () => {
@@ -53,6 +53,29 @@ describe('errorCode', () => {
 
   it('ignores a numeric code rather than reporting it as a string', () => {
     expect(errorCode({ code: 42 })).toBeUndefined();
+  });
+});
+
+describe('foreignKeyConstraint', () => {
+  it('reads the constraint of a foreign key failure as Prisma 7\'s PostgreSQL adapter reports it', () => {
+    const err = {
+      code: 'P2003',
+      meta: { modelName: 'Message', driverAdapterError: { name: 'DriverAdapterError', cause: { kind: 'ForeignKeyConstraintViolation', constraint: { index: 'Message_recipientId_fkey' } } } },
+    };
+    expect(foreignKeyConstraint(err)).toBe('Message_recipientId_fkey');
+  });
+
+  it('reads it from field_name, where Prisma\'s own engine put it', () => {
+    expect(foreignKeyConstraint({ code: 'P2003', meta: { field_name: 'Message_campaignId_fkey (index)' } })).toBe('Message_campaignId_fkey');
+  });
+
+  it.each([
+    ['another Prisma error', { code: 'P2002', meta: { target: ['email'] } }],
+    ['a foreign key failure naming nothing', { code: 'P2003', meta: {} }],
+    ['a plain Error', new Error('P2003')],
+    ['null', null],
+  ])('returns undefined for %s', (_label, thrown) => {
+    expect(foreignKeyConstraint(thrown)).toBeUndefined();
   });
 });
 

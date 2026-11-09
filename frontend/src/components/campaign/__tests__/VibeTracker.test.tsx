@@ -4,7 +4,7 @@
  * anyway, and clicking one only produced a refused request; the panel now
  * says the tracker is off and how to turn it on. The server treats missing
  * `enabled` as on, so the buttons stay for settings saved before the flag
- * existed.
+ * existed. The DM's settings button is named as its tooltip is.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -67,5 +67,15 @@ describe('VibeTracker while the tracker is off', () => {
     mockState.campaign = { id: 'c1', vibeSettings: { periods: [day] } };
     render(<VibeTracker />);
     expect(screen.getByTitle('Set vibe to Day')).toBeTruthy();
+  });
+});
+
+describe("VibeTracker's settings button", () => {
+  // It showed only a gear, with the name in a tooltip.
+  it('is named as its tooltip is', () => {
+    mockState.campaign = { id: 'c1', vibeSettings: { enabled: true, periods: [day] } };
+    mockState.userRole = 'DM' as CampaignRole;
+    render(<VibeTracker />);
+    expect(screen.getByTitle('Configure periods')).toHaveAttribute('aria-label', 'Configure periods');
   });
 });

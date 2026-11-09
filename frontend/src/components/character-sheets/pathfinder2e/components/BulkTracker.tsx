@@ -33,7 +33,7 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
     <div className="space-y-4">
       {/* Bulk Summary */}
       <div className="bg-info/10 border-2 border-info/30 rounded-lg p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
           <div>
             <h4 className="font-bold text-info-ink text-lg mb-1">Bulk Carried</h4>
             <div className="text-sm text-info-ink">
@@ -100,7 +100,7 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
             <div className="flex items-start justify-between">
               {/* Item Info */}
               <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-1">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 mb-1">
                   <Package className="w-4 h-4 text-ink-muted" />
                   <span className="font-semibold text-ink">{item.name}</span>
                   {item.equipped && (

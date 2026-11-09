@@ -1,6 +1,11 @@
 @import 'tailwindcss';
 @import './styles/tailwind3-palette.css';
 
+/* A screen under 500 px tall, such as a phone turned sideways: wide enough
+   for the sm: layouts, too short for a window's margins and chrome. Sorted
+   after the breakpoints, so `sm:p-4 short:p-0` is p-0 on such a screen. */
+@custom-variant short (@media (max-height: 499.98px));
+
 @theme {
   /* ── Semantic theme colors, from the --rgb-* channels below ── */
   --color-brand: rgb(var(--rgb-brand));
@@ -142,6 +147,17 @@
   one, give every element that relies on it an explicit utility first.
 */
 @layer base {
+  /* With viewport-fit=cover (index.html) a page runs under a notch, a
+     home-screen app's status bar and the home indicator: every page but the
+     table keeps clear of them here. The table pads its own top, and its bar,
+     sheets, header, dock and strips their own sides and foot. */
+  body:not(:has([data-table-page])) {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+
   *,
   ::after,
   ::before,
@@ -173,6 +189,13 @@
   input[type='range'] {
     accent-color: rgb(var(--rgb-brand));
   }
+}
+
+/* A page as tall as the browser shows it, less the insets the body pads by
+   (a notch, the home indicator): min-h-screen (100vh) is the height without
+   a phone's toolbar, which left the foot of a short page under it. */
+@utility min-h-page {
+  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }
 
 @utility glass-panel {
@@ -246,6 +269,31 @@
   @apply bg-info/10 border border-info/30 text-info-ink rounded-cozy px-3 py-2 text-sm;
 }
 
+@utility toast-danger {
+  /* ── Messages that float over the page ──
+     The status tint the alert-* classes have, mixed into the theme's surface
+     so it is solid: a message lands over a map, a sheet's header or anything
+     else, and must read over all of them. It looks as the tint does over the
+     surface, so the -ink text reads as it does there. */
+  background-color: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
+  @apply border-danger/30 text-danger-ink;
+}
+
+@utility toast-success {
+  background-color: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  @apply border-success/30 text-success-ink;
+}
+
+@utility toast-warning {
+  background-color: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
+  @apply border-warning/30 text-warning-ink;
+}
+
+@utility toast-info {
+  background-color: color-mix(in srgb, var(--color-info) 10%, var(--color-surface));
+  @apply border-info/30 text-info-ink;
+}
+
 @utility badge-danger {
   /* ── Status pills ── */
   @apply inline-flex items-center rounded-full bg-danger/15 text-danger-ink px-2 py-0.5 text-[10px] font-medium;
@@ -269,6 +317,19 @@
 
 @utility transition-spring {
   transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@utility touch-target {
+  /* A control a finger can hit: at least 44 by 44 CSS px where the primary
+     pointer is coarse (a phone or a tablet); a mouse keeps the control's own
+     size. It sets no display, so it never undoes `hidden`: a control whose
+     icon must stay centred in the bigger box centres it with its own
+     classes (`inline-flex items-center justify-center`). <Button iconOnly>
+     and <Button size="sm"> carry it already. */
+  @media (pointer: coarse) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
 }
 
 @utility input-cozy-number {
@@ -358,7 +419,10 @@
     @apply font-body bg-canvas text-ink;
     margin: 0;
     padding: 0;
-    min-height: 100vh;
+    /* The height the browser shows, its toolbar coming and going on a phone. */
+    min-height: 100dvh;
+    /* No double-tap zoom on a button, and no wait before a tap counts. */
+    touch-action: manipulation;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -370,6 +434,68 @@
   * {
     box-sizing: border-box;
   }
+}
+
+/* ── Form controls on a touch screen ──
+   Safari on an iPhone or an iPad zooms the page when a text box, a dropdown
+   or a text area smaller than 16 px takes focus. Where the primary pointer is
+   coarse, every one is drawn at 16 px or more, and a larger one (a sheet's
+   name in text-3xl) keeps its size; a mouse sees no change. text-xs and
+   text-sm read their size from these variables on the element they are on;
+   a control with no size class takes its parent's, but not under 16 px.
+   styles/__tests__/touchFormControls.test.ts fails when a size below 16 px
+   can reach a control unraised. */
+@layer base {
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      --text-xs: 1rem;
+      --text-xs--line-height: 1.25rem;
+      --text-sm: 1rem;
+      font-size: max(1rem, 1em);
+    }
+  }
+}
+
+/* The sizes below 16 px the components write in pixels, which no variable
+   carries. Outside any layer, so it wins over the class it names; it sets no
+   line height, which would win over a leading-* class on the same box. */
+@media (pointer: coarse) {
+  :is(input, select, textarea):is(
+      [class~='text-[7px]'],
+      [class~='text-[8px]'],
+      [class~='text-[9px]'],
+      [class~='text-[10px]'],
+      [class~='text-[11px]']
+    ) {
+    font-size: 1rem;
+  }
+}
+
+/* The compact layout's sheets and map (components/campaign/compact/
+   CompactTable.tsx marks them): every control a finger's size, 44 by 44 CSS
+   px, whatever the panel inside was written with for a desktop column and a
+   mouse. Outside any layer, so a panel's own height class cannot undo it; a
+   switch keeps its drawn pill, and a check box or a radio button is pressed
+   through its label. styles/__tests__/fingerControls.test.ts reads it. */
+.finger-controls
+  :is(
+    button:not([role='switch']),
+    select,
+    summary,
+    a[href],
+    [role='button'],
+    [role='tab'],
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='hidden'], [type='color'])
+  ) {
+  min-height: 2.75rem;
+}
+.finger-controls :is(button:not([role='switch']), summary, a[href], [role='button'], [role='tab']) {
+  min-width: 2.75rem;
+}
+.finger-controls label:has(> input:is([type='checkbox'], [type='radio'])) {
+  min-height: 2.75rem;
 }
 
 /* Panel resize separator styles (react-resizable-panels v4 renders
@@ -410,5 +536,23 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0s !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* A stat pressed on a character sheet gives a short pulse as its roll goes
+   (hooks/useRollFeedback.ts). With reduced motion the animation above is
+   collapsed to nothing, and the stat is highlighted while the class stays. */
+@keyframes roll-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.05) rotate(-1deg); }
+  70% { transform: scale(1.02) rotate(1deg); }
+  100% { transform: scale(1); }
+}
+.roll-pulse {
+  animation: roll-pulse 250ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .roll-pulse {
+    background-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
   }
 }

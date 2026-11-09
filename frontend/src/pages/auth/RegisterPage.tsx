@@ -136,7 +136,7 @@ export default function RegisterPage() {
 
   if (pendingApproval) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
+      <div className="min-h-page flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
         <div className="glass-panel max-w-md w-full p-8 space-y-4 text-center">
           <div className="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center mx-auto">
             <span className="text-3xl">&#9203;</span>
@@ -154,7 +154,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
+    <div className="min-h-page flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
       <div className="glass-panel max-w-md w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">

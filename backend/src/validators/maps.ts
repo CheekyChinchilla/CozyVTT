@@ -11,9 +11,9 @@
  */
 
 import { z } from 'zod';
-import { MAP_LIMITS } from './mapLimits';
+import { MAP_LIMITS, MAX_COORDINATE, MAX_FOG_CELLS } from './mapLimits';
 
-export { MAP_LIMITS };
+export { MAP_LIMITS, MAX_COORDINATE, MAX_FOG_CELLS };
 
 const between = (what: string, min: number, max: number, unit: string) =>
   `${what} must be a whole number from ${min} to ${max}${unit}`;
@@ -42,6 +42,9 @@ export const FeetPerSquareSchema = z
   .min(MAP_LIMITS.minFeetPerSquare, FEET_MESSAGE)
   .max(MAP_LIMITS.maxFeetPerSquare, FEET_MESSAGE);
 
+/** The colour a map drawn in CozyVTT was made in, as #rrggbb. */
+export const DrawnBackgroundSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+
 /**
  * What a map name over MAP_LIMITS.maxNameLength answers, on every path that
  * names a map. A campaign archive import shortens one instead.
@@ -59,13 +62,6 @@ export const MapDimensionsSchema = z.object({
   gridSize: GridSizeSchema,
 });
 
-/**
- * The most fog cells one map may have: one per grid square of the largest
- * map, 500 by 500. Fog and explored areas are stored as one entry per cell,
- * so this bounds what loading either can allocate.
- */
-export const MAX_FOG_CELLS = MAP_LIMITS.maxSide * MAP_LIMITS.maxSide;
-
 /** The first problem with a value sent for one of a map's dimensions, or null. */
 export function dimensionProblem(schema: z.ZodType, value: unknown): string | null {
   const parsed = schema.safeParse(value);
@@ -74,19 +70,15 @@ export function dimensionProblem(schema: z.ZodType, value: unknown): string | nu
 
 // ── Where walls and lights may be ───────────────────────────────────────────
 
+const COORDINATE_MESSAGE = `Coordinates must be within ${MAX_COORDINATE.toLocaleString('en-US')} pixels of the map's corner`;
 /**
- * The furthest any wall end or light may be from the map's corner, in
- * pixels, either way: the far side of the largest map at the largest grid
- * size (500 squares of 500 pixels).
+ * A wall end's or a light's x or y, in map pixels, within MAX_COORDINATE
+ * (./mapLimits.ts) of the map's corner.
  *
  * Coordinates had no bound at all. Sight on a map with more than 200 walls
  * walks a grid over every wall's extent, so one wall reaching ten million
  * pixels froze the server for every table.
  */
-export const MAX_COORDINATE = MAP_LIMITS.maxSide * MAP_LIMITS.maxGridSize;
-
-const COORDINATE_MESSAGE = `Coordinates must be within ${MAX_COORDINATE.toLocaleString('en-US')} pixels of the map's corner`;
-/** A wall end's or a light's x or y, in map pixels. */
 export const CoordinateSchema = z
   .number()
   .finite()

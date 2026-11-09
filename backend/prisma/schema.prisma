@@ -56,6 +56,7 @@ enum MessageType {
   SYSTEM
   DICE_ROLL
   CHARACTER_ACTION
+  WHISPER
 }
 
 enum LogLevel {
@@ -76,6 +77,20 @@ enum InvitationStatus {
   PENDING
   ACCEPTED
   DECLINED
+}
+
+// Who a drawing on a map is sent to: everyone who may read the map, or the
+// DM alone.
+enum DrawingAudience {
+  ALL
+  DM
+}
+
+// Where a drawing sits on a map: MARKUP over the grid, GROUND under it for
+// DM-drawn map art. Only MARKUP is accepted so far (validators/drawings.ts).
+enum DrawingLayer {
+  MARKUP
+  GROUND
 }
 
 // ============================================
@@ -125,6 +140,7 @@ model User {
   campaignInvitations CampaignInvitation[]
   characters          Character[]
   messages            Message[]
+  receivedMessages    Message[]              @relation("MessageRecipient")
   diceRolls           DiceRoll[]
   uploadedAssets      Asset[]
   passwordResetTokens PasswordResetToken[]
@@ -135,6 +151,7 @@ model User {
   personalNotes       PersonalNote[]
   diceMacros          DiceMacro[]
   mapExplorations     MapExploration[]
+  drawings            MapDrawing[]
   documentLinks       CampaignDocument[]
 
   @@index([email])
@@ -210,6 +227,10 @@ model Campaign {
   // Chat Settings
   chatCooldownEnabled Boolean @default(false)
   chatCooldownSeconds Int     @default(5)
+
+  // Drawing Settings
+  // Players may draw on the map while the session is live; the DM always may.
+  playersMayDraw Boolean @default(true)
 
   // Dice Settings
   // When the DM clears roll history, this records when — rolls older than it
@@ -338,6 +359,14 @@ model DiceMacro {
   /// A dice expression. Validated against the real parser on save, so a stored
   /// macro is one that can actually be rolled — see validators/diceMacros.ts.
   expression String
+
+  /// Who the roll is made as when the dice panel's Character box is empty.
+  /// Free text, as the box is: it names no Character row. Null for none.
+  characterName String?
+
+  /// What the roll is for, shown with it in place of the name. Null for the
+  /// name itself.
+  purpose String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -486,6 +515,10 @@ model Map {
   gridSize      Int    @default(50) // Pixels per grid square
   feetPerSquare Int    @default(5)  // Feet represented by one grid square
   diagonalRule  String @default("flat") // "flat" (D&D 5e) or "alternating" (PF2e 5/10)
+  // The colour a map drawn in CozyVTT was made in, as #rrggbb: what
+  // Mapmaker's eraser paints. Null for a map made from a picture, and for one
+  // drawn before this was kept.
+  drawnBackground String?
 
   // Layers
   baseLayerUrl   String // Main map image
@@ -511,8 +544,47 @@ model Map {
   // Relations
   activeCampaigns Campaign[] @relation("CurrentMap")
   explorations    MapExploration[]
+  drawings        MapDrawing[]
 
   @@index([campaignId])
+}
+
+/// One drawing on one map: a stroke, a shape or a text label, with who drew
+/// it and who is sent it. Points are in whole map pixels from the map's
+/// top-left corner, as walls and lights are. `Map.annotations` predates this
+/// table and holds nothing the app reads.
+model MapDrawing {
+  id        String          @id @default(uuid())
+  mapId     String
+  map       Map             @relation(fields: [mapId], references: [id], onDelete: Cascade)
+  /// Null once the author's account is deleted; the drawing stays, the DM's to erase.
+  authorId  String?
+  author    User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  audience  DrawingAudience @default(ALL)
+  layer     DrawingLayer    @default(MARKUP)
+  /// pen, line, arrow, rect, ellipse, polygon or text (validators/drawingLimits.ts)
+  kind      String
+  /// The stroke, #rrggbb
+  color     String
+  /// The fill, #rrggbb; null for none
+  fillColor String?
+  /// A texture name; null for a flat fill. Not accepted yet
+  pattern   String?
+  /// A glyph name, for a stamp. Not accepted yet
+  stamp     String?
+  /// Map pixels, 1 to 64
+  width     Int
+  /// Degrees, 0 to 359
+  rotation  Int             @default(0)
+  /// Drawing order within a layer, then createdAt
+  sortKey   Int             @default(0)
+  /// [[x, y], ...] in whole map pixels, top-left origin
+  points    Json
+  /// A text label's words; null for every other kind
+  text      String?
+  createdAt DateTime        @default(now())
+
+  @@index([mapId])
 }
 
 /// What one player has explored on one map: the cells their vision has
@@ -574,10 +646,42 @@ model Asset {
   /// to read a document that is otherwise private to its uploader.
   campaignLinks CampaignDocument[]
 
+  /// When a document's text was last read for the assets it names
+  /// (DocumentPicture). Null on every other asset, and on a document stored
+  /// before this was kept, until the server has read it
+  /// (services/sharedDocumentPictures.ts).
+  picturesReadAt   DateTime?
+  /// The assets this document's text names by their address.
+  picturesNamed    DocumentPicture[] @relation("DocumentNames")
+  /// The documents whose text names this asset by its address.
+  namedInDocuments DocumentPicture[] @relation("NamedInDocument")
+
   @@index([campaignId])
   @@index([type])
   @@index([scope])
   @@index([uploadedById])
+  /// The documents not read yet, found without reading every document.
+  @@index([type, picturesReadAt])
+}
+
+/// One asset a plain text or Markdown document names by its address
+/// (`/api/assets/<kind>/<id>`), as read from the document's text when it is
+/// uploaded, written or saved. What a shared handout shows players
+/// (services/sharedDocumentPictures.ts), and what keeps a picture from a
+/// delete that is not forced (services/assetUsage.ts), are read from here,
+/// never from the files.
+model DocumentPicture {
+  /// The document. Deleting it removes what it names.
+  documentId String
+  document   Asset  @relation("DocumentNames", fields: [documentId], references: [id], onDelete: Cascade)
+
+  /// The asset it names. Deleting that asset removes the row as well.
+  pictureId String
+  picture   Asset  @relation("NamedInDocument", fields: [pictureId], references: [id], onDelete: Cascade)
+
+  /// A document names an asset once or not at all.
+  @@id([documentId, pictureId])
+  @@index([pictureId])
 }
 
 // ============================================
@@ -594,6 +698,12 @@ model Message {
   userId String? // Null for system messages
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  // The one member a WHISPER is for. The type marks a message private, and
+  // this says who it is for: deleting the recipient's account empties it,
+  // and the whisper stays its sender's alone.
+  recipientId String?
+  recipient   User?   @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
   // Content
   type     MessageType
   content  String      @db.Text
@@ -603,6 +713,7 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([campaignId, createdAt])
+  @@index([campaignId, recipientId, createdAt])
 }
 
 model DiceRoll {

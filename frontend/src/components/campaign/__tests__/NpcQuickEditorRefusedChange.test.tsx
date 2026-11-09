@@ -34,7 +34,7 @@ vi.mock('framer-motion', () => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: { emitMapChange: vi.fn() } }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [] }, currentMap: { id: 'map-1', feetPerSquare: 5 } }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [] }, currentMap: { id: 'map-1', feetPerSquare: 5 }, viewedMap: { id: 'map-1', feetPerSquare: 5 } }),
 }));
 vi.mock('@/services/api', () => {
   const client = { updateToken: (...args: unknown[]) => updateToken(...args), listAssets: vi.fn().mockResolvedValue({ assets: [], pagination: {} }) };

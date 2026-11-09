@@ -38,28 +38,32 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Platform
 - **Multi-campaign** — one server, unlimited campaigns, isolated from each other
-- **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign
+- **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign; players and spectators can leave a campaign on their own
 - **Setup wizard** — guided first-run initialization; no manual database seeding required. It asks for a one-time setup token printed in the backend log, so only the person running the server can create the first administrator
-- **Admin dashboard** — user management, system settings, activity logs, uploaded files, instance backups (database and uploaded files)
-- **Keyboard and screen reader support** — dialogs and side panels are named, keep focus and close on Escape; the dice and chat logs announce new entries; initiative runs from the keyboard; reduced-motion settings are honoured
+- **Admin Panel** — user management, system settings, activity logs, uploaded files, instance backups (database and uploaded files)
+- **Works on phones and tablets** — below 1,024 pixels wide the campaign page has a layout of its own: the map across the screen, a bar of Map, Chat, Dice, Initiative, Party and More along the bottom, and each panel in a sheet over the map; menus open as lists from the bottom of the screen, and Back closes what is open. On a phone on its side the bar moves into the header. A tablet turned across 1,024 pixels switches layout without losing anything; CozyVTT can also go on the home screen from the browser's own menu
+- **Keyboard and screen reader support** — dialogs and side panels are named, keep focus and close on Escape; the dice and chat logs announce new entries; initiative runs from the keyboard; a token can be selected, moved, turned and stepped through from the keyboard, a screen reader hears which one is selected, and **?** lists the map's shortcuts; reduced-motion settings are honoured
 
 ### Campaign Tools
-- **Interactive map canvas** — upload map images, place tokens, click a token to pick it up and click a square to put it down, with every move shown to the table in real time
+- **Interactive map canvas** — upload map images or draw a map in CozyVTT, place tokens, click a token to pick it up and click a square to put it down, or select it and move it with the arrow keys, with every move shown to the table in real time; on a tablet, slide a token with your finger or tap it and tap a square, tap a token for its details, press and hold a token, a door, a character or a combatant for its menu, and pinch to zoom
+- **Draw a map in CozyVTT** — the DM makes a blank map of the size and colour they choose and paints it with a brush, an eraser, lines, curves, rectangles, ellipses, polygons, rooms that add their own walls, stamps, textures, a fill bucket, text and an eyedropper, by mouse, finger or stylus, on a phone or a tablet too, with undo and redo and a draft kept in the browser until it is saved, then saves it as the map's picture, during play too; tokens, walls, lights and fog work on it as on any map
+- **Prepare a map while the table plays** — the DM opens any map on their own screen to set up its walls, lights, fog, tokens and drawings while the players stay on theirs and are sent nothing of it, then brings everyone over with one button
 - **Token system** — player, NPC, and object token types with disposition (friendly/neutral/hostile), HP bars, conditions, stat blocks, and notes; three display modes (pog, top-down, full-art); tokens turn to face any direction; colored-letter placeholders for tokens without images; the DM can hide a token from players or obscure what it is, and players are sent only what they may see of each token
 - **Creature library** — browse, search, and place creatures from the SRD bestiary (imported from Open5e by an administrator, with one button) or custom campaign-specific templates; per-campaign favorites with star toggle; duplicate SRD creatures to customize; edit custom creatures in-place; save token images back to templates
 - **Token templates** — save reusable token configurations (image, stats, HP, size, disposition, full NPC stat block); place from library or save from map context menu; copy templates between campaigns the DM owns
 - **NPC right-click rolls** — DMs right-click any NPC token to roll abilities, saves, skills, attacks, and damage parsed from its stat block; advantage/disadvantage selector for d20 systems; free-form custom roll fallback for systems whose stat blocks have nothing to parse
-- **Campaign export/import** — export campaigns as portable `.cozyvtt` archives; import on any CozyVTT instance; includes maps, tokens, creatures, templates, and assets; multi-step preview flow; optional audio toggle; secured against path traversal, zip bombs, and malicious files
+- **Campaign export/import** — export campaigns as portable `.cozyvtt` archives; import on any CozyVTT instance; includes maps, tokens, drawings, creatures, templates, and assets; multi-step preview flow; optional audio toggle; secured against path traversal, zip bombs, and malicious files
 - **Walls & dynamic lighting** — DM-drawn wall segments (walls, doors, windows) with raycasting visibility; draw, polygon, and brush drawing modes; snap-to-grid and snap-to-endpoint; split, select, erase, and merge point tools; multi-select with Shift, a drag-box or Ctrl+A, then move or delete the lot together; snap-to-wall door/window placement (auto-splits existing walls); players only see what their character can: bright light clearly, dim light and the token's darkvision at half, nothing beyond, and light never reveals through a wall — a lit room is visible only to someone with line of sight into it; per-map Global Illumination lights everything in line of sight for tables that prefer it; explored areas are remembered per player and shown in grey until seen again; door interactions for both DM and players; bright/dim light radii matching D&D 5e and PF2e rules; named light presets (Candle, Torch, Lamp, Lantern, Campfire); overlapping dim zones combine to bright
 - **Universal VTT import/export** — bring in a `.uvtt`, `.dd2vtt` or `.df2vtt` map from Dungeondraft, Dungeon Alchemist, Czepeku and others, with its walls, doors and lights already placed, and export any map back out. One file is one map, as the format intends; if a file's walls reach outside its own picture, CozyVTT says so before importing rather than leaving you to wonder
 - **Fog of war** — drag a box to reveal or hide chunks of the map; the selection snaps to whole grid squares, with animated fade transitions
 - **Spirit layer** — a second canvas layer for ethereal / astral / out-of-body scenes, hidden from players by default
-- **Initiative tracker** — real-time combat turn order that follows each token; the DM runs it and players roll their own initiative. Players see every combatant the DM has not hidden, on the map the table is looking at and on their own plane, even one they cannot yet find in the dark or under fog, and a creature's hit points only when the DM turns its HP bar on. The acting token is ringed on the map for everyone, hovering a name highlights its token (and vice versa), and right-clicking a combatant opens their sheet and rolls
-- **Map pings** — press Tab to mark a spot for the whole table; a dot with radiating rings in your own colour, labelled with your name
+- **Initiative tracker** — real-time combat turn order that follows each token; the DM runs it and players roll their own initiative. Players see every combatant the DM has not hidden, on the map the table is looking at and on their own plane, even one they cannot yet find in the dark or under fog, and a creature's hit points only when the DM turns its HP bar on. The acting token is ringed on the map for everyone, hovering a name highlights its token (and vice versa), and clicking or tapping a combatant's name, or right-clicking its row, opens their sheet and rolls
+- **Map pings** — press Tab, use the map's **Ping** button, or on a touch screen double tap or press and hold the map, to mark a spot for the whole table; a dot with radiating rings in your own colour, labelled with your name
+- **Drawing on the map** — the DM and the players sketch on the map with a pen, lines, arrows, rectangles, ellipses, polygons and text labels in any colour and width, seen by the table live as they are drawn; a laser pointer whose trail fades for everyone; the DM can turn players' drawing off with **Players may draw**, keep a drawing to themselves, erase anyone's or clear the map, and a player erases their own; by mouse, finger or stylus
 - **Vibe tracker** — time-of-day periods (dawn, day, dusk and night by default, all editable) that tint the map with a colour filter
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
 - **Session management** — start, pause, resume, and end sessions with full state capture (token positions, map, vibe)
-- **Resizable session workspace** — drag to resize or collapse the roster, map, and side panels; a tabbed sidebar keeps Chat, Dice, Initiative, Notes and Session full-height, with an unread-message badge; layout persists per browser
+- **Resizable session workspace** — on a computer or a tablet held sideways, drag to resize or collapse the roster, map, and side panels; a tabbed sidebar keeps Chat, Dice, Initiative, Notes and Session full-height, with an unread-message badge; layout persists per browser
 
 ### Character Sheets
 - **D&D 5th Edition** — full sheet with stats, skills, saving throws, attacks, spells, inventory
@@ -72,10 +76,11 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Real-time results** — rolls appear in the Dice panel for the whole table
 - **Secret rolls** — hidden from the other players; your DM can still see them, and they stay in your own list marked as secret
 - **Dice history** — a running log of the session's rolls that survives a refresh, filtered per person by the server
-- **Saved rolls** — name a dice expression and it becomes a one-click button in the dice panel; private to you and scoped to one campaign, with the expression checked when you save it so a saved roll always works
+- **Saved rolls** — name a dice expression and it becomes a one-click button in the dice panel, with a character and a purpose of its own if you like; private to you and scoped to one campaign, with the expression checked when you save it so a saved roll always works
 
 ### Communication
 - **Campaign chat** — in-session messaging between all members
+- **Whispers** — a chat message to one member, seen by the two of you alone, from the **To** list or with `/w` (or `/whisper`) and a name
 - **System messages** — automatic notices when a session starts, pauses, resumes or ends, when the DM changes the time of day, and when the spirit layer is revealed or hidden
 - **Personal notes** — private per-campaign notes in Markdown, with a rendered preview and autosave; readable only by their author, enforced server-side
 - **Documents** — upload a PDF, plain text or Markdown rulebook or handout, or write one in the app, and read it without leaving CozyVTT; a DM shares documents with a campaign, and every member reads them from inside the session; text and Markdown documents can be edited by their uploader
@@ -184,7 +189,7 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment with Ngin
 
 ## Configuration
 
-Most runtime configuration is managed through the Admin dashboard after setup. Email (SMTP) and upload limits are set in `.env`; the dashboard shows them and can send a test email:
+Most runtime configuration is managed through the Admin Panel after setup. Email (SMTP) and upload limits are set in `.env`; the Admin Panel shows them and can send a test email:
 
 | Tab | Setting | Description |
 |-----|---------|-------------|
@@ -194,7 +199,7 @@ Most runtime configuration is managed through the Admin dashboard after setup. E
 | Settings | Allow Public Registration | Whether new users can self-register |
 | Settings | Require Admin Approval | New registrations must be approved before login |
 | Settings | SMTP | Shows the email settings from `.env`, with **Send Test Email** |
-| Settings | Upload Limits | Shows the per-type file size limits from `.env` (maps, tokens, audio, avatars, documents) |
+| Settings | Upload Size Limits | Shows the per-type file size limits from `.env` (maps, tokens, audio, avatars, documents) |
 | Appearance | Default Theme | Theme shown on the login page and used for new users (each user can override from their profile) |
 | Appearance | Default Font | Default font family applied alongside the default theme |
 | Appearance | Custom Theme | Build a palette from primary, accent, background, and text colors, with a live readability check |
@@ -202,7 +207,7 @@ Most runtime configuration is managed through the Admin dashboard after setup. E
 However an account is added, its first sign-in ends with the person choosing their own password — an
 admin-issued temporary password cannot be used for anything else.
 
-Instance branding (logo, mascot, favicon) is **not** set from the dashboard yet — see
+Instance branding (logo, mascot, favicon) is **not** set from the Admin Panel yet — see
 [Appearance & Theming](docs/USER_GUIDE.md#appearance--theming) for how to change it today.
 
 ### Default Upload Limits
@@ -233,8 +238,8 @@ Pictures also have fixed limits: at most 16,384 pixels on each side, and for an 
 | Role | Description |
 |------|-------------|
 | `DM` | Full campaign control — manage maps, tokens, sessions, members |
-| `PLAYER` | Can view maps, move their own tokens, roll dice, chat |
-| `SPECTATOR` | Watches the map, chats and pings; keeps private notes and dice macros; cannot roll dice or initiative, move or edit tokens, or edit a character |
+| `PLAYER` | Can view maps, move their own tokens, roll dice, chat and whisper, draw on the map while the DM allows it, and leave the campaign |
+| `SPECTATOR` | Watches the map, chats, whispers and pings; keeps private notes and dice macros; can leave the campaign; cannot roll dice or initiative, move or edit tokens, draw on the map, or edit a character |
 
 ---
 
@@ -251,6 +256,7 @@ Pictures also have fixed limits: at most 16,384 pixels on each side, and for an 
 | [Contributing](docs/CONTRIBUTING.md) | How to contribute to CozyVTT |
 | [Game Systems](docs/GAME_SYSTEMS.md) | How to add new game system support |
 | [API Reference](docs/API_REFERENCE.md) | REST API and WebSocket event reference |
+| [API changes](docs/api-changes/README.md) | What changed for programs driving CozyVTT, release by release |
 | [WebSocket Events](backend/docs/WEBSOCKET_DOCUMENTATION.md) | Detailed Socket.io event schema |
 | [Future Features](docs/FUTURE_FEATURES.md) | Backlog of planned work |
 | [Security Policy](SECURITY.md) | How to report vulnerabilities |

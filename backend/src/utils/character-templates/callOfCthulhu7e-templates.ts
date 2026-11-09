@@ -6,14 +6,7 @@
 
 import { GameSystem } from '@prisma/client';
 import { cocBlankSkills } from '../rules/callOfCthulhu7e';
-
-export interface CharacterTemplate {
-  name: string;
-  description: string;
-  gameSystem: GameSystem;
-  /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
-  data: Record<string, unknown>;
-}
+import type { CharacterTemplate } from './types';
 
 /**
  * Blank Call of Cthulhu 7e character template with minimal required fields

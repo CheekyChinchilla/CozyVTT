@@ -15,11 +15,11 @@ import { useGameStore } from '@/stores/gameStore';
 
 const getCampaignCharacters = vi.fn();
 const assignCharacterToCampaign = vi.fn();
-const socket = { on: vi.fn(), off: vi.fn(), onPresenceState: vi.fn(), requestPresence: vi.fn() };
+const socket = { on: vi.fn(), off: vi.fn() };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'DM' }] }, currentMap: null, userRole: 'DM' }),
+  useCampaign: () => ({ campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'DM' }] }, currentMap: null, viewedMap: null, userRole: 'DM' }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm' } }) }));
@@ -66,4 +66,14 @@ it('removes nothing when the confirmation is cancelled', async () => {
   await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
 
   expect(assignCharacterToCampaign).not.toHaveBeenCalled();
+});
+
+// The question said "this character", so a menu opened on the wrong row
+// could remove someone the DM did not mean.
+it('names the character it asks about', async () => {
+  render(<CampaignRoster />);
+  fireEvent.contextMenu(await screen.findByText("Ash's hero"), { clientX: 40, clientY: 40 });
+  await userEvent.click(await screen.findByRole('button', { name: /Remove from Campaign/ }));
+
+  expect(await screen.findByText("Remove Ash's hero from the campaign? They go back to their player's own list.")).toBeInTheDocument();
 });

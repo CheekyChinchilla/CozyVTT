@@ -75,6 +75,13 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         iconOnly && 'p-2!',
+        // 44 by 44 for a finger on a touch screen, a mouse's size elsewhere.
+        // An icon passed as a child is a block, which the wider box would
+        // leave at its left; the `icon` prop's is inline and centred anyway.
+        // A regular one is 40 to 42 pixels tall, and as narrow as its icon
+        // when its words hide on a phone (Documents' Read).
+        size !== 'lg' && 'touch-target',
+        iconOnly && 'pointer-coarse:[&>svg]:mx-auto',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         className
       )}

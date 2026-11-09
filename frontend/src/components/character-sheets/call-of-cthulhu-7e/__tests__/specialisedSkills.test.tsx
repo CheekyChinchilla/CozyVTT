@@ -24,7 +24,7 @@ type Saved = { skills: Record<string, unknown> };
 function open(overrides: Record<string, unknown> = {}) {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<CallOfCthulhu7eCharacterEditor character={cocCharacter(overrides)} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: /^Skills$/ }));
+  fireEvent.click(screen.getByRole('tab', { name: /^Skills$/ }));
   return async (): Promise<Saved['skills']> => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
@@ -125,7 +125,7 @@ describe('the read-only sheet', () => {
         })}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Skills$/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Skills$/ }));
     expect(screen.getByText('Fighting (Sword)')).toBeInTheDocument();
   });
 });

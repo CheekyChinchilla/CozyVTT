@@ -10,8 +10,9 @@ import { BASE_URL } from './e2e/instance';
  * these check that the pieces still meet.
  *
  * The first project finishes the setup wizard on a fresh instance; the other
- * two run the smoke tests after it, at a desktop and a phone size. One worker,
- * since they share the instance. Settings are in e2e/instance.ts.
+ * four run the smoke tests after it: Chromium at a desktop and a Pixel 10
+ * phone size, WebKit on an iPhone 15 and an iPad Pro 11 in landscape. One
+ * worker, since they share the instance. Settings are in e2e/instance.ts.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -25,6 +26,8 @@ export default defineConfig({
   projects: [
     { name: 'setup', testMatch: /instance\.setup\.ts/ },
     { name: 'desktop', testMatch: /\.spec\.ts/, use: { ...devices['Desktop Chrome'] }, dependencies: ['setup'] },
-    { name: 'phone', testMatch: /\.spec\.ts/, use: { ...devices['Pixel 7'] }, dependencies: ['setup'] },
+    { name: 'phone', testMatch: /\.spec\.ts/, use: { ...devices['Pixel 10'] }, dependencies: ['setup'] },
+    { name: 'iphone', testMatch: /\.spec\.ts/, use: { ...devices['iPhone 15'] }, dependencies: ['setup'] },
+    { name: 'ipad', testMatch: /\.spec\.ts/, use: { ...devices['iPad Pro 11 landscape'] }, dependencies: ['setup'] },
   ],
 });

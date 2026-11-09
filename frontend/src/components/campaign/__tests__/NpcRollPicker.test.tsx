@@ -6,9 +6,10 @@
  * named; the helper is tested on its own, and this pins the call sites.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import NpcRollPicker from '../NpcRollPicker';
+import { anyMenuShown, menuOpened, whenMenuOpens } from '@/components/ui/openMenus';
 import type { NpcStatBlock, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 
@@ -93,6 +94,101 @@ describe('the close button', () => {
     const onClose = vi.fn();
     render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // It was 20 pixels square. The size is set on a touch screen only, which
+  // jsdom cannot show, so the classes are what is checked.
+  it('is big enough for a finger, with its cross in the middle', () => {
+    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    expect(screen.getByRole('button', { name: 'Close' }).className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+  });
+});
+
+describe('the roll mode', () => {
+  function rollWithDisadvantage(option: RegExp) {
+    const onRoll = vi.fn();
+    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disadvantage' }));
+    fireEvent.click(screen.getByRole('button', { name: option }));
+    return onRoll.mock.calls[0] as [string, string, string | undefined];
+  }
+
+  it('rolls an attack twice with Disadvantage, keeping the lower, and the log says so', () => {
+    expect(rollWithDisadvantage(/^Scimitar \(Attack/).slice(0, 2)).toEqual(['2d20kl1+4', 'Scimitar Attack (Disadvantage)']);
+  });
+
+  it('leaves the damage as it is', () => {
+    const [expression, purpose] = rollWithDisadvantage(/^Scimitar \(Damage/);
+    expect(expression).not.toMatch(/2d20/);
+    expect(purpose).not.toMatch(/Disadvantage/);
+  });
+});
+
+// The panel library takes a press in a divider's strip whenever the pressed
+// element is inside its group ([data-group]); the picker is opened from the
+// map and the tracker, both inside it.
+describe('where it is drawn', () => {
+  it('is on the body, outside the panel group it is opened from', () => {
+    render(
+      <div data-group>
+        <NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
+      </div>,
+    );
+
+    const picker = screen.getByText('Roll for Goblin Boss').closest('.fixed');
+    expect(picker).not.toBeNull();
+    expect(picker?.closest('[data-group]')).toBeNull();
+    expect(picker?.parentElement).toBe(document.body);
+  });
+});
+
+// Placed as the map's menus are (components/ui/menu.ts flipOntoScreen): the
+// screen is jsdom's, 1,024 by 768, and the picker measures 300 by 400.
+describe('near the edge of the screen', () => {
+  const originalRect = HTMLDivElement.prototype.getBoundingClientRect;
+  afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = originalRect; });
+
+  it('flips to the left of and above the point', () => {
+    HTMLDivElement.prototype.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 300, bottom: 400, width: 300, height: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
+
+    const picker = screen.getByText('Roll for Goblin Boss').closest<HTMLElement>('.fixed')!;
+    expect([picker.style.left, picker.style.top]).toEqual(['600px', '200px']);
+  });
+});
+
+// The map asks, so a tap on it that closes the picker is not the first of a
+// double tap to ping.
+describe('while it is open', () => {
+  it('is a menu on the screen, until it closes', () => {
+    const { unmount } = render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    expect(anyMenuShown()).toBe(true);
+    unmount();
+    expect(anyMenuShown()).toBe(false);
+  });
+});
+
+// A long-press that opens another menu, the map's or a list's, brings no
+// mousedown here; and this one's opening closes theirs the same way.
+describe('beside another menu', () => {
+  it('says it has opened, and closes when another menu opens, not on its own opening', () => {
+    const told = vi.fn();
+    const stop = whenMenuOpens(told);
+    const onClose = vi.fn();
+    try {
+      render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+      expect(told).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+
+    act(() => { menuOpened(); });
+
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

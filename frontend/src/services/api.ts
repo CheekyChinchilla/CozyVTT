@@ -3,6 +3,7 @@ import { handleUnauthorized } from '@/services/unsavedWork';
 import { loadPage } from '@/services/pageLoad';
 import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
+import type { WallSegment } from '@/types/walls';
 import type {
   User,
   AdminListedUser,
@@ -56,6 +57,7 @@ import type {
   AdminActivityData,
   AdminServerConfig,
   AdminBackup,
+  CreatedBackup,
   OrphanedFilesReport,
   OrphanedFilesDeletion,
   LeftCampaignSummary,
@@ -465,10 +467,10 @@ class ApiClient {
     return response.data;
   }
 
-  async createAdminBackup(): Promise<AdminBackup> {
+  async createAdminBackup(): Promise<CreatedBackup> {
     // Dumping and zipping the whole database takes minutes on a large
     // instance; the bundled nginx allows this route ten minutes.
-    const response = await this.client.post<AdminBackup>('/api/admin/backups', undefined, { timeout: LONG_ADMIN_REQUEST_MS });
+    const response = await this.client.post<CreatedBackup>('/api/admin/backups', undefined, { timeout: LONG_ADMIN_REQUEST_MS });
     return response.data;
   }
 
@@ -595,6 +597,15 @@ class ApiClient {
 
   async removeCampaignMember(campaignId: string, userId: string): Promise<{ message: string }> {
     const response = await this.client.delete(`/api/campaigns/${campaignId}/members/${userId}`);
+    return response.data;
+  }
+
+  /**
+   * Leave a campaign as a player or a spectator. Refused (409) for its owner
+   * and its DM; `message` is the sentence the leaver's socket is told too.
+   */
+  async leaveCampaign(campaignId: string): Promise<{ message: string }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/leave`);
     return response.data;
   }
 
@@ -727,18 +738,20 @@ class ApiClient {
     return response.data;
   }
 
+  /** An empty or null character name or purpose is stored as none. */
   async createDiceMacro(
     campaignId: string,
-    body: { name: string; expression: string },
+    body: { name: string; expression: string; characterName?: string | null; purpose?: string | null },
   ): Promise<{ macro: import('@/types').DiceMacro }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/macros`, body);
     return response.data;
   }
 
+  /** A field left out is kept; an empty or null character name or purpose clears it. */
   async updateDiceMacro(
     campaignId: string,
     macroId: string,
-    body: { name?: string; expression?: string },
+    body: { name?: string; expression?: string; characterName?: string | null; purpose?: string | null },
   ): Promise<{ macro: import('@/types').DiceMacro }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/macros/${macroId}`, body);
     return response.data;
@@ -958,6 +971,20 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Write a new picture over a picture drawn in CozyVTT, under the same id:
+   * Paint's Save. Answers the asset and `imageUrl`, the picture's address
+   * with a version new on every save, to give the map. No limit of the
+   * page's own, as for an upload.
+   */
+  async replaceDrawnPicture(id: string, formData: FormData): Promise<{ message: string; asset: Asset; imageUrl: string }> {
+    const response = await this.client.put(`/api/assets/${id}/picture`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+    });
+    return response.data;
+  }
+
   async getAsset(id: string): Promise<{ asset: Asset }> {
     const response = await this.client.get<{ asset: Asset }>(`/api/assets/${id}`);
     return response.data;
@@ -1030,6 +1057,12 @@ class ApiClient {
 
   async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<{ map: CampaignMap }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/maps/${mapId}`, data);
+    return response.data;
+  }
+
+  /** Add one wall segment to a map (DM only); the server gives it its id. */
+  async addWall(campaignId: string, mapId: string, segment: Omit<WallSegment, 'id'>): Promise<{ segment: WallSegment; total: number }> {
+    const response = await this.client.post(`/api/campaigns/${campaignId}/maps/${mapId}/walls`, segment);
     return response.data;
   }
 

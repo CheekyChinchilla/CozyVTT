@@ -17,7 +17,7 @@ const seat = vi.hoisted(() => ({ role: 'PLAYER' }));
 const emitInitiativeReorder = vi.hoisted(() => vi.fn());
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-1' } }),
+  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-1' }, viewedMap: { id: 'map-1' } }),
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -37,7 +37,7 @@ const token = (id: string, name: string): Token => ({
 });
 
 const entry = (tokenId: string, name: string, initiative: number): CombatantEntry => ({
-  tokenId, mapId: 'map-1', name, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null,
+  tokenId, mapId: 'map-1', name, imageUrl: '', initiative, hp: null, type: 'npc', disposition: null, characterId: null,
 });
 
 beforeEach(() => {

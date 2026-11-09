@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { NpcStatBlockSchema } from './statBlock';
 import { TOKEN_LIMITS } from './tokenLimits';
+import { MAX_TEMPORARY_HIT_POINTS } from '../utils/rules/hitPoints';
 
 /** How many squares a token occupies. */
 /**
@@ -25,6 +26,13 @@ import { TOKEN_LIMITS } from './tokenLimits';
 export const TOKEN_TYPES = ['player', 'npc', 'object'] as const;
 export const TOKEN_DISPOSITIONS = ['friendly', 'neutral', 'hostile'] as const;
 export const TOKEN_DISPLAY_MODES = ['pog', 'top-down', 'full-art'] as const;
+
+/**
+ * What every route that takes a token's picture answers for one that is not
+ * an asset uploaded as a token picture: a token's, a token template's, a
+ * creature's, a character's or a character template's.
+ */
+export const TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE = 'The token image must be a token picture from the asset library.';
 
 export const TokenSizeSchema = z.object({
   width: z.number().int().min(1).max(10),
@@ -41,7 +49,7 @@ export const TokenSizeSchema = z.object({
 export const TokenHpSchema = z.object({
   current: z.number().int().min(0).max(99999),
   max: z.number().int().min(1).max(99999),
-  temp: z.number().int().min(0).max(99999),
+  temp: z.number().int().min(0).max(MAX_TEMPORARY_HIT_POINTS),
 });
 
 /**

@@ -3,6 +3,7 @@
  */
 
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useUnsavedWorkGuard } from '@/hooks/useUnsavedWorkGuard';
@@ -12,6 +13,7 @@ import type { Character } from '@/types';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
 import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
+import { SHEET_SHELL_DIALOG, SHEET_SHELL_OVERLAY } from './sheetShell';
 
 // Import editor components
 import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor';
@@ -211,15 +213,17 @@ export default function CharacterSheetEditorModal({
     }
   };
 
+  // Portaled to the body, as the sheet it is opened over is (sheetShell.ts).
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+    {createPortal(
+    <div className={SHEET_SHELL_OVERLAY}>
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="character-sheet-editor-title"
-        className="bg-soft-cream border-2 border-moss-green/30 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col"
+        className={SHEET_SHELL_DIALOG}
       >
         {/* Close button, in flow rather than absolute. It used to be
             `absolute top-4 right-4`, but the dialog is not a positioned
@@ -232,7 +236,7 @@ export default function CharacterSheetEditorModal({
           <button
             onClick={handleCancel}
             aria-label="Close dialog"
-            className="p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
+            className="touch-target inline-flex items-center justify-center p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
             disabled={saving}
           >
             <X className="w-5 h-5 text-stone-gray" />
@@ -257,9 +261,11 @@ export default function CharacterSheetEditorModal({
           <CharacterSheetErrorBoundary>{renderCharacterEditor()}</CharacterSheetErrorBoundary>
         </div>
       </div>
-    </div>
-    {/* ConfirmDialog must be rendered AFTER the modal overlay so it appears
-        on top at the same z-50 stacking level (later DOM = visually on top). */}
+    </div>,
+    document.body
+    )}
+    {/* The question is a Modal on the overlay layer (z-60), portaled to the
+        body after this dialog, so it is drawn over it. */}
     <ConfirmDialog
       isOpen={confirmClose}
       title="Discard Changes?"

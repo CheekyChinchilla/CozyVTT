@@ -95,8 +95,12 @@ export default function Modal({
             aria-hidden="true"
           />
 
-          {/* Dialog */}
-          <div className={cn('fixed inset-0 flex items-center justify-center p-4', zDialog)}>
+          {/* Dialog. On a phone (below sm) its margin is 8 px where it was
+              16, its padding 16 px where it was 24, and its footer's buttons
+              wrap; from sm up it is laid out as it always was.
+              Its height is a share of what the browser shows (dvh), so a
+              phone's toolbar never covers its foot. */}
+          <div className={cn('fixed inset-0 flex items-center justify-center p-2 sm:p-4', zDialog)}>
             <motion.div
               ref={modalRef}
               role="dialog"
@@ -107,9 +111,9 @@ export default function Modal({
               exit={dialogExit}
               transition={{ duration: 0.2 }}
               className={cn(
-                'w-full p-6 relative rounded-cozy-lg border border-brand/20 shadow-2xl',
+                'w-full p-4 sm:p-6 relative rounded-cozy-lg border border-brand/20 shadow-2xl',
                 'bg-surface-light/95 backdrop-blur-cozy',
-                fitViewport ? 'h-[90vh] flex flex-col overflow-hidden' : 'max-h-[90vh] overflow-y-auto',
+                fitViewport ? 'h-[90dvh] flex flex-col overflow-hidden' : 'max-h-[90dvh] overflow-y-auto',
                 SIZE_CLASSES[size]
               )}
               onClick={(e) => e.stopPropagation()}
@@ -127,11 +131,12 @@ export default function Modal({
                   </h2>
                 </div>
 
+                {/* 44 by 44 for a finger on a touch screen, as <Button iconOnly> is. */}
                 <button
                   type="button"
                   onClick={handleClose}
                   disabled={closeDisabled}
-                  className="p-2 rounded-lg hover:bg-ink/10 transition-colors
+                  className="p-2 rounded-lg hover:bg-ink/10 transition-colors touch-target pointer-coarse:[&>svg]:mx-auto
                              disabled:opacity-50 disabled:cursor-not-allowed
                              focus:outline-hidden focus:ring-2 focus:ring-brand"
                   aria-label="Close dialog"
@@ -144,7 +149,7 @@ export default function Modal({
               {fitViewport ? <div className="flex-1 min-h-0 flex flex-col">{children}</div> : children}
 
               {/* Footer */}
-              {footer && <div className="flex gap-3 justify-end pt-4 shrink-0">{footer}</div>}
+              {footer && <div className="flex flex-wrap sm:flex-nowrap gap-3 justify-end pt-4 shrink-0">{footer}</div>}
             </motion.div>
           </div>
         </>

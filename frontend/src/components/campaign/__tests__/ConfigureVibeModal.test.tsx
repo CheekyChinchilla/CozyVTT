@@ -79,6 +79,21 @@ describe('ConfigureVibeModal', () => {
     expect(scrollRegions).toEqual([null, null, null]);
   });
 
+  // On a phone the three buttons need about 400 px and the window has about
+  // 310 for them: Cancel and Save Periods go onto a line of their own, at the
+  // right, below Restore Defaults. From sm up the row stays on one line.
+  it('puts Cancel and Save Periods on a line of their own where the row does not fit', async () => {
+    render(<ConfigureVibeModal onClose={vi.fn()} />);
+    await waitFor(() => expect(listAssets).toHaveBeenCalled());
+    const classes = (element: Element | null) => (element?.getAttribute('class') ?? '').split(/\s+/);
+    const group = screen.getByRole('button', { name: 'Save Periods' }).parentElement;
+    const row = screen.getByRole('button', { name: 'Restore Defaults' }).parentElement;
+
+    expect(group?.parentElement).toBe(row);
+    expect(classes(row)).toEqual(expect.arrayContaining(['flex', 'flex-wrap', 'sm:flex-nowrap', 'justify-between']));
+    expect(classes(group)).toContain('ml-auto');
+  });
+
   it('puts the period cards inside a scrollable region', async () => {
     render(<ConfigureVibeModal onClose={vi.fn()} />);
     const nameInput = screen.getByDisplayValue('Day');

@@ -20,7 +20,6 @@ import {
   ImportMapSchema,
   ImportTokenSchema,
   ImportFogSchema,
-  ImportAnnotationsSchema,
   ImportGameSystemSchema,
   CreatureTemplateSchema,
   TokenTemplateImportSchema,
@@ -28,6 +27,7 @@ import {
 } from '../validators/campaignImport';
 import { MAP_LIMITS, GEOMETRY_MARGIN_SQUARES, wallWithinMap, lightWithinMap } from '../validators/maps';
 import { WallSegmentSchema, LightSourceSchema, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES } from '../validators/walls';
+import { NewDrawingSchema, drawingOutsideMap, markupLimitReached, archiveShare, DRAWING_LIMITS, MARKUP_SHARES, type MarkupShare } from '../validators/drawings';
 import { clampTokenPosition } from '../utils/mapTokens';
 import { cutText } from '../utils/cutText';
 
@@ -146,6 +146,8 @@ export interface MapContext {
   remapAsset: (ref: string | null | undefined) => string | null;
   /** Whether the asset the archive names `ref` was imported as a map picture. */
   isMapPicture: (ref: string) => boolean;
+  /** Whether the asset the archive names `ref` was imported as a token picture. */
+  isTokenPicture: (ref: string) => boolean;
   report: ImportReport;
 }
 
@@ -153,6 +155,8 @@ export interface MapContext {
 export interface PreparedMap {
   data: Omit<Prisma.MapUncheckedCreateInput, 'id' | 'campaignId'>;
   tokenCount: number;
+  /** Its drawings, in the archive's order, written once the map is. */
+  drawings: PreparedDrawing[];
 }
 
 interface PlacedToken extends Omit<ImportToken, 'position'> {
@@ -205,12 +209,7 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
     else if (fog.data.fogCols === map.width && fog.data.fogRows === map.height && fog.data.cellPx === map.gridSize) fogData = fog.data;
   }
 
-  let annotations: Prisma.InputJsonValue = [];
-  if (map.annotations !== undefined && map.annotations !== null) {
-    const parsedAnnotations = ImportAnnotationsSchema.safeParse(map.annotations);
-    if (parsedAnnotations.success) annotations = parsedAnnotations.data as Prisma.InputJsonValue;
-    else say('left out its annotations, which could not be read.');
-  }
+  const drawings = prepareDrawings([[map.drawings, 'drawings'], [map.annotations, 'annotations']], map, say);
 
   // A map's picture and spirit layer can only be map pictures, as on Create
   // Map. One the archive names that came in as a token picture or a sound
@@ -227,6 +226,7 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
   const spiritLayerUrl = picture(map.spiritLayerAssetRef, 'spirit layer picture');
   return {
     tokenCount: tokens.length,
+    drawings,
     data: {
       name,
       imageUrl,
@@ -237,8 +237,10 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
       gridSize: map.gridSize,
       feetPerSquare: map.feetPerSquare,
       diagonalRule: map.diagonalRule ?? 'flat',
+      drawnBackground: map.drawnBackground ?? null,
       tokens: tokens as unknown as Prisma.InputJsonValue,
-      annotations,
+      // Unused: a map's drawings are rows of MapDrawing.
+      annotations: [],
       wallSegments: wallSegments as unknown as Prisma.InputJsonValue,
       fogData,
       lightingEnabled: map.lightingEnabled ?? false,
@@ -278,7 +280,7 @@ function prepareTokens(
     );
   }
 
-  const tally = { names: 0, notes: 0, statBlocks: 0, statBlocksDropped: 0, moved: 0 };
+  const tally = { names: 0, notes: 0, statBlocks: 0, statBlocksDropped: 0, moved: 0, pictures: 0 };
   const tokens: PlacedToken[] = [];
   for (const entry of listed) {
     let fitted = fitToSchema(ImportTokenSchema, entry);
@@ -304,10 +306,19 @@ function prepareTokens(
     const position = clampTokenPosition(square, token.size, map);
     if (position.x !== token.position.x || position.y !== token.position.y) tally.moved++;
 
+    // A token's picture can only be a token picture, as on the token routes.
+    // One the archive names that came in as a map picture or a sound stays
+    // in the campaign's library as that, and the token arrives without it.
+    let imageUrl = ctx.remapAsset(token.imageUrl) || '';
+    if (imageUrl && token.imageUrl && !ctx.isTokenPicture(token.imageUrl)) {
+      imageUrl = '';
+      tally.pictures++;
+    }
+
     tokens.push({
       ...token,
       id: randomUUID(),
-      imageUrl: ctx.remapAsset(token.imageUrl) || '',
+      imageUrl,
       position,
       characterId: null,
       controlledBy: null,
@@ -321,6 +332,10 @@ function prepareTokens(
     say(`left the stat block off ${count(tally.statBlocksDropped, 'token')}, which the app cannot store; ${tally.statBlocksDropped === 1 ? 'the token was' : 'the tokens were'} kept.`);
   }
   if (tally.moved) say(`moved ${count(tally.moved, 'token')} onto whole squares inside the map.`);
+  if (tally.pictures) {
+    const one = tally.pictures === 1;
+    say(`left out the ${one ? 'picture' : 'pictures'} of ${count(tally.pictures, 'token')}, which ${one ? 'was' : 'were'} not uploaded as ${one ? 'a token picture' : 'token pictures'}.`);
+  }
   return tokens;
 }
 
@@ -353,6 +368,79 @@ function prepareWalls(raw: unknown, map: MapGeometry, say: (what: string) => voi
     say(`left out the last ${count(walls.length - kept.length, 'wall or door', 'walls or doors')}: a map can hold ${MAX_WALL_SEGMENTS.toLocaleString('en-US')}.`);
   }
   return kept;
+}
+
+/**
+ * A drawing ready to be written, without its map, id, author and time, and
+ * the share of the markup layer it goes back to: the DM's is written as the
+ * importing DM's, the players' with no author.
+ */
+export type PreparedDrawing = Omit<Prisma.MapDrawingCreateManyInput, 'id' | 'mapId' | 'authorId' | 'createdAt' | 'pattern' | 'stamp'> & {
+  share: MarkupShare;
+};
+
+/** A share by the name an import's warnings give it. */
+const SHARE_NAMES: Record<MarkupShare, string> = { DM: "the DM's share", PLAYERS: "the players' share" };
+
+/**
+ * A map's drawings, from its file's `drawings`, where an export writes
+ * them, and its `annotations`, which an export writes empty: releases up
+ * to 1.5.4 store an archive's annotations and send them to every member,
+ * so a drawing for the DM alone must never be there. Each entry of either
+ * is held to what `drawing:add` stores and to the region the map's walls
+ * may reach, and goes back to the share of the markup layer it names
+ * (archiveShare), each share held to its room (markupLimitReached).
+ * Archives from before drawings existed carry `[]` in `annotations`, and
+ * some carried records of another shape, which nothing drew; what is not a
+ * drawing is left out and counted.
+ */
+function prepareDrawings(sources: Array<[unknown, string]>, map: MapGeometry, say: (what: string) => void): PreparedDrawing[] {
+  const entries: unknown[] = [];
+  for (const [raw, what] of sources) {
+    if (raw === undefined || raw === null) continue;
+    if (Array.isArray(raw)) entries.push(...raw);
+    else say(`left out its ${what}, which could not be read.`);
+  }
+  const drawings: PreparedDrawing[] = [];
+  const left = { invalid: 0, outside: 0 };
+  const shares = {
+    DM: { drawings: 0, points: 0, overCount: 0, overPoints: 0 },
+    PLAYERS: { drawings: 0, points: 0, overCount: 0, overPoints: 0 },
+  };
+  for (const entry of entries) {
+    const parsed = NewDrawingSchema.safeParse(entry);
+    if (!parsed.success) {
+      left.invalid++;
+      continue;
+    }
+    if (drawingOutsideMap(parsed.data.points, map)) {
+      left.outside++;
+      continue;
+    }
+    const share = archiveShare(entry, parsed.data.audience);
+    const held = shares[share];
+    const limit = markupLimitReached({ share, drawings: held.drawings, points: held.points }, parsed.data.points.length);
+    if (limit === 'drawings') held.overCount++;
+    else if (limit === 'points') held.overPoints++;
+    else {
+      held.drawings++;
+      held.points += parsed.data.points.length;
+      drawings.push({ ...parsed.data, share });
+    }
+  }
+  if (left.invalid) say(`left out ${count(left.invalid, 'drawing')} the app cannot store.`);
+  if (left.outside) say(`left out ${count(left.outside, 'drawing')} more than ${GEOMETRY_MARGIN_SQUARES} squares outside the map.`);
+  for (const share of [...MARKUP_SHARES].reverse()) {
+    const { overCount, overPoints } = shares[share];
+    const room = DRAWING_LIMITS.markupShares[share];
+    if (overCount) {
+      say(`left out the last ${count(overCount, 'drawing')} of ${SHARE_NAMES[share]}: each share of a map's markup layer holds ${room.drawings.toLocaleString('en-US')}.`);
+    }
+    if (overPoints) {
+      say(`left out ${count(overPoints, 'drawing')} of ${SHARE_NAMES[share]} past the ${room.points.toLocaleString('en-US')} points each share of a map's markup layer holds.`);
+    }
+  }
+  return drawings;
 }
 
 /** A map's lights, each as the light routes store one, with a new id. */
@@ -397,7 +485,23 @@ export function importedGameSystem(value: unknown, whose: string, report: Import
 
 export interface LibraryContext {
   remapAsset: (ref: string | null | undefined) => string | null;
+  /** Whether the asset the archive names `ref` was imported as a token picture. */
+  isTokenPicture: (ref: string) => boolean;
   report: ImportReport;
+}
+
+/**
+ * A creature's or template's picture, as the routes take one: only a token
+ * picture. Any other the archive names stays in the campaign's library as
+ * what it was uploaded as, and the item arrives without it.
+ */
+function libraryPicture(ref: string | null | undefined, ctx: LibraryContext, whose: string): string | null {
+  const address = ctx.remapAsset(ref);
+  if (address && ref && !ctx.isTokenPicture(ref)) {
+    ctx.report.warn(`${whose}: left out its picture, which was not uploaded as a token picture.`);
+    return null;
+  }
+  return address;
 }
 
 /** The fields of a creature or template, in words, for the report. */
@@ -441,7 +545,7 @@ export function prepareCreature(raw: unknown, ctx: LibraryContext): CreatureRow 
     challengeRating: c.challengeRating || null,
     creatureType: c.creatureType || null,
     alignment: c.alignment || null,
-    imageUrl: ctx.remapAsset(c.imageAssetRef),
+    imageUrl: libraryPicture(c.imageAssetRef, ctx, whose),
     statBlock: c.statBlock as Prisma.InputJsonValue,
     size: (c.size || { width: 1, height: 1 }) as Prisma.InputJsonValue,
     disposition: c.disposition || 'hostile',
@@ -475,7 +579,7 @@ export function prepareTokenTemplate(raw: unknown, ctx: LibraryContext): TokenTe
   if (droppedStatBlock) ctx.report.warn(`${whose}: left off its stat block, which the app cannot store; the template was kept.`);
   return {
     name: t.name,
-    imageUrl: ctx.remapAsset(t.imageAssetRef),
+    imageUrl: libraryPicture(t.imageAssetRef, ctx, whose),
     type: t.type || 'object',
     disposition: t.disposition || null,
     displayMode: t.displayMode || 'pog',

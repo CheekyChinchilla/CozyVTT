@@ -91,3 +91,21 @@ export const DND5E_ATTACK_DAMAGE_ROLLS_MAX = 10;
  * carries a few.
  */
 export const DND5E_WEAPON_PROPERTIES_MAX = 20;
+
+/** D&D 5e: one of the four proficiency boxes (armor, weapons, tools, languages). */
+export const DND5E_PROFICIENCY_BOX_MAX = 2000;
+
+/** D&D 5e: the name of a skill of the player's own. */
+export const DND5E_CUSTOM_SKILL_NAME_MAX = 60;
+
+/** D&D 5e: one row's hit die, such as "d10", or "2d6" where a game uses that. */
+export const DND5E_HIT_DIE_MAX = 50;
+
+/** D&D 5e: a further damage line's label ("Two-handed") and its dice. */
+export const DND5E_DAMAGE_ROLL_TEXT_MAX = 60;
+
+/** D&D 5e: a further damage line's damage type. */
+export const DND5E_DAMAGE_TYPE_MAX = 40;
+
+/** D&D 5e: one property of an attack, bounded so the field cannot be used as storage. */
+export const DND5E_WEAPON_PROPERTY_LENGTH_MAX = 60;

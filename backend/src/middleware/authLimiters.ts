@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { failureLimiter } from './failureLimiter';
 import { writeSystemLog } from '../services/systemLog';
+import { inBackground } from '../utils/backgroundWork';
 import { MAX_EMAIL_LENGTH } from '../utils/validation';
 
 /**
@@ -62,11 +63,11 @@ export const accountLoginLimiter = failureLimiter({
   headers: false,
   onLimit: (req, key) => {
     const email = key.slice('account:'.length);
-    void writeSystemLog({
+    inBackground('the activity log line for a sign-in locked', () => writeSystemLog({
       level: 'WARNING',
       message: `Sign-in locked for ${email}: 10 wrong passwords within an hour, the last from ${req.ip ?? 'an unknown address'}`,
       context: { email, address: req.ip ?? null },
-    });
+    }));
   },
 });
 

@@ -6,7 +6,13 @@ import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSe
 import { databaseBeingReplaced, RESTORING_MESSAGE } from '../services/restoreState';
 import { broadcastPresence, getOnlineUserIds, clearCampaignFromLiveSockets, applyRoleToLiveSockets } from './utils';
 import logger from '../utils/logger';
-import { stateRequestAllowed, withinCeiling, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS } from './shared';
+import { holdsNulCharacter, NUL_REFUSAL } from '../validators/nulCharacter';
+import { ackFrom } from './ack';
+import {
+  stateRequestAllowed, withinCeiling, refuseOncePerNotice, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS,
+  withinSocketBudget, TOO_MANY_SOCKET_EVENTS, REJOIN_EVENTS, type EventBudget,
+} from './shared';
+import { boundOutgoingQueue } from './outgoingQueue';
 import { registerTokenHandlers } from './handlers/tokens';
 import { registerDiceHandlers } from './handlers/dice';
 import { registerChatHandlers } from './handlers/chat';
@@ -21,6 +27,7 @@ import { registerFogHandlers } from './handlers/fog';
 import { registerExplorationHandlers } from './handlers/exploration';
 import { registerLightHandlers } from './handlers/lights';
 import { registerPingHandlers } from './handlers/pings';
+import { registerDrawingHandlers } from './handlers/drawings';
 
 /**
  * WebSocket Event Handlers — orchestrator.
@@ -39,6 +46,9 @@ import { registerPingHandlers } from './handlers/pings';
 export function registerEventHandlers(io: Server): void {
   io.on('connection', async (socket: AuthenticatedSocket) => {
     logger.debug('ws connection attempt', { socketId: socket.id });
+
+    // What waits to be sent to this socket is bounded from its first packet.
+    boundOutgoingQueue(socket);
 
     // While a restore replaces the database, nobody's sign-in is the one in
     // it, and a write would land on the restored rows (services/restoreState).
@@ -71,6 +81,33 @@ export function registerEventHandlers(io: Server): void {
       socket.join(socket.userId);
       logger.debug('ws joined user room', { socketId: socket.id, userId: socket.userId });
     }
+
+    // An event holding U+0000 in any text, which PostgreSQL cannot store,
+    // is refused before any handler reads it (validators/nulCharacter.ts):
+    // through its acknowledgement every time, and otherwise with `error` once
+    // in ten seconds, as an event past its ceiling is. The event's name is
+    // not text a handler stores, and an `error` a client sends is never
+    // read, nor answered (below).
+    //
+    // Before that, every event this socket sends is counted together, the
+    // ones no handler takes included: past SOCKET_EVENTS_PER_SECOND it is
+    // dropped unanswered, an acknowledgement too, and the socket is told
+    // once in ten seconds. Answering each would be the flood's own reply.
+    // The join and the requests that load the map (REJOIN_EVENTS) are
+    // neither counted nor dropped: socket.io sends them after whatever the
+    // page queued while the connection was down.
+    const budget: EventBudget = { windowStart: 0, sent: 0 };
+    socket.use(([event, ...args], next) => {
+      if (!REJOIN_EVENTS.has(event) && !withinSocketBudget(budget)) {
+        refuseOncePerNotice(socket, null, 'events', TOO_MANY_SOCKET_EVENTS);
+        return;
+      }
+      if (event === 'error' || !holdsNulCharacter(args)) {
+        next();
+        return;
+      }
+      refuseOncePerNotice(socket, ackFrom(args[args.length - 1]), 'nul', NUL_REFUSAL);
+    });
 
     // Send connection acknowledgment
     socket.emit('connected', {
@@ -114,6 +151,10 @@ export function registerEventHandlers(io: Server): void {
 
         const result = await authenticateCampaign(socket, data.campaignId);
 
+        // TODO(play): a tab that reconnects after its member left or was removed (a laptop that slept
+        // through it) is refused here with a plain `error`, "You are not a member of this campaign", and
+        // its page stays on the campaign. A socket whose user is no longer a member should be sent
+        // campaign.access.revoked instead, so the page says so and goes to the dashboard.
         if (!result.success) {
           socket.emit('error', { message: result.error });
           return;
@@ -137,11 +178,15 @@ export function registerEventHandlers(io: Server): void {
           (room) => room !== socket.id && room !== socket.userId && room !== data.campaignId
         );
         const leaving = oldRooms.map((room) => socket.leave(room));
+        const previous = socket.campaignId;
         // The role is refreshed even when the campaign is the same, since a
         // client re-authenticates after a reconnect.
         socket.join(data.campaignId);
         socket.campaignId = data.campaignId;
         socket.role = result.role;
+        // A token carried in the campaign this socket has left goes back
+        // where it stands there: its put-down would go to this campaign now.
+        if (previous && previous !== data.campaignId) socket.releaseHeldTokens?.(previous);
         await Promise.all(leaving);
 
         for (const room of oldRooms) {
@@ -219,6 +264,9 @@ export function registerEventHandlers(io: Server): void {
       }
       if (socket.campaignId !== campaignId) return;
       if (!membership) {
+        // TODO(play): this says "removed" whatever took the member out, so a leaver's tab re-joining at the
+        // moment of the leave is told "You were removed from this campaign.". It should be told the reason
+        // the leave gave, `left`.
         await clearCampaignFromLiveSockets(userId, campaignId);
         await broadcastPresence(campaignId);
       } else if (membership.role !== socket.role) {
@@ -262,6 +310,7 @@ export function registerEventHandlers(io: Server): void {
     registerExplorationHandlers(io, socket);
     registerLightHandlers(io, socket);
     registerPingHandlers(io, socket);
+    registerDrawingHandlers(io, socket);
 
     // ============================================
     // DISCONNECT EVENT
@@ -296,7 +345,11 @@ export function registerEventHandlers(io: Server): void {
     // PING/PONG HEARTBEAT
     // Connection health monitoring
     // ============================================
+    // Under a ceiling of its own, as every event a client sends is: each
+    // is answered, and a client that sent them without reading filled the
+    // server's memory with the answers.
     socket.on('ping', () => {
+      if (!withinCeiling(socket, 'ping')) return;
       socket.emit('pong', { timestamp: new Date().toISOString() });
     });
 

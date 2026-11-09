@@ -37,7 +37,7 @@ const sheet = {
 
 function open(tab: RegExp) {
   render(<Pathfinder2eCharacterEditor character={pf2eCharacter(sheet)} onSave={vi.fn()} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: tab }));
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
 }
 
 describe.each([

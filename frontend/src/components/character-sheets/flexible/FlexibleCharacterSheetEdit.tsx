@@ -9,6 +9,7 @@ import type { Character } from '../../../types';
 import type { FlexibleSection, SectionTemplate } from '../../../types/flexible-character-sheet';
 import { initializeFlexibleData } from './utils/section-helpers';
 import { SectionEditor } from './components/SectionEditor';
+import { DragEntry, type DragGrip } from './components/DragEntry';
 import { AddSectionMenu } from './components/AddSectionMenu';
 import { StatsEditor } from './components/sections/StatsEditor';
 import { ListEditor } from './components/sections/ListEditor';
@@ -21,6 +22,7 @@ import type { CharacterData } from '@/types';
 import Button from '@/components/ui/Button';
 import { FLEXIBLE_MAX_SECTIONS } from '@/constants/sheetLimits';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
+import PortraitNotes from '../PortraitNotes';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
@@ -170,7 +172,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
     );
   };
 
-  const renderSectionEditor = (section: FlexibleSection) => {
+  const renderSectionEditor = (section: FlexibleSection, grip: DragGrip) => {
     let editor: React.ReactNode;
 
     switch (section.type) {
@@ -194,6 +196,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
         section={section}
         onUpdate={(updates) => updateSection(section.id, updates)}
         onRemove={() => removeSection(section.id)}
+        grip={grip}
       >
         {editor}
       </SectionEditor>
@@ -201,13 +204,15 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   };
 
   return (
-    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-6">
-      {/* Header with Save/Cancel */}
-      <div className="flex items-center justify-between pb-4 border-b border-moss-green/20 mb-6">
-        <div className="flex items-center gap-4">
-          {/* Token Image Upload */}
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-3 sm:p-6">
+      {/* Header with Save/Cancel, which go under the name where the row is
+          too narrow for both */}
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-moss-green/20 mb-6">
+        <div className="flex items-center gap-4 min-w-0">
+          {/* Token Image Upload, as wide as the portrait so its caption wraps
+              under it on a phone */}
           {allowTokenPicture && (
-          <div className="relative group">
+          <div className="relative group w-16 shrink-0">
             <input
               type="file"
               id="token-upload-flexible"
@@ -234,16 +239,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
                 <Upload className="w-6 h-6 text-white" />
               </div>
             </label>
-            {tokenError && (
-              <div className="absolute top-full mt-1 text-xs text-danger-ink whitespace-nowrap">
-                {tokenError}
-              </div>
-            )}
-            {!character.campaignId && (
-              <div className="absolute top-full mt-1 text-xs text-warning-ink whitespace-nowrap">
-                Saves as personal token
-              </div>
-            )}
+            <PortraitNotes error={tokenError} personal={!character.campaignId} errorClassName="text-danger-ink" noteClassName="text-warning-ink" />
           </div>
           )}
 
@@ -274,9 +270,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       {sections.length > 0 ? (
         <Reorder.Group axis="y" values={sections} onReorder={setSections} className="space-y-4 mb-4">
           {sections.map((section) => (
-            <Reorder.Item key={section.id} value={section}>
-              {renderSectionEditor(section)}
-            </Reorder.Item>
+            <DragEntry key={section.id} value={section}>
+              {(grip) => renderSectionEditor(section, grip)}
+            </DragEntry>
           ))}
         </Reorder.Group>
       ) : (

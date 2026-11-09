@@ -10,6 +10,8 @@ import type { NpcStatBlock } from '@/types';
 import { ABILITY_KEYS, CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
 import ProficiencyEditor from './ProficiencyEditor';
 import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
+import PrintedSkillsEditor from './PrintedSkillsEditor';
+import { creatureModel, scoreLabel } from './creatureModel';
 import { changeAbilitiesOrRating } from './statBlockProficiency';
 import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
 import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
@@ -20,8 +22,10 @@ interface StatBlockEditorProps {
   /**
    * The campaign's game system. Decides how this stat block is interpreted:
    * D&D 5e derives saves and skills from ability scores and Challenge Rating,
-   * while Pathfinder 2e stores printed modifiers against a creature Level.
-   * Defaults to 5e, which is the shape the stat block was designed around.
+   * Pathfinder 2e stores printed modifiers against a creature Level, and Call
+   * of Cthulhu and Shadowrun 6e store their scores and skills as typed
+   * (creatureModel). Defaults to 5e, which is the shape the stat block was
+   * designed around.
    */
   gameSystem?: string | null;
 }
@@ -33,7 +37,8 @@ export default function StatBlockEditor({
   onChange,
   gameSystem = 'DND_5E',
 }: StatBlockEditorProps) {
-  const isPf2e = gameSystem === 'PATHFINDER_2E';
+  const model = creatureModel(gameSystem);
+  const isPf2e = model === 'pf2e';
   const pf2eModifiers = readAttributeModifiers(statBlock);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['core', 'abilities']));
 
@@ -137,7 +142,7 @@ export default function StatBlockEditor({
                   className="input-cozy input-cozy-number w-full text-xs text-center"
                 />
               </div>
-            ) : (
+            ) : model === 'derived' ? (
               <div>
                 <label className="text-[10px] text-ink-muted block mb-0.5" htmlFor="statblock-cr">CR</label>
                 {/* A select, not free text: CR drives the proficiency bonus, so a
@@ -154,7 +159,7 @@ export default function StatBlockEditor({
                   ))}
                 </select>
               </div>
-            )}
+            ) : null}
             <div>
               <label className="text-[10px] text-ink-muted block mb-0.5">XP</label>
               <input
@@ -211,13 +216,19 @@ export default function StatBlockEditor({
       )}
       {isExpanded('abilities') && !isPf2e && (
         <div className="grid grid-cols-6 gap-1.5 pl-1">
-          {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
+          {ABILITY_KEYS.map((ab) => (
             <div key={ab} className="text-center">
-              <label className="text-[9px] font-bold text-brand-ink uppercase block mb-0.5">{ab}</label>
+              <label className="text-[9px] font-bold text-brand-ink uppercase block mb-0.5">{scoreLabel(gameSystem, ab)}</label>
               <input
                 type="number"
+                aria-label={scoreLabel(gameSystem, ab)}
                 value={statBlock.abilities[ab]}
-                onChange={(e) => updateAbility(ab, parseInt(e.target.value, 10) || 10)}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10) || 10;
+                  // Only D&D 5e works anything out from a score.
+                  if (model === 'derived') updateAbility(ab, value);
+                  else update({ abilities: { ...statBlock.abilities, [ab]: value } });
+                }}
                 className="input-cozy input-cozy-number w-full text-xs text-center"
               />
             </div>
@@ -226,10 +237,12 @@ export default function StatBlockEditor({
       )}
 
       {/* ── Saves & Skills ── */}
-      <SectionHeader title="Saves & Skills" section="saves" expanded={isExpanded('saves')} toggle={toggleSection} />
+      <SectionHeader title={model === 'printed' ? 'Skills' : 'Saves & Skills'} section="saves" expanded={isExpanded('saves')} toggle={toggleSection} />
       {isExpanded('saves') &&
-        (isPf2e ? (
+        (model === 'pf2e' ? (
           <Pf2eProficiencyEditor statBlock={statBlock} onChange={onChange} />
+        ) : model === 'printed' ? (
+          <PrintedSkillsEditor statBlock={statBlock} onChange={onChange} />
         ) : (
           <ProficiencyEditor statBlock={statBlock} onChange={onChange} />
         ))}

@@ -137,3 +137,67 @@ describe('Edit Map and the spirit layer', () => {
     expect(sent()).toEqual({ fogEnabled: false, feetPerSquare: 10 });
   });
 });
+
+// The dialog's two columns are the grid's settings and the preview of that
+// grid. The lighting and fog switches were cells of the same grid, so they
+// pushed the preview down to the bottom of the right column, far from the
+// settings it shows.
+describe('Edit Map layout', () => {
+  it('puts the grid preview beside the grid settings, in a two-column row of its own', async () => {
+    open();
+    const preview = await screen.findByText('Grid Preview');
+    const dimensions = screen.getByText('Map Dimensions');
+    const row = preview.closest('.grid');
+    expect(row).not.toBeNull();
+    expect(dimensions.closest('.grid')).toBe(row);
+    expect(row?.children).toHaveLength(2);
+  });
+
+  it('puts the lighting and fog switches in a section of their own after it', async () => {
+    open();
+    const preview = await screen.findByText('Grid Preview');
+    const row = preview.closest('.grid');
+    const section = screen.getByRole('group', { name: 'Lighting and Fog' });
+    for (const name of ['Enable dynamic lighting', 'Fog of war on this map', 'Global Illumination', 'Remember explored areas']) {
+      const box = screen.getByRole('checkbox', { name });
+      expect(section.contains(box)).toBe(true);
+      expect(row?.contains(box)).toBe(false);
+    }
+    expect(row !== null && Boolean(row.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+});
+
+// The alternating rule was described as 5/10/5/10 ft diagonals whatever the
+// Grid Scale.
+describe("Edit Map's diagonal rules", () => {
+  it('describes the alternating rule at the Grid Scale chosen', async () => {
+    open({ ...listed, feetPerSquare: 10 } as CampaignMap);
+    expect(await screen.findByText('Alternating — 10/20/10/20 ft diagonals')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('5 ft'));
+
+    expect(screen.getByText('Alternating — 5/10/5/10 ft diagonals')).toBeInTheDocument();
+  });
+});
+
+describe('Edit Map\'s buttons', () => {
+  // They stood in a see-through bar inside the scrolling form, inset from its
+  // sides, so on a phone the form's fields showed through and around them.
+  it('stand under the scrolling form, in the dialog\'s own footer', () => {
+    open();
+    const form = screen.getByText('Map Dimensions').closest('.overflow-y-auto');
+    expect(form).not.toBeNull();
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    expect(screen.getByRole('dialog', { name: 'Edit Map' })).toContainElement(cancel);
+    expect(form).not.toContainElement(cancel);
+  });
+});
+
+describe('Edit Map\'s size boxes', () => {
+  it('are named by their labels', () => {
+    open();
+    for (const name of ['Width (grid squares)', 'Height (grid squares)', 'Grid Size (px/square)']) {
+      expect(screen.getByRole('spinbutton', { name })).toBeInTheDocument();
+    }
+  });
+});

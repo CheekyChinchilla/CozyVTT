@@ -54,14 +54,18 @@ function poolCount(total: string): number | null {
  *
  * `die` holds it directly and may be anything the dice parser accepts — "d10",
  * but equally "2d6" or "1d10+1" for a homebrew pool. Without it, one die is
- * taken out of the older pool string.
+ * taken out of the older pool string. The parser is asked about the die on
+ * its own and with Constitution added, as it is spent: a die that ends in a
+ * sign rolls only once the modifier follows it, and then not as die plus
+ * Constitution ("d10/+2" halves the die). One + at the end is dropped, since
+ * "1d10+" did roll as the die plus Constitution and still does.
  */
-export function hitDieExpression(hd: DnD5eHitDice): string | null {
-  const die = typeof hd.die === 'string' ? hd.die.trim() : '';
-  if (die) return isValidDiceExpression(die) ? die : null;
-
-  const size = hitDieSize(hd.total ?? '');
-  return size === null ? null : `1d${size}`;
+export function hitDieExpression(hd: DnD5eHitDice, conModifier: number): string | null {
+  const written = typeof hd.die === 'string' ? hd.die.trim() : '';
+  const size = written ? null : hitDieSize(hd.total ?? '');
+  const expression = written ? written.replace(/\+$/, '').trimEnd() : size === null ? null : `1d${size}`;
+  if (expression === null) return null;
+  return isValidDiceExpression(expression) && isValidDiceExpression(spendRoll(expression, conModifier)) ? expression : null;
 }
 
 /**
@@ -87,6 +91,6 @@ export function spendRoll(expression: string, conModifier: number): string {
 }
 
 /** Whether this entry can be spent: it describes a die, and one is left. */
-export function canSpendHitDie(hd: DnD5eHitDice): boolean {
-  return hitDieExpression(hd) !== null && (hd.remaining ?? 0) > 0;
+export function canSpendHitDie(hd: DnD5eHitDice, conModifier: number): boolean {
+  return hitDieExpression(hd, conModifier) !== null && (hd.remaining ?? 0) > 0;
 }

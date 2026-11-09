@@ -125,7 +125,8 @@ describeOnPosix('restore.sh', () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('DATABASE_URL names the database schema "cozy"');
-    expect(result.stdout).toContain('Admin Dashboard');
+    expect(result.stdout).toContain('Restore in the Admin Panel, which keep to the schema DATABASE_URL names.');
+    expect(result.stdout).not.toContain('Admin Dashboard');
     await expect(fs.access(loaded)).rejects.toThrow();
   });
 

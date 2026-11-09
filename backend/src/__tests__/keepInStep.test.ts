@@ -64,10 +64,37 @@
  * campaign over them and the campaign dialogs stop each box at them. The file
  * is kept identical in both packages.
  *
+ * The longest chat message. The server refuses a message over it and the
+ * chat box stops at it. The file is kept identical in both packages.
+ *
+ * The drawing limits: the kinds of drawing, how many a map's markup layer
+ * holds and how many points, a stroke's width, a label's length. The server
+ * refuses a drawing outside them and the draw tool keeps to them. The file is
+ * kept identical in both packages, and its audiences and layers are the
+ * database's two enums.
+ *
+ * The fields of a drawing: what the schema takes, what the server sends,
+ * the API document's Drawing schema and the WebSocket guide's table of them;
+ * and what a campaign archive carries of one, which the import reads with
+ * the same schema. The browser declares a drawing as it is sent, and each
+ * drawing event the draw tool sends, in frontend/src/types/drawings.ts:
+ * those are held to the server's interface and to the schemas the events
+ * are read with.
+ *
  * The files each kind of asset may be uploaded as. The server decides by a
  * file's bytes; the Upload Asset dialog checks a file's extension against the
  * same list, and refused Ogg, WAV and Markdown files the server takes while
  * its own list differed. The file is kept identical in both packages.
+ *
+ * The Campaign Settings the server sends every member's page when the DM
+ * saves them, `campaign.settings.updated`: Players may draw was added to
+ * the route, and the payload is declared on each side.
+ *
+ * The chat message the server sends and the client reads, and the kinds of
+ * chat message: the database names them, and the frontend declares its own
+ * enum, which has to name the same values. A whisper added a type and two
+ * fields to both. And the chat message the client sends, whose fields and
+ * types are the ones ChatMessageSchema takes.
  *
  * The campaign archive format version. The import window reads an archive's
  * manifest in the browser and shows it only for the version the server
@@ -142,12 +169,27 @@
  * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
  * declares its own enum, which has to name the same values.
  *
+ * The columns of a map. What a member is sent of a map is built from three
+ * lists in utils/spirit-layer.ts: the columns sent to everyone as stored, the
+ * ones decided for each recipient, and the ones never sent. Every column of
+ * the Map model is in exactly one, so a column added later fails here until
+ * someone decides who may see it. The frontend's CampaignMap and the API
+ * document's Map schema describe what the first two lists send, and the API
+ * document's map list and campaign fetch what the first list selects.
+ *
  * The Universal VTT import's longest wait. An import waits for its turn and
  * then runs, each up to a limit (services/uvttImportQueue.ts), so the DM is
  * told why it failed before the bundled nginx gives up on the request and
  * shows a proxy error instead. Both limits together, and five seconds more,
  * stay within the proxy_read_timeout of the location in nginx/locations.conf
  * that serves the import, chosen as nginx chooses it.
+ *
+ * The password fields the U+0000 refusal leaves alone. The refusal
+ * (middleware/nulCharacter.ts) lists each route that reads a password from
+ * its body and the fields it reads; the routes decide which those are, by
+ * the schemas they parse their bodies with and the fields they take from
+ * req.body by name. A password field the list missed is refused, and an
+ * account whose password holds the character could not use it there.
  */
 
 import crypto from 'crypto';
@@ -155,14 +197,28 @@ import fs from 'fs';
 import path from 'path';
 import { RESTORE_TRAILER } from '../utils/pgRestore';
 import { sessionSecretProblem } from '../config/sessionSecret';
-import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
+import { SOCKET_CEILINGS, SOCKET_EVENTS_PER_SECOND, type CeilingWindow } from '../websocket/shared';
+import { MAX_QUEUED_PACKETS, MAX_QUEUED_BYTES, MAX_QUEUED_BYTES_PER_USER } from '../websocket/outgoingQueue';
+import { REVEALS_PER_SECOND } from '../websocket/handlers/exploration';
 import { THEME_IDS, FONT_IDS } from '../validators/appearance';
 import { sheetTypeMismatches } from './helpers/sheetTypeParity';
 import ts from 'typescript';
 import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
+import { ChatMessageSchema } from '../validators/chat';
+import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS } from '../validators/drawingLimits';
+import {
+  NewDrawingSchema, DrawingPreviewSchema, DrawingAddEventSchema, DrawingRemoveEventSchema, DrawingClearMineEventSchema,
+  DrawingClearEventSchema, DrawingPreviewEventSchema, DrawingsRequestEventSchema,
+} from '../validators/drawings';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
+import { Prisma, type MapDrawing } from '@prisma/client';
+import { drawingForArchive } from '../services/mapDrawings';
+import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
+import { PASSWORD_FIELDS } from '../middleware/nulCharacter';
+import { PICTURE_LIMITS } from '../utils/pictureLimits';
+import { PICTURE_SIZE_LIMITS } from '../validators/pictureSizeLimits';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -380,9 +436,188 @@ describe('campaign.access.revoked, which the server sends and the client reads',
   });
 });
 
+describe('chat.message, which the server sends and the client reads', () => {
+  it('has the same fields on both sides', () => {
+    expect(interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageBroadcast')).toEqual(
+      interfaceFields(read('backend/src/websocket/handlers/chat.ts'), 'ChatMessageBroadcast')
+    );
+  });
+});
+
+describe('campaign.settings.updated, which the server sends and the client reads', () => {
+  it('has the same fields on both sides', () => {
+    expect(interfaceFields(read('frontend/src/types/index.ts'), 'CampaignSettingsUpdatedBroadcast')).toEqual(
+      interfaceFields(read('backend/src/routes/campaigns.ts'), 'CampaignSettingsUpdatedBroadcast')
+    );
+  });
+});
+
+describe('chat.message, which the client sends and the server checks', () => {
+  const fields = interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageEvent');
+
+  it('names the fields ChatMessageSchema takes, and no others', () => {
+    const declared = fields.map((line) => {
+      const m = /^(\w+)\??:/.exec(line);
+      if (!m) throw new Error(`ChatMessageEvent has a line this test cannot read: ${line}`);
+      return m[1];
+    });
+    expect(declared.sort()).toEqual(Object.keys(ChatMessageSchema.shape).sort());
+  });
+
+  it('asks for the types the schema takes', () => {
+    const line = fields.find((l) => l.startsWith('type:')) ?? '';
+    expect([...line.matchAll(/MessageType\.(\w+)/g)].map((m) => m[1]).sort()).toEqual([...ChatMessageSchema.shape.type.unwrap().options].sort());
+  });
+});
+
+describe('the kinds of chat message', () => {
+  it('are the same in the database schema and the frontend', () => {
+    const prismaBlock = /enum MessageType \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+    const frontendBlock = /export enum MessageType \{([^}]*)\}/.exec(read('frontend/src/types/index.ts'));
+    if (!prismaBlock || !frontendBlock) throw new Error('a MessageType enum moved; update this test');
+    const database = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
+      expect(m[1]).toBe(m[2]);
+      return m[2];
+    });
+    expect(frontend).toEqual(database);
+  });
+});
+
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));
+  });
+});
+
+describe('the drawing limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/drawingLimits.ts')).toBe(read('backend/src/validators/drawingLimits.ts'));
+  });
+
+  it.each([
+    ['DrawingAudience', DRAWING_AUDIENCES],
+    ['DrawingLayer', DRAWING_LAYERS],
+  ] as const)('name the values of %s the database has, in its order', (name, values) => {
+    const block = new RegExp(`enum ${name} \\{([^}]*)\\}`).exec(read('backend/prisma/schema.prisma'));
+    if (!block) throw new Error(`no enum ${name} in the schema; update this test`);
+    const database = block[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    expect([...values]).toEqual(database);
+  });
+});
+
+// A drawing is declared in several places: the schema that decides what is
+// stored (NewDrawingSchema), the shape every path sends (DrawingSent), the
+// API document's Drawing schema and the WebSocket guide's table of fields.
+// A field added to one and not the others is one a script is told nothing
+// of, or one the server drops.
+describe('the fields of a drawing', () => {
+  const taken = Object.keys(NewDrawingSchema.shape).sort();
+  const sentFields = interfaceFields(read('backend/src/services/mapDrawings.ts'), 'DrawingSent').map((line) => {
+    const m = /^(\w+)\??:/.exec(line);
+    if (!m) throw new Error(`DrawingSent has a line this test cannot read: ${line}`);
+    return m[1];
+  });
+  const drawingSchema = () => {
+    const m = /\n {4}Drawing:\n[\s\S]*?\n {6}properties:\n([\s\S]*?)\n {6}required: \[([^\]]*)\]/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer has the Drawing schema where this test looks; update this test with the file');
+    return { properties: m[1], required: m[2].split(',').map((f) => f.trim()) };
+  };
+
+  it('are sent as the schema takes them, with the id, the author and the time the server sets', () => {
+    expect([...sentFields].sort()).toEqual([...taken, 'authorId', 'createdAt', 'id'].sort());
+  });
+
+  it('are the properties of the Drawing schema in the API document, every one required', () => {
+    const { properties, required } = drawingSchema();
+    expect([...properties.matchAll(/^ {8}(\w+):/gm)].map((p) => p[1]).sort()).toEqual([...sentFields].sort());
+    expect([...required].sort()).toEqual([...sentFields].sort());
+  });
+
+  it('take the kinds of drawing the limits file names, in the API document', () => {
+    const kinds = /^ {8}kind:\n {10}type: string\n {10}enum: \[([^\]]*)\]/m.exec(drawingSchema().properties);
+    if (!kinds) throw new Error('the Drawing schema no longer lists its kinds where this test looks; update this test with the file');
+    expect(kinds[1].split(',').map((k) => k.trim())).toEqual([...DRAWING_KINDS]);
+  });
+
+  it('are the rows of the WebSocket guide\'s table of what a drawing is', () => {
+    const guide = read('backend/docs/WEBSOCKET_DOCUMENTATION.md');
+    const at = guide.indexOf('**What a drawing is.**');
+    if (at === -1) throw new Error('the WebSocket guide no longer has "What a drawing is"; update this test with the file');
+    const table = guide.slice(at).split('\n\n')[1] ?? '';
+    const rows = table.split('\n').filter((l) => /^\| `\w+` \|/.test(l)).map((l) => /^\| `(\w+)`/.exec(l)![1]);
+    expect(rows.sort()).toEqual(taken);
+  });
+});
+
+// The page holds a drawing as the server sends it, and the draw tool sends
+// each drawing event in the shape its schema reads. A field the server adds
+// and the page does not declare is one it never draws; one the tool sends
+// that the schema does not take is dropped on the way.
+describe('a drawing as the page holds it, and the drawing events the page sends', () => {
+  const types = read('frontend/src/types/drawings.ts');
+  const names = (name: string) => interfaceFields(types, name).map((line) => {
+    const m = /^(\w+)\??:/.exec(line);
+    if (!m) throw new Error(`${name} has a line this test cannot read: ${line}`);
+    return m[1];
+  });
+
+  it('has the fields DrawingSent has, of the same types', () => {
+    expect(interfaceFields(types, 'Drawing')).toEqual(interfaceFields(read('backend/src/services/mapDrawings.ts'), 'DrawingSent'));
+  });
+
+  // `opId` is no field of an event's schema: the handlers read it from the
+  // payload as it came (websocket/opId.ts) and echo it.
+  const sent: Array<[string, { shape: object }, string[]]> = [
+    ['NewDrawing', NewDrawingSchema, []],
+    ['DrawingPreview', DrawingPreviewSchema, []],
+    ['DrawingAddEvent', DrawingAddEventSchema, ['opId']],
+    ['DrawingRemoveEvent', DrawingRemoveEventSchema, ['opId']],
+    ['DrawingClearMineEvent', DrawingClearMineEventSchema, ['opId']],
+    ['DrawingClearEvent', DrawingClearEventSchema, ['opId']],
+    ['DrawingPreviewEvent', DrawingPreviewEventSchema, []],
+    ['DrawingsRequestEvent', DrawingsRequestEventSchema, []],
+  ];
+  it.each(sent)('%s names the fields its schema takes, and no others', (name, schema, echoed) => {
+    expect(names(name).sort()).toEqual([...Object.keys(schema.shape), ...echoed].sort());
+  });
+
+  // What the page reads of each drawing event the server sends. The server
+  // declares each payload where it builds it (services/mapDrawings.ts) and
+  // the handlers hold what they send to it; the names and which may be
+  // left out must agree. The drawing inside is the check above's.
+  const withOptional = (source: string, name: string) => interfaceFields(source, name).map((line) => {
+    const m = /^(\w+)(\??):/.exec(line);
+    if (!m) throw new Error(`${name} has a line this test cannot read: ${line}`);
+    return `${m[1]}${m[2]}`;
+  }).sort();
+  it.each(['DrawingAddedBroadcast', 'DrawingRemovedBroadcast', 'DrawingsClearedBroadcast', 'DrawingPreviewedBroadcast', 'DrawingsStateBroadcast'])(
+    '%s has the fields the server sends, the same ones optional',
+    (name) => {
+      expect(withOptional(types, name)).toEqual(withOptional(read('backend/src/services/mapDrawings.ts'), name));
+    },
+  );
+});
+
+// A campaign archive carries each drawing as the exporter writes it and the
+// importer reads it with the schema that decides what is stored. A field the
+// schema takes and the exporter leaves out is lost on every round trip.
+describe('a drawing as a campaign archive carries it', () => {
+  const row: MapDrawing = {
+    id: 'drawing', mapId: 'map', authorId: null, audience: 'ALL', layer: 'MARKUP', kind: 'line', color: '#1a1a1a',
+    fillColor: null, pattern: null, stamp: null, width: 2, rotation: 0, sortKey: 0, points: [[0, 0], [1, 1]], text: null,
+    createdAt: new Date(0),
+  };
+
+  // And the share of the map's markup layer it counts to, which the
+  // import reads beside the schema, to give it back to its share.
+  it('has the fields the import takes, and its share, and no others', () => {
+    expect(Object.keys(drawingForArchive(row, null)).sort()).toEqual([...Object.keys(NewDrawingSchema.shape), 'share'].sort());
+  });
+
+  it('is stored by the import in columns of MapDrawing, every field of it', () => {
+    const columns: string[] = Object.values(Prisma.MapDrawingScalarFieldEnum);
+    expect(Object.keys(NewDrawingSchema.shape).filter((field) => !columns.includes(field))).toEqual([]);
   });
 });
 
@@ -399,6 +634,19 @@ describe('sight on the map', () => {
 
   it('finds walls near a point with the same file in the browser and on the server', () => {
     expect(read('frontend/src/utils/spatialIndex.ts')).toBe(read('backend/src/utils/spatialIndex.ts'));
+  });
+});
+
+// A map drawn in CozyVTT is made no wider or taller than the server keeps,
+// so its picture is never refused on Save.
+describe('the largest side a picture may have', () => {
+  it('is the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/pictureSizeLimits.ts')).toBe(read('backend/src/validators/pictureSizeLimits.ts'));
+  });
+
+  it('is the one the server checks pictures against', () => {
+    expect(PICTURE_LIMITS.maxSide).toBe(PICTURE_SIZE_LIMITS.maxSide);
+    expect(read('backend/src/utils/pictureLimits.ts')).toContain('maxSide: PICTURE_SIZE_LIMITS.maxSide,');
   });
 });
 
@@ -472,6 +720,52 @@ describe('the limits on a campaign\'s name and description', () => {
   });
 });
 
+describe('the chat limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/chatLimits.ts')).toBe(read('backend/src/validators/chatLimits.ts'));
+  });
+
+  it('give the chat box its longest message, with no number of its own', () => {
+    const panel = read('frontend/src/components/campaign/ChatPanel.tsx');
+    expect(panel).toContain("from '@/constants/chatLimits'");
+    expect(panel).not.toMatch(/\b2000\b|MAX_MESSAGE_LENGTH = /);
+  });
+
+  it('give the history route its longest page, which the chat reads as it looks back', () => {
+    expect(read('backend/src/routes/campaigns.ts')).toContain('limitNum > MAX_CHAT_HISTORY_PAGE');
+    const walk = read('frontend/src/utils/messageHistory.ts');
+    expect(walk).toContain("from '@/constants/chatLimits'");
+    expect(walk).toContain('let limit = MAX_CHAT_HISTORY_PAGE;');
+    expect(walk).toContain('read(limit, cursor)');
+  });
+});
+
+describe('the dice limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/diceLimits.ts')).toBe(read('backend/src/validators/diceLimits.ts'));
+  });
+
+  it.each([
+    'frontend/src/components/campaign/DiceRoller.tsx',
+    'frontend/src/components/campaign/DiceMacroManager.tsx',
+  ])('give the boxes in %s their longest, with no number of their own', (file) => {
+    const source = read(file);
+    expect(source).toContain("from '@/constants/diceLimits'");
+    expect(source).not.toMatch(/maxLength=\{\d+\}/);
+  });
+});
+
+describe('the refusal of the tag kept for drawn maps', () => {
+  it.each([
+    'backend/src/validators/assets.ts',
+    'frontend/src/components/assets/AssetUploadModal.tsx',
+  ])('is the mirrored asset limits file\'s in %s, with no wording of its own', (file) => {
+    const source = read(file);
+    expect(source).toContain('DRAWN_MAP_TAG_REFUSAL');
+    expect(source).not.toMatch(/is kept for maps drawn in CozyVTT/);
+  });
+});
+
 describe('the files each kind of asset may be uploaded as', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/uploadTypes.ts')).toBe(read('backend/src/validators/uploadTypes.ts'));
@@ -502,6 +796,21 @@ describe('the socket flood ceilings in the WebSocket guide', () => {
 
   it.each(Object.entries(SOCKET_CEILINGS))('%s is stated as the server applies it', (event, ceiling) => {
     expect(stated(event)).toBe(inWords(ceiling.windows));
+  });
+
+  it('exploration:reveal is stated as the server applies it', () => {
+    expect(stated('exploration:reveal')).toBe(inWords([{ limit: REVEALS_PER_SECOND, windowMs: 1000 }]));
+  });
+
+  it('every event one socket sends is stated as the server counts it', () => {
+    expect(guide).toContain(`one socket may send at most ${SOCKET_EVENTS_PER_SECOND} events a second`);
+  });
+
+  it('what is held for a client that does not read is stated as the server bounds it', () => {
+    expect(guide).toContain(
+      `more than ${MAX_QUEUED_PACKETS.toLocaleString('en-US')} packets, or ${MAX_QUEUED_BYTES / (1024 * 1024)} MiB of them, wait`
+    );
+    expect(guide).toContain(`more than ${MAX_QUEUED_BYTES_PER_USER / (1024 * 1024)} MiB waiting over all its connections`);
   });
 });
 
@@ -876,6 +1185,77 @@ describe('the game systems', () => {
   });
 });
 
+describe('the columns of a map and who is sent them', () => {
+  const listed: string[] = [...MAP_FIELDS_SENT_TO_EVERYONE, ...MAP_FIELDS_DECIDED_PER_RECIPIENT, ...MAP_FIELDS_NEVER_SENT];
+  const sent: string[] = [...MAP_FIELDS_SENT_TO_EVERYONE, ...MAP_FIELDS_DECIDED_PER_RECIPIENT].sort();
+
+  it('are each in one of the three lists in utils/spirit-layer.ts, and the lists name nothing else', () => {
+    expect([...new Set(listed)].sort()).toEqual(Object.values(Prisma.MapScalarFieldEnum).sort());
+  });
+
+  it('are in one list each', () => {
+    expect(listed.filter((field, i) => listed.indexOf(field) !== i)).toEqual([]);
+  });
+
+  it('are the fields of the frontend\'s CampaignMap, as far as a member is sent them', () => {
+    const declared = interfaceFields(read('frontend/src/types/index.ts'), 'CampaignMap').map((line) => {
+      const m = /^(\w+)\??:/.exec(line);
+      if (!m) throw new Error(`CampaignMap has a line this test cannot read: ${line}`);
+      return m[1];
+    });
+    expect(declared.sort()).toEqual(sent);
+  });
+
+  it('are the properties of the Map schema in the API document, as far as a member is sent them', () => {
+    const m = /\n {4}Map:\n {6}type: object\n {6}properties:\n([\s\S]*?)\n {4}\w+:\n/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer has the Map schema where this test looks; update this test with the file');
+    expect([...m[1].matchAll(/^ {8}(\w+):/gm)].map((p) => p[1]).sort()).toEqual(sent);
+  });
+
+  /** The fields the API document gives each map in the `maps` array of an operation's reply. */
+  function documentedMapItemFields(operationId: string): string[] {
+    const doc = read('backend/docs/API_DOCUMENTATION.yaml');
+    const at = doc.indexOf(`operationId: ${operationId}\n`);
+    const m = at === -1 ? null : /\n( *)maps:\n(?:\1 .*\n)*?(\1 +)properties:\n((?:\2 {2}.*\n)+)/.exec(doc.slice(at));
+    if (!m) throw new Error(`the API document no longer lists the maps of ${operationId} where this test looks; update this test with the file`);
+    return [...m[3].matchAll(new RegExp(`^${m[2]} {2}(\\w+):`, 'gm'))].map((p) => p[1]).sort();
+  }
+
+  it.each(['listMaps', 'getCampaignById'])('are the fields the API document gives each map %s sends, with the spirit layer', (operationId) => {
+    expect(documentedMapItemFields(operationId)).toEqual([...MAP_FIELDS_SENT_TO_EVERYONE, 'spiritLayerUrl'].sort());
+  });
+});
+
+
+// The saved roll routes send every column of DiceMacro as stored. The
+// frontend's DiceMacro is what the dice panel and the Saved window read of
+// one, and the API document's DiceMacro schema describes it; a column missing
+// from either is one the page never uses or the document never mentions.
+describe('a saved roll as the routes send it', () => {
+  const columns: string[] = Object.values(Prisma.DiceMacroScalarFieldEnum).sort();
+  const model = /\nmodel DiceMacro \{([\s\S]*?)\n\}/.exec(read('backend/prisma/schema.prisma'))?.[1] ?? '';
+  const nullable = [...model.matchAll(/^\s+(\w+)\s+\w+\?/gm)].map((m) => m[1]).sort();
+
+  it('is read by the frontend\'s DiceMacro, every column of it, the nullable ones as null', () => {
+    const declared = interfaceFields(read('frontend/src/types/index.ts'), 'DiceMacro').map((line) => {
+      const m = /^(\w+):\s*(.+);$/.exec(line);
+      if (!m) throw new Error(`DiceMacro has a line this test cannot read: ${line}`);
+      return { field: m[1], orNull: /\|\s*null$/.test(m[2]) };
+    });
+    expect(nullable).toEqual(['characterName', 'purpose']);
+    expect(declared.map((d) => d.field).sort()).toEqual(columns);
+    expect(declared.filter((d) => d.orNull).map((d) => d.field).sort()).toEqual(nullable);
+  });
+
+  it('is the DiceMacro schema in the API document, the same properties nullable', () => {
+    const m = /\n {4}DiceMacro:\n {6}type: object\n[\s\S]*?\n {6}properties:\n([\s\S]*?)\n {4}\w+:\n/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer has the DiceMacro schema where this test looks; update this test with the file');
+    const properties = m[1].split(/\n(?= {8}\w+:)/);
+    expect(properties.map((p) => /^ {8}(\w+):/.exec(p)?.[1]).sort()).toEqual(columns);
+    expect(properties.filter((p) => /\n {10}nullable: true/.test(p)).map((p) => /^ {8}(\w+):/.exec(p)?.[1]).sort()).toEqual(nullable);
+  });
+});
+
 
 // A campaign member's account fields: the routes select them once, and the
 // frontend's member type declares what it may read. The frontend once read an
@@ -966,3 +1346,66 @@ describe('the Universal VTT import\'s longest wait', () => {
     expect(proxyReadTimeoutMs(nginxLocationFor(withPrefixFirst, IMPORT))).toBe(45_000);
   });
 });
+
+/** The names of a body schema's fields that say they hold a password, by the schema's exported name. */
+function passwordFieldsOfSchemas(): Map<string, string[]> {
+  const fields = new Map<string, string[]>();
+  for (const file of fs.readdirSync(path.join(root, 'backend/src/validators'))) {
+    if (!file.endsWith('.ts')) continue;
+    const exported = jest.requireActual<Record<string, unknown>>(path.join(root, 'backend/src/validators', file));
+    for (const [name, value] of Object.entries(exported)) {
+      const shape = typeof value === 'object' && value !== null && 'shape' in value ? value.shape : undefined;
+      if (typeof shape !== 'object' || shape === null) continue;
+      const passwords = Object.keys(shape).filter((key) => /password/i.test(key));
+      if (passwords.length > 0) fields.set(name, passwords);
+    }
+  }
+  return fields;
+}
+
+/**
+ * Every route that reads a password from its body, as `METHOD /api/path`,
+ * with the fields it reads: read from each router file's own text, a route
+ * at a time, and placed where app.ts mounts its router.
+ */
+function passwordFieldsRoutesRead(): Record<string, string[]> {
+  const app = read('backend/src/app.ts');
+  const fileOf = new Map([...app.matchAll(/^import (\w+) from '\.\/routes\/(\w+)';$/gm)].map((m) => [m[1], m[2]]));
+  const mounts = new Map<string, string>();
+  for (const m of app.matchAll(/app\.use\('([^']+)', (\w+)\)/g)) {
+    const file = fileOf.get(m[2]);
+    if (file) mounts.set(file, m[1]);
+  }
+  const schemas = passwordFieldsOfSchemas();
+  const found: Record<string, string[]> = {};
+  for (const file of fs.readdirSync(path.join(root, 'backend/src/routes'))) {
+    if (!file.endsWith('.ts')) continue;
+    const source = read(`backend/src/routes/${file}`);
+    const routes = [...source.matchAll(/router\.(get|post|put|patch|delete)\(\s*'([^']*)'/g)];
+    routes.forEach((route, i) => {
+      const handler = source.slice(route.index, routes[i + 1]?.index ?? source.length);
+      const fields = new Set<string>();
+      for (const m of handler.matchAll(/parseBody\(\s*(\w+)|(\w+)\.(?:safeParse|parse)\(/g)) {
+        for (const field of schemas.get(m[1] ?? m[2]) ?? []) fields.add(field);
+      }
+      for (const m of handler.matchAll(/req\.body\.(\w+)/g)) if (/password/i.test(m[1])) fields.add(m[1]);
+      for (const m of handler.matchAll(/const \{([^}]*)\} = req\.body/g)) {
+        for (const name of m[1].split(',').map((part) => part.trim().split(/[:\s=]/)[0])) {
+          if (/password/i.test(name)) fields.add(name);
+        }
+      }
+      if (fields.size === 0) return;
+      const mount = mounts.get(file.replace(/\.ts$/, '')) ?? `<${file} is not mounted in app.ts>`;
+      found[`${route[1].toUpperCase()} ${mount}${route[2] === '/' ? '' : route[2]}`] = [...fields].sort();
+    });
+  }
+  return found;
+}
+
+describe('the password fields the U+0000 refusal leaves alone', () => {
+  it('are every password field a route reads from its body', () => {
+    const listed = Object.fromEntries(Object.entries(PASSWORD_FIELDS).map(([route, fields]) => [route, [...fields].sort()]));
+    expect(listed).toEqual(passwordFieldsRoutesRead());
+  });
+});
+

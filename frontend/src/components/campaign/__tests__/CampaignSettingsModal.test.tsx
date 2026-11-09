@@ -17,7 +17,7 @@ import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 let current: Campaign;
 const viewer = vi.hoisted(() => ({ role: 'DM', user: { id: 'dm', platformRole: 'USER' } }));
 const updateCampaign = vi.hoisted(() => vi.fn());
-const invitationsApi = vi.hoisted(() => ({ listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn() }));
+const invitationsApi = vi.hoisted(() => ({ listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn(), removeCampaignMember: vi.fn() }));
 vi.mock('@/services/api', () => ({ default: invitationsApi, api: invitationsApi }));
 vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ campaign: current, refreshCampaign: vi.fn(), userRole: viewer.role }) }));
 // Stable, as the real one is.
@@ -25,7 +25,8 @@ const showToast = vi.hoisted(() => vi.fn());
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: viewer.user }) }));
 vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
-vi.mock('@/services/campaign.service', () => ({ default: { updateCampaign, deleteCampaign: vi.fn() } }));
+const deleteCampaign = vi.hoisted(() => vi.fn());
+vi.mock('@/services/campaign.service', () => ({ default: { updateCampaign, deleteCampaign } }));
 // Invite Player asks whether the server can send email.
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -35,6 +36,8 @@ beforeEach(() => {
   updateCampaign.mockReset().mockResolvedValue({});
   invitationsApi.listCampaignInvitations.mockReset().mockResolvedValue({ invitations: [] });
   invitationsApi.withdrawCampaignInvitation.mockReset().mockResolvedValue({ message: 'Invitation withdrawn' });
+  invitationsApi.removeCampaignMember.mockReset().mockResolvedValue({ message: 'Member removed' });
+  showToast.mockReset();
 });
 
 import CampaignSettingsModal from '../CampaignSettingsModal';
@@ -47,13 +50,13 @@ const campaign = (): Campaign => ({
 describe('CampaignSettingsModal', () => {
   it('keeps an unsaved description when the campaign is fetched again', () => {
     current = campaign();
-    const { rerender } = render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    const { rerender } = render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
     const field = screen.getByPlaceholderText('Describe your campaign…') as HTMLTextAreaElement;
     fireEvent.change(field, { target: { value: 'Half-written notes' } });
 
     // A roster change elsewhere: the same campaign, fetched again.
     current = campaign();
-    rerender(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    rerender(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
 
     expect((screen.getByPlaceholderText('Describe your campaign…') as HTMLTextAreaElement).value).toBe('Half-written notes');
   });
@@ -62,7 +65,7 @@ describe('CampaignSettingsModal', () => {
   // stayed while the panel said the settings were saved.
   it('clears the description when the box is emptied', async () => {
     current = campaign();
-    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
     fireEvent.change(screen.getByPlaceholderText('Describe your campaign…'), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: /Save/ }));
     await waitFor(() => expect(updateCampaign).toHaveBeenCalledWith('c1', { name: 'The Keep', description: null }));
@@ -77,7 +80,7 @@ describe('the Danger Zone', () => {
 
   it('is not offered to a DM who is neither the owner nor an administrator', () => {
     current = { ...campaign(), ownerId: 'someone-else' } as Campaign;
-    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
     expect(tabs()).toBeNull();
   });
 
@@ -89,8 +92,27 @@ describe('the Danger Zone', () => {
     viewer.role = role;
     viewer.user = { id: 'dm', platformRole };
     current = { ...campaign(), ownerId } as Campaign;
-    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
     expect(tabs()).not.toBeNull();
+  });
+});
+
+// The owner was told twice: by the panel's own notice, and by the page's,
+// which the server's word to every tab of the campaign brings. The panel
+// hands its answer to the page's handler, which says a notice once.
+describe('deleting the campaign', () => {
+  it('hands its answer to the page and says nothing itself', async () => {
+    current = campaign();
+    deleteCampaign.mockReset().mockResolvedValue({});
+    const onDeleted = vi.fn();
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} onDeleted={onDeleted} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Danger Zone' }));
+    fireEvent.change(screen.getByLabelText(/to confirm/), { target: { value: 'The Keep' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Campaign' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete Forever' }));
+
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith({ campaignId: 'c1', reason: 'campaign-deleted', message: 'The Keep was deleted.' }));
+    expect(showToast).not.toHaveBeenCalled();
   });
 });
 
@@ -101,7 +123,7 @@ describe('pending invitations', () => {
       invitations: [{ id: 'inv-1', userId: 'u-gwen', createdAt: '2026-10-18T00:00:00.000Z', expiresAt: '2026-11-01T00:00:00.000Z', user: { displayName: 'Gwen' } }],
     });
     current = campaign();
-    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
     fireEvent.click(screen.getByRole('button', { name: 'Members' }));
 
     expect(await screen.findByText('Gwen')).toBeTruthy();
@@ -115,7 +137,7 @@ describe('pending invitations', () => {
 // and 5,000.
 it('stops the name and description at the server\'s limits', () => {
   current = campaign();
-  render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+  render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
   expect((screen.getByPlaceholderText('My Campaign') as HTMLInputElement).maxLength).toBe(CAMPAIGN_LIMITS.maxNameLength);
   expect((screen.getByPlaceholderText('Describe your campaign…') as HTMLTextAreaElement).maxLength).toBe(CAMPAIGN_LIMITS.maxDescriptionLength);
   expect(screen.getByText(`11/${CAMPAIGN_LIMITS.maxDescriptionLength}`)).toBeTruthy();
@@ -127,7 +149,7 @@ describe('the Campaign Settings panel as a dialog', () => {
   it('is announced by name, and Escape and its Close button close it', () => {
     current = campaign();
     const onClose = vi.fn();
-    render(<CampaignSettingsModal isOpen onClose={onClose} />);
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={onClose} />);
     const dialog = screen.getByRole('dialog', { name: 'Campaign Settings' });
 
     fireEvent.keyDown(dialog, { key: 'Escape' });
@@ -140,7 +162,7 @@ describe('the Campaign Settings panel as a dialog', () => {
   it('closes only Invite Player on Escape', async () => {
     current = campaign();
     const onClose = vi.fn();
-    render(<CampaignSettingsModal isOpen onClose={onClose} />);
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Members' }));
     fireEvent.click(screen.getByRole('button', { name: /Invite Player/ }));
     const invite = await screen.findByRole('dialog', { name: 'Invite Player' });
@@ -158,7 +180,7 @@ describe('the Campaign Settings panel as a dialog', () => {
       memberships: [{ userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } }],
     } as unknown as Campaign;
     const onClose = vi.fn();
-    render(<CampaignSettingsModal isOpen onClose={onClose} />);
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Members' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Pia from campaign' }));
     const confirm = await screen.findByRole('dialog', { name: 'Remove Player' });
@@ -167,5 +189,132 @@ describe('the Campaign Settings panel as a dialog', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Remove Player' })).toBeNull());
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// Players may draw on the map unless the DM turns it off here; it takes
+// effect at once, for a table in play.
+describe('Players may draw', () => {
+  const toggle = () => screen.getByRole('switch', { name: 'Players may draw' });
+
+  it('shows the campaign’s setting, on unless the DM turned it off', () => {
+    current = { ...campaign(), playersMayDraw: true } as Campaign;
+    const { unmount } = render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
+    unmount();
+
+    current = { ...campaign(), playersMayDraw: false } as Campaign;
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+    expect(toggle()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('is saved as soon as it is switched, alone', async () => {
+    current = { ...campaign(), playersMayDraw: true } as Campaign;
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+
+    fireEvent.click(toggle());
+
+    expect(toggle()).toHaveAttribute('aria-checked', 'false');
+    await waitFor(() => expect(updateCampaign).toHaveBeenCalledWith('c1', { playersMayDraw: false }));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Only you can draw on the map now', 'success'));
+  });
+
+  it('goes back as it was, saying why, when the save fails', async () => {
+    current = { ...campaign(), playersMayDraw: true } as Campaign;
+    updateCampaign.mockRejectedValueOnce(Object.assign(new Error('nope'), { response: { data: { message: 'The server is busy' } } }));
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+
+    fireEvent.click(toggle());
+
+    await waitFor(() => expect(toggle()).toHaveAttribute('aria-checked', 'true'));
+    expect(showToast).toHaveBeenCalledWith(expect.any(String), 'error');
+  });
+});
+
+// A DM the game was handed to was offered Remove beside the owner, who sits
+// at the table as a player, and the server then refused it.
+describe('Remove under Members', () => {
+  it('is not offered beside the owner, and is beside another player', () => {
+    current = {
+      ...campaign(),
+      ownerId: 'owner-1',
+      memberships: [
+        { userId: 'owner-1', role: 'PLAYER', user: { displayName: 'Olwen' } },
+        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'player-1', role: 'PLAYER', user: { displayName: 'Pip' } },
+      ],
+    } as unknown as Campaign;
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    expect(screen.getByRole('button', { name: 'Remove Pip from campaign' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove Olwen from campaign' })).toBeNull();
+  });
+});
+
+// The badge printed the stored role, so a player read PLAYER and a
+// spectator SPECTATOR.
+describe("Members' role badges", () => {
+  it('name each role as the rest of the page does', () => {
+    current = {
+      ...campaign(),
+      memberships: [
+        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
+        { userId: 'sam', role: 'SPECTATOR', user: { displayName: 'Sam' } },
+      ],
+    } as unknown as Campaign;
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    /** The member's row, from the line that names them. */
+    const row = (name: string) => {
+      const found = screen.getByText(name).closest<HTMLElement>('.justify-between');
+      if (!found) throw new Error(`no row for ${name}`);
+      return found;
+    };
+    expect(within(row('Dain')).getByText('DM')).toBeTruthy();
+    expect(within(row('Pia')).getByText('Player')).toBeTruthy();
+    expect(within(row('Sam')).getByText('Spectator')).toBeTruthy();
+  });
+});
+
+// Remove's question and its toast said "Player" whoever was removed, a
+// spectator too.
+describe("Remove's question and its toast", () => {
+  const members = () => ({
+    ...campaign(),
+    memberships: [
+      { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
+      { userId: 'sam', role: 'SPECTATOR', user: { displayName: 'Sam' } },
+    ],
+  }) as unknown as Campaign;
+
+  async function remove(name: string, title: string) {
+    fireEvent.click(screen.getByRole('button', { name: `Remove ${name} from campaign` }));
+    const confirm = await screen.findByRole('dialog', { name: title });
+    expect(confirm).toHaveTextContent(`Remove ${name} from "The Keep"?`);
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Remove' }));
+  }
+
+  it('name a spectator a spectator', async () => {
+    current = members();
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    await remove('Sam', 'Remove Spectator');
+
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Spectator removed from campaign', 'success'));
+    expect(invitationsApi.removeCampaignMember).toHaveBeenCalledWith('c1', 'sam');
+  });
+
+  it('name a player a player, as before', async () => {
+    current = members();
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    await remove('Pia', 'Remove Player');
+
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Player removed from campaign', 'success'));
   });
 });

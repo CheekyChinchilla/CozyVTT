@@ -10,13 +10,14 @@
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import { useGameStore } from '@/stores/gameStore';
 import { TOKEN_LIMITS } from '@/constants/tokenLimits';
+import { DND5E_CONDITIONS, DND5E_EFFECTS } from '@/utils/conditions';
 
 const updateToken = vi.fn();
 const campaign = vi.hoisted(() => ({ gameSystem: 'DND_5E' as string | null }));
@@ -37,7 +38,7 @@ vi.mock('framer-motion', () => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: null }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [], gameSystem: campaign.gameSystem }, currentMap: { id: 'map-1', feetPerSquare: 5 } }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', memberships: [], gameSystem: campaign.gameSystem }, currentMap: { id: 'map-1', feetPerSquare: 5 }, viewedMap: { id: 'map-1', feetPerSquare: 5 } }),
 }));
 vi.mock('@/services/api', () => {
   const client = { updateToken: (...args: unknown[]) => updateToken(...args), listAssets: vi.fn().mockResolvedValue({ assets: [], pagination: {} }) };
@@ -119,11 +120,109 @@ it('takes the listed spelling of a listed condition, and adds nothing twice', as
   expect(updateToken).not.toHaveBeenCalled();
 });
 
-it('stops adding at the most conditions a token may carry', () => {
+const fullNote = `A token carries at most ${TOKEN_LIMITS.maxConditions} conditions and effects. Take one off to add another.`;
+
+it('stops adding at the most conditions a token may carry, and says why', () => {
   campaign.gameSystem = null;
   const full = Array.from({ length: TOKEN_LIMITS.maxConditions }, (_, i) => `Mark ${i}`);
   open({ ...cultist, conditions: full });
   const box = screen.getByRole('textbox', { name: 'Add a condition' });
   fireEvent.change(box, { target: { value: 'One more' } });
-  expect(screen.getByRole('button', { name: 'Add condition' })).toBeDisabled();
+  const add = screen.getByRole('button', { name: 'Add condition' });
+  expect(add).toBeDisabled();
+  expect(add).toHaveAccessibleDescription(fullNote);
+  expect(screen.getByText(fullNote)).toBeVisible();
+});
+
+it('says the token is full in a live region that is there before it fills', async () => {
+  // A screen reader may not read out a live region that arrives with its
+  // words already in it.
+  campaign.gameSystem = 'DND_5E';
+  open({ ...cultist, conditions: Array.from({ length: TOKEN_LIMITS.maxConditions - 1 }, (_, i) => `Mark ${i}`) });
+  const live = screen.getByRole('status');
+  expect(live).toBeEmptyDOMElement();
+
+  await userEvent.click(within(screen.getByRole('group', { name: 'Conditions' })).getByRole('button', { name: 'Grappled' }));
+  await waitFor(() => expect(live).toHaveTextContent(fullNote));
+  expect(screen.getByRole('status')).toBe(live);
+});
+
+it('turns off the listed conditions and effects a full token does not carry, and keeps the ones it does', async () => {
+  campaign.gameSystem = 'DND_5E';
+  const full = ['Prone', 'Hasted', ...Array.from({ length: TOKEN_LIMITS.maxConditions - 2 }, (_, i) => `Mark ${i}`)];
+  open({ ...cultist, conditions: full });
+  const conditions = screen.getByRole('group', { name: 'Conditions' });
+  const effects = screen.getByRole('group', { name: 'Effects' });
+  const grappled = within(conditions).getByRole('button', { name: 'Grappled' });
+  const blessed = within(effects).getByRole('button', { name: 'Blessed' });
+  for (const unlit of [grappled, blessed]) {
+    expect(unlit).toBeDisabled();
+    expect(unlit).toHaveAccessibleDescription(fullNote);
+  }
+  expect(screen.getByText(fullNote)).toBeVisible();
+  fireEvent.click(grappled);
+  expect(updateToken).not.toHaveBeenCalled();
+
+  // One it carries still comes off, and then the rest come back.
+  expect(within(effects).getByRole('button', { name: 'Hasted' })).toBeEnabled();
+  await userEvent.click(within(conditions).getByRole('button', { name: 'Prone' }));
+  await waitFor(() => expect(sentConditions()).toEqual(full.slice(1)));
+  await waitFor(() => expect(grappled).toBeEnabled());
+  expect(screen.queryByText(fullNote)).not.toBeInTheDocument();
+});
+
+it('offers the D&D 5e effects in a group of their own under the conditions', async () => {
+  campaign.gameSystem = 'DND_5E';
+  open();
+  const conditions = screen.getByRole('group', { name: 'Conditions' });
+  const effects = screen.getByRole('group', { name: 'Effects' });
+  expect(within(conditions).getAllByRole('button').map((b) => b.textContent)).toEqual([...DND5E_CONDITIONS]);
+  expect(within(effects).getAllByRole('button').map((b) => b.textContent)).toEqual([...DND5E_EFFECTS]);
+  expect(conditions.compareDocumentPosition(effects) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  await userEvent.click(within(effects).getByRole('button', { name: 'Hasted' }));
+  await waitFor(() => expect(sentConditions()).toEqual(['Hasted']));
+});
+
+it("takes an effect's listed spelling when it is typed, and a typed effect of the DM's own still works", async () => {
+  campaign.gameSystem = 'DND_5E';
+  open();
+  await waitForDialogFocus();
+  const box = screen.getByRole('textbox', { name: 'Add a condition' });
+  await userEvent.type(box, "hunter's mark{Enter}");
+  await waitFor(() => expect(sentConditions()).toEqual(["Hunter's Mark"]));
+  await userEvent.type(box, 'Sanctuary{Enter}');
+  await waitFor(() => expect(sentConditions()).toEqual(["Hunter's Mark", 'Sanctuary']));
+});
+
+it.each(['CALL_OF_CTHULHU_7E', 'PATHFINDER_2E', null])('offers no effects in %s', (system) => {
+  campaign.gameSystem = system;
+  open();
+  expect(screen.queryByRole('group', { name: 'Effects' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Hasted' })).not.toBeInTheDocument();
+});
+
+it('lights a listed effect the token carries in another spelling, and takes every spelling of it off', async () => {
+  campaign.gameSystem = 'DND_5E';
+  open({ ...cultist, conditions: ['hunter\u2019s mark', 'Prone'] });
+  const effects = screen.getByRole('group', { name: 'Effects' });
+  const mark = within(effects).getByRole('button', { name: "Hunter's Mark" });
+  expect(mark).toHaveAttribute('aria-pressed', 'true');
+  expect(within(effects).getByRole('button', { name: 'Hasted' })).toHaveAttribute('aria-pressed', 'false');
+
+  await userEvent.click(mark);
+  await waitFor(() => expect(sentConditions()).toEqual(['Prone']));
+});
+
+it('adds nothing when the token carries a typed effect already, in other capitals or with a curly apostrophe', async () => {
+  campaign.gameSystem = 'DND_5E';
+  open({ ...cultist, conditions: ['HASTED'] });
+  await waitForDialogFocus();
+  expect(within(screen.getByRole('group', { name: 'Effects' })).getByRole('button', { name: 'Hasted' })).toHaveAttribute('aria-pressed', 'true');
+  const box = screen.getByRole('textbox', { name: 'Add a condition' });
+  await userEvent.type(box, 'hasted{Enter}');
+  expect(updateToken).not.toHaveBeenCalled();
+
+  await userEvent.type(box, 'Hunter\u2019s Mark{Enter}');
+  await waitFor(() => expect(sentConditions()).toEqual(['HASTED', "Hunter's Mark"]));
 });

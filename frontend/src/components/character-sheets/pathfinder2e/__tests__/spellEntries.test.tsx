@@ -22,7 +22,7 @@ const spontaneous = { ...(PF2E_BLANK_SHEET.spellcasting as Record<string, unknow
 async function saveAfter(sheet: Record<string, unknown>, edit: () => void): Promise<Sheet> {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<Pathfinder2eCharacterEditor character={pf2eCharacter(sheet)} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Spells' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Spells' }));
   edit();
   fireEvent.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() => expect(onSave).toHaveBeenCalled());

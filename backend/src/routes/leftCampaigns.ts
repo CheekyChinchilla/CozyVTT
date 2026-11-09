@@ -1,8 +1,9 @@
 // ============================================
 // Notes and dice macros from campaigns the caller has left
 //
-// Removing a member deletes nothing of theirs: their personal notes and dice
-// macros stay with the campaign, and are in it again if they rejoin. The
+// Removing a member, or their leaving, deletes nothing of theirs: their
+// personal notes and dice macros stay with the campaign, and are in it again
+// if they rejoin. The
 // notes and macros routes ask for membership, so these let the person
 // still read and copy their own once they are out. Deleting the campaign
 // deletes them, as it always has.

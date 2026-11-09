@@ -21,10 +21,16 @@ export function mergeMessages(existing: Message[], incoming: Message[]): Message
   for (const message of existing) byId.set(message.id, message);
   for (const message of incoming) byId.set(message.id, message);
 
-  return [...byId.values()].sort((a, b) => {
-    const at = Date.parse(a.createdAt);
-    const bt = Date.parse(b.createdAt);
-    if (at !== bt) return at - bt;
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  });
+  return [...byId.values()].sort(compareMessages);
+}
+
+/**
+ * The server's order of chat history, oldest first: by `createdAt`, then by
+ * `id`. Negative when `a` comes before `b`.
+ */
+export function compareMessages(a: Message, b: Message): number {
+  const at = Date.parse(a.createdAt);
+  const bt = Date.parse(b.createdAt);
+  if (at !== bt) return at - bt;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

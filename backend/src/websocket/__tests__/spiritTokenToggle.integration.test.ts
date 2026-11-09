@@ -9,11 +9,17 @@
  * path a map switch and a lighting change use; only the DM still gets the
  * toggle event with the token.
  *
+ * What it re-sends is the map as its locked write left it. It used to be the
+ * row read before taking the lock with the token list read under it, so a
+ * change to the map landing between the two, such as dynamic lighting
+ * turned on, was missing from what players were sent.
+ *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
 import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
+import { withMapsLocked, writersWaitingFor } from '../../utils/mapTokens';
 import {
   createWsTestServer,
   expectNoEvent,
@@ -38,6 +44,17 @@ const OWN = 'token-own';
 const TARGET = 'token-target';
 
 type MapChanged = { mapId: string; mapData: { tokens: Array<{ id: string; notes?: string }> } };
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Until the toggle waits in line for the map's lock: it has read the map by then. */
+async function toggleWaitingForLock(): Promise<void> {
+  for (let tries = 0; tries < 100; tries++) {
+    if (writersWaitingFor(mapId) > 0) return;
+    await pause(50);
+  }
+  throw new Error('the toggle never reached the map lock');
+}
 
 function token(id: string, x: number, controlledBy: string | null, visible: boolean, notes?: string) {
   return {
@@ -145,6 +162,34 @@ describe('spirit_layer.token.toggle', () => {
     player.disconnect();
   });
 
+  it('sends players the map as it is under the lock, with a lighting change made meanwhile', async () => {
+    await resetMap(false);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let locked!: () => void;
+    const holding = new Promise<void>((resolve) => { locked = resolve; });
+    const holder = withMapsLocked([mapId], async (tx) => {
+      locked();
+      await gate;
+      await tx.map.update({ where: { id: mapId }, data: { lightingEnabled: true } });
+    });
+    await holding;
+
+    const resync = waitForEvent<MapChanged>(player, 'map.changed', 5000);
+    dm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
+    await toggleWaitingForLock();
+    release();
+    await holder;
+    // Lit by then: in the dark one square away, the revealed token is not sent.
+    expect((await resync).mapData.tokens.map((t) => t.id)).toEqual([OWN]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
   it('the DM still gets the toggle event with the token', async () => {
     await resetMap(true);
     const dm = await server.connectAndAuth(dmCookie, campaignId);
@@ -157,5 +202,32 @@ describe('spirit_layer.token.toggle', () => {
     expect(payload.token.notes).toBe('dm eyes only');
 
     dm.disconnect();
+  });
+});
+
+describe('spirit_layer.token.toggle on a map the table is not on', () => {
+  it('sends the player nothing, and the DM the toggle', async () => {
+    const prepared = await prisma.map.create({
+      data: {
+        campaignId, name: 'Prepared Toggle Map', imageUrl: '/api/assets/maps/none', baseLayerUrl: '/api/assets/maps/none',
+        width: 20, height: 20, annotations: [], lightingEnabled: false,
+        tokens: [token(OWN, 5, playerId, true), token(TARGET, 6, null, false, 'dm eyes only')],
+      },
+    });
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const quiet = Promise.all([
+      expectNoEvent(player, 'spirit_layer.token.toggled', 800),
+      expectNoEvent(player, 'map.changed', 800),
+      expectNoEvent(dm, 'map.changed', 800),
+    ]);
+    const toDm = waitForEvent<{ tokenId: string }>(dm, 'spirit_layer.token.toggled');
+    dm.emit('spirit_layer.token.toggle', { mapId: prepared.id, tokenId: TARGET, visible: true });
+    expect((await toDm).tokenId).toBe(TARGET);
+    await quiet;
+
+    dm.disconnect();
+    player.disconnect();
   });
 });

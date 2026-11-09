@@ -29,8 +29,12 @@ export default defineConfig({
     // index.css by src/__tests__/reducedMotion.test.tsx, which checks its
     // reduce motion rules. No test imports either one as a stylesheet. Every
     // stylesheet, the ones in src/styles too, is read by
-    // src/styles/__tests__/rgbChannelVariables.test.ts.
-    css: { include: [/src\/assets\/fonts\/fonts\.css/, /src\/index\.css/, /src\/styles\/[^/]+\.css/] },
+    // src/styles/__tests__/rgbChannelVariables.test.ts, and Tailwind's own
+    // theme.css by src/constants/__tests__/layout.test.ts, for the lg
+    // breakpoint the narrow layout's query must agree with.
+    css: {
+      include: [/src\/assets\/fonts\/fonts\.css/, /src\/index\.css/, /src\/styles\/[^/]+\.css/, /node_modules\/tailwindcss\/theme\.css/],
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

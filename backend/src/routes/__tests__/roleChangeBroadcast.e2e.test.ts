@@ -142,3 +142,38 @@ it('re-sends the map to both sides of a DM handover, and regroups the roster', a
     await prisma.map.deleteMany({ where: { id: mapId } });
   }
 });
+
+// A drawing the DM keeps for themselves goes to whoever holds the seat. After
+// a handover the new DM's page held none of them and the old DM's kept them
+// all, until a reload; each is now sent the map's drawings as it may see them.
+it('sends both sides of a DM handover the drawings as each new role sees them', async () => {
+  const mapId = await litMapWith([]);
+  await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: dmId, campaignId } }, data: { role: 'DM' } });
+  await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId } }, data: { role: 'PLAYER' } });
+  const drawn = (audience: 'ALL' | 'DM') => prisma.mapDrawing.create({
+    data: { mapId, authorId: dmId, audience, kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [50, 50]] },
+  });
+  const shared = await drawn('ALL');
+  const secret = await drawn('DM');
+  try {
+    const incoming = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const outgoing = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    type State = { mapId: string; drawings: Array<{ id: string }> };
+    const toIncoming = waitForEvent<State>(incoming, 'drawings:state');
+    const toOutgoing = waitForEvent<State>(outgoing, 'drawings:state');
+
+    expect((await dm.put(`/api/campaigns/${campaignId}/dm`).send({ userId: playerId })).status).toBe(200);
+
+    const asDm = await toIncoming;
+    expect(asDm.mapId).toBe(mapId);
+    expect(asDm.drawings.map((d) => d.id).sort()).toEqual([shared.id, secret.id].sort());
+    expect((await toOutgoing).drawings.map((d) => d.id)).toEqual([shared.id]);
+    incoming.disconnect();
+    outgoing.disconnect();
+  } finally {
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: dmId, campaignId } }, data: { role: 'DM' } });
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId } }, data: { role: 'PLAYER' } });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
+    await prisma.map.deleteMany({ where: { id: mapId } });
+  }
+});

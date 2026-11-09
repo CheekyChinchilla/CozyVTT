@@ -14,21 +14,25 @@ import {
   Trash2,
   CheckCircle,
   AlertTriangle,
-  ChevronRight,
   Upload,
   Download,
+  Eye,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { useGameStore } from '@/stores/gameStore';
+import { useTableSwitch } from '@/hooks/useTableSwitch';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
-import type { CampaignMap, Token } from '@/types';
+import type { Asset, CampaignMap } from '@/types';
 import CreateMapModal from './CreateMapModal';
+import TokenTransferConfirmation from './TokenTransferConfirmation';
 import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
-import { extractAssetId } from '@/utils/assetUrl';
+import { assetAddressVersion, extractAssetId } from '@/utils/assetUrl';
+import { pictureIsDrawn, rememberPictureAsset } from './map/paint/mapPicture';
+import { usePaintStore } from '@/stores/paintStore';
+import { dropDrafts, paintDraftStore } from './map/paint/paintDrafts';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
   uvttImportDecision,
@@ -43,118 +47,6 @@ interface MapManagerProps {
   onClose: () => void;
 }
 
-/**
- * Extract asset UUID from a stored imageUrl like /api/assets/maps/{uuid}
- */
-// ============================================
-// Token Transfer Confirmation
-// ============================================
-
-interface TokenTransferProps {
-  tokens: Token[];
-  targetMap: CampaignMap;
-  onConfirm: (selectedTokenIds: string[]) => void;
-  onCancel: () => void;
-  isSwitching: boolean;
-}
-
-function TokenTransferConfirmation({
-  tokens,
-  targetMap,
-  onConfirm,
-  onCancel,
-  isSwitching,
-}: TokenTransferProps) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-
-  const toggleToken = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAll = () => setSelected(new Set(tokens.map((t) => t.id)));
-  const selectNone = () => setSelected(new Set());
-
-  return (
-    <div className="mt-3 p-3 bg-warm-amber/10 border border-warm-amber/30 rounded-lg space-y-3">
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
-        <div>
-          <p className="text-sm font-medium text-stone-gray">
-            Current map has {tokens.length} token{tokens.length !== 1 ? 's' : ''}
-          </p>
-          <p className="text-xs text-stone-gray/70">
-            Select which to transfer to <span className="font-medium">{targetMap.name}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="flex gap-2 text-xs">
-        <button type="button" onClick={selectAll} className="text-brand-ink hover:underline">
-          Select all
-        </button>
-        <span className="text-stone-gray/40">·</span>
-        <button type="button" onClick={selectNone} className="text-stone-gray hover:underline">
-          Select none
-        </button>
-      </div>
-
-      <div className="space-y-1 max-h-36 overflow-y-auto">
-        {tokens.map((token) => (
-          <label
-            key={token.id}
-            className="flex items-center gap-2 p-1.5 rounded-sm hover:bg-warm-amber/10 cursor-pointer"
-          >
-            <input
-              type="checkbox"
-              checked={selected.has(token.id)}
-              onChange={() => toggleToken(token.id)}
-              className="rounded-sm accent-moss-green"
-            />
-            <span className="text-sm text-stone-gray truncate">{token.name}</span>
-            {token.layer === 'spirit' && (
-              <span className="text-xs text-spirit-ink bg-spirit-purple/10 px-1 rounded-sm">spirit</span>
-            )}
-          </label>
-        ))}
-      </div>
-
-      <div className="flex gap-2 pt-1">
-        <Button
-          type="button"
-          onClick={onCancel}
-          disabled={isSwitching}
-          variant="secondary" className="text-xs py-1 px-3"
-        >
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          onClick={() => onConfirm(Array.from(selected))}
-          disabled={isSwitching}
-          className="text-xs py-1 px-3 flex items-center gap-1.5"
-        >
-          {isSwitching ? (
-            <>
-              <Loader2 className="w-3 h-3 animate-spin" />
-              Switching...
-            </>
-          ) : (
-            <>
-              <ChevronRight className="w-3 h-3" />
-              Switch Map
-            </>
-          )}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 // ============================================
 // Map Card
 // ============================================
@@ -162,30 +54,32 @@ function TokenTransferConfirmation({
 interface MapCardProps {
   map: CampaignMap;
   isActive: boolean;
-  campaignId: string;
+  /** The map the DM has open to prepare on this page. */
+  isPrepared: boolean;
   onSetActive: (map: CampaignMap) => void;
+  onOpenToPrepare: (map: CampaignMap) => void;
   onEdit: (map: CampaignMap) => void;
   onDelete: (map: CampaignMap) => void;
   onExport: (map: CampaignMap) => void;
   switchingToId: string | null;
-  tokens: Token[];
-  currentMap: CampaignMap | null;
+  openingId: string | null;
 }
 
 function MapCard({
   map,
   isActive,
-  campaignId: _campaignId,
+  isPrepared,
   onSetActive,
+  onOpenToPrepare,
   onEdit,
   onDelete,
   onExport,
   switchingToId,
-  tokens: _tokens,
-  currentMap: _currentMap,
+  openingId,
 }: MapCardProps) {
   const thumbnailId = extractAssetId(map.imageUrl);
   const isSwitchingToThis = switchingToId === map.id;
+  const isOpeningThis = openingId === map.id;
   const cardExit = useMotionExit({ opacity: 0, scale: 0.95 });
 
   return (
@@ -195,14 +89,14 @@ function MapCard({
       animate={{ opacity: 1, y: 0 }}
       exit={cardExit}
       className={`bg-parchment/50 border rounded-xl overflow-hidden shadow-xs transition-shadow hover:shadow-md ${
-        isActive ? 'border-moss-green/60' : 'border-moss-green/20'
+        isActive ? 'border-moss-green/60' : isPrepared ? 'border-info/60' : 'border-moss-green/20'
       }`}
     >
       {/* Thumbnail */}
       <div className="relative h-36 bg-moss-green/10 overflow-hidden">
         {thumbnailId ? (
           <img
-            src={api.getAssetThumbnailUrl(thumbnailId, 'maps')}
+            src={api.getAssetThumbnailUrl(thumbnailId, 'maps') + assetAddressVersion(map.imageUrl)}
             alt={map.name}
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -224,6 +118,13 @@ function MapCard({
             Active
           </div>
         )}
+        {/* The map open on this page to prepare, which the players are not on */}
+        {isPrepared && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-paper-white text-info-ink border border-info/50 text-xs font-semibold rounded-full shadow-sm">
+            <Eye className="w-3 h-3" />
+            Preparing
+          </div>
+        )}
       </div>
 
       {/* Info */}
@@ -233,14 +134,15 @@ function MapCard({
           {map.width}×{map.height} grid · {map.gridSize}px/sq
         </p>
 
-        {/* Actions */}
+        {/* Actions: the two that change what is on screen on a row of
+            their own, as a card two to a row is too narrow for five. */}
         <div className="flex items-center gap-1.5 mt-3">
           <button
             type="button"
             onClick={() => onSetActive(map)}
             disabled={isActive || isSwitchingToThis}
             title={isActive ? 'Already active' : 'Set as active map'}
-            className={`flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
+            className={`touch-target flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
               isActive
                 ? 'bg-moss-green/10 text-brand-ink/50 cursor-not-allowed'
                 : 'bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink'
@@ -254,11 +156,32 @@ function MapCard({
             {isActive ? 'Active' : 'Set Active'}
           </button>
 
+          {/* Open it on this page only; the players stay where they are. */}
+          {!isActive && (
+            <button
+              type="button"
+              onClick={() => onOpenToPrepare(map)}
+              disabled={isPrepared || isOpeningThis}
+              title={isPrepared ? 'On your screen now, while the players stay on the active map' : 'Open on your screen only, while the players stay on the active map'}
+              className={`touch-target flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                isPrepared
+                  ? 'bg-info/10 text-info-ink/60 cursor-not-allowed'
+                  : 'bg-info/10 hover:bg-info/15 text-info-ink'
+              }`}
+            >
+              {isOpeningThis ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+              {isPrepared ? 'Preparing' : 'Open to prepare'}
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-1.5 mt-1.5">
           <button
             type="button"
             onClick={() => onEdit(map)}
             title="Edit map"
-            className="p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/15 text-accent-ink transition-colors"
+            aria-label="Edit map"
+            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/15 text-accent-ink transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -267,7 +190,8 @@ function MapCard({
             type="button"
             onClick={() => onExport(map)}
             title="Export as .uvtt file"
-            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
+            aria-label="Export as .uvtt file"
+            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
@@ -277,7 +201,8 @@ function MapCard({
             onClick={() => onDelete(map)}
             disabled={isActive}
             title={isActive ? 'Cannot delete the active map' : 'Delete map'}
-            className={`p-1.5 rounded-lg transition-colors ${
+            aria-label={isActive ? 'Cannot delete the active map' : 'Delete map'}
+            className={`touch-target inline-flex items-center justify-center p-1.5 rounded-lg transition-colors ${
               isActive
                 ? 'bg-danger/5 text-danger-ink/40 cursor-not-allowed'
                 : 'bg-danger/10 hover:bg-danger/15 text-danger-ink'
@@ -296,7 +221,8 @@ function MapCard({
 // ============================================
 
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
-  const { campaign, currentMap, setCurrentMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
+  const { campaign, currentMap, viewedMap, isPreparing, updateMap, upsertCampaignMap, removeCampaignMap, openToPrepare, mayChangeViewedMap } = useCampaign();
+  const tableSwitch = useTableSwitch();
 
   const [maps, setMaps] = useState<CampaignMap[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -306,20 +232,27 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editingMap, setEditingMap] = useState<CampaignMap | null>(null);
 
-  // Map switching state
-  const [switchingToMap, setSwitchingToMap] = useState<CampaignMap | null>(null);
-  const [isSwitching, setIsSwitching] = useState(false);
+  // The map being opened to prepare, while it loads.
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   // The active map comes straight from the campaign: setCurrentMap keeps
   // campaign.currentMapId in step with every switch, so there is no separate
   // copy here to fall out of date.
   const activeMapId = campaign?.currentMapId ?? null;
 
-  // Tokens fetched from the full current map before showing transfer UI
-  const [currentMapTokens, setCurrentMapTokens] = useState<Token[]>([]);
+  const preparedMapId = isPreparing ? viewedMap?.id ?? null : null;
 
   // Confirm delete
   const [mapToDelete, setMapToDelete] = useState<CampaignMap | null>(null);
+  /**
+   * For a drawn map: its picture can go with it, if the DM ticks the box
+   * (null while it is not a drawn map, or not yet known to be one).
+   */
+  const [deletePicture, setDeletePicture] = useState<boolean | null>(null);
+  /** What a delete left to say: a picture kept because it is in use. */
+  const [notice, setNotice] = useState<string | null>(null);
+  /** The map the question about its picture was asked for: a late answer about another map is dropped. */
+  const askedAboutRef = useRef<string | null>(null);
 
   // UVTT import
   const uvttInputRef = useRef<HTMLInputElement>(null);
@@ -359,18 +292,29 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- CRUD handlers ----
 
-  const handleCreated = (map: CampaignMap) => {
+  const handleCreated = (map: CampaignMap, drawnPicture?: Asset) => {
     setMaps((prev) => [map, ...prev]);
     upsertCampaignMap(map);
+    // A drawn map opens on this screen with Paint on, the players staying
+    // where they are; its picture is known to be drawn without asking.
+    if (drawnPicture) {
+      rememberPictureAsset(drawnPicture);
+      usePaintStore.getState().openWhenShown(map.id);
+      // Not opened (Not now kept paint on the map on screen, or it failed):
+      // Paint does not turn on by itself when the map is shown later.
+      void handleOpenToPrepare(map).then((opened) => {
+        if (!opened && usePaintStore.getState().openOnMapId === map.id) usePaintStore.getState().openWhenShown(null);
+      });
+    }
   };
 
   const handleUpdated = (updated: CampaignMap) => {
     setMaps((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     upsertCampaignMap(updated);
-    // If the updated map is the current one, refresh context
-    if (currentMap?.id === updated.id) {
-      setCurrentMap(updated);
-    }
+    // The table's map or the one being prepared, whichever this is. A map
+    // being prepared is told of its edit by nothing else: the server sends
+    // map.changed for the table's map alone.
+    updateMap(updated.id, updated);
   };
 
   const handleExport = async (map: CampaignMap) => {
@@ -385,18 +329,46 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   const handleDeleteClick = (map: CampaignMap) => {
     setMapToDelete(map);
+    setDeletePicture(null);
+    setNotice(null);
+    askedAboutRef.current = map.id;
+    // Only a picture Paint made is offered; the box starts unticked. The
+    // answer counts only while the question is still about this map.
+    void pictureIsDrawn(map.imageUrl, campaign?.id).then((drawn) => {
+      if (drawn && askedAboutRef.current === map.id) setDeletePicture((now) => now ?? false);
+    });
   };
 
   const handleConfirmDelete = async () => {
     if (!campaign?.id || !mapToDelete) return;
     const map = mapToDelete;
+    const alsoPicture = deletePicture === true;
     setMapToDelete(null);
+    setDeletePicture(null);
+    askedAboutRef.current = null;
+    // The map on screen, being prepared: whatever holds it is asked first.
+    // Deleting it ends preparing (removeCampaignMap).
+    if (map.id === preparedMapId && !(await mayChangeViewedMap({ kind: 'delete', toMapId: activeMapId }))) return;
     try {
       await mapService.deleteMap(campaign.id, map.id);
       setMaps((prev) => prev.filter((m) => m.id !== map.id));
       removeCampaignMap(map.id);
+      // A draft of painting on it, kept in this browser, has no map to go back to.
+      const campaignId = campaign.id;
+      void dropDrafts(paintDraftStore(), (draft) => draft.campaignId === campaignId && draft.mapId === map.id);
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to delete map.');
+      return;
+    }
+    // Without force: a picture something else still uses stays.
+    const pictureId = alsoPicture ? extractAssetId(map.imageUrl) : null;
+    if (!pictureId) return;
+    try {
+      await api.deleteAsset(pictureId);
+    } catch (err: unknown) {
+      setNotice(apiErrorCode(err) === 'ASSET_IN_USE'
+        ? `${map.name} is deleted. Its picture is used elsewhere, so it stays in the Asset Library.`
+        : `${map.name} is deleted. Its picture could not be deleted; delete it in the Asset Library.`);
     }
   };
 
@@ -454,77 +426,21 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- Map switching ----
 
-  const handleSetActiveClick = async (map: CampaignMap) => {
-    if (!campaign?.id || map.id === activeMapId) return;
-
-    if (currentMap) {
-      // Fetch full current map to get actual tokens (context tokens may be empty
-      // because they come from the lightweight campaign maps list)
-      setIsSwitching(true);
-      try {
-        const fullCurrentMap = await mapService.getMap(campaign.id, currentMap.id);
-        const actualTokens = fullCurrentMap.tokens || [];
-        setCurrentMapTokens(actualTokens);
-        setIsSwitching(false);
-        if (actualTokens.length > 0) {
-          // Show token transfer confirmation UI
-          setSwitchingToMap(map);
-        } else {
-          performSwitch(map, []);
-        }
-      } catch (err: unknown) {
-        // Without the tokens there is nothing to offer to bring along, and
-        // switching anyway could leave the party behind unasked.
-        setIsSwitching(false);
-        setCurrentMapTokens([]);
-        setError(apiErrorMessage(err) || 'Could not read the tokens on this map, so the switch was stopped. Try again.');
-      }
-    } else {
-      performSwitch(map, []);
-    }
-  };
-
-  const handleTransferConfirm = async (selectedTokenIds: string[]) => {
-    if (!switchingToMap) return;
-    await performSwitch(switchingToMap, selectedTokenIds);
-    setSwitchingToMap(null);
-  };
-
-  const handleTransferCancel = () => {
-    setSwitchingToMap(null);
-    setCurrentMapTokens([]);
-  };
-
-  const performSwitch = async (targetMap: CampaignMap, tokenIdsToTransfer: string[]) => {
-    if (!campaign?.id) return;
-    setIsSwitching(true);
+  /** Open the map to prepare, answering whether it opened. */
+  const handleOpenToPrepare = async (map: CampaignMap): Promise<boolean> => {
     setError(null);
-
+    setOpeningId(map.id);
     try {
-      // 1. Transfer selected tokens to the new map, all in one request: the
-      // server moves them as they are, under a lock on both maps, so none
-      // is lost or doubled however many go at once.
-      if (tokenIdsToTransfer.length > 0 && currentMap) {
-        await api.moveTokens(campaign.id, currentMap.id, tokenIdsToTransfer, targetMap.id);
-      }
-
-      // 2. Set target map as current
-      await mapService.setCurrentMap(campaign.id, targetMap.id);
-
-      // 3. Fetch full map (with filtered tokens)
-      const fullMap = await mapService.getMap(campaign.id, targetMap.id);
-
-      // 4. Update context + live token store
-      setCurrentMap(fullMap);
-      useGameStore.getState().setTokens(fullMap.tokens || []);
-
-      setCurrentMapTokens([]);
-
-      // The server sends every page the new map when it is set current.
+      // On this page only, so the Map Library gets out of the way of it.
+      const opened = await openToPrepare(map.id);
+      if (opened) onClose();
+      return opened;
     } catch (err: unknown) {
-      setError(apiErrorMessage(err) || 'Failed to switch map. Please try again.');
+      setError(apiErrorMessage(err) || 'Could not open that map. Try again.');
+      return false;
     } finally {
-      setIsSwitching(false);
+      // Only this card's: a second card opened meanwhile keeps its spinner.
+      setOpeningId((opening) => (opening === map.id ? null : opening));
     }
   };
 
@@ -587,10 +503,17 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
         {/* Content */}
         <div className="p-6">
-          {error && (
+          {(error ?? tableSwitch.error) && (
             <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              {error}
+              {error ?? tableSwitch.error}
+            </div>
+          )}
+
+          {notice && (
+            <div role="status" className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              {notice}
             </div>
           )}
 
@@ -622,30 +545,33 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            // One card to a row on a phone: two to a row left each about
+            // 150 px, too narrow for Set Active, Edit, Export and Delete.
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <AnimatePresence>
                 {maps.map((map) => (
                   <div key={map.id}>
                     <MapCard
                       map={map}
                       isActive={map.id === activeMapId}
-                      campaignId={campaign.id}
-                      onSetActive={handleSetActiveClick}
+                      isPrepared={map.id === preparedMapId}
+                      onSetActive={(target) => { setError(null); void tableSwitch.requestSwitch(target); }}
+                      onOpenToPrepare={(target) => { void handleOpenToPrepare(target); }}
                       onEdit={setEditingMap}
                       onDelete={handleDeleteClick}
                       onExport={handleExport}
-                      switchingToId={isSwitching ? switchingToMap?.id ?? null : null}
-                      tokens={currentMapTokens}
-                      currentMap={currentMap}
+                      switchingToId={tableSwitch.switching ? tableSwitch.pending?.id ?? null : null}
+                      openingId={openingId}
                     />
                     {/* Token transfer confirmation (shown under the target card) */}
-                    {switchingToMap?.id === map.id && (
+                    {tableSwitch.pending?.id === map.id && (
                       <TokenTransferConfirmation
-                        tokens={currentMapTokens}
+                        tokens={tableSwitch.tableTokens}
+                        fromMap={currentMap}
                         targetMap={map}
-                        onConfirm={handleTransferConfirm}
-                        onCancel={handleTransferCancel}
-                        isSwitching={isSwitching}
+                        onConfirm={(ids) => { void tableSwitch.confirm(ids); }}
+                        onCancel={tableSwitch.cancel}
+                        isSwitching={tableSwitch.switching}
                       />
                     )}
                   </div>
@@ -706,8 +632,24 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
         confirmLabel="Delete"
         variant="danger"
         onConfirm={handleConfirmDelete}
-        onCancel={() => setMapToDelete(null)}
-      />
+        onCancel={() => {
+          setMapToDelete(null);
+          setDeletePicture(null);
+          askedAboutRef.current = null;
+        }}
+      >
+        {deletePicture !== null && (
+          <label className="flex items-start gap-2 text-sm text-ink-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={deletePicture}
+              onChange={(e) => setDeletePicture(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>Also delete its picture from the Asset Library</span>
+          </label>
+        )}
+      </ConfirmDialog>
     </>
   );
 }

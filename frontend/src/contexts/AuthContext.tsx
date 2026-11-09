@@ -36,6 +36,35 @@ function answersSignedOut(error: unknown): boolean {
   return status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
+/** The longest signing out waits for the user's Paint drafts to be dropped, their code loaded first. */
+const SIGN_OUT_DRAFTS_WAIT_MS = 3_000;
+
+/**
+ * Drop the drafts of Paint `userId` left in this browser, as they sign out:
+ * a draft holds a map's picture the players have not seen, and the next
+ * person on the browser could read it. Paint's code is loaded only for this.
+ * Sign-out waits at most SIGN_OUT_DRAFTS_WAIT_MS for the load and the store
+ * together: a page open from before an upgrade may find its part of the app
+ * gone, and a store may not answer.
+ */
+async function forgetPaintDrafts(userId: string): Promise<void> {
+  const drop = async () => {
+    const drafts = await import('@/components/campaign/map/paint/paintDrafts');
+    await drafts.dropDrafts(drafts.paintDraftStore(), (draft) => draft.userId === userId, drafts.paintTab());
+  };
+  let late: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      drop(),
+      new Promise<void>((resolve) => { late = setTimeout(resolve, SIGN_OUT_DRAFTS_WAIT_MS); }),
+    ]);
+  } catch (error) {
+    console.warn('Could not drop the painting drafts:', errorSummary(error));
+  } finally {
+    clearTimeout(late);
+  }
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // ============================================
@@ -49,6 +78,11 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   // State
   const [user, setUser] = useState<User | null>(null);
+  /** Who is signed in, for signing out. */
+  const userIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    userIdRef.current = user?.id ?? null;
+  }, [user]);
   const [loading, setLoading] = useState<boolean>(true);
   const [authenticated, setAuthenticated] = useState<boolean>(false);
   const [mfaPending, setMfaPending] = useState<boolean>(false);
@@ -199,6 +233,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // ============================================
 
   const logout = useCallback(async (): Promise<void> => {
+    const signingOut = userIdRef.current;
+    const forgetting = signingOut ? forgetPaintDrafts(signingOut) : Promise.resolve();
     try {
       await authService.logout();
     } catch (error) {
@@ -213,6 +249,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setMfaPending(false);
       setMustChangePassword(false);
     }
+    await forgetting;
   }, []);
 
   // ============================================

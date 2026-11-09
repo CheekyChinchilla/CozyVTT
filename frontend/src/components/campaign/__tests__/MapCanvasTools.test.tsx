@@ -19,6 +19,7 @@ import { Profiler } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
+import { mouse } from '@/test/pointer';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -67,6 +68,7 @@ const h = vi.hoisted(() => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
+  const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, (map) => h.set({ currentMap: map }));
   const noop = () => undefined;
   const setCurrentMap = (next: unknown) => {
     h.set({ currentMap: typeof next === 'function' ? (next as (p: unknown) => unknown)(h.state.currentMap) : next });
@@ -77,7 +79,9 @@ vi.mock('@/contexts/CampaignContext', async () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
       return {
         currentMap: h.state.currentMap,
+        viewedMap: h.state.currentMap,
         setCurrentMap,
+        ...mapActions,
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
@@ -185,11 +189,11 @@ function surface(): HTMLCanvasElement {
 }
 
 const down = (p: { clientX: number; clientY: number }, extra: Record<string, unknown> = {}) =>
-  fireEvent.mouseDown(surface(), { ...p, button: 0, buttons: 1, detail: 1, ...extra });
+  mouse.down(surface(), p, 0, extra);
 const move = (p: { clientX: number; clientY: number }, buttons = 1) =>
-  fireEvent.mouseMove(surface(), { ...p, buttons });
+  mouse.move(surface(), p, buttons);
 const up = (p: { clientX: number; clientY: number }, button = 0) =>
-  fireEvent.mouseUp(surface(), { ...p, button });
+  mouse.up(surface(), p, button);
 function click(p: { clientX: number; clientY: number }, extra: Record<string, unknown> = {}) {
   down(p, extra);
   up(p);
@@ -269,10 +273,38 @@ describe('the wall draw tool', () => {
 
     click(px(100, 300));
     click(px(200, 300));
-    click(px(200, 300), { detail: 2 });
+    click(px(200, 300));
     click(px(400, 400));
 
     expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  // A pointer event's own click count is always 0; the page counts them.
+  it('takes a second click more than 4 pixels from the first as a click of its own', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    click(px(100, 300));
+    click(px(200, 300));
+    click(px(205, 300));
+
+    expect(sentOf('wall:add')).toHaveLength(2);
+  });
+
+  it('takes a second click more than half a second after the first as a click of its own', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      click(px(100, 300));
+      click(px(200, 300));
+      vi.setSystemTime(Date.now() + 501);
+      click(px(200, 300));
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(sentOf('wall:add')).toHaveLength(2);
   });
 
   it('drops a half-drawn line on the first Escape and puts the tool away on the second', () => {
@@ -289,6 +321,47 @@ describe('the wall draw tool', () => {
     click(px(300, 300));
     click(px(400, 300));
     expect(sentOf('wall:add')).toEqual([]);
+  });
+
+  // A line begun in Draw outlived the tool, unseen, since only Draw draws
+  // it: the next Escape, Ctrl+Z or Undo let go of it and did nothing to see,
+  // and Draw chosen again carried on from its point.
+  it('drops a half-drawn line when another wall tool is chosen, so the first Escape there clears the selection', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Wall select mode'));
+
+    click(px(150, 100));
+    press('Escape');
+    press('Delete');
+
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+
+  it('starts a new line when Draw is chosen again, after another wall tool or a light tool', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Wall select mode'));
+    fireEvent.click(screen.getByLabelText('Wall draw mode'));
+    click(px(200, 300));
+    expect(sentOf('wall:add')).toEqual([]);
+
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Place'));
+    fireEvent.click(screen.getByLabelText('Wall draw mode'));
+    click(px(300, 300));
+    expect(sentOf('wall:add')).toEqual([]);
+  });
+
+  it("leaves the panel's Undo off in another tool when there is nothing to undo", () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Wall select mode'));
+
+    expect(screen.getByLabelText('Undo wall edit')).toBeDisabled();
   });
 
   it('turns a door drawn along a wall into a section of that wall', () => {
@@ -316,7 +389,7 @@ describe('the polygon tool', () => {
     click(px(500, 500));
     click(px(700, 500));
     click(px(700, 700));
-    click(px(700, 700), { detail: 2 });
+    click(px(700, 700));
 
     expect(lastWalls()).toEqual([
       WALL_A, WALL_B,
@@ -347,7 +420,7 @@ describe('the polygon tool', () => {
     click(px(900, 500));
     press('z', { ctrlKey: true });
     click(px(700, 700));
-    click(px(700, 700), { detail: 2 });
+    click(px(700, 700));
     expect(lastWalls().slice(2)).toEqual([
       { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
       { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
@@ -359,7 +432,7 @@ describe('the polygon tool', () => {
     click(px(300, 500));
     click(px(300, 700));
     press('Escape');
-    click(px(300, 700), { detail: 2 });
+    click(px(300, 700));
     expect(sentOf('walls:replace')).toEqual([]);
   });
 });
@@ -511,6 +584,169 @@ describe('the wall select tool', () => {
   });
 });
 
+describe("the Walls panel's buttons, which do what a key or a double-click does", () => {
+  // Each is named by what it shows, so a voice command that says the word
+  // finds it; the longer wording is its tooltip.
+  const button = (name: string) => screen.queryByRole('button', { name });
+
+  it('Done finishes a line as a double-click does, and shows only while one is being drawn', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    expect(button('Done')).toBeNull();
+
+    click(px(100, 300));
+    click(px(200, 300));
+    fireEvent.click(button('Done')!);
+    expect(button('Done')).toBeNull();
+    click(px(400, 400));
+
+    expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  // On a short tablet the tool stack is capped and scrolls, and Done came
+  // in under the mode buttons, out of sight until the stack was scrolled.
+  it('brings Done, and Cancel with it, into view in the stack as they appear, and only then', () => {
+    const intoView = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: intoView, configurable: true, writable: true });
+    try {
+      render(<MapCanvas />);
+      wallTool('Wall draw mode');
+      click(px(100, 300));
+      expect(intoView.mock.contexts).toEqual([button('Done')!.parentElement]);
+      expect(intoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+      click(px(200, 300));
+      expect(intoView).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByLabelText('Polygon wall mode'));
+      click(px(500, 500));
+      expect(intoView).toHaveBeenCalledTimes(2);
+      expect(intoView.mock.contexts[1]).toBe(button('Cancel')!.parentElement);
+      click(px(700, 500));
+      expect(intoView).toHaveBeenCalledTimes(2);
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  it('Done closes a polygon as a double-click does, once it has three corners', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(500, 500));
+    click(px(700, 500));
+    expect(button('Done')).toBeDisabled();
+    click(px(700, 700));
+    fireEvent.click(button('Done')!);
+
+    expect(lastWalls()).toEqual([
+      WALL_A, WALL_B,
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  it('Cancel drops a polygon as Escape does, and keeps the tool', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(100, 500));
+    click(px(300, 500));
+    click(px(300, 700));
+    fireEvent.click(button('Cancel')!);
+    expect(button('Cancel')).toBeNull();
+    expect(sentOf('walls:replace')).toEqual([]);
+
+    click(px(500, 500));
+    click(px(700, 500));
+    click(px(700, 700));
+    fireEvent.click(button('Done')!);
+    expect(lastWalls().slice(2)).toEqual([
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  it('Undo takes back the last corner first, as Ctrl+Z does', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(500, 500));
+    click(px(700, 500));
+    click(px(900, 500));
+    fireEvent.click(screen.getByLabelText('Undo wall edit'));
+    click(px(700, 700));
+    click(px(700, 700));
+
+    expect(lastWalls().slice(2)).toEqual([
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  it('Undo drops a half-drawn line, then undoes the last edit, as Ctrl+Z does', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    expect(screen.getByLabelText('Undo wall edit')).toBeDisabled();
+
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Undo wall edit'));
+    click(px(200, 300));
+    expect(sentOf('wall:add')).toEqual([]);
+
+    click(px(300, 300));
+    fireEvent.click(button('Done')!);
+    expect(sentOf('wall:add')).toHaveLength(1);
+    fireEvent.click(screen.getByLabelText('Undo wall edit'));
+    expect(lastWalls()).toEqual([WALL_A, WALL_B]);
+  });
+
+  it('Delete removes a selection of mixed types, as the Delete key does, and says how many', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A, seg('d1', 300, 100, 400, 100, 'door-closed')] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    press('a', { ctrlKey: true });
+    const del = screen.getByRole('button', { name: 'Delete 2 segments' });
+    expect(del).toHaveTextContent('Delete 2 segments');
+    fireEvent.click(del);
+
+    expect(lastWalls()).toEqual([]);
+  });
+
+  it('Add to selection adds a clicked wall as Shift does, and keeps the selection through a box', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    click(px(150, 100));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add to selection' }));
+    click(px(350, 100));
+    press('ArrowDown');
+    expect(lastWalls()).toEqual([{ ...WALL_A, y1: 101, y2: 101 }, { ...WALL_B, y1: 101, y2: 101 }]);
+
+    press('Escape');
+    click(px(150, 101));
+    drag(px(250, 50), px(350, 120), px(450, 150));
+    press('Delete');
+    expect(lastWalls()).toEqual([]);
+  });
+
+  it('Add to selection takes a clicked wall back out, as Shift does', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    click(px(150, 100));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add to selection' }));
+    click(px(350, 100));
+    click(px(150, 100));
+    press('Delete');
+
+    expect(lastWalls()).toEqual([WALL_A]);
+  });
+});
+
 describe('the light tools', () => {
   const lamp: LightSource = { id: 'l1', x: 250, y: 250, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
 
@@ -608,12 +844,40 @@ describe('the fog box tools', () => {
   it('pans with the right button, sending nothing', () => {
     fogTool('Fog reveal box');
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
-    fireEvent.mouseMove(surface(), { clientX: 550, clientY: 500, buttons: 2 });
-    fireEvent.mouseUp(surface(), { clientX: 550, clientY: 500, button: 2 });
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.move(surface(), { clientX: 550, clientY: 500 }, 2);
+    mouse.up(surface(), { clientX: 550, clientY: 500 }, 2);
 
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10, buttons: 0 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
     expect(readout()).toBe('(0, 19)');
+    expect(sentOf('fog:operation')).toEqual([]);
+  });
+
+  // Two buttons held at once send one pointerdown and one pointerup; the
+  // second button's press and release arrive as moves.
+  it('drops a box when the right button is pressed during it, and pans instead', () => {
+    fogTool('Fog reveal box');
+
+    down(px(60, 60));
+    move(px(160, 110));
+    mouse.chord(surface(), px(160, 110), 2, 3);
+    move(px(210, 110), 3);
+    mouse.chord(surface(), px(210, 110), 2, 1);
+    up(px(210, 110));
+
+    mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
+    expect(readout()).toBe('(0, 19)');
+    expect(sentOf('fog:operation')).toEqual([]);
+  });
+
+  it('abandons a box when the browser cancels the pointer', () => {
+    fogTool('Fog reveal box');
+
+    down(px(60, 60));
+    move(px(160, 110));
+    mouse.cancel(surface());
+    up(px(160, 110));
+
     expect(sentOf('fog:operation')).toEqual([]);
   });
 
@@ -745,12 +1009,25 @@ describe('the right button', () => {
     render(<MapCanvas />);
     wallTool('Wall draw mode');
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
-    fireEvent.mouseMove(surface(), { clientX: 550, clientY: 500, buttons: 2 });
-    fireEvent.mouseUp(surface(), { clientX: 550, clientY: 500, button: 2 });
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.move(surface(), { clientX: 550, clientY: 500 }, 2);
+    mouse.up(surface(), { clientX: 550, clientY: 500 }, 2);
 
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10, buttons: 0 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
     expect(readout()).toBe('(0, 19)');
+  });
+
+  it('stops panning when it is let go, even with the left button let go last', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.chord(surface(), { clientX: 500, clientY: 500 }, 0, 3);
+    mouse.chord(surface(), { clientX: 500, clientY: 500 }, 2, 1);
+    mouse.up(surface(), { clientX: 500, clientY: 500 }, 0);
+    mouse.move(surface(), px(150, 102), 0);
+
+    expect(surface().className).toContain('cursor-pointer');
   });
 
   it('opens no token menu while a wall tool is up', () => {
@@ -806,7 +1083,8 @@ describe('switching tools', () => {
     expect(sentOf('light:add')).toHaveLength(2);
   });
 
-  it('keeps a half-drawn wall across a switch to the fog tool and back (as it is)', () => {
+  // It kept the half-drawn wall, unseen, and Draw chosen again joined it.
+  it('drops a half-drawn wall when the fog tool is chosen, so Draw again starts a new line', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
     render(<MapCanvas />);
     fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
@@ -818,9 +1096,7 @@ describe('switching tools', () => {
     fireEvent.click(screen.getByLabelText('Wall draw mode'));
     click(px(200, 300));
 
-    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
-      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
-    ]);
+    expect(sentOf('wall:add')).toEqual([]);
   });
 });
 
@@ -835,7 +1111,20 @@ describe("the DM's spirit token button", () => {
 });
 
 describe('Preview Player View', () => {
-  const previewButton = () => screen.queryByLabelText('Toggle DM player view preview');
+  /** The preview's button, by the words it shows with the preview off or on. */
+  const previewButton = () => screen.queryByRole('button', { name: /^(Preview Player View|DM View)$/ });
+
+  // So a voice command for the words on the button finds it.
+  it('is named by the words it shows, with the preview off and on', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
+    fireEvent.click(screen.getByRole('button', { name: 'DM View' }));
+
+    expect(screen.getByRole('button', { name: 'Preview Player View' })).toBeInTheDocument();
+  });
 
   it('can still be ended after fog and lighting are both turned off', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
@@ -965,7 +1254,7 @@ describe("a player's right-click on a token", () => {
 });
 
 describe('letting go of the mouse outside the map', () => {
-  const releaseOutside = (button = 0) => fireEvent.mouseUp(document.body, { button });
+  const releaseOutside = (button = 0) => mouse.up(document.body, px(1200, 300), button);
 
   it('finishes an erase stroke', () => {
     render(<MapCanvas />);
@@ -973,12 +1262,12 @@ describe('letting go of the mouse outside the map', () => {
 
     down(px(150, 110));
     move(px(350, 110));
-    fireEvent.mouseLeave(surface());
+    mouse.leave(surface(), 1);
     releaseOutside();
 
     expect(lastWalls()).toEqual([]);
     h.sent.length = 0;
-    fireEvent.mouseMove(surface(), { ...px(150, 110), buttons: 0 });
+    mouse.move(surface(), px(150, 110), 0);
     expect(sentOf('walls:replace')).toEqual([]);
   });
 
@@ -989,10 +1278,31 @@ describe('letting go of the mouse outside the map', () => {
     down(px(100, 300));
     move(px(200, 300));
     move(px(300, 300));
-    fireEvent.mouseLeave(surface());
+    mouse.leave(surface(), 1);
     releaseOutside();
 
     expect(lastWalls().slice(2)).toEqual([{ x1: 100, y1: 300, x2: 300, y2: 300, type: 'wall' }]);
+  });
+
+  // The mouse is never captured: a pan stops at the map's edge, as it
+  // always has, and does not start again when the pointer comes back.
+  it('stops a pan at the edge of the map', () => {
+    const capture = vi.spyOn(Element.prototype, 'setPointerCapture');
+    try {
+      render(<MapCanvas />);
+
+      down({ clientX: 500, clientY: 500 });
+      move({ clientX: 550, clientY: 500 });
+      mouse.leave(surface(), 1);
+      move({ clientX: 600, clientY: 500 });
+      releaseOutside();
+
+      mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
+      expect(readout()).toBe('(0, 19)');
+      expect(capture).not.toHaveBeenCalled();
+    } finally {
+      capture.mockRestore();
+    }
   });
 
   // A right-button pan left on blocked the select tool's hover, so a wall
@@ -1001,10 +1311,24 @@ describe('letting go of the mouse outside the map', () => {
     render(<MapCanvas />);
     wallTool('Wall select mode');
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
-    fireEvent.mouseLeave(surface());
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.leave(surface(), 2);
     releaseOutside(2);
-    fireEvent.mouseMove(surface(), { ...px(150, 102), buttons: 0 });
+    mouse.move(surface(), px(150, 102), 0);
+
+    expect(surface().className).toContain('cursor-pointer');
+  });
+
+  it('ends a right-button pan when the right button is let go out there before the left', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.chord(surface(), { clientX: 500, clientY: 500 }, 0, 3);
+    mouse.leave(surface(), 3);
+    mouse.chord(document.body, px(1200, 300), 2, 1);
+    releaseOutside(0);
+    mouse.move(surface(), px(150, 102), 0);
 
     expect(surface().className).toContain('cursor-pointer');
   });
@@ -1046,7 +1370,7 @@ describe('switching maps', () => {
 
     switchMap();
     click(px(700, 700));
-    click(px(700, 700), { detail: 2 });
+    click(px(700, 700));
 
     expect(sentOf('walls:replace')).toEqual([]);
   });
@@ -1233,13 +1557,13 @@ describe('moving the pointer', () => {
   it('renders again only when the pointer reaches another square', () => {
     let commits = 0;
     render(<Profiler id="map" onRender={() => { commits += 1; }}><MapCanvas /></Profiler>);
-    fireEvent.mouseMove(surface(), { ...px(110, 110), buttons: 0 });
+    mouse.move(surface(), px(110, 110), 0);
     // React may render once more right after a state change before it can
     // skip an update that leaves the state as it is; a second move settles it.
-    fireEvent.mouseMove(surface(), { ...px(111, 110), buttons: 0 });
+    mouse.move(surface(), px(111, 110), 0);
     const before = commits;
 
-    for (const x of [112, 115, 120, 130, 140]) fireEvent.mouseMove(surface(), { ...px(x, 110), buttons: 0 });
+    for (const x of [112, 115, 120, 130, 140]) mouse.move(surface(), px(x, 110), 0);
 
     expect(commits).toBe(before);
   });
@@ -1248,7 +1572,7 @@ describe('moving the pointer', () => {
     const attach = vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener');
     try {
       render(<MapCanvas />);
-      for (const x of [60, 160, 260, 360]) fireEvent.mouseMove(surface(), { ...px(x, 110), buttons: 0 });
+      for (const x of [60, 160, 260, 360]) mouse.move(surface(), px(x, 110), 0);
       expect(attach.mock.calls.filter(([type]) => type === 'wheel')).toHaveLength(1);
     } finally {
       attach.mockRestore();
@@ -1264,11 +1588,11 @@ describe('the Global Illumination switch', () => {
     vi.mocked(mapService.updateMap).mockRejectedValueOnce({ response: { status: 429, data: { message: 'Too many requests, please slow down' } } });
     render(<MapCanvas />);
     fireEvent.click(screen.getByText(/^Lights/));
-    const toggle = screen.getByLabelText('Global illumination') as HTMLInputElement;
+    const toggle = screen.getByLabelText('Global Illumination') as HTMLInputElement;
     await act(async () => { fireEvent.click(toggle); });
 
     expect(await screen.findByText('Too many requests, please slow down')).toBeTruthy();
-    expect((screen.getByLabelText('Global illumination') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Global Illumination') as HTMLInputElement).checked).toBe(true);
   });
 });
 
@@ -1282,7 +1606,9 @@ describe('the Spirit Realm badge', () => {
     const words = screen.getByText('Spirit Realm');
     const tint = words.parentElement as HTMLElement;
     const backing = tint.parentElement as HTMLElement;
-    expect(backing.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'bg-parchment']));
+    expect(backing.className.split(/\s+/)).toContain('bg-parchment');
+    // Over the map, in the band it shares with the toolbar.
+    expect((backing.parentElement as HTMLElement).className.split(/\s+/)).toContain('absolute');
     expect(tint.className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-spirit-purple/20', 'border-spirit-purple/40']));
     expect(words.className.split(/\s+/)).toContain('text-spirit-ink');
   });

@@ -12,19 +12,20 @@
  * Security: strips all user IDs, server-specific paths, and internal references.
  */
 
-import { ZipArchive, type ZipEntryData } from 'archiver';
 import type { Writable } from 'stream';
-import { pipeline } from 'stream/promises';
 import path from 'path';
 import fs from 'fs';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { writeZipTo, type ZipEntrySource } from '../utils/zipWriter';
+import { storedFilePath } from '../utils/storedPath';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import { readTokens, readJsonObject } from '../utils/prisma-json';
 import { extractAssetId } from '../utils/asset-urls';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
+import { DRAWING_ORDER, campaignDmId, drawingForArchive } from './mapDrawings';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -72,19 +73,42 @@ const ZIP_BYTES_PER_ENTRY = 256;
 
 // ── Asset reference extractor ───────────────────────────────────────────────
 
+/** What the Asset Library shows of an asset: its own name, description and tags. */
+interface AssetDetails {
+  name: string;
+  description: string | null;
+  tags: string[];
+}
+
+/**
+ * An asset going into the archive: its file, and what the asset manifest says
+ * of it. Only the campaign's own assets, and the exporter's own personal
+ * ones, carry their details: a picture of another member's own library that
+ * the campaign uses goes as its file alone, since an archive is shared off
+ * the server, and what its uploader wrote about it is theirs.
+ */
+interface ArchivedAsset {
+  filePath: string;
+  mimeType: string;
+  originalName: string;
+  type: string;
+  fileSize: number;
+  details: AssetDetails | null;
+}
+
 /**
  * Resolve an asset ID to its file path on disk, if the exporting user may read
  * the asset. Returns null if not. An archive is a way of reading every file
  * in it, so what goes in follows the same read rule as the asset routes: a
  * campaign could otherwise name another user's private file and export it.
  */
-async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<{ filePath: string; mimeType: string; originalName: string; type: string; fileSize: number } | null> {
+async function resolveAssetFile(assetId: string, viewer: ExportViewer, campaignId: string): Promise<ArchivedAsset | null> {
   const asset = await prisma.asset.findUnique({ where: { id: assetId } });
   if (!asset) return null;
   if (!(await canReadAsset(asset, viewer.userId, viewer.isAdmin))) return null;
 
   // asset.filePath is stored as a relative path from the project root (e.g. "uploads/maps/...")
-  const fullPath = path.resolve(asset.filePath.replace(/\\/g, '/'));
+  const fullPath = storedFilePath(asset.filePath);
   if (!fs.existsSync(fullPath)) {
     logger.warn('Asset file not found on disk', { assetId, filePath: asset.filePath, resolvedPath: fullPath });
     return null;
@@ -96,6 +120,9 @@ async function resolveAssetFile(assetId: string, viewer: ExportViewer): Promise<
     originalName: asset.originalName,
     type: asset.type,
     fileSize: asset.fileSize,
+    details: (asset.scope === 'CAMPAIGN' && asset.campaignId === campaignId) || (asset.scope === 'USER' && asset.uploadedById === viewer.userId)
+      ? { name: asset.name, description: asset.description, tags: asset.tags }
+      : null,
   };
 }
 
@@ -121,10 +148,13 @@ export async function prepareCampaignExport(
   });
 
   if (!campaign) throw new Error('Campaign not found');
+  // The campaign's DM, by whom each drawing's share of its map's markup
+  // layer is written (drawingShare).
+  const dmId = await campaignDmId(prisma, campaignId);
 
   // 2. Collect all asset IDs we need to include
   const assetIds = new Set<string>();
-  const assetMap: Map<string, { filePath: string; mimeType: string; originalName: string; type: string; fileSize: number }> = new Map();
+  const assetMap: Map<string, ArchivedAsset> = new Map();
 
   /**
    * Register an asset for inclusion. Returns the UUID reference key. With
@@ -134,7 +164,7 @@ export async function prepareCampaignExport(
     const id = extractAssetId(url);
     if (!id) return null;
     if (!assetMap.has(id)) {
-      const resolved = await resolveAssetFile(id, viewer);
+      const resolved = await resolveAssetFile(id, viewer, campaignId);
       if (resolved && (!onlyType || resolved.type === onlyType)) {
         // Skip audio files unless explicitly included
         if (resolved.type === 'AUDIO' && !includeAudio) return null;
@@ -183,8 +213,16 @@ export async function prepareCampaignExport(
       gridSize: map.gridSize,
       feetPerSquare: map.feetPerSquare,
       diagonalRule: map.diagonalRule,
+      drawnBackground: map.drawnBackground,
       tokens,
-      annotations: map.annotations || [],
+      // Empty: releases up to 1.5.4 store an archive's annotations and send
+      // them to every member of the campaign, so a drawing for the DM alone
+      // must not be here. They drop a key they do not know, such as
+      // `drawings`. Map.annotations, which nothing reads, is not written.
+      annotations: [],
+      // The map's drawings, in drawing order and without their authors, each
+      // with the share of the markup layer it counts to.
+      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map((row) => drawingForArchive(row, dmId)),
       wallSegments: map.wallSegments || [],
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
@@ -233,13 +271,14 @@ export async function prepareCampaignExport(
   }
 
   // 6. Build asset manifest
-  const assetManifest: Record<string, { originalName: string; mimeType: string; type: string; fileSize: number }> = {};
+  const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath' | 'details'> & Partial<AssetDetails>> = {};
   for (const [id, info] of assetMap.entries()) {
     assetManifest[id] = {
       originalName: info.originalName,
       mimeType: info.mimeType,
       type: info.type,
       fileSize: info.fileSize,
+      ...info.details,
     };
   }
 
@@ -253,7 +292,7 @@ export async function prepareCampaignExport(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.5.4'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.6.0'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,
@@ -275,13 +314,17 @@ export async function prepareCampaignExport(
     currentVibe: campaign.currentVibe,
     spiritLayerEnabled: campaign.spiritLayerEnabled,
     spiritLayerStyle: campaign.spiritLayerStyle,
+    playersMayDraw: campaign.playersMayDraw,
   };
 
   // 10. The archive's data files, written before the pictures.
   const dataFiles: Array<{ name: string; content: string }> = [
     { name: 'manifest.json', content: JSON.stringify(manifest, null, 2) },
     { name: 'campaign.json', content: JSON.stringify(campaignSettings, null, 2) },
-    ...mapDataArray.map((map, i) => ({ name: `maps/map-${i}.json`, content: JSON.stringify(map, null, 2) })),
+    // Without indentation, which made a map file several times its size: a
+    // map holding all the drawing, fog and walls it may fits in the 10 MB
+    // a data file may hold, and an import reads it whole.
+    ...mapDataArray.map((map, i) => ({ name: `maps/map-${i}.json`, content: JSON.stringify(map) })),
   ];
   if (creaturesData.length > 0) {
     dataFiles.push({ name: 'creatures/creatures.json', content: JSON.stringify(creaturesData, null, 2) });
@@ -338,29 +381,22 @@ export async function prepareCampaignExport(
   return {
     filename,
     async writeTo(out: Writable): Promise<void> {
-      const archive = new ZipArchive({ zlib: { level: 6 } });
-      const written = pipeline(archive, out);
-
-      for (const file of dataFiles) archive.append(file.content, { name: file.name });
-      // Pictures and sound are compressed already; packing them again costs
-      // the server time and saves nothing, and stored they take exactly the
-      // space the size check above counted.
-      for (const [id, info] of assetMap.entries()) {
-        const ext = path.extname(info.originalName) || mimeToExt(info.mimeType);
-        const entry: ZipEntryData = { name: `assets/${id}${ext}`, store: true };
-        archive.file(info.filePath, entry);
-      }
-      archive.append(assetManifestFile.content, { name: assetManifestFile.name });
-      // An error here reaches `written` too, which is where it is handled.
-      archive.finalize().catch(() => undefined);
-
-      try {
-        await written;
-      } catch (error) {
-        // The caller hung up, or a file could not be read: stop reading the rest.
-        archive.abort();
-        throw error;
-      }
+      const entries: ZipEntrySource[] = [
+        ...dataFiles,
+        // Pictures and sound are compressed already; packing them again costs
+        // the server time and saves nothing, and stored they take exactly the
+        // space the size check above counted. One deleted since it was
+        // listed is left out, and an import says its file is missing.
+        ...[...assetMap.entries()].map(([id, info]) => ({
+          name: `assets/${id}${path.extname(info.originalName) || mimeToExt(info.mimeType)}`,
+          file: info.filePath,
+          store: true,
+          skipIfGone: true,
+        })),
+        assetManifestFile,
+      ];
+      // The caller hanging up, or a file that cannot be read, stops it.
+      const archiveSize = await writeZipTo(out, entries);
 
       logger.info('Campaign exported', {
         campaignId,
@@ -368,7 +404,7 @@ export async function prepareCampaignExport(
         creatureCount: creaturesData.length,
         tokenTemplateCount: tokenTemplatesData.length,
         assetCount: assetMap.size,
-        archiveSize: archive.pointer(),
+        archiveSize,
       });
     },
   };

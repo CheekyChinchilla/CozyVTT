@@ -36,8 +36,8 @@ import { STAT_BLOCK_LIMITS } from './statBlockLimits';
  * ability scores and challenge rating, plus the warning it shows on an override
  * that its stat block cannot support.
  */
-export const MIN_STORED_BONUS = -50;
-export const MAX_STORED_BONUS = 50;
+export const MIN_STORED_BONUS = STAT_BLOCK_LIMITS.minBonus;
+export const MAX_STORED_BONUS = STAT_BLOCK_LIMITS.maxBonus;
 
 /**
  * Cap on how many saves or skills one stat block may carry.
@@ -45,10 +45,10 @@ export const MAX_STORED_BONUS = 50;
  * Comfortably above the eighteen 5e skills plus six saves so custom and
  * non-5e entries fit, while still bounding the size of the stored JSON.
  */
-const MAX_BONUS_ENTRIES = 60;
+const MAX_BONUS_ENTRIES = STAT_BLOCK_LIMITS.maxBonusEntries;
 
 /** Max length of a save or skill key. */
-const MAX_KEY_LENGTH = 50;
+const MAX_KEY_LENGTH = STAT_BLOCK_LIMITS.maxBonusKeyLength;
 
 /**
  * The most a stat block may hold, as stored (its JSON, in characters), and
@@ -146,6 +146,10 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     hpMax: z.number().int().min(1).max(99999).optional(),
     hitDice: z.string().max(STAT_BLOCK_LIMITS.maxHitDiceLength).optional(),
     speed: z.string().max(options.maxSpeedLength),
+    // TODO(creatures): D&D 5e's score bound, and every system's skill bound of
+    // 50, refuse a Call of Cthulhu creature's real numbers (STR 60, Dodge 55).
+    // A Call of Cthulhu creature model, with its eight characteristics and
+    // percentile skills, is the fix (docs/FUTURE_FEATURES.md, Known issues).
     abilities: z.object({
       str: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
       dex: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),

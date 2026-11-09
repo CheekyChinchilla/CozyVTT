@@ -63,8 +63,8 @@ cozyvtt/
 │   │   ├── components/    Reusable UI components (incl. ui/ primitives)
 │   │   │   └── character-sheets/  Game system sheet components
 │   │   ├── constants/     Game system labels, and limits copied from the backend (keepInStep.test.ts compares them)
-│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Theme, Toast)
-│   │   ├── stores/        Zustand store for live session state
+│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Layout, Theme, Toast)
+│   │   ├── stores/        Zustand stores: live session state, and the Mapmaker's
 │   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
 │   │   ├── lib/           React Query client setup
 │   │   ├── pages/         Top-level page components
@@ -113,7 +113,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 | `INSTANCE_NAME` | No | — | The name emails use while the name in Admin > Settings is empty or still CozyVTT |
 | `SETUP_TOKEN` | No | — | The token the setup wizard asks for; unset, the backend makes one and prints it in its log until setup has run |
 | `UPLOAD_DIR` | No | `uploads` | Where uploaded files are stored, relative to the backend folder |
-| `BACKUP_DIR` | No | `backups` | Where the Admin Dashboard writes backups; must not be inside the uploads folder |
+| `BACKUP_DIR` | No | `backups` | Where the Admin Panel writes backups; must not be inside the uploads folder |
 | `SESSION_MAX_AGE` | No | `3600000` | Milliseconds a sign-in lasts without a request |
 | `REMEMBER_ME_MAX_AGE` | No | `2592000000` | Milliseconds a **Remember me** sign-in lasts, and the longest any sign-in lasts |
 | `RATE_LIMIT_MAX_REQUESTS` | No | `300` | Requests per minute to `/api` from one address |
@@ -438,7 +438,7 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 
 > **The run refuses a database without `test` in its name.** The suites
 > write to the database freely: they add accounts and campaigns, several
-> change the instance's settings, and five create and drop schemas of their
+> change the instance's settings, and some create and drop schemas of their
 > own. So
 > jest stops before any suite starts unless the database `DATABASE_URL` names
 > has `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
@@ -458,8 +458,7 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 
 ```bash
 cd frontend
-npm test                  # Interactive watch mode
-npm run test:run          # Run once (CI mode)
+npx vitest run            # Run once
 npm run test:coverage     # Generate coverage report
 ```
 
@@ -472,14 +471,15 @@ Tests live alongside the components they test in `__tests__/` subdirectories or 
 ### Browser smoke tests (Playwright)
 
 `frontend/e2e/` holds a handful of end-to-end tests that drive a real browser
-(Chromium, at a desktop and a phone size) through a running instance: the
+(Chromium at a desktop and a Pixel 10 phone size, WebKit on an iPhone 15 and
+an iPad Pro 11 in landscape) through a running instance: the
 setup wizard on a fresh one, signing in and out, creating a campaign and
 opening it with its live connection, and nothing wider than the screen on a
 phone. CI runs them against the production stack it has just built. To run
 them yourself, start an instance, then from `frontend/`:
 
 ```bash
-npx playwright install chromium     # once, to fetch the browser (add --with-deps on Linux, as CI does)
+npx playwright install chromium webkit   # once, to fetch both browsers (add --with-deps on Linux, as CI does)
 E2E_BASE_URL=http://localhost:3000 E2E_SETUP_TOKEN=<the setup token> npm run test:e2e
 ```
 
@@ -488,6 +488,21 @@ can throw away; on one already set up, it is skipped and the others sign in
 as `E2E_ADMIN_EMAIL` with `E2E_ADMIN_PASSWORD`. The settings are listed in
 `frontend/e2e/instance.ts`. One test's check of the page's security headers
 runs only with `E2E_PRODUCTION=1`, since the development server sends none.
+On Linux, WebKit needs system libraries that `--with-deps` installs with
+`sudo`; without them its projects fail to launch.
+
+**On a phone or tablet.** The four projects are `desktop`, `phone` (Pixel 10),
+`iphone` (iPhone 15) and `ipad` (iPad Pro 11, landscape); `setup` runs first.
+Run one with `npx playwright test --project=iphone`. The phone checks apply to
+any project whose screen matches the app's `COMPACT_LAYOUT_QUERY`, which the
+spec imports and asks the browser (1024 px at the usual text size): the
+campaign page shows the compact layout's bar and no columns, its **Chat**
+button opens the Chat sheet, and nothing scrolls sideways. The iPad, in
+landscape, takes the desktop path, where the rail's **Chat** tab shows and
+no bar. Each run makes a campaign named `Smoke <project> <time>`; delete it
+afterwards on an instance that is not throwaway. WebKit here is Playwright's build, not Safari:
+it catches layout and engine differences, but final checks on iOS belong on a
+real device.
 
 ### Checking sign-in by hand
 
@@ -543,6 +558,10 @@ python3 -m unittest discover -s scripts/tests
 
 Some of those deserve a note:
 
+- **No other company's product names a feature of ours.** Describe a tool in
+  CozyVTT's own words: `scripts/tests/test_product_names.py` fails on a tracked
+  file that names the commercial drawing program Mapmaker resembles, and keep
+  such names out of commit messages too.
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
 - **The production build leaves out `console.log`, `info`, `debug` and
@@ -557,11 +576,24 @@ Some of those deserve a note:
   builds its own Prisma clients and jest reuses workers across files, so a
   full run once crept up to PostgreSQL's default ceiling of a hundred
   connections and unrelated suites failed with "too many clients already".
-  Two files under `src/__tests__/helpers/` (`jest.setup.ts`,
-  `jest.afterEnv.ts`) cap each pool and disconnect each file's clients when
-  it ends; if you see that error again, look there first, not at the code.
-  That disconnect runs before a file's own top-level `afterAll`, so a file
-  that cleans up the database there ends it with `prisma.$disconnect()`.
+  Files under `src/__tests__/helpers/` (`jest.setup.ts`, `testFileEnd.ts`)
+  cap each pool and disconnect each file's clients when it ends; if you see
+  that error again, look there first, not at the code. The disconnect runs
+  after every hook of the file, so a file's own `afterAll` may clean up the
+  database without disconnecting.
+- **A file ends only once the work the server started has finished.** Some
+  work runs after its request has been answered: the map sent to the table
+  again 100 ms after a token change, explored ground written a second after
+  it was seen. Such work goes through `src/utils/backgroundWork.ts`, which
+  counts it, and both a shutdown and the end of every test file wait for it
+  before closing the database. Started any other way, it can run after Jest
+  has torn the file down and fail the whole run with "You are trying to
+  `require` a file after the Jest environment has been torn down". A file
+  whose work is still under way 5 seconds after its last hook fails, naming
+  the work, and so does one whose clients still have a query running 5
+  seconds after that. Work asked for while fake timers are on starts only if
+  the test advances them past it: switching them off in an `afterEach` does
+  not start it, and the file fails.
 - **A test that needs the server to survive a request runs it as a process of
   its own.** An uncaught exception inside Jest fails the test and nothing
   else, so it cannot show that a request would end the real server.
@@ -571,7 +603,7 @@ Some of those deserve a note:
 - **A test that needs a brand new instance gets a schema of its own.** The
   suites share one database and run at once, so none can count on it being
   empty. The setup wizard suite, the first-admin and last-admin race tests,
-  the admin settings log suite and the sign-in table's own test need exactly
+  the admin settings log suite and the two sign-in table suites need exactly
   that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
   schema in the same test database from `schema.prisma`, and drops it at the
   end. The file sets `DATABASE_URL` to that schema before it loads the app,
@@ -587,7 +619,7 @@ Some of those deserve a note:
   files and CI pin, when any line in either Dockerfile that installs it names the
   unpinned `postgresql-client`, or when the stage that runs (the last one) does
   not install it. It also fails when `backend/scripts/restore.sh`
-  stops ending its load with the statements the dashboard restore ends it with,
+  stops ending its load with the statements the Admin Panel's restore ends it with,
   when the combat state's fields differ between the two packages, when the
   special characters a password needs differ between the browser and the
   server, when the email address check differs between them (the body of
@@ -614,14 +646,51 @@ Some of those deserve a note:
   box) differs between the two, when the campaign limits file
   (`backend/src/validators/campaignLimits.ts`, copied as
   `frontend/src/constants/campaignLimits.ts` for the campaign dialogs)
-  differs between the two, when the upload types file
+  differs between the two, when the chat limit file
+  (`backend/src/validators/chatLimits.ts`, copied as
+  `frontend/src/constants/chatLimits.ts` for the chat box) differs between
+  the two or the chat box writes the number itself, when the dice limits file
+  (`backend/src/validators/diceLimits.ts`, copied as
+  `frontend/src/constants/diceLimits.ts` for the dice panel and the **Saved**
+  window) differs between the two or either writes a `maxLength` of its own,
+  when the frontend's `DiceMacro` or the API document's `DiceMacro` schema
+  differs from the columns of `DiceMacro`, nullable ones included, when the drawing limits
+  file (`backend/src/validators/drawingLimits.ts`, copied as
+  `frontend/src/constants/drawingLimits.ts` for the draw tool) differs between
+  the two or its audiences and layers differ from the `DrawingAudience` and
+  `DrawingLayer` enums in `schema.prisma`, when the upload types file
   (`backend/src/validators/uploadTypes.ts`, copied as
   `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
-  differs between the two,
+  differs between the two, when the account limits file
+  (`backend/src/validators/accountLimits.ts`, copied as
+  `frontend/src/constants/accountLimits.ts` for Profile, Sign Up and the
+  setup wizard) differs between the two, when the largest side a picture may have
+  (`backend/src/validators/pictureSizeLimits.ts`, copied as
+  `frontend/src/constants/pictureSizeLimits.ts` for **Draw a map**) differs
+  between the two or from the side the server checks pictures against, when
+  the password fields the U+0000 refusal leaves alone (`PASSWORD_FIELDS` in
+  `backend/src/middleware/nulCharacter.ts`) are not every password field a
+  route reads from its body,
   when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when
   `campaign.access.revoked` has different fields or reasons on the two sides,
+  when `chat.message` has different fields on the two sides (the handler's
+  `ChatMessageBroadcast` against the frontend's), when the kinds of chat
+  message differ between `schema.prisma` and the frontend's `MessageType`,
+  when the frontend's `ChatMessageEvent` names other fields or types than
+  `ChatMessageSchema` takes, when `campaign.settings.updated` has different
+  fields on the two sides (`CampaignSettingsUpdatedBroadcast`), when the
+  fields of a drawing differ between what the server sends (`DrawingSent` in
+  `backend/src/services/mapDrawings.ts`), what `NewDrawingSchema` takes, the
+  API document's `Drawing` schema, the WebSocket guide's table of what a
+  drawing is and the frontend's `Drawing`, or a drawing event or broadcast
+  has other fields in the frontend's `types/drawings.ts` than on the server,
+  when a drawing in a campaign archive carries fields the import does not
+  store, when a column of `Map` is in none, or more than one, of the three
+  lists in `backend/src/utils/spirit-layer.ts` that decide who is sent it, or
+  the frontend's `CampaignMap` or the API document's `Map` schema differ from
+  what a member is sent,
   when `tokenCentre.ts` differs between them, when a `SESSION_SECRET=`
   example in an example file or a guide would start a production server,
   when the themes and fonts the server accepts differ from those the app
@@ -782,9 +851,9 @@ Dependabot, since its data has to be dumped and restored. A new release
 waits before Dependabot proposes it (`cooldown`): an npm package 3 days for a
 patch, 7 for a minor and 14 for a major, an action or base image 7 days, so
 a hijacked publish is usually pulled first. Security updates do not wait.
-Dependabot alerts for published advisories are on. Its automatic security pull requests are
-turned on in the repository's settings once 1.5.3 is on `main`; GitHub opens
-those against `main` whatever `target-branch` says.
+Dependabot alerts for published advisories are on. Its automatic security pull requests,
+turned on in the repository's settings, are opened against `main` whatever
+`target-branch` says.
 
 A pull request into `main` cannot merge until the Frontend, Backend, Docs,
 Dependency advisories, and Production images, nginx and smoke tests jobs pass
@@ -808,7 +877,7 @@ tagged, rehearse exactly that:
    a real instance's, so do this on a machine that is not running one.
 2. Seed it through the app: an admin, a player with two-factor sign-in on,
    a campaign with a lit map (walls, a light, a hidden token with notes, some
-   revealed fog) and a character; then make a backup from the Admin Dashboard
+   revealed fog) and a character; then make a backup from the Admin Panel
    and one with `./backend/scripts/backup.sh`.
 3. Record a fingerprint of the data with `psql` in the database container:
    an `md5` of each map's tokens, walls, lights and fog, of each character's
@@ -818,7 +887,7 @@ tagged, rehearse exactly that:
 5. Check that the migrations applied (`docker compose logs backend`), the
    fingerprints are unchanged, `/health` answers through the bundled nginx,
    the old passwords still sign in, the player is sent nothing the DM hid,
-   the previous release's dashboard backup restores on the new code, a new
+   a backup from the previous release's Admin Panel restores on the new code, a new
    backup downloads and restores, and `backup.sh` then `restore.sh` work.
 6. Open the campaign in a browser as the DM and as the player.
 
@@ -850,9 +919,9 @@ and a deprecated option fails the type check.
 The backend compiles with `"module": "node20"` and `"moduleResolution":
 "node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
 every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
-package's `"exports"`, and the code can import the packages published only as
-ES modules (archiver, file-type), which Node 22.12 and later load
-with `require` (the images run Node 26). `"module": "node16"` refuses those imports. Two things follow:
+package's `"exports"`, and the code can import a package published only as
+an ES module (file-type), which Node 22.12 and later load
+with `require` (the images run Node 26). `"module": "node16"` refuses that import. Two things follow:
 
 - **No dynamic `import()` of our own files.** Under these settings an
   `import()` stays a native ES module import, which fails in `dist/` and
@@ -896,7 +965,8 @@ ESLint's recommended rules from `@eslint/js`, the recommended rules of the
 in the frontend, the React hooks rules. Only TypeScript files are linted, apart from
 the frontend's `vite.config.ts`. A rule that is switched off says why beside
 it. In the frontend the ones waiting to be turned on are marked
-`TODO(ratchet)`; the backend's three are listed in the comment above them.
+`TODO(ratchet)`; the backend has none waiting, and its one rule switched
+off, for tests, says why.
 
 There is no enforced code formatter (Prettier), but follow the existing style in the file you're editing:
 - 2-space indentation
@@ -914,7 +984,7 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 - **Pages** in `src/pages/` — one file per route, thin orchestration layer
 - **Components** in `src/components/` — reusable UI; they reach the API through the clients in `src/services/` (the document reader's `fetch` of a document's text is the one exception)
-- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign, Theme, Toast)
+- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign, Layout, Theme, Toast)
 - **Services** in `src/services/` — all API calls go through `api.ts` or `auth.service.ts`
 - **No `any`** — if you need to escape the type system, use `unknown` and narrow it
 

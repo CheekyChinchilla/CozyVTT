@@ -14,8 +14,14 @@
 // `data-autofocus`, which the trap focuses. React's `autoFocus` moves focus
 // before the trap records where it came from, so focus could not return to
 // the opener, and the trap then moved it to the first control anyway.
+//
+// On the campaign page's compact layout the browser's Back closes the dialog
+// on top as Escape does (components/campaign/compact/sheetHistory.ts), so an
+// open trap there holds a place on the history; the desktop's is untouched.
 
 import { useEffect, useRef } from 'react';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import { dialogOpened, nextOpening } from '@/components/campaign/compact/sheetHistory';
 
 const FOCUSABLE_SELECTORS = [
   'a[href]',
@@ -26,8 +32,35 @@ const FOCUSABLE_SELECTORS = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
 
+/** An open trap, known by its identity. */
+type OpenTrap = object;
+
 /** The open traps, oldest first; only the last acts on a key. */
-const openTraps: symbol[] = [];
+const openTraps: OpenTrap[] = [];
+
+/**
+ * Whether any dialog's focus trap is open. The map's keys stand aside while
+ * one is: the trap takes only Tab and Escape, so arrows and the rest would
+ * otherwise reach the map behind the dialog.
+ */
+export function isAnyTrapOpen(): boolean {
+  return openTraps.length > 0;
+}
+
+export interface FocusTrapOptions {
+  /**
+   * Leave the focus where it is as the trap begins when it is already inside
+   * the container: a panel that becomes a dialog while open, such as a sheet
+   * made full height, keeps the control in use.
+   */
+  keepFocusInside?: boolean;
+  /**
+   * Whether the browser's Back closes the dialog on the compact layout,
+   * through the close Escape calls. True unless set false, as a sheet that
+   * answers Back itself does (compact/BottomSheet.tsx).
+   */
+  closesOnBack?: boolean;
+}
 
 /**
  * Traps keyboard focus inside a dialog container.
@@ -36,7 +69,7 @@ const openTraps: symbol[] = [];
  * @param onClose Called when the user presses Escape
  * @returns A ref to attach to the modal's root element
  */
-export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
+export function useFocusTrap(isOpen: boolean, onClose?: () => void, options: FocusTrapOptions = {}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
@@ -45,12 +78,20 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
   // (which would steal focus from inputs on every keystroke).
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  const keepFocusInsideRef = useRef(options.keepFocusInside === true);
+  keepFocusInsideRef.current = options.keepFocusInside === true;
+  const closesOnBack = useCompactLayout() && options.closesOnBack !== false;
+
+  // When the trap opened, among the dialogs and sheets (sheetHistory's
+  // nextOpening), so its hold on the history keeps its place.
+  const openedRef = useRef(0);
 
   useEffect(() => {
     if (!isOpen) return;
 
-    const trap = Symbol('focus trap');
+    const trap: OpenTrap = {};
     openTraps.push(trap);
+    openedRef.current = nextOpening();
 
     // Remember the element that had focus before the modal opened
     previousFocusRef.current = document.activeElement as HTMLElement;
@@ -60,6 +101,7 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
     const frame = requestAnimationFrame(() => {
       const container = containerRef.current;
       if (!container) return;
+      if (keepFocusInsideRef.current && container.contains(document.activeElement)) return;
 
       const first =
         container.querySelector<HTMLElement>('[data-autofocus]') ??
@@ -128,6 +170,15 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
   // onCloseRef is stable (created by useRef) — no need to include it.
    
   }, [isOpen]);
+
+  // Its own effect, so a layout that changes while the dialog is open takes
+  // or gives back the history's entry without the trap starting over. After
+  // the trap's, which takes the dialog's place as it opens.
+  useEffect(() => {
+    if (!isOpen || !closesOnBack) return;
+    const entry = dialogOpened(() => onCloseRef.current?.(), openedRef.current);
+    return () => entry.release();
+  }, [isOpen, closesOnBack]);
 
   return containerRef;
 }

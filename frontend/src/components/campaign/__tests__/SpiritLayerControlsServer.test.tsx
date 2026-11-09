@@ -12,6 +12,8 @@
 import { it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useGameStore } from '@/stores/gameStore';
+import { TokenLayer, type Token } from '@/types';
 
 vi.mock('framer-motion', () => {
   const MotionDiv = (props: Record<string, unknown>) => {
@@ -32,7 +34,9 @@ const veil = vi.hoisted(() => ({ open: false }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', spiritLayerEnabled: veil.open, spiritLayerStyle: 'wispy' },
-    currentMap: { id: 'map-1' },
+    // The table on another map than the one on screen.
+    currentMap: { id: 'map-table' },
+    viewedMap: { id: 'map-1' },
     updateCampaignSpiritLayer,
     dmViewBothPlanes: true,
     setDmViewBothPlanes: vi.fn(),
@@ -40,8 +44,9 @@ vi.mock('@/contexts/CampaignContext', () => ({
 }));
 const emitSpiritLayerToggle = vi.fn();
 const emitSpiritLayerStyleChange = vi.fn();
+const emitSpiritLayerTokenToggle = vi.fn();
 vi.mock('@/contexts/WebSocketContext', () => ({
-  useWebSocket: () => ({ socket: { emitSpiritLayerToggle, emitSpiritLayerStyleChange, emitSpiritLayerTokenToggle: vi.fn() } }),
+  useWebSocket: () => ({ socket: { emitSpiritLayerToggle, emitSpiritLayerStyleChange, emitSpiritLayerTokenToggle } }),
 }));
 const updateCampaign = vi.fn();
 vi.mock('@/services/campaign.service', () => ({ default: { updateCampaign: (...a: unknown[]) => updateCampaign(...a) } }));
@@ -98,4 +103,16 @@ it('is announced by name, and Escape and its Close button close it', async () =>
 
   fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
   expect(onClose).toHaveBeenCalledTimes(2);
+});
+
+// A DM preparing a map shows or hides a spirit token of that map, not of the
+// table's.
+it("toggles a spirit token of the map on screen", async () => {
+  useGameStore.getState().setTokens([{
+    id: 'shade', name: 'Shade', imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 },
+    layer: TokenLayer.SPIRIT, visible: false, controlledBy: null, rotation: 0, conditions: [], metadata: {},
+  } as unknown as Token], 'map-1');
+  render(<SpiritLayerControls isOpen onClose={() => {}} />);
+  await userEvent.click(screen.getByTitle('Show token'));
+  expect(emitSpiritLayerTokenToggle).toHaveBeenCalledWith('map-1', 'shade', true);
 });

@@ -187,3 +187,27 @@ describe('NumberField left unchanged', () => {
     expect(onChange).toHaveBeenCalledWith(0);
   });
 });
+
+// A box whose stored value is something it cannot show, such as an age kept
+// as text, must not replace it with a number nobody typed.
+describe('NumberField with a null fallback', () => {
+  it('commits nothing when a box with no value is passed through', () => {
+    const onChange = vi.fn();
+    render(<NumberField value={null} onChange={onChange} fallback={null} aria-label="age" />);
+    const box = screen.getByLabelText('age') as HTMLInputElement;
+    fireEvent.focus(box);
+    fireEvent.blur(box);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(box.value).toBe('');
+  });
+
+  it('shows the committed value again when emptied', () => {
+    const onChange = vi.fn();
+    render(<NumberField value={34} onChange={onChange} fallback={null} aria-label="age" />);
+    const box = screen.getByLabelText('age') as HTMLInputElement;
+    fireEvent.change(box, { target: { value: '' } });
+    fireEvent.blur(box);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(box.value).toBe('34');
+  });
+});

@@ -30,6 +30,17 @@ describe('Toast', () => {
     expect(screen.getByText('Goblin Sniper is already standing there.')).toBeInTheDocument();
   });
 
+  // A see-through tint was hard to read over a sheet's header on a phone.
+  it('draws each kind of message on a solid colour, so it reads over a map or a sheet', () => {
+    for (const [type, tone] of [['success', 'toast-success'], ['error', 'toast-danger'], ['warning', 'toast-warning'], ['info', 'toast-info']] as const) {
+      const { unmount } = render(<Toast show type={type} message="Saved" onClose={noop} />);
+      const card = screen.getByRole('alert');
+      expect(card.className).toContain(tone);
+      expect(card.className).not.toMatch(/glass-panel|bg-[a-z]+\/\d+/);
+      unmount();
+    }
+  });
+
   it('renders nothing when not shown', () => {
     render(<Toast show={false} message="Hidden" onClose={noop} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -90,5 +101,27 @@ describe('Toast timing', () => {
     rerender(<Toast show message="Uploaded" onClose={() => closed()} duration={5000} />);
     vi.advanceTimersByTime(2100);
     expect(closed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Toast on a touch screen', () => {
+  // The close button was the 16-pixel cross alone.
+  it('has a close button big enough for a finger, with its cross in the middle', () => {
+    render(<Toast show message="Saved" onClose={noop} />);
+
+    expect(screen.getByRole('button', { name: 'Close notification' }).className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+  });
+});
+
+// Placed 16 px from the right, a long message was as wide as the screen left
+// it and met a phone's left edge. It now keeps 16 px from both edges, and is
+// at most 448 px wide wherever that fits, as before.
+describe('Toast on a phone', () => {
+  it('keeps 16 px from both edges of a narrow screen', () => {
+    render(<Toast show message="Placed" onClose={noop} />);
+    const classes = screen.getByRole('alert').parentElement?.className.split(/\s+/) ?? [];
+    expect(classes).toContain('max-w-[min(28rem,calc(100vw-2rem))]');
+    expect(classes).not.toContain('max-w-md');
   });
 });

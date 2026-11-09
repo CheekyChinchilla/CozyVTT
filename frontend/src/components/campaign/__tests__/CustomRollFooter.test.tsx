@@ -43,6 +43,26 @@ describe('CustomRollFooter', () => {
     expect(screen.getByText(/invalid dice expression/i)).toBeInTheDocument();
   });
 
+  // Only the characters were checked, so these went to the server and failed.
+  it.each(['2d6+', 'dddd', '200d6'])('refuses %j, which the dice parser rejects', (expression) => {
+    const onRoll = vi.fn();
+    render(<CustomRollFooter onRoll={onRoll} />);
+    fireEvent.change(expressionBox(), { target: { value: expression } });
+    fireEvent.click(screen.getByRole('button', { name: /roll/i }));
+    expect(onRoll).not.toHaveBeenCalled();
+    expect(screen.getByText(/invalid dice expression/i)).toBeInTheDocument();
+  });
+
+  // The parser's own reason, as the Dice panel gives it: a player cannot
+  // otherwise tell that the limit is 100 dice.
+  it('says why the dice parser rejects an expression', () => {
+    const onRoll = vi.fn();
+    render(<CustomRollFooter onRoll={onRoll} />);
+    fireEvent.change(expressionBox(), { target: { value: '200d6' } });
+    fireEvent.click(screen.getByRole('button', { name: /roll/i }));
+    expect(screen.getByText('Invalid dice expression: Too many dice. Maximum 100 per roll.')).toBeInTheDocument();
+  });
+
   it('asks for an expression rather than rolling nothing', () => {
     const onRoll = vi.fn();
     render(<CustomRollFooter onRoll={onRoll} />);

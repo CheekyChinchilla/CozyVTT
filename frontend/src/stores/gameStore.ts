@@ -9,14 +9,22 @@
 //
 // BOUNDARY RULE (do not blur it):
 //   - zustand (this store) owns LIVE SESSION STATE fed by sockets:
-//     token positions, token lists, combat/initiative and characters' hit
-//     points today; walls / fog / lights may move here in future (they are
-//     currently MapCanvas-local state with their own undo/redo history).
+//     token positions, token lists, combat/initiative, characters' hit
+//     points, who is online today and the current map's drawings; walls /
+//     fog / lights may move here in future (they are currently
+//     MapCanvas-local state with their own undo/redo history). The
+//     previews of strokes on their way are not here: they change every
+//     frame, and live in a ref the overlay reads (map/useMapDrawings.ts).
 //   - react-query owns SERVER RESOURCES fetched over REST (campaign
 //     lists, characters, assets, map metadata).
 //   - CampaignContext owns campaign-level metadata and low-frequency
 //     UI state (vibe, atmosphere, session).
 //   Never represent the same datum in two of these places.
+//   Some things here are the page's own and fed by no socket: the
+//   cross-highlight peek and the selected token, which sit beside the
+//   tokens because the map, the tracker and the keyboard all read them;
+//   and the open session tab and the chat's unread count, which the
+//   rail's tab bar and its panels both read.
 //
 // Write access: components and socket handlers mutate ONLY through the
 // targeted actions below (patch/add/remove by id). Never rebuild the
@@ -29,6 +37,10 @@ import { create } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import type { CombatState, Position, Token } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
+import type { Drawing } from '@/types/drawings';
+import { drawingOrder } from '@/components/campaign/map/drawingGeometry';
+import { isSessionTab, type SessionTab } from '@/components/campaign/sessionTabs';
+import { optionalStorage } from '@/utils/optionalStorage';
 
 /** Combat is inactive until the DM starts it; matches the server's default. */
 /** The same record without `key`, or the same record when it has none. */
@@ -46,6 +58,20 @@ const EMPTY_COMBAT: CombatState = {
   combatants: [],
 };
 
+/** Where this browser remembers the open session tab; the key the rail has always used. */
+export const SESSION_TAB_KEY = 'cozyvtt-session-tab';
+
+/** The session tab this browser last had open, or the chat. */
+function storedSessionTab(): SessionTab {
+  const stored = optionalStorage.getItem(SESSION_TAB_KEY);
+  return isSessionTab(stored) ? stored : 'chat';
+}
+
+/** Whether the chat is on screen, so a message arriving is read as it comes. */
+function chatOnScreen(s: { sessionTab: SessionTab; sessionShown: boolean }): boolean {
+  return s.sessionShown && s.sessionTab === 'chat';
+}
+
 interface GameState {
   /**
    * Where a token someone else is carrying is drawn, by id. A drag frame moves
@@ -56,6 +82,20 @@ interface GameState {
   heldAt: Record<string, Position>;
   /** Normalized token map — authoritative live positions live here. */
   tokens: Record<string, Token>;
+  /**
+   * The map `tokens` are of, written with them (setTokens). A token event,
+   * or the answer to a request, for any other map is not applied (onMapTokens,
+   * and the `mapId` the token writes take), so no token of another map is
+   * ever drawn, whatever arrives late.
+   */
+  tokensMapId: string | null;
+  /**
+   * The map whose tokens are being fetched to replace `tokens`
+   * (expectTokensOf), and its token events that arrived meanwhile, applied
+   * in order once its tokens are in, so none made during the fetch is lost.
+   */
+  loadingTokensOf: string | null;
+  heldTokenEvents: ReadonlyArray<() => void>;
   /** Render/list order (server order preserved from the last full set). */
   tokenOrder: string[];
   /**
@@ -75,56 +115,174 @@ interface GameState {
   peekTokenId: string | null;
   peekSource: 'tracker' | 'map' | null;
   /**
+   * The token this page has selected, by a click or the keyboard: what the
+   * arrow keys move, the turn keys turn and Enter opens the menu of. Kept
+   * across a new token list while the list still holds it, since the server
+   * sends the whole map again after any change to a token.
+   */
+  selectedTokenId: string | null;
+  /**
    * Characters' hit points by character id, seeded from the roster and
    * kept current by `character.hp.updated`. Read by the roster and the
    * map's HP bars; here so a change in a fight re-renders only those.
    */
   characterHp: Record<string, CharacterHpInfo>;
+  /**
+   * Who has at least one live connection to the campaign, by user id, as the
+   * last `presence.state` said; the server sends the whole set every time.
+   * Read by the roster's dots and the chat's To list.
+   */
+  onlineUserIds: ReadonlySet<string>;
+  /**
+   * The drawings on the map on screen, as this member is sent them, in
+   * drawing order (`drawingOrder`), with this page's own adds still on their
+   * way (an id starting `pending:`). Replaced whole by `drawings:state` and
+   * on a map switch.
+   */
+  drawings: Drawing[];
+  /** The map `drawings` are for. */
+  drawingsMapId: string | null;
+  /**
+   * The session panel open in the rail (Chat, Dice, Initiative, Notes or
+   * Session), remembered in this browser under `SESSION_TAB_KEY`.
+   */
+  sessionTab: SessionTab;
+  /**
+   * How many chat messages from someone else arrived while the chat was not
+   * on screen: the Chat tab's badge. Back to none when the chat is opened.
+   */
+  unreadChat: number;
+  /**
+   * Whether the session panels are on screen. The desktop's rail always
+   * shows them; the compact layout keeps them in a sheet, shown only while it
+   * is open, and says so here. A session's teardown leaves it as it is,
+   * since the arrangement on screen keeps it.
+   */
+  sessionShown: boolean;
 
   // ---- Actions (named after the events that drive them) ----
-  /** Wholesale replace — map load, map change, reconnect resync. */
-  setTokens: (tokens: Token[]) => void;
+  /**
+   * Wholesale replace — map load, map change, reconnect resync — with the
+   * map they are of. A map whose tokens were expected gets the events held
+   * for it applied after.
+   */
+  setTokens: (tokens: Token[], mapId?: string | null) => void;
+  /** The tokens of `mapId` are being fetched; its token events wait for them. Null stops waiting. */
+  expectTokensOf: (mapId: string | null) => void;
+  /**
+   * A token event for `mapId`: applied now when the store holds that map's
+   * tokens, and kept to be applied again onto the answer while that map's
+   * tokens are being fetched, the map on screen's own included; dropped
+   * otherwise. `hold: false` applies it now and keeps nothing (a drag
+   * frame, which only moves where a token is drawn). At most
+   * MAX_HELD_TOKEN_EVENTS are kept, the oldest going first.
+   */
+  onMapTokens: (mapId: string, apply: () => void, options?: { hold?: boolean }) => void;
   /** `token.moved` stream + local drag commit: position-only update. */
   applyTokenMove: (tokenId: string, position: Position) => void;
   /** `token.moved` — a drag frame (`dragging`) or where the token was put down. */
   receiveTokenMove: (tokenId: string, position: Position, dragging: boolean) => void;
-  /** New token placed (REST response or DM action). */
-  addToken: (token: Token) => void;
+  /**
+   * New token placed (REST response or DM action). `mapId`, the map the
+   * request named, when given: a token of another map is not added.
+   */
+  addToken: (token: Token, mapId?: string) => void;
   /** `token:appeared` — update position if known, otherwise add. */
   revealToken: (token: Token) => void;
-  /** `token:disappeared` / delete. */
-  removeToken: (tokenId: string) => void;
-  /** Targeted field update (visibility, layer, conditions, ...). */
-  patchToken: (tokenId: string, patch: Partial<Token>) => void;
-  /** Full-object replace after an editor save (NpcQuickEditor). */
-  replaceToken: (token: Token) => void;
+  /** `token:disappeared` / delete. `mapId` as for addToken. */
+  removeToken: (tokenId: string, mapId?: string) => void;
+  /** Targeted field update (visibility, layer, conditions, ...). `mapId` as for addToken. */
+  patchToken: (tokenId: string, patch: Partial<Token>, mapId?: string) => void;
+  /** Full-object replace after an editor save (NpcQuickEditor). `mapId` as for addToken. */
+  replaceToken: (token: Token, mapId?: string) => void;
   /** `initiative.state` — wholesale replace of the combat snapshot. */
   setCombatState: (combat: CombatState) => void;
   /** Point at a token from either side; pass null to clear. */
   setPeekToken: (tokenId: string | null, source: 'tracker' | 'map') => void;
+  /** Select a token on the map, or nothing. */
+  selectToken: (tokenId: string | null) => void;
   /** `character.hp.updated`: one character's hit points. */
   setCharacterHp: (characterId: string, hp: CharacterHpInfo) => void;
   /** The roster's answer: every character it lists that has hit points. */
   seedCharacterHp: (entries: { id: string; hp: CharacterHpInfo | null }[]) => void;
-  /** Session teardown. */
+  /** `presence.state`: the whole set of who is online. */
+  setOnlineUserIds: (userIds: readonly string[]) => void;
+  /** `drawings:state`, or a map switch: a map's drawings, whole. */
+  setDrawings: (mapId: string | null, drawings: Drawing[]) => void;
+  /**
+   * `drawing:added`, or this page's own add: the drawing in its place in the
+   * order, in place of the one with its id, or of `replacing` (this page's
+   * drawing while it was on its way).
+   */
+  putDrawing: (drawing: Drawing, replacing?: string) => void;
+  /** `drawing:removed`, or this page's own erase. */
+  removeDrawing: (drawingId: string) => void;
+  /** `drawings:cleared`, or a role that may not have some of them. */
+  removeDrawings: (match: (drawing: Drawing) => boolean) => void;
+  /** Open a session panel. Opening the chat reads what arrived meanwhile. */
+  setSessionTab: (tab: SessionTab) => void;
+  /** `chat.message` from someone else: one more unread, unless the chat is on screen. */
+  countUnreadChat: () => void;
+  /** The session panels are shown or put away. Shown on the chat, it reads what arrived meanwhile. */
+  setSessionShown: (shown: boolean) => void;
+  /**
+   * Session teardown, and a page's start: what a page that opens a campaign
+   * begins with. The open tab is read again from this browser's storage, as
+   * the rail did when it was drawn.
+   */
   clearGameState: () => void;
 }
+
+/**
+ * The most token events kept while a map's tokens are fetched. A fetch ends
+ * within the request's timeout, and drag frames are not kept, so a table
+ * makes far fewer than this in that time.
+ */
+export const MAX_HELD_TOKEN_EVENTS = 2000;
 
 export const useGameStore = create<GameState>((set, get) => ({
   heldAt: {},
   tokens: {},
+  tokensMapId: null,
+  loadingTokensOf: null,
+  heldTokenEvents: [],
   tokenOrder: [],
   combat: EMPTY_COMBAT,
   peekTokenId: null,
   peekSource: null,
+  selectedTokenId: null,
   characterHp: {},
+  onlineUserIds: new Set(),
+  drawings: [],
+  drawingsMapId: null,
+  sessionTab: storedSessionTab(),
+  unreadChat: 0,
+  sessionShown: true,
 
-  setTokens: (list) =>
-    set({
+  setTokens: (list, mapId = null) => {
+    const expected = mapId !== null && get().loadingTokensOf === mapId;
+    const held = expected ? get().heldTokenEvents : [];
+    set((s) => ({
       tokens: Object.fromEntries(list.map((t) => [t.id, t])),
+      tokensMapId: mapId,
       tokenOrder: list.map((t) => t.id),
       heldAt: {},
-    }),
+      selectedTokenId: s.selectedTokenId !== null && list.some((t) => t.id === s.selectedTokenId) ? s.selectedTokenId : null,
+      ...(expected ? { loadingTokensOf: null, heldTokenEvents: [] } : {}),
+    }));
+    for (const apply of held) apply();
+  },
+
+  expectTokensOf: (mapId) => set({ loadingTokensOf: mapId, heldTokenEvents: [] }),
+
+  onMapTokens: (mapId, apply, options) => {
+    if (mapId === get().loadingTokensOf && options?.hold !== false) {
+      set((s) => ({ heldTokenEvents: [...s.heldTokenEvents.slice(-(MAX_HELD_TOKEN_EVENTS - 1)), apply] }));
+    }
+    // The map on screen keeps moving while it is fetched again; the answer,
+    // read before this, gets it once more when it lands.
+    if (mapId === get().tokensMapId) apply();
+  },
 
   applyTokenMove: (tokenId, position) => {
     const token = get().tokens[tokenId];
@@ -144,8 +302,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ heldAt: home ? withoutKey(get().heldAt, tokenId) : { ...get().heldAt, [tokenId]: position } });
   },
 
-  addToken: (token) =>
-    set((s) => ({
+  addToken: (token, mapId) =>
+    set((s) => (mapId !== undefined && mapId !== s.tokensMapId ? s : {
       tokens: { ...s.tokens, [token.id]: token },
       tokenOrder: s.tokenOrder.includes(token.id) ? s.tokenOrder : [...s.tokenOrder, token.id],
     })),
@@ -161,22 +319,27 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  removeToken: (tokenId) =>
+  removeToken: (tokenId, mapId) =>
     set((s) => {
-      if (!s.tokens[tokenId]) return s;
+      if (!s.tokens[tokenId] || (mapId !== undefined && mapId !== s.tokensMapId)) return s;
       const tokens = { ...s.tokens };
       delete tokens[tokenId];
-      return { tokens, tokenOrder: s.tokenOrder.filter((id) => id !== tokenId), heldAt: withoutKey(s.heldAt, tokenId) };
+      return {
+        tokens,
+        tokenOrder: s.tokenOrder.filter((id) => id !== tokenId),
+        heldAt: withoutKey(s.heldAt, tokenId),
+        selectedTokenId: s.selectedTokenId === tokenId ? null : s.selectedTokenId,
+      };
     }),
 
-  patchToken: (tokenId, patch) => {
+  patchToken: (tokenId, patch, mapId) => {
     const token = get().tokens[tokenId];
-    if (!token) return;
+    if (!token || (mapId !== undefined && mapId !== get().tokensMapId)) return;
     set({ tokens: { ...get().tokens, [tokenId]: { ...token, ...patch } } });
   },
 
-  replaceToken: (token) => {
-    if (!get().tokens[token.id]) return;
+  replaceToken: (token, mapId) => {
+    if (!get().tokens[token.id] || (mapId !== undefined && mapId !== get().tokensMapId)) return;
     set({ tokens: { ...get().tokens, [token.id]: token } });
   },
 
@@ -191,6 +354,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ peekTokenId: tokenId, peekSource: tokenId === null ? null : source });
   },
 
+  selectToken: (tokenId) => {
+    if (get().selectedTokenId !== tokenId) set({ selectedTokenId: tokenId });
+  },
+
   setCharacterHp: (characterId, hp) => set((s) => ({ characterHp: { ...s.characterHp, [characterId]: hp } })),
 
   seedCharacterHp: (entries) =>
@@ -202,8 +369,42 @@ export const useGameStore = create<GameState>((set, get) => ({
       return { characterHp };
     }),
 
+  setOnlineUserIds: (userIds) => set({ onlineUserIds: new Set(userIds) }),
+
+  setDrawings: (mapId, drawings) => set({ drawingsMapId: mapId, drawings: [...drawings].sort(drawingOrder) }),
+
+  putDrawing: (drawing, replacing) =>
+    set((s) => {
+      const rest = s.drawings.filter((d) => d.id !== drawing.id && d.id !== replacing);
+      // Most arrive last in the order; look for the place from the end.
+      let at = rest.length;
+      while (at > 0 && drawingOrder(rest[at - 1], drawing) > 0) at -= 1;
+      return { drawings: [...rest.slice(0, at), drawing, ...rest.slice(at)] };
+    }),
+
+  removeDrawing: (drawingId) =>
+    set((s) => (s.drawings.some((d) => d.id === drawingId) ? { drawings: s.drawings.filter((d) => d.id !== drawingId) } : s)),
+
+  removeDrawings: (match) =>
+    set((s) => (s.drawings.some(match) ? { drawings: s.drawings.filter((d) => !match(d)) } : s)),
+
+  setSessionTab: (tab) => {
+    optionalStorage.setItem(SESSION_TAB_KEY, tab);
+    set((s) => ({ sessionTab: tab, unreadChat: chatOnScreen({ ...s, sessionTab: tab }) ? 0 : s.unreadChat }));
+  },
+
+  setSessionShown: (shown) =>
+    set((s) => ({ sessionShown: shown, unreadChat: chatOnScreen({ ...s, sessionShown: shown }) ? 0 : s.unreadChat })),
+
+  countUnreadChat: () => set((s) => (chatOnScreen(s) ? s : { unreadChat: s.unreadChat + 1 })),
+
   clearGameState: () =>
-    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, characterHp: {} }),
+    set({
+      tokens: {}, tokensMapId: null, loadingTokensOf: null, heldTokenEvents: [],
+      tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null,
+      characterHp: {}, onlineUserIds: new Set(), drawings: [], drawingsMapId: null,
+      sessionTab: storedSessionTab(), unreadChat: 0,
+    }),
 }));
 
 // ============================================
@@ -269,6 +470,16 @@ export function useCharacterHp(): Record<string, CharacterHpInfo> {
   return useGameStore((s) => s.characterHp);
 }
 
+/** The current map's drawings, in drawing order: the map's layer and the draw tool. */
+export function useDrawings(): Drawing[] {
+  return useGameStore((s) => s.drawings);
+}
+
+/** Who has a live connection to the campaign, by user id: the roster's dots and the chat's To list. */
+export function useOnlineUserIds(): ReadonlySet<string> {
+  return useGameStore((s) => s.onlineUserIds);
+}
+
 /** The whole combat snapshot — for the initiative tracker, which renders it all. */
 export function useCombatState(): CombatState {
   return useGameStore((s) => s.combat);
@@ -307,6 +518,11 @@ export function useTokenInitiative(tokenId: string | null): number | null | unde
 /** The pointed-at token, whichever side is pointing — for the tracker's row tint. */
 export function usePeekTokenId(): string | null {
   return useGameStore((s) => s.peekTokenId);
+}
+
+/** The token this page has selected, or null. */
+export function useSelectedTokenId(): string | null {
+  return useGameStore((s) => s.selectedTokenId);
 }
 
 /**

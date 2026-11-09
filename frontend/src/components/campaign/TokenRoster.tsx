@@ -65,7 +65,7 @@ interface TokenRowProps {
 }
 
 function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
   const memberships = campaign?.memberships;
   const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -75,7 +75,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
 
 
   const handleDuplicate = useCallback(async () => {
-    if (!currentMap) return;
+    if (!viewedMap) return;
     setIsDuplicating(true);
     try {
       // The roster subscribes ignoring movement, so this row's `token` prop
@@ -84,7 +84,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
       const position = clampTokenPosition(
         { x: livePosition.x + 1, y: livePosition.y + 1 },
         token.size,
-        currentMap
+        viewedMap
       );
       const result = await api.addToken(campaignId, mapId, {
         ...tokenCopyRequest(token, position),
@@ -94,7 +94,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
         conditions: [],
       });
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, mapId);
     } catch (err) {
       // A copy is a new token, so an older one whose fields predate validation
       // is refused: say which, so the DM can fix it in Edit Token.
@@ -102,7 +102,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     } finally {
       setIsDuplicating(false);
     }
-  }, [token, campaignId, mapId, currentMap, showToast, memberships]);
+  }, [token, campaignId, mapId, viewedMap, showToast, memberships]);
 
   const handleToggleVisible = useCallback(async () => {
     try {
@@ -126,7 +126,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     setIsDeleting(true);
     try {
       await api.deleteToken(campaignId, mapId, token.id);
-      useGameStore.getState().removeToken(token.id);
+      useGameStore.getState().removeToken(token.id, mapId);
     } catch (err) {
       showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
       setIsDeleting(false);
@@ -136,7 +136,9 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
   const hp = hpLabel(token);
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-cozy hover:bg-moss-green/5 group">
+    // On a touch screen the actions are 44 pixels each, too wide to sit beside
+    // the name in a narrow panel: the row lets them go under it.
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-cozy hover:bg-moss-green/5 group pointer-coarse:flex-wrap">
       {/* Token image */}
       {token.imageUrl ? (
         <img
@@ -165,14 +167,14 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
       {/* Actions — shown on hover, while one has keyboard focus, and always on a
           screen with no hover (touch), where they would otherwise be tappable
           before they could be seen. */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0 pointer-coarse:shrink pointer-coarse:flex-wrap pointer-coarse:justify-end pointer-coarse:ml-auto">
         {/* Edit — every token type */}
         {onEditToken && (
           <button
             onClick={() => onEditToken(token)}
             title="Edit token"
             aria-label={`Edit ${token.name}`}
-            className="p-1.5 rounded-sm hover:bg-moss-green/10 text-brand-ink transition-colors"
+            className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-brand-ink transition-colors"
           >
             <Edit2 className="w-3.5 h-3.5" />
           </button>
@@ -183,7 +185,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           onClick={handleToggleVisible}
           title={token.visible ? 'Hide from players' : 'Show to players'}
           aria-label={token.visible ? `Hide ${token.name} from players` : `Show ${token.name} to players`}
-          className="p-1.5 rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors"
+          className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors"
         >
           {token.visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
         </button>
@@ -193,7 +195,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           onClick={handleToggleObscured}
           title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
           aria-label={token.obscured ? `Reveal identity of ${token.name}` : `Obscure identity of ${token.name}`}
-          className={`p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
+          className={`p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 transition-colors ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`}
         >
           <HelpCircle className="w-3.5 h-3.5" />
         </button>
@@ -204,7 +206,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           disabled={isDuplicating}
           title="Duplicate token"
           aria-label={`Duplicate ${token.name}`}
-          className="p-1.5 rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors disabled:opacity-40"
+          className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray transition-colors disabled:opacity-40"
         >
           {isDuplicating ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -219,7 +221,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
           disabled={isDeleting}
           title="Remove from map"
           aria-label={`Remove ${token.name} from map`}
-          className="p-1.5 rounded-sm hover:bg-danger/10 text-danger-ink/60 hover:text-danger-ink transition-colors disabled:opacity-40"
+          className="p-1.5 touch-target inline-flex items-center justify-center rounded-sm hover:bg-danger/10 text-danger-ink/60 hover:text-danger-ink transition-colors disabled:opacity-40"
         >
           {isDeleting ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -286,13 +288,13 @@ function TokenGroup({ label, tokens, campaignId, mapId, onEditToken, defaultOpen
 // ============================================
 
 export default function TokenRoster({ onEditToken }: TokenRosterProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
   // Movement-ignoring subscription: the roster renders names/flags/HP, not
   // coordinates, so it stays static while tokens are dragged around the map.
   const tokens = useTokenListIgnoringMovement();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  if (!currentMap || !campaign) return null;
+  if (!viewedMap || !campaign) return null;
 
   const players  = tokens.filter((t) => getEffectiveType(t) === TokenType.PLAYER);
   const npcs     = tokens.filter((t) => getEffectiveType(t) === TokenType.NPC);
@@ -325,7 +327,7 @@ export default function TokenRoster({ onEditToken }: TokenRosterProps) {
             label="Players"
             tokens={players}
             campaignId={campaign.id}
-            mapId={currentMap.id}
+            mapId={viewedMap.id}
             onEditToken={onEditToken}
             defaultOpen={true}
           />
@@ -333,7 +335,7 @@ export default function TokenRoster({ onEditToken }: TokenRosterProps) {
             label="NPCs"
             tokens={npcs}
             campaignId={campaign.id}
-            mapId={currentMap.id}
+            mapId={viewedMap.id}
             onEditToken={onEditToken}
             defaultOpen={true}
           />
@@ -341,7 +343,7 @@ export default function TokenRoster({ onEditToken }: TokenRosterProps) {
             label="Objects"
             tokens={objects}
             campaignId={campaign.id}
-            mapId={currentMap.id}
+            mapId={viewedMap.id}
             onEditToken={onEditToken}
             defaultOpen={false}
           />

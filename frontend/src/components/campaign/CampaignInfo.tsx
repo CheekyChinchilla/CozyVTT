@@ -7,11 +7,17 @@ import { useState } from 'react';
 import { campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { Info, Users, Crown, Calendar, UserPlus, KeyRound} from 'lucide-react';
-import type { CampaignStatus } from '@/types';
+import type { AccessRevoked, CampaignStatus } from '@/types';
 import GameSystemBadge from '../common/GameSystemBadge';
 import InvitePlayerModal from './InvitePlayerModal';
+import LeaveCampaign from './LeaveCampaign';
 
-export default function CampaignInfo() {
+interface CampaignInfoProps {
+  /** Told when the member has left the campaign from here (useAccessRevoked). */
+  onLeft: (revoked: AccessRevoked) => void;
+}
+
+export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
   const { campaign, userRole } = useCampaign();
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteKey, setInviteKey] = useState(0);
@@ -148,19 +154,22 @@ export default function CampaignInfo() {
         </div>
       )}
 
-      {/* User Role Badge */}
+      {/* User Role Badge, and the way out of the campaign */}
       {userRole && (
-        <div className="pt-2 border-t border-moss-green/20">
-          <span className="text-xs text-warm-gray">Your role:</span>
-          <div
-            className={`inline-block ml-2 px-2.5 py-1 rounded-full border text-xs font-medium ${
-              userRole === 'DM'
-                ? 'bg-moss-green/15 text-brand-ink border-moss-green/40'
-                : 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40'
-            }`}
-          >
-            {userRole}
+        <div className="pt-2 border-t border-moss-green/20 space-y-3">
+          <div>
+            <span className="text-xs text-warm-gray">Your role:</span>
+            <div
+              className={`inline-block ml-2 px-2.5 py-1 rounded-full border text-xs font-medium ${
+                userRole === 'DM'
+                  ? 'bg-moss-green/15 text-brand-ink border-moss-green/40'
+                  : 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40'
+              }`}
+            >
+              {userRole}
+            </div>
           </div>
+          <LeaveCampaign campaign={campaign} userRole={userRole} onLeft={onLeft} />
         </div>
       )}
 

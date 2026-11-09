@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { LeftCampaignDetail, LeftCampaignSummary, PersonalNote } from '@/types';
+import type { DiceMacro, LeftCampaignDetail, LeftCampaignSummary, PersonalNote } from '@/types';
 import LeftCampaignNotes from '../LeftCampaignNotes';
 import { leftCampaignMarkdown } from '@/utils/leftCampaignNotes';
 
@@ -30,9 +30,15 @@ vi.mock('@/services/api', () => ({ api, default: api }));
 const download = vi.hoisted(() => vi.fn());
 vi.mock('@/utils/download', () => ({ downloadTextFile: download }));
 
-const macro = {
+const macro: DiceMacro = {
   id: 'm-1', userId: 'u-1', campaignId: 'c-1', name: 'Sneak attack', expression: '3d6',
+  characterName: null, purpose: null,
   createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
+};
+
+/** A saved roll with a character and a purpose of its own. */
+const goblin: DiceMacro = {
+  ...macro, id: 'm-2', name: 'Goblin', expression: '1d20+4', characterName: 'Goblin boss', purpose: 'Scimitar attack',
 };
 
 const summary: LeftCampaignSummary = {
@@ -122,6 +128,12 @@ describe('notes from campaigns you have left', () => {
     expect(api.getLeftCampaignNote).toHaveBeenCalledWith('c-1', 'n-2');
     expect(within(dialog).getByText('Sneak attack')).toBeInTheDocument();
     expect(within(dialog).getByText('3d6')).toBeInTheDocument();
+  });
+
+  it('shows a saved roll\'s own character and purpose', async () => {
+    api.getLeftCampaign.mockResolvedValue({ ...detail, macros: [macro, goblin] });
+    const dialog = await openDialog();
+    expect(await within(dialog).findByText('as Goblin boss, for Scimitar attack')).toBeInTheDocument();
   });
 
   it('says why a note could not be read', async () => {
@@ -227,5 +239,10 @@ describe('the downloaded file', () => {
         '',
       ].join('\n')
     );
+  });
+
+  it('holds a saved roll\'s own character and purpose', () => {
+    const file = leftCampaignMarkdown({ campaign: detail.campaign, notes: [], macros: [macro, goblin] });
+    expect(file).toContain('- Sneak attack: `3d6`\n- Goblin: `1d20+4`, as Goblin boss, for Scimitar attack\n');
   });
 });

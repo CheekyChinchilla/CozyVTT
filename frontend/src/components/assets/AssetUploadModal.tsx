@@ -10,7 +10,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
 import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
-import { ASSET_LIMITS } from '@/constants/assetLimits';
+import { ASSET_LIMITS, DRAWN_MAP_TAG, DRAWN_MAP_TAG_REFUSAL } from '@/constants/assetLimits';
 import { assetNameFrom } from '@/utils/assetName';
 import { UPLOAD_EXTENSIONS } from '@/constants/uploadTypes';
 
@@ -41,7 +41,7 @@ interface AssetUploadModalProps {
 /** What each choice means, under it, when the dialog offers `campaignOption`. */
 const CAMPAIGN_OPTION_CHOICES = [
   { scope: AssetScope.USER, icon: User, label: 'Personal', hint: 'Players see it once its map is on screen, while you are in the campaign.' },
-  { scope: AssetScope.CAMPAIGN, icon: Users, label: 'Campaign', hint: 'Everyone in the campaign can browse it now, and it stays if you leave.' },
+  { scope: AssetScope.CAMPAIGN, icon: Users, label: 'Campaign', hint: 'Players see it once its map is on screen, and it stays if you leave.' },
 ] as const;
 
 /**
@@ -83,6 +83,8 @@ export default function AssetUploadModal({
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  /** The last tag refused for being Paint's own. */
+  const [tagKept, setTagKept] = useState(false);
 
   // Campaign selection state
   const [allCampaigns, setAllCampaigns] = useState<Campaign[] | null>(null);
@@ -221,9 +223,20 @@ export default function AssetUploadModal({
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
-      if (!tags.includes(tagInput.trim()) && !atTagLimit) {
-        setTags([...tags, tagInput.trim()]);
+      // The server splits tags at their commas, so each piece is a tag of its
+      // own, and is one here. Paint's tag marks a picture it may change and a
+      // save may delete; a picture uploaded here never carries it, in any case.
+      const pieces = tagInput.split(',').map((piece) => piece.trim()).filter((piece) => piece.length > 0);
+      const kept = pieces.some((piece) => piece.toLowerCase() === DRAWN_MAP_TAG);
+      const next = [...tags];
+      for (const piece of pieces) {
+        if (piece.toLowerCase() === DRAWN_MAP_TAG || next.includes(piece) || next.length >= ASSET_LIMITS.maxTags) continue;
+        next.push(piece);
       }
+      // The notice stays until a tag is added after it.
+      if (kept) setTagKept(true);
+      else if (next.length > tags.length) setTagKept(false);
+      setTags(next);
       setTagInput('');
     }
   };
@@ -304,7 +317,11 @@ export default function AssetUploadModal({
     // of your campaigns points at this asset, that campaign's members can see
     // it — otherwise players got a blank battlemap and placeholder token art.
     [AssetScope.USER]: 'Yours, and usable in all your campaigns. Anyone in a campaign can see it once you use it there.',
-    [AssetScope.CAMPAIGN]: 'Shared with all members of the selected campaign.',
+    // A map picture is kept from players until the table is on a map using
+    // it, wherever it is filed.
+    [AssetScope.CAMPAIGN]: assetType === AssetType.MAP
+      ? 'Shared with the selected campaign. Players see it once a map using it is on screen.'
+      : 'Shared with all members of the selected campaign.',
     [AssetScope.GLOBAL]: 'Available to all users across all campaigns on this platform.',
   };
 
@@ -588,6 +605,11 @@ export default function AssetUploadModal({
                 placeholder="Type a tag and press Enter..."
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
+              {tagKept && (
+                <p className="text-xs text-warm-gray mt-1">
+                  {DRAWN_MAP_TAG_REFUSAL}
+                </p>
+              )}
               {atTagLimit && (
                 <p className="text-xs text-warm-gray mt-1">
                   An asset can have at most {ASSET_LIMITS.maxTags} tags.

@@ -2,6 +2,7 @@
 export { default as Button, type ButtonProps, type ButtonVariant } from './Button';
 export { default as Modal, type ModalProps, type ModalSize } from './Modal';
 export { default as SlideOver, SlideOverTitle, SlideOverClose, type SlideOverProps } from './SlideOver';
+export { default as FloatingLayer, type FloatingLayerProps } from './FloatingLayer';
 export { Input, Textarea, Select, type InputProps } from './Input';
 export { default as Field, type FieldProps, type FieldControlProps } from './Field';
 export { default as Tooltip, type TooltipProps } from './Tooltip';

@@ -4,7 +4,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 CozyVTT incorporates third-party software components. The following notices
 are provided for informational purposes and to comply with license requirements.
 
-Last brought in line with the lockfiles: 2026-10-24
+Last brought in line with the lockfiles: 2026-11-01
 
 
 ================================================================================
@@ -272,11 +272,6 @@ backend/package-lock.json.
   License: Apache-2.0
   https://github.com/prisma/prisma
 
-archiver 8.x
-  Copyright (c) Chris Talkington
-  License: MIT
-  https://github.com/archiverjs/node-archiver
-
 argon2 0.44.x
   Copyright (c) Ranieri Althoff
   License: MIT
@@ -375,6 +370,11 @@ winston 3.x
   License: MIT
   https://github.com/winstonjs/winston
 
+yazl 3.x
+  Copyright (c) 2014 Josh Wolfe
+  License: MIT
+  https://github.com/thejoshwolfe/yazl
+
 zod 4.x
   Copyright (c) Colin McDonnell
   License: MIT
@@ -390,8 +390,8 @@ listed above or not, is under one of these licences, as the lockfiles record
 them:
 
   Frontend: 0BSD, ISC, MIT
-  Backend:  0BSD, Apache-2.0, BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause,
-            EPL-2.0, ISC, LGPL-3.0-or-later, MIT, MIT-0, Unlicense
+  Backend:  0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, EPL-2.0, ISC,
+            LGPL-3.0-or-later, MIT, MIT-0, Unlicense
 
 LGPL-3.0-or-later is the licence of libvips, the image library inside the
 prebuilt binaries sharp loads at run time; it places no requirement on
@@ -408,13 +408,12 @@ public-domain dedication, is the licence of postgres, a database driver the
 tool includes, and robust-predicates, a geometry library under Prisma Studio.
 All are installed from npm unmodified. No package is under the GPL or the AGPL.
 
-Three Apache-2.0 packages come with a NOTICE file. archiver brings bare-path,
-through tar-stream and bare-fs; its notice names Holepunch Inc (Copyright
-2023). The Prisma command-line tool brings @prisma/studio-core, whose notice says Prisma
-Studio may be used in production under the Apache License 2.0 as long as
-Prisma's branding is left in place, and @prisma/streams-local, whose notice
-says its xxhash files are copied from hash-wasm (MIT, Copyright (c) 2020 Dani
-Biró). CozyVTT changes none of them, and each notice stays with its package.
+Two Apache-2.0 packages come with a NOTICE file, both brought by the Prisma
+command-line tool: @prisma/studio-core, whose notice says Prisma Studio may be
+used in production under the Apache License 2.0 as long as Prisma's branding
+is left in place, and @prisma/streams-local, whose notice says its xxhash
+files are copied from hash-wasm (MIT, Copyright (c) 2020 Dani Biró). CozyVTT
+changes neither, and each notice stays with its package.
 
 CozyVTT itself is licensed under AGPL-3.0-only (see LICENSE).
 
@@ -525,11 +524,6 @@ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
 LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
 OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
-
-
-BlueOak-1.0.0 License
-----------------------
-Full text available at: https://blueoakcouncil.org/license/1.0.0
 
 
 SIL Open Font License 1.1

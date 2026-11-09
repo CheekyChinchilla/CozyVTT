@@ -70,7 +70,7 @@ afterAll(async () => {
 });
 
 describe('DELETE /api/campaigns/:campaignId with members connected', () => {
-  it('tells every connection the campaign was deleted, cuts them off from each other, and forgets its combat state', async () => {
+  it('tells every connection the campaign was deleted, cuts them off from each other, forgets its combat state, and takes what was drawn on its maps', async () => {
     const dm = await server.connectAndAuth(ownerCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
@@ -79,6 +79,9 @@ describe('DELETE /api/campaigns/:campaignId with members connected', () => {
     dm.emit('map.ping', { mapId, x: 1, y: 1 });
     await expect(crossed).resolves.toMatchObject({ x: 1, y: 1 });
     setState(campaignId, { active: true, round: 3, currentTokenId: null, combatants: [] });
+    const drawing = await prisma.mapDrawing.create({
+      data: { mapId, authorId: playerId, kind: 'line', color: '#e8a33c', width: 2, points: [[0, 0], [40, 40]] },
+    });
 
     const told = { campaignId, reason: 'campaign-deleted', message: 'This campaign was deleted.' };
     const dmTold = waitForEvent(dm, 'campaign.access.revoked');
@@ -94,6 +97,8 @@ describe('DELETE /api/campaigns/:campaignId with members connected', () => {
     await expect(silence).resolves.toBeUndefined();
     expect(getState(campaignId).active).toBe(false);
     expect(getState(campaignId).round).toBe(0);
+    // The campaign's maps went with it, and what was drawn on them.
+    expect(await prisma.mapDrawing.findUnique({ where: { id: drawing.id } })).toBeNull();
 
     dm.disconnect();
     player.disconnect();

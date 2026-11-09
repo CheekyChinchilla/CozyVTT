@@ -5,7 +5,6 @@
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router';
 import {
   X,
   Settings,
@@ -28,16 +27,23 @@ import api from '@/services/api';
 import campaignService from '@/services/campaign.service';
 import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import type { CampaignMembership, CampaignInvitationSummary } from '@/types';
+import { CampaignRole } from '@/types';
+import type { AccessRevoked, CampaignMembership, CampaignInvitationSummary } from '@/types';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { apiErrorMessage } from '@/utils/errors';
-import { isCampaignOwner } from '@/utils/campaignRoles';
+import { CAMPAIGN_ROLE_LABEL, isCampaignOwner } from '@/utils/campaignRoles';
 import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 interface CampaignSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /**
+   * Told once the campaign is deleted, with the notice every tab of the
+   * campaign is sent too (useAccessRevoked says it once, whichever comes
+   * first, and goes to the dashboard).
+   */
+  onDeleted: (revoked: AccessRevoked) => void;
 }
 
 // ============================================
@@ -46,9 +52,13 @@ interface CampaignSettingsModalProps {
 
 type SettingsTab = 'general' | 'chat' | 'members' | 'danger';
 
+/** A switch's press, a finger's height around its 24 px pill on a touch screen. */
+const SWITCH_PRESS = "pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2.5 pointer-coarse:after:content-['']";
+
 export default function CampaignSettingsModal({
   isOpen,
   onClose,
+  onDeleted,
 }: CampaignSettingsModalProps) {
   const { campaign, refreshCampaign, userRole } = useCampaign();
 
@@ -66,7 +76,6 @@ export default function CampaignSettingsModal({
   const { showToast } = useToast();
   const { user } = useAuth();
   const mayDelete = isCampaignOwner(campaign, user?.id) || user?.platformRole === 'ADMIN';
-  const navigate = useNavigate();
 
   // ── Tab ─────────────────────────────────────
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -76,6 +85,11 @@ export default function CampaignSettingsModal({
   const [description, setDescription] = useState('');
   const [savingGeneral, setSavingGeneral] = useState(false);
 
+  // ── Players may draw ─────────────────────────
+  // What the switch shows while its save is on its way; the campaign's own
+  // value otherwise, which the settings broadcast keeps current.
+  const [playersMayDrawShown, setPlayersMayDrawShown] = useState<boolean | null>(null);
+
   // ── Chat settings ────────────────────────────
   const [chatCooldownEnabled, setChatCooldownEnabled] = useState(false);
   const [chatCooldownSeconds, setChatCooldownSeconds] = useState(5);
@@ -84,6 +98,8 @@ export default function CampaignSettingsModal({
   // ── Members ──────────────────────────────────
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<CampaignMembership | null>(null);
+  // What Remove's question calls the member asked about.
+  const removingRole = memberToRemove ? CAMPAIGN_ROLE_LABEL[memberToRemove.role] : CAMPAIGN_ROLE_LABEL[CampaignRole.PLAYER];
   const [memberToPromote, setMemberToPromote] = useState<CampaignMembership | null>(null);
   const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -171,6 +187,20 @@ export default function CampaignSettingsModal({
     }
   };
 
+  /** Players may draw: saved as soon as it is switched, so it reaches a table in play at once. */
+  const handlePlayersMayDraw = async (next: boolean) => {
+    setPlayersMayDrawShown(next);
+    try {
+      await campaignService.updateCampaign(campaign.id, { playersMayDraw: next });
+      await refreshCampaign();
+      showToast(next ? 'Players may draw on the map now' : 'Only you can draw on the map now', 'success');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Could not change who may draw on the map', 'error');
+    } finally {
+      setPlayersMayDrawShown(null);
+    }
+  };
+
   const handleSaveChat = async () => {
     setSavingChat(true);
     try {
@@ -198,7 +228,7 @@ export default function CampaignSettingsModal({
     try {
       await api.removeCampaignMember(campaign.id, memberToRemove.userId);
       await refreshCampaign();
-      showToast('Player removed from campaign', 'success');
+      showToast(`${CAMPAIGN_ROLE_LABEL[memberToRemove.role]} removed from campaign`, 'success');
     } catch (err) {
       showToast(apiErrorMessage(err) ?? 'Failed to remove member', 'error');
     } finally {
@@ -229,13 +259,14 @@ export default function CampaignSettingsModal({
     }
   };
 
+  // The server also tells this tab, before it answers; the page's handler
+  // says whichever comes first, once, as for Leave Campaign.
   const handleDeleteCampaign = async () => {
     setShowDeleteConfirm(false);
     setDeletingCampaign(true);
     try {
       await campaignService.deleteCampaign(campaign.id);
-      showToast(`Campaign "${campaign.name}" deleted`, 'success');
-      navigate('/dashboard');
+      onDeleted({ campaignId: campaign.id, reason: 'campaign-deleted', message: `${campaign.name} was deleted.` });
     } catch (err) {
       showToast(apiErrorMessage(err) ?? 'Failed to delete campaign', 'error');
       setDeletingCampaign(false);
@@ -259,8 +290,10 @@ export default function CampaignSettingsModal({
     }
   };
 
-  const isDmSelf = (membership: CampaignMembership) =>
-    membership.userId === user?.id || membership.role === 'DM';
+  // Nobody the server refuses to remove: yourself, the DM, and the
+  // campaign's owner, who keeps their place at the table whoever runs it.
+  const mayRemove = (membership: CampaignMembership) =>
+    membership.userId !== user?.id && membership.role !== 'DM' && membership.userId !== campaign.ownerId;
 
   const deleteNameMatches = deleteConfirmName.trim() === campaign.name;
 
@@ -308,7 +341,7 @@ export default function CampaignSettingsModal({
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                className={`touch-target px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                   activeTab === tab.id
                     ? tab.id === 'danger'
                       ? 'bg-danger/10 text-danger-ink border border-danger/20'
@@ -388,6 +421,32 @@ export default function CampaignSettingsModal({
                 </Button>
               </div>
 
+              {/* ── Players may draw ── */}
+              <div className="pt-4 mt-4 border-t border-moss-green/15 flex items-center justify-between gap-4">
+                <div>
+                  <p id="cs-players-may-draw" className="text-sm font-semibold text-stone-gray">Players may draw</p>
+                  <p className="text-xs text-warm-gray mt-0.5">
+                    Players can draw on the map and point the laser, except while the session is paused or has ended. You can always draw. Saved at once.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={playersMayDrawShown ?? campaign.playersMayDraw ?? true}
+                  aria-labelledby="cs-players-may-draw"
+                  onClick={() => void handlePlayersMayDraw(!(playersMayDrawShown ?? campaign.playersMayDraw ?? true))}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${SWITCH_PRESS} ${
+                    (playersMayDrawShown ?? campaign.playersMayDraw ?? true) ? 'bg-moss-green' : 'bg-warm-gray/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      (playersMayDrawShown ?? campaign.playersMayDraw ?? true) ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
               {/* ── Export ── */}
               <div className="pt-4 mt-4 border-t border-moss-green/15 space-y-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-stone-gray">
@@ -401,15 +460,16 @@ export default function CampaignSettingsModal({
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-stone-gray">Include audio assets</p>
+                    <p id="cs-export-audio" className="text-sm text-stone-gray">Include audio assets</p>
                     <p className="text-xs text-warm-gray">The tracks your atmosphere plays</p>
                   </div>
                   <button
                     type="button"
                     role="switch"
                     aria-checked={exportIncludeAudio}
+                    aria-labelledby="cs-export-audio"
                     onClick={() => setExportIncludeAudio((v) => !v)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${SWITCH_PRESS} ${
                       exportIncludeAudio ? 'bg-moss-green' : 'bg-warm-gray/30'
                     }`}
                   >
@@ -596,10 +656,10 @@ export default function CampaignSettingsModal({
                           {isDm ? (
                             <span className="flex items-center gap-1">
                               <ShieldCheck className="w-3 h-3" />
-                              DM
+                              {CAMPAIGN_ROLE_LABEL[membership.role]}
                             </span>
                           ) : (
-                            membership.role
+                            CAMPAIGN_ROLE_LABEL[membership.role]
                           )}
                         </span>
 
@@ -622,8 +682,8 @@ export default function CampaignSettingsModal({
                           </button>
                         )}
 
-                        {/* Remove button — DM and self cannot be removed */}
-                        {isDmViewer && !isDmSelf(membership) && (
+                        {/* Remove button: not for yourself, the DM or the owner */}
+                        {isDmViewer && mayRemove(membership) && (
                           <button
                             type="button"
                             onClick={() => handleRemoveMemberClick(membership)}
@@ -742,11 +802,11 @@ export default function CampaignSettingsModal({
         </div>
       </SlideOver>
 
-      {/* Remove member confirm dialog */}
+      {/* Remove member confirm dialog, named for the member's role */}
       <ConfirmDialog
         isOpen={!!memberToRemove}
-        title="Remove Player"
-        message={`Remove ${memberToRemove?.user?.displayName ?? 'this player'} from "${campaign.name}"? They will lose access to the campaign immediately.`}
+        title={`Remove ${removingRole}`}
+        message={`Remove ${memberToRemove?.user?.displayName ?? `this ${removingRole.toLowerCase()}`} from "${campaign.name}"? They will lose access to the campaign immediately.`}
         confirmLabel="Remove"
         cancelLabel="Cancel"
         variant="danger"

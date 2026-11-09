@@ -3,11 +3,13 @@
  */
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Shield, User as UserIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOptionalWebSocket } from '@/contexts/WebSocketContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
+import { useRollFeedback } from '@/hooks/useRollFeedback';
 import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
 import type { Campaign, Character, CampaignMembership } from '@/types';
@@ -20,9 +22,12 @@ import Shadowrun6eCharacterSheet from '../character-sheets/shadowrun6e/Shadowrun
 import CallOfCthulhu7eCharacterView from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
 import { FlexibleCharacterSheetView } from '../character-sheets/flexible/FlexibleCharacterSheetView';
 import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
+import { RollModeControl } from '../character-sheets/RollModeControl';
+import { systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 
 // Import editor modal
 import CharacterSheetEditorModal from './CharacterSheetEditorModal';
+import { SHEET_SHELL_DIALOG, SHEET_SHELL_OVERLAY } from './sheetShell';
 import { errorSummary } from '@/utils/errors';
 
 interface CharacterSheetViewerModalProps {
@@ -42,6 +47,11 @@ interface CharacterSheetViewerModalProps {
    * otherwise.
    */
   publicName?: string;
+  /**
+   * Rolls from this sheet go to the DM alone: it was opened from a token on
+   * a map the table is not on.
+   */
+  secretRolls?: boolean;
   onClose: () => void;
   /**
    * Called with the character as stored, each time the sheet loads it again
@@ -58,6 +68,7 @@ export default function CharacterSheetViewerModal({
   membership,
   campaign,
   publicName,
+  secretRolls = false,
   onClose,
   onCharacterChanged,
 }: CharacterSheetViewerModalProps) {
@@ -68,8 +79,12 @@ export default function CharacterSheetViewerModal({
   const ws = useOptionalWebSocket();
   const socket = ws?.socket;
   const tableRoll = useTableRoll(socket);
+  const rollFeedback = useRollFeedback(socket);
   const [character, setCharacter] = useState(initialCharacter);
   const [showEditor, setShowEditor] = useState(false);
+  // Roll mode, for every test a click or a tap rolls on this sheet: held
+  // while it is open, Normal each time it opens, and never stored.
+  const [rollMode, setRollMode] = useState<RollMode>('normal');
 
   // The owner's name comes with the character: GET /api/characters/:id names
   // its owner to anyone who may read it. Asking GET /api/users/:id instead was
@@ -154,13 +169,24 @@ export default function CharacterSheetViewerModal({
   // Handle click-to-roll: rolls at the table, and says so when refused.
   // Named so the panel heads the entry with the character whose sheet this
   // is, not with whoever happens to be reading it.
-  const handleRoll = (expression: string, purpose: string) =>
-    tableRoll({ expression, purpose, characterName: publicName ?? character.name });
+  // The stat pressed pulses, and the result is said where the Dice log
+  // cannot be seen (hooks/useRollFeedback.ts).
+  const handleRoll = (expression: string, purpose: string) => {
+    rollFeedback.sent();
+    return tableRoll(
+      { expression, purpose, characterName: publicName ?? character.name, ...(secretRolls ? { secret: true } : {}) },
+      (id) => rollFeedback.made(id, purpose || expression),
+    );
+  };
 
   // Passed to the sheet views only when this viewer may roll and there is a
   // table to roll at; without it the stats render as plain text. The
   // Characters page has no socket, so its sheets offer no rolls.
   const rollHandler = canRoll && socket ? handleRoll : undefined;
+
+  // Offered wherever the sheet rolls and its system rolls a d20 twice for
+  // advantage: D&D 5e, and Pathfinder 2e's fortune and misfortune.
+  const offersRollMode = !!rollHandler && systemSupportsAdvantage(character.gameSystem);
 
   // Spending follows the same rule as rolling. The server checks it again
   // (owner or DM), so this only decides whether the control is offered.
@@ -172,9 +198,9 @@ export default function CharacterSheetViewerModal({
   const renderCharacterSheet = () => {
     switch (character.gameSystem) {
       case 'DND_5E':
-        return <DnD5eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} onSpendHitDie={spendHitDie} />;
+        return <DnD5eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} onSpendHitDie={spendHitDie} />;
       case 'PATHFINDER_2E':
-        return <Pathfinder2eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} />;
+        return <Pathfinder2eCharacterView character={character} onEdit={canEdit ? handleEdit : undefined} onRoll={rollHandler} rollMode={rollMode} />;
       case 'SHADOWRUN_6E':
         return <Shadowrun6eCharacterSheet character={character} mode="view" />;
       case 'CALL_OF_CTHULHU_7E':
@@ -184,21 +210,29 @@ export default function CharacterSheetViewerModal({
     }
   };
 
+  // Portaled to the body, as Modal is: it is opened inside the roster, the
+  // initiative tracker and the map, where an ancestor with a transform or a
+  // backdrop filter would hold a fixed overlay inside itself. On a phone, and
+  // on a screen too short for a window (a phone turned sideways), it takes
+  // the whole screen; from sm up it is a window.
   return (
     <>
-    {/* m-0: the roster renders this inside its spaced list (space-y-4), whose
-        margin would otherwise leave a strip of the window uncovered. */}
-    <div className="fixed inset-0 z-50 m-0 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+    {createPortal(
+    <div className={SHEET_SHELL_OVERLAY}>
       <div
         ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="character-sheet-viewer-title"
-        className="bg-soft-cream border-2 border-moss-green/30 rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col"
+        className={SHEET_SHELL_DIALOG}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-moss-green/20 bg-parchment/30">
-          <div className="flex-1">
+        {/* Header. Below sm, Roll mode takes a line of its own under the name
+            and the close button; from sm up it sits in the right column under
+            the close button. Either way it is drawn after the close button,
+            and comes after it in the document, so Tab reaches them in the
+            order they are seen. */}
+        <div data-sheet-shell="header" className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-3 p-3 sm:p-6 short:p-3 border-b border-moss-green/20 bg-parchment/30">
+          <div className={`min-w-0 ${offersRollMode ? 'sm:row-span-2' : ''}`}>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 rounded-full bg-moss-green/10">
                 <UserIcon className="w-5 h-5 text-brand-ink" />
@@ -207,7 +241,7 @@ export default function CharacterSheetViewerModal({
                 <h2 id="character-sheet-viewer-title" className="text-2xl font-bold text-brand-ink">
                   {character.name}
                 </h2>
-                <div className="flex items-center gap-3 text-sm text-warm-gray">
+                <div className="flex flex-wrap items-center gap-x-3 text-sm text-warm-gray">
                   <span>Player: {ownerName}</span>
                   <span>•</span>
                   <span>{gameSystemName(character.gameSystem)}</span>
@@ -229,38 +263,49 @@ export default function CharacterSheetViewerModal({
           {/* Actions — close only. Edit lives on the sheet itself, which
               receives handleEdit as onEdit below; rendering it here as well
               produced two working Edit buttons on every character. */}
-          <div className="flex items-center gap-2 ml-4">
+          <div className="flex items-center gap-2 justify-self-end">
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
+              className="touch-target inline-flex items-center justify-center p-2 rounded-lg hover:bg-stone-gray/10 transition-colors"
             >
               <X className="w-5 h-5 text-stone-gray" />
             </button>
           </div>
+
+          {offersRollMode && (
+            <RollModeControl
+              mode={rollMode}
+              onChange={setRollMode}
+              gameSystem={character.gameSystem}
+              className="col-span-2 sm:col-span-1 sm:col-start-2 sm:justify-self-end"
+            />
+          )}
         </div>
 
         {/* Character Sheet Content. A sheet that cannot be drawn fails here,
             inside the dialog, and not across the whole page; a new version of
             the character tries it again. Keyed on the character alone, so a
             sheet that is drawn keeps its open tab through every update. */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div data-sheet-shell="content" className="flex-1 overflow-y-auto p-3 sm:p-6 short:p-3" onClickCapture={rollFeedback.onClickCapture}>
           <CharacterSheetErrorBoundary key={character.id} resetKey={character.updatedAt}>
             {renderCharacterSheet()}
           </CharacterSheetErrorBoundary>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 p-4 border-t border-moss-green/20 bg-parchment/30">
+        <div data-sheet-shell="footer" className="flex items-center justify-end gap-3 p-2 sm:p-4 short:p-2 border-t border-moss-green/20 bg-parchment/30">
           <button
             onClick={onClose}
-            className="px-6 py-2 rounded-lg bg-stone-gray/10 text-stone-gray hover:bg-stone-gray/20 transition-colors"
+            className="touch-target px-6 py-2 rounded-lg bg-stone-gray/10 text-stone-gray hover:bg-stone-gray/20 transition-colors"
           >
             Close
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
+    )}
 
       {/* Character Editor Modal */}
       {showEditor && (

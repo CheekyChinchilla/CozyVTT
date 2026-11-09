@@ -39,7 +39,7 @@ interface LeftCampaign {
   id: string;
   name: string;
   notes: { id: string; title: string; content?: string }[];
-  macros: { id: string; name: string; expression: string }[];
+  macros: { id: string; name: string; expression: string; characterName: string | null; purpose: string | null }[];
 }
 
 async function signedIn(label: string) {
@@ -86,7 +86,8 @@ describe('notes and macros from a campaign the person was removed from', () => {
     const note = await leaver.agent.post(`/api/campaigns/${campaignId}/notes`).send({ title: 'Suspects', content: '# The baron\n\nLied about the mill.' });
     expect(note.status).toBe(201);
     noteId = note.body.note.id;
-    expect((await leaver.agent.post(`/api/campaigns/${campaignId}/macros`).send({ name: 'Sneak attack', expression: '3d6' })).status).toBe(201);
+    expect((await leaver.agent.post(`/api/campaigns/${campaignId}/macros`)
+      .send({ name: 'Sneak attack', expression: '3d6', characterName: 'Vex', purpose: 'Sneak attack damage' })).status).toBe(201);
     stayerNoteId = (await stayer.agent.post(`/api/campaigns/${campaignId}/notes`).send({ title: 'Not yours', content: 'secret' })).body.note.id;
 
     expect((await dm.agent.delete(`/api/campaigns/${campaignId}/members/${leaver.user.id}`)).status).toBe(200);
@@ -115,6 +116,15 @@ describe('notes and macros from a campaign the person was removed from', () => {
     expect(res.body.macros[0]).toMatchObject({ name: 'Sneak attack', expression: '3d6' });
     // Nobody else's.
     expect((res.body.notes as { id: string }[]).map((n) => n.id)).not.toContain(stayerNoteId);
+  });
+
+  it('gives each macro its own character and purpose, in the list and for the campaign', async () => {
+    const list = await leaver.agent.get('/api/campaigns/left');
+    const left = (list.body.campaigns as LeftCampaign[]).find((c) => c.id === campaignId);
+    expect(left!.macros[0]).toMatchObject({ characterName: 'Vex', purpose: 'Sneak attack damage' });
+
+    const one = await leaver.agent.get(`/api/campaigns/left/${campaignId}`);
+    expect(one.body.macros[0]).toMatchObject({ characterName: 'Vex', purpose: 'Sneak attack damage' });
   });
 
   it('answers the text of one of their notes from that campaign', async () => {

@@ -25,7 +25,7 @@ describe('the Add Feat buttons', () => {
 
   it('each carry a background class written out in the source', () => {
     render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={vi.fn()} onCancel={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: /Feats & Features/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Feats & Features/ }));
     const buttons = screen.getAllByRole('button', { name: 'Add Feat' });
     expect(buttons).toHaveLength(5);
     for (const button of buttons) {

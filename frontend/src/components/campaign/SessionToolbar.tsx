@@ -29,14 +29,16 @@ export type SessionToolKey =
   | 'atmosphere'
   | 'settings';
 
-interface ToolDef {
+export interface ToolDef {
   key: SessionToolKey;
   label: string;
   icon: LucideIcon;
 }
 
-// Grouped by intent: campaign content, scene ambience, configuration.
-const TOOL_GROUPS: ToolDef[][] = [
+// Grouped by intent: campaign content, scene ambience, configuration. The
+// compact layout's More lists the same tools in the same order
+// (compact/MoreSheet.tsx).
+export const TOOL_GROUPS: ToolDef[][] = [
   [
     { key: 'maps', label: 'Map Library', icon: MapIcon },
     { key: 'tokens', label: 'Token Manager', icon: Swords },

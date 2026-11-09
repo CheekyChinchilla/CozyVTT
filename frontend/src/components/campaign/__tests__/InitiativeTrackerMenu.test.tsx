@@ -5,15 +5,20 @@
  * offers about its character: View Character Sheet to any member, Roll... to
  * whoever may roll that character, and the DM a creature's Roll.... Double-
  * clicking a character's row opens its sheet. The name is a button, so the
- * menu opens from the keyboard too.
+ * menu opens from the keyboard too, and from a click or a tap on it: a
+ * single click on the name used to do nothing, which left a touch screen
+ * no way to the menu.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import { contact } from '@/test/pointer';
 import InitiativeTracker from '../InitiativeTracker';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
+import { characterMenuRows, openCharacterMenu } from '@/test/characterMenuRows';
 
 const seat = vi.hoisted(() => ({ role: 'PLAYER' }));
 const getCharacter = vi.hoisted(() => vi.fn());
@@ -22,6 +27,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     userRole: seat.role,
     currentMap: { id: 'map-1' },
+    viewedMap: { id: 'map-1' },
     campaign: {
       id: 'camp-1',
       gameSystem: 'DND_5E',
@@ -50,12 +56,15 @@ vi.mock('@/components/character/CharacterSheetViewerModal', () => ({
   default: ({ character }: { character: { id: string } }) => <div role="dialog" aria-label={`Sheet of ${character.id}`} />,
 }));
 
+// The pickers say what they were given: whose rolls, and where they stand.
 vi.mock('@/components/campaign/CharacterRollPicker', () => ({
-  default: ({ characterId }: { characterId: string }) => <div data-testid="character-rolls">{characterId}</div>,
+  default: ({ characterId, anchorX, anchorY }: { characterId: string; anchorX: number; anchorY: number }) =>
+    <div data-testid="character-rolls">{`${characterId} at ${anchorX}, ${anchorY}`}</div>,
 }));
 
 vi.mock('@/components/campaign/NpcRollPicker', () => ({
-  default: ({ token }: { token: { id: string } }) => <div data-testid="creature-rolls">{token.id}</div>,
+  default: ({ token, anchorX, anchorY }: { token: { id: string }; anchorX: number; anchorY: number }) =>
+    <div data-testid="creature-rolls">{`${token.id} at ${anchorX}, ${anchorY}`}</div>,
 }));
 
 const token = (id: string, name: string, extra: Partial<Token> = {}): Token => ({
@@ -65,8 +74,9 @@ const token = (id: string, name: string, extra: Partial<Token> = {}): Token => (
   ...extra,
 });
 
-const entry = (tokenId: string, name: string, type: CombatantEntry['type'], mapId = 'map-1'): CombatantEntry => ({
-  tokenId, mapId, name, imageUrl: '', initiative: 10, hp: null, type, disposition: null,
+/** A combatant, naming its token's character as the server does. */
+const entry = (tokenId: string, name: string, type: CombatantEntry['type'], mapId = 'map-1', characterId: string | null = null): CombatantEntry => ({
+  tokenId, mapId, name, imageUrl: '', initiative: 10, hp: null, type, disposition: null, characterId,
 });
 
 beforeEach(() => {
@@ -80,7 +90,7 @@ beforeEach(() => {
   ]);
   useGameStore.getState().setCombatState({
     active: false, round: 0, currentTokenId: null,
-    combatants: [entry('pa', 'Alice', 'player'), entry('pb', 'Bob', 'player'), entry('g', 'Goblin', 'npc')],
+    combatants: [entry('pa', 'Alice', 'player', 'map-1', 'char-alice'), entry('pb', 'Bob', 'player', 'map-1', 'char-bob'), entry('g', 'Goblin', 'npc')],
   });
 });
 
@@ -128,7 +138,8 @@ describe("a combatant's right-click menu", () => {
     expect(screen.getByTestId('creature-rolls')).toHaveTextContent('g');
   });
 
-  it('offers nothing for a combatant whose token is on another map', () => {
+  // One with a character offers its sheet (InitiativeTrackerOtherMapSheet).
+  it('offers nothing for a combatant on another map with no character', () => {
     useGameStore.getState().setCombatState({
       active: false, round: 0, currentTokenId: null,
       combatants: [entry('far', 'Carol', 'player', 'map-2')],
@@ -192,11 +203,140 @@ describe('the menu from the keyboard', () => {
     expect(document.activeElement).toBe(name);
   });
 
-  it('does not open on a single mouse click', () => {
+});
+
+describe('the menu from a click on the name', () => {
+  it('opens on a single click, under the name, leaving the cursor where it was', () => {
     render(<InitiativeTracker />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Alice' }), { detail: 1 });
 
+    expect(menuItem('View Character Sheet')).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(menuItem('View Character Sheet'));
+  });
+
+  it('says so in its tooltip', () => {
+    render(<InitiativeTracker />);
+
+    expect(screen.getByRole('button', { name: 'Alice' })).toHaveAttribute('title', 'Click for the sheet and rolls, or double-click to open the sheet');
+  });
+
+  it('gives way to a double-click, which closes the menu its first click opened and opens the sheet', async () => {
+    render(<InitiativeTracker />);
+    const name = screen.getByRole('button', { name: 'Alice' });
+
+    fireEvent.mouseDown(name);
+    fireEvent.click(name, { detail: 1 });
+    expect(menuItem('View Character Sheet')).toBeInTheDocument();
+    fireEvent.mouseDown(name);
+    fireEvent.click(name, { detail: 2 });
+    fireEvent.doubleClick(name);
+
+    expect(await screen.findByRole('dialog', { name: 'Sheet of char-alice' })).toBeInTheDocument();
     expect(menuItem('View Character Sheet')).not.toBeInTheDocument();
+  });
+});
+
+// A touch screen has no right button: a finger held on the row opens the
+// same menu, item for item, for a player as for the DM.
+describe('the menu from a finger held on the row', () => {
+  const labels = () => [...document.querySelectorAll<HTMLElement>('div.fixed.z-50 button')].map((b) => b.textContent);
+
+  it.each([
+    ['their own character', 'Alice', ['View Character Sheet', 'Roll...']],
+    ["another player's character", 'Bob', ['View Character Sheet']],
+  ])("is the right-click's for a player, on %s", (_what, name, items) => {
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 40 });
+    const byRightClick = labels();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const finger = contact('touch', 1);
+      finger.down(screen.getByText(name), { clientX: 40, clientY: 40 });
+      act(() => { vi.advanceTimersByTime(500); });
+      finger.up(screen.getByText(name), { clientX: 40, clientY: 40 });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(byRightClick).toEqual(items);
+    expect(labels()).toEqual(byRightClick);
+  });
+});
+
+// The menu as each viewer is shown it, item for item, with its icons and
+// looks (test/characterMenuRows.ts), so a change to how it is built shows.
+describe("a combatant's menu, as each viewer is shown it", () => {
+  it.each([
+    ['PLAYER', 'Alice', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['PLAYER', 'Bob', ['[eye] View Character Sheet']],
+    ['DM', 'Alice', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['DM', 'Bob', ['[eye] View Character Sheet', '[dices] Roll...']],
+    ['DM', 'Goblin', ['[dices] Roll...']],
+    ['SPECTATOR', 'Alice', ['[eye] View Character Sheet']],
+  ])('for a %s on %s', (role, name, expected) => {
+    seat.role = role;
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 60 });
+
+    expect(characterMenuRows()).toEqual(expected);
+    expect(openCharacterMenu()!.getAttribute('style')).toBe('left: 40px; top: 60px; visibility: visible;');
+  });
+
+  it.each([
+    ['PLAYER', 'Goblin'],
+    ['SPECTATOR', 'Goblin'],
+  ])('offers a %s nothing on %s', (role, name) => {
+    seat.role = role;
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 60 });
+
+    expect(openCharacterMenu()).toBeNull();
+  });
+
+  it('offers the DM nothing on an object', () => {
+    seat.role = 'DM';
+    useGameStore.getState().setTokens([token('chest', 'Chest', { type: TokenType.OBJECT })]);
+    useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants: [entry('chest', 'Chest', 'npc')] });
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText('Chest'), { clientX: 40, clientY: 60 });
+
+    expect(openCharacterMenu()).toBeNull();
+  });
+
+  it.each([
+    ['PLAYER', 'Alice', 'character-rolls', 'char-alice at 40, 60'],
+    ['DM', 'Goblin', 'creature-rolls', 'g at 40, 60'],
+  ])("opens a %s's Roll... picker on %s where the menu was opened", (role, name, picker, given) => {
+    seat.role = role;
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText(name), { clientX: 40, clientY: 60 });
+    fireEvent.click(menuItem('Roll...')!);
+
+    expect(screen.getByTestId(picker)).toHaveTextContent(new RegExp(`^${given}$`));
+  });
+
+  it('closes after an item, and on a press elsewhere', async () => {
+    render(<InitiativeTracker />);
+    fireEvent.contextMenu(screen.getByText('Alice'), { clientX: 40, clientY: 60 });
+    fireEvent.click(menuItem('Roll...')!);
+    expect(openCharacterMenu()).toBeNull();
+    expect(screen.getByTestId('character-rolls')).toHaveTextContent('char-alice');
+
+    fireEvent.contextMenu(screen.getByText('Alice'), { clientX: 40, clientY: 60 });
+    fireEvent.mouseDown(document.body);
+    expect(openCharacterMenu()).toBeNull();
+  });
+});
+
+describe("a combatant's menu on the compact layout", () => {
+  it('is an action sheet named by the combatant, with the same items', () => {
+    render(<LayoutProvider compact><InitiativeTracker /></LayoutProvider>);
+    fireEvent.contextMenu(screen.getByText('Alice'));
+
+    const sheet = screen.getByRole('dialog', { name: 'Alice' });
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['View Character Sheet', 'Roll...', 'Cancel']);
+    expect(openCharacterMenu()).toBeNull();
   });
 });

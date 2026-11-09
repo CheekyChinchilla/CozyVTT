@@ -8,6 +8,7 @@ import { setSocketInstance } from './utils';
 import { startSignInSweep } from './signInSweep';
 import logger from '../utils/logger';
 import { socketAllowRequest } from '../middleware/originCheck';
+import { MAX_SOCKET_MESSAGE_BYTES } from '../validators/mapLimits';
 
 /**
  * WebSocket Infrastructure Setup
@@ -36,6 +37,9 @@ export function initializeWebSocket(httpServer: HTTPServer): Server {
     pingTimeout: 60000, // Disconnect if no pong within 60 seconds
     // Connection settings
     transports: ['websocket', 'polling'], // Prefer WebSocket, fallback to polling
+    // The longest message read; the web client sends a longer fog operation
+    // or explored-ground report in parts under it.
+    maxHttpBufferSize: MAX_SOCKET_MESSAGE_BYTES,
     // A handshake a browser makes from another site is refused, as the API
     // refuses its requests: the socket acts as whoever is signed in.
     allowRequest: socketAllowRequest,

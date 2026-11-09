@@ -51,6 +51,30 @@ export const DND5E_CONDITIONS: readonly string[] = [
 ];
 
 /**
+ * Effects a D&D 5e table marks on a token beside its conditions: the state a
+ * spell, a class feature or an action leaves a creature in, named as the
+ * creature is (Hexed, from the Hex spell). None is a condition in the rules,
+ * so they are a list of their own and DND5E_CONDITIONS stays the rules'
+ * fifteen. The token editor offers them in a group under the conditions, and
+ * a token carries them in its conditions as it carries a typed one. Each
+ * needs an entry in CONDITION_ABBREVIATIONS below, as a condition does.
+ *
+ * Rules reference: the spells Bane, Bless, Haste, Hex, Hunter's Mark and
+ * Slow; the Barbarian's Rage; the Dodge action; concentration on a spell.
+ */
+export const DND5E_EFFECTS: readonly string[] = [
+  'Baned',
+  'Blessed',
+  'Concentrating',
+  'Dodging',
+  'Hasted',
+  'Hexed',
+  "Hunter's Mark",
+  'Raging',
+  'Slowed',
+];
+
+/**
  * The five conditions a Call of Cthulhu 7e sheet tracks, in the order the
  * rulebook introduces them: the three that follow from hit points, then the
  * two from Sanity. The investigator sheet ticks them by `key`; the token
@@ -81,11 +105,23 @@ export function conditionsOffered(gameSystem: GameSystem | null): readonly strin
 }
 
 /**
- * Two-letter codes, one per listed condition (D&D 5e and Call of Cthulhu,
- * which share Unconscious). Every value here is unique; a test enforces that,
- * since a collision would quietly bring back the original bug.
+ * The effects the token editor lists, under the conditions, for a campaign's
+ * game system: D&D 5e's, and none in any other.
  */
-export const CONDITION_ABBREVIATIONS: Readonly<Record<string, string>> = {
+export function effectsOffered(gameSystem: GameSystem | null): readonly string[] {
+  return gameSystem === GameSystem.DND_5E ? DND5E_EFFECTS : [];
+}
+
+/**
+ * Two-letter codes, one per listed condition and effect (D&D 5e and Call of
+ * Cthulhu, which share Unconscious). Every value here is unique; a test
+ * enforces that, since a collision would quietly bring back the original bug.
+ *
+ * A Map, so a name finds only an entry of its own: a condition typed as
+ * "constructor" found Object itself in a plain object's lookup, and the badge
+ * drew a function's text.
+ */
+export const CONDITION_ABBREVIATIONS: ReadonlyMap<string, string> = new Map(Object.entries({
   blinded: 'BL',
   charmed: 'CH',
   deafened: 'DF',
@@ -105,7 +141,28 @@ export const CONDITION_ABBREVIATIONS: Readonly<Record<string, string>> = {
   dying: 'DY',
   'temporary insanity': 'TI',
   'indefinite insanity': 'II',
-};
+  baned: 'BA',
+  blessed: 'BS',
+  concentrating: 'CO',
+  dodging: 'DO',
+  hasted: 'HA',
+  hexed: 'HX',
+  "hunter's mark": 'HM',
+  raging: 'RG',
+  slowed: 'SL',
+}));
+
+/**
+ * The name a condition or an effect is known by, however it was typed or
+ * stored: trimmed, in lower case, with a curly or a modifier-letter
+ * apostrophe (’ ‘ ʼ, as iOS and iPadOS type one) made straight. The badge
+ * table is keyed by it, and the token editor matches a typed or stored name
+ * to its listed spelling with it, so "Hunter’s Mark" and "hunter's mark" are
+ * the listed Hunter's Mark.
+ */
+export function conditionKey(name: string): string {
+  return name.trim().toLowerCase().replace(/[\u2018\u2019\u02BC]/g, "'");
+}
 
 /**
  * The badge text for a condition.
@@ -116,7 +173,7 @@ export const CONDITION_ABBREVIATIONS: Readonly<Record<string, string>> = {
  */
 export function conditionAbbreviation(condition: string): string {
   if (!condition) return '?';
-  const known = CONDITION_ABBREVIATIONS[condition.trim().toLowerCase()];
+  const known = CONDITION_ABBREVIATIONS.get(conditionKey(condition));
   if (known) return known;
   return condition.trim().slice(0, 2).toUpperCase();
 }

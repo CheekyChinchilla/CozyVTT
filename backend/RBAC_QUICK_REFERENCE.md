@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way._
+_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31. The sections on saving over a drawn picture, a campaign's map pictures, deleting an asset as its uploader and temporary hit points were added after that, and were read against the code on 2026-11-08, as was the section on what ends a live socket._
 
 ## Middleware Cheat Sheet
 
@@ -10,11 +10,12 @@ _Last verified against the code on 2026-10-13: the files and helpers it names ex
 router sees it, in this order (see `docs/ARCHITECTURE.md`, Request Flow):
 
 1. The origin check: `403` for a change a browser sent from another site (`middleware/originCheck.ts`)
-2. The restore gate: `503` while a restore replaces the database (`middleware/restoreGate.ts`)
-3. The session lookup
-4. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
-5. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address, an IPv6 address counted by its /56 network
-6. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
+2. The null-character check: `400` for a request whose body, path or query string holds U+0000, the password fields of the routes that read one excepted (`middleware/nulCharacter.ts`)
+3. The restore gate: `503` while a restore replaces the database (`middleware/restoreGate.ts`)
+4. The session lookup
+5. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
+6. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address, an IPv6 address counted by its /56 network
+7. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
 
 ### Import Statement
 ```typescript
@@ -66,11 +67,15 @@ that.
 Any member may read a character assigned to the campaign, and the DM may edit
 it, only while its owner is still a member (`mayReadCharacter` and
 `ownerStillIn` in `utils/characterCampaign.ts`); anyone else is answered 404.
-Removing a member takes their characters out of the campaign in the same
-transaction; a character left naming a campaign by a
+Removing a member, or their leaving, takes their characters out of the
+campaign in the same transaction; a character left naming a campaign by a
 removal from before that is its owner's alone, and its saves are not sent to
-that campaign. The socket's hit point and hit dice events ask the same
-(`characterInCampaign` in `utils/characterCampaign.ts`).
+that campaign. The socket's hit point, temporary hit point and hit dice
+events (`character.hp.update`, `character.hp.temporary`,
+`character.hitdice.spend`) ask the same (`characterInCampaign` in
+`utils/characterCampaign.ts`), through one check they share
+(`characterToChange` in `websocket/handlers/characters.ts`): the character's
+owner, or the DM.
 
 Only the owner assigns a character to a campaign (`POST
 /api/characters/:id/assign` with a `campaignId`). The owner, or the DM of the
@@ -93,15 +98,18 @@ a copy has none.
 #### 5. Campaign DM or Player (Excludes Spectators)
 No route guard refuses spectators alone. Where spectators are refused, the
 handler does it: `dice.roll` (socket) through `canRollDice`, token control
-through `canControlToken`, and doors through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
+through `canControlToken`, drawing and erasing through `canDraw` and
+`canEraseDrawing` (see [Who may draw on a map](#who-may-draw-on-a-map)), and
+doors through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
 may open or close an unlocked door and nothing else, the segment's position
 and size they send being ignored, on a lit map only a door one of their
 tokens can see, and under manual fog only one beside a square revealed to
 them, or the answer is "You cannot see that door"). Anyone but the
 DM is sent a locked door as `door-closed`, and no light that is off.
 Chat is a socket event (`chat.message`)
-and spectators may send it. `character.hp.update`, `character.hitdice.spend`
-and `PUT /api/characters/:id` refuse a spectator outright, even for a
+and spectators may send it, whispers included (see
+[Who may read a whisper](#who-may-read-a-whisper)). `character.hp.update`, `character.hp.temporary`,
+`character.hitdice.spend` and `PUT /api/characters/:id` refuse a spectator outright, even for a
 character they own, because a token bound to it follows the sheet on every
 screen. The token-image sync that route runs repaints tokens only where the
 editor may: the owner's change reaches every campaign bound to the character
@@ -123,9 +131,13 @@ import {
   canControlToken,
   canMoveTokensNow,
   canReadMap,
+  canDraw,
+  canEraseDrawing,
+  drawingSentTo,
   canDeleteCampaign,
   canTransferDM,
   canRollDice,
+  whisperRecipient,
   // ... other helpers
 } from '../services/permissions';
 ```
@@ -156,8 +168,9 @@ if (!canControlToken(role, token.controlledBy, userId)) {
 `PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` and for the three
 `token.move*` socket events, so the two channels cannot disagree. Beside it,
 `canMoveTokensNow(role, campaign.status)` holds a player's move while the
-session is paused or has ended (`PAUSED`, `INACTIVE`), on the same four paths;
-the DM moves tokens at any time. The spectator
+session is paused or has ended (`PAUSED`, `INACTIVE`), on the same four paths,
+and their turn (`rotation`) on the REST one; the DM moves and turns tokens at
+any time. A player's `conditions` are not held. The spectator
 clause matters: `controlledBy` is set once and is not cleared when someone is
 demoted, so a spectator can still hold a token from their time as a player.
 Such a token is nobody's for what the spectator is sent, too: the
@@ -171,6 +184,77 @@ by that alone. A token created with a `characterId` and no `controlledBy` is
 given the character's owner as controller, provided the character belongs to
 the campaign and its owner is a `PLAYER` member of it (`canHoldTokens`). A
 character owned by the DM or a spectator gives its token no controller.
+
+#### Who may draw on a map
+
+```typescript
+// The DM always; a player while Players may draw is on and the session is
+// live; never a spectator. Read under the map's lock, with the map.
+if (!canDraw(role, map.campaign)) return { refused: drawRefusal(role, map.campaign) };
+// The DM any drawing; a player their own; never a spectator.
+if (!canEraseDrawing(role, userId, drawing)) return { refused: eraseRefusal(role) };
+```
+
+The drawing rules live in `utils/drawingRules.ts`, a file kept byte for byte
+identical in the frontend (`visionParity.test.ts`), so the draw tool offers
+what the server takes; `services/permissions.ts` re-exports them, and
+`canMoveTokensNow` asks the same `sessionLetsPlayersAct` for the pause.
+
+- `canDraw(role, { status, playersMayDraw })` decides `drawing:add` and
+  `drawing:preview`, the laser pointer included: the DM always; a `PLAYER`
+  while the campaign's **Players may draw** is on and the session is not
+  paused or ended (`PAUSED`, `INACTIVE`), the move rule's statuses; nobody
+  else. `canMoveTokensNow` alone lets a spectator through, which is why
+  `canDraw` tests the role itself. `drawRefusal` gives the reason.
+- `canDrawOnLayer(role, layer)`: the ground layer is the DM's. The validators
+  take only the markup layer so far, so nothing reaches it yet.
+- `canEraseDrawing(role, userId, drawing)` decides `drawing:remove` and
+  `drawing:clear_mine`: the DM any drawing, one whose author's account is
+  gone included; a `PLAYER` their own whose `audience` is `ALL`, at any
+  time, a pause or the setting being off included; a spectator none, their
+  own from before a demotion included. A drawing for the DM alone goes with
+  the seat: a DM who hands it over, or has it taken by the owner or an
+  administrator, keeps no way to erase the ones they wrote in it, and
+  `drawing:clear_mine` leaves them as `drawing:remove` does. `drawing:clear`,
+  every drawing on a layer or, with `authorId`, one member's, is the DM's
+  alone.
+- `drawingSentTo(role, drawing)` decides every send: the DM every drawing,
+  anyone else those whose `audience` is `ALL`. A player's drawing is stored
+  with `audience` `ALL` whatever they send, and their preview frames go to
+  everyone. A drawing the sender is not sent is answered `Drawing not found`
+  by `drawing:remove`, as an id that names nothing is.
+
+Every drawing write runs under `withMapsLocked([mapId])` and reads the map,
+its campaign's status, `playersMayDraw` and `currentMapId` there; the author
+is `socket.userId`, never a field of the payload. **A new drawing event asks
+these rules, and sends through `drawingSentTo`.**
+
+#### Who may read a whisper
+
+```typescript
+// Any current member but the sender; null for anyone else.
+const recipient = await whisperRecipient(campaignId, socket.userId, recipientId);
+if (!recipient) return refuse(WHISPER_RECIPIENT_REFUSAL);
+```
+
+A whisper is a chat message with a `recipientId`. Whoever may chat may send
+one, spectators included, to any current member of the campaign but
+themselves (`whisperRecipient`, one membership read; the handler refuses a
+whisper to oneself first, with `WHISPER_SELF_REFUSAL`). It is stored as type
+`WHISPER` with the recipient, and two people read it: its sender and its
+recipient. The DM is not copied, and reads a whisper only when they are one
+of the two.
+
+Both ways a whisper is read keep to that. `chat.message` sends it to the
+sender's and the recipient's sockets in the campaign (`handlers/chat.ts`),
+never through a user's own room, which spans every campaign they have open.
+`GET /api/campaigns/:campaignId/messages` returns it only to a reader who
+sent it or is its recipient, a condition under `AND` beside the cursor's.
+The type is what makes a message private: when the recipient's account is
+deleted `recipientId` becomes null, and the whisper stays its sender's alone.
+
+Whispers are stored like all chat, so whoever runs the server, and anyone
+with a backup of its database, can read them.
 
 #### Which token fields a player may change
 
@@ -217,6 +301,16 @@ rule. **A new token field a player must not read goes into
 `tokenForRecipient`**, for the same reason a new field a player must not
 write goes into `restrictedFields`.
 
+The map itself is built from lists the same way. `filterMapData` sends each
+member the columns in `MAP_FIELDS_SENT_TO_EVERYONE` as stored, decides each
+column in `MAP_FIELDS_DECIDED_PER_RECIPIENT` for them (tokens, walls, lights,
+fog, the spirit layer, and the annotations, which members get as an empty
+list), and sends nothing else. Four replies only the DM receives return the
+stored row whole: `POST /maps`, `POST /maps/import-uvtt`, `PUT /maps/:id` and
+`POST /maps/:id/tokens`. **A new map column goes into one of the three lists in
+`spirit-layer.ts`**, `MAP_FIELDS_NEVER_SENT` being the third; the suite fails
+until it is in one (`keepInStep.test.ts`).
+
 #### Check Campaign Deletion Permission
 ```typescript
 const canDelete = await canDeleteCampaign(userId, campaignId, platformRole);
@@ -254,7 +348,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 | 403 | Forbidden | User logged in but lacks permission, for a record they may read |
 | 404 | Not Found | Resource doesn't exist, or the caller may not read it (see below) |
 | 400 | Bad Request | Invalid input data |
-| 409 | Conflict | The request conflicts with what is stored now: the last admin, a DM seat that stops an account deletion, an asset still in use, a character changed since it was loaded, an email address already taken, a backup, restore or SRD import already running, a fog operation while fog is off |
+| 409 | Conflict | The request conflicts with what is stored now: the last admin, a DM seat that stops an account deletion, the owner or the DM asking to leave their campaign, an asset still in use, a character changed since it was loaded, an email address already taken, a backup, restore or SRD import already running, a fog operation while fog is off |
 | 429 | Too Many Requests | A rate limit: the general `/api` limiter or a route's own |
 | 500 | Internal Server Error | Unexpected error |
 | 503 | Service Unavailable | A restore is replacing the database (the restore gate), email is needed and SMTP is not set up, or a Universal VTT import could not start or finish in time |
@@ -338,18 +432,35 @@ the DM may read any map of the campaign; a player or spectator only the one the
 campaign is showing. It gates `GET /api/campaigns/:campaignId/maps` (a player's
 list holds the current map alone), `GET .../maps/:id` and its `walls` and
 `lights` (404 for any other map), the `maps` array of
-`GET /api/campaigns/:campaignId`, and the `walls:request`, `lights:request`,
-`fog:request_state` and `exploration:request` socket events (answered with
-nothing). It gates writes too: a player's `PUT .../maps/:id/tokens/:tokenId`
+`GET /api/campaigns/:campaignId`, `GET .../maps/:id/drawings` (404), and the
+`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`
+and `drawings:request` socket events (answered with nothing). It gates writes
+too: a player's `PUT .../maps/:id/tokens/:tokenId`
 (404), `token.move.start`, `token.move` and `token.move.end`, a door
-toggled with `wall:update`, `exploration:reveal` and `initiative.roll`
-(answered with `error`, frames dropped) all refuse
+toggled with `wall:update`, `exploration:reveal`, `initiative.roll` and the
+drawing events (answered with `error`, frames dropped) all refuse
 any map but the current one, even a token the player controls on it. And it
-gates what is broadcast: a map's live wall, light, fog, settings, ping and
-explored-memory-reset events go through `emitToMapReaders` in
-`websocket/utils.ts`, which sends them to the whole campaign for the current
-map and to the DM's sockets for any other. A map the DM has prepared but not
+gates what is broadcast: a map's live wall, light, fog, settings, ping,
+drawing and explored-memory-reset events go through `emitToMapReaders` in
+`websocket/utils.ts`, or its per-role form `emitToMapReadersAs`, which send
+them to the whole campaign for the current map and to the DM's sockets for any
+other (`drawing:previewed` applies the same rule in its own loop, which skips
+the sender's socket). A map the DM has prepared but not
 switched to is therefore the DM's alone, tokens left visible on it included.
+
+## Deleting an asset, or moving it out: the uploader's own uses only
+
+Whoever may change an asset (`mayChangeAsset`) may delete it
+(`DELETE /api/assets/:id`) or move it out of its scope
+(`PATCH /api/assets/:id/scope`), with one narrowing (`mayRemoveAsset`,
+`services/assetRemoval.ts`): a campaign asset's uploader who does not run the
+campaign may do either only while nothing but their own things use it, their
+characters, the tokens they control (`controlledBy`) and the documents they
+wrote (`usedByOthersThan` in `services/assetUsage.ts`). Anything else using it
+makes it the campaign's DM's alone, so a DM who handed the seat over cannot,
+as a player, delete a picture the new DM's maps use, `force=true` or not. The
+campaign's DM and a platform admin are not narrowed, and editing a document's
+text stays with `mayChangeAsset`.
 
 ## Reading an asset: access follows use
 
@@ -362,7 +473,16 @@ update (image and spirit layer), token create and update, token and creature
 templates, and a character's `tokenImageUrl`. So pointing at an asset never
 grants the right to read it. A map's picture and spirit layer must also be
 an asset uploaded as a map picture (`isMapPicture`, asked by the map routes
-after `canReferenceAsset`). An update may send back the address already
+after `canReferenceAsset`). A token's, a token template's, a creature's, a
+character's and a character template's picture must likewise be an asset
+uploaded as a token picture (`isTokenPicture`, asked after
+`canReferenceAsset`, so a picture the caller may not read answers 403 before
+its type is looked at). The address a record already stores passes on that
+record's own update, but every copy is held to the rule, so copying an older
+record whose picture is not a token picture (Duplicate, Save as Template,
+placing it from a template, a creature or a character, a character made from
+a character template, a template copied to another campaign) answers 400.
+An update may send back the address already
 stored even if it can no longer be read, and an address naming an asset that
 does not exist is accepted, since it grants nothing. So is a picture a record
 of the same campaign already stores (a copy: Duplicate, Save as Template,
@@ -373,23 +493,105 @@ platform admin's right to read any file: a stored reference shows the asset
 to the whole table, so an admin who is a campaign's DM may reference only what
 they could read as that DM. An address on this server must be exactly an
 asset's own (`/api/assets/<kind>/<id>`): any other same-origin path is
-refused, since every viewer's browser would request it with their own
+refused (but for a map picture's `?v=<digits>` version, which names the same
+asset), since every viewer's browser would request it with their own
 session, and because an address the check read as naming nothing was read
 differently by the exports. The campaign export and a map's UVTT export
 include only the asset files their caller may read. A map's use counts
 for a player only while it is the campaign's current map (`canReadMap`): the
 artwork and token art of a prepared map stay the DM's until they switch to it.
+
+### Saving over a drawn picture
+
+`PUT /api/assets/:id/picture` (Mapmaker's **Save**) writes a new file over a
+picture's own. An asset the caller may not read (`canReadAsset`) answers 404;
+one that is not a drawn picture of a campaign (`isDrawnPicture` in
+`validators/assets.ts`: a `MAP` tagged exactly `cozyvtt-drawn-map`, at
+`CAMPAIGN` scope with a campaign) answers 400; and a caller who is not the
+DM of the asset's campaign answers 403, a platform admin included. The DM
+seat decides, read from the membership at the time of the request, not who
+uploaded the picture: a former DM, now a player, is refused even for a
+picture they drew, and the new DM may save over it. Only the upload's tag marks a
+drawn picture, and only the campaign's DM may upload one (`tagsAllowedOn`),
+so no other picture can be written over this way.
 The list and detail
 responses select the public fields only; `filePath` and `thumbnailPath` are the
-server's. A map's spirit-layer image is listed to a member, and served, only
-when that member may see the spirit plane there (`getSpiritVisibility`), which
-is what the map itself does with it.
+server's.
+
+### A campaign's map pictures: hidden from players until the table is there
+
+A member of a campaign who is not its DM (a player or a spectator) is listed
+and served a `CAMPAIGN` asset of that campaign unless `mapPictureHidden` in
+`services/permissions.ts` keeps it from them. It keeps:
+
+- an asset a map of the campaign names as its `imageUrl`, `baseLayerUrl` or
+  `spiritLayerUrl` (read with `extractAssetId`), and
+- any `MAP` asset of the campaign, used by a map or not,
+
+unless one of these shows it to them:
+
+- the campaign's current map: as its picture or base layer, or as its spirit
+  layer while they may see the spirit plane there (`getSpiritVisibility`,
+  which is what the map itself does with it);
+- another table they sit at: the current map of another campaign they are a
+  member of, whether they play in it or run it, with the same spirit rule (a
+  DM sees their own plane), while the asset's uploader is a member of that
+  campaign too. Only a table's current map counts: a map of a campaign they
+  run that its table is not on keeps nothing, so a picture is not kept by
+  putting it on a map of one's own. The uploader's presence is the rule
+  `assetUsedInUserCampaign` already applies to non-members, and it is what
+  stops a campaign of one's own from opening someone else's picture;
+- a document of the asset's campaign's list (linked to it by
+  `CampaignDocument`, or a `CAMPAIGN` document written or uploaded in it)
+  whose text the campaign's DM now controls, as they uploaded it, and whose
+  text names the asset (`/api/assets/<kind>/<id>`, its folder in any case,
+  in a plain text or Markdown document; a mention counts as an embed). That is the DM choosing to
+  show the picture in a handout. A document a former DM wrote while they
+  held the seat (which they may still rewrite as a member), one any other
+  member got there, a global document someone else uploaded that the DM
+  linked, a document shared with another campaign, and a `CAMPAIGN`
+  document of another campaign linked to this one (whose later DM could
+  rewrite it) count for nothing.
+  What a document names is read from its text when it is uploaded, written
+  or saved, only its first 1 MiB and at most 200 addresses, each naming an
+  asset that exists, and kept in `DocumentPicture`
+  (`services/sharedDocumentPictures.ts`); the rule reads that a table at a time
+  and never a file. A document stored before those rows were kept is read
+  by the requests that ask, five at a time, until none is left.
+
+An asset they uploaded themselves is never kept from them. Token art, audio,
+documents and every other asset are left alone, even on a prepared map: a
+token picture uploaded for the next scene is listed to players at once.
+
+The rule is final for a member: when it keeps an asset, nothing else a member
+can point at opens it (a character's picture, a token, a template). A
+character's picture set to a map's before pictures had to be token pictures
+(`isTokenPicture` lets a record keep an address it already stores) must still
+be hidden once the table leaves. Only maps, which the DM alone sets, and the
+DM's shared documents count.
+
+One predicate (`campaignMapPictures` and `mapPictureHidden`) feeds both
+`GET /api/assets` (with or without `campaignId`, and with `usable=true`),
+through `mapPictureAssetIdsHiddenFrom`, and `canReadAsset`'s member branch, so
+a member is listed an asset exactly when its read answers 200
+(`mapPicturesHidden.e2e.test.ts`, and `mapPicturesAcrossTables.e2e.test.ts`
+for several tables, handouts and the spirit plane). Every file route goes through
+`canReadAsset` and follows. Nothing is re-sent when the DM switches maps: each
+read is decided from `currentMapId`, committed before `map.changed` goes out.
+
+A platform admin reads every asset, a prepared map's pictures included. With
+no `campaignId` an admin is listed every asset on the instance, and with one
+every asset of that campaign. Only `usable=true` without `campaignId` (what
+the pickers send) holds an admin to a member's rule, as `canReferenceAsset`
+does.
 
 The asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
 `/documents/:id`, `/audio/:id` and `/:id/download`) decide read access from the
 asset's **scope**; `/avatars/:userId` serves a user's avatar to anyone signed
 in. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
-campaign's members, and `USER` by its uploader. A `CAMPAIGN` asset with no
+campaign's members, except a map's picture, which a member who is not the DM
+reads only while a map using it is current (above), and `USER` by its
+uploader. A `CAMPAIGN` asset with no
 campaign recorded (the foreign key nulls it when a campaign row goes) is read
 as a `USER` one, so a way of removing campaigns that forgets to turn their
 assets personal first cannot open them to everyone.
@@ -707,8 +909,9 @@ or the `campaignDM` middleware.
 campaign (`canDeleteCampaign`), which is deliberate: the destructive power
 stays with whoever created it. The owner may always hand the DM seat on
 (`canTransferDM`). And the owner cannot be removed from the campaign
-(`DELETE /api/campaigns/:campaignId/members/:userId` answers `400`), since
-only the DM can add a membership and the owner could not get back in.
+(`DELETE /api/campaigns/:campaignId/members/:userId` answers `400`) or leave
+it (`POST /api/campaigns/:campaignId/leave` answers `409`), since only the DM
+can add a membership and the owner could not get back in.
 
 ### Transferring the DM role
 
@@ -725,6 +928,21 @@ The generic role route still refuses to touch a DM or mint a second one. That is
 intentional: transferring is the only supported way to move the seat, so there is
 one atomic path rather than two.
 
+### Leaving a campaign
+
+`POST /api/campaigns/:campaignId/leave`, behind `campaignMember`, lets a player
+or a spectator take themselves out of a campaign. It is the DM's removal asked
+by the member: the same serializable transaction (`takeMemberOut` in
+`services/campaignMembers.ts`) and the same notices after it
+(`tellTableMemberLeft`), with reason `left` on their open connections. The
+handler reads the role inside the transaction and answers `409` to the owner,
+asked first ("You own this campaign, so you cannot leave it. ..."), and then to
+the DM ("You run this campaign. Hand the DM seat to someone else in the
+campaign's settings, then leave it."), so the campaign keeps one DM and its
+owner a way back in. A caller who is no longer a member when the transaction
+runs, a removal having won the race, is answered `403` "You are not a member
+of this campaign", as the guard answers anyone not in the campaign.
+
 ### Membership changes under open sockets
 
 `socket.role` and `socket.campaignId` are read once, when the socket
@@ -738,10 +956,11 @@ written:
 |---|---|
 | `PUT /api/campaigns/:id/dm` | `applyRoleToLiveSockets(userId, campaignId, role)` for both seats |
 | `PUT /api/campaigns/:id/members/:userId/role` | `applyRoleToLiveSockets(userId, campaignId, role)`, then `campaign.role.changed` to the campaign so every open page, the member's own included, updates its controls |
-| `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
+| `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId, 'removed')`, then `presence.state` to the campaign (`tellTableMemberLeft` in `services/campaignMembers.ts`) |
+| `POST /api/campaigns/:id/leave` | The same, with reason `left` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
-The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`; a restore ends every socket on the instance through `endEveryLiveSocket`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
+The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`; a restore ends every socket on the instance through `endEveryLiveSocket`. Two other things end them. A guarded request or `GET /api/auth/me` that finds a sign-in past `REMEMBER_ME_MAX_AGE` ends that sign-in's sockets with it (`withinSignInLimitOr401` in `middleware/auth.ts`). And a sweep (`websocket/signInSweep.ts`) runs every minute: it ends each socket whose sign-in is past the limit, and every fifth minute it also reads each socket's session from the store and ends those whose session is gone, leaving a socket connected when the store cannot be read. A socket's sign-in is also checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline. So a session that expires from inactivity keeps its open socket until the next store check, at most about five minutes.
 
 | Route | Which sockets end |
 |---|---|
@@ -773,7 +992,7 @@ per request. Platform role is a different matter, see above.
 
 ### A removed member's own notes and macros
 
-Removing a member deletes none of their `PersonalNote` or `DiceMacro` rows, and
+Removing a member, or their leaving, deletes none of their `PersonalNote` or `DiceMacro` rows, and
 every notes and macros route asks for membership. Four read-only routes,
 guarded by `authenticated` alone, let the author still read their own
 (`routes/leftCampaigns.ts`): `GET /api/campaigns/left` lists the campaigns the

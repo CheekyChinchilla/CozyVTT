@@ -191,13 +191,14 @@ function buildDnd5eRolls(statBlock: NpcStatBlock): CharacterRolls {
  *
  * Saves are Fortitude/Reflex/Will rather than six ability saves, and only
  * trained-or-better skills appear, both of which the stat block already
- * represents as plain keyed records.
+ * represents as plain keyed records. The stat block takes any save key, so
+ * the labels are a Map: "constructor" found Object in a plain object.
  */
-const PF2E_SAVE_LABELS: Record<string, string> = {
-  fortitude: 'Fortitude',
-  reflex: 'Reflex',
-  will: 'Will',
-};
+const PF2E_SAVE_LABELS: ReadonlyMap<string, string> = new Map([
+  ['fortitude', 'Fortitude'],
+  ['reflex', 'Reflex'],
+  ['will', 'Will'],
+]);
 
 function buildPf2eRolls(statBlock: NpcStatBlock): CharacterRolls {
   const abilities:    RollOption[] = [];
@@ -224,7 +225,7 @@ function buildPf2eRolls(statBlock: NpcStatBlock): CharacterRolls {
 
   for (const [key, bonus] of Object.entries(statBlock.savingThrows ?? {})) {
     if (typeof bonus !== 'number') continue;
-    const label = PF2E_SAVE_LABELS[key.toLowerCase()] ?? key;
+    const label = PF2E_SAVE_LABELS.get(key.toLowerCase()) ?? key;
     savingThrows.push({
       label:             `${label} ${formatModifier(bonus)}`,
       expression:        `1d20${formatModifier(bonus)}`,

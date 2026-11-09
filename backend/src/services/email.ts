@@ -185,7 +185,7 @@ export async function sendTestEmail(toEmail: string, toName: string): Promise<vo
     p(`Hello <strong>${escapeHtml(toName)}</strong>,`) +
     p(`This is a test email from ${escapeHtml(instanceName)}. If you received this, your SMTP configuration is working correctly.`) +
     divider +
-    p('<em style="color:#8B7355;font-size:13px;">No action is required. This email was triggered from the Admin Dashboard.</em>');
+    p('<em style="color:#8B7355;font-size:13px;">No action is required. This email was triggered from the Admin Panel.</em>');
 
   await transporter.sendMail({
     from: fromAddress,

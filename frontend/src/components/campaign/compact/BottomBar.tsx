@@ -1,0 +1,126 @@
+// ============================================
+// BottomBar: the compact layout's buttons along the foot of the screen
+//
+// Map, Chat, Dice, Initiative, Party and More, each a button 56 px tall, in
+// a `nav` landmark named "Table", above the phone's own home indicator (the
+// safe area). The arrangement says which one is open (`active`, 'map' while
+// no sheet is) and opens what is chosen; the bar draws only the buttons.
+// They are buttons and not tabs: Map closes every sheet, More opens a menu,
+// and Party has no tab panel. The open one is `aria-current`; each that
+// opens a sheet says whether it is open (`aria-expanded`) and, once the
+// arrangement gives the sheets' ids (`sheetIds`), which sheet it opens
+// (`aria-controls`). The Chat button carries the unread count the rail's
+// Chat tab shows (the game store's `unreadChat`). On a tablet the buttons
+// are at most 672 px wide, centred, as the sheets are. On a phone turned on
+// its side there is no height to spare for a bar, so the same buttons sit in
+// the arrangement's header, smaller (`placement` 'header').
+// ============================================
+
+import { Ellipsis, Map as MapIcon, Users, type LucideIcon } from 'lucide-react';
+import { useGameStore } from '@/stores/gameStore';
+import { cn } from '@/utils/cn';
+import { SESSION_TAB_LOOKS, unreadBadge, type SessionTab } from '@/components/campaign/sessionTabs';
+import { SHEET_WIDTH } from './BottomSheet';
+
+/**
+ * The session panels the bar has a button for, in order: the one list of
+ * them. More opens the others (MoreSheet's MORE_PANELS).
+ */
+export const BAR_PANELS = ['chat', 'dice', 'initiative'] as const satisfies readonly SessionTab[];
+
+export type BarPanel = (typeof BAR_PANELS)[number];
+
+/** Whether the bar has a button for a session panel. */
+export const onTheBar = (tab: SessionTab): tab is BarPanel => BAR_PANELS.some((panel) => panel === tab);
+
+export type CompactTab = 'map' | BarPanel | 'party' | 'more';
+
+/** The bar's buttons, in order. */
+export const COMPACT_TABS: readonly CompactTab[] = ['map', ...BAR_PANELS, 'party', 'more'];
+
+/**
+ * The bar's height, its top rule and the safe area under it included: where
+ * the arrangement's sheets stand (BottomSheet's `edges`).
+ */
+export const BOTTOM_BAR_HEIGHT = 'calc(3.5rem + 1px + env(safe-area-inset-bottom, 0px))';
+
+/** A button's name and icon; a session panel's are the rail's tab's. */
+function tabLook(tab: CompactTab): { label: string; icon: LucideIcon } {
+  switch (tab) {
+    case 'map':
+      return { label: 'Map', icon: MapIcon };
+    case 'party':
+      return { label: 'Party', icon: Users };
+    case 'more':
+      return { label: 'More', icon: Ellipsis };
+    default:
+      return SESSION_TAB_LOOKS[tab];
+  }
+}
+
+export interface BottomBarProps {
+  /** The button shown as open (aria-current); 'map' while no sheet is. */
+  active: CompactTab;
+  /**
+   * The button whose own sheet is open (aria-expanded), when it is not
+   * `active`: More is shown current while Notes or Session, which it opens,
+   * is open in the session sheet, and its own list is then closed.
+   */
+  expanded?: CompactTab | null;
+  onSelect: (tab: CompactTab) => void;
+  /** The id of the sheet each button opens, once the arrangement draws them. */
+  sheetIds?: Partial<Record<Exclude<CompactTab, 'map'>, string>>;
+  /** Along the foot of the screen, or in the header on a screen too short for a bar. */
+  placement?: 'foot' | 'header';
+}
+
+export default function BottomBar({ active, expanded = active, onSelect, sheetIds, placement = 'foot' }: BottomBarProps) {
+  const unreadChat = useGameStore((s) => s.unreadChat);
+  const inHeader = placement === 'header';
+
+  return (
+    <nav
+      aria-label="Table"
+      // In the header the buttons give up width down to 44 px before the
+      // row runs past a narrow, short window's edge.
+      className={inHeader ? 'min-w-0' : 'shrink-0 border-t border-brand/20 bg-parchment pb-[env(safe-area-inset-bottom)]'}
+    >
+      <div className={inHeader ? 'flex items-center gap-0.5' : cn(SHEET_WIDTH, 'grid h-14 grid-cols-6')}>
+        {COMPACT_TABS.map((tab) => {
+          const { label, icon: Icon } = tabLook(tab);
+          const open = active === tab;
+          const badge = tab === 'chat' && unreadChat > 0 ? unreadBadge(unreadChat) : null;
+          return (
+            <button
+              key={tab}
+              type="button"
+              id={`compact-tab-${tab}`}
+              aria-current={open ? 'true' : undefined}
+              aria-expanded={tab === 'map' ? undefined : expanded === tab}
+              aria-controls={tab === 'map' ? undefined : sheetIds?.[tab]}
+              onClick={() => onSelect(tab)}
+              className={cn(
+                'relative flex min-w-0 flex-col items-center justify-center gap-0.5 transition-colors',
+                'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand',
+                inHeader ? 'h-12 w-13 min-w-11 rounded-cozy text-[10px]' : 'text-[11px] md:text-xs',
+                open ? 'font-semibold text-brand-ink' : 'font-medium text-ink-muted hover:text-ink',
+                open && inHeader && 'bg-brand/10'
+              )}
+            >
+              <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="max-w-full truncate px-0.5">{label}</span>
+              {badge && (
+                <span
+                  aria-label={badge.label}
+                  className="absolute top-1 left-1/2 ml-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger-fill px-1 text-[11px] font-bold text-white"
+                >
+                  {badge.text}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

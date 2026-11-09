@@ -32,6 +32,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', memberships: [], maps: [{ id: 'map-1', name: 'Cave' }] },
     currentMap: { id: 'map-1', width: 20, height: 20 },
+    viewedMap: { id: 'map-1', width: 20, height: 20 },
   }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: { emitMapChange } }) }));
@@ -53,7 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.listAssets.mockResolvedValue({ assets: [], pagination: {} });
   api.deleteToken.mockResolvedValue({ message: 'ok' });
-  useGameStore.getState().setTokens([goblin]);
+  useGameStore.getState().setTokens([goblin], 'map-1');
 });
 
 describe('removing a token in the Token Manager', () => {

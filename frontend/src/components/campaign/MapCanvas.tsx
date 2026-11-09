@@ -3,16 +3,18 @@
 // HTML Canvas-based map viewer with zoom/pan controls
 // ============================================
 
-import { useEffect, useEffectEvent, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 'lucide-react';
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap, MapPin, Pencil, Paintbrush, SlidersHorizontal } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { campaignHasCharacter as campaignHasTokenCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
+import { tokenTemporaryHp, type TemporaryHpTarget } from '@/utils/temporaryHp';
 import { useTableRoll } from '@/hooks/useTableRoll';
-import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp } from '@/stores/gameStore';
+import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useCharacterHp, useSelectedTokenId } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useCoarsePointer } from '@/hooks/useMediaQuery';
 import type {
   Token,
   TokenMoveStartEvent,
@@ -20,14 +22,15 @@ import type {
   TokenMoveEndEvent,
   TokenMovedEvent,
   CampaignMap,
+  Position,
   SpiritLayerToggledBroadcast,
   SpiritLayerTokenToggledBroadcast,
   VibeUpdatedBroadcast,
   Character,
   MapPingedBroadcast,
 } from '@/types';
-import { GameSystem, TokenLayer, TokenType } from '@/types';
-import type { WallSegment, FogState, WallType, LightSource } from '@/types/walls';
+import { GameSystem, TokenLayer } from '@/types';
+import type { WallSegment, FogState, LightSource } from '@/types/walls';
 import {
   drawMapImage,
   drawSpiritLayer,
@@ -48,33 +51,58 @@ import {
   drawFogSelection,
   drawPings,
   PING_DURATION_MS,
+  drawDrawings,
+  drawDrawingPreviews,
+  drawMarkupLayer,
+  createDrawingCache,
   type ActivePing,
   type AoEShape,
+  type LightingComposite,
   type Viewport,
 } from './map/layers';
 import { createVisionCache } from './map/vision';
-import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
-import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
+import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp, isTokenVisibleTo, tokenCoversCell } from './map/tokenHitTest';
+import { cachedTokenImage } from './map/layers/drawTokens';
 import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
+import { explorationReports } from './map/fogSends';
 import { useFogTool } from './map/tools/useFogTool';
 import { useLightTool } from './map/tools/useLightTool';
 import { useMeasureTools } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
+import { useDrawTool, DEFAULT_DRAW_SETTINGS, type DrawSettings, type DrawToolKind } from './map/tools/useDrawTool';
 import type { MapTool, PointerAt } from './map/tools/types';
+import { usePaintSurface } from './map/paint/usePaintSurface';
+import { usePaintGuards } from './map/paint/usePaintGuards';
+import { rememberPictureAsset, useMapPictureKind } from './map/paint/mapPicture';
+import { drawPaintPreview } from './map/paint/paintShapes';
+import { releaseCanvas } from './map/paint/blankPicture';
+import { draftTime, dropDrafts, paintDraftStore } from './map/paint/paintDrafts';
+import { mapInputOwner } from './map/inputOwner';
+import { usePaintStore } from '@/stores/paintStore';
+import { buttonBit, clickRoom, createClickCounter, fromMouseEvent, fromPointerEvent, CLICK_COUNT_PX, DOUBLE_TAP_PX, PEN_ERASER_BUTTON, type MapPointer, type PointerKind } from './map/mapPointer';
+import { createGestureRecognizer, type Gesture } from './map/gestures';
+import { createClickSwallow } from './map/clickSwallow';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
-  encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
+  encodePreviewSelection, decodePreviewSelection, resolvePreviewSelection, followStepTokens, type PreviewSelection,
   previewTokens,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
 import { useWallLightRequest } from './map/useWallLightRequest';
-import { releaseHeldToken } from './map/tokenHold';
+import { useMapDrawings } from './map/useMapDrawings';
+import { labelFontSize } from './map/drawingGeometry';
+import { DRAWING_LIMITS } from '@/constants/drawingLimits';
+import { releaseHeldToken, carriedSquare, carriedDistance, heldDrawnAt } from './map/tokenHold';
+import { gridDistanceLabel } from '@/utils/geometry';
 import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
+import { keyBelongsToMap, mapKeyAction, createRepeatPacer, ARROW_REPEAT_MS, MAP_KEYS_HINT } from './map/keyboard';
+import { selectableTokens, nextSelectedId, squareFromArrow, panToKeepInView, keepInViewMargin, settleArrowEcho, type ArrowKey, type StepDirection } from './map/selection';
+import { tokenCentre } from '@/utils/tokenCentre';
 import { createOwnEdits } from './map/ownEdits';
 import mapService from '@/services/map.service';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
@@ -88,28 +116,52 @@ import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { controlsToken } from '@/utils/tokenOwnership';
 import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
-import { dmTokenControls } from '@/utils/dmTokenMenu';
+import { createTokenTurns } from './map/tokenTurns';
+import { tokenMenuHasItems, tokenMenuItems, type TokenMenuActions, type TokenMenuView } from './map/tokenMenuItems';
+import { doorMenuItems } from './map/doorMenuItems';
+import { mapControlItems, mapControlsTitle, gridColorLabel, rulerColorLabel, type MapControlsActions } from './map/mapControlItems';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
+import { applyViewport, clearLayer, drawSaved, effectiveDpr, resetLayer, sizeBackingStore } from './map/layerCanvas';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
 import RemoveTokenDialog from '@/components/campaign/RemoveTokenDialog';
-import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/utils/tokenDisplayName';
+import TemporaryHpDialog from '@/components/campaign/TemporaryHpDialog';
+import { tokenDisplayName, tokenPublicName, characterRollPublicName, UNKNOWN_CREATURE } from '@/utils/tokenDisplayName';
 import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
 import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
+import DrawControls, { type DrawControlsProps, type MemberDrawings } from '@/components/campaign/DrawControls';
+import DrawStrip from '@/components/campaign/DrawStrip';
+import PaintControls from '@/components/campaign/PaintControls';
+import PaintStrip from '@/components/campaign/PaintStrip';
+import { PaintLeaveQuestion, PaintLeftoverQuestion, PaintSaveQuestion } from '@/components/campaign/PaintQuestions';
+import { extractAssetId } from '@/utils/assetUrl';
+import { preparingHoldsBack } from '@/components/campaign/PreparingBanner';
+import ConfirmDialog from '@/components/common/ConfirmDialog';
+import { canDraw, canEraseDrawing, drawingSentTo } from '@/utils/drawingRules';
+import HeldTokenBar from '@/components/campaign/HeldTokenBar';
+import TokenDetailsCard from '@/components/campaign/TokenDetailsCard';
+import MapMenuRows from '@/components/campaign/MapMenuRows';
+import { flipOntoScreen } from '@/components/ui/menu';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
+import FloatingLayer from '@/components/ui/FloatingLayer';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import ActionSheet, { headedMenu, type SheetEdge } from '@/components/campaign/compact/ActionSheet';
+import { TokenSheetPicture, tokenSheetLine } from '@/components/campaign/compact/tokenSheetHeader';
+import { anyMenuShown, menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
 import '@/styles/spirit-effects.css';
-import { mapImageState } from './map/mapImageState';
+import { mapImageState, pictureFor, PICTURE_DECODE_WAIT_MS, type LoadedPicture } from './map/mapImageState';
 import { useTokenImages } from './map/useTokenImages';
+import { useTopBand, underBand, belowBand, useMeasuredBottom, useMeasuredHeight, BAND_GAP } from './map/toolbarLayout';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -121,6 +173,26 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   return '#9370DB'; // wispy default = spirit-purple
 }
 
+/**
+ * The band on the compact layout: across the map, 8 pixels in from each
+ * side, or clear of a phone's notch on a side where it has one.
+ */
+const COMPACT_BAND = 'absolute top-2 left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] flex flex-wrap items-start gap-2 pointer-events-none';
+
+/** What the ruler says to a player with no token of theirs on the map. */
+const RULER_NEEDS_TOKEN = 'Place your character token on the map to use the ruler';
+
+/**
+ * The compact layout's dock at the foot of the map: its floating rows keep
+ * 8 pixels from either side, or clear of a phone's notch.
+ */
+const DOCK_ROW = 'pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))]';
+
+/** The screen's pixel ratio; 1 where there is no window to ask. */
+function readDeviceRatio(): number {
+  return typeof window === 'undefined' ? 1 : window.devicePixelRatio;
+}
+
 /** The DM's editing tool, from the wall, fog or light panel. */
 type DmTool =
   | { kind: 'wall'; mode: NonNullable<WallToolMode> }
@@ -129,10 +201,15 @@ type DmTool =
 
 interface MapCanvasProps {
   onEditToken?: (token: Token) => void;
+  /** The ? key: the page shows the keyboard shortcuts window, which it holds. */
+  onShowShortcuts?: () => void;
 }
 
-export default function MapCanvas({ onEditToken }: MapCanvasProps) {
-  const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
+export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasProps) {
+  // `currentMap` here is the map this page shows (viewedMap): the table's,
+  // or one the DM is preparing. Every emit, request and filter below is for
+  // it; the table's own map is the context's to follow (receiveTableMap).
+  const { viewedMap: currentMap, isPreparing, receiveTableMap, updateMap, registerViewedMapGuard, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
   const characterHpCache = useCharacterHp();
   // Live token state comes from the game store, not the campaign context —
   // socket handlers write there directly (outside React), and this
@@ -145,6 +222,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Token being pointed at from the initiative tracker. Null while the map is
   // the one pointing — the blue hover outline already marks that case.
   const peekTokenId = useMapPeekTokenId();
+  // The token this page has selected, which the keyboard acts on.
+  const selectedTokenId = useSelectedTokenId();
   const prefersReducedMotion = useReducedMotion();
   // joinedEpoch is 0 until this connection has authenticated into the campaign,
   // and a new number after each rejoin. Anything that asks the server for map
@@ -154,15 +233,28 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
   const isDM = userRole === 'DM';
+  // On the compact layout the token and door menus are action sheets.
+  const compact = useCompactLayout();
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
   // receives all pointer input and holds the overlay draw layer; terrain and
   // tokens sit beneath it. All three are the same size and share one world
   // transform, so their composite is pixel-identical to the old single canvas.
+  // Each holds its CSS size times the screen's ratio in pixels
+  // (map/layerCanvas.ts); everything else here is in CSS pixels.
   const canvasRef = useRef<HTMLCanvasElement>(null);        // overlay layer + input
   const terrainCanvasRef = useRef<HTMLCanvasElement>(null); // map image, grid, fog, spirit
   const tokenCanvasRef = useRef<HTMLCanvasElement>(null);   // tokens + drag ghost
   const containerRef = useRef<HTMLDivElement>(null);
-  const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; CSS-transformed during pan
+  const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; carries the vibe filter and the keyboard focus
+  // The band across the top of the map (the toolbar, and the spirit realm
+  // label), measured so the panels under it can start below it.
+  const topBandRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const heldBarRef = useRef<HTMLDivElement>(null);
+  const topBand = useTopBand(topBandRef, toolbarRef, containerRef);
+  // A touch screen's bigger toolbar buttons (`touch-target`).
+  const coarsePointer = useCoarsePointer();
+  const mapHintId = useId();
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());
   // Lazily-created AudioContext for spirit layer transition sound, closed
@@ -178,13 +270,33 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [gridColor, setGridColor] = useState<'black' | 'white'>('black');
   const [hoverCoords, setHoverCoords] = useState<{ x: number; y: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
-  const [mapImage, setMapImage] = useState<HTMLImageElement | null>(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
+  // The screen's pixel ratio, as the browser reports it. It changes with the
+  // browser's zoom and when the window moves to a screen of another density.
+  const [deviceRatio, setDeviceRatio] = useState(readDeviceRatio);
+  // The ratio the canvases are drawn at: the screen's, within the limits.
+  const dpr = effectiveDpr(deviceRatio, canvasSize.width, canvasSize.height);
+  // The last map picture loaded, and the map and address of one that did
+  // not load. The picture drawn is decided from them for the map on screen
+  // (map/mapImageState.ts), so no map is drawn on another map's picture.
+  const [loadedPicture, setLoadedPicture] = useState<LoadedPicture<HTMLImageElement> | null>(null);
+  const [failedPicture, setFailedPicture] = useState<{ mapId: string; url: string } | null>(null);
+  const mapImage = pictureFor(loadedPicture, currentMap);
+  const mapImageRef = useRef(mapImage);
+  mapImageRef.current = mapImage;
+  const imageLoaded = mapImage !== null;
+  const imageError = failedPicture !== null && failedPicture.mapId === currentMap?.id && failedPicture.url === currentMap.imageUrl
+    ? 'Failed to load map image'
+    : null;
   const imageState = mapImageState(currentMap, imageLoaded, imageError);
+  // The picture drawn, with the address it was loaded from: while a new
+  // picture for the map loads, or after it failed, the one before it.
+  const shownPicture = mapImage !== null ? loadedPicture : null;
 
   // Spirit layer image
-  const [spiritLayerImage, setSpiritLayerImage] = useState<HTMLImageElement | null>(null);
+  // The spirit layer picture last loaded, with the map it was loaded for:
+  // another map's is never drawn (pictureFor), as with the map's picture.
+  const [loadedSpirit, setLoadedSpirit] = useState<LoadedPicture<HTMLImageElement> | null>(null);
+  const spiritLayerImage = pictureFor(loadedSpirit, currentMap && { id: currentMap.id, imageUrl: currentMap.spiritLayerUrl });
   // Fade-in transition state for spirit layer toggle
   const [spiritLayerOpacity, setSpiritLayerOpacity] = useState(1);
 
@@ -193,15 +305,70 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const tokenImages = useTokenImages(tokens);
   const [draggedToken, setDraggedToken] = useState<Token | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * The square under the pointer carrying the held token, while one does: a
+   * mouse or a hovering pen over the map, or a finger dragging it. Null for
+   * a token a finger tapped up and lifted from, which is drawn on its own
+   * square (map/tokenHold.ts).
+   */
+  const [carrierSquare, setCarrierSquare] = useState<Position | null>(null);
+  /**
+   * A finger's drag that carries a token, from its down to its lift: which
+   * token, and the square of it the finger took it by. A ref, since the
+   * drag's down and first move arrive in one event.
+   */
+  const carryRef = useRef<{ tokenId: string; offset: Position } | null>(null);
+  /**
+   * The held token's id as of now, not as of the last render: a pen landing
+   * during a finger's carry puts the token back and then presses, in one
+   * event, and that press must not put down a token no longer held.
+   */
+  const heldIdRef = useRef<string | null>(null);
+  /**
+   * Whether the hold offers Put back: a token a finger tapped up or a pen
+   * took, which no leave of the map and maybe no Esc key puts back. A
+   * mouse's hold goes back as it leaves the map, and a finger's drag puts
+   * its token down as it lifts.
+   */
+  const [putBackOffered, setPutBackOffered] = useState(false);
+  /** A finger is carrying the held token, which its lift puts down: Put back waits until it is held still. */
+  const [fingerCarrying, setFingerCarrying] = useState(false);
+  /** The Ping button has been pressed: the next tap or click on the map pings it. */
+  const [pingArmed, setPingArmed] = useState(false);
+  /** On the compact layout: the Map controls sheet is open. */
+  const [mapControlsOpen, setMapControlsOpen] = useState(false);
+  /** On the compact layout: Tools is on, and the DM's tool stack shows. */
+  const [toolsShown, setToolsShown] = useState(false);
+  const mapControlsButtonRef = useRef<HTMLButtonElement>(null);
+  const drawButtonRef = useRef<HTMLButtonElement>(null);
+  // The compact layout's dock at the map's foot, and its height.
+  const dockContentRef = useRef<HTMLDivElement>(null);
+  const dockHeight = useMeasuredHeight(dockContentRef, compact);
+  // A sheet left open as the layout turns to the desktop's does not come
+  // back with the compact layout.
+  useEffect(() => {
+    if (!compact) setMapControlsOpen(false);
+  }, [compact]);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
-  /** Initiative of the token being pointed at — for the details panel. */
-  const hoverInitiative = useTokenInitiative(hoverToken?.id ?? null);
+  /**
+   * What made the last press on the map. A finger or a pen leaves no hover
+   * behind, so after one the selected token's details show in the hover
+   * card's place; after a mouse the hover card is all there is.
+   */
+  const [lastPressKind, setLastPressKind] = useState<PointerKind | null>(null);
+  /**
+   * The token whose details were closed. They stay closed while it stays
+   * selected, and show again for another token or on the next tap on a
+   * token, the same one included: a tap is a fresh act of selecting.
+   */
+  const [selectionDetailsClosedFor, setSelectionDetailsClosedFor] = useState<string | null>(null);
 
-  // Context menu state
+  // Context menu state. One opened by Enter is held inside the map.
   const [contextMenu, setContextMenu] = useState<{
     token: Token;
     x: number;
     y: number;
+    fromKeyboard?: boolean;
   } | null>(null);
 
   // Door context menu state (right-click on a door segment)
@@ -210,10 +377,24 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     x: number; // viewport x
     y: number; // viewport y
   } | null>(null);
+  const doorMenuRef = useRef<HTMLDivElement>(null);
+  const [doorMenuPos, setDoorMenuPos] = useState<{ x: number; y: number } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isMovingTokenLayer, setIsMovingTokenLayer] = useState(false);
-  const [contextMenuMoveToMapOpen, setContextMenuMoveToMapOpen] = useState(false);
+  /** The token menu's submenu that is open, by its item's id (Move to Map…). */
+  const [tokenMenuSubmenu, setTokenMenuSubmenu] = useState<string | null>(null);
+  /**
+   * Close the token menu. Focus that was in it goes back to the map, so the
+   * keys keep working after a choice from the menu; focus a click has taken
+   * elsewhere stays there.
+   */
+  const closeTokenMenu = useCallback(() => {
+    const hadFocus = contextMenuRef.current?.contains(document.activeElement) ?? false;
+    setContextMenu(null);
+    setTokenMenuSubmenu(null);
+    if (hadFocus) layersRef.current?.focus({ preventScroll: true });
+  }, []);
   // The token whose Remove from Map is waiting for confirmation.
   const [removingToken, setRemovingToken] = useState<Token | null>(null);
   const [isMoveToMapLoading, setIsMoveToMapLoading] = useState(false);
@@ -225,10 +406,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Roll picker (right-click token → Roll...). Carries the token as well as the
   // character because initiative belongs to the token on the map, not to the
   // sheet — the same character could be represented by more than one token.
+  // Each picker keeps the point it opens at, so it stays there while the
+  // token menu is used again.
   const [rollPicker, setRollPicker] = useState<
-    { characterId: string; tokenId: string; canRollInitiative: boolean; x: number; y: number } | null
+    { characterId: string; tokenId: string; canRollInitiative: boolean; at: { x: number; y: number } } | null
   >(null);
-  const [npcRollPicker, setNpcRollPicker] = useState<{ tokenId: string; x: number; y: number } | null>(null);
+  const [npcRollPicker, setNpcRollPicker] = useState<{ tokenId: string; at: { x: number; y: number } } | null>(null);
+  // The token whose Temporary HP... dialog is open.
+  const [temporaryHpTokenId, setTemporaryHpTokenId] = useState<string | null>(null);
+  /**
+   * Where the token menu was last opened. A roll picker its Roll... opens
+   * stands there; the items themselves carry no position.
+   */
+  const menuPointRef = useRef({ x: 0, y: 0 });
+  // Through a callback: a ref written in openMenuAt itself made the React
+  // Compiler's purity rule take the handlers that reach it for render code.
+  const rememberMenuPoint = useCallback((x: number, y: number) => { menuPointRef.current = { x, y }; }, []);
 
   // DM-only: toggle whether spirit-layer tokens are drawn on canvas
   const [dmShowSpiritTokens, setDmShowSpiritTokens] = useState(true);
@@ -243,12 +436,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const {
     tool: measuring, track: trackMeasure,
     showRuler, showAoE, handleToggleRuler, handleToggleAoE, putRulerAway,
-    rulerOrigin, rulerColor, setRulerColor,
-    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef,
-  } = useMeasureTools({ isDM, markDirty });
+    rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, setRulerColor,
+    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef, aoeSnap, setAoESnap,
+  } = useMeasureTools({
+    isDM, markDirty,
+    // Asked at a press, by when all three are known.
+    measuresFromToken: () => myToken !== null,
+    picksUpAt: (square) => getMovableTokenAtPosition(square.x, square.y) !== null,
+    holdsToken: () => draggedToken !== null,
+  });
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
-  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
+  const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, index: wallHistoryIndex, stepBack: stepWallHistoryBack, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
   // Every wall and light edit this page sends carries an id, so the server's
   // echo of it can be told from anyone else's change (map/ownEdits.ts).
   const [ownEdits] = useState(() => createOwnEdits());
@@ -296,29 +495,53 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const setLightMode = useCallback((mode: LightToolMode) => {
     setDmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
   }, []);
+  // The draw tool, null while Draw is put away, and how the next drawing looks.
+  const [drawKind, setDrawKind] = useState<DrawToolKind | null>(null);
+  const [drawSettings, setDrawSettings] = useState<DrawSettings>(DEFAULT_DRAW_SETTINGS);
 
   // Right-mouse button panning while a DM tool is active (left-click is reserved for tools)
   const rightPanActiveRef = useRef(false);
   const { toast, showToast, hideToast } = useToast();
+  // Why a wall or light tool drew nothing, or took back what the server refused.
+  const refuseMapEdit = useCallback((message: string) => showToast(message, 'error'), [showToast]);
   /** DM "Preview player view" toggle — when true, DM sees lighting as players do. */
   const [dmPreviewPlayerView, setDmPreviewPlayerView] = useState(false);
   const [previewSelection, setPreviewSelection] = useState<PreviewSelection | null>(null);
 
   // Player Preview: the DM's canvas drawn through chosen eyes, a player's, one
-  // token's, or the whole party's. Those tokens supply the vision, the fog
-  // comes from the grid the DM already holds, and the same visibility rule
-  // decides what is drawn.
-  const previewing = isDM && dmPreviewPlayerView && previewSelection !== null;
+  // token's, the whole party's, or the selected token's (Follow my
+  // selection). Those tokens supply the vision, the fog comes from the grid
+  // the DM already holds, and the same visibility rule decides what is drawn.
+  // Never on a map being prepared: a preview records the previewed player's
+  // explored memory, of ground they have never been sent.
+  const previewing = isDM && dmPreviewPlayerView && previewSelection !== null && !isPreparing;
+  // Opening a map to prepare turns it off, so Back to the table comes back
+  // to the DM's own view.
+  useEffect(() => {
+    if (isPreparing) setDmPreviewPlayerView(false);
+  }, [isPreparing]);
+  // Follow my selection looks through the selected token, and with nothing
+  // selected through the last one it followed on this map: clearing the
+  // selection must not drop the projector back to the DM's view.
+  const following = previewSelection?.kind === 'selected';
+  const [followedTokenId, setFollowedTokenId] = useState<string | null>(null);
+  useEffect(() => {
+    if (following && selectedTokenId !== null) setFollowedTokenId(selectedTokenId);
+  }, [following, selectedTokenId]);
+  const previewViewer = useMemo(
+    () => resolvePreviewSelection(previewSelection, selectedTokenId ?? followedTokenId),
+    [previewSelection, selectedTokenId, followedTokenId]
+  );
   // The plane the previewed viewer is on, by the server's rule: a player whose
   // token has crossed to the spirit layer is sent that plane and sees through
   // that token, so the preview draws the spirit realm as their screen does.
   const previewedPlane = useMemo(
-    () => previewPlane(previewSelection, tokens, campaign?.spiritLayerEnabled ?? false),
-    [previewSelection, tokens, campaign?.spiritLayerEnabled]
+    () => previewPlane(previewViewer, tokens, campaign?.spiritLayerEnabled ?? false),
+    [previewViewer, tokens, campaign?.spiritLayerEnabled]
   );
-  const previewOwn = useMemo(() => previewOwnFor(previewSelection, previewedPlane), [previewSelection, previewedPlane]);
+  const previewOwn = useMemo(() => previewOwnFor(previewViewer, previewedPlane), [previewViewer, previewedPlane]);
   // Whose tokens the preview shows whole; differs from sight only for the party.
-  const previewControls = useMemo(() => previewControlsFor(previewSelection), [previewSelection]);
+  const previewControls = useMemo(() => previewControlsFor(previewViewer), [previewViewer]);
   const viewerOwn = previewing ? previewOwn : isOwnToken;
   const previewChoices = useMemo(
     () => previewOptions(campaign?.memberships ?? [], tokens),
@@ -369,6 +592,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Light coverage is built here first so it can be intersected with the
   // viewer's line of sight before joining the coverage mask.
   const lightOnlyOffscreenRef = useRef<HTMLCanvasElement | null>(null);
+  // What the three map-space lighting canvases were last drawn from; while
+  // it holds, a repaint of the overlay reuses them.
+  const lightingCompositeRef = useRef<LightingComposite | null>(null);
   // Explored memory pass: two screen-sized scratch canvases, allocated on first use.
   const memoryMaskOffscreenRef = useRef<HTMLCanvasElement | null>(null);
   const memoryOffscreenRef = useRef<HTMLCanvasElement | null>(null);
@@ -427,13 +653,123 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     draggingLightRef,
   } = useLightTool({
     isDM, previewing, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
-    socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
+    socket, ownEdits, mapControls, rightPanActiveRef, markDirty, refuse: refuseMapEdit,
   });
 
   // The fog boxes (map/tools/useFogTool.ts).
   const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
     isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty,
   });
+
+  // The map's drawings and the strokes on their way (map/useMapDrawings.ts),
+  // and the traced outline of each, kept for every repaint.
+  const mapDrawings = useMapDrawings({
+    socket, mapId: currentMap?.id, joinedEpoch, role: userRole, userId: user?.id, markDirty,
+    onRefused: (message) => showToast(message, 'error'),
+  });
+  const [drawingCache] = useState(createDrawingCache);
+
+  // Whether this member may draw now (utils/drawingRules.ts, the server's
+  // rule), on a map whose picture shows: nothing is drawn on one without it.
+  const mayDraw = canDraw(userRole ?? undefined, { status: campaign?.status ?? 'INACTIVE', playersMayDraw: campaign?.playersMayDraw ?? false });
+  // Erasing one's own asks nothing of the session or the setting, as on the
+  // server: a player who may not draw now is offered the eraser and Clear
+  // mine while the map holds drawings of theirs to erase.
+  const hasOwnToErase = mapDrawings.drawings.some((d) => d.layer === 'MARKUP' && !d.id.startsWith('pending:')
+    && d.authorId === user?.id && canEraseDrawing(userRole ?? undefined, user?.id, d));
+  const eraseOnly = !mayDraw && hasOwnToErase;
+  const drawOffered = (mayDraw || eraseOnly) && !!currentMap?.imageUrl && imageState !== 'error';
+  useEffect(() => {
+    if (!drawOffered) setDrawKind(null);
+    else if (eraseOnly) setDrawKind((kind) => (kind && kind !== 'eraser' ? 'eraser' : kind));
+  }, [drawOffered, eraseOnly]);
+  // The drawings the screen draws, and the eraser may find: in Player
+  // Preview, those a player is sent.
+  const drawingsShown = useCallback(
+    () => mapDrawings.drawings.filter((d) => drawingSentTo(isDM && !previewing ? 'DM' : 'PLAYER', d)),
+    [mapDrawings.drawings, isDM, previewing],
+  );
+  const drawTool = useDrawTool({
+    kind: drawKind, setKind: setDrawKind, settings: drawSettings, mapId: currentMap?.id, gridSize: currentMap?.gridSize ?? 50,
+    role: userRole, userId: user?.id, drawnDrawings: drawingsShown, mapControls, markDirty, drawings: mapDrawings,
+    hoverAt: () => hoverMapPxRef.current, hint: (message) => showToast(message, 'info'),
+  });
+
+  // Paint (map/paint/usePaintSurface.ts): the DM painting the picture of a
+  // map drawn in CozyVTT, or of a map with no picture, which it gives one.
+  // Never offered on an uploaded picture.
+  const pictureKind = useMapPictureKind(currentMap, campaign?.id, isDM);
+  // The other maps of the campaign whose picture is the one at `address`:
+  // Save writes over that picture, so they change too, and are named before.
+  const campaignMapList = campaign?.maps;
+  const mapsSharingPicture = useCallback((mapId: string, address: string | null | undefined) => {
+    const pictureId = extractAssetId(address);
+    return pictureId ? (campaignMapList ?? []).filter((m) => m.id !== mapId && extractAssetId(m.imageUrl) === pictureId) : [];
+  }, [campaignMapList]);
+  const paint = usePaintSurface({
+    map: currentMap, picture: shownPicture, pictureKind, pictureFailed: imageError !== null, isDM, mapControls, markDirty,
+    campaignId: campaign?.id,
+    // The map on screen takes its new picture: a map being prepared hears
+    // of it from nothing else, and the server sends the table's map again.
+    // No player is on a map being prepared.
+    onSaved: (saved, picture) => {
+      rememberPictureAsset(picture);
+      updateMap(saved.id, saved);
+      showToast(isPreparing ? 'Saved. Players see it when you bring them here.' : 'Saved. Players on this map see the new picture.', 'success');
+    },
+    // Save found the map's picture changed where this page was not told, or
+    // pointed another map using the picture at its new address: show the map as it is.
+    onMapRead: (latest) => updateMap(latest.id, latest),
+    mapsSharing: (mapId, address) => mapsSharingPicture(mapId, address).map((m) => m.id),
+    refuse: (message) => showToast(message, 'error'),
+    warn: (message) => showToast(message, 'warning'),
+    drafts: paintDraftStore(),
+    userId: user?.id,
+  });
+  // Paint not saved is asked about before anything takes it off the screen
+  // (map/paint/usePaintGuards.ts). The phone's Back while preparing a map
+  // goes back to the table, which asks it through the campaign page.
+  const paintGuards = usePaintGuards(paint, { registerViewedMapGuard, holdBack: !preparingHoldsBack(compact, isPreparing) });
+  // Save writes over the map's drawn picture (map/paint/savePaint.ts), so it
+  // asks first, on every press; a map with no drawn picture is given one
+  // without asking. The unsaved-paint question's Save my painting does not
+  // ask again: its own words say so.
+  const saveOverwrites = pictureKind === 'drawn';
+  // The map Save asked about: the question goes with Paint, and with the map.
+  const [askingSaveOf, setAskingSaveOf] = useState<string | null>(null);
+  const paintSave = paint.save;
+  const shownMapId = currentMap?.id ?? null;
+  const pressSave = useCallback(() => {
+    if (saveOverwrites) setAskingSaveOf(shownMapId);
+    else void paintSave();
+  }, [saveOverwrites, paintSave, shownMapId]);
+  // Drafts of painting on maps since deleted, from another device or tab,
+  // are dropped as the DM opens the campaign: they have no map to go back to.
+  const draftsPruned = useRef<string | null>(null);
+  const campaignMaps = campaign?.maps;
+  useEffect(() => {
+    const campaignId = campaign?.id;
+    const userId = user?.id;
+    if (!isDM || !campaignId || !userId || !Array.isArray(campaignMaps) || draftsPruned.current === campaignId) return;
+    draftsPruned.current = campaignId;
+    const maps = new Set(campaignMaps.map((m) => m.id));
+    void dropDrafts(paintDraftStore(), (draft) => draft.userId === userId && draft.campaignId === campaignId && !maps.has(draft.mapId));
+  }, [isDM, campaign?.id, user?.id, campaignMaps]);
+  // Paint is offered where it opens (map/paint/usePaintSurface.ts).
+  const paintOffered = paint.offered;
+  // What the map's picture is drawn from: the picture being painted while
+  // there is one for this map, else the picture as loaded.
+  const terrainSource: CanvasImageSource | null = paint.source ?? mapImage;
+  const mapShown = terrainSource !== null;
+  // While a picture is being painted it is the map's picture on screen: no
+  // notice of a picture missing, loading or failed covers it.
+  const shownImageState = paint.source ? 'ready' : imageState;
+  // Paint's strokes on their way, for the overlay.
+  const paintStrokes = paint.inProgress;
+  // Who takes the map's presses (and with Paint its keys) from the token
+  // tool and the rest (map/inputOwner.ts), read at every place that keeps
+  // them out.
+  const inputOwner = mapInputOwner({ painting: paint.on, drawing: drawKind !== null, dmTool: dmTool !== null && isDM });
 
   // ============================================
   // Helper Functions
@@ -448,23 +784,73 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
   // Put a held token back where it was picked up. The per-frame moves told
   // every other client where the cursor went; without this release they keep
-  // showing the last cursor position until the token next moves.
+  // showing the last cursor position until the token next moves. On the map
+  // it was picked up on, it goes back to the square this page last heard of,
+  // which someone else's move may have changed since.
   const cancelHold = () => {
-    if (draggedToken && currentMap && canEmit()) {
-      socket!.emitTokenMove(releaseHeldToken(draggedToken, heldOnMapRef.current ?? currentMap.id));
-    }
+    showHeldTokenHome();
+    endHold();
+  };
+  /** Tell the table the held token is on its own square again, as the hold goes on or ends. */
+  const showHeldTokenHome = () => {
+    if (!draggedToken || !currentMap || !canEmit()) return;
+    const onItsMap = (heldOnMapRef.current ?? currentMap.id) === currentMap.id;
+    const home = (onItsMap ? useGameStore.getState().tokens[draggedToken.id] : undefined) ?? draggedToken;
+    socket!.emitTokenMove(releaseHeldToken(home, heldOnMapRef.current ?? currentMap.id));
+  };
+  /** The hold is over, by a put-down, a put-back or the token going: nothing is held or carried. */
+  const endHold = useCallback(() => {
     setDraggedToken(null);
     setDragOffset(null);
-  };
+    setCarrierSquare(null);
+    carryRef.current = null;
+    heldIdRef.current = null;
+    setPutBackOffered(false);
+    setFingerCarrying(false);
+  }, []);
   // The map a held token was picked up on, which is where it goes back to if
   // the map changes while it is held.
   const heldOnMapRef = useRef<string | null>(null);
-  const releaseHoldOnMapSwitch = useEffectEvent(() => {
+  const putBackHeldToken = useEffectEvent(() => {
     if (draggedToken) cancelHold();
   });
+  // A held token goes back, and the selection goes, when the map changes:
+  // the next map starts with nothing selected.
   useEffect(() => {
-    releaseHoldOnMapSwitch();
+    putBackHeldToken();
+    useGameStore.getState().selectToken(null);
+    setFollowedTokenId(null);
+    setPingArmed(false);
   }, [currentMap?.id]);
+  // And when the map leaves the page. The server lets go of a carry only when
+  // the connection drops, so a map taken away while it stays open would leave
+  // the token where it was last carried on every other screen.
+  useEffect(() => () => putBackHeldToken(), []);
+  // The token and door menus, and the Roll... pickers the token menu opens,
+  // close when the map changes. Each holds the token or the door it was
+  // opened on and acts on the map on screen, so it would send the old map's
+  // token or door with the new map's id.
+  useEffect(() => {
+    closeTokenMenu();
+    setDoorContextMenu(null);
+    setRollPicker(null);
+    setNpcRollPicker(null);
+    setTemporaryHpTokenId(null);
+  }, [currentMap?.id, closeTokenMenu]);
+  /**
+   * Let go of a held token this page has been told is gone from the map it
+   * was picked up on, sending nothing, since there is nothing left to put
+   * down or put back: `token:disappeared` took it out of this player's
+   * sight, or a `map.changed` for that map no longer carries it (the DM
+   * removed it, hid it or moved it to another map). A finger or a pen can
+   * hold a token for as long as it likes, so this can happen mid-hold. A
+   * token list replaced for another map is the map switch's: it puts the
+   * token back on the map it came from.
+   */
+  const letGoIfGone = useEffectEvent((mapId: string, stillThere: (tokenId: string) => boolean) => {
+    if (!draggedToken || heldOnMapRef.current !== mapId || stillThere(draggedToken.id)) return;
+    endHold();
+  });
 
   // The wall tools, with the wall selection (map/tools/useWallTool.ts).
   const {
@@ -476,8 +862,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     carryIntoDrags,
   } = useWallTool({
     isDM, currentMap, wallMode, setWallMode, wallSegments,
-    pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
-    socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty,
+    pushWallHistory, replaceWallHistory, carryWallHistory, undoWalls, redoWalls, wallHistoryIndex, stepWallHistoryBack, canUndoWalls, canRedoWalls,
+    socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty, refuse: refuseMapEdit,
   });
 
   // Player's own token on the current map — used as ruler origin for non-DM users
@@ -567,6 +953,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * Update canvas size to match container
    */
   const updateCanvasSize = useCallback(() => {
+    // The browser's zoom changes the ratio and fires the window's resize.
+    setDeviceRatio(readDeviceRatio());
     if (!containerRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
@@ -598,92 +986,172 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
   }, [updateCanvasSize]);
 
+  /**
+   * A window moved to a screen of another density changes the ratio and
+   * usually not the size, so no resize reports it. A query for the current
+   * resolution stops matching then; it is asked again for the new ratio.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    let query: MediaQueryList | null = null;
+    const onChange = () => {
+      setDeviceRatio(readDeviceRatio());
+      listen();
+    };
+    const listen = () => {
+      query?.removeEventListener('change', onChange);
+      query = window.matchMedia(`(resolution: ${readDeviceRatio()}dppx)`);
+      query.addEventListener('change', onChange);
+    };
+    listen();
+    return () => query?.removeEventListener('change', onChange);
+  }, []);
+
+  /**
+   * Size the three canvases: their CSS size times the ratio in pixels. Done
+   * here, after React has written the page and before the browser paints,
+   * since assigning a canvas's size clears it; a change repaints every layer.
+   */
+  useLayoutEffect(() => {
+    let changed = false;
+    for (const canvas of [terrainCanvasRef.current, tokenCanvasRef.current, canvasRef.current]) {
+      if (canvas && sizeBackingStore(canvas, canvasSize.width, canvasSize.height, dpr)) changed = true;
+    }
+    if (changed) markDirty('terrain', 'tokens', 'overlay');
+  }, [canvasSize, dpr, markDirty]);
+
   // ============================================
   // Map Image Loading
   // ============================================
 
   /**
-   * Load map image when currentMap changes
+   * Load the map's picture when the map or its picture changes. A new
+   * picture for the map on screen takes the old one's place only once it
+   * has loaded and decoded, in one frame, so every screen keeps the map and
+   * its tokens meanwhile; if it does not load, the old one stays and the
+   * error shows over it. Paint's copy, while it stands in the picture's
+   * place, counts as a picture shown. A map with nothing drawn yet shows its
+   * picture as soon as it has loaded.
    */
+  const pictureMapId = currentMap?.id;
+  const pictureUrl = currentMap?.imageUrl;
+  // While Paint holds its own copy of the picture, the page lets go of the
+  // decoded one, so a large picture is held once; it is loaded again when
+  // Paint lets go (map/paint/usePaintSurface.ts).
+  const pictureHeld = paint.holdsPicture;
+  // Paint's copy, on screen in the picture's place until the picture is
+  // back: a picture loaded meanwhile is decoded ahead too.
+  const paintSourceRef = useRef(paint.source);
+  paintSourceRef.current = paint.source;
   useEffect(() => {
-    if (!currentMap?.imageUrl) {
-      setMapImage(null);
-      setImageLoaded(false);
-      setImageError(null);
+    setFailedPicture(null);
+    if (!pictureMapId || !pictureUrl || pictureHeld) {
+      setLoadedPicture(null);
       return;
     }
 
-    setImageLoaded(false);
-    setImageError(null);
-
+    let current = true;
     const img = new Image();
     img.crossOrigin = 'anonymous'; // For CORS support
 
+    let shown = false;
+    let decodeWait: ReturnType<typeof setTimeout> | undefined;
+    const show = () => {
+      if (!current || shown) return;
+      shown = true;
+      clearTimeout(decodeWait);
+      setLoadedPicture({ mapId: pictureMapId, url: pictureUrl, image: img });
+    };
     img.onload = () => {
-      setMapImage(img);
-      setImageLoaded(true);
-      setImageError(null);
+      if (mapImageRef.current === null && paintSourceRef.current === null) {
+        show();
+        return;
+      }
+      // A picture the browser will not decode ahead, or has not decoded in
+      // PICTURE_DECODE_WAIT_MS, is shown anyway, and decoded on its first draw.
+      decodeWait = setTimeout(show, PICTURE_DECODE_WAIT_MS);
+      void img.decode().catch(() => undefined).then(show);
     };
 
     img.onerror = () => {
-      setImageError('Failed to load map image');
-      setImageLoaded(false);
-      setMapImage(null);
+      setFailedPicture({ mapId: pictureMapId, url: pictureUrl });
     };
 
     // Use the imageUrl directly - backend now returns full paths
-    img.src = currentMap.imageUrl;
+    img.src = pictureUrl;
 
     return () => {
+      current = false;
+      clearTimeout(decodeWait);
       img.onload = null;
       img.onerror = null;
     };
-  }, [currentMap?.imageUrl]);
+  }, [pictureMapId, pictureUrl, pictureHeld]);
 
   // ============================================
   // Spirit Layer Image Loading
   // ============================================
 
+  const spiritMapId = currentMap?.id;
+  const spiritUrl = currentMap?.spiritLayerUrl;
   useEffect(() => {
-    if (!currentMap?.spiritLayerUrl) {
-      setSpiritLayerImage(null);
-      return;
-    }
+    if (!spiritMapId || !spiritUrl) return;
 
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
-    img.onload = () => setSpiritLayerImage(img);
-    img.onerror = () => setSpiritLayerImage(null);
-    img.src = currentMap.spiritLayerUrl;
+    img.onload = () => setLoadedSpirit({ mapId: spiritMapId, url: spiritUrl, image: img });
+    img.onerror = () => setLoadedSpirit(null);
+    img.src = spiritUrl;
 
     return () => {
       img.onload = null;
       img.onerror = null;
     };
-  }, [currentMap?.spiritLayerUrl]);
+  }, [spiritMapId, spiritUrl]);
 
   // ============================================
-  // Auto-Fit: Center and fit map when a new map image finishes loading
+  // Auto-Fit: centre and fit a new map once its picture has loaded and the
+  // canvas has a size
   // ============================================
 
   useEffect(() => {
-    // Only fit when image is ready, canvas is measured, and we haven't already fitted this map
-    if (!imageLoaded || canvasSize.width === 0 || canvasSize.height === 0 || !currentMap?.id) return;
+    // Fit when the picture is ready and the canvas is measured, whichever
+    // comes second, once per map. A resize after that leaves the view alone;
+    // the Reset View button fits again.
+    if (!mapShown || canvasSize.width === 0 || canvasSize.height === 0 || !currentMap?.id) return;
     if (lastFittedMapIdRef.current === currentMap.id) return;
 
     lastFittedMapIdRef.current = currentMap.id;
     mapControls.fitToScreen(canvasSize.width, canvasSize.height);
-    // Users can use the Reset View button to fit again.
-    // TODO(play): a picture that loads while the canvas still measures 0x0
-    // never fits, since the size is not a dependency; lastFittedMapIdRef
-    // already limits the fit to once per map, so the size can be added.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mapControls is a new object each render; lastFittedMapIdRef keeps the fit to once per map
-  }, [imageLoaded, currentMap?.id]);
+  }, [mapShown, currentMap?.id, canvasSize.width, canvasSize.height]);
 
   // ============================================
   // WebSocket Event Listeners
   // ============================================
+
+  /**
+   * The squares this page has sent by arrow key for each token, oldest
+   * first, that the server has not echoed back yet. While a token has any,
+   * its next arrow works from the last one (map/selection.ts,
+   * settleArrowEcho). A refusal, a map switch or a rejoin ends every wait.
+   */
+  const arrowSentRef = useRef(new Map<string, Position[]>());
+  // The handlers below are registered once and read the viewer's id here.
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
+  useEffect(() => {
+    arrowSentRef.current.clear();
+  }, [currentMap?.id, joinedEpoch]);
+  useEffect(() => {
+    if (!socket) return;
+    const handleRefusal = () => arrowSentRef.current.clear();
+    socket.onServerRefusal(handleRefusal);
+    return () => {
+      socket.off('error', handleRefusal);
+    };
+  }, [socket]);
 
   /**
    * Listen for token.moved events from other clients
@@ -691,12 +1159,29 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     if (!socket) return;
 
+    // Applied only to the tokens of the map they are on (onMapTokens): a DM
+    // preparing a map is still sent the table's, and one arriving while a
+    // map's tokens are being read waits for them.
     const handleTokenMoved = (event: TokenMovedEvent) => {
+      // A drag frame only moves where the token is drawn: nothing to keep for a read.
+      useGameStore.getState().onMapTokens(event.mapId, () => applyTokenMoved(event), { hold: event.dragging !== true });
+    };
+    const applyTokenMoved = (event: TokenMovedEvent) => {
       // Read from the store (not a render closure) so rapid events that arrive
       // in the same macro-task all see the most recently mutated state.
       const store = useGameStore.getState();
       const token = store.tokens[event.tokenId];
       if (!token) return;
+      // A drop while this page waits to hear back about arrow moves of the
+      // token: its own echo of an earlier square is not drawn
+      // (map/selection.ts).
+      const sent = event.dragging ? undefined : arrowSentRef.current.get(event.tokenId);
+      if (sent) {
+        const settled = settleArrowEcho(sent, event, userIdRef.current);
+        if (settled.sent.length > 0) arrowSentRef.current.set(event.tokenId, settled.sent);
+        else arrowSentRef.current.delete(event.tokenId);
+        if (!settled.draw) return;
+      }
       // Glide from where it is drawn, which is where it is held while someone
       // carries it.
       const from = store.heldAt[event.tokenId] ?? token.position;
@@ -775,8 +1260,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     if (!socket) return;
 
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
-      setCurrentMap(mapData);
-      useGameStore.getState().setTokens(mapData.tokens || []);
+      // The table's map, which this page shows with its tokens unless the
+      // DM is preparing another here; then only the table's map follows.
+      if (!receiveTableMap(mapData)) return;
+      letGoIfGone(mapData.id, (tokenId) => (mapData.tokens ?? []).some((t) => t.id === tokenId));
 
       // For non-DMs: track whether this player is personally in the spirit realm.
       // Play the ethereal audio cue if they are crossing in or out.
@@ -798,7 +1285,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socket.off('map.changed', handleMapChanged);
     };
-  }, [socket, setCurrentMap, setPlayerSpiritVisible, playEtherealTransition]);
+  }, [socket, receiveTableMap, setPlayerSpiritVisible, playEtherealTransition]);
 
   // ============================================
   // Spirit Layer WebSocket Listeners
@@ -819,8 +1306,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     const handleSpiritTokenToggled = (data: SpiritLayerTokenToggledBroadcast) => {
-      // Update the token's visible flag in the live token store
-      useGameStore.getState().patchToken(data.tokenId, { visible: data.visible });
+      // Only on the map it is on: the DM is told of a toggle on any map.
+      useGameStore.getState().onMapTokens(data.mapId, () => {
+        useGameStore.getState().patchToken(data.tokenId, { visible: data.visible });
+      });
     };
 
     const handleSpiritStyleChanged = (data: { style: string }) => {
@@ -879,6 +1368,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
     lightOnlyOffscreenRef.current = null;
+    lightingCompositeRef.current = null;
     // A change to the same map's walls or lights arrives through the socket;
     // loading them here again would wipe the DM's undo history.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per map switch
@@ -900,7 +1390,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // player's own, or the player the DM is previewing as; the DM's own view
   // explores as nobody.
   const explorationEnabled = currentMap?.explorationEnabled ?? true;
-  const exploringAs = previewing ? previewMemoryUser(previewSelection, tokens, campaign?.memberships ?? []) : (isDM ? null : user?.id ?? null);
+  const exploringAs = previewing ? previewMemoryUser(previewViewer, tokens, campaign?.memberships ?? []) : (isDM ? null : user?.id ?? null);
   const { exploredCells, addExplored } = useExploredMemory(
     socket,
     currentMap?.id,
@@ -1009,14 +1499,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // multiple tokens in the same macro-task (server re-sync after player
     // move), each call builds on the previous result.
     const handleTokenAppeared = (data: { token: Token; mapId: string }) => {
-      if (!currentMapId || data.mapId !== currentMapId) return;
-      useGameStore.getState().revealToken(data.token);
+      useGameStore.getState().onMapTokens(data.mapId, () => useGameStore.getState().revealToken(data.token));
     };
 
     // Dynamic lighting: token left this player's view
     const handleTokenDisappeared = (data: { tokenId: string; mapId: string }) => {
-      if (!currentMapId || data.mapId !== currentMapId) return;
-      useGameStore.getState().removeToken(data.tokenId);
+      useGameStore.getState().onMapTokens(data.mapId, () => {
+        letGoIfGone(data.mapId, (tokenId) => tokenId !== data.tokenId);
+        useGameStore.getState().removeToken(data.tokenId);
+      });
     };
 
     // Dynamic lighting toggle broadcast from DM
@@ -1025,15 +1516,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Only the flags change, on the map as it is now: spreading the map this
     // listener captured put back a picture or grid size edited since.
     const handleSettingsUpdated = (data: { mapId: string; lightingEnabled: boolean; fogEnabled: boolean; globalIllumination: boolean; explorationEnabled: boolean }) => {
-      setCurrentMap((latest) => latest && latest.id === data.mapId
-        ? {
-          ...latest,
-          lightingEnabled: data.lightingEnabled,
-          fogEnabled: data.fogEnabled,
-          globalIllumination: data.globalIllumination,
-          explorationEnabled: data.explorationEnabled,
-        }
-        : latest);
+      // The table's map or the one being prepared, whichever it names.
+      updateMap(data.mapId, (latest) => ({
+        ...latest,
+        lightingEnabled: data.lightingEnabled,
+        fogEnabled: data.fogEnabled,
+        globalIllumination: data.globalIllumination,
+        explorationEnabled: data.explorationEnabled,
+      }));
     };
 
     socketInstance.on('token:appeared', handleTokenAppeared);
@@ -1091,7 +1581,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMapId, joinedEpoch, ownEdits, setCurrentMap, carryWallHistory, carryIntoDrags, revealOpacityRef]);
+  }, [socket, currentMapId, joinedEpoch, ownEdits, updateMap, carryWallHistory, carryIntoDrags, revealOpacityRef]);
 
   // ============================================
   // Map pings — receive, name, and expire
@@ -1149,7 +1639,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [currentMap?.id]);
 
   // ============================================
-  // Keyboard: Escape, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
+  // Keyboard: Tab (ping), Escape, the token keys (map/keyboard.ts), and for
+  // the DM the wall keys, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
   // ============================================
   // The listener is added once and reads the tools as they are at the key
   // press, so a tool chosen since is the one Escape asks.
@@ -1160,49 +1651,69 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // ── Tab: ping at the cursor ──────────────────────────────────────
     // Tab is the keyboard-navigation key and this listener is on `window`,
-    // so it is only safe to claim under strict guards: the pointer must be
-    // over the map, and focus must not be on anything the user could be
-    // navigating from or typing into. Click around the map and Tab pings;
-    // tab to any control and Tab keeps navigating as normal.
+    // so it is claimed only while the map's focus stop has the keyboard (a
+    // click on the map gives it) and the pointer is over the map. With focus
+    // anywhere else, a panel divider or the page itself included, Tab keeps
+    // navigating as normal. Beside the map's picture it pings nothing, like
+    // the Ping button and a long-press.
     if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
       const at = hoverMapPxRef.current;
       if (!at || !currentMap) return;
-
-      const el = document.activeElement as HTMLElement | null;
-      const onFormControl =
-        !!el &&
-        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(el.tagName) ||
-          el.isContentEditable);
-      if (onFormControl) return;
+      if (document.activeElement !== layersRef.current) return;
+      // Paint takes the map's keys: Tab moves on.
+      if (inputOwner === 'paint') return;
 
       e.preventDefault();
-      socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
+      pingMapPx(at);
       return;
     }
 
     if (e.key === 'Escape') {
-      // A held token is put back first: it is the most transient thing.
+      // A picker, a menu or a dialog that closed on this press has used it.
+      if (e.defaultPrevented) return;
+      // Each press lets go of one thing, the most transient first: a menu
+      // open on the map, then the armed Ping, then a held token, then the
+      // tools, then the selection.
+      if (contextMenu || doorContextMenu) {
+        closeTokenMenu();
+        setDoorContextMenu(null);
+        focusMap();
+        return;
+      }
+      if (pingArmed) {
+        setPingArmed(false);
+        return;
+      }
       if (draggedToken) {
         cancelHold();
         return;
       }
-      // Each press lets go of one thing, asking the tools in this order. The
-      // measuring tools come last on purpose: the AoE template is not
-      // mutually exclusive with the wall and light tools, so it can sit armed
-      // while a wall is half-drawn. Esc has to cancel the more transient
-      // thing first, or it would quietly close the template instead.
-      for (const tool of [fogTool, wallTool, lightTool, measuring]) {
+      // The tools are asked in this order. The measuring tools come last on
+      // purpose: the AoE template is not mutually exclusive with the wall
+      // and light tools, so it can sit armed while a wall is half-drawn.
+      // Esc has to cancel the more transient thing first, or it would
+      // quietly close the template instead.
+      for (const tool of [paint.tool, fogTool, wallTool, lightTool, drawTool.tool, measuring]) {
         if (tool.escape?.()) return;
       }
+      if (selectedTokenId) useGameStore.getState().selectToken(null);
       return;
     }
+
+    // While Paint is on, the keys every other tool takes are its own.
+    if (paint.key(e, keyBelongsToMap(e, layersRef.current))) return;
+
+    // A DM's arrows, Ctrl+A, Delete and Backspace go to the wall selection
+    // first, so the walls keep the arrows while the select tool holds some.
+    if (isDM && currentMap && wallSelectKey(e)) return;
+
+    // The keys that act on the selected token, behind their own guard.
+    if (tokenKey(e)) return;
 
     // Only handle undo/redo for DM with active map
     if (!isDM || !currentMap) return;
 
     const isCtrl = e.ctrlKey || e.metaKey;
-
-    if (wallSelectKey(e)) return;
 
     if (isCtrl && e.key === 'z' && !e.shiftKey) {
       e.preventDefault();
@@ -1290,12 +1801,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     carryWallHistory, socket, ownEdits, showToast, markDirty,
   });
 
-  // A choice from the door menu: the door changed, the menu closed.
-  const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
-    setDoorType(door, newType);
-    setDoorContextMenu(null);
-  }, [setDoorType]);
-
   /**
    * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
    * spirit imagery. Static during a token drag. The three layers stack
@@ -1308,21 +1813,20 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    clearLayer(ctx);
 
-    // If no map, show empty state
-    if (!currentMap || !imageLoaded || !mapImage) {
+    // If no map, show empty state, in CSS pixels at the centre
+    if (!currentMap || !terrainSource) {
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = '#8b7d6b'; // stone-gray
       ctx.font = '16px system-ui';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('No map loaded', canvas.width / 2, canvas.height / 2);
+      ctx.fillText('No map loaded', canvas.width / dpr / 2, canvas.height / dpr / 2);
+      ctx.restore();
       return;
     }
-
-    ctx.save();
-    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
-    ctx.scale(mapControls.zoom, mapControls.zoom);
 
     const viewport: Viewport = {
       zoom: mapControls.zoom,
@@ -1332,54 +1836,71 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapHeight: currentMap.height,
     };
 
-    const renderIsDM = isDM && !previewing;
-    // isInSpiritRealm is true if the campaign-wide toggle is on OR this
-    // specific non-DM player has personally crossed into the spirit realm. A
-    // preview is in it when the previewed viewer is.
-    const spiritActive = campaign?.spiritLayerEnabled ?? false;
-    const isInSpiritRealm = previewing
-      ? previewedPlane === 'spirit'
-      : spiritActive || (userRole !== 'DM' && playerSpiritVisible);
+    drawSaved(ctx, () => {
+      applyViewport(ctx, viewport, dpr);
 
-    // 1. Map image (Material Plane)
-    drawMapImage(ctx, {
-      mapImage,
-      spiritActive,
-      isDM: renderIsDM,
-      dmViewBothPlanes,
-    }, viewport);
+      const renderIsDM = isDM && !previewing;
+      // isInSpiritRealm is true if the campaign-wide toggle is on OR this
+      // specific non-DM player has personally crossed into the spirit realm. A
+      // preview is in it when the previewed viewer is.
+      const spiritActive = campaign?.spiritLayerEnabled ?? false;
+      const isInSpiritRealm = previewing
+        ? previewedPlane === 'spirit'
+        : spiritActive || (userRole !== 'DM' && playerSpiritVisible);
 
-    // 2. Grid overlay
-    if (showGrid) {
-      drawGrid(ctx, { gridColor }, viewport);
-    }
-
-    // 3. The DM's translucent fog, under the spirit layer and tokens so they
-    //    stay visible through it. A player's fog is opaque and has to cover
-    //    walls, doors and light glows too, so it is drawn on the overlay.
-    if (renderIsDM) {
-      drawFog(ctx, {
-        isDM: true,
-        fogState: effectiveFogState,
-        revealedCells: null,
-        revealOpacity: revealOpacityRef.current,
-      }, viewport);
-    }
-
-    // 4. Spirit layer image (the Ethereal Plane)
-    if (spiritLayerImage) {
-      drawSpiritLayer(ctx, {
-        spiritLayerImage,
-        spiritLayerOpacity,
-        spiritActive,
-        isInSpiritRealm,
+      // 1. Map image (Material Plane), or the picture being painted. Paint
+      //    shows the material plane, without the DM's fog and the spirit
+      //    layer, so what is painted is what is seen.
+      drawMapImage(ctx, {
+        mapImage: terrainSource,
+        spiritActive: spiritActive && !paint.on,
         isDM: renderIsDM,
         dmViewBothPlanes,
       }, viewport);
-    }
 
-    ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef]);
+      // The part of the map on screen, which the drawings are culled to.
+      const visible = canvasSize.width > 0 && canvasSize.height > 0
+        ? {
+          minX: -mapControls.panOffset.x / mapControls.zoom,
+          minY: -mapControls.panOffset.y / mapControls.zoom,
+          maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+          maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+        }
+        : null;
+      // 1b. The ground layer's drawings, under the grid. Only the DM may draw
+      //     there, and nothing does: a drawn map is painted into its picture.
+      drawDrawings(ctx, { drawings: mapDrawings.drawings, layer: 'GROUND', showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+
+      // 2. Grid overlay
+      if (showGrid) {
+        drawGrid(ctx, { gridColor }, viewport);
+      }
+
+      // 3. The DM's translucent fog, under the spirit layer and tokens so they
+      //    stay visible through it. A player's fog is opaque and has to cover
+      //    walls, doors and light glows too, so it is drawn on the overlay.
+      if (renderIsDM && !paint.on) {
+        drawFog(ctx, {
+          isDM: true,
+          fogState: effectiveFogState,
+          revealedCells: null,
+          revealOpacity: revealOpacityRef.current,
+        }, viewport);
+      }
+
+      // 4. Spirit layer image (the Ethereal Plane)
+      if (spiritLayerImage && !paint.on) {
+        drawSpiritLayer(ctx, {
+          spiritLayerImage,
+          spiritLayerOpacity,
+          spiritActive,
+          isInSpiritRealm,
+          isDM: renderIsDM,
+          dmViewBothPlanes,
+        }, viewport);
+      }
+    });
+  }, [currentMap, terrainSource, paint.on, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef, canvasSize.width, canvasSize.height, mapDrawings.drawings, drawingCache]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1390,12 +1911,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!currentMap || !imageLoaded || !mapImage) return;
-
-    ctx.save();
-    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
-    ctx.scale(mapControls.zoom, mapControls.zoom);
+    clearLayer(ctx);
+    if (!currentMap || !mapShown) return;
 
     const viewport: Viewport = {
       zoom: mapControls.zoom,
@@ -1405,45 +1922,54 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapHeight: currentMap.height,
     };
 
-    const renderIsDM = isDM && !previewing;
+    drawSaved(ctx, () => {
+      applyViewport(ctx, viewport, dpr);
 
-    // In Player Preview only the tokens that player would have are drawn:
-    // their own, and what the visibility rule says they see. Hidden and
-    // off-plane tokens, which the server never sends a player, are dropped.
-    let drawn = tokens;
-    if (previewing) {
-      const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
-      drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
-    }
+      const renderIsDM = isDM && !previewing;
 
-    // 5. Tokens (+ drag ghost)
-    drawTokens(ctx, {
-      tokens: drawn,
-      tokenImages,
-      animatingTokens,
-      heldAt,
-      now: Date.now(),
-      // In a preview the ghost is the token as the viewer is sent it, or
-      // nothing when the viewer would not have it at all.
-      draggedToken: previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken,
-      dragOffset,
-      hoverCoords,
-      hoverTokenId: hoverToken?.id ?? null,
-      revealedCells: viewerRevealed,
-      isDM: renderIsDM,
-      dmShowSpiritTokens,
-      dmViewBothPlanes,
-      spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
-      characterHpCache,
-      isOwnToken: viewerOwn,
-      currentTurnTokenId,
-      // Held at mid-breath under reduced motion, where no pulse loop runs.
-      pulsePhase: prefersReducedMotion ? 0.5 : pulsePhaseAt(Date.now()),
-      peekTokenId,
-    }, viewport);
+      // In Player Preview only the tokens that player would have are drawn:
+      // their own, and what the visibility rule says they see. Hidden and
+      // off-plane tokens, which the server never sends a player, are dropped.
+      let drawn = tokens;
+      if (previewing) {
+        const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
+        drawn = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
+      }
 
-    ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, isDM, previewControls]);
+      // 5. Tokens (+ drag ghost)
+      const held = previewing ? (drawn.find((t) => t.id === draggedToken?.id) ?? null) : draggedToken;
+      drawTokens(ctx, {
+        tokens: drawn,
+        tokenImages,
+        animatingTokens,
+        heldAt,
+        now: Date.now(),
+        // In a preview the ghost is the token as the viewer is sent it, or
+        // nothing when the viewer would not have it at all.
+        draggedToken: held,
+        heldDrawnAt: held
+          ? heldDrawnAt(
+            tokens.find((t) => t.id === held.id) ?? held,
+            carrierSquare && dragOffset ? { square: carrierSquare, offset: dragOffset } : null,
+            currentMap,
+          )
+          : null,
+        hoverTokenId: hoverToken?.id ?? null,
+        revealedCells: viewerRevealed,
+        isDM: renderIsDM,
+        dmShowSpiritTokens,
+        dmViewBothPlanes,
+        spiritAccentColor: getSpiritAccentColor(campaign?.spiritLayerStyle),
+        characterHpCache,
+        isOwnToken: viewerOwn,
+        currentTurnTokenId,
+        // Held at mid-breath under reduced motion, where no pulse loop runs.
+        pulsePhase: prefersReducedMotion ? 0.5 : pulsePhaseAt(Date.now()),
+        peekTokenId,
+        selectedTokenId,
+      }, viewport);
+    });
+  }, [currentMap, mapShown, mapControls.panOffset, mapControls.zoom, dpr, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, carrierSquare, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, selectedTokenId, isDM, previewControls]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1455,12 +1981,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!currentMap || !imageLoaded || !mapImage) return;
-
-    ctx.save();
-    ctx.translate(mapControls.panOffset.x, mapControls.panOffset.y);
-    ctx.scale(mapControls.zoom, mapControls.zoom);
+    clearLayer(ctx);
+    if (!currentMap || !mapShown) return;
 
     const viewport: Viewport = {
       zoom: mapControls.zoom,
@@ -1470,194 +1992,254 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapHeight: currentMap.height,
     };
 
-    const renderIsDM = isDM && !previewing;
+    drawSaved(ctx, () => {
+      applyViewport(ctx, viewport, dpr);
 
-    // 6. Dynamic lighting — raycast visibility darkness over tokens.
-    //    DM always sees all; "Preview player view" simulates player vision.
-    //    The vision polygons also feed the walls layer's door LOS filter.
-    const lightingEnabled = currentMap.lightingEnabled ?? false;
-    // Whether this viewer can make out a point, by the shared visibility rule.
-    // Everything is seen until lighting says otherwise.
-    let canSee: (x: number, y: number) => boolean = () => true;
-    if (lightingEnabled && !renderIsDM) {
-      const myTokens = tokens.filter(viewerOwn);
-      const rule = ruleFor(myTokens, viewport);
-      canSee = rule.canSee;
-      drawDynamicLighting(ctx, {
-        myTokens,
-        enabledLights: rule.enabledLights,
-        tokenVision: rule.vision.tokenVision,
-        tokenSight: rule.vision.tokenSight,
-        lightVision: rule.vision.lightVision,
-        globalIllumination: rule.globalIllumination,
-        lightingCanvas: lightingOffscreenRef,
-        coverageCanvas: lightCoverageOffscreenRef,
-        lightCanvas: lightOnlyOffscreenRef,
-        explored: explorationEnabled ? exploredRaster : null,
-        terrainCanvas: terrainCanvasRef.current,
-        memoryMaskCanvas: memoryMaskOffscreenRef,
-        memoryCanvas: memoryOffscreenRef,
-      }, viewport);
+      const renderIsDM = isDM && !previewing;
 
-      // Report what this viewer has just seen, at most every 300 ms, from the
-      // coverage mask just built, to whoever's memory this is: the player's
-      // own, or the player the DM is previewing. A preview writes too, so a
-      // token the DM moves for an absent player still remembers its ground.
-      // The party and an uncontrolled token explore as nobody, and write
-      // nothing.
-      const now = Date.now();
-      if (exploringAs !== null && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
-        && now - lastExploredReportRef.current >= 300) {
-        lastExploredReportRef.current = now;
-        const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
-        const fresh = seen ? diffNew(exploredCells, seen) : [];
-        if (fresh.length > 0) {
-          addExplored(fresh);
-          socket?.getSocket()?.emit('exploration:reveal', { mapId: currentMap.id, cells: fresh, userId: exploringAs });
+      // Manual fog for a player is drawn whatever fails before it (below):
+      // a step that throws must not leave the picture and the tokens under
+      // the fog showing.
+      let failed = false;
+      try {
+        // 6. Dynamic lighting — raycast visibility darkness over tokens.
+        //    DM always sees all; "Preview player view" simulates player vision.
+        //    The vision polygons also feed the walls layer's door LOS filter.
+        const lightingEnabled = currentMap.lightingEnabled ?? false;
+        // Whether this viewer can make out a point, by the shared visibility rule.
+        // Everything is seen until lighting says otherwise.
+        let canSee: (x: number, y: number) => boolean = () => true;
+        if (lightingEnabled && !renderIsDM) {
+          const myTokens = tokens.filter(viewerOwn);
+          const rule = ruleFor(myTokens, viewport);
+          canSee = rule.canSee;
+          drawDynamicLighting(ctx, {
+            myTokens,
+            enabledLights: rule.enabledLights,
+            tokenVision: rule.vision.tokenVision,
+            tokenSight: rule.vision.tokenSight,
+            lightVision: rule.vision.lightVision,
+            globalIllumination: rule.globalIllumination,
+            lightingCanvas: lightingOffscreenRef,
+            coverageCanvas: lightCoverageOffscreenRef,
+            lightCanvas: lightOnlyOffscreenRef,
+            explored: explorationEnabled ? exploredRaster : null,
+            terrainCanvas: terrainCanvasRef.current,
+            memoryMaskCanvas: memoryMaskOffscreenRef,
+            memoryCanvas: memoryOffscreenRef,
+            dpr,
+            compositeCache: lightingCompositeRef,
+          }, viewport);
+
+          // Report what this viewer has just seen, at most every 300 ms, from the
+          // coverage mask, which is this frame's whether it was drawn now or kept
+          // from an earlier frame, to whoever's memory this is: the player's
+          // own, or the player the DM is previewing. A preview writes too, so a
+          // token the DM moves for an absent player still remembers its ground.
+          // The party and an uncontrolled token explore as nobody, and write
+          // nothing.
+          const now = Date.now();
+          if (exploringAs !== null && explorationEnabled && exploredCells !== null && lightCoverageOffscreenRef.current
+            && now - lastExploredReportRef.current >= 300) {
+            lastExploredReportRef.current = now;
+            const seen = exploredCellsFromCoverage(lightCoverageOffscreenRef.current, currentMap.width, currentMap.height, exploredScratchRef);
+            const fresh = seen ? diffNew(exploredCells, seen) : [];
+            if (fresh.length > 0) {
+              addExplored(fresh);
+              // In parts the server takes: one sight over a large open map sees
+              // more than a report may name.
+              const sock = socket?.getSocket();
+              for (const cells of explorationReports(fresh)) {
+                sock?.emit('exploration:reveal', { mapId: currentMap.id, cells, userId: exploringAs });
+              }
+            }
+          }
+        }
+
+        // 7. DM light source markers, in the DM's own view only: a preview is a
+        //    player's view, and a marker would give away every light on the map
+        if (isDM) {
+          drawLightIcons(ctx, {
+            lights: lightSources,
+            selectedLightId,
+            lightMode,
+            isDM: renderIsDM,
+          }, viewport);
+        }
+
+        // 8. Wall segments — DM sees all (+ endpoint nodes while a wall tool is
+        //    active); players see doors (LOS-filtered under dynamic lighting)
+        drawWalls(ctx, {
+          wallSegments,
+          isDM: renderIsDM,
+          wallColor,
+          hoveredWallId,
+          selectedWallIds,
+          hoveredDoorId,
+          showEndpoints: wallMode !== null,
+          dragEndpoint: wallDragEndpointRef.current?.point ?? null,
+          selectedEndpoint,
+          lightingEnabled,
+          canSee,
+        }, viewport);
+
+        // 9. DM wall-tool overlays
+        if (isDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
+          drawWallDrawOverlay(ctx, {
+            wallInProgress,
+            hoverMapPx: hoverMapPxRef.current,
+            hoverCoords,
+            wallType,
+            snapPoint,
+            findWallAtPoint,
+          }, viewport);
+        }
+        if (isDM && wallMode === 'wall-split' && splitHoverPoint) {
+          drawSplitPreview(ctx, splitHoverPoint, viewport);
+        }
+        if (isDM && wallMode === 'wall-erase') {
+          drawEraseOverlay(ctx, {
+            hoverMapPx: hoverMapPxRef.current,
+            eraseRadius: WALL_ERASE_RADIUS,
+            erasedIds: wallErasedIdsRef.current,
+            wallSegments,
+          }, viewport);
+        }
+        if (isDM && wallMode === 'wall-brush') {
+          drawBrushOverlay(ctx, {
+            points: wallBrushPointsRef.current,
+            brushSize,
+            hoverMapPx: hoverMapPxRef.current,
+          }, viewport);
+        }
+        if (isDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
+          drawPolygonOverlay(ctx, {
+            points: polygonPoints,
+            hoverMapPx: hoverMapPxRef.current,
+            closeRadius: POLYGON_CLOSE_RADIUS,
+            snapPoint,
+          }, viewport);
+        }
+
+        // 10. Measurement overlays
+        // A finger's or a pen's pinned end, else the pointer's square; with
+        // neither, a start a finger has just tapped is drawn alone, as a dot.
+        const rulerTarget = rulerEnd ?? hoverCoords ?? (rulerStartByTouch ? effectiveRulerOrigin : null);
+        if (showRuler && effectiveRulerOrigin && rulerTarget) {
+          drawRuler(ctx, {
+            origin: effectiveRulerOrigin,
+            target: rulerTarget,
+            color: rulerColor,
+            feetPerSquare: currentMap.feetPerSquare,
+            diagonalRule: currentMap.diagonalRule,
+          }, viewport);
+        }
+        if (showAoE) {
+          drawAoEOverlay(ctx, {
+            config: aoeConfig,
+            anchor: aoeAnchor,
+            // Only offer the cursor as a stand-in anchor while it is actually over
+            // the map — hoverCoords is the bounds-checked one. Without this an
+            // un-pinned template draws out in the margin beside the map, which the
+            // old grid-coordinate anchor ruled out for free.
+            hoverMapPx: hoverCoords ? hoverMapPxRef.current : null,
+            // Not bounds-checked: aiming a pinned template at something off the
+            // edge of the map is legitimate.
+            aimMapPx: aoeAimRef.current,
+            hoverExact: aoeAltHeldRef.current || !aoeSnap,
+            feetPerSquare: currentMap.feetPerSquare ?? 5,
+            coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
+          }, viewport);
+        }
+
+        // 11. Fog selection box — world space, so the snapped rectangle stays
+        //     locked to the grid through pan and zoom.
+        if (fogMode && isDM && fogState) {
+          drawFogSelection(ctx, {
+            mode: fogMode,
+            fog: fogState,
+            anchor: fogDragAnchorRef.current,
+            cursor: fogDragCurrent,
+          }, viewport);
+        }
+
+        // 11b. Wall selection — the dragged box and a ring around what is held,
+        //      so a gathered selection reads as one thing before it is moved.
+        if (wallMode === 'wall-select' && isDM) {
+          drawWallSelection(ctx, viewport, {
+            marquee: wallMarquee,
+            selectedWallIds,
+            wallSegments,
+          });
+        }
+      } catch (err) {
+        failed = true;
+        throw err;
+      } finally {
+        // 12. Map pings — drawn last in world space, above the lighting darkness
+        //     so a ping into an unlit corner is still visible. (The turn ring
+        //     makes the opposite trade on purpose: it lives on the token layer
+        //     so a hidden token's ring stays hidden.)
+        // Manual fog for a player covers everything drawn so far on this layer
+        // and the layers beneath: artwork, tokens, walls, doors and light glows.
+        // Nothing under an unrevealed cell shows, except the cells the player's
+        // own tokens stand on. Pings stay above it: a ping is a deliberate
+        // signal from someone at the table, not a discovery.
+        if (!renderIsDM) {
+          // After a step that threw, the overlay holds the fog alone, drawn
+          // in a fresh state: whatever that step left set (a clip, a
+          // transform, its saves) would cut the fog short or move it.
+          if (failed) {
+            resetLayer(ctx);
+            applyViewport(ctx, viewport, dpr);
+          }
+          drawFog(ctx, {
+            isDM: false,
+            fogState: null,
+            revealedCells: viewerRevealed,
+            exemptCells: ownTokenCells,
+            revealOpacity: revealOpacityRef.current,
+          }, viewport);
         }
       }
-    }
 
-    // 7. DM light source markers, in the DM's own view only: a preview is a
-    //    player's view, and a marker would give away every light on the map
-    if (isDM) {
-      drawLightIcons(ctx, {
-        lights: lightSources,
-        selectedLightId,
-        lightMode,
-        isDM: renderIsDM,
-      }, viewport);
-    }
+      // 13. The drawings, the topmost layer of the map: over the tokens, a
+      //     player's fog and the lit darkness, so a table can plan over
+      //     ground it cannot see. A drawing for the DM alone shows in the
+      //     DM's own view only, never in a preview. They are kept as pixels
+      //     and copied on, drawn again only when they or the view change, so
+      //     a repaint for a ping or a stroke on its way strokes none of them.
+      //     Then the strokes on their way, and the laser pointer and the
+      //     pings on top.
+      const visible = canvasSize.width > 0 && canvasSize.height > 0
+        ? {
+          minX: -mapControls.panOffset.x / mapControls.zoom,
+          minY: -mapControls.panOffset.y / mapControls.zoom,
+          maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+          maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+        }
+        : null;
+      // Paint's strokes on their way, until the lift paints them into the picture.
+      for (const preview of paintStrokes()) drawPaintPreview(ctx, preview);
+      drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+      const previewNow = Date.now();
+      const ownStroke = drawTool.inProgress();
+      const shownPreviews = [...mapDrawings.previews.current.values(), ...(ownStroke ? [ownStroke] : [])];
+      if (shownPreviews.length > 0) {
+        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: false }, viewport);
+      }
 
-    // 8. Wall segments — DM sees all (+ endpoint nodes while a wall tool is
-    //    active); players see doors (LOS-filtered under dynamic lighting)
-    drawWalls(ctx, {
-      wallSegments,
-      isDM: renderIsDM,
-      wallColor,
-      hoveredWallId,
-      selectedWallIds,
-      hoveredDoorId,
-      showEndpoints: wallMode !== null,
-      dragEndpoint: wallDragEndpointRef.current?.point ?? null,
-      selectedEndpoint,
-      lightingEnabled,
-      canSee,
-    }, viewport);
+      // The laser pointer goes over everything, with the pings: pointing is
+      // a signal from someone at the table, as a ping is.
+      if (shownPreviews.length > 0) {
+        drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: true }, viewport);
+      }
 
-    // 9. DM wall-tool overlays
-    if (isDM && wallMode === 'wall-draw' && wallInProgress.length > 0) {
-      drawWallDrawOverlay(ctx, {
-        wallInProgress,
-        hoverMapPx: hoverMapPxRef.current,
-        hoverCoords,
-        wallType,
-        snapPoint,
-        findWallAtPoint,
-      }, viewport);
-    }
-    if (isDM && wallMode === 'wall-split' && splitHoverPoint) {
-      drawSplitPreview(ctx, splitHoverPoint, viewport);
-    }
-    if (isDM && wallMode === 'wall-erase') {
-      drawEraseOverlay(ctx, {
-        hoverMapPx: hoverMapPxRef.current,
-        eraseRadius: WALL_ERASE_RADIUS,
-        erasedIds: wallErasedIdsRef.current,
-        wallSegments,
-      }, viewport);
-    }
-    if (isDM && wallMode === 'wall-brush') {
-      drawBrushOverlay(ctx, {
-        points: wallBrushPointsRef.current,
-        brushSize,
-        hoverMapPx: hoverMapPxRef.current,
-      }, viewport);
-    }
-    if (isDM && wallMode === 'wall-polygon' && polygonPoints.length > 0) {
-      drawPolygonOverlay(ctx, {
-        points: polygonPoints,
-        hoverMapPx: hoverMapPxRef.current,
-        closeRadius: POLYGON_CLOSE_RADIUS,
-        snapPoint,
-      }, viewport);
-    }
-
-    // 10. Measurement overlays
-    if (showRuler && effectiveRulerOrigin && hoverCoords) {
-      drawRuler(ctx, {
-        origin: effectiveRulerOrigin,
-        target: hoverCoords,
-        color: rulerColor,
-        feetPerSquare: currentMap.feetPerSquare ?? 5,
-        diagonalRule: (currentMap.diagonalRule ?? 'flat') as 'flat' | 'alternating',
-      }, viewport);
-    }
-    if (showAoE) {
-      drawAoEOverlay(ctx, {
-        config: aoeConfig,
-        anchor: aoeAnchor,
-        // Only offer the cursor as a stand-in anchor while it is actually over
-        // the map — hoverCoords is the bounds-checked one. Without this an
-        // un-pinned template draws out in the margin beside the map, which the
-        // old grid-coordinate anchor ruled out for free.
-        hoverMapPx: hoverCoords ? hoverMapPxRef.current : null,
-        // Not bounds-checked: aiming a pinned template at something off the
-        // edge of the map is legitimate.
-        aimMapPx: aoeAimRef.current,
-        hoverExact: aoeAltHeldRef.current,
-        feetPerSquare: currentMap.feetPerSquare ?? 5,
-        coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
-      }, viewport);
-    }
-
-    // 11. Fog selection box — world space, so the snapped rectangle stays
-    //     locked to the grid through pan and zoom.
-    if (fogMode && isDM && fogState) {
-      drawFogSelection(ctx, {
-        mode: fogMode,
-        fog: fogState,
-        anchor: fogDragAnchorRef.current,
-        cursor: fogDragCurrent,
-      }, viewport);
-    }
-
-    // 11b. Wall selection — the dragged box and a ring around what is held,
-    //      so a gathered selection reads as one thing before it is moved.
-    if (wallMode === 'wall-select' && isDM) {
-      drawWallSelection(ctx, viewport, {
-        marquee: wallMarquee,
-        selectedWallIds,
-        wallSegments,
-      });
-    }
-
-    // 12. Map pings — drawn last in world space, above the lighting darkness
-    //     so a ping into an unlit corner is still visible. (The turn ring
-    //     makes the opposite trade on purpose: it lives on the token layer
-    //     so a hidden token's ring stays hidden.)
-    // Manual fog for a player covers everything drawn so far on this layer
-    // and the layers beneath: artwork, tokens, walls, doors and light glows.
-    // Nothing under an unrevealed cell shows, except the cells the player's
-    // own tokens stand on. Pings stay above it: a ping is a deliberate
-    // signal from someone at the table, not a discovery.
-    if (!renderIsDM) {
-      drawFog(ctx, {
-        isDM: false,
-        fogState: null,
-        revealedCells: viewerRevealed,
-        exemptCells: ownTokenCells,
-        revealOpacity: revealOpacityRef.current,
-      }, viewport);
-    }
-
-    if (pings.length > 0) {
-      drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
-    }
-
-    // Restore context state (back to screen-space)
-    ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
+      if (pings.length > 0) {
+        drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
+      }
+    });
+  }, [currentMap, mapShown, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef, mapDrawings.previews, mapDrawings.drawings, drawingCache, canvasSize.width, canvasSize.height, drawTool, paintStrokes]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1674,12 +2256,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // every layer.
   useEffect(() => {
     markDirty('terrain', 'tokens', 'overlay');
-  }, [markDirty, mapControls.zoom, mapControls.panOffset, canvasSize, currentMap, imageLoaded, mapImage]);
+  }, [markDirty, mapControls.zoom, mapControls.panOffset, canvasSize, currentMap, terrainSource]);
 
   // Terrain-only content.
   useEffect(() => {
     markDirty('terrain');
-  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
+  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, mapDrawings.drawings]);
 
   // Spirit flags affect the base/spirit images (terrain) and spirit-token
   // alpha (tokens).
@@ -1692,7 +2274,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     markDirty('tokens');
     if (currentMap?.lightingEnabled) markDirty('overlay');
-  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, previewing, previewSelection]);
+  }, [markDirty, tokens, tokenImages, animatingTokens, hoverToken, characterHpCache, dmShowSpiritTokens, currentMap?.lightingEnabled, currentTurnTokenId, peekTokenId, selectedTokenId, previewing, previewViewer]);
 
   // Publish this map's own token hover so the initiative tracker can tint the
   // matching row — the other half of the cross-highlight.
@@ -1706,12 +2288,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   useEffect(() => {
     markDirty('tokens');
     if (wallMode || showRuler || showAoE || fogMode) markDirty('overlay');
-  }, [markDirty, hoverCoords, draggedToken, dragOffset, wallMode, showRuler, showAoE, fogMode]);
+  }, [markDirty, hoverCoords, draggedToken, dragOffset, carrierSquare, wallMode, showRuler, showAoE, fogMode]);
 
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
 
   // ============================================
   // Token Hit Testing
@@ -1741,6 +2323,35 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }),
     [userRole, effectiveRevealedCells, isOwnToken, dmShowSpiritTokens, currentMap?.width, currentMap?.height]
   );
+
+  /**
+   * The tokens the map draws for this viewer, as the token layer decides it:
+   * in Player Preview what the preview shows, else every token this viewer
+   * can see. A selection is made, said and acted on only among these, so it
+   * never lands on a token the screen does not show.
+   */
+  const drawnTokens = useMemo((): Token[] => {
+    if (!currentMap) return [];
+    if (!previewing) return tokens.filter((t) => isTokenVisibleTo(t, tokenView));
+    const viewport: Viewport = {
+      zoom: mapControls.zoom,
+      panOffset: mapControls.panOffset,
+      gridSize: currentMap.gridSize,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    };
+    const rule = (currentMap.lightingEnabled ?? false) ? ruleFor(tokens.filter(viewerOwn), viewport) : null;
+    const shown = previewTokens(tokens, viewerOwn, previewControls, rule?.canSee ?? null, viewport, previewedPlane);
+    return shown.filter((t) => isTokenVisibleTo(t, {
+      isDM: false,
+      revealedCells: viewerRevealed,
+      isOwnToken: viewerOwn,
+      dmShowSpiritTokens,
+      mapWidth: currentMap.width,
+      mapHeight: currentMap.height,
+    }));
+  }, [currentMap, previewing, tokens, tokenView, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, previewControls, previewedPlane, viewerRevealed, dmShowSpiritTokens]);
+  const drawnIds = useMemo(() => new Set(drawnTokens.map((t) => t.id)), [drawnTokens]);
 
   /**
    * Check if a grid coordinate is within a token's bounds
@@ -1814,13 +2425,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * is what hovering and the context menu want. Picking a token up has to look
    * further down the stack: an NPC sharing the square is drawn on top of it, and
    * stopping at that NPC left a player unable to pick up their own token at all.
+   *
+   * In Player Preview only what the preview draws can be taken. The DM's own
+   * view counts hidden creatures, so a click on a hidden creature's square
+   * picked it up unseen and the next click put it down somewhere new.
    */
   const getMovableTokenAtPosition = useCallback(
     (gridX: number, gridY: number): Token | null => {
       if (!currentMap) return null;
-      return pickMovableTokenAt(tokens, gridX, gridY, canMoveToken, tokenView);
+      if (!previewing) return pickMovableTokenAt(tokens, gridX, gridY, canMoveToken, tokenView);
+      // The drawn list holds the tokens as the viewer is sent them; the one
+      // taken is the token as it is.
+      const hit = pickMovableTokenAt(drawnTokens, gridX, gridY, canMoveToken);
+      return hit ? tokens.find((t) => t.id === hit.id) ?? null : null;
     },
-    [tokens, currentMap, canMoveToken, tokenView]
+    [tokens, currentMap, canMoveToken, tokenView, previewing, drawnTokens]
   );
 
   // ============================================
@@ -1840,70 +2459,109 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const MOVE_THROTTLE_MS = 16;
 
   /**
-   * Tokens and panning, when no other tool took the event: a click picks a
-   * token up or puts the held one down, and a drag on empty ground pans.
+   * A press the token tool took on the ground or on a token this viewer may
+   * not move, until it lifts: where it began, whether the map has been
+   * dragged since, and whether its lift clears the selection (a click on
+   * empty ground does; a drag never does).
+   */
+  const groundPressRef = useRef<{ x: number; y: number; panned: boolean; clears: boolean } | null>(null);
+
+  /**
+   * Put a token down on `square`: what a click does with a held token, and
+   * an arrow key with the selected one. A player may not end a move where
+   * another creature stands, which is checked here and nowhere else (see
+   * `blockingTokensAt`): the move is refused with a note and a held token
+   * goes back. Otherwise the table is told, the token is drawn there at
+   * once, it stays selected, and a hold of it ends. `start` sends the
+   * pick-up first, for a token that was not held, so the move is a drag's
+   * pair and a drop the server refuses is put back on this screen. True when
+   * the drop was sent.
+   */
+  const putDown = (token: Token, square: Position, { start = false }: { start?: boolean } = {}): boolean => {
+    if (!currentMap) return false;
+    // Two creatures do not share a square. The Basic Rules are blunt about it
+    // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
+    // friend or an enemy, you can't willingly end your move in its space."
+    // A token at zero hit points is treated as no longer holding its space,
+    // so a body can be stood on — that part is a house rule, not something
+    // the rulebook spells out.
+    //
+    // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
+    // swarm, scenery being arranged — is ordinary DM work, and refusing it
+    // would be an obstacle rather than a rule.
+    //
+    // Checked here on the client and nowhere else, deliberately: see
+    // `blockingTokensAt`, which explains why enforcing this server-side would
+    // turn a refused move into a way to find hidden creatures.
+    if (userRole !== 'DM') {
+      const blockedBy = blockingTokensAt(tokens, token, square, characterHpCache);
+      if (blockedBy.length > 0) {
+        // A creature under the player's fog still holds its square, but the
+        // note names only one this screen draws, so it gives none away.
+        const seen = blockedBy.find((t) => drawnIds.has(t.id));
+        showToast(`${seen ? tokenDisplayName(seen) : 'Someone'} is already standing there.`, 'info');
+        if (draggedToken?.id === token.id) cancelHold();
+        markDirty('tokens');
+        return false;
+      }
+    }
+
+    // Emit token.move.end event
+    const sendable = canEmit() && !!currentMap.id;
+    if (sendable) {
+      if (start) {
+        const pickUp: TokenMoveStartEvent = { tokenId: token.id, mapId: currentMap.id };
+        socket!.emitTokenMoveStart(pickUp);
+      }
+      const event: TokenMoveEndEvent = {
+        tokenId: token.id,
+        mapId: currentMap.id,
+        x: square.x,
+        y: square.y,
+      };
+      socket!.emitTokenMoveEnd(event);
+    } else {
+      console.warn('⚠️ Cannot emit token.move.end - socket not connected');
+    }
+
+    // Update local token position; the token put down stays selected
+    useGameStore.getState().applyTokenMove(token.id, square);
+    useGameStore.getState().selectToken(token.id);
+
+    // Clear drag state
+    if (draggedToken?.id === token.id || carryRef.current?.tokenId === token.id) endHold();
+    console.log('✅ Token placed, state cleared');
+    return sendable;
+  };
+
+  /**
+   * Tokens and panning, when no other tool took the event: a click or a tap
+   * picks a token up or puts the held one down, and a drag on empty ground
+   * pans. A finger's drag that starts on a token the viewer may move carries
+   * it and puts it down where the finger lifts. With a token held by a tap, a
+   * drag that starts on that token's own square carries it the same way, and
+   * a drag anywhere else pans the map with the token still held.
    */
   const tokenTool: MapTool = {
-    down({ e, gridCoords }: PointerAt) {
+    down({ e, via, gridCoords }: PointerAt) {
       if (!currentMap) return false;
         // If we're already holding a token, place it on this click
-        if (draggedToken && dragOffset) {
-          // Finalize token position (snap to grid)
-          const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-          const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
-
-          // Two creatures do not share a square. The Basic Rules are blunt about it
-          // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
-          // friend or an enemy, you can't willingly end your move in its space."
-          // A token at zero hit points is treated as no longer holding its space,
-          // so a body can be stood on — that part is a house rule, not something
-          // the rulebook spells out.
-          //
-          // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
-          // swarm, scenery being arranged — is ordinary DM work, and refusing it
-          // would be an obstacle rather than a rule.
-          //
-          // Checked here on the client and nowhere else, deliberately: see
-          // `blockingTokensAt`, which explains why enforcing this server-side would
-          // turn a refused move into a way to find hidden creatures.
-          if (userRole !== 'DM') {
-            const blockedBy = blockingTokensAt(
-              tokens,
-              draggedToken,
-              { x: Math.floor(finalX), y: Math.floor(finalY) },
-              characterHpCache
-            );
-            if (blockedBy.length > 0) {
-              showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
-              cancelHold();
-              markDirty('tokens');
-              return true;
+        if (draggedToken && dragOffset && heldIdRef.current === draggedToken.id) {
+          if (via === 'drag') {
+            const own = useGameStore.getState().tokens[draggedToken.id] ?? draggedToken;
+            if (tokenCoversCell(own, gridCoords.x, gridCoords.y)) {
+              // Taken again by whichever of its squares the finger landed on.
+              const offset = { x: gridCoords.x - own.position.x, y: gridCoords.y - own.position.y };
+              carryRef.current = { tokenId: own.id, offset };
+              setFingerCarrying(true);
+              setDragOffset(offset);
+            } else {
+              groundPressRef.current = { x: e.clientX, y: e.clientY, panned: false, clears: false };
+              mapControls.startDrag(e);
             }
+            return true;
           }
-
-          // Emit token.move.end event
-          if (canEmit() && currentMap.id) {
-            const event: TokenMoveEndEvent = {
-              tokenId: draggedToken.id,
-              mapId: currentMap.id,
-              x: Math.floor(finalX),
-              y: Math.floor(finalY),
-            };
-            socket!.emitTokenMoveEnd(event);
-          } else {
-            console.warn('⚠️ Cannot emit token.move.end - socket not connected');
-          }
-
-          // Update local token position
-          useGameStore.getState().applyTokenMove(draggedToken.id, {
-            x: Math.floor(finalX),
-            y: Math.floor(finalY),
-          });
-
-          // Clear drag state
-          setDraggedToken(null);
-          setDragOffset(null);
-          console.log('✅ Token placed, state cleared');
+          putDown(draggedToken, carriedSquare({ square: gridCoords, offset: dragOffset }, draggedToken.size, currentMap));
           return true;
         }
 
@@ -1920,11 +2578,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           if (showRuler) putRulerAway();
           console.log('👆 Picking up token:', token.name);
           heldOnMapRef.current = currentMap.id;
+          heldIdRef.current = token.id;
+          const offset = { x: gridCoords.x - token.position.x, y: gridCoords.y - token.position.y };
           setDraggedToken(token);
-          setDragOffset({
-            x: gridCoords.x - token.position.x,
-            y: gridCoords.y - token.position.y,
-          });
+          setDragOffset(offset);
+          setCarrierSquare(null);
+          setPutBackOffered(e.kind !== 'mouse' && via !== 'drag');
+          if (via === 'drag') {
+            carryRef.current = { tokenId: token.id, offset };
+            setFingerCarrying(true);
+          }
 
           // Emit token.move.start event
           if (canEmit() && currentMap.id) {
@@ -1936,32 +2599,81 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           } else {
             console.warn('⚠️ Cannot emit token.move.start - socket not connected');
           }
-        } else if (!draggedToken) {
+          // A click or a tap selects what it picks up, if the screen draws it;
+          // a finger's drag does not until it puts the token down.
+          if (via !== 'drag' && drawnIds.has(token.id)) {
+            useGameStore.getState().selectToken(token.id);
+            setSelectionDetailsClosedFor(null);
+          }
+        } else {
+          // A click or a tap on a token this viewer may not move selects it,
+          // found as the viewer sees the map: in Player Preview, only what
+          // the preview draws. On empty ground it clears the selection when
+          // the button lifts, unless the press dragged the map.
+          const seen = via === 'drag' ? null : getHoverTokenAt(gridCoords.x, gridCoords.y);
+          if (seen) {
+            useGameStore.getState().selectToken(seen.id);
+            setSelectionDetailsClosedFor(null);
+          }
+          groundPressRef.current = { x: e.clientX, y: e.clientY, panned: false, clears: via !== 'drag' && !seen };
           // Only start panning if we're not holding a token
           mapControls.startDrag(e);
         }
       return true;
     },
-    move({ e, gridCoords }: PointerAt) {
+    up(at?: PointerAt) {
+      // A finger that carried a token puts it down where it lifted, by the
+      // put-down a click makes, and the token stays selected.
+      const carry = carryRef.current;
+      if (carry) {
+        // The carry is still recorded while it is put down, so the hold ends
+        // even before a render has caught up with the drag's pick-up.
+        const token = useGameStore.getState().tokens[carry.tokenId];
+        if (token && at && currentMap) putDown(token, carriedSquare({ square: at.gridCoords, offset: carry.offset }, token.size, currentMap));
+        else cancelHold();
+        carryRef.current = null;
+        setFingerCarrying(false);
+        return;
+      }
+      const press = groundPressRef.current;
+      groundPressRef.current = null;
+      if (press?.clears && !press.panned) useGameStore.getState().selectToken(null);
+    },
+    // The browser, a second finger or the window losing focus took the
+    // pointer: a pan stops, and a token a finger was carrying goes back where
+    // it was picked up. A token held by a click or a tap stays held.
+    cancel() {
+      groundPressRef.current = null;
+      mapControls.stopDrag();
+      if (carryRef.current) cancelHold();
+    },
+    move({ e, via, gridCoords }: PointerAt) {
       if (!currentMap) return false;
-        // Handle token dragging
-        if (draggedToken && dragOffset) {
-          // Calculate new token position (snapped to grid)
-          const newX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-          const newY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
+        // What this move carries: for a finger, the token its drag took; for
+        // a mouse or a pen, the held token, wherever it goes over the map.
+        const carry = carryRef.current;
+        const carried = via === 'drag'
+          ? (carry ? { token: useGameStore.getState().tokens[carry.tokenId], offset: carry.offset } : null)
+          : (draggedToken && dragOffset ? { token: draggedToken, offset: dragOffset } : null);
+        if (carried?.token) {
+          const { token, offset } = carried;
+          const square = carriedSquare({ square: gridCoords, offset }, token.size, currentMap);
 
           // Throttle move events to 60fps
           const now = Date.now();
           if (canEmit() && currentMap.id && now - lastMoveEmitRef.current >= MOVE_THROTTLE_MS) {
             const event: TokenMoveEvent = {
-              tokenId: draggedToken.id,
+              tokenId: token.id,
               mapId: currentMap.id,
-              x: Math.floor(newX),
-              y: Math.floor(newY),
+              x: square.x,
+              y: square.y,
             };
             socket!.emitTokenMove(event);
             lastMoveEmitRef.current = now;
           }
+
+          // The ghost is drawn under the pointer carrying it.
+          setCarrierSquare((prev) => (prev && prev.x === gridCoords.x && prev.y === gridCoords.y ? prev : gridCoords));
 
           // Keep the hover panel honest while dragging. It used to be updated only
           // in the branch below, so a held token left the last name it happened to
@@ -1975,6 +2687,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         } else {
           // Handle map panning
           mapControls.handleDrag(e);
+          const press = groundPressRef.current;
+          if (press && !press.panned && Math.hypot(e.clientX - press.x, e.clientY - press.y) > CLICK_COUNT_PX) press.panned = true;
 
           // Update hover token
           const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
@@ -1990,51 +2704,158 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   };
 
   /**
-   * The tools a click or a move is offered to, in this order, until one takes
-   * it: a DM tool first, then doors, the fog boxes, the measuring tools, and
-   * tokens and panning last. The order is what decides a click when two tools
-   * are up at once. On mouse up each finishes what it holds, in the same order.
+   * The armed Ping: the next click or tap on the map, whatever tool is up,
+   * pings that point and puts the Ping away. A finger's drag goes to the
+   * other tools, so the map can be panned to the spot first.
    */
-  const pointerTools: MapTool[] = [wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !currentMap) return;
-
-    // Right-button while a tool is active: start panning (left-click is reserved for tools).
-    // In normal pan mode, right-click is the context menu — handled by handleContextMenu.
-    if (e.button === 2 && (wallMode || fogMode || lightMode) && isDM) {
-      cancelFogDrag(); // Panning away mid-drag must not reveal anything
-      rightPanActiveRef.current = true;
-      mapControls.startDrag(e);
-      return;
-    }
-
-    if (e.button !== 0) return; // Only left click for everything else
-
-    // Get grid coordinates of click
-    const rect = canvasRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
-    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
-
-    for (const tool of pointerTools) {
-      if (tool.down?.(at)) return;
-    }
+  const pingTool: MapTool = {
+    down({ via, mapPx }: PointerAt) {
+      if (!pingArmed || via === 'drag') return false;
+      setPingArmed(false);
+      pingMapPx(mapPx);
+      return true;
+    },
   };
 
   /**
-   * Handle mouse move (pan + hover coordinates + token drag)
+   * The tools a press or a move is offered to, in this order, until one takes
+   * it: the armed Ping, the draw tool, a DM tool, then doors, the fog boxes,
+   * the measuring tools, and tokens and panning last. The order is what decides a click
+   * when two tools are up at once. When the button lifts each finishes what
+   * it holds, in the same order.
    */
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !currentMap) return;
+  const pointerTools: MapTool[] = [paint.tool, pingTool, drawTool.tool, wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
 
+  // A mouse and a pen reach the tools as they happen. The mouse is never
+  // captured, so a press that leaves the canvas behaves as it always has: a
+  // pan stops at the edge, a stroke or a box gets no moves past it, and the
+  // window hears the release. A pen or a finger is captured from down to
+  // lift, so its moves and its lift come here wherever it goes.
+  const clickCounterRef = useRef(createClickCounter(clickRoom));
+
+  /** Where a pointer is in the canvas's, the map's and the grid's spaces. */
+  const pointerAt = (e: MapPointer, via: PointerAt['via']): PointerAt | undefined => {
+    if (!canvasRef.current) return undefined;
     const rect = canvasRef.current.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
-    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
+    return { e, via, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
+  };
 
+  /**
+   * A press at time `t` with its click count. A pointer event's own count is
+   * always 0, so the downs are counted here, for the double-click or double
+   * tap that ends a wall line, a finger's or a pen's with a fingertip's room
+   * between its taps. Another button starts the count again.
+   */
+  const withClickCount = (e: MapPointer, t: number): MapPointer => {
+    const clicks = clickCounterRef.current;
+    if (e.button !== 0) {
+      clicks.reset();
+      return { ...e, detail: Math.max(e.detail, 1) };
+    }
+    return { ...e, detail: Math.max(e.detail, clicks.count(e.kind, t, e.clientX, e.clientY)) };
+  };
+
+  /**
+   * A button pressed: the right one pans under a DM tool or Draw, the left
+   * one goes to the tools. Returns the tool that took it, if one did.
+   */
+  const pressButton = (e: MapPointer, via: PointerAt['via']): MapTool | undefined => {
+    if (!canvasRef.current || !currentMap) return undefined;
+
+    // Right-button while a tool is active: start panning (left-click is reserved for tools).
+    // In normal pan mode, right-click is the context menu — handled by handleContextMenu.
+    if (e.button === 2 && inputOwner !== null) {
+      cancelFogDrag(); // Panning away mid-drag must not reveal anything
+      rightPanActiveRef.current = true;
+      mapControls.startDrag(e);
+      return undefined;
+    }
+
+    if (e.button !== 0) return undefined; // Only left click for everything else
+
+    const at = pointerAt(e, via);
+    if (!at) return undefined;
+    for (const tool of pointerTools) {
+      if (tool.down?.(at)) return tool;
+    }
+    return undefined;
+  };
+
+  // ============================================
+  // A double tap to ping. Two taps of a finger, or of a pen, on the same
+  // spot of empty ground ping it, as the Ping button and a tap there do,
+  // while no tool is up. Each tap is counted as it lifts, after the tools
+  // have had it, so the first does what a tap does with no wait. A tap on a
+  // token, or one that puts a held token down, toggles a door or closes a
+  // menu, starts the count again, as does any press that is no tap: a drag,
+  // a pinch, a long-press, a mouse's press, and a map switch. A mouse's
+  // double-click pings nothing.
+  // ============================================
+  /** The taps toward a double tap to ping, with a finger's room between them. */
+  const doubleTapRef = useRef(createClickCounter(DOUBLE_TAP_PX));
+  // Switching maps starts the count again.
+  useEffect(() => {
+    doubleTapRef.current.reset();
+  }, [currentMap?.id]);
+
+  /**
+   * No tool is up that a tap is for: the armed Ping, Paint, Draw, a wall,
+   * fog or light tool, the ruler or the AoE template. The tool that took a tap
+   * cannot say this alone: the ruler of a player with no token, and a fog
+   * tool before the fog arrives, pass the tap on to the token tool.
+   */
+  const noToolUp = () => !pingArmed && inputOwner === null && !showRuler && !showAoE;
+
+  /**
+   * Whether a menu was on the screen as the latest press on the page landed,
+   * read on the window in the capture phase, before anything on the page
+   * hears the press: a menu that closes on the press itself, as a sheet's
+   * roll menu does, can be gone by the time the map hears it.
+   */
+  const pressMenuRef = useRef<{ pointerId: number; menu: boolean } | null>(null);
+  useEffect(() => {
+    const onPress = (event: PointerEvent) => {
+      pressMenuRef.current = { pointerId: event.pointerId, menu: anyMenuShown() };
+    };
+    window.addEventListener('pointerdown', onPress, true);
+    return () => window.removeEventListener('pointerdown', onPress, true);
+  }, []);
+  /** Whether a menu was on the screen as this pointer's press landed. */
+  const menuAtPress = (pointerId: number) => {
+    const press = pressMenuRef.current;
+    return press?.pointerId === pointerId ? press.menu : anyMenuShown();
+  };
+
+  /** Whether a tap may be one of a double tap to ping: no tool up, no menu on the screen as it landed (`menuUp`), no token held. */
+  const tapMayPing = (menuUp: boolean) => noToolUp() && !menuUp && heldIdRef.current === null;
+
+  /** Whether the tool that took a press, `took`, took it on empty ground: the token tool, finding no token there. */
+  const pressedGround = (took: MapTool | undefined) => took === tokenTool && groundPressRef.current?.clears === true;
+
+  /**
+   * A finger's or a pen's tap that has lifted, at the page point and time it
+   * landed: one more toward a double tap to ping, which pings the map at the
+   * second; null for one that may not ping, which starts the count again. A
+   * third tap counts from 1.
+   */
+  const countTap = (tap: { kind: PointerKind; t: number; x: number; y: number } | null) => {
+    const taps = doubleTapRef.current;
+    if (!tap) {
+      taps.reset();
+      return;
+    }
+    if (taps.count(tap.kind, tap.t, tap.x, tap.y) < 2) return;
+    taps.reset();
+    pingAt(tap.x, tap.y);
+  };
+
+  /**
+   * A pointer moved (pan + hover coordinates + token drag)
+   */
+  const movePointer = (at: PointerAt) => {
     // Track raw map-px position (unquantised) for accurate ghost line in free-draw mode
     hoverMapPxRef.current = at.mapPx;
 
@@ -2043,6 +2864,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Update hover coordinates
     // Only when the pointer reaches another square: a new object on every
     // pixel of movement re-rendered the whole canvas.
+    const { gridCoords } = at;
     if (mapControls.isWithinBounds(gridCoords)) {
       setHoverCoords((prev) => (prev && prev.x === gridCoords.x && prev.y === gridCoords.y ? prev : gridCoords));
     } else {
@@ -2055,56 +2877,353 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   };
 
   /**
-   * Handle mouse up (stop map panning)
-   * Note: a held token is put down by the token tool's mouse down, on the second click
+   * A button let go: the right one ends its pan; any other has every tool
+   * finish what it holds and stops the pan. A held token is put down by the
+   * token tool's down, on the second click.
    */
-  const handleMouseUp = (e?: { button: number }) => {
+  const releaseButton = (button: number, at?: PointerAt) => {
     // Release right-button pan
-    if (e?.button === 2) {
+    if (button === 2) {
       rightPanActiveRef.current = false;
       mapControls.stopDrag();
       return;
     }
-    for (const tool of pointerTools) tool.up?.();
+    for (const tool of pointerTools) tool.up?.(at);
     // Stop map panning
     mapControls.stopDrag();
   };
 
-  // A button let go outside the canvas never reaches its onMouseUp, which left
-  // an erase or brush stroke, a box, a drag or a right-button pan going. The
-  // window hears every release; one over the canvas is the canvas's own.
-  const handleMouseUpRef = useRef(handleMouseUp);
-  handleMouseUpRef.current = handleMouseUp;
+  /** The browser took the pointer: every tool drops what the press holds, and a pan stops. */
+  const cancelPointer = () => {
+    for (const tool of pointerTools) tool.cancel?.();
+    rightPanActiveRef.current = false;
+    mapControls.stopDrag();
+  };
+
+  const capturePointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer is already gone; its lift or cancel still arrives.
+    }
+  };
+
+  const releasePointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = event.currentTarget;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  };
+
+  // A finger reaches the tools through the gesture recogniser
+  // (map/gestures.ts): a tap as a down and an up where it landed, a drag as a
+  // down where it landed, moves and an up. A drag the tools do not take pans
+  // the map, through the token tool; a door opens on a tap only. A second
+  // finger cancels what the first began and pinches the zoom. A long-press
+  // reaches no tool: it opens the menu a right-click opens there, or pings
+  // where none opens, and under a DM tool there is none, so a press held
+  // still stays the tool's. A pen is a mouse to the tools, makes no
+  // long-press, and while one is down every finger is ignored.
+
+  /** The press each finger began with, which its tap or drag reaches the tools as. */
+  const fingerDownsRef = useRef(new Map<number, MapPointer>());
+  /** The fingers that landed while a menu was on the screen: a tap of one closes it, and is no double tap's. */
+  const fingerMenusRef = useRef(new Set<number>());
+  /** The pens whose tip, not a barrel button, is on the glass. */
+  const penTipsRef = useRef(new Set<number>());
+  /**
+   * A pen's press on empty ground that may be one of a double tap to ping,
+   * where and when it landed, until it lifts. The recogniser makes no tap of
+   * a pen's, so its lift decides: a tap if the press has not moved the map.
+   */
+  const penTapRef = useRef<{ pointerId: number; t: number; x: number; y: number } | null>(null);
+  /** The pointer event being handled, which a gesture it ends in is made from. */
+  const gestureEventRef = useRef<MapPointer | null>(null);
+  /** Set from a finger's drag reaching the tools until it ends. */
+  const fingerPressRef = useRef(false);
+  const gestureHandlerRef = useRef<(g: Gesture) => void>(() => undefined);
+  /** Whether a press may long-press, asked as it lands: not while Paint, Draw or a wall, fog or light tool is up. */
+  const longPressAllowedRef = useRef(true);
+  const [gestures] = useState(() => createGestureRecognizer((g) => gestureHandlerRef.current(g), {
+    longPressAt: () => longPressAllowedRef.current,
+  }));
+
+  const handleGesture = (g: Gesture) => {
+    const current = gestureEventRef.current;
+    const at = (via: PointerAt['via']) => (current ? pointerAt(current, via) : undefined);
+    if (g.type === 'tap') {
+      const down = fingerDownsRef.current.get(g.at.id);
+      if (!down) return;
+      focusMap();
+      // Built from the press, after the event: preventDefault has nothing to cancel.
+      const press: MapPointer = { ...down, clientX: g.at.x, clientY: g.at.y, button: 0, buttons: 1, preventDefault: () => undefined };
+      // Asked before the tools have it, since the tap may put a token down.
+      const mayPing = tapMayPing(fingerMenusRef.current.has(g.at.id));
+      const took = pressButton(withClickCount(press, g.at.t), 'tap');
+      const onGround = pressedGround(took);
+      releaseButton(0, at('tap'));
+      countTap(mayPing && onGround ? { kind: down.kind, t: g.at.t, x: g.at.x, y: g.at.y } : null);
+    } else if (g.type === 'long-press') {
+      if (!fingerDownsRef.current.has(g.at.id)) return;
+      longPress(g.at.id, g.at.x, g.at.y);
+    } else if (g.type === 'drag') {
+      if (g.phase === 'start') {
+        const down = fingerDownsRef.current.get(g.from.id);
+        if (!down) return;
+        focusMap();
+        clickCounterRef.current.reset();
+        doubleTapRef.current.reset();
+        fingerPressRef.current = true;
+        // The down and the first move arrive in one event, so React state
+        // the down sets is seen from the next move on.
+        pressButton({ ...down, button: 0, buttons: 1, detail: 1, preventDefault: () => undefined }, 'drag');
+        const moved = at('drag');
+        if (moved) movePointer(moved);
+      } else if (g.phase === 'move') {
+        const moved = at('drag');
+        if (moved) movePointer(moved);
+      } else if (g.phase === 'end') {
+        fingerPressRef.current = false;
+        releaseButton(0, at('drag'));
+      } else {
+        fingerPressRef.current = false;
+        cancelPointer();
+      }
+    } else if (g.type === 'pinch') {
+      if (g.phase === 'start') {
+        doubleTapRef.current.reset();
+        mapControls.pinchStart();
+      } else if (g.phase === 'move' && canvasRef.current) {
+        // The fingers are in page pixels; the zoom is about a canvas point.
+        const rect = canvasRef.current.getBoundingClientRect();
+        mapControls.pinchBy(g.scale, { x: g.centre.x - rect.left, y: g.centre.y - rect.top }, g.dx, g.dy);
+        markDirty('terrain', 'tokens', 'overlay');
+      }
+    }
+  };
   useEffect(() => {
-    const onWindowMouseUp = (e: MouseEvent) => {
-      if (e.target === canvasRef.current) return;
-      handleMouseUpRef.current(e);
+    gestureHandlerRef.current = handleGesture;
+    longPressAllowedRef.current = inputOwner === null;
+  });
+
+  /**
+   * A finger's long-press, by the recogniser's timer or the browser's own
+   * (Android's contextmenu), at page point (x, y): the map takes the keys,
+   * the click a lift may bring is swallowed, and the menu a right-click
+   * opens there opens; where none would, the map is pinged there.
+   */
+  const longPress = (pointerId: number, x: number, y: number) => {
+    focusMap();
+    doubleTapRef.current.reset();
+    clickSwallow.arm(pointerId);
+    if (openMenuAt(x, y)) return;
+    // A ping, as the armed Ping would have made: it is used up.
+    pingAt(x, y);
+    setPingArmed(false);
+  };
+
+  /**
+   * The mousedown and the click iOS may send as a long-pressing finger
+   * lifts, swallowed once (map/clickSwallow.ts), so the menu just opened
+   * stays open.
+   */
+  const [clickSwallow] = useState(() => createClickSwallow());
+  useEffect(() => () => clickSwallow.clear(), [clickSwallow]);
+
+  /** Hand a finger's or a pen's event to the recogniser, which may answer with a gesture. */
+  const feedGesture = (step: 'down' | 'move' | 'up' | 'cancel', e: MapPointer, t: number) => {
+    gestureEventRef.current = e;
+    try {
+      gestures[step]({ id: e.pointerId, kind: e.kind, x: e.clientX, y: e.clientY, t, button: e.button });
+    } finally {
+      gestureEventRef.current = null;
+    }
+  };
+
+  // A gesture under way is forgotten when the window loses focus or a DM tool
+  // changes; a finger's drag that reached the tools is cancelled for them.
+  const dropGestures = useEffectEvent(() => {
+    gestures.reset();
+    fingerDownsRef.current.clear();
+    fingerMenusRef.current.clear();
+    penTipsRef.current.clear();
+    clickSwallow.clear();
+    doubleTapRef.current.reset();
+    penTapRef.current = null;
+    if (!fingerPressRef.current) return;
+    fingerPressRef.current = false;
+    cancelPointer();
+  });
+  useEffect(() => {
+    dropGestures();
+  }, [wallMode, fogMode, lightMode, drawKind, paint.on]);
+  useEffect(() => {
+    const onBlur = () => dropGestures();
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('blur', onBlur);
+      gestures.reset();
     };
-    window.addEventListener('mouseup', onWindowMouseUp);
-    return () => window.removeEventListener('mouseup', onWindowMouseUp);
+  }, [gestures]);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    // A press on the map gives it the keys; one on a panel over it does not.
+    // A finger's does once its gesture is known, a tap, a drag or a
+    // long-press, so a pinch while typing in the chat keeps the on-screen
+    // keyboard.
+    if (e.kind !== 'touch') focusMap();
+    setLastPressKind(e.kind);
+    if (e.kind !== 'mouse') capturePointer(event);
+    if (e.kind === 'touch') {
+      fingerDownsRef.current.set(e.pointerId, e);
+      if (menuAtPress(e.pointerId)) fingerMenusRef.current.add(e.pointerId);
+      else fingerMenusRef.current.delete(e.pointerId);
+      feedGesture('down', e, event.timeStamp);
+      return;
+    }
+    if (e.kind === 'pen') {
+      if (e.button === 0) penTipsRef.current.add(e.pointerId);
+      // A finger's gesture under way ends before the pen's press arrives.
+      feedGesture('down', e, event.timeStamp);
+      if (e.button === PEN_ERASER_BUTTON) return;
+    }
+    const mayPing = e.kind === 'pen' && tapMayPing(menuAtPress(e.pointerId));
+    const took = pressButton(withClickCount(e, event.timeStamp), 'mouse');
+    if (e.kind === 'mouse') doubleTapRef.current.reset();
+    else penTapRef.current = mayPing && pressedGround(took) ? { pointerId: e.pointerId, t: event.timeStamp, x: e.clientX, y: e.clientY } : null;
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    if (e.kind === 'touch') {
+      feedGesture('move', e, event.timeStamp);
+      return;
+    }
+    // A second button pressed or let go while another is held fires no
+    // pointerdown or pointerup: it is a move whose button is the one that
+    // changed. A right press during a left fog drag cancels the box and pans.
+    if (e.button !== -1) {
+      if (e.buttons & buttonBit(e.button)) pressButton(withClickCount(e, event.timeStamp), 'mouse');
+      else releaseButton(e.button, pointerAt(e, 'mouse'));
+      return;
+    }
+    if (!currentMap) return;
+    const at = pointerAt(e, 'mouse');
+    if (at) movePointer(at);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    if (e.kind !== 'mouse') releasePointer(event);
+    if (e.kind === 'touch') {
+      feedGesture('up', e, event.timeStamp);
+      fingerDownsRef.current.delete(e.pointerId);
+      fingerMenusRef.current.delete(e.pointerId);
+      clickSwallow.lifted(e.pointerId);
+      return;
+    }
+    if (e.kind === 'pen') {
+      penTipsRef.current.delete(e.pointerId);
+      feedGesture('up', e, event.timeStamp);
+      if (e.button === PEN_ERASER_BUTTON) return;
+    }
+    // A pen's press on empty ground was a tap if it has not moved the map,
+    // as the token tool judged it (CLICK_COUNT_PX), read before the tools
+    // let go of the press.
+    const penPress = e.kind === 'pen' && penTapRef.current?.pointerId === e.pointerId ? penTapRef.current : null;
+    const penTap = penPress && groundPressRef.current && !groundPressRef.current.panned ? penPress : null;
+    releaseButton(e.button, pointerAt(e, 'mouse'));
+    if (e.kind === 'pen') {
+      penTapRef.current = null;
+      countTap(penTap ? { kind: 'pen', t: penTap.t, x: penTap.x, y: penTap.y } : null);
+    }
+  };
+
+  const handlePointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    // A press the browser took was no tap: a pen's, or a finger's while no
+    // pen is on the glass. A palm resting beside a pen, which the browser may
+    // cancel, leaves the pen's taps alone.
+    if (penTapRef.current?.pointerId === e.pointerId) penTapRef.current = null;
+    if (e.kind === 'pen' || (e.kind === 'touch' && penTipsRef.current.size === 0)) doubleTapRef.current.reset();
+    if (e.kind !== 'mouse') releasePointer(event);
+    if (e.kind === 'touch') {
+      feedGesture('cancel', e, event.timeStamp);
+      fingerDownsRef.current.delete(e.pointerId);
+      fingerMenusRef.current.delete(e.pointerId);
+      clickSwallow.lifted(e.pointerId);
+      return;
+    }
+    if (e.kind === 'pen') {
+      penTipsRef.current.delete(e.pointerId);
+      feedGesture('cancel', e, event.timeStamp);
+    }
+    cancelPointer();
+  };
+
+  // The mouse is never captured, so a button let go outside the canvas never
+  // reaches its pointerup, which left an erase or brush stroke, a box, a drag
+  // or a right-button pan going. The window hears every release, a second
+  // button's included; one over the canvas is the canvas's own.
+  const onWindowPointer = useEffectEvent((event: PointerEvent) => {
+    if (event.target === canvasRef.current) return;
+    const e = fromPointerEvent(event);
+    if (e.kind !== 'mouse') return;
+    const released = event.type === 'pointerup' || (e.button !== -1 && !(e.buttons & buttonBit(e.button)));
+    if (released) releaseButton(e.button, pointerAt(e, 'mouse'));
+  });
+  useEffect(() => {
+    const listener = (event: PointerEvent) => onWindowPointer(event);
+    window.addEventListener('pointerup', listener);
+    window.addEventListener('pointermove', listener);
+    return () => {
+      window.removeEventListener('pointerup', listener);
+      window.removeEventListener('pointermove', listener);
+    };
   }, []);
 
   /**
-   * Handle mouse leave (stop pan, clear hover, cancel token drag)
+   * The pointer left the canvas.
    */
-  const handleMouseLeave = () => {
-    // Cancel token drag if in progress
-    if (draggedToken) cancelHold();
+  const handlePointerLeave = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    // A mouse leaving puts a held token back and stops a pan, as it always
+    // has. A finger leaves after every lift and a pen when it goes out of
+    // range, and a token they picked up with a tap stays held.
+    if (e.kind === 'mouse') {
+      if (draggedToken) cancelHold();
+      mapControls.stopDrag();
+    } else if (e.buttons === 0 && draggedToken && carrierSquare) {
+      // A pen that carried a held token as it hovered has gone out of range:
+      // the token stays held, drawn on its own square, and the table is
+      // shown it there again.
+      showHeldTokenHome();
+      setCarrierSquare(null);
+    }
 
-    // Stop map panning
-    mapControls.stopDrag();
-
-    // Clear hover state
-    setHoverCoords(null);
-    setHoverToken(null);
-    setHoveredDoorId(null);
-    hoverMapPxRef.current = null;
+    // Clear hover state, unless a finger or a pen is still pressing
+    if (e.kind === 'mouse' || e.buttons === 0) {
+      for (const tool of pointerTools) tool.leave?.();
+      setHoverCoords(null);
+      setHoverToken(null);
+      setHoveredDoorId(null);
+      hoverMapPxRef.current = null;
+    }
   };
+
+  /**
+   * Whether a drag is over the map's own element. The character sheet a
+   * token opens, and its editor, are drawn on the body but are React children
+   * of the map, so their drags reach these handlers too; a drag of text
+   * between their boxes is theirs.
+   */
+  const dragOnMap = (e: React.DragEvent<HTMLDivElement>) =>
+    e.target instanceof Node && containerRef.current?.contains(e.target) === true;
 
   /**
    * Drag-from-roster: allow drop onto map canvas
    */
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!dragOnMap(e)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
   };
@@ -2113,7 +3232,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * Drag-from-roster: receive character token drop and place on map
    */
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    if (!dragOnMap(e)) return;
     e.preventDefault();
+    // Paint takes the map: nothing is placed on it meanwhile.
+    if (inputOwner === 'paint') return;
     if (!campaign?.id || !currentMap || userRole !== 'DM' || !canvasRef.current) return;
 
     const dragData = readCharacterTokenDrag(e.dataTransfer.getData('text/plain'));
@@ -2141,7 +3263,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         currentMap.id,
         characterTokenRequest(dragData, position, targetLayer),
       );
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, currentMap.id);
     } catch (err) {
       showToast(apiErrorMessage(err) || `Could not place ${dragData.name} on the map`, 'error');
     }
@@ -2167,41 +3289,226 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   // The sheet and roll entries, by the same rules as the initiative tracker's
   // menu (utils/tokenCharacter).
-  const campaignHasCharacter = (characterId: string): boolean => campaignHasTokenCharacter(campaign, characterId);
   const canRollForToken = (token: Token): boolean => canRollTokenCharacter(user, campaign, token);
 
   /**
-   * Whether this viewer may turn a token: the DM any token, anyone else a
-   * token they control, as for moving it. The server checks the same.
+   * Whether this viewer may turn a token: by the move rule, the DM any token
+   * at any time, a player a token they control while the session is live.
+   * The server checks the same.
    */
-  const canRotateToken = (token: Token): boolean => isDM || controlsToken(token, user?.id, userRole);
+  const canRotateToken = canMoveToken;
+
+  /** What Temporary HP... grants to on `token`, for this viewer, or null (utils/temporaryHp). */
+  const temporaryHpOf = (token: Token): TemporaryHpTarget | null =>
+    tokenTemporaryHp(token, campaign, characterHpCache, { userId: user?.id, role: userRole });
 
   /**
-   * Whether the token menu offers this viewer anything. The DM always has the
-   * token actions; anyone else has the character's sheet and rolls, and
-   * turning a token they control, so a creature or an object they do not
-   * control would open an empty box.
+   * Give temporary hit points from Temporary HP...: a character's on its
+   * sheet, over the socket, and a creature's to its token.
    */
-  const tokenMenuHasItems = (token: Token): boolean =>
-    canRotateToken(token) || (!!token.characterId && (campaignHasCharacter(token.characterId) || canRollForToken(token)));
+  const takeTemporaryHp = async (target: TemporaryHpTarget, temporary: number) => {
+    if (target.kind === 'character') {
+      socket?.emitCharacterTemporaryHp({ characterId: target.characterId, temporary });
+      return;
+    }
+    if (!campaign?.id || !currentMap?.id) return;
+    const hp = { ...target.hp, temp: temporary };
+    try {
+      await api.updateToken(campaign.id, currentMap.id, target.tokenId, { hp });
+      useGameStore.getState().patchToken(target.tokenId, { hp }, currentMap.id);
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Could not give the token temporary hit points', 'error');
+    }
+  };
 
   /**
-   * Turn a token one step, shown at once and put back if the server refuses.
-   * Read from the store, so presses in a menu that stays open add up.
+   * This viewer, what they may do with `token`, and the table, as the token
+   * menu reads them (map/tokenMenuItems.ts). The DM always has the token
+   * actions; anyone else has the character's sheet and rolls, and turning a
+   * token they control, so a creature or an object they do not control
+   * opens no menu.
    */
-  const rotateToken = async (tokenId: string, step: number) => {
+  const tokenMenuView = (token: Token): TokenMenuView => ({
+    role: userRole,
+    mayViewSheet: campaignHasTokenCharacter(campaign, token.characterId),
+    mayRoll: canRollForToken(token),
+    mayGrantTemporaryHp: temporaryHpOf(token) !== null,
+    mayRotate: canRotateToken(token),
+    mapId: currentMap?.id ?? null,
+    maps: campaign?.maps ?? [],
+    busy: { crossing: isMovingTokenLayer, moving: isMoveToMapLoading },
+  });
+
+  /** What a refused turn says; a ref, so the turns made once keep the newest. */
+  const turnRefusedRef = useRef<(err: unknown) => void>(() => undefined);
+  turnRefusedRef.current = (err) => showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
+  /** A token's turns, sent one at a time (map/tokenTurns.ts). */
+  const [tokenTurns] = useState(() => createTokenTurns({
+    send: ({ campaignId, mapId, tokenId }, rotation) => api.updateToken(campaignId, mapId, tokenId, { rotation }),
+    show: ({ mapId, tokenId }, rotation) => useGameStore.getState().patchToken(tokenId, { rotation }, mapId),
+    refused: (err) => turnRefusedRef.current(err),
+  }));
+
+  /**
+   * Turn a token one step, shown at once. Read from the store, so presses in
+   * a menu that stays open add up.
+   */
+  const rotateToken = (tokenId: string, step: number) => {
     if (!campaign?.id || !currentMap?.id) return;
     const token = useGameStore.getState().tokens[tokenId];
     if (!token) return;
-    const before = token.rotation;
-    const rotation = turned(before, step);
-    useGameStore.getState().patchToken(tokenId, { rotation });
-    try {
-      await api.updateToken(campaign.id, currentMap.id, tokenId, { rotation });
-    } catch (err) {
-      useGameStore.getState().patchToken(tokenId, { rotation: before });
-      showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
+    tokenTurns.turn({ campaignId: campaign.id, mapId: currentMap.id, tokenId }, turned(token.rotation, step), token.rotation);
+  };
+
+  // ============================================
+  // The token keys (map/keyboard.ts, map/selection.ts)
+  // ============================================
+
+  /** Give the keys back to the map: its focus stop takes focus, without scrolling the page. */
+  const focusMap = () => {
+    layersRef.current?.focus({ preventScroll: true });
+  };
+
+  /** Held arrow keys move a token at most once in ARROW_REPEAT_MS; each fresh press moves it. */
+  const [arrowPacer] = useState(() => createRepeatPacer(ARROW_REPEAT_MS));
+
+  /**
+   * The selected token, as the store holds it, while the screen draws it.
+   * Under fog, hidden on the spirit layer or left out of a preview, the keys
+   * leave it alone and the screen reader is told nothing of it.
+   */
+  const selectedShown = (): Token | undefined =>
+    selectedTokenId && drawnIds.has(selectedTokenId) ? useGameStore.getState().tokens[selectedTokenId] : undefined;
+
+  /**
+   * Pan just enough to bring a token's centre two squares inside the view (at
+   * least 48 px, `keepInViewMargin`), and
+   * say how far it panned, in canvas pixels.
+   */
+  const keepInView = (token: Token, area: { width: number; height: number } = canvasSize): { dx: number; dy: number } => {
+    if (!currentMap) return { dx: 0, dy: 0 };
+    const centre = tokenCentre(token, currentMap.gridSize, currentMap.height);
+    const onScreen = {
+      x: centre.x * mapControls.zoom + mapControls.panOffset.x,
+      y: centre.y * mapControls.zoom + mapControls.panOffset.y,
+    };
+    const pan = panToKeepInView(onScreen, area, keepInViewMargin(currentMap.gridSize * mapControls.zoom));
+    if (pan.dx !== 0 || pan.dy !== 0) mapControls.panBy(pan.dx, pan.dy);
+    return pan;
+  };
+
+  /**
+   * Select the next token along (`.`) or the one before (`,`): for the DM
+   * any token the map draws, and while following the selection in a preview
+   * the whole party too; for anyone else their own, paused or not; in the
+   * turn order during a fight, then by row from the top and by column.
+   * False when there is nothing to step to. A key held down steps once.
+   */
+  const stepSelection = (direction: StepDirection, repeat: boolean): boolean => {
+    if (!currentMap) return false;
+    // Following the selection, the party is in reach wherever it stands.
+    const candidates = previewing && following ? followStepTokens(tokens, drawnTokens, previewedPlane) : drawnTokens;
+    const ordered = selectableTokens(candidates, isDM ? () => true : isOwnToken, useGameStore.getState().combat);
+    if (ordered.length === 0) return false;
+    if (repeat) return true;
+    const nextId = nextSelectedId(ordered, selectedTokenId, direction);
+    const next = ordered.find((t) => t.id === nextId);
+    if (!next) return false;
+    useGameStore.getState().selectToken(next.id);
+    keepInView(next);
+    return true;
+  };
+
+  /**
+   * Move a token by an arrow key, by the same put-down a click makes, from
+   * the last square sent by arrow while the server's echoes are still on
+   * their way, and pan it into view. A token this viewer may not move now
+   * is left where it is, and a move that goes nowhere (the token at the
+   * edge) sends nothing unless the token is held, whose hold then ends
+   * where it stands.
+   */
+  const moveByArrow = (token: Token, key: ArrowKey, squares: number) => {
+    if (!currentMap || !canMoveToken(token)) return;
+    const held = draggedToken?.id === token.id;
+    const sent = arrowSentRef.current.get(token.id) ?? [];
+    const from = sent[sent.length - 1] ?? token.position;
+    const square = squareFromArrow(from, token.size, key, squares, currentMap);
+    if (!held && square.x === from.x && square.y === from.y) return;
+    if (!putDown(token, square, { start: !held })) return;
+    arrowSentRef.current.set(token.id, [...sent, square]);
+    keepInView({ ...token, position: square });
+  };
+
+  /**
+   * Pan `token` into the part of the map its action sheet leaves: above the
+   * sheet's top on the compact layout, left of its left side on a phone held
+   * sideways. A turn pressed in the sheet must be seen. A sheet that covers
+   * the whole map leaves nothing to pan into.
+   */
+  const keepInViewBeside = (token: Token, edge: SheetEdge) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    keepInView(token, edge.side === 'right'
+      ? { width: Math.min(canvasSize.width, edge.at - rect.left), height: canvasSize.height }
+      : { width: canvasSize.width, height: Math.min(canvasSize.height, edge.at - rect.top) });
+  };
+
+  /** Whether the next token menu to open puts the cursor on its first item. */
+  const focusMenuOnOpenRef = useRef(false);
+
+  /**
+   * Open a token's menu at its centre on screen, as Enter does, with the
+   * cursor on its first item: the token is panned into view first, and the
+   * menu is held inside the map once its size is known.
+   */
+  const openTokenMenuAt = (token: Token) => {
+    if (!canvasRef.current || !currentMap) return;
+    const { dx, dy } = keepInView(token);
+    const rect = canvasRef.current.getBoundingClientRect();
+    const centre = tokenCentre(token, currentMap.gridSize, currentMap.height);
+    focusMenuOnOpenRef.current = true;
+    setDoorContextMenu(null);
+    setTokenMenuSubmenu(null);
+    const x = rect.left + centre.x * mapControls.zoom + mapControls.panOffset.x + dx;
+    const y = rect.top + centre.y * mapControls.zoom + mapControls.panOffset.y + dy;
+    rememberMenuPoint(x, y);
+    setContextMenu({ token, x, y, fromKeyboard: true });
+  };
+
+  /**
+   * The keys that act on the selected token: the arrows move it, [ and ]
+   * turn it, , and . step the selection, Enter opens its menu; and ? asks
+   * for the shortcuts window. True when the map used the key; only then is
+   * the browser kept from doing anything with it. A held [, ], , . or ?
+   * acts once per press, and a held arrow at the pacer's rate.
+   */
+  const tokenKey = (e: KeyboardEvent): boolean => {
+    const action = mapKeyAction(e);
+    if (!action || !keyBelongsToMap(e, layersRef.current, contextMenuRef.current)) return false;
+    const selected = selectedShown();
+    switch (action.kind) {
+      case 'move':
+        if (!selected || !canMoveToken(selected)) return false;
+        if (arrowPacer.allow(e.repeat, Date.now())) moveByArrow(selected, action.key, action.squares);
+        break;
+      case 'turn':
+        if (!selected || !canRotateToken(selected)) return false;
+        if (!e.repeat) rotateToken(selected.id, action.step * ROTATION_STEP);
+        break;
+      case 'step':
+        if (!stepSelection(action.direction, e.repeat)) return false;
+        break;
+      case 'menu':
+        if (!selected || !tokenMenuHasItems(selected, tokenMenuView(selected))) return false;
+        if (!e.repeat) openTokenMenuAt(selected);
+        break;
+      case 'shortcuts':
+        if (!onShowShortcuts) return false;
+        if (!e.repeat) onShowShortcuts();
+        break;
     }
+    e.preventDefault();
+    return true;
   };
 
   const canRollInitiativeFor = (token: Token): boolean => {
@@ -2234,13 +3541,136 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     });
   };
 
-  const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    if (!canvasRef.current || !currentMap) return;
-    // The right button pans while a wall, fog or light tool is up, so no menu
-    // opens: some browsers send this event as the button goes down, before
-    // any drag, so a drag cannot be told from a click here.
-    if ((wallMode || fogMode || lightMode) && isDM) return;
+  /**
+   * What the token menu's items do (map/tokenMenuItems.ts). The menu closes
+   * before each runs, but for the turns, which keep it open.
+   */
+  const tokenMenuActions: TokenMenuActions = {
+    viewSheet: async (token) => {
+      if (!token.characterId) return;
+      try {
+        const { character } = await api.getCharacter(token.characterId);
+        setViewingSheet({ character, tokenId: token.id });
+      } catch (err) {
+        console.error('Failed to load character sheet:', errorSummary(err));
+        showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
+      }
+    },
+    rollCharacter: (token) => {
+      if (!token.characterId) return;
+      setRollPicker({
+        characterId: token.characterId, tokenId: token.id, canRollInitiative: canRollInitiativeFor(token), at: menuPointRef.current,
+      });
+    },
+    grantTemporaryHp: (token) => setTemporaryHpTokenId(token.id),
+    rotate: (token, step) => { rotateToken(token.id, step); },
+    rollCreature: (token) => setNpcRollPicker({ tokenId: token.id, at: menuPointRef.current }),
+    edit: (token) => onEditToken?.(token),
+    addToInitiative: (token, mapId) => socket?.emitInitiativeAdd({ tokenId: token.id, mapId }),
+    duplicate: async (token) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      try {
+        // Place the copy one cell along, clamped to the map
+        const position = clampTokenPosition(
+          { x: token.position.x + 1, y: token.position.y + 1 },
+          token.size,
+          currentMap
+        );
+        const result = await api.addToken(campaign.id, currentMap.id, {
+          ...tokenCopyRequest(token, position),
+          // A copy starts fresh and belongs to nobody's character:
+          // two tokens on one sheet would follow the same hit
+          // points and both count as that player's own.
+          characterId: null,
+          controlledBy: copyController(token.controlledBy, campaign?.memberships),
+          hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
+          conditions: [],
+        });
+        useGameStore.getState().addToken(result.token, currentMap.id);
+      } catch (err) {
+        // A copy is a new token, so an older one whose fields predate
+        // validation is refused: say which, so the DM can fix it in Edit Token.
+        showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
+      }
+    },
+    saveAsTemplate: async (token) => {
+      if (!campaign?.id) return;
+      try {
+        await api.saveTokenAsTemplate(campaign.id, {
+          name: token.name,
+          imageUrl: token.imageUrl || null,
+          type: token.type,
+          disposition: token.disposition,
+          displayMode: token.displayMode || 'pog',
+          size: token.size,
+          notes: token.notes || null,
+          hp: token.hp || null,
+          showHpBar: token.showHpBar,
+          statBlock: token.statBlock || null,
+          sightRadius: token.sightRadius ?? null,
+        });
+        showToast(`Saved ${tokenDisplayName(token)} as a template`, 'success');
+      } catch (err) {
+        showToast(apiErrorMessage(err) || 'Could not save the token as a template', 'error');
+      }
+    },
+    setVisible: async (token, visible) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      try {
+        await setTokenFlag(campaign.id, currentMap.id, token, 'visible', visible);
+      } catch (err) {
+        showToast(apiErrorMessage(err) || (visible ? 'Could not show the token to players' : 'Could not hide the token from players'), 'error');
+      }
+    },
+    setObscured: async (token, obscured) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      try {
+        await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', obscured);
+      } catch (err) {
+        showToast(apiErrorMessage(err) || (obscured ? "Could not obscure the token's identity" : "Could not reveal the token's identity"), 'error');
+      }
+    },
+    setLayer: async (token, layer) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      setIsMovingTokenLayer(true);
+      try {
+        await api.updateToken(campaign.id, currentMap.id, token.id, { layer });
+        useGameStore.getState().patchToken(token.id, { layer }, currentMap.id);
+      } catch (err) {
+        showToast(apiErrorMessage(err) || (layer === TokenLayer.SPIRIT
+          ? 'Could not send the token to the spirit realm'
+          : 'Could not return the token to the material plane'), 'error');
+      } finally {
+        setIsMovingTokenLayer(false);
+      }
+    },
+    moveToMap: async (token, mapId) => {
+      if (!campaign?.id || !currentMap?.id) return;
+      setIsMoveToMapLoading(true);
+      try {
+        // One request: the server moves the token as it is and
+        // tells everyone on this map itself.
+        await api.moveTokens(campaign.id, currentMap.id, [token.id], mapId);
+        useGameStore.getState().removeToken(token.id, currentMap.id);
+      } catch (err) {
+        showToast(apiErrorMessage(err) || 'Failed to move the token to that map', 'error');
+      } finally {
+        setIsMoveToMapLoading(false);
+      }
+    },
+    remove: (token) => setRemovingToken(token),
+  };
+
+  /**
+   * Open the menu a right-click or a long-press opens at page point
+   * (clientX, clientY), and say whether one opened: the token menu on a
+   * token whose menu has something for this viewer, selecting it, else the
+   * door menu on a door the map offers. A held token goes back first, as a
+   * right-click always put it back. One function decides both, so a finger
+   * is offered exactly what a mouse is.
+   */
+  const openMenuAt = (clientX: number, clientY: number): boolean => {
+    if (!canvasRef.current || !currentMap) return false;
 
     // Always close any open door context menu first
     setDoorContextMenu(null);
@@ -2250,16 +3680,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Get grid + screen coordinates of click
     const rect = canvasRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
+    const screenX = clientX - rect.left;
+    const screenY = clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
 
     // Check tokens first — they sit on a higher visual layer than doors. A
     // token whose menu would be empty for this viewer is passed over.
+    // In Player Preview this finds a creature the preview hides too, and opens
+    // the DM's menu for it: the DM previewing is still the DM.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
-    if (token && tokenMenuHasItems(token)) {
-      setContextMenu({ token, x: e.clientX, y: e.clientY });
-      return;
+    if (token && tokenMenuHasItems(token, tokenMenuView(token))) {
+      rememberMenuPoint(clientX, clientY);
+      if (drawnIds.has(token.id)) useGameStore.getState().selectToken(token.id);
+      // A new menu opens with its submenu shut, as Enter's does, whatever was open in the last.
+      setTokenMenuSubmenu(null);
+      setContextMenu({ token, x: clientX, y: clientY });
+      return true;
     }
     setContextMenu(null);
 
@@ -2268,9 +3704,57 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     if (!wallMode && !fogMode) {
       const door = doorAt(screenToMapPx(screenX, screenY));
       if (door) {
-        setDoorContextMenu({ door, x: e.clientX, y: e.clientY });
+        setDoorContextMenu({ door, x: clientX, y: clientY });
+        return true;
       }
     }
+    return false;
+  };
+
+  /** Ping the map at page point (clientX, clientY), if that is on the map. */
+  const pingAt = (clientX: number, clientY: number) => {
+    if (!canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    pingMapPx(screenToMapPx(clientX - rect.left, clientY - rect.top));
+  };
+  /** Ping map pixel `at` for the table, as Tab does, if it is on the map. */
+  const pingMapPx = (at: { x: number; y: number }) => {
+    if (!currentMap) return;
+    const onMap = at.x >= 0 && at.y >= 0 && at.x <= currentMap.width * currentMap.gridSize && at.y <= currentMap.height * currentMap.gridSize;
+    if (onMap) socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
+  };
+
+  const handleContextMenu = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const e = fromMouseEvent(event);
+    e.preventDefault();
+    if (!canvasRef.current || !currentMap) return;
+    // The right button pans while a wall, fog, light or draw tool is up, so no menu
+    // opens: some browsers send this event as the button goes down, before
+    // any drag, so a drag cannot be told from a click here. A finger's
+    // long-press does nothing there either, and its press stays free to drag.
+    if (inputOwner !== null) return;
+
+    // A stylus opens no menu by holding, but some browsers turn a stylus
+    // held still into a right-click (Windows Ink does). Its barrel button's
+    // right-click presses button 2, not the tip, and opens the menu.
+    if (penTipsRef.current.size > 0) return;
+
+    // A finger's press the recogniser is timing is the browser's own
+    // long-press (Android's), whatever pointer type the event carries, which
+    // Firefox's may not: the recogniser holds the press, so its lift is no
+    // tap, and the long-press opens what its own timer would have. One it
+    // already holds was the timer's: whichever of the two comes second does
+    // nothing. Any other touch on the glass, such as a palm the recogniser
+    // ignores beside a stylus, leaves a right-click a right-click.
+    for (const pointerId of fingerDownsRef.current.keys()) {
+      if (gestures.hold(pointerId)) {
+        longPress(pointerId, e.clientX, e.clientY);
+        return;
+      }
+      if (gestures.isHeld(pointerId)) return;
+    }
+
+    openMenuAt(e.clientX, e.clientY);
   };
 
   /**
@@ -2305,39 +3789,498 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   /**
    * Close context menu when clicking elsewhere
    */
+  // The popover's: an action sheet closes itself, and a click on one of its
+  // rows that keeps the menu open would close it.
   useEffect(() => {
-    const handleClick = () => {
-      setContextMenu(null);
-      setContextMenuMoveToMapOpen(false);
-    };
-    if (!contextMenu) return;
+    const handleClick = () => closeTokenMenu();
+    if (!contextMenu || compact) return;
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
-  }, [contextMenu]);
+  }, [contextMenu, closeTokenMenu, compact]);
 
   // Close door context menu on any left-click outside it
   useEffect(() => {
-    if (!doorContextMenu) return;
+    if (!doorContextMenu || compact) return;
     const handleClick = () => setDoorContextMenu(null);
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
-  }, [doorContextMenu]);
+  }, [doorContextMenu, compact]);
 
-  // After context menu renders, adjust position so it doesn't overflow the viewport
+  // A menu opened elsewhere, the roster's or the tracker's, closes these: the
+  // right-click or long-press that opened it sent no click. And their opening
+  // closes one of those, which a long-press here, sending no mousedown, would
+  // leave open beside them.
+  const mapMenuOpen = contextMenu !== null || doorContextMenu !== null;
+  useEffect(() => {
+    if (!mapMenuOpen) return;
+    menuOpened();
+    return whenMenuOpens(() => {
+      closeTokenMenu();
+      setDoorContextMenu(null);
+    });
+  }, [mapMenuOpen, closeTokenMenu]);
+  // While one is open it is a menu on the screen, as the roll pickers and the
+  // roster's menu are, so the tap that closes it is not the first of a double
+  // tap to ping.
+  useEffect(() => (mapMenuOpen ? menuShown() : undefined), [mapMenuOpen]);
+
+  // After context menu renders, adjust position so it doesn't overflow the
+  // viewport; again when Move to Map… opens or closes, which changes its
+  // height. On a touch screen its height is capped at the viewport's (the
+  // menu scrolls), so a menu opened upward from the point keeps its top on
+  // the screen.
   useEffect(() => {
     if (!contextMenu || !contextMenuRef.current) {
+      // An action sheet, which the compact layout draws, puts the focus on
+      // its first item itself.
+      if (contextMenu) focusMenuOnOpenRef.current = false;
       setContextMenuPos(null);
       return;
     }
     const rect = contextMenuRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const adjustedX = contextMenu.x + rect.width > vw ? Math.max(0, contextMenu.x - rect.width) : contextMenu.x;
-    const adjustedY = contextMenu.y + rect.height > vh ? Math.max(0, contextMenu.y - rect.height) : contextMenu.y;
+    let { x: adjustedX, y: adjustedY } = flipOntoScreen(contextMenu, rect, { width: window.innerWidth, height: window.innerHeight });
+    // A menu opened by Enter sits at a token, which may be near any edge of
+    // the map: it is held inside the map on all four.
+    const area = contextMenu.fromKeyboard ? canvasRef.current?.getBoundingClientRect() : undefined;
+    if (area && area.width > 0 && area.height > 0) {
+      adjustedX = Math.max(area.left, Math.min(contextMenu.x, area.right - rect.width));
+      adjustedY = Math.max(area.top, Math.min(contextMenu.y, area.bottom - rect.height));
+    }
     setContextMenuPos({ x: adjustedX, y: adjustedY });
-  }, [contextMenu]);
+    // `compact`: a menu open as the layout turns from the compact one, which
+    // drew it as an action sheet, is placed as the popover and shown.
+  }, [contextMenu, tokenMenuSubmenu, compact]);
+  // The door menu is placed as the token menu is, flipped to stay on the screen.
+  useEffect(() => {
+    if (!doorContextMenu || !doorMenuRef.current) {
+      setDoorMenuPos(null);
+      return;
+    }
+    const rect = doorMenuRef.current.getBoundingClientRect();
+    setDoorMenuPos(flipOntoScreen(doorContextMenu, rect, { width: window.innerWidth, height: window.innerHeight }));
+  }, [doorContextMenu, compact]);
+
+  // A menu opened from the keyboard puts the cursor on its first item once
+  // it is placed, and so visible: a hidden button cannot take focus.
+  useEffect(() => {
+    if (!contextMenuPos || !focusMenuOnOpenRef.current) return;
+    focusMenuOnOpenRef.current = false;
+    contextMenuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  }, [contextMenuPos]);
 
   // (Token tween + fog reveal rAF loops live in ./map/useMapAnimations)
+
+  // What a screen reader hears of the selection: the token and its square,
+  // said again as it moves. Nothing for a token the screen does not draw.
+  const selectedToken = selectedShown();
+  // The selected token's details, after a finger's or a pen's press, where
+  // no hover card shows: the token as the screen draws it (in a preview, as
+  // the previewed viewer is sent it), and nothing for one it does not draw.
+  const selectionDetails = selectedToken && !(hoverToken && hoverCoords) && selectionDetailsClosedFor !== selectedToken.id
+    && (lastPressKind === 'touch' || lastPressKind === 'pen')
+    ? drawnTokens.find((t) => t.id === selectedToken.id) ?? null
+    : null;
+  const selectionAnnouncement = selectedToken
+    ? `Selected ${tokenDisplayName(selectedToken)}, square ${selectedToken.position.x}, ${selectedToken.position.y}`
+    : '';
+
+  // The toolbar buttons that say what they show now: the tooltip and the
+  // name a screen reader hears.
+  const gridColorName = gridColorLabel(gridColor);
+  const rulerColorName = rulerColorLabel(rulerColor);
+  const spiritTokensLabel = dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show';
+  // What the toolbar's buttons do, and on the compact layout the rows of
+  // Map controls, which hold the buttons its one row leaves out.
+  const mapControlActions: MapControlsActions = {
+    fit: () => mapControls.fitToScreen(canvasSize.width, canvasSize.height),
+    toggleGrid: () => setShowGrid((prev) => !prev),
+    nextGridColor: () => setGridColor((prev) => (prev === 'black' ? 'white' : 'black')),
+    toggleRuler: () => { setDrawKind(null); handleToggleRuler(); },
+    nextRulerColor: () => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber'),
+    toggleAoE: () => { setDrawKind(null); handleToggleAoE(); },
+    toggleSpiritTokens: () => setDmShowSpiritTokens((prev) => !prev),
+    toggleTools: () => (stackShown ? hideTools() : showTools()),
+    togglePaint: () => togglePaint(),
+  };
+  // Where the Put back bar starts: null keeps its place under one row of a
+  // mouse's buttons. The compact layout's band spans the map, so it starts
+  // under the band there. The AoE panel starts under the band with every
+  // pointer, and while both show, under the bar, which would otherwise lie
+  // over its shape buttons.
+  const underToolbar = underBand(topBand, coarsePointer || compact);
+  const putBackShown = draggedToken !== null && putBackOffered && !fingerCarrying;
+  const heldBarBottom = useMeasuredBottom(heldBarRef, containerRef, putBackShown, underToolbar);
+  const aoeTop = heldBarBottom !== null ? heldBarBottom + BAND_GAP : belowBand(topBand);
+
+  /**
+   * Open Draw with the pen, putting away what would take its presses (a DM
+   * tool, the ruler, the area template, a held token); or put it away.
+   */
+  const toggleDraw = () => {
+    if (drawKind) {
+      setDrawKind(null);
+      return;
+    }
+    setDmTool(null);
+    setSelectedLightId(null);
+    putRulerAway();
+    if (draggedToken) cancelHold();
+    // On the compact layout the strip and the stack take turns.
+    if (compact) setToolsShown(false);
+    setDrawKind(eraseOnly ? 'eraser' : 'pen');
+  };
+  /**
+   * Turn Paint on, putting away what would take its presses or keys (Draw,
+   * a DM tool and the chosen light, the ruler and the area template, the
+   * armed Ping, a held token, the selected token and walls) and Player
+   * Preview, which Paint is not drawn in; or turn it off.
+   */
+  const togglePaint = () => {
+    if (paint.on) {
+      paint.close();
+      return;
+    }
+    openPaint();
+  };
+  const openPaint = () => {
+    setDrawKind(null);
+    setDmTool(null);
+    setSelectedLightId(null);
+    putRulerAway();
+    setPingArmed(false);
+    if (draggedToken) cancelHold();
+    useGameStore.getState().selectToken(null);
+    setSelectedWallIds(new Set());
+    setHoverToken(null);
+    setDmPreviewPlayerView(false);
+    if (compact) setToolsShown(false);
+    // The lighting's map-sized canvases are drawn for a preview alone, and
+    // made again when one is next on: their memory goes to the picture.
+    for (const ref of [lightingOffscreenRef, lightCoverageOffscreenRef, lightOnlyOffscreenRef, memoryMaskOffscreenRef, memoryOffscreenRef]) {
+      if (ref.current) releaseCanvas(ref.current);
+      ref.current = null;
+    }
+    lightingCompositeRef.current = null;
+    paint.open();
+  };
+  // Draw, a DM tool, the ruler, the area template or the armed Ping coming
+  // up from anywhere (a panel, Map controls on a phone) puts Paint away, as
+  // Paint puts each of them away; so does the map's picture turning out to
+  // be an uploaded one.
+  const putPaintAway = useEffectEvent(() => {
+    if (paint.on) paint.close();
+  });
+  const otherToolUp = drawKind !== null || dmTool !== null || showRuler || showAoE || pingArmed || pictureKind === 'uploaded';
+  useEffect(() => {
+    if (otherToolUp) putPaintAway();
+  }, [otherToolUp]);
+  // A map just made with Draw a map opens with Paint on, once it is on
+  // screen and its picture is known to be drawn.
+  const openOnMapId = usePaintStore((st) => st.openOnMapId);
+  const openPaintWhenShown = useEffectEvent(() => {
+    usePaintStore.getState().openWhenShown(null);
+    openPaint();
+  });
+  // Paint pressed before its draft had been looked for waits here too.
+  useEffect(() => {
+    if (openOnMapId !== null && openOnMapId === currentMap?.id && paintOffered && paint.ready && !paint.on) openPaintWhenShown();
+  }, [openOnMapId, currentMap?.id, paintOffered, paint.ready, paint.on]);
+  /**
+   * On the compact layout the DM's tool stack shows while Tools is on, and
+   * while a tool from it is armed, so a tool armed as the layout turns
+   * compact keeps its panel, with its Done and Cancel, in sight.
+   */
+  const stackShown = toolsShown || dmTool !== null;
+  /** Put the DM's armed tool away, with what it had begun: a wall line or polygon, a fog box, the chosen light. */
+  const putDmToolAway = () => {
+    wallPanel.onCollapse?.();
+    setFogMode(null);
+    cancelFogDrag();
+    setLightMode(null);
+    setSelectedLightId(null);
+  };
+  /** Tools on: the stack shows, and Draw is put away, as a DM tool puts it away. */
+  const showTools = () => {
+    setDrawKind(null);
+    setToolsShown(true);
+  };
+  /** Tools off: the stack hides, and takes its armed tool with it. */
+  const hideTools = () => {
+    putDmToolAway();
+    setToolsShown(false);
+  };
+  /** How many drawings Clear mine, or for the DM Clear drawings, would erase. */
+  const clearableDrawings = mapDrawings.drawings.filter((d) => d.layer === 'MARKUP' && !d.id.startsWith('pending:')
+    && (isDM || (d.authorId === user?.id && canEraseDrawing(userRole ?? undefined, user?.id, d)))).length;
+  /** For the DM: each other member with drawings Clear one member's would erase, and how many. */
+  const membersWithDrawings = useMemo((): MemberDrawings[] => {
+    if (!isDM) return [];
+    const counts = new Map<string, number>();
+    for (const d of mapDrawings.drawings) {
+      if (d.layer !== 'MARKUP' || d.audience !== 'ALL' || !d.authorId || d.authorId === user?.id || d.id.startsWith('pending:')) continue;
+      counts.set(d.authorId, (counts.get(d.authorId) ?? 0) + 1);
+    }
+    const named = [...counts].map(([authorId, count]) => ({
+      authorId,
+      name: campaign?.memberships?.find((m) => m.userId === authorId)?.user?.displayName ?? null,
+      count,
+    }));
+    // By name, and anyone who has left after the members.
+    return named.sort((a, b) => (a.name === null ? 1 : 0) - (b.name === null ? 1 : 0) || (a.name ?? '').localeCompare(b.name ?? ''));
+  }, [isDM, mapDrawings.drawings, user?.id, campaign?.memberships]);
+  // A label's box takes the keys as it opens, after the press that opened it.
+  const labelBoxRef = useRef<HTMLInputElement>(null);
+  const labelAt = drawTool.textBox?.at;
+  useLayoutEffect(() => {
+    if (labelAt) labelBoxRef.current?.focus({ preventScroll: true });
+  }, [labelAt]);
+  // And Paint's text box, likewise.
+  const paintTextRef = useRef<HTMLInputElement>(null);
+  const paintTextAt = paint.textBox?.at;
+  useLayoutEffect(() => {
+    if (paintTextAt) paintTextRef.current?.focus({ preventScroll: true });
+  }, [paintTextAt]);
+
+  // The rows of Map controls on the compact layout, which its tooltip names.
+  const mapControlRows = mapControlItems({
+    isDM,
+    hasMap: !!currentMap,
+    showGrid,
+    gridColor,
+    showRuler,
+    rulerColor,
+    showAoE,
+    spiritTokensShown: dmShowSpiritTokens,
+    toolsShown: stackShown,
+    paint: paintOffered ? (paint.on ? 'on' : 'offered') : null,
+  }, mapControlActions);
+  // The buttons both layouts' toolbars hold: the zoom buttons and their
+  // readout, Ping and Draw.
+  const zoomOutButton = (
+    <Button
+      onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
+      disabled={mapControls.zoom <= mapControls.minZoom}
+      variant="secondary" iconOnly
+      title="Zoom Out"
+      aria-label="Zoom Out"
+    >
+      <ZoomOut className="w-4 h-4" />
+    </Button>
+  );
+  // 48 pixels on a touch screen, room for "300%", so a DM's toolbar of
+  // 44-pixel buttons keeps one row on an iPad in landscape with both side
+  // panels at their minimums.
+  const zoomReadout = (
+    <span className="text-xs text-stone-gray font-mono min-w-16 pointer-coarse:min-w-12 text-center">
+      {Math.round(mapControls.zoom * 100)}%
+    </span>
+  );
+  const zoomInButton = (
+    <Button
+      onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
+      disabled={mapControls.zoom >= mapControls.maxZoom}
+      variant="secondary" iconOnly
+      title="Zoom In"
+      aria-label="Zoom In"
+    >
+      <ZoomIn className="w-4 h-4" />
+    </Button>
+  );
+  // Ping: Tab's ping without a keyboard, for the next tap or click.
+  const pingButton = (
+    <Button
+      onClick={() => setPingArmed((armed) => !armed)}
+      variant="secondary" iconOnly className={pingArmed ? 'bg-moss-green/20' : undefined}
+      aria-label="Ping"
+      aria-pressed={pingArmed}
+      title="Ping: tap or click the map to show everyone a spot"
+    >
+      <MapPin className={`w-4 h-4 ${pingArmed ? 'text-brand-ink' : ''}`} />
+    </Button>
+  );
+  // Draw, for whoever may draw now: the DM, or a player while Players may
+  // draw is on and the session is live.
+  const drawButton = drawOffered && (
+    <Button
+      ref={drawButtonRef}
+      onClick={toggleDraw}
+      variant="secondary" iconOnly className={drawKind ? 'bg-moss-green/20' : undefined}
+      aria-label="Draw"
+      aria-pressed={drawKind !== null}
+      title={eraseOnly ? 'Draw: drawing is off for now; erase your own drawings' : 'Draw: a pen, shapes, labels and the laser pointer'}
+    >
+      <Pencil className={`w-4 h-4 ${drawKind ? 'text-brand-ink' : ''}`} />
+    </Button>
+  );
+
+  // Paint, for the DM, on a map drawn in CozyVTT or one with no picture.
+  const paintButton = paintOffered && (
+    <Button
+      onClick={togglePaint}
+      variant="secondary" iconOnly className={paint.on ? 'bg-moss-green/20' : undefined}
+      aria-label="Mapmaker"
+      aria-pressed={paint.on}
+      title="Mapmaker: draw on the map's picture, on your screen until it is saved"
+    >
+      <Paintbrush className={`w-4 h-4 ${paint.on ? 'text-brand-ink' : ''}`} />
+    </Button>
+  );
+
+  // The DM's Player Preview controls, offered while dynamic lighting or
+  // fog is on, and kept while a preview is on; not while Paint is on.
+  const previewOffered = userRole === 'DM' && !paint.on && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled);
+  const previewHint = isPreparing
+    ? 'Preview Player View is off while you prepare a map the table is not on'
+    : dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it';
+  const playerPreviewControls = (
+    <>
+      {dmPreviewPlayerView && !isPreparing && (
+        <select
+          value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
+          onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
+          aria-label="Player or token to preview as"
+          className="touch-target px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
+        >
+          {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
+          {/* Looks through whichever token is selected, as , and . step. */}
+          <option value={encodePreviewSelection({ kind: 'selected' })}>Follow my selection</option>
+          {(['players', 'tokens'] as const).map((group) => {
+            const entries = previewChoices.filter((o) => o.group === group);
+            if (entries.length === 0) return null;
+            return (
+              <optgroup key={group} label={group === 'players' ? 'Players' : 'Tokens'}>
+                {entries.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </optgroup>
+            );
+          })}
+        </select>
+      )}
+      <button
+        onClick={() => {
+          const next = !dmPreviewPlayerView;
+          if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
+          setDmPreviewPlayerView(next);
+        }}
+        disabled={isPreparing}
+        className={`touch-target px-3 py-1.5 rounded text-xs font-medium transition-colors border disabled:opacity-60 disabled:cursor-not-allowed ${
+          dmPreviewPlayerView && !isPreparing
+            ? 'bg-info/30 text-info-ink border-info/50'
+            // ink/paper invert together, so this stays a legible contrast
+            // chip over the map on both light and dark themes
+            : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
+        }`}
+        title={previewHint}
+      >
+        {/* Named by the words it shows, which say what a press does, so a
+            voice command for them finds it. */}
+        {dmPreviewPlayerView && !isPreparing
+          ? <><span aria-hidden="true">👁</span> DM View</>
+          : <><span aria-hidden="true">🎭</span> Preview Player View</>}
+      </button>
+      {/* Said as well as greyed out: a touch screen shows no tooltip. */}
+      {isPreparing && (
+        <span className="px-2 py-1 rounded-sm text-xs bg-ink/85 text-paper">Off while you prepare a map</span>
+      )}
+    </>
+  );
+  // The drawing tools, while Draw is open: the stack's panel, or on the
+  // compact layout the strip at the map's foot.
+  const drawPanel: DrawControlsProps | null = drawKind && {
+    kind: drawKind,
+    onKindChange: setDrawKind,
+    settings: drawSettings,
+    onSettingsChange: (patch) => setDrawSettings((prev) => ({ ...prev, ...patch })),
+    isDM,
+    onlyErase: eraseOnly,
+    polygonCorners: drawTool.polygonCorners,
+    onPolygonDone: drawTool.finishPolygon,
+    onPolygonCancel: drawTool.cancelPolygon,
+    clearable: clearableDrawings,
+    onClear: isDM ? mapDrawings.clearAll : mapDrawings.clearMine,
+    members: membersWithDrawings,
+    onClearMember: mapDrawings.clearMember,
+    onClose: () => {
+      setDrawKind(null);
+      // The strip's Done goes with the strip: the keys go to Draw, which opened it.
+      if (compact) drawButtonRef.current?.focus({ preventScroll: true });
+    },
+  };
+  // A player with no token of theirs on the map measures from nothing.
+  const rulerNeedsToken = showRuler && !isDM && !myToken;
+
+  // The square under the pointer, shown where the details card goes while
+  // no card shows.
+  const hoverCoordsShown = hoverCoords !== null && !hoverToken && !selectionDetails;
+  const hoverCoordsText = hoverCoords && (
+    <span className="text-xs text-stone-gray font-mono font-semibold">
+      ({hoverCoords.x}, {hoverCoords.y})
+    </span>
+  );
+  // While a token is held, how far it has come from its square to where it
+  // would be put down, as the ruler measures (map/tokenHold.ts): beside the
+  // square under the pointer, or above the details card where one shows.
+  // Nothing for a token the screen does not draw.
+  const heldDistance = draggedToken && currentMap && drawnIds.has(draggedToken.id)
+    ? carriedDistance(
+      tokens.find((t) => t.id === draggedToken.id) ?? draggedToken,
+      carrierSquare && dragOffset ? { square: carrierSquare, offset: dragOffset } : null,
+      currentMap,
+    )
+    : null;
+  const heldDistanceText = heldDistance && (
+    <span className="text-xs text-stone-gray font-mono font-semibold">Carried {gridDistanceLabel(heldDistance)}</span>
+  );
+  const heldDistanceCard = heldDistanceText && (
+    <div className="glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">{heldDistanceText}</div>
+  );
+  const detailsCardShown = (hoverToken !== null && hoverCoords !== null) || selectionDetails !== null;
+  const cornerPanelShown = hoverCoordsShown || (heldDistance !== null && !detailsCardShown);
+  const cornerPanelText = (
+    <>
+      {hoverCoordsShown && hoverCoordsText}
+      {!detailsCardShown && heldDistanceText}
+    </>
+  );
+  /**
+   * The token's details: in the map's bottom left corner, or `docked` in
+   * the compact layout's dock, across the map's foot.
+   */
+  const tokenDetails = (docked: boolean) => (
+    <>
+      {/* The hovered token's details (TokenDetailsCard), with only what this
+          viewer may see. A player token follows its character sheet, which
+          every campaign member can already read; an NPC's own hit points are
+          the DM's to reveal, so they appear only once the HP bar is turned
+          on, the rule the bar on the token itself draws by. */}
+      {hoverToken && hoverCoords && (
+        <TokenDetailsCard
+          token={hoverToken}
+          square={hoverCoords}
+          hp={visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing)}
+          imageSrc={cachedTokenImage(hoverToken, tokenImages)?.src}
+          mayMove={canMoveToken(hoverToken)}
+          docked={docked}
+          above={heldDistanceCard}
+        />
+      )}
+
+      {/* The selected token's details, in the same place, after a tap: a
+          finger has no hover. Closed, they stay closed until the selection
+          changes; the selection itself stays, for the keys. */}
+      {selectionDetails && (
+        <TokenDetailsCard
+          token={selectionDetails}
+          square={selectionDetails.position}
+          hp={visibleTokenHp(selectionDetails, characterHpCache, isDM && !previewing)}
+          imageSrc={cachedTokenImage(selectionDetails, tokenImages)?.src}
+          mayMove={canMoveToken(selectionDetails)}
+          onClose={() => setSelectionDetailsClosedFor(selectionDetails.id)}
+          above={heldDistanceCard}
+          docked={docked}
+        />
+      )}
+    </>
+  );
 
   // ============================================
   // Render
@@ -2353,11 +4296,19 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     >
       {/* Three stacked canvases. The vibe CSS filter is applied to
           the wrapper so it tints the composite of all three, matching the old
-          single-canvas behaviour. The wrapper is also the CSS-transform target
-          for pan gestures. Only the top canvas takes input. */}
+          single-canvas behaviour. The layout effect above sizes them at the
+          screen's ratio. Only the top canvas takes input. A press on the
+          map selects no text and a long-press opens no callout; the panels
+          over it keep theirs. */}
       <div
         ref={layersRef}
-        className="absolute inset-0"
+        // The map's focus stop: it takes the token keys, and holds only the
+        // canvases, so the panels over the map keep their own roles.
+        tabIndex={0}
+        role="application"
+        aria-label="Map"
+        aria-describedby={mapHintId}
+        className="absolute inset-0 select-none [-webkit-touch-callout:none] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
         style={{
           // Re-checked here as well as on the server: a filter is CSS.
           filter: activeVibeEffect && isSafeVibeFilter(activeVibeEffect.filter) ? activeVibeEffect.filter : undefined,
@@ -2366,22 +4317,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       >
         <canvas
           ref={terrainCanvasRef}
-          width={canvasSize.width}
-          height={canvasSize.height}
           className="absolute inset-0 pointer-events-none"
         />
         <canvas
           ref={tokenCanvasRef}
-          width={canvasSize.width}
-          height={canvasSize.height}
           className="absolute inset-0 pointer-events-none"
         />
         <canvas
           ref={canvasRef}
-          width={canvasSize.width}
-          height={canvasSize.height}
-          className={`absolute inset-0 ${
+          className={`absolute inset-0 touch-none ${
+            pingArmed ? 'cursor-crosshair' :
             draggedToken ? 'cursor-grabbing' :
+            paint.on ? 'cursor-crosshair' :
+            drawKind === 'eraser' ? 'cursor-cell' :
+            drawKind === 'text' ? 'cursor-text' :
+            drawKind ? 'cursor-crosshair' :
             wallMode === 'wall-draw' ? 'cursor-crosshair' :
             wallMode === 'wall-polygon' ? 'cursor-crosshair' :
             wallMode === 'wall-split' ? (splitHoverPoint ? 'cursor-pointer' : 'cursor-crosshair') :
@@ -2393,13 +4343,20 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             (hoverToken || hoveredDoorId) ? 'cursor-pointer' :
             'cursor-move'
           }`}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerLeave}
           onContextMenu={handleContextMenu}
+          // While a label's box is open the press on the map that follows
+          // a pointer's down must not take the keys back from it.
+          onMouseDown={(e) => { if (drawTool.textOpen() || paint.textOpen()) e.preventDefault(); }}
         />
       </div>
+
+      <p id={mapHintId} className="sr-only">{MAP_KEYS_HINT}</p>
+      <p role="status" aria-live="polite" className="sr-only">{selectionAnnouncement}</p>
 
       {/* Vibe hue tint overlay — color tint layered on top of canvas */}
       {activeVibeEffect && (
@@ -2467,129 +4424,233 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         })()
       )}
 
-      {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
-      {(previewing
-        ? previewedPlane === 'spirit'
-        : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
-        // An opaque backing under the tint, as the zoom panel has, so the
-        // words read over any map.
-        <div className="absolute top-4 right-4 z-10 rounded-cozy bg-parchment animate-pulse-soft">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40">
-            <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
-            <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
-          </div>
-        </div>
-      )}
-
-      {/* Toolbar - Glassmorphism */}
-      <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-xs">
-        {/* Zoom Out */}
-        <Button
-          onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
-          disabled={mapControls.zoom <= mapControls.minZoom}
-          variant="secondary" className="p-2"
-          title="Zoom Out"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </Button>
-
-        {/* Zoom Level Display */}
-        <span className="text-xs text-stone-gray font-mono min-w-16 text-center">
-          {Math.round(mapControls.zoom * 100)}%
-        </span>
-
-        {/* Zoom In */}
-        <Button
-          onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
-          disabled={mapControls.zoom >= mapControls.maxZoom}
-          variant="secondary" className="p-2"
-          title="Zoom In"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </Button>
-
-        {/* Divider */}
-        <div className="w-px h-6 bg-moss-green/20" />
-
-        {/* Reset View — fit and center the map in the canvas */}
-        <Button
-          onClick={() => mapControls.fitToScreen(canvasSize.width, canvasSize.height)}
-          variant="secondary" className="p-2"
-          title="Fit to Screen"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </Button>
-
-        {/* Toggle Grid */}
-        <Button
-          onClick={() => setShowGrid((prev) => !prev)}
-          variant="secondary" className={`p-2 ${showGrid ? 'bg-moss-green/20' : ''}`}
-          title="Toggle Grid"
-        >
-          <Grid3x3 className="w-4 h-4" />
-        </Button>
-
-        {/* Grid Color Toggle (only show if grid is enabled) */}
-        {showGrid && (
-          <Button
-            onClick={() => setGridColor((prev) => (prev === 'black' ? 'white' : 'black'))}
-            variant="secondary" className="p-2"
-            title={`Grid Color: ${gridColor === 'black' ? 'Black' : 'White'}`}
-          >
-            <Palette className="w-4 h-4" />
-          </Button>
-        )}
-
-        {/* Toggle Ruler */}
-        {currentMap && (
-          <>
-            <div className="w-px h-6 bg-moss-green/20" />
+      {/* The band across the top of the map: the toolbar, and the spirit
+          realm label on the right. Where they do not fit one row, the
+          toolbar wraps between its groups and the label goes under it; the
+          panels under the band are placed from its measured bottom edge
+          (map/toolbarLayout.ts). It passes clicks through between the two.
+          On the compact layout the toolbar is one row across the map, and
+          Map controls opens what that row leaves out. */}
+      <div ref={topBandRef} className={compact ? COMPACT_BAND : 'absolute top-4 left-4 right-0 flex flex-wrap items-start gap-2 pointer-events-none'}>
+        {compact ? (
+          // Across the map on a phone, with More at its far end; from a
+          // small tablet up as wide as its buttons, More beside Draw.
+          <div ref={toolbarRef} role="group" aria-label="Map tools" className="glass-panel w-full sm:w-auto p-1.5 flex items-center gap-1.5 bg-parchment/90 backdrop-blur-xs pointer-events-auto">
+            {zoomOutButton}
+            {zoomReadout}
+            {zoomInButton}
+            <div className="w-px h-6 shrink-0 bg-moss-green/20" />
+            {currentMap && !paint.on && pingButton}
+            {currentMap && !paint.on && drawButton}
+            {/* Paint is in More here, so the row stays one row. */}
+            {/* "More", and named for what it holds, its name starting with
+                the word it shows. The word goes on a screen under 384
+                pixels wide, where the row has room for the icon alone. */}
             <Button
-              onClick={handleToggleRuler}
-              variant="secondary" className={`p-2 ${showRuler ? 'bg-moss-green/20' : ''}`}
-              title="Ruler — measure distance"
+              ref={mapControlsButtonRef}
+              onClick={() => setMapControlsOpen(true)}
+              variant="secondary" size="sm"
+              className="ml-auto sm:ml-0 shrink-0 inline-flex items-center justify-center"
+              aria-label="More map controls"
+              aria-haspopup="dialog"
+              aria-expanded={mapControlsOpen}
+              title={mapControlsTitle(mapControlRows)}
             >
-              <Ruler className={`w-4 h-4 ${showRuler ? 'text-brand-ink' : ''}`} />
+              <SlidersHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span className="ml-1.5 max-[24rem]:sr-only">More</span>
             </Button>
-            {showRuler && (
+          </div>
+        ) : (
+        /* Toolbar - Glassmorphism */
+        <div ref={toolbarRef} className="glass-panel p-2 flex flex-wrap items-center gap-2 bg-parchment/90 backdrop-blur-xs pointer-events-auto">
+          <div className="flex items-center gap-2">
+            {zoomOutButton}
+            {zoomReadout}
+            {zoomInButton}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Divider */}
+            <div className="w-px h-6 bg-moss-green/20" />
+
+            {/* Reset View — fit and center the map in the canvas */}
+            <Button
+              onClick={mapControlActions.fit}
+              variant="secondary" iconOnly
+              title="Fit to Screen"
+              aria-label="Fit to Screen"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+
+            {/* Toggle Grid */}
+            <Button
+              onClick={mapControlActions.toggleGrid}
+              variant="secondary" iconOnly className={showGrid ? 'bg-moss-green/20' : undefined}
+              title="Toggle Grid"
+              aria-label="Toggle Grid"
+            >
+              <Grid3x3 className="w-4 h-4" />
+            </Button>
+
+            {/* Grid Color Toggle (only show if grid is enabled) */}
+            {showGrid && (
               <Button
-                onClick={() => setRulerColor((prev) => prev === 'amber' ? 'purple' : prev === 'purple' ? 'black' : 'amber')}
-                variant="secondary" className="p-2"
-                title={`Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`}
+                onClick={mapControlActions.nextGridColor}
+                variant="secondary" iconOnly
+                title={gridColorName}
+                aria-label={gridColorName}
               >
-                <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
+                <Palette className="w-4 h-4" />
               </Button>
             )}
+          </div>
 
-            {/* Toggle AoE tool */}
-            <Button
-              onClick={handleToggleAoE}
-              variant="secondary" className={`p-2 ${showAoE ? 'bg-moss-green/20' : ''}`}
-              title="AoE Shape — area of effect overlay"
-            >
-              <Zap className={`w-4 h-4 ${showAoE ? 'text-brand-ink' : ''}`} />
-            </Button>
-          </>
+          {/* Toggle Ruler */}
+          {currentMap && (
+            <div className="flex items-center gap-2">
+              <div className="w-px h-6 bg-moss-green/20" />
+              {/* While Paint is on, its button alone: it takes the map. */}
+              {!paint.on && (<>
+              <Button
+                onClick={mapControlActions.toggleRuler}
+                variant="secondary" iconOnly className={showRuler ? 'bg-moss-green/20' : undefined}
+                title="Ruler — measure distance"
+                aria-label="Ruler — measure distance"
+              >
+                <Ruler className={`w-4 h-4 ${showRuler ? 'text-brand-ink' : ''}`} />
+              </Button>
+              {showRuler && (
+                <Button
+                  onClick={mapControlActions.nextRulerColor}
+                  variant="secondary" iconOnly
+                  title={rulerColorName}
+                  aria-label={rulerColorName}
+                >
+                  <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
+                </Button>
+              )}
+
+              {/* Toggle AoE tool */}
+              <Button
+                onClick={mapControlActions.toggleAoE}
+                variant="secondary" iconOnly className={showAoE ? 'bg-moss-green/20' : undefined}
+                title="AoE Shape — area of effect overlay"
+                aria-label="AoE Shape — area of effect overlay"
+              >
+                <Zap className={`w-4 h-4 ${showAoE ? 'text-brand-ink' : ''}`} />
+              </Button>
+
+              {pingButton}
+              {drawButton}
+              </>)}
+              {paintButton}
+            </div>
+          )}
+
+          {/* DM-only: toggle spirit layer token visibility */}
+          {userRole === 'DM' && (
+            <div className="flex items-center gap-2">
+              <div className="w-px h-6 bg-moss-green/20" />
+              <Button
+                onClick={mapControlActions.toggleSpiritTokens}
+                variant="secondary" iconOnly className={dmShowSpiritTokens ? 'bg-spirit-purple/15' : undefined}
+                title={spiritTokensLabel}
+                aria-label={spiritTokensLabel}
+              >
+                <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
+              </Button>
+            </div>
+          )}
+        </div>
         )}
 
-        {/* DM-only: toggle spirit layer token visibility */}
-        {userRole === 'DM' && (
-          <>
-            <div className="w-px h-6 bg-moss-green/20" />
-            <Button
-              onClick={() => setDmShowSpiritTokens((prev) => !prev)}
-              variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
-              title={dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show'}
-            >
-              <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
-            </Button>
-          </>
+        {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
+        {(previewing
+          ? previewedPlane === 'spirit'
+          : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
+          // An opaque backing under the tint, as the zoom panel has, so the
+          // words read over any map.
+          <div className="ml-auto mr-4 z-10 rounded-cozy bg-parchment animate-pulse-soft pointer-events-auto">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40">
+              <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
+              <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* DM Tool Panels — draggable container with stacked panels */}
-      {userRole === 'DM' && currentMap && (
-        <DmToolPanelContainer containerRef={containerRef}>
+      {/* Map controls, on the compact layout: what the toolbar's one row
+          leaves out, as an action sheet. */}
+      {compact && mapControlsOpen && (
+        <ActionSheet
+          open
+          title="Map controls"
+          items={mapControlRows}
+          onClose={() => setMapControlsOpen(false)}
+        />
+      )}
+
+      {/* Put back, while a finger or a pen holds a token still. In Player
+          Preview it names only what the preview draws, as the previewed
+          player is sent it; a token the preview leaves out goes unnamed. */}
+      {draggedToken && putBackShown && (() => {
+        const shown = drawnTokens.find((t) => t.id === draggedToken.id);
+        const name = previewing ? (shown ? tokenDisplayName(shown) : UNKNOWN_CREATURE) : tokenDisplayName(draggedToken);
+        return (
+          <HeldTokenBar
+            name={name}
+            top={underToolbar}
+            ref={heldBarRef}
+            onPutBack={() => {
+              cancelHold();
+              // The button goes with the hold; the keys go back to the map.
+              focusMap();
+            }}
+          />
+        );
+      })()}
+
+      {/* The tool panels, in a stack that can be dragged: the drawing tools
+          for whoever has Draw open, then the DM's Fog, Walls and Lights. On
+          the compact layout the drawing tools are a strip in the dock at
+          the map's foot instead. */}
+      {(userRole === 'DM' || (drawPanel && !compact)) && currentMap && (
+        <DmToolPanelContainer
+          containerRef={containerRef}
+          band={topBand}
+          // On the compact layout it hides behind Tools, in Map controls,
+          // and a drag keeps it under the band, where Map controls is.
+          hidden={compact && !stackShown}
+          onHide={compact ? () => {
+            hideTools();
+            mapControlsButtonRef.current?.focus({ preventScroll: true });
+          } : undefined}
+          topLimit={compact ? underToolbar ?? 0 : undefined}
+          // Above the dock, Preview and the details card in it, however tall.
+          roomBelow={compact && dockHeight !== null ? dockHeight + BAND_GAP : undefined}
+        >
+          {/* On the compact layout Paint's tools are a strip at the map's foot instead. */}
+          {paint.on && !compact && (
+            <PaintControls
+              settings={paint.settings}
+              onSettingsChange={(patch) => paint.setSettings((prev) => ({ ...prev, ...patch }))}
+              canUndo={paint.canUndo}
+              canRedo={paint.canRedo}
+              onUndo={paint.undo}
+              onRedo={paint.redo}
+              unsaved={paint.unsaved}
+              onSave={pressSave}
+              saving={paint.saving}
+              onDownload={() => { void paint.download(); }}
+              signedOut={paintGuards.signedOut}
+              onClose={paint.close}
+              selection={paint.selection}
+            />
+          )}
+          {drawPanel && !compact && <DrawControls {...drawPanel} />}
+          {/* On a phone the stack is put away while Paint is on, so the map keeps room to paint on. */}
+          {userRole === 'DM' && !(compact && paint.on) && (<>
           <DmFogControls
             fogMode={fogMode}
             fogEnabled={fogEnabled}
@@ -2600,15 +4661,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               if (!campaign || !currentMap) return;
               // Shown at once; the settings broadcast confirms it for every
               // client, this one included. Put back if the save fails.
-              const before = currentMap;
-              setCurrentMap({ ...currentMap, fogEnabled: enabled });
+              // On the map on screen, which may be one being prepared: the
+              // table stays where it is.
+              const { id: mapId, fogEnabled: before } = currentMap;
+              updateMap(mapId, (latest) => ({ ...latest, fogEnabled: enabled }));
               if (!enabled) { setFogMode(null); cancelFogDrag(); }
               try {
-                await mapService.updateMap(campaign.id, currentMap.id, { fogEnabled: enabled });
+                await mapService.updateMap(campaign.id, mapId, { fogEnabled: enabled });
               } catch (err) {
                 // Say why: a map stored larger than the size limits is
                 // refused fog, and the box would otherwise just untick.
-                setCurrentMap(before);
+                updateMap(mapId, (latest) => ({ ...latest, fogEnabled: before }));
                 showToast(apiErrorMessage(err) || 'Could not change fog of war for this map', 'error');
               }
             }}
@@ -2620,6 +4683,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setFogMode(mode);
               // Deactivate wall/light tools when switching to fog tool
               if (mode) {
+                setDrawKind(null);
                 setWallMode(null);
                 setLightMode(null);
                 setSelectedLightId(null);
@@ -2646,7 +4710,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             onWallModeChange={(mode) => {
               wallPanel.onWallModeChange(mode);
               // Deactivate fog/light tools when switching to wall tool
-              if (mode) { setFogMode(null); setLightMode(null); setSelectedLightId(null); }
+              if (mode) { setFogMode(null); setLightMode(null); setSelectedLightId(null); setDrawKind(null); }
             }}
           />
           <DmLightControls
@@ -2655,7 +4719,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setLightMode(mode);
               if (mode !== 'light-select') setSelectedLightId(null);
               // Deactivate wall/fog tools when switching to light tool
-              if (mode) { setWallMode(null); setFogMode(null); }
+              if (mode) { setWallMode(null); setFogMode(null); setDrawKind(null); }
             }}
             onCollapse={() => {
               setLightMode(null);
@@ -2691,79 +4755,125 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             globalIllumination={currentMap.globalIllumination ?? true}
             onGlobalIlluminationChange={async (on) => {
               if (!campaign) return;
-              const before = currentMap;
-              setCurrentMap({ ...currentMap, globalIllumination: on });
+              const { id: mapId, globalIllumination: before } = currentMap;
+              updateMap(mapId, (latest) => ({ ...latest, globalIllumination: on }));
               try {
-                await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
+                await mapService.updateMap(campaign.id, mapId, { globalIllumination: on });
               } catch (err) {
-                setCurrentMap(before);
-                // TODO(ui): the Lights panel's switch reads "Global illumination" and
-                // Edit Map's checkbox "Global Illumination"; settle on one spelling
-                // for both controls and this toast.
+                updateMap(mapId, (latest) => ({ ...latest, globalIllumination: before }));
                 showToast(apiErrorMessage(err) || 'Could not change Global Illumination', 'error');
               }
             }}
             placementDefaults={lightPlacementDefaults}
             onDefaultsChange={setLightPlacementDefaults}
           />
+          </>)}
         </DmToolPanelContainer>
+      )}
+
+      {/* A text label being written, in a box at its point on the map. */}
+      {drawTool.textBox && currentMap && (
+        <input
+          ref={labelBoxRef}
+          aria-label="Label"
+          value={drawTool.textBox.draft}
+          maxLength={DRAWING_LIMITS.maxTextLength}
+          enterKeyHint="done"
+          autoComplete="off"
+          onChange={(e) => drawTool.setTextDraft(e.target.value)}
+          onKeyDown={(e) => {
+            // An input method's Enter confirms, and its Esc cancels, what it is composing.
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              drawTool.commitText();
+              focusMap();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              drawTool.cancelText();
+              focusMap();
+            }
+          }}
+          onBlur={() => drawTool.commitText()}
+          className="absolute z-20 m-0 p-0 min-w-24 bg-parchment/40 border border-dashed border-brand rounded-sm outline-hidden"
+          style={{
+            left: drawTool.textBox.at[0] * mapControls.zoom + mapControls.panOffset.x,
+            top: drawTool.textBox.at[1] * mapControls.zoom + mapControls.panOffset.y,
+            // At least 16 pixels on a touch screen, below which iOS zooms the page to type.
+            fontSize: Math.max(coarsePointer ? 16 : 8, labelFontSize(drawSettings.width) * mapControls.zoom),
+            lineHeight: 1.25,
+            fontWeight: 600,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            color: drawSettings.color,
+          }}
+        />
+      )}
+
+      {/* Paint's line of text being written, in a box at its point on the map. */}
+      {paint.textBox && currentMap && (
+        <input
+          ref={paintTextRef}
+          aria-label="Text to paint"
+          value={paint.textBox.draft}
+          maxLength={DRAWING_LIMITS.maxTextLength}
+          enterKeyHint="done"
+          autoComplete="off"
+          onChange={(e) => paint.setTextDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              paint.commitText();
+              focusMap();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              paint.cancelText();
+              focusMap();
+            }
+          }}
+          onBlur={() => paint.commitText()}
+          className="absolute z-20 m-0 p-0 min-w-24 bg-parchment/40 border border-dashed border-brand rounded-sm outline-hidden"
+          style={{
+            left: paint.textBox.at[0] * mapControls.zoom + mapControls.panOffset.x,
+            top: paint.textBox.at[1] * mapControls.zoom + mapControls.panOffset.y,
+            // As tall as it is painted, and at least 16 pixels on a touch screen, below which iOS zooms the page to type.
+            fontSize: Math.max(coarsePointer ? 16 : 8, (labelFontSize(paint.settings.width) / paint.scale) * mapControls.zoom),
+            lineHeight: 1.25,
+            fontWeight: 600,
+            fontFamily: "'Inter', system-ui, sans-serif",
+            color: paint.settings.colour,
+          }}
+        />
       )}
 
       {/* DM Preview Player View — offered while dynamic lighting or fog is
          on, and kept while a preview is on, so turning both off mid-preview
-         still leaves the way back to the DM's view. */}
-      {userRole === 'DM' && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled) && (
+         still leaves the way back to the DM's view. On the compact layout
+         it is in the dock at the foot of the map, over the details card. */}
+      {previewOffered && !compact && (
         <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
-          {dmPreviewPlayerView && (
-            <select
-              value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
-              onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
-              aria-label="Player or token to preview as"
-              className="px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
-            >
-              {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
-              {(['players', 'tokens'] as const).map((group) => {
-                const entries = previewChoices.filter((o) => o.group === group);
-                if (entries.length === 0) return null;
-                return (
-                  <optgroup key={group} label={group === 'players' ? 'Players' : 'Tokens'}>
-                    {entries.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </optgroup>
-                );
-              })}
-            </select>
-          )}
-          <button
-            onClick={() => {
-              const next = !dmPreviewPlayerView;
-              if (next && previewSelection === null) setPreviewSelection(defaultPreviewSelection(campaign?.memberships ?? [], tokens));
-              setDmPreviewPlayerView(next);
-            }}
-            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
-              dmPreviewPlayerView
-                ? 'bg-info/30 text-info-ink border-info/50'
-                // ink/paper invert together, so this stays a legible contrast
-                // chip over the map on both light and dark themes
-                : 'bg-ink/85 text-paper border-ink/40 hover:bg-ink'
-            }`}
-            title={dmPreviewPlayerView ? 'Back to DM view (see all)' : 'Preview this map as one of your players sees it'}
-            aria-label="Toggle DM player view preview"
-          >
-            {dmPreviewPlayerView ? '👁 DM View' : '🎭 Preview Player View'}
-          </button>
+          {playerPreviewControls}
         </div>
       )}
 
       {/* Ruler hint for players with no token */}
-      {showRuler && !isDM && !myToken && (
+      {rulerNeedsToken && !compact && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full pointer-events-none">
-          Place your character token on the map to use the ruler
+          {RULER_NEEDS_TOKEN}
         </div>
       )}
 
-      {/* AoE panel */}
+      {/* AoE panel, under the toolbar's band (top-12 until the band is
+          measured), and under Put back while that shows. */}
       {showAoE && currentMap && (
-        <div className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-xs">
+        <div
+          className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-xs"
+          // Moved down, it keeps to the map, scrolling inside where it is
+          // taller than the room below it.
+          style={aoeTop !== null
+            ? { top: aoeTop, maxHeight: `calc(100% - ${aoeTop}px - 1rem)`, overflowY: 'auto', overscrollBehavior: 'contain' }
+            : undefined}
+        >
           <p className="text-xs font-semibold text-brand-ink">AoE Shape</p>
 
           {/* Shape selector */}
@@ -2772,7 +4882,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               <button
                 key={shape}
                 onClick={() => setAoEConfig((prev) => ({ ...prev, shape }))}
-                className={`text-xs px-2 py-1 rounded border transition-colors capitalize ${
+                className={`touch-target text-xs px-2 py-1 rounded border transition-colors capitalize ${
                   aoeConfig.shape === shape
                     ? 'bg-moss-green/15 border-moss-green/60 text-brand-ink font-medium'
                     : 'border-stone-gray/30 text-stone-gray hover:border-moss-green/40 hover:text-brand-ink'
@@ -2823,7 +4933,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 <button
                   key={ft}
                   onClick={() => setAoEConfig((prev) => ({ ...prev, sizeFt: ft }))}
-                  className="text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
+                  className="touch-target text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
                 >
                   {ft} ft
                 </button>
@@ -2831,11 +4941,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             </div>
           </div>
 
+          {/* Alt's free placement, for a finger or a pen. */}
+          <label className="flex items-center gap-2 cursor-pointer touch-target">
+            <input
+              type="checkbox"
+              checked={aoeSnap}
+              onChange={(e) => setAoESnap(e.target.checked)}
+              className="accent-moss-green"
+            />
+            <span className="text-xs font-medium text-stone-gray">Snap to grid</span>
+          </label>
+
           {/* Clear the anchor */}
           {aoeAnchor && (
             <button
               onClick={() => setAoEAnchor(null)}
-              className="text-xs text-stone-gray hover:text-danger-ink transition-colors"
+              className="touch-target text-xs text-stone-gray hover:text-danger-ink transition-colors"
             >
               × Clear placement
             </button>
@@ -2845,135 +4966,93 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             {aoeAnchor ? 'Click map to reposition' : 'Click map to place shape'}
           </p>
           {/* Cone and line pivot about the square you click, so most of the
-              time you want them on your token. Alt is the escape hatch for an
-              effect cast at a distance — a wall of fire, say. */}
+              time you want them on your token. Alt, or Snap to grid off, is
+              the escape hatch for an effect cast at a distance — a wall of
+              fire, say. */}
           {(aoeConfig.shape === 'cone' || aoeConfig.shape === 'line') && (
             <p className="text-xs text-stone-gray/70">
+              {/* A finger has no hover to aim with, nor an Alt key. */}
               {aoeAnchor
-                ? 'Move the cursor to aim it around that square'
-                : 'Alt+click to place it freely, off the grid'}
+                ? (coarsePointer ? 'Drag from its square to aim it' : 'Move the cursor to aim it around that square')
+                : !aoeSnap ? 'Placed freely, off the grid'
+                  : coarsePointer ? 'Untick Snap to grid to place it freely, off the grid' : 'Alt+click to place it freely, off the grid'}
             </p>
           )}
         </div>
       )}
 
-      {/* Hover Coordinates */}
-      {hoverCoords && !hoverToken && (
-        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
-          <span className="text-xs text-stone-gray font-mono font-semibold">
-            ({hoverCoords.x}, {hoverCoords.y})
-          </span>
+      {/* Hover Coordinates, unless the selection's details sit there, and
+          how far a held token has come */}
+      {cornerPanelShown && !compact && (
+        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs flex items-baseline gap-3">
+          {cornerPanelText}
         </div>
       )}
 
-      {/* Hover Token Name.
+      {!compact && tokenDetails(false)}
 
-          Conditions are listed here in full, for everyone rather than the DM
-          alone. The badges drawn on the token are only two letters each, which
-          is enough to tell them apart at a glance but not to learn them — and a
-          player who cannot read what is afflicting a creature cannot play
-          around it. */}
-      {hoverToken && hoverCoords && (() => {
-        // Only what this viewer may see. A player token follows its character
-        // sheet, which every campaign member can already read; an NPC's own hit
-        // points are the DM's to reveal, so they appear only once the HP bar is
-        // turned on. Same rule the bar on the token itself draws by.
-        const hp = visibleTokenHp(hoverToken, characterHpCache, isDM && !previewing);
-        const image = cachedTokenImage(hoverToken, tokenImages);
-        const conditions = hoverToken.conditions ?? [];
-        // `undefined` means "not in the turn order" — the row is left out
-        // rather than shown blank. `null` means it is, but nothing has rolled.
-        const inTurnOrder = hoverInitiative !== undefined;
-
-        /** One labelled row. The labels line up, so the panel reads as a list. */
-        const Row = ({ label, children }: { label: string; children: ReactNode }) => (
-          <div className="flex items-baseline gap-2">
-            <span className="w-19 shrink-0 text-[11px] uppercase tracking-wide text-warm-gray">
-              {label}
-            </span>
-            <span className="min-w-0 text-sm text-brand-ink">{children}</span>
-          </div>
-        );
-
-        return (
-          <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg">
-            <div className="flex items-start gap-3.5">
-              {/* Large enough to actually recognise the art. On the map a token
-                  is often only a few dozen pixels at play zoom, which is what
-                  made "token images are hard to see" a real complaint. */}
-              {image ? (
-                <img
-                  src={image.src}
-                  alt=""
-                  className="w-18 h-18 rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
-                />
-              ) : (
-                <div
-                  className="w-18 h-18 rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
-                  style={{ backgroundColor: placeholderColor(hoverToken) }}
-                  aria-hidden="true"
-                >
-                  {(hoverToken.name || '?').charAt(0).toUpperCase()}
+      {/* The compact layout's dock at the foot of the map, from the top: the
+          ruler's hint, a row of the square under the pointer at the left and
+          the DM's Player Preview controls at the right, and the token's
+          details. Laid out as a
+          column from the foot, so each stands clear of the one below it
+          whatever its height. It is the map's size, a size container, so the
+          Draw strip's height is a share of the map's (cqh). It lets presses
+          through to the map, except on its controls. */}
+      {compact && (
+        <div data-map-dock="" className="absolute inset-0 z-30 flex flex-col justify-end pointer-events-none [container-type:size]">
+          {/* What the dock holds, measured: the DM's stack stops above it. */}
+          <div ref={dockContentRef} className="flex min-h-0 flex-col">
+            <div className={`${DOCK_ROW} flex flex-col gap-2 pb-2`}>
+              {rulerNeedsToken && (
+                <div className="self-center bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
+                  {RULER_NEEDS_TOKEN}
                 </div>
               )}
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2 mb-1.5">
-                  <span className="text-sm font-semibold text-brand-ink truncate">
-                    {tokenDisplayName(hoverToken)}
-                  </span>
-                  <span className="text-xs text-stone-gray font-mono shrink-0">
-                    ({hoverCoords.x}, {hoverCoords.y})
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  {hp && (
-                    <Row label="HP">
-                      <span className="font-mono">
-                        {hp.current}/{hp.max}
-                        {hp.temp > 0 && <span className="text-info-ink"> +{hp.temp}</span>}
-                      </span>
-                    </Row>
-                  )}
-
-                  {conditions.length > 0 && (
-                    <Row label="Conditions">
-                      <span className="flex flex-wrap gap-1">
-                        {conditions.map((condition) => (
-                          <span
-                            key={condition}
-                            className="px-1.5 py-0.5 rounded-cozy bg-warm-amber/20 border border-warm-amber/40 text-[11px] font-medium text-brand-ink capitalize"
-                          >
-                            {condition}
-                          </span>
-                        ))}
-                      </span>
-                    </Row>
-                  )}
-
-                  {inTurnOrder && (
-                    <Row label="Initiative">
-                      <span className="font-mono">
-                        {hoverInitiative === null ? '—' : hoverInitiative}
-                      </span>
-                    </Row>
+              {/* The square under the pointer and the DM's Preview controls share
+                  a row, the square at the left: stacked, the controls rose and
+                  fell as the square came and went, out from under the pointer. */}
+              {(previewOffered || cornerPanelShown) && (
+                <div className="flex items-end justify-between gap-2">
+                  {cornerPanelShown ? (
+                    <div className="self-start min-w-0 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs flex items-baseline gap-3">
+                      {cornerPanelText}
+                    </div>
+                  ) : <span aria-hidden="true" />}
+                  {previewOffered && (
+                    <div className="self-end shrink-0 flex items-center gap-1 pointer-events-auto *:min-h-11">
+                      {playerPreviewControls}
+                    </div>
                   )}
                 </div>
-
-                {!canMoveToken(hoverToken) && (
-                  <div className="mt-1.5 text-[11px] text-warm-gray italic">
-                    Not yours to move
-                  </div>
-                )}
-              </div>
+              )}
+              {/* Not while the strip is up: the two left a phone little map to draw on. */}
+              {!drawPanel && !paint.on && tokenDetails(true)}
             </div>
+            {drawPanel && currentMap && <DrawStrip {...drawPanel} />}
+            {paint.on && currentMap && (
+              <PaintStrip
+                settings={paint.settings}
+                onSettingsChange={(patch) => paint.setSettings((prev) => ({ ...prev, ...patch }))}
+                canUndo={paint.canUndo}
+                canRedo={paint.canRedo}
+                onUndo={paint.undo}
+                onRedo={paint.redo}
+                unsaved={paint.unsaved}
+                onSave={pressSave}
+                saving={paint.saving}
+                onDownload={() => { void paint.download(); }}
+                signedOut={paintGuards.signedOut}
+                onClose={paint.close}
+                selection={paint.selection}
+              />
+            )}
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Image Loading State */}
-      {imageState === 'loading' && (
+      {shownImageState === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-moss-green/30 border-t-moss-green rounded-full animate-spin mx-auto mb-2" />
@@ -2983,22 +5062,23 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* No Picture State: an imported map whose picture the export left out */}
-      {imageState === 'missing' && (
+      {shownImageState === 'missing' && (
         <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
           <div className="glass-panel p-4 text-center max-w-sm">
             <p className="text-sm text-brand-ink mb-1">This map has no picture.</p>
             <p className="text-xs text-stone-gray">
               {isDM
-                ? 'Choose one in Edit Map; its walls, tokens and fog are kept.'
+                ? 'Choose one in Edit Map, or draw one with Mapmaker; its walls, tokens and fog are kept.'
                 : 'The DM has to choose one before the map can be shown.'}
             </p>
           </div>
         </div>
       )}
 
-      {/* Image Error State */}
-      {imageState === 'error' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-parchment/80">
+      {/* Image Error State. A new picture that did not load leaves the one
+          before it drawn, and presses pass through the message to the map. */}
+      {(shownImageState === 'error' || shownImageState === 'kept') && (
+        <div className={`absolute inset-0 flex items-center justify-center ${shownImageState === 'kept' ? 'pointer-events-none' : 'bg-parchment/80'}`}>
           <div className="glass-panel p-4 text-center">
             <p className="text-sm text-danger-ink mb-2">{imageError}</p>
             <p className="text-xs text-stone-gray">Check map image URL</p>
@@ -3007,7 +5087,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       )}
 
       {/* No Map State */}
-      {imageState === 'none' && (
+      {shownImageState === 'none' && (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
             <Grid3x3 className="w-12 h-12 text-brand-ink/30 mx-auto mb-3" />
@@ -3032,361 +5112,117 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           max-content is the *widest* label instead of the total.
 
           `max-w` is now only a guard against one very long label (a map name
-          in the Move to Map submenu), not the thing doing the sizing. */}
-      {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
-          style={{
-            left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
-            top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
-            visibility: contextMenuPos ? 'visible' : 'hidden',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {contextMenu.token.characterId && (
-            <>
-              {/* Only for a character of this campaign, which every member
-                  may read, and whose campaign is the one the sheet is opened
-                  in, so it is shown Edit by this campaign's role. A token
-                  keeps its character after the character leaves. */}
-              {campaignHasCharacter(contextMenu.token.characterId) && (
-                <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={async () => {
-                    const characterId = contextMenu.token.characterId!;
-                    const tokenId = contextMenu.token.id;
-                    setContextMenu(null);
-                    try {
-                      const { character } = await api.getCharacter(characterId);
-                      setViewingSheet({ character, tokenId });
-                    } catch (err) {
-                      console.error('Failed to load character sheet:', errorSummary(err));
-                      showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
-                    }
-                  }}
-                >
-                  View Character Sheet
-                </button>
-              )}
-              {canRollForToken(contextMenu.token) && (
-                <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={() => {
-                    const token = contextMenu.token;
-                    const picker = {
-                      characterId: token.characterId!,
-                      tokenId: token.id,
-                      canRollInitiative: canRollInitiativeFor(token),
-                      x: contextMenu.x,
-                      y: contextMenu.y,
-                    };
-                    setContextMenu(null);
-                    setRollPicker(picker);
-                  }}
-                >
-                  Roll...
-                </button>
-              )}
-            </>
+          in the Move to Map submenu), not the thing doing the sizing.
+
+          Drawn on the body (FloatingLayer), where the panel divider beside
+          the map cannot take a press on an item that lies over it. */}
+      {contextMenu && compact && (
+        <ActionSheet
+          // A new token's menu opens on its first page.
+          key={contextMenu.token.id}
+          open
+          title={tokenDisplayName(contextMenu.token)}
+          subtitle={tokenSheetLine(
+            contextMenu.token,
+            user?.id,
+            campaign?.memberships,
+            visibleTokenHp(contextMenu.token, characterHpCache, isDM && !previewing)
           )}
-
-          {/* Rotate Left / Right: the DM on any token, a player on a token
-              they control. The menu stays open so presses add up. */}
-          {canRotateToken(contextMenu.token) && (
-            <>
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                title={`Turn ${ROTATION_STEP} degrees anticlockwise`}
-                onClick={() => { void rotateToken(contextMenu.token.id, -ROTATION_STEP); }}
-              >
-                Rotate Left
-              </button>
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                title={`Turn ${ROTATION_STEP} degrees clockwise`}
-                onClick={() => { void rotateToken(contextMenu.token.id, ROTATION_STEP); }}
-              >
-                Rotate Right
-              </button>
-            </>
-          )}
-
-          {userRole === 'DM' && (() => {
-            const cmToken = contextMenu.token;
-            const cmType = cmToken.type ?? (cmToken.characterId ? TokenType.PLAYER : TokenType.NPC);
-            const controls = dmTokenControls(cmType);
-            return (
-            <>
-              {/* Roll... — NPC tokens only. The `characterId` check is what
-                  actually enforces "player tokens have their own Roll above":
-                  a token can be typed NPC *and* still be bound to a character
-                  (a companion, or a PC the DM re-typed), and that combination
-                  rendered this entry a second time. */}
-              {cmType === TokenType.NPC && !cmToken.characterId && (
-                <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={() => {
-                    const tokenId = cmToken.id;
-                    const x = contextMenu.x;
-                    const y = contextMenu.y;
-                    setContextMenu(null);
-                    setNpcRollPicker({ tokenId, x, y });
-                  }}
-                >
-                  Roll...
-                </button>
-              )}
-
-              {/* Edit Token — every token type. The editor shows a player token
-                  its name, image, darkvision and controller; the NPC-only
-                  sections stay hidden. */}
-              {(
-                <button
-                  className="w-full px-4 py-2 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
-                  onClick={() => {
-                    setContextMenu(null);
-                    onEditToken?.(cmToken);
-                  }}
-                >
-                  Edit Token
-                </button>
-              )}
-
-              {/* Add to Initiative — DM only */}
-              {currentMap && (
-                <button
-                  className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
-                  onClick={() => {
-                    const token = contextMenu.token;
-                    setContextMenu(null);
-                    socket?.emitInitiativeAdd({ tokenId: token.id, mapId: currentMap.id });
-                  }}
-                >
-                  Add to Initiative
-                </button>
-              )}
-
-              {/* Duplicate Token — all types, DM only */}
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                onClick={async () => {
-                  if (!campaign?.id || !currentMap?.id) return;
-                  const token = contextMenu.token;
-                  setContextMenu(null);
-                  try {
-                    // Place the copy one cell along, clamped to the map
-                    const position = clampTokenPosition(
-                      { x: token.position.x + 1, y: token.position.y + 1 },
-                      token.size,
-                      currentMap
-                    );
-                    const result = await api.addToken(campaign.id, currentMap.id, {
-                      ...tokenCopyRequest(token, position),
-                      // A copy starts fresh and belongs to nobody's character:
-                      // two tokens on one sheet would follow the same hit
-                      // points and both count as that player's own.
-                      characterId: null,
-                      controlledBy: copyController(token.controlledBy, campaign?.memberships),
-                      hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
-                      conditions: [],
-                    });
-                    useGameStore.getState().addToken(result.token);
-                  } catch (err) {
-                    // A copy is a new token, so an older one whose fields predate
-                    // validation is refused: say which, so the DM can fix it in Edit Token.
-                    showToast(apiErrorMessage(err) || 'Failed to duplicate the token', 'error');
-                  }
-                }}
-              >
-                Duplicate Token
-              </button>
-
-              {/* Save as Template — DM only */}
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                onClick={async () => {
-                  if (!campaign?.id) return;
-                  const token = contextMenu.token;
-                  setContextMenu(null);
-                  try {
-                    await api.saveTokenAsTemplate(campaign.id, {
-                      name: token.name,
-                      imageUrl: token.imageUrl || null,
-                      type: token.type,
-                      disposition: token.disposition,
-                      displayMode: token.displayMode || 'pog',
-                      size: token.size,
-                      notes: token.notes || null,
-                      hp: token.hp || null,
-                      showHpBar: token.showHpBar,
-                      statBlock: token.statBlock || null,
-                      sightRadius: token.sightRadius ?? null,
-                    });
-                    showToast(`Saved ${tokenDisplayName(token)} as a template`, 'success');
-                  } catch (err) {
-                    showToast(apiErrorMessage(err) || 'Could not save the token as a template', 'error');
-                  }
-                }}
-              >
-                Save as Template
-              </button>
-
-              {/* Hide from / Reveal to players — every token; see utils/dmTokenMenu.ts */}
-              {controls.hide && (
-                <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={async () => {
-                    if (!campaign?.id || !currentMap?.id) return;
-                    const token = contextMenu.token;
-                    setContextMenu(null);
-                    try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
-                    } catch (err) {
-                      showToast(apiErrorMessage(err) || (token.visible ? 'Could not hide the token from players' : 'Could not show the token to players'), 'error');
-                    }
-                  }}
-                >
-                  {cmToken.visible ? 'Hide from Players' : 'Reveal to Players'}
-                </button>
-              )}
-
-              {/* Obscure / Reveal identity — every token; see utils/dmTokenMenu.ts */}
-              {controls.obscure && (
-                <button
-                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                  onClick={async () => {
-                    if (!campaign?.id || !currentMap?.id) return;
-                    const token = contextMenu.token;
-                    setContextMenu(null);
-                    try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
-                    } catch (err) {
-                      showToast(apiErrorMessage(err) || (token.obscured ? "Could not reveal the token's identity" : "Could not obscure the token's identity"), 'error');
-                    }
-                  }}
-                >
-                  {cmToken.obscured ? 'Reveal Identity' : 'Obscure Identity'}
-                </button>
-              )}
-
-              {/* Spirit Realm toggle — creatures cross planes, scenery does not */}
-              {controls.crossPlanes && (
-                contextMenu.token.layer === TokenLayer.TOKEN ? (
-                  <button
-                    disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
-                    onClick={async () => {
-                      if (!campaign?.id || !currentMap?.id) return;
-                      setIsMovingTokenLayer(true);
-                      const token = contextMenu.token;
-                      setContextMenu(null);
-                      try {
-                        await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.SPIRIT });
-                        useGameStore.getState().patchToken(token.id, { layer: TokenLayer.SPIRIT });
-                      } catch (err) {
-                        showToast(apiErrorMessage(err) || 'Could not send the token to the spirit realm', 'error');
-                      } finally {
-                        setIsMovingTokenLayer(false);
-                      }
-                    }}
-                  >
-                    {isMovingTokenLayer ? 'Moving…' : 'Send to Spirit Realm'}
-                  </button>
-                ) : (
-                  <button
-                    disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50"
-                    onClick={async () => {
-                      if (!campaign?.id || !currentMap?.id) return;
-                      setIsMovingTokenLayer(true);
-                      const token = contextMenu.token;
-                      setContextMenu(null);
-                      try {
-                        await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.TOKEN });
-                        useGameStore.getState().patchToken(token.id, { layer: TokenLayer.TOKEN });
-                      } catch (err) {
-                        showToast(apiErrorMessage(err) || 'Could not return the token to the material plane', 'error');
-                      } finally {
-                        setIsMovingTokenLayer(false);
-                      }
-                    }}
-                  >
-                    {isMovingTokenLayer ? 'Moving…' : 'Return to Material Plane'}
-                  </button>
-                )
-              )}
-
-              <div className="h-px bg-moss-green/20 my-1" />
-
-              {/* Move to another map */}
-              {(campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id).length > 0 && (
-                <div>
-                  <button
-                    className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setContextMenuMoveToMapOpen(!contextMenuMoveToMapOpen);
-                    }}
-                  >
-                    <span>Move to Map…</span>
-                    <span className="text-xs opacity-60">▶</span>
-                  </button>
-                  {contextMenuMoveToMapOpen && (
-                    <div className="bg-parchment/80 border-t border-moss-green/10 px-2 py-1 space-y-0.5">
-                      {isMoveToMapLoading ? (
-                        <p className="text-xs text-stone-gray px-2 py-1">Moving…</p>
-                      ) : (
-                        (campaign?.maps ?? [])
-                          .filter((m) => m.id !== currentMap?.id)
-                          .map((targetMap) => (
-                            <button
-                              key={targetMap.id}
-                              className="w-full px-2 py-1.5 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
-                              onClick={async () => {
-                                if (!campaign?.id || !currentMap?.id) return;
-                                const token = contextMenu.token;
-                                setContextMenu(null);
-                                setContextMenuMoveToMapOpen(false);
-                                setIsMoveToMapLoading(true);
-                                try {
-                                  // One request: the server moves the token as it is and
-                                  // tells everyone on this map itself.
-                                  await api.moveTokens(campaign.id, currentMap.id, [token.id], targetMap.id);
-                                  useGameStore.getState().removeToken(token.id);
-                                } catch (err) {
-                                  showToast(apiErrorMessage(err) || 'Failed to move the token to that map', 'error');
-                                } finally {
-                                  setIsMoveToMapLoading(false);
-                                }
-                              }}
-                            >
-                              {targetMap.name}
-                            </button>
-                          ))
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="h-px bg-moss-green/20 my-1" />
-
-              {/* Asks first, through the same dialog as the Token Roster. */}
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
-                onClick={() => {
-                  setRemovingToken(contextMenu.token);
-                  setContextMenu(null);
-                }}
-              >
-                Remove from Map
-              </button>
-            </>
-            );
-          })()}
-        </div>
+          leading={<TokenSheetPicture token={contextMenu.token} imageSrc={cachedTokenImage(contextMenu.token, tokenImages)?.src} />}
+          items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
+          onClose={closeTokenMenu}
+          onPlaced={(edge) => keepInViewBeside(contextMenu.token, edge)}
+        />
       )}
+      {contextMenu && !compact && (
+        <FloatingLayer>
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
+            style={{
+              left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
+              top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
+              visibility: contextMenuPos ? 'visible' : 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+            // A held Enter that opened the menu must not press its first item.
+            onKeyDown={(e) => { if (e.key === 'Enter' && e.repeat) e.preventDefault(); }}
+          >
+            <MapMenuRows
+              items={tokenMenuItems(contextMenu.token, { ...tokenMenuView(contextMenu.token), actions: tokenMenuActions })}
+              onClose={closeTokenMenu}
+              openSubmenu={tokenMenuSubmenu}
+              onToggleSubmenu={(id) => setTokenMenuSubmenu((open) => (open === id ? null : id))}
+            />
+          </div>
+        </FloatingLayer>
+      )}
+
+      {/* Paint not saved, before something takes it off the screen; and left behind by a map gone without asking. */}
+      <PaintSaveQuestion
+        open={paint.on && askingSaveOf !== null && askingSaveOf === currentMap?.id}
+        mapName={currentMap?.name ?? 'this map'}
+        sharing={currentMap ? mapsSharingPicture(currentMap.id, currentMap.imageUrl).map((m) => m.name) : []}
+        onSave={() => {
+          setAskingSaveOf(null);
+          void paint.save();
+        }}
+        onCancel={() => setAskingSaveOf(null)}
+      />
+      <PaintLeaveQuestion
+        leaving={paintGuards.leaving}
+        mapName={currentMap?.name ?? 'this map'}
+        overwrites={saveOverwrites}
+        answering={paintGuards.answering}
+        onAnswer={(choice) => { void paintGuards.answer(choice); }}
+      />
+      <PaintLeftoverQuestion
+        leftover={paint.leftover}
+        onDownload={() => { void paint.downloadLeftover(); }}
+        onDiscard={paint.discardLeftover}
+      />
+
+      {/* A draft of what was painted here and not saved, offered back as Paint opens. */}
+      <ConfirmDialog
+        isOpen={paint.offer !== null}
+        title="Restore your painting?"
+        message={paint.offer?.older
+          ? `Your unsaved painting from ${draftTime(paint.offer.header.savedAt)} was painted on an older picture of this map. Restore it over this picture, or discard it?`
+          : `Restore your unsaved painting from ${paint.offer ? draftTime(paint.offer.header.savedAt) : ''}?`}
+        confirmLabel={paint.offer?.older ? 'Restore it over this picture' : 'Restore my painting'}
+        cancelLabel="Not now"
+        variant="info"
+        onConfirm={() => { void paint.answerOffer('restore'); }}
+        onCancel={() => { void paint.answerOffer('later'); }}
+      >
+        <button
+          type="button"
+          onClick={() => { void paint.answerOffer('discard'); }}
+          className="touch-target text-sm text-danger-ink underline underline-offset-2 hover:no-underline"
+        >
+          Discard it
+        </button>
+      </ConfirmDialog>
+
+      {/* Paint not saved over a picture changed elsewhere: what to do with it. */}
+      <ConfirmDialog
+        isOpen={paint.asking}
+        title="This map's picture changed"
+        message={`The picture of ${currentMap?.name ?? 'this map'} was changed elsewhere, in Edit Map or another tab or device, while you had paint here not saved. Save your painting over the new picture, or discard it?`}
+        confirmLabel="Save my painting over it"
+        cancelLabel="Not now"
+        variant="warning"
+        onConfirm={() => paint.answer('save')}
+        onCancel={() => paint.answer('later')}
+      >
+        <button
+          type="button"
+          onClick={() => paint.answer('discard')}
+          className="touch-target text-sm text-danger-ink underline underline-offset-2 hover:no-underline"
+        >
+          Discard my painting
+        </button>
+      </ConfirmDialog>
 
       <RemoveTokenDialog
         token={removingToken}
@@ -3397,12 +5233,28 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           if (!token || !campaign?.id || !currentMap?.id) return;
           try {
             await api.deleteToken(campaign.id, currentMap.id, token.id);
-            useGameStore.getState().removeToken(token.id);
+            useGameStore.getState().removeToken(token.id, currentMap.id);
           } catch (err) {
             showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
           }
         }}
       />
+
+      {/* Temporary HP..., from the token menu. It goes when the token, or the right to grant them, does. */}
+      {temporaryHpTokenId && (() => {
+        const token = tokens.find((t) => t.id === temporaryHpTokenId);
+        const target = token ? temporaryHpOf(token) : null;
+        if (!token || !target) return null;
+        return (
+          <TemporaryHpDialog
+            name={tokenDisplayName(token)}
+            current={target.kind === 'character' ? target.current : target.hp.temp}
+            system={target.system}
+            onTake={(temporary) => { void takeTemporaryHp(target, temporary); }}
+            onClose={() => setTemporaryHpTokenId(null)}
+          />
+        );
+      })()}
 
       {/* Character Sheet Viewer (opened from token context menu) */}
       {viewingSheet && campaign && (() => {
@@ -3413,8 +5265,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             character={viewingSheet.character}
             campaignId={campaign.id}
             membership={membership}
-            // Rolls from it reach the whole table, as from Roll... below.
+            // Rolls from it reach the whole table, as from Roll... below,
+            // or the DM alone from a map being prepared.
             publicName={characterRollPublicName(tokens.find((t) => t.id === viewingSheet.tokenId), user?.id)}
+            secretRolls={isPreparing}
             onClose={() => setViewingSheet(null)}
           />
         );
@@ -3427,13 +5281,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           onSpendHitDie={(index) =>
             socket?.emitHitDiceSpend({ characterId: rollPicker.characterId, index })
           }
-          anchorX={rollPicker.x}
-          anchorY={rollPicker.y}
+          anchorX={rollPicker.at.x}
+          anchorY={rollPicker.at.y}
           // The dice log goes to the whole table, so an obscured token's
           // rolls are filed under the name everyone may see.
           publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
+          // A token on a map the table is not on is the DM's to know of, so
+          // its rolls are secret while the DM prepares that map.
           onRoll={(expression, purpose, characterName) =>
-            tableRoll({ expression, purpose, characterName })
+            tableRoll({ expression, purpose, characterName, ...(isPreparing ? { secret: true } : {}) })
           }
           // Only offered when this token is already in the initiative order and
           // this viewer may roll for it — the DM for anyone, a player for a
@@ -3455,78 +5311,49 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           <NpcRollPicker
             token={npcToken}
             gameSystem={campaign?.gameSystem ?? 'DND_5E'}
-            anchorX={npcRollPicker.x}
-            anchorY={npcRollPicker.y}
+            anchorX={npcRollPicker.at.x}
+            anchorY={npcRollPicker.at.y}
             onRoll={(expression, purpose, characterName) =>
-            tableRoll({ expression, purpose, characterName })
-          }
+              tableRoll({ expression, purpose, characterName, ...(isPreparing ? { secret: true } : {}) })
+            }
             onClose={() => setNpcRollPicker(null)}
           />
         );
       })()}
 
-      {/* Door Context Menu — right-click on a door segment.
-          Same flex-column sizing as the token menu above; see the note there. */}
-      {doorContextMenu && (
-        <div
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
-          style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header — door type label */}
-          <p className="px-4 py-1.5 text-xs font-semibold text-stone-gray/70 border-b border-moss-green/10 select-none">
-            {doorContextMenu.door.type === 'door-closed' ? '🚪 Closed Door' :
-             doorContextMenu.door.type === 'door-open'   ? '🚪 Open Door'   :
-                                                            '🔒 Locked Door'}
-          </p>
-
-          {/* Open — available when door is closed */}
-          {doorContextMenu.door.type === 'door-closed' && (
-            <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-open')}
-            >
-              Open Door
-            </button>
-          )}
-
-          {/* Close — available when door is open */}
-          {doorContextMenu.door.type === 'door-open' && (
-            <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
-            >
-              Close Door
-            </button>
-          )}
-
-          {/* Lock — DM only, available when door is open or closed */}
-          {isDM && doorContextMenu.door.type !== 'door-locked' && (
-            <button
-              className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-locked')}
-            >
-              Lock Door
-            </button>
-          )}
-
-          {/* Unlock — DM only, available when door is locked */}
-          {isDM && doorContextMenu.door.type === 'door-locked' && (
-            <button
-              className="w-full px-4 py-2 text-left text-sm text-brand-ink hover:bg-moss-green/10 transition-colors"
-              onClick={() => changeDoorType(doorContextMenu.door, 'door-closed')}
-            >
-              Unlock Door
-            </button>
-          )}
-
-          {/* Players see informational text when a door is locked */}
-          {!isDM && doorContextMenu.door.type === 'door-locked' && (
-            <p className="px-4 py-2 text-sm text-stone-gray/70 italic select-none">
-              This door is locked.
-            </p>
-          )}
-        </div>
+      {/* Door Context Menu — right-click on a door segment, its items from
+          map/doorMenuItems.ts. Same flex-column sizing as the token menu
+          above, drawn on the body and placed as it is; see the notes there. */}
+      {doorContextMenu && compact && (() => {
+        const menu = headedMenu(doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } }), 'Door');
+        return (
+          <ActionSheet
+            open
+            title={menu.title}
+            leading={menu.mark ? <span aria-hidden="true" className="text-2xl leading-none">{menu.mark}</span> : undefined}
+            items={menu.items}
+            onClose={() => setDoorContextMenu(null)}
+          />
+        );
+      })()}
+      {doorContextMenu && !compact && (
+        <FloatingLayer>
+          <div
+            ref={doorMenuRef}
+            className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
+            style={{
+              left: `${doorMenuPos ? doorMenuPos.x : doorContextMenu.x}px`,
+              top: `${doorMenuPos ? doorMenuPos.y : doorContextMenu.y}px`,
+              visibility: doorMenuPos ? 'visible' : 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MapMenuRows
+              items={doorMenuItems(doorContextMenu.door, { role: userRole, actions: { setType: setDoorType } })}
+              onClose={() => setDoorContextMenu(null)}
+            />
+          </div>
+        </FloatingLayer>
       )}
 
       {/* Toast notifications (locked door, a square already occupied).

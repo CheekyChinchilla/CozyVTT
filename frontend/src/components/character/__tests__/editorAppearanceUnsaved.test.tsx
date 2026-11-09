@@ -72,9 +72,10 @@ describe.each(systems)('leaving the $system editor', ({ character, current, othe
 
   it('asks when only a new token picture was chosen', async () => {
     const onClose = vi.fn();
-    const { container } = render(<CharacterSheetEditorModal character={character()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={character()} onClose={onClose} />);
 
-    const picker = container.querySelector<HTMLInputElement>('input[type="file"]');
+    // The editor is portaled to the body, outside the render's container.
+    const picker = document.querySelector<HTMLInputElement>('input[type="file"]');
     expect(picker).not.toBeNull();
     await userEvent.upload(picker!, new File(['png'], 'token.png', { type: 'image/png' }));
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));

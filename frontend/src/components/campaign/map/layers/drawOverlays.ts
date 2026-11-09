@@ -6,7 +6,7 @@
 // ============================================
 
 import type { FogState, WallSegment, WallType } from '@/types/walls';
-import { calcGridDistance } from '@/utils/geometry';
+import { gridDistanceLabel, gridMeasure } from '@/utils/geometry';
 import type { Viewport } from './types';
 import { mapPxToFogCell } from '../coords';
 import { fogRectFromDrag, fogRectToPx, fogRectSize } from '../fogSelection';
@@ -311,10 +311,7 @@ export function drawRuler(
   const x1 = state.target.x * gs + gs / 2;
   const y1 = (mh - 1 - state.target.y) * gs + gs / 2;
 
-  const dx = Math.abs(state.target.x - state.origin.x);
-  const dy = Math.abs(state.target.y - state.origin.y);
-  const squares = Math.max(dx, dy);
-  const feet = calcGridDistance(dx, dy, state.feetPerSquare, state.diagonalRule);
+  const measured = gridMeasure(state.origin, state.target, state.feetPerSquare, state.diagonalRule);
 
   const rulerLineColor = state.color === 'purple' ? 'rgba(168, 85, 247, 0.9)' : state.color === 'black' ? 'rgba(0, 0, 0, 0.9)' : 'rgba(251, 191, 36, 0.9)';
   const rulerPillColor = state.color === 'black' ? 'rgba(255, 255, 255, 0.88)' : 'rgba(0, 0, 0, 0.65)';
@@ -339,8 +336,8 @@ export function drawRuler(
   ctx.fill();
 
   // Distance label near cursor
-  if (feet > 0) {
-    const label = `${feet} ft  (${squares} sq)`;
+  if (measured.feet > 0) {
+    const label = gridDistanceLabel(measured);
     const fontSize = Math.max(11, 13 / zoom);
     ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.textBaseline = 'bottom';

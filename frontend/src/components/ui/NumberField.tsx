@@ -35,8 +35,12 @@ interface NumberFieldProps {
    * fields such as item weight.
    */
   integer?: boolean;
-  /** Committed when the field is left empty or unparseable. Defaults to `min ?? 0`. */
-  fallback?: number;
+  /**
+   * Committed when the field is left empty or unparseable. Defaults to
+   * `min ?? 0`. Null commits nothing and shows the committed value again, for
+   * a box whose stored value it cannot show and must not replace.
+   */
+  fallback?: number | null;
   className?: string;
   placeholder?: string;
   disabled?: boolean;
@@ -75,7 +79,7 @@ export default function NumberField({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on value only: reacting to text here would undo each keystroke as it is typed
   }, [value]);
 
-  const resolvedFallback = fallback ?? min ?? 0;
+  const resolvedFallback = fallback === null ? null : fallback ?? min ?? 0;
 
   const handleChange = (next: string) => {
     setText(next);
@@ -96,6 +100,10 @@ export default function NumberField({
     // is already the committed one is not reported again: focus passing
     // through a box is not an edit.
     if (text === '' || text === '-' || !Number.isFinite(Number(text))) {
+      if (resolvedFallback === null) {
+        setText(value == null ? '' : String(value));
+        return;
+      }
       setText(String(resolvedFallback));
       if (resolvedFallback !== value) onChange(resolvedFallback);
       return;

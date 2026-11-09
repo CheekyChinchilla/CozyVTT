@@ -7,7 +7,7 @@
  * the semantic tokens instead — see the alert and badge classes in index.css,
  * and the token list in its @theme block.
  *
- * The DM map overlays are exempt, a fixed-surface design, listed explicitly
+ * The map's tool panels are exempt, a fixed-surface design, listed explicitly
  * so the exemption stays visible and reviewable; so are the sheets' header
  * colour presets, which are the player's choice and not the theme's.
  */
@@ -17,7 +17,8 @@ import indexCss from '../../index.css?raw';
 
 /**
  * Exempt:
- *  - the DM map overlays, deliberately dark panels floating over the map
+ *  - the map's tool panels, deliberately dark panels floating over the map:
+ *    the DM's Fog, Walls and Lights, their stack, the drawing tools and Paint's
  *  - each sheet's header colour presets (`colorPresets.ts`)
  */
 const EXEMPT = [
@@ -25,6 +26,8 @@ const EXEMPT = [
   '/src/components/campaign/DmLightControls.tsx',
   '/src/components/campaign/DmFogControls.tsx',
   '/src/components/campaign/DmToolPanelContainer.tsx',
+  '/src/components/campaign/DrawControls.tsx',
+  '/src/components/campaign/PaintControls.tsx',
 ];
 const HEADER_COLOURS = /\/character-sheets\/[^/]+\/colorPresets\.ts$/;
 
@@ -128,6 +131,18 @@ describe('themed surfaces use semantic tokens', () => {
     const found = Object.entries(SOURCES)
       .filter(([path]) => !path.includes('/__tests__/'))
       .map(([path, source]) => ({ file: path, count: (source.match(BUILT) ?? []).length }))
+      .filter((entry) => entry.count > 0)
+      .map((entry) => `${entry.file} (${entry.count})`);
+    expect(found).toEqual([]);
+  });
+
+  // Tailwind's dark: variant follows the computer's dark mode, which the app's
+  // theme does not set, so a light theme on a computer set to dark drew the
+  // dice panels dark. The tokens follow the theme. No file is exempt.
+  it('uses no dark: variant', () => {
+    const DARK = /\bdark:(?=[\w-])/g;
+    const found = Object.entries(SOURCES)
+      .map(([path, source]) => ({ file: path, count: (source.match(DARK) ?? []).length }))
       .filter((entry) => entry.count > 0)
       .map((entry) => `${entry.file} (${entry.count})`);
     expect(found).toEqual([]);

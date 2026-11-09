@@ -20,6 +20,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { createWsTestServer, expectNoEvent, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { clearState } from '../initiativeState';
+import * as outgoingQueue from '../outgoingQueue';
 
 jest.setTimeout(30000);
 
@@ -121,11 +122,19 @@ describe.each([
   ['fog:request_state', 'fog:cells'],
   ['exploration:request', 'exploration:state'],
   ['presence.request', 'presence.state'],
+  ['drawings:request', 'drawings:state'],
 ])('%s', (request, reply) => {
   it('answers at most five a second per user, and drops the rest silently', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const denial = expectNoEvent(player, 'error', 700);
-    expect(await flood(player, request, reply, 20)).toBe(5);
+    // A whole state answered while the one before is still being written
+    // replaces it (outgoingQueue.ts), so the page may receive fewer: the
+    // answers are counted as the server sends them.
+    const sent = jest.spyOn(outgoingQueue, 'emitNewestState');
+    const received = await flood(player, request, reply, 20);
+    const answered = Math.max(received, sent.mock.calls.filter(([, event]) => event === reply).length);
+    expect(received).toBeGreaterThan(0);
+    expect(answered).toBe(5);
     await denial;
     player.disconnect();
   });

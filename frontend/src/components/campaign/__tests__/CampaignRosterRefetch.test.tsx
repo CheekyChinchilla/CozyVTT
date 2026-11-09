@@ -17,13 +17,11 @@ const handlers: Record<string, (data?: unknown) => void> = {};
 const socket = {
   on: (event: string, fn: (data?: unknown) => void) => { handlers[event] = fn; },
   off: vi.fn(),
-  onPresenceState: vi.fn(),
-  requestPresence: vi.fn(),
 };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, userRole: 'DM' }),
+  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, viewedMap: null, userRole: 'DM' }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm' } }) }));

@@ -1,12 +1,13 @@
 // ============================================
-// Operation ids on wall and light edits
+// Operation ids on wall, light and drawing edits
 //
-// The server sends every wall and light change to everyone who may read the
-// map, the sender included. The sending page has already drawn its change,
-// and may have made another since, so it needs to tell the echo of its own
-// edit from anyone else's. A page attaches a random id to each edit it sends
-// and the broadcast carries it back. An edit without one is broadcast without
-// one, so a client that never sends ids sees no difference.
+// The server sends every wall, light and drawing change to everyone on the
+// map who may see it, the sender included. The sending page has already drawn
+// its change, and may have made another since, so it needs to tell the echo
+// of its own edit from anyone else's. A page attaches a random id to each
+// edit it sends and the broadcast carries it back, as a drawing's
+// acknowledgement does. An edit without one is broadcast without one, so a
+// client that never sends ids sees no difference.
 // ============================================
 
 /** Letters, digits, dashes and underscores, as a random UUID is. */

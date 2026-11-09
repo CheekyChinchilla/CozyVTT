@@ -4,7 +4,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { useState } from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { useFocusTrap } from '../useFocusTrap';
+import { isAnyTrapOpen, useFocusTrap } from '../useFocusTrap';
 
 function nextFrame(): Promise<void> {
   return act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
@@ -134,5 +134,32 @@ describe('where focus goes', () => {
     render(<Dialog name="Plain"><input aria-label="Name" /></Dialog>);
     await nextFrame();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close Plain' }));
+  });
+});
+
+// The map's keys stand aside while a dialog is open, which the map asks here.
+describe('whether any dialog is open', () => {
+  function Toggle({ open }: { open: boolean }) {
+    const ref = useFocusTrap(open);
+    return <div ref={ref}>{open ? <button type="button">Inside</button> : null}</div>;
+  }
+
+  it('is no while none is, yes while one is, and no again once it closes', () => {
+    expect(isAnyTrapOpen()).toBe(false);
+    const { rerender, unmount } = render(<Toggle open />);
+    expect(isAnyTrapOpen()).toBe(true);
+
+    rerender(<Toggle open={false} />);
+    expect(isAnyTrapOpen()).toBe(false);
+    unmount();
+  });
+
+  it('stays yes while the lower of two is still open', () => {
+    const { rerender, unmount } = render(<><Toggle open /><Toggle open /></>);
+    rerender(<><Toggle open /><Toggle open={false} /></>);
+
+    expect(isAnyTrapOpen()).toBe(true);
+    unmount();
+    expect(isAnyTrapOpen()).toBe(false);
   });
 });

@@ -10,12 +10,15 @@ import type { FogState, FogOperation } from '../types/walls';
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
 import type { SocketAck } from './ack';
-import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
+import type { Map as MapRow } from '@prisma/client';
+import { getSpiritVisibilityBatch, filterMapData } from '../utils/spirit-layer';
 import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
 import { canReadMap } from '../services/permissions';
 import logger from '../utils/logger';
+import { inBackgroundAfter, type WaitingWork } from '../utils/backgroundWork';
 import { MAP_LIMITS, MAX_FOG_CELLS } from '../validators/maps';
+import { emitNewestState } from './outgoingQueue';
 
 /**
  * A token as stored in the `Map.tokens` JSON column.
@@ -140,14 +143,26 @@ export const fogOperationLimiter = new RateLimiter(); // Max 10 fog ops/second p
 // blunt a misbehaving/malicious client, so over-limit events are dropped
 // silently rather than surfaced as an error toast (same policy as fog).
 export const tokenMoveLimiter = new RateLimiter(); // Max 150 drag frames (token.move)/second per user
-export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/second per user
+export const mapEditLimiter = new RateLimiter();   // Max MAP_EDITS_PER_SECOND wall/light edits/second per user
+/** Wall and light edits one user may send a second, the eight edit events together. */
+export const MAP_EDITS_PER_SECOND = 40;
+/** What an edit past that ceiling is answered, when it came with an acknowledgement. */
+export const TOO_MANY_MAP_EDITS_MESSAGE = 'Too many wall and light edits at once. Wait a moment, then try again.';
 // Map pings are a deliberate human gesture, so the ceiling is low compared to
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
 // toast for pressing the ping key too often is worse than nothing happening.
 export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per user
+// Preview frames of a drawing on its way, and the laser pointer: the draw
+// tool sends at most 20 a second while a stroke is drawn. Over-limit frames
+// are dropped silently, as drag frames are; the stroke itself is a
+// drawing:add, under SOCKET_CEILINGS below.
+export const drawingPreviewLimiter = new RateLimiter();
+/** Preview frames one user may send a second, every stroke and socket together. */
+export const DRAWING_PREVIEWS_PER_SECOND = 60;
 // Explored-memory reveals arrive as a player's vision moves; a client sends
-// at most a few a second. Over-limit reveals are dropped silently.
-export const explorationRevealLimiter = new RateLimiter(); // Max REVEALS_PER_SECOND (40) reveals/second per user
+// a few a second, and one sight of a large map in parts. Over-limit reveals
+// are dropped silently.
+export const explorationRevealLimiter = new RateLimiter(); // Max REVEALS_PER_SECOND reveals/second per user (handlers/exploration.ts)
 
 /**
  * The key a per-socket flood ceiling is counted under: the user, so that
@@ -189,6 +204,11 @@ const dmEvent = (what: string): SocketCeiling => ({
   windows: [{ limit: 50, windowMs: SECOND }],
   refusal: `Too many ${what} at once. Wait a moment, then try again.`,
 });
+/** Clearing drawings: a click and a confirmation each. */
+const drawingClears: SocketCeiling = {
+  windows: [{ limit: 5, windowMs: 10 * SECOND }],
+  refusal: 'Too many clears of the drawings at once. Wait a few seconds, then try again.',
+};
 const atmosphere = dmEvent('atmosphere changes');
 const spiritLayer = dmEvent('spirit layer changes');
 const initiative = dmEvent('initiative changes');
@@ -220,6 +240,10 @@ export const SOCKET_CEILINGS = {
   'character.hp.update': {
     windows: [{ limit: 50, windowMs: SECOND }],
     refusal: 'Too many hit point changes at once. Wait a moment, then try again.',
+  },
+  'character.hp.temporary': {
+    windows: [{ limit: 20, windowMs: SECOND }],
+    refusal: 'Too many temporary hit point changes at once. Wait a moment, then try again.',
   },
   'character.hitdice.spend': {
     windows: [{ limit: 50, windowMs: SECOND }],
@@ -256,6 +280,24 @@ export const SOCKET_CEILINGS = {
   'initiative.roll': initiative,
   'dice.clearHistory': dmEvent('requests to clear the dice log'),
   'exploration:reset': dmEvent('explored-area resets'),
+  // Drawing on the map: one add per stroke, shape or label, which is a
+  // write under the map's lock, and one remove per tap of the eraser.
+  'drawing:add': {
+    windows: [{ limit: 20, windowMs: SECOND }, { limit: 300, windowMs: MINUTE }],
+    refusal: 'Too many drawings at once. Wait a moment, then draw again.',
+  },
+  'drawing:remove': {
+    windows: [{ limit: 20, windowMs: SECOND }],
+    refusal: 'Too many drawings erased at once. Wait a moment, then try again.',
+  },
+  'drawing:clear_mine': drawingClears,
+  'drawing:clear': drawingClears,
+  // A check that the connection still answers, which the web client never
+  // sends; each is answered with a `pong` to the sender.
+  ping: {
+    windows: [{ limit: 10, windowMs: SECOND }],
+    refusal: 'Too many connection checks (ping) at once. Wait a moment, then try again.',
+  },
 } satisfies Record<string, SocketCeiling>;
 
 export type CeilingEvent = keyof typeof SOCKET_CEILINGS;
@@ -270,6 +312,49 @@ export type CeilingEvent = keyof typeof SOCKET_CEILINGS;
 export const MAX_SOCKETS_PER_USER = 40;
 export const TOO_MANY_SOCKETS =
   `Too many CozyVTT tabs or devices are open on this account at once (the most is ${MAX_SOCKETS_PER_USER}). Close one, then reload this page.`;
+
+/**
+ * The most events one socket may send in a second, every event together.
+ * The ceilings above are each event's own, per user; this is the one place
+ * every event passes, so a flood of any of them, or of events no handler
+ * takes, stops here. A page at a fast table sends under 80 a second from
+ * one socket (busyTable.integration.test.ts).
+ */
+export const SOCKET_EVENTS_PER_SECOND = 500;
+/**
+ * The events a page sends to join a campaign and load its map, after every
+ * reconnect, when socket.io sends at once whatever the page emitted while
+ * the connection was down. The budget never drops them: a page that lost one
+ * stays unjoined or without its walls. Each has a small ceiling of its own
+ * (SOCKET_CEILINGS, stateRequestAllowed).
+ */
+export const REJOIN_EVENTS: ReadonlySet<string> = new Set([
+  'authenticate', 'walls:request', 'lights:request', 'fog:request_state', 'exploration:request', 'drawings:request',
+  'presence.request', 'initiative.request_state',
+]);
+/** What a socket past it is told, once in REFUSAL_NOTICE_MS. */
+export const TOO_MANY_SOCKET_EVENTS =
+  'Too many messages at once from this page, so some were dropped. Reload the page if the table stops keeping up.';
+
+/** One socket's events in the current second, for SOCKET_EVENTS_PER_SECOND. */
+export interface EventBudget {
+  windowStart: number;
+  sent: number;
+}
+
+/**
+ * Whether a socket may send one more event now, counting it. Counted in
+ * windows of a second from the first event of each: a fixed count, so a
+ * flood costs the check nothing more than one event does.
+ */
+export function withinSocketBudget(budget: EventBudget, now = Date.now()): boolean {
+  if (now - budget.windowStart >= SECOND) {
+    budget.windowStart = now;
+    budget.sent = 0;
+  }
+  budget.sent += 1;
+  return budget.sent <= SOCKET_EVENTS_PER_SECOND;
+}
 
 const ceilingLimiter = new RateLimiter();
 /** One refusal notice per socket and event in this long; the rest are refused quietly. */
@@ -287,12 +372,21 @@ const refusalNotices = new RateLimiter();
 export function withinCeiling(socket: AuthenticatedSocket, event: CeilingEvent, ack: SocketAck | null = null): boolean {
   const ceiling: SocketCeiling = SOCKET_CEILINGS[event];
   if (ceilingLimiter.checkAll(`${limiterKey(socket)}:${event}`, ceiling.windows)) return true;
-  if (ack) {
-    ack({ ok: false, error: ceiling.refusal });
-  } else if (refusalNotices.check(`${socket.id}:${event}`, 1, REFUSAL_NOTICE_MS)) {
-    socket.emit('error', { message: ceiling.refusal });
-  }
+  refuseOncePerNotice(socket, ack, event, ceiling.refusal);
   return false;
+}
+
+/**
+ * Refuse a request a client may send many of, as withinCeiling refuses one
+ * past its ceiling: through its acknowledgement every time, and otherwise
+ * with `error` once in REFUSAL_NOTICE_MS for this socket and `kind`.
+ */
+export function refuseOncePerNotice(socket: AuthenticatedSocket, ack: SocketAck | null, kind: string, message: string): void {
+  if (ack) {
+    ack({ ok: false, error: message });
+  } else if (refusalNotices.check(`${socket.id}:${kind}`, 1, REFUSAL_NOTICE_MS)) {
+    socket.emit('error', { message });
+  }
 }
 
 // Cleanup old events every 5 minutes, in every limiter there is. unref() so
@@ -405,15 +499,15 @@ export async function broadcastFogState(io: Server, campaignId: string, mapId: s
     const role = (s as unknown as AuthenticatedSocket).role;
     if (!canReadMap(role, mapId, campaign?.currentMapId)) continue;
     if (role === 'DM') {
-      s.emit('fog:updated', { mapId, fogState: fog });
+      emitNewestState(s, 'fog:updated', { mapId, fogState: fog }, mapId);
     } else {
-      s.emit('fog:cells', {
+      emitNewestState(s, 'fog:cells', {
         mapId,
         revealedCells: revealedCellIndices(fog),
         fogCols: fog.fogCols,
         fogRows: fog.fogRows,
         cellPx: fog.cellPx,
-      });
+      }, mapId);
     }
   }
 }
@@ -434,10 +528,14 @@ export async function broadcastExplorationState(
   cells: number[]
 ): Promise<void> {
   const sockets = await campaignSockets(io, campaignId);
+  // The user's own screens only for a map they may read: a write queued
+  // while the table was on this map can land after it has left.
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   for (const s of sockets) {
     const member = s as unknown as AuthenticatedSocket;
-    if (member.userId === userId || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
-      s.emit('exploration:state', { mapId, userId, cells });
+    const own = member.userId === userId && canReadMap(member.role, mapId, campaign?.currentMapId);
+    if (own || (member.role === 'DM' && member.previewingMemoryOf === userId)) {
+      emitNewestState(s, 'exploration:state', { mapId, userId, cells }, `${mapId}:${userId}`);
     }
   }
 }
@@ -468,7 +566,7 @@ export interface HandlerContext {
 export async function broadcastMapData(
   io: Server,
   campaignId: string,
-  map: MapData,
+  map: MapRow,
   audience: 'everyone' | 'players' = 'everyone'
 ): Promise<void> {
   const members = await campaignSockets(io, campaignId);
@@ -476,6 +574,12 @@ export async function broadcastMapData(
     campaignId,
     members.map((s) => (s as unknown as AuthenticatedSocket).userId).filter((id): id is string => !!id)
   );
+  // map.changed puts every page onto the map it carries, so it only ever
+  // carries the table's. Asked here, after the reads above, as well as by
+  // each caller: a resend that passed its caller's check can still be under
+  // way when the DM switches maps, and would put the table back.
+  const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+  if (campaign?.currentMapId !== map.id) return;
   for (const s of stillInCampaign(members, campaignId)) {
     const member = s as unknown as AuthenticatedSocket;
     if (audience === 'players' && member.role === 'DM') continue;
@@ -504,27 +608,22 @@ export async function broadcastMapData(
  * logged and nothing else.
  */
 const SIGHT_RESEND_MS = 150;
-const pendingSightResends = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingSightResends = new Map<string, WaitingWork>();
 
 export function resendSightAfterChange(io: Server, campaignId: string, mapId: string): void {
   const key = `${campaignId}:${mapId}`;
-  const pending = pendingSightResends.get(key);
-  if (pending) clearTimeout(pending);
-  const timer = setTimeout(() => {
+  pendingSightResends.get(key)?.cancel();
+  pendingSightResends.set(key, inBackgroundAfter('sight re-sent after a light or wall change', SIGHT_RESEND_MS, async () => {
     pendingSightResends.delete(key);
-    void (async () => {
-      try {
-        const [map, campaign] = await Promise.all([
-          prisma.map.findUnique({ where: { id: mapId } }),
-          prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
-        ]);
-        if (!map || map.campaignId !== campaignId || !map.lightingEnabled || campaign?.currentMapId !== mapId) return;
-        await broadcastMapData(io, campaignId, map, 'players');
-      } catch (err) {
-        logger.warn('Players not sent their sight after a light or wall change; the change stands', { err, mapId });
-      }
-    })();
-  }, SIGHT_RESEND_MS);
-  timer.unref?.();
-  pendingSightResends.set(key, timer);
+    try {
+      const [map, campaign] = await Promise.all([
+        prisma.map.findUnique({ where: { id: mapId } }),
+        prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
+      ]);
+      if (!map || map.campaignId !== campaignId || !map.lightingEnabled || campaign?.currentMapId !== mapId) return;
+      await broadcastMapData(io, campaignId, map, 'players');
+    } catch (err) {
+      logger.warn('Players not sent their sight after a light or wall change; the change stands', { err, mapId });
+    }
+  }));
 }

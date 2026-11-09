@@ -5,7 +5,7 @@
  * Implements the 5-tier proficiency system, bulk inventory, and PF2e mechanics.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Heart,
   Shield,
@@ -27,7 +27,7 @@ import ProficiencyIndicator, {
 import FeatsList from './components/FeatsList';
 import StrikesList from './components/StrikesList';
 import BulkTracker from './components/BulkTracker';
-import { withAdvantage, withDisadvantage, pf2eLoreName } from '../../../utils/characterRolls';
+import { pf2eLoreName } from '../../../utils/characterRolls';
 import { readFeatureEntries } from '../../../utils/featureEntries';
 import { pf2eInitiativeBonus } from '../../../utils/rules/initiative';
 import {
@@ -49,19 +49,16 @@ import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { readPf2eSpellSlots } from './spellcastingEntries';
 import { headerInk } from '@/utils/themeColor';
+import { rollTarget, useSheetRolls } from '../useSheetRolls';
+import type { RollMode } from '@/utils/rollModes';
 
 interface Pathfinder2eCharacterViewProps {
   character: Character;
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
-}
-
-interface RollPopupState {
-  anchorX: number;
-  anchorY: number;
-  expression: string;
-  purpose: string;
+  /** The sheet's Roll mode, for every d20 test a click rolls. Normal without one. */
+  rollMode?: RollMode;
 }
 
 /**
@@ -85,35 +82,13 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   character,
   onEdit,
   onRoll,
+  rollMode,
 }) => {
   const data = character.data as PF2eCharacterData;
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
-  const [rollPopup, setRollPopup] = useState<RollPopupState | null>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-
-  // Close popup on outside click
-  useEffect(() => {
-    if (!rollPopup) return;
-    const handler = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
-        setRollPopup(null);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [rollPopup]);
-
-  const handleRoll = (expression: string, purpose: string) => {
-    if (onRoll) onRoll(expression, purpose);
-    setRollPopup(null);
-  };
-
-  const showRollPopup = (e: React.MouseEvent, expression: string, purpose: string) => {
-    e.preventDefault();
-    setRollPopup({ anchorX: e.clientX, anchorY: e.clientY, expression, purpose });
-  };
+  const { roll: handleRoll, rollTest, rootProps: rollRoot, menu: rollMenu } = useSheetRolls(onRoll, character.gameSystem, rollMode);
 
   // Load saved color preference from character data
   useEffect(() => {
@@ -140,16 +115,16 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     const ink = headerInk(isCustomColor ? customColorHex : selectedColor.hex);
 
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative`
-      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${ink.text} p-6 rounded-t-lg relative`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative`
+      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Edit Button */}
         {onEdit && (
           <button
             onClick={onEdit}
-            className={`absolute top-4 right-4 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium`}
+            className={`ml-auto mb-3 w-fit sm:absolute sm:top-4 sm:right-4 sm:mb-0 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium`}
             title="Edit character"
           >
             <Edit className="w-4 h-4" />
@@ -157,8 +132,11 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           </button>
         )}
 
-      <div className="flex items-start justify-between pr-24">
-        <div className="flex items-start space-x-4">
+      {/* Below sm, Edit is in the flow above this row and the experience and
+          hero points go under the name; from sm up the row clears the corner
+          Edit sits in. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0 sm:pr-24">
+        <div className="flex items-start space-x-4 min-w-0">
           {/* Token Image */}
           {character.tokenImageUrl && (
             <img
@@ -169,7 +147,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           )}
 
           {/* Character Info */}
-          <div>
+          <div className="min-w-0">
             <h2 className="text-3xl font-bold mb-2">{data.characterName}</h2>
             <div className="flex items-center flex-wrap gap-2 opacity-90">
               <span className={`px-3 py-1 ${ink.chip} rounded-full text-sm font-medium`}>
@@ -202,7 +180,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           </div>
         </div>
 
-        <div className="text-right">
+        <div className="sm:text-right">
           <div className="text-xs opacity-70 mb-1">Experience Points</div>
           <div className="text-2xl font-bold">{data.experiencePoints || 0}</div>
           {data.heroPoints !== undefined && (
@@ -234,10 +212,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           return (
             <div
               key={ability}
-              className={`flex flex-col items-center rounded-lg p-1 transition-colors group ${onRoll ? 'cursor-pointer hover:bg-ink/10 select-none' : ''}`}
-              onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
-              onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
-              title={onRoll ? `Left-click: roll ${ability} check  |  Right-click: Fortune / Misfortune` : undefined}
+              className={`flex flex-col items-center rounded-lg p-1 transition-colors group ${onRoll ? 'cursor-pointer hover:bg-ink/10 select-none [-webkit-touch-callout:none]' : ''}`}
+              onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
+              {...(onRoll ? rollTarget(expr, purpose, character.gameSystem) : undefined)}
             >
               <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                 {ability.slice(0, 3)}
@@ -247,7 +224,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                   {formatModifier(abilityData.modifier)}
                 </span>
                 {onRoll && (
-                  <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity pointer-events-none">
                     <div className="w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
                       <Dices className="w-2.5 h-2.5 text-accent-text" />
                     </div>
@@ -285,15 +262,14 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           return (
             <div
               key={save}
-              className={`bg-paper border border-ink/10 rounded-lg p-3 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-              onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
-              onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
-              title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
+              className={`bg-paper border border-ink/10 rounded-lg p-3 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none [-webkit-touch-callout:none]' : ''}`}
+              onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
+              {...(onRoll ? rollTarget(expr, purpose, character.gameSystem) : undefined)}
             >
               <div className="flex items-center space-x-2">
                 <ProficiencyIndicator rank={saveData.proficiencyRank as ProficiencyRank} />
                 <span className="font-semibold text-ink capitalize">{save}</span>
-                {onRoll && <Dices className="w-3.5 h-3.5 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                {onRoll && <Dices className="w-3.5 h-3.5 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
               </div>
               <span className="text-2xl font-bold text-accent-ink">
                 {formatModifier(saveBonus)}
@@ -324,17 +300,16 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           const expr = perceptionBonus >= 0 ? `1d20+${perceptionBonus}` : `1d20${perceptionBonus}`;
           return (
             <div
-              className={`bg-paper border border-ink/10 rounded-lg p-4 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-              onClick={onRoll ? () => handleRoll(expr, 'Perception') : undefined}
-              onContextMenu={onRoll ? (e) => showRollPopup(e, expr, 'Perception') : undefined}
-              title={onRoll ? `Left-click: roll Perception  |  Right-click: Fortune / Misfortune` : undefined}
+              className={`bg-paper border border-ink/10 rounded-lg p-4 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none [-webkit-touch-callout:none]' : ''}`}
+              onClick={onRoll ? () => rollTest(expr, 'Perception') : undefined}
+              {...(onRoll ? rollTarget(expr, 'Perception', character.gameSystem) : undefined)}
             >
               <div className="flex items-center space-x-3">
                 <ProficiencyIndicator rank={perception.proficiencyRank as ProficiencyRank} size="lg" />
                 <div>
                   <div className="flex items-center gap-1 text-xs text-ink-secondary uppercase tracking-wide">
                     Perception
-                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                   </div>
                   {perception.senses && perception.senses.length > 0 && (
                     <div className="text-xs text-ink-muted mt-1">
@@ -459,7 +434,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Resistances, Immunities, Weaknesses */}
-      <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
         {data.hp?.resistances && data.hp.resistances.length > 0 && (
           <div>
             <span className="font-semibold text-success-ink">Resistances:</span>{' '}
@@ -485,7 +460,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         (data.deathAndDying?.wounded ?? 0) > 0 ||
         (data.deathAndDying?.doomed ?? 0) > 0) && (
         <div className="mt-3 pt-3 border-t border-danger/30">
-          <div className="flex items-center space-x-4 text-sm">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 text-sm">
             <div className="flex items-center space-x-1">
               <Skull className="w-4 h-4 text-danger-ink" />
               <span className="font-semibold text-danger-ink">Dying:</span>
@@ -526,10 +501,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             return (
               <div
                 key={skillName}
-                className={`bg-paper border border-ink/10 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-                onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
-                onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
-                title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
+                className={`bg-paper border border-ink/10 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none [-webkit-touch-callout:none]' : ''}`}
+                onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
+                {...(onRoll ? rollTarget(expr, purpose, character.gameSystem) : undefined)}
               >
                 <div className="flex items-center space-x-2">
                   <ProficiencyIndicator rank={skillData.proficiencyRank as ProficiencyRank} size="sm" />
@@ -537,7 +511,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                   <span className="text-xs text-ink-muted">
                     ({skillData.attribute?.slice(0, 3).toUpperCase()})
                   </span>
-                  {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                  {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                 </div>
                 <span className="text-lg font-bold text-accent-ink">
                   {formatModifier(skillBonus)}
@@ -559,15 +533,14 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                 return (
                   <div
                     key={index}
-                    className={`bg-warning/10 border border-warning/30 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
-                    onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
-                    onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
-                    title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
+                    className={`bg-warning/10 border border-warning/30 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none [-webkit-touch-callout:none]' : ''}`}
+                    onClick={onRoll ? () => rollTest(expr, purpose) : undefined}
+                    {...(onRoll ? rollTarget(expr, purpose, character.gameSystem) : undefined)}
                   >
                     <div className="flex items-center space-x-2">
                       <ProficiencyIndicator rank={lore.proficiencyRank as ProficiencyRank} size="sm" />
                       <span className="text-sm font-medium text-ink">{lore.name}</span>
-                      {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
+                      {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
                     </div>
                     <span className="text-lg font-bold text-accent-ink">
                       {formatModifier(loreBonus)}
@@ -588,8 +561,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       <h3 className="text-lg font-bold text-ink mb-3">Strikes & Attacks</h3>
       <StrikesList
         strikes={data.strikes || []}
-        onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
-        onRollContext={onRoll ? (e, expr, purpose) => showRollPopup(e, expr, purpose) : undefined}
+        onRollStrike={onRoll ? rollTest : undefined}
+        onRollDamage={onRoll ? handleRoll : undefined}
       />
     </div>
   );
@@ -604,12 +577,12 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
       {/* Currency */}
       <div className="bg-paper border border-ink/10 rounded-lg p-3 mb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center space-x-2">
             <Coins className="w-5 h-5 text-ink-secondary" />
             <span className="font-semibold text-ink">Currency</span>
           </div>
-          <div className="flex items-center space-x-4 text-sm">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 text-sm">
             <span><strong>{data.currency?.pp || 0}</strong> pp</span>
             <span><strong>{data.currency?.gp || 0}</strong> gp</span>
             <span><strong>{data.currency?.sp || 0}</strong> sp</span>
@@ -750,7 +723,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         </h3>
 
         {/* Spellcasting Info */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-paper border border-spirit/30 rounded-lg p-3">
             <div className="text-xs font-semibold text-spirit-ink mb-1">Tradition</div>
             <div className="font-bold text-spirit-ink capitalize">{spellcasting.tradition}</div>
@@ -766,7 +739,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         </div>
 
         {/* Spell Attack & DC */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div className="bg-paper border border-spirit/30 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <ProficiencyIndicator
@@ -816,7 +789,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {/* Spell Slots */}
         <div className="mb-4">
           <h4 className="font-semibold text-spirit-ink mb-2">Spell Slots</h4>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
               // Read as the editor reads them: an older sheet's count under
               // `used`, and never more used than the total.
@@ -996,7 +969,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {data.appearance && (
         <div className="bg-paper border border-ink/10 rounded-lg p-3 mb-4">
           <h4 className="text-sm font-semibold text-ink-secondary mb-2">Appearance</h4>
-          <div className="grid grid-cols-3 gap-2 text-xs text-ink-secondary">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-ink-secondary">
             {data.appearance.age && <div><strong>Age:</strong> {data.appearance.age}</div>}
             {data.appearance.height && <div><strong>Height:</strong> {data.appearance.height}</div>}
             {data.appearance.weight && <div><strong>Weight:</strong> {data.appearance.weight}</div>}
@@ -1045,10 +1018,10 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   );
 
   return (
-    <div className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg">
+    <div className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg" {...rollRoot}>
       {renderHeader()}
 
-      <div className="p-6 space-y-6">
+      <div data-sheet-body className="p-3 sm:p-6 space-y-6">
         {renderAttributes()}
         {renderSavingThrows()}
         {renderPerception()}
@@ -1064,32 +1037,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {renderBio()}
       </div>
 
-      {/* Fortune / Misfortune popup (shown on right-click of any rollable stat) */}
-      {rollPopup && (
-        <div
-          ref={popupRef}
-          className="fixed z-50 bg-paper border border-ink/10 rounded-lg shadow-xl overflow-hidden"
-          style={{ left: rollPopup.anchorX, top: rollPopup.anchorY, minWidth: 180 }}
-        >
-          <div className="px-3 py-2 bg-accent text-accent-text text-xs font-semibold truncate">
-            {rollPopup.purpose}
-          </div>
-          {[
-            { label: 'Normal', expr: rollPopup.expression, suffix: '' },
-            { label: 'Fortune', expr: withAdvantage(rollPopup.expression), suffix: ' (Fortune)' },
-            { label: 'Misfortune', expr: withDisadvantage(rollPopup.expression), suffix: ' (Misfortune)' },
-          ].map(({ label, expr, suffix }) => (
-            <button
-              key={label}
-              onClick={() => handleRoll(expr, rollPopup.purpose + suffix)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-secondary hover:bg-accent/10 transition-colors text-left"
-            >
-              <Dices className="w-3.5 h-3.5 text-accent-ink shrink-0" />
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Fortune / Misfortune, on a right-click or a press and hold of any d20 test */}
+      {rollMenu}
     </div>
   );
 };

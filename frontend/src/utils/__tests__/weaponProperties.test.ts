@@ -18,8 +18,8 @@ import {
   toggleWeaponProperty,
   customWeaponProperties,
   addCustomWeaponProperty,
-  MAX_WEAPON_PROPERTY_LENGTH,
 } from '../weaponProperties';
+import { DND5E_WEAPON_PROPERTY_LENGTH_MAX } from '@/constants/sheetLimits';
 
 describe('DND5E_WEAPON_PROPERTIES', () => {
   // Basic Rules p. 48, "Weapon Properties" plus the Weapons table.
@@ -120,12 +120,12 @@ describe('addCustomWeaponProperty', () => {
   });
 
   it('refuses a value long enough to be used as storage', () => {
-    expect(addCustomWeaponProperty(['light'], 'x'.repeat(MAX_WEAPON_PROPERTY_LENGTH + 1)))
+    expect(addCustomWeaponProperty(['light'], 'x'.repeat(DND5E_WEAPON_PROPERTY_LENGTH_MAX + 1)))
       .toEqual(['light']);
   });
 
   it('accepts one exactly at the limit', () => {
-    const atLimit = 'x'.repeat(MAX_WEAPON_PROPERTY_LENGTH);
+    const atLimit = 'x'.repeat(DND5E_WEAPON_PROPERTY_LENGTH_MAX);
     expect(addCustomWeaponProperty([], atLimit)).toEqual([atLimit]);
   });
 

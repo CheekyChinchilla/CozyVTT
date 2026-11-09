@@ -36,6 +36,14 @@ export interface WallHistoryResult {
   carry: (change: (walls: WallSegment[]) => WallSegment[]) => void;
   undo: () => WallSegment[] | null;
   redo: () => WallSegment[] | null;
+  /** Which entry is on screen: 0 is the oldest. */
+  index: number;
+  /**
+   * Move back to entry `to` from entry `from`, as when the server refused
+   * the list an undo or a redo sent: only while the history is still at
+   * `from`, and nothing has been pushed since.
+   */
+  stepBack: (from: number, to: number) => void;
   canUndo: boolean;
   canRedo: boolean;
 }
@@ -134,6 +142,10 @@ export function useWallHistory(initial: WallSegment[]): WallHistoryResult {
     return ws.stack[newIdx];
   }, [ws]);
 
+  const stepBack = useCallback((from: number, to: number) => {
+    setWs(prev => (prev.idx === from && to >= 0 && to < prev.stack.length ? { ...prev, idx: to } : prev));
+  }, []);
+
   return {
     walls: ws.stack[ws.idx] ?? initial,
     push,
@@ -142,6 +154,8 @@ export function useWallHistory(initial: WallSegment[]): WallHistoryResult {
     carry,
     undo,
     redo,
+    index: ws.idx,
+    stepBack,
     canUndo: ws.idx > 0,
     canRedo: ws.idx < ws.stack.length - 1,
   };

@@ -74,11 +74,13 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-page bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <header className="bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-6">
+          {/* Wraps so the actions drop below the title on a phone narrower
+              than both: an administrator's four buttons need about 230 px. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 py-6">
             {/* Left: Logo + Title */}
             <div className="flex items-center gap-4">
               <div className="p-1 rounded-lg bg-moss-green/10" aria-hidden="true">
@@ -173,7 +175,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/characters')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">Manage</span>
+                  <span className="max-sm:sr-only">Manage</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -271,7 +273,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/assets')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">View Library</span>
+                  <span className="max-sm:sr-only">View Library</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -313,7 +315,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/documents')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">View Documents</span>
+                  <span className="max-sm:sr-only">View Documents</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -353,7 +355,7 @@ export default function DashboardPage() {
                   onClick={() => navigate('/character-templates')}
                   className="flex items-center gap-2"
                 >
-                  <span className="hidden sm:inline">Browse</span>
+                  <span className="max-sm:sr-only">Browse</span>
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
@@ -434,7 +436,7 @@ export default function DashboardPage() {
                   variant="secondary" className="flex items-center gap-2"
                 >
                   <Upload className="w-4 h-4" />
-                  <span className="hidden sm:inline">Import</span>
+                  <span className="max-sm:sr-only">Import</span>
                 </Button>
                 <Button
                   onClick={() => setShowCreateModal(true)}

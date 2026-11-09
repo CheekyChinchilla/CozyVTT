@@ -10,14 +10,17 @@ import { ImportVibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, DrawnBackgroundSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
 import { TOKEN_LIMITS } from './tokenLimits';
 import { CAMPAIGN_LIMITS } from './campaignLimits';
+import { ASSET_LIMITS } from './assetLimits';
+import { tidyTags, isDrawnMapTag } from './assets';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
-// Tokens on a map, walls and lights are held to the app's own limits
-// (MAP_LIMITS, validators/walls.ts), so anything the app stores imports.
+// Tokens on a map, walls, lights and drawings are held to the app's own
+// limits (MAP_LIMITS, validators/walls.ts, validators/drawingLimits.ts), so
+// anything the app stores imports.
 // How many maps, pictures and sound files an archive holds is bounded by
 // MAX_FILE_COUNT, since each is a file in it. Creatures and token templates
 // have counts of their own: bounded only by their 10 MB list, a list of
@@ -34,12 +37,20 @@ export const IMPORT_LIMITS = {
   // six, at a map token's stat block's proficiencies; this is five times that.
   MAX_JSON_DEPTH: 32,
   // How many values and members one map file may hold, counted on its text
-  // before it is parsed. The largest map an export writes (a 500 by 500 fog,
-  // 5,000 walls, and as many tokens carrying the longest SRD stat block as
-  // fit in the 10 MB a file may hold, about 760) holds about 340,000; 10 MB
-  // of tiny walls or empty objects holds over a million and cost several
-  // times as much to parse.
+  // before it is parsed. A map with a 500 by 500 fog, 5,000 walls and 1,000
+  // tokens carrying the longest SRD stat block holds about 350,000, in
+  // 8.3 MB; one with the fog, the walls and all the drawing its markup
+  // layer holds (two shares of 1,000 drawings and 100,000 points), about
+  // 700,000, in 5.1 MB,
+  // and with 800 such tokens beside them about 760,000, in 10.2 MB; more
+  // tokens than that make a file the export refuses. 10 MB of tiny walls or
+  // empty objects holds over a million and cost several times as much to
+  // parse.
   MAX_MAP_VALUES: 1_000_000,
+  // The longest list of tags an asset's entry may give. Tidying one tag costs
+  // little, but a 10 MB entry holds millions; an export writes at most 50,
+  // and 1.5.1 and earlier stored lists longer than that.
+  MAX_ASSET_TAG_ENTRIES: 1000,
   FORMAT_VERSION: 1,
 } as const;
 
@@ -111,6 +122,9 @@ export const CampaignSettingsSchema = z.object({
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
   spiritLayerStyle: z.string().max(100, { abort: true }).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
+  // Absent from archives made before the setting; such a campaign imports
+  // with players allowed to draw, as every campaign had at the upgrade.
+  playersMayDraw: z.boolean().optional().catch(undefined),
 }).strip();
 
 // ── Token (within a map) ────────────────────────────────────────────────────
@@ -169,8 +183,8 @@ export const ImportFogSchema = z
 /**
  * A map's own fields. Only its size can refuse it: a map the app could not
  * hold, such as one wider than 500 squares, is left out with that reason.
- * Its name, tokens, walls, lights and fog are each checked on their own by
- * the importer, which cuts or leaves out what does not fit and says so.
+ * Its name, tokens, walls, lights, fog and drawings are each checked on
+ * their own by the importer, which cuts or leaves out what does not fit and says so.
  *
  * imageAssetRef is null when the export left the picture out (deleted, or one
  * the person exporting could not open): the map imports without a picture,
@@ -189,7 +203,12 @@ export const ImportMapSchema = z.object({
   gridSize: GridSizeSchema,
   feetPerSquare: FeetPerSquareSchema,
   diagonalRule: z.enum(['flat', 'alternating']).optional().catch(undefined),
+  // Absent in archives from before 1.6.0, and from a map made from a picture.
+  drawnBackground: DrawnBackgroundSchema.nullable().optional().catch(null),
   tokens: z.unknown().optional(),
+  // The map's drawings, each checked as drawing:add checks one. An export
+  // writes them under `drawings` and `annotations` empty (campaignExporter.ts).
+  drawings: z.unknown().optional(),
   annotations: z.unknown().optional(),
   wallSegments: z.unknown().optional(),
   fogData: z.unknown().optional(),
@@ -199,12 +218,6 @@ export const ImportMapSchema = z.object({
   explorationEnabled: z.boolean().optional().catch(undefined),
   lights: z.unknown().optional(),
 }).strip();
-
-/**
- * A map's annotations. Nothing draws them yet, and the drawing tool will
- * define their shape, so each is kept as it is, within a bound.
- */
-export const ImportAnnotationsSchema = z.array(z.record(z.string(), z.unknown())).max(500);
 
 // ── Creature template ───────────────────────────────────────────────────────
 
@@ -251,6 +264,37 @@ export const TokenTemplateImportSchema = z.object({
  */
 export const IMPORTABLE_ASSET_TYPES = ['MAP', 'TOKEN', 'AUDIO'] as const;
 
+// An asset's own name or description, as an upload sets one
+// (validators/assets.ts): trimmed, and none when empty. One that is not text
+// is taken as none, so an asset whose entry has neither, as in archives made
+// before they were carried, is named after its file and has no description.
+// The importer cuts one over the upload's limit to it and says so.
+const ImportAssetTextSchema = z
+  .string()
+  .trim()
+  .optional()
+  .catch(undefined)
+  .transform((text) => text || undefined);
+
+// An asset's tags, held to what an upload may set (validators/assets.ts) and
+// tidied as an upload's are. A tag that is not text or is too long is left
+// out on its own, as a token's condition is; one that held U+0000 arrives
+// without it, as all of an archive's text does (services/campaignImporter.ts).
+// A picture tagged on 1.5.1 or earlier may have more tags than an upload now
+// may, and keeps the first ones, in order. A list too long to be one an
+// export wrote, or one that is not a list, imports as none, and its entries
+// are not checked. Archives made before tags were carried have no list, and
+// their assets none. The tag kept for the pictures Paint makes is left out,
+// in any case: a save in Paint writes over a picture on its word, and an
+// archive may come from anyone.
+const ImportAssetTagsSchema = z
+  .unknown()
+  .transform((tags) => (Array.isArray(tags) && tags.length <= IMPORT_LIMITS.MAX_ASSET_TAG_ENTRIES ? tags : []))
+  .pipe(z.array(z.string().catch('')))
+  .transform((tags) => tidyTags(tags)
+    .filter((tag) => tag.length <= ASSET_LIMITS.maxTagLength && !isDrawnMapTag(tag))
+    .slice(0, ASSET_LIMITS.maxTags));
+
 // The declared MIME type is kept for the log only: the stored type and file
 // extension come from the file's own bytes, as on upload.
 export const AssetEntrySchema = z.object({
@@ -258,6 +302,9 @@ export const AssetEntrySchema = z.object({
   mimeType: z.string().max(100),
   type: z.enum(IMPORTABLE_ASSET_TYPES),
   fileSize: z.number().int().min(0),
+  name: ImportAssetTextSchema,
+  description: ImportAssetTextSchema,
+  tags: ImportAssetTagsSchema.optional(),
 }).strip();
 
 // Each entry is checked on its own by the importer: one that is not an

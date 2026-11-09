@@ -19,7 +19,7 @@ vi.mock('@/hooks/queries', () => ({
 function open(overrides: Record<string, unknown>, tab: RegExp) {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<DnD5eCharacterEditor character={dnd5eCharacter(overrides)} onSave={onSave} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: tab }));
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
   return async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());

@@ -5,7 +5,8 @@
 
 import { memo } from 'react';
 import { useMinuteClock } from '@/hooks/useMinuteClock';
-import { Bot, Shield } from 'lucide-react';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import { Bot, Lock, Shield } from 'lucide-react';
 import type { Message, MessageType } from '@/types';
 import { formatRelativeTime } from '@/utils/format';
 
@@ -18,6 +19,14 @@ interface ChatMessageProps {
   notSentReason?: string;
   onRetry?: (message: Message) => void;
   onDiscard?: (message: Message) => void;
+  /** On a whisper: "Whisper to Mara" or "Whisper from Mara". */
+  whisperLabel?: string;
+  /** On a whisper: the other person's name, for "Only you and Mara can see this". */
+  whisperPeer?: string;
+  /** The campaign's DM sent it: a DM's whisper keeps the DM's shield. */
+  sentByDM?: boolean;
+  /** Choosing a whisper's name whispers back to the other person, while they are a member. */
+  onWhisperBack?: (message: Message) => void;
 }
 
 /**
@@ -76,20 +85,146 @@ function getMessageStyle(type: MessageType): { bg: string; textColor: string; bo
   }
 }
 
-function ChatMessageInner({ message, isCurrentUser = false, isPending = false, notSentReason, onRetry, onDiscard }: ChatMessageProps) {
+/** A whisper's tint, whoever sent it. */
+const WHISPER_STYLE = { bg: 'bg-accent/10', textColor: 'text-stone-gray', borderColor: 'border-accent/30' };
+
+function ChatMessageInner({ message, isCurrentUser = false, isPending = false, notSentReason, onRetry, onDiscard, whisperLabel, whisperPeer, sentByDM = false, onWhisperBack }: ChatMessageProps) {
   // The row is memoised, so without this its "just now" never moved on.
   const now = useMinuteClock();
-  const { bg, textColor, borderColor } = getMessageStyle(message.type);
+  const isWhisper = whisperLabel !== undefined;
+  const { bg, textColor, borderColor } = isWhisper ? WHISPER_STYLE : getMessageStyle(message.type);
   const isSystem = message.type === 'SYSTEM';
   const isDM = message.type === 'DM';
+  const showShield = isDM || (isWhisper && sentByDM);
 
   // Get display name
   const displayName = isSystem
     ? 'System'
     : message.user?.displayName || 'Unknown User';
 
+  const compact = useCompactLayout();
+
+  const nameColor = isDM ? 'text-warning-ink' : isSystem || isCurrentUser ? 'text-brand-ink' : 'text-stone-gray';
+  const onlyYou = `Only you and ${whisperPeer} can see this.`;
+  const sentAt = message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time';
+
+  const notSentRow = notSentReason && (
+    <div className={`${compact ? 'mt-1' : 'mt-2'} flex flex-wrap items-center gap-2 text-xs`} role="status">
+      <span className="text-danger-ink">Not sent: {notSentReason}</span>
+      <button type="button" onClick={() => onRetry?.(message)} className="font-medium text-brand-ink underline hover:no-underline">
+        Retry
+      </button>
+      <button type="button" onClick={() => onDiscard?.(message)} className="font-medium text-stone-gray underline hover:no-underline">
+        Discard
+      </button>
+    </div>
+  );
+
+  // Metadata (e.g., dice roll results) - hide for internal system actions
+  const metadataBlock = message.metadata &&
+    Object.keys(message.metadata).length > 0 &&
+    message.metadata.action !== 'user.joined' &&
+    message.metadata.action !== 'user.left' &&
+    message.metadata.action !== 'spirit_layer.toggle' &&
+    message.metadata.action !== 'vibe.update' &&
+    message.metadata.action !== 'session.started' &&
+    message.metadata.action !== 'session.paused' &&
+    message.metadata.action !== 'session.ended' &&
+    message.metadata.action !== 'session.resumed' && (
+      <div className="mt-2 pt-2 border-t">
+        <pre className="text-xs opacity-70 font-mono">
+          {JSON.stringify(message.metadata, null, 2)}
+        </pre>
+      </div>
+    );
+
+  /**
+   * A system notice (a session paused or resumed, the spirit layer shown or
+   * hidden) is one quiet centred line on either layout, so people's
+   * messages stand out; a screen reader hears it named as the system's.
+   */
+  if (isSystem) {
+    return (
+      <div data-message-id={message.id} className="px-2 py-0.5 text-center text-xs text-ink-muted">
+        <Bot className="mr-1 inline h-3 w-3 align-[-0.1em]" aria-hidden="true" />
+        <span className="sr-only">System: </span>
+        <span className="whitespace-pre-wrap wrap-break-word">{message.content}</span>
+        <span className="whitespace-nowrap" title={sentAt}> · {messageAge(message.createdAt, now)}</span>
+        {metadataBlock}
+      </div>
+    );
+  }
+
+  /**
+   * The compact layout's chat, where a sheet half a phone's height should
+   * show several messages: the sender and the time start the message's own
+   * line, at the size they have on the desktop, and the padding is slimmer.
+   * The icons, the colours, a whisper's way to whisper back and Not sent are
+   * the desktop's.
+   */
+  if (compact) {
+    const icon = 'mr-1 inline h-3.5 w-3.5 align-[-0.15em]';
+    return (
+      <div
+        data-message-id={message.id}
+        className={`rounded-lg border px-2.5 py-1 ${bg} ${borderColor} ${isPending ? 'opacity-60' : ''} ${notSentReason ? 'border-danger/40' : ''}`}
+      >
+        <p className={`text-sm ${textColor} whitespace-pre-wrap wrap-break-word`}>
+          {isSystem && <Bot className={`${icon} text-brand-ink`} />}
+          {isWhisper && (
+            <span title={onlyYou} className="inline">
+              <Lock className={`${icon} text-accent-ink`} aria-hidden="true" />
+            </span>
+          )}
+          {showShield && <Shield className={`${icon} text-warning-ink`} />}
+          {isWhisper ? (
+            <>
+              {onWhisperBack ? (
+                // A finger's height, without making the line taller.
+                <button
+                  type="button"
+                  onClick={() => onWhisperBack(message)}
+                  title={`Whisper to ${whisperPeer}`}
+                  className="-my-3 inline-flex items-center align-middle text-xs font-semibold text-accent-ink underline-offset-2 hover:underline"
+                >
+                  {whisperLabel}
+                </button>
+              ) : (
+                <span className="text-xs font-semibold text-accent-ink">{whisperLabel}</span>
+              )}
+              <span className="sr-only">{onlyYou}</span>
+            </>
+          ) : (
+            <span className={`text-xs font-semibold ${nameColor}`}>
+              {displayName}
+              {isCurrentUser && !isSystem && ' (You)'}
+            </span>
+          )}
+          {/* The text keeps its own spaces and line breaks, so one space each. */}
+          {notSentReason ? null : isPending ? (
+            <>
+              {' '}
+              <span className="whitespace-nowrap text-xs text-stone-gray/50 italic">sending…</span>
+            </>
+          ) : (
+            <>
+              {' '}
+              <span className="whitespace-nowrap text-xs text-stone-gray/70" title={sentAt}>
+                {messageAge(message.createdAt, now)}
+              </span>
+            </>
+          )}{' '}
+          {message.content}
+        </p>
+        {notSentRow}
+        {metadataBlock}
+      </div>
+    );
+  }
+
   return (
     <div
+      data-message-id={message.id}
       className={`p-3 rounded-lg border ${bg} ${borderColor} transition-all hover:shadow-xs ${
         isPending ? 'opacity-60' : ''
       } ${notSentReason ? 'border-danger/40' : ''}`}
@@ -98,29 +233,42 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
       <div className="flex items-center gap-2 mb-1">
         {/* Icon for special message types */}
         {isSystem && <Bot className="w-3.5 h-3.5 text-brand-ink" />}
-        {isDM && <Shield className="w-3.5 h-3.5 text-warning-ink" />}
+        {isWhisper && (
+          <span title={onlyYou} className="inline-flex shrink-0">
+            <Lock className="w-3.5 h-3.5 text-accent-ink" aria-hidden="true" />
+          </span>
+        )}
+        {showShield && <Shield className="w-3.5 h-3.5 shrink-0 text-warning-ink" />}
 
-        {/* Username */}
-        <span
-          className={`text-xs font-semibold ${
-            isDM
-              ? 'text-warning-ink'
-              : isSystem
-              ? 'text-brand-ink'
-              : isCurrentUser
-              ? 'text-brand-ink'
-              : 'text-stone-gray'
-          }`}
-        >
+        {isWhisper ? (
+          <>
+            {onWhisperBack ? (
+              <button
+                type="button"
+                onClick={() => onWhisperBack(message)}
+                title={`Whisper to ${whisperPeer}`}
+                className="min-w-0 text-left text-xs font-semibold text-accent-ink underline-offset-2 hover:underline"
+              >
+                {whisperLabel}
+              </button>
+            ) : (
+              <span className="min-w-0 text-left text-xs font-semibold text-accent-ink">{whisperLabel}</span>
+            )}
+            <span className="sr-only">{onlyYou}</span>
+          </>
+        ) : (
+        /* Username */
+        <span className={`text-xs font-semibold ${nameColor}`}>
           {displayName}
           {isCurrentUser && !isSystem && ' (You)'}
         </span>
+        )}
 
         {/* Timestamp / pending indicator */}
         {notSentReason ? null : isPending ? (
-          <span className="text-xs text-stone-gray/50 italic">sending…</span>
+          <span className="shrink-0 whitespace-nowrap text-xs text-stone-gray/50 italic">sending…</span>
         ) : (
-          <span className="text-xs text-stone-gray/70" title={message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time'}>
+          <span className="shrink-0 whitespace-nowrap text-xs text-stone-gray/70" title={sentAt}>
             {messageAge(message.createdAt, now)}
           </span>
         )}
@@ -131,35 +279,9 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
         {message.content}
       </p>
 
-      {notSentReason && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" role="status">
-          <span className="text-danger-ink">Not sent: {notSentReason}</span>
-          <button type="button" onClick={() => onRetry?.(message)} className="font-medium text-brand-ink underline hover:no-underline">
-            Retry
-          </button>
-          <button type="button" onClick={() => onDiscard?.(message)} className="font-medium text-stone-gray underline hover:no-underline">
-            Discard
-          </button>
-        </div>
-      )}
+      {notSentRow}
 
-      {/* Metadata (e.g., dice roll results) - hide for internal system actions */}
-      {message.metadata &&
-       Object.keys(message.metadata).length > 0 &&
-       message.metadata.action !== 'user.joined' &&
-       message.metadata.action !== 'user.left' &&
-       message.metadata.action !== 'spirit_layer.toggle' &&
-       message.metadata.action !== 'vibe.update' &&
-       message.metadata.action !== 'session.started' &&
-       message.metadata.action !== 'session.paused' &&
-       message.metadata.action !== 'session.ended' &&
-       message.metadata.action !== 'session.resumed' && (
-        <div className="mt-2 pt-2 border-t">
-          <pre className="text-xs opacity-70 font-mono">
-            {JSON.stringify(message.metadata, null, 2)}
-          </pre>
-        </div>
-      )}
+      {metadataBlock}
     </div>
   );
 }

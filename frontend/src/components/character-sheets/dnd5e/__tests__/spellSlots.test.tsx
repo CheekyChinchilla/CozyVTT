@@ -65,7 +65,7 @@ describe('spell slots in the editor', () => {
         onCancel={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Spells/ }));
   }
 
   it(`stops each total at ${SPELL_SLOTS_MAX} and each used box at its total`, () => {
@@ -92,7 +92,7 @@ describe('spell slots in the editor', () => {
         onCancel={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Spells/ }));
     const total = screen.getAllByLabelText('Total')[0];
     fireEvent.change(total, { target: { value: '2' } });
     fireEvent.blur(total);

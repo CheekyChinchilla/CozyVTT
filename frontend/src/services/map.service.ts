@@ -5,6 +5,7 @@
 
 import api from './api';
 import type { CampaignMap, CreateMapRequest, UpdateMapRequest, Token, CreateTokenRequest } from '@/types';
+import type { WallSegment } from '@/types/walls';
 
 class MapService {
   /**
@@ -37,6 +38,15 @@ class MapService {
   async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<CampaignMap> {
     const response = await api.updateMap(campaignId, mapId, data);
     return response.map;
+  }
+
+  /**
+   * Add one wall to a map (DM only), as Paint's Room does when its painting
+   * is saved; the wall tool adds walls over the live connection.
+   */
+  async addWall(campaignId: string, mapId: string, segment: Omit<WallSegment, 'id'>): Promise<WallSegment> {
+    const response = await api.addWall(campaignId, mapId, segment);
+    return response.segment;
   }
 
   /**

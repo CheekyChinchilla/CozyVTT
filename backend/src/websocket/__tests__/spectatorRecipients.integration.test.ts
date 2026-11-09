@@ -41,7 +41,7 @@ const token = (id: string, extra: Record<string, unknown>) => ({
   id, name: id, imageUrl: '', position: { x: 2, y: 2 }, size: { width: 1, height: 1 }, layer: 'token',
   visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {}, type: 'npc', ...extra,
 });
-const entry = (tokenId: string) => ({ tokenId, mapId, name: tokenId, imageUrl: '', initiative: null, hp: null, type: 'npc' as const, disposition: null });
+const entry = (tokenId: string) => ({ tokenId, mapId, name: tokenId, imageUrl: '', initiative: null, hp: null, type: 'npc' as const, disposition: null, characterId: null });
 
 beforeAll(async () => {
   const [dmUser, playerUser, spectatorUser] = await Promise.all(['dm', 'player', 'spectator'].map((name) =>

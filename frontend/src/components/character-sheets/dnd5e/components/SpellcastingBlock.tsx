@@ -37,7 +37,7 @@ const SpellSlotIndicator: React.FC<{ slot: SpellSlot }> = ({ slot }) => {
   const remaining = Math.min(total, Math.max(0, total - slot.expended));
 
   return (
-    <div className="flex items-center space-x-1">
+    <div className="flex flex-wrap items-center gap-1">
       {total <= SPELL_SLOTS_MAX &&
         Array.from({ length: total }).map((_, idx) => (
           <div key={idx} data-slot>
@@ -143,7 +143,7 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
             {spellcasting.class ? `${spellcasting.class} Spellcasting` : 'Spellcasting'}
           </h4>
         </div>
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
           <div>
             <div className="text-xs text-ink-muted">Spellcasting Ability</div>
             <div className="text-lg font-bold text-info-ink">{spellcasting.ability}</div>

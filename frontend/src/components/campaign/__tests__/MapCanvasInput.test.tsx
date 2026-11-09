@@ -13,9 +13,10 @@
  * and a square is 50 pixels.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { TokenType, type CampaignMap, type Token } from '@/types';
+import { mouse } from '@/test/pointer';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -50,6 +51,7 @@ const h = vi.hoisted(() => {
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
+  const mapActions = (await import('@/test/viewedMapContext')).mapActionsFor(() => h.state.currentMap, () => undefined);
   const noop = () => undefined;
   const campaign = { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, memberships: [], characters: [] };
   return {
@@ -57,7 +59,9 @@ vi.mock('@/contexts/CampaignContext', async () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
       return {
         currentMap: h.state.currentMap,
+        viewedMap: h.state.currentMap,
         setCurrentMap: noop,
+        ...mapActions,
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
@@ -160,8 +164,8 @@ function show(...tokens: Token[]) {
 
 /** A left click as the canvas sees it: down, then up, at one place. */
 function click(point: { clientX: number; clientY: number }) {
-  fireEvent.mouseDown(surface(), { ...point, button: 0, buttons: 1 });
-  fireEvent.mouseUp(surface(), { ...point, button: 0 });
+  mouse.down(surface(), point);
+  mouse.up(surface(), point);
 }
 
 const readout = () => screen.queryByText(/^\(-?\d+, -?\d+\)$/)?.textContent ?? null;
@@ -183,18 +187,18 @@ describe('the square under the pointer', () => {
   it('is shown in the corner, counting columns from the left and rows up from the bottom', () => {
     render(<MapCanvas />);
 
-    fireEvent.mouseMove(surface(), { clientX: 10, clientY: 10 });
+    mouse.move(surface(), { clientX: 10, clientY: 10 });
     expect(readout()).toBe('(0, 19)');
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 });
     expect(readout()).toBe('(1, 19)');
-    fireEvent.mouseMove(surface(), { clientX: 10, clientY: 960 });
+    mouse.move(surface(), { clientX: 10, clientY: 960 });
     expect(readout()).toBe('(0, 0)');
   });
 
   it('is not shown off the edge of the map', () => {
     render(<MapCanvas />);
 
-    fireEvent.mouseMove(surface(), { clientX: 1010, clientY: 10 });
+    mouse.move(surface(), { clientX: 1010, clientY: 10 });
 
     expect(readout()).toBeNull();
   });
@@ -207,7 +211,7 @@ describe('zooming', () => {
 
     fireEvent.wheel(surface(), { deltaY: -100, clientX: 260, clientY: 260 });
     expect(zoom()).toBe('110%');
-    fireEvent.mouseMove(surface(), { clientX: 260, clientY: 260 });
+    mouse.move(surface(), { clientX: 260, clientY: 260 });
     expect(readout()).toBe('(5, 14)');
 
     fireEvent.wheel(surface(), { deltaY: 100, clientX: 260, clientY: 260 });
@@ -238,12 +242,12 @@ describe('panning', () => {
   it('drags the map with the left button held on an empty square', () => {
     render(<MapCanvas />);
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 0, buttons: 1 });
-    fireEvent.mouseMove(surface(), { clientX: 550, clientY: 500, buttons: 1 });
-    fireEvent.mouseUp(surface(), { clientX: 550, clientY: 500, button: 0 });
+    mouse.down(surface(), { clientX: 500, clientY: 500 });
+    mouse.move(surface(), { clientX: 550, clientY: 500 }, 1);
+    mouse.up(surface(), { clientX: 550, clientY: 500 });
 
     // The map moved one square right, so the first column is now under x 60.
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 });
     expect(readout()).toBe('(0, 19)');
   });
 });
@@ -256,7 +260,7 @@ describe('moving a token: click to pick it up, click again to put it down', () =
     click(at(0, 19));
     expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a' }]);
 
-    fireEvent.mouseMove(surface(), at(3, 19));
+    mouse.move(surface(), at(3, 19));
     expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 19 }]);
 
     click(at(3, 19));
@@ -268,9 +272,9 @@ describe('moving a token: click to pick it up, click again to put it down', () =
     render(<MapCanvas />);
     show(goblin());
     click(at(0, 19));
-    fireEvent.mouseMove(surface(), at(3, 19));
+    mouse.move(surface(), at(3, 19));
 
-    fireEvent.mouseLeave(surface());
+    mouse.leave(surface());
 
     expect(lastOf('token.move')).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
     expect(sentOf('token.move.end')).toEqual([]);
@@ -281,7 +285,7 @@ describe('moving a token: click to pick it up, click again to put it down', () =
     render(<MapCanvas />);
     show(goblin());
     click(at(0, 19));
-    fireEvent.mouseMove(surface(), at(3, 19));
+    mouse.move(surface(), at(3, 19));
 
     fireEvent.contextMenu(surface(), at(3, 19));
 
@@ -361,4 +365,101 @@ describe('a right-click', () => {
       expect(screen.getByText('Obscure Identity')).toBeInTheDocument();
     },
   );
+});
+
+// Nothing pinned the hover card before it moved into its own component
+// (TokenDetailsCard): what it shows, by who is looking.
+describe('the card a hovered token shows', () => {
+  afterEach(() => {
+    act(() => { useGameStore.getState().clearGameState(); });
+  });
+
+  /** The card over the map, found by the name in it. */
+  const card = (name: string) => screen.getByText(name).closest('.glass-panel') as HTMLElement;
+  const hover = (point: { clientX: number; clientY: number }) => mouse.move(surface(), point);
+  const inOrder = (initiative: number | null) => act(() => {
+    useGameStore.getState().setCombatState({
+      active: true, round: 1, currentTokenId: null,
+      combatants: [{ tokenId: 'tok-goblin', mapId: 'map-a', name: 'Goblin Scout', imageUrl: '', initiative, hp: null, type: 'npc', disposition: null, characterId: null }],
+    });
+  });
+
+  it('names the token and the square under the pointer, and lists its conditions in full', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin Scout', 0, 19, { conditions: ['poisoned', 'prone'] }));
+
+    hover(at(0, 19));
+
+    const shown = card('Goblin Scout');
+    expect(within(shown).getByText('(0, 19)')).toBeInTheDocument();
+    expect(within(shown).getByText('poisoned')).toBeInTheDocument();
+    expect(within(shown).getByText('prone')).toBeInTheDocument();
+  });
+
+  it("shows a creature's own hit points to the DM, and to a player only once its HP bar is on", () => {
+    const wounded = (showHpBar: boolean) => token('tok-goblin', 'Goblin Scout', 0, 19, { hp: { current: 5, max: 7, temp: 2 }, showHpBar });
+    render(<MapCanvas />);
+    show(wounded(false));
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).getByText('5/7')).toBeInTheDocument();
+    expect(within(card('Goblin Scout')).getByText('+2')).toBeInTheDocument();
+
+    act(() => { h.set({ userRole: 'PLAYER' }); });
+    hover(at(1, 19));
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).queryByText('5/7')).toBeNull();
+    expect(within(card('Goblin Scout')).queryByText('HP')).toBeNull();
+
+    show(wounded(true));
+    hover(at(1, 19));
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).getByText('5/7')).toBeInTheDocument();
+  });
+
+  it("shows a character's hit points from its sheet, to a player too", () => {
+    h.set({ userRole: 'PLAYER' });
+    act(() => { useGameStore.getState().setCharacterHp('char-mara', { current: 12, max: 20, temp: 0 }); });
+    render(<MapCanvas />);
+    show(token('tok-mara', 'Mara', 0, 19, { type: TokenType.PLAYER, characterId: 'char-mara', hp: { current: 1, max: 1, temp: 0 } }));
+
+    hover(at(0, 19));
+
+    expect(within(card('Mara')).getByText('12/20')).toBeInTheDocument();
+  });
+
+  it('has an Initiative row only while the token is in the turn order, with a dash before it rolls', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).queryByText('Initiative')).toBeNull();
+
+    inOrder(null);
+    expect(within(card('Goblin Scout')).getByText('Initiative')).toBeInTheDocument();
+    expect(within(card('Goblin Scout')).getByText('—')).toBeInTheDocument();
+
+    inOrder(14);
+    expect(within(card('Goblin Scout')).getByText('14')).toBeInTheDocument();
+  });
+
+  it('says "Not yours to move" on a token the viewer may not move, and nothing on their own', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(goblin(), token('tok-mine', 'Aldra', 2, 19, { type: TokenType.PLAYER, controlledBy: 'me' }));
+
+    hover(at(0, 19));
+    expect(within(card('Goblin Scout')).getByText('Not yours to move')).toBeInTheDocument();
+
+    hover(at(2, 19));
+    expect(within(card('Aldra')).queryByText('Not yours to move')).toBeNull();
+  });
+
+  it('is gone once the pointer leaves the token', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    hover(at(0, 19));
+    expect(screen.getByText('Goblin Scout')).toBeInTheDocument();
+
+    hover(at(5, 5));
+    expect(screen.queryByText('Goblin Scout')).toBeNull();
+  });
 });

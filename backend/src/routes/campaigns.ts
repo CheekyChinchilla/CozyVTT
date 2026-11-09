@@ -1,13 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { AuthenticatedRequest } from '../middleware/rbac';
+import { AuthenticatedRequest, NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
-import { getSpiritVisibility } from '../utils/spirit-layer';
+import { getSpiritVisibility, MAP_SELECT_SENT_TO_EVERYONE } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, withSessionsHeld, openSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
-import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance } from '../websocket/utils';
+import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance, LEFT_MESSAGE } from '../websocket/utils';
+import { takeMemberOut, tellTableMemberLeft, type TakeOutRefusal } from '../services/campaignMembers';
 import { broadcastMapData } from '../websocket/shared';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
@@ -23,7 +24,7 @@ import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPA
 import { UpdateSessionNotesSchema, EndSessionSchema } from '../validators/sessionNotes';
 import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
 import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
-import type { Prisma } from '@prisma/client';
+import type { GameSystem, Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
 import { inSerializableTransaction } from '../utils/serializable';
 import { toJson, readJsonObject } from '../utils/prisma-json';
@@ -37,7 +38,9 @@ import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validato
 import { escapeLikePattern } from '../utils/likePattern';
 import { standingInvitation, isStanding } from '../utils/invitationState';
 import { CAMPAIGN_LIMITS } from '../validators/campaignLimits';
+import { MAX_CHAT_HISTORY_PAGE } from '../validators/chatLimits';
 import { downloadOnly } from '../middleware/downloadOnly';
+import { refuseNulCharacters } from '../middleware/nulCharacter';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -48,6 +51,7 @@ import {
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fsp from 'fs/promises';
+import { resendDrawings } from '../services/mapDrawings';
 const router = Router();
 
 /**
@@ -302,27 +306,9 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
         // GET /api/campaigns/:campaignId/maps/:id (spirit-filtered) and character
         // sheets via GET /api/characters/:id. Frontend only reads ids + a few
         // metadata fields from these arrays (map move-to-map, token ownership).
-        maps: {
-          select: {
-            id: true,
-            campaignId: true,
-            name: true,
-            imageUrl: true,
-            width: true,
-            height: true,
-            gridSize: true,
-            feetPerSquare: true,
-            diagonalRule: true,
-            baseLayerUrl: true,
-            spiritLayerUrl: true,
-            lightingEnabled: true,
-            fogEnabled: true,
-            globalIllumination: true,
-            explorationEnabled: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        },
+        // The fields everyone is sent of a map, and the spirit layer address,
+        // blanked below for a member who may not have it.
+        maps: { select: { ...MAP_SELECT_SENT_TO_EVERYONE, spiritLayerUrl: true } },
         characters: {
           select: {
             id: true,
@@ -456,6 +442,21 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
 });
 
 /**
+ * `campaign.settings.updated`: the Campaign Settings every member's page
+ * shows, as stored, sent when the DM saves any of them. The frontend declares
+ * the same fields (keepInStep.test.ts).
+ */
+export interface CampaignSettingsUpdatedBroadcast {
+  campaignId: string;
+  name: string;
+  description: string | null;
+  gameSystem: GameSystem | null;
+  chatCooldownEnabled: boolean;
+  chatCooldownSeconds: number;
+  playersMayDraw: boolean;
+}
+
+/**
  * PUT /api/campaigns/:campaignId
  * Update campaign settings
  * Requires: Campaign DM role
@@ -470,7 +471,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
         message: parsed.error.issues[0]?.message ?? 'Invalid campaign data',
       });
     }
-    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = parsed.data;
+    const { name, description, status, vibeSettings, spiritLayerEnabled, spiritLayerStyle, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw } = parsed.data;
 
     const updateData: Prisma.CampaignUpdateInput = {};
     if (name !== undefined) updateData.name = name;
@@ -487,6 +488,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (spiritLayerStyle !== undefined) updateData.spiritLayerStyle = spiritLayerStyle;
     if (chatCooldownEnabled !== undefined) updateData.chatCooldownEnabled = chatCooldownEnabled;
     if (chatCooldownSeconds !== undefined) updateData.chatCooldownSeconds = chatCooldownSeconds;
+    if (playersMayDraw !== undefined) updateData.playersMayDraw = playersMayDraw;
 
     // Handle gameSystem update
     if (gameSystem !== undefined) {
@@ -515,18 +517,21 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       : { ...outcome.campaign, ...(await saveVibeSettings(campaignId, req.session.userId!, vibeSettings)) };
 
     // Every member's page shows these, so a player at the table follows them
-    // without a reload: the chat box's cooldown, the campaign's name.
-    // The change is saved either way, so a failed broadcast is only logged.
-    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds].some((value) => value !== undefined)) {
+    // without a reload: the chat box's cooldown, the campaign's name, whether
+    // they may draw. The change is saved either way, so a failed broadcast is
+    // only logged.
+    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds, playersMayDraw].some((value) => value !== undefined)) {
       try {
-        broadcastToCampaign(campaignId, 'campaign.settings.updated', {
+        const settings: CampaignSettingsUpdatedBroadcast = {
           campaignId,
           name: campaign.name,
           description: campaign.description,
           gameSystem: campaign.gameSystem,
           chatCooldownEnabled: campaign.chatCooldownEnabled,
           chatCooldownSeconds: campaign.chatCooldownSeconds,
-        });
+          playersMayDraw: campaign.playersMayDraw,
+        };
+        broadcastToCampaign(campaignId, 'campaign.settings.updated', settings);
       } catch (error) {
         logger.error('Campaign settings saved but not sent to the table', { err: error, campaignId });
       }
@@ -962,68 +967,29 @@ router.delete('/:campaignId/invitations/:invitationId', campaignDM, async (req: 
   }
 });
 
+/** What the DM is told when a removal is refused (services/campaignMembers.ts). */
+const REMOVAL_REFUSED: Record<TakeOutRefusal, { status: number; error: string; message: string }> = {
+  'not-member': { status: 404, error: 'Not Found', message: 'User is not a member of this campaign' },
+  dm: { status: 400, error: 'Bad Request', message: 'Cannot remove the Dungeon Master from the campaign' },
+  owner: { status: 400, error: 'Bad Request', message: 'Cannot remove the campaign owner from their own campaign' },
+};
+
 /**
  * DELETE /api/campaigns/:campaignId/members/:userId
  * Remove a member from the campaign
  * Requires: Campaign DM role
- * Cannot remove the DM
+ * Cannot remove the DM or the campaign's owner
  */
 router.delete('/:campaignId/members/:userId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, userId } = req.params;
 
-    // Who the member is, and the removal, in one serializable transaction
-    // (utils/serializable.ts): a DM hand-over landing in between could
-    // otherwise give this member the seat just before they were removed,
-    // leaving the campaign with no DM.
-    const refusal = await inSerializableTransaction(async (tx): Promise<{ status: number; message: string } | null> => {
-      const membership = await tx.campaignMembership.findUnique({
-        where: { userId_campaignId: { userId, campaignId } },
-        select: { role: true },
-      });
-      if (!membership) {
-        return { status: 404, message: 'User is not a member of this campaign' };
-      }
-
-      // CRITICAL: Cannot remove the DM
-      if (membership.role === 'DM') {
-        return { status: 400, message: 'Cannot remove the Dungeon Master from the campaign' };
-      }
-
-      // Nor the owner, who is often sitting as a player after handing the seat
-      // over. Taking the seat back needs a membership, and only the DM can add
-      // one, so removing the owner would shut them out of their own campaign with
-      // no way in except deleting it.
-      const campaign = await tx.campaign.findUnique({ where: { id: campaignId }, select: { ownerId: true } });
-      if (campaign?.ownerId === userId) {
-        return { status: 400, message: 'Cannot remove the campaign owner from their own campaign' };
-      }
-
-      // Delete the membership, and take their characters out of the campaign
-      // with it: a character that still named the campaign stayed readable by
-      // every member and editable by the DM, and each save the owner made was
-      // still sent to the table they had left.
-      await tx.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } });
-      await tx.campaignMembership.delete({ where: { userId_campaignId: { userId, campaignId } } });
-      return null;
-    });
+    const refusal = await takeMemberOut(campaignId, userId);
     if (refusal) {
-      return res.status(refusal.status).json({
-        error: refusal.status === 404 ? 'Not Found' : 'Bad Request',
-        message: refusal.message,
-      });
+      const refused = REMOVAL_REFUSED[refusal];
+      return res.status(refused.status).json({ error: refused.error, message: refused.message });
     }
-
-    // A socket caches the campaign from when it authenticated, so without this
-    // the person carries on playing until they close the tab. Best-effort: the
-    // membership is already gone and a socket layer that is not up must not
-    // fail the request.
-    try {
-      await clearCampaignFromLiveSockets(userId, campaignId);
-    } catch (error) {
-      logger.error('Member removed but live sockets were not updated', { err: error, userId, campaignId });
-    }
-    announceRosterChange(userId, [campaignId], 'member.left');
+    await tellTableMemberLeft(userId, campaignId, 'removed');
 
     return res.status(200).json({
       message: 'Member removed successfully',
@@ -1038,11 +1004,61 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
 });
 
 /**
+ * What a member is told when their leave is refused. Not a member any more
+ * (the DM's removal won the race with this request) is answered as the
+ * `campaignMember` guard answers it. The wording of the DM's refusal follows
+ * account deletion's (services/accountDeletion.ts).
+ */
+const LEAVE_REFUSED: Record<TakeOutRefusal, { status: number; error: string; message: string }> = {
+  'not-member': { status: 403, error: 'Forbidden', message: NOT_A_MEMBER_MESSAGE },
+  owner: {
+    status: 409,
+    error: 'Conflict',
+    message: "You own this campaign, so you cannot leave it. If you no longer want it, delete it in the campaign's settings.",
+  },
+  dm: {
+    status: 409,
+    error: 'Conflict',
+    message: "You run this campaign. Hand the DM seat to someone else in the campaign's settings, then leave it.",
+  },
+};
+
+/**
+ * POST /api/campaigns/:campaignId/leave
+ * Leave the campaign, as a player or a spectator: the same as the DM's
+ * Remove, asked by the member. Their characters go back to their own list;
+ * their tokens, combatants, drawings, notes and macros stay with the campaign.
+ * Requires: Campaign membership, any role. The owner (asked first) and the
+ * DM are refused in the transaction, which reads the role as it stands.
+ */
+router.post('/:campaignId/leave', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId } = req.params;
+    const userId = req.session.userId!;
+
+    const refusal = await takeMemberOut(campaignId, userId, 'owner');
+    if (refusal) {
+      const refused = LEAVE_REFUSED[refusal];
+      return res.status(refused.status).json({ error: refused.error, message: refused.message });
+    }
+    await tellTableMemberLeft(userId, campaignId, 'left');
+
+    return res.status(200).json({ message: LEFT_MESSAGE });
+  } catch (error) {
+    logger.error('Error leaving campaign', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to leave the campaign',
+    });
+  }
+});
+
+/**
  * What the open pages need after members' roles change, the new roles
  * already applied to their live connections: the roster panel regroups
  * (it groups by role from its own list), and each copy of the initiative
- * order and of the map the table is on is sent again as the new roles see
- * it. A spectator on a lit map is sent no tokens, a player their own and
+ * order, of the map the table is on and of its drawings is sent again as
+ * the new roles see it. A spectator on a lit map is sent no tokens, a player their own and
  * what they see, a DM every hidden creature and its notes.
  */
 async function followNewRoles(campaignId: string, userIds: string[]): Promise<void> {
@@ -1050,7 +1066,11 @@ async function followNewRoles(campaignId: string, userIds: string[]): Promise<vo
   await resendInitiative(campaignId);
   const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
-  if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+  if (!map) return;
+  await broadcastMapData(getSocketInstance(), campaignId, map);
+  // A drawing for the DM alone goes with the seat: the new DM's page is sent
+  // it, and the old DM's page is sent the list without it.
+  await resendDrawings(campaignId, map.id);
 }
 
 /**
@@ -1326,10 +1346,14 @@ router.get('/admin/all', adminOnly, async (_req: AuthenticatedRequest, res: Resp
  * Get chat messages for a campaign
  * Requires: Campaign member
  * Chat Messages - Load last 50 messages with pagination
+ *
+ * A whisper is sent to the two people it is between, its sender and its
+ * recipient, and to nobody else: the DM reads only their own.
  */
 router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
+    const userId = req.session.userId!;
     // `before` was once sent by the client and never read here. It is still
     // ignored rather than rejected, so an older client keeps working — it simply
     // gets the newest page, which is what it got before.
@@ -1337,10 +1361,10 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
 
     const limitNum = parseInt(limit as string, 10);
 
-    if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+    if (isNaN(limitNum) || limitNum < 1 || limitNum > MAX_CHAT_HISTORY_PAGE) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Limit must be between 1 and 100',
+        message: `Limit must be between 1 and ${MAX_CHAT_HISTORY_PAGE}`,
       });
     }
 
@@ -1372,18 +1396,29 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
         // these rows carry the flag only inside unindexed metadata, so serving
         // them here would leak hidden rolls.
         type: { not: 'DICE_ROLL' },
-        ...(cursor
-          ? {
-              // (createdAt, id) < (cursor.createdAt, cursor.id), spelled out
-              // because Prisma cannot express a row-value comparison.
-              OR: [
-                { createdAt: { lt: cursor.createdAt } },
-                { createdAt: cursor.createdAt, id: { lt: cursor.id } },
-              ],
-            }
-          : {}),
+        // Each condition in its own OR, both under AND: two OR keys side by
+        // side would be one object key, and whichever came last would drop
+        // the other, the cursor or the whisper rule.
+        AND: [
+          // The type marks a whisper private and the recipient says who it is
+          // for. A whisper whose recipient's account was deleted has no
+          // recipient left, and stays its sender's alone.
+          { OR: [{ type: { not: 'WHISPER' } }, { userId }, { recipientId: userId }] },
+          ...(cursor
+            ? [
+                {
+                  // (createdAt, id) < (cursor.createdAt, cursor.id), spelled out
+                  // because Prisma cannot express a row-value comparison.
+                  OR: [
+                    { createdAt: { lt: cursor.createdAt } },
+                    { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+                  ],
+                },
+              ]
+            : []),
+        ],
       },
-      include: { user: { select: MESSAGE_USER_SELECT } },
+      include: { user: { select: MESSAGE_USER_SELECT }, recipient: { select: MESSAGE_USER_SELECT } },
       // createdAt alone is not unique — a burst of system messages lands in one
       // millisecond — and paging needs a total order or rows on the boundary are
       // skipped or repeated. The existing [campaignId, createdAt] index carries
@@ -1403,6 +1438,12 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
         user: msg.user ? {
           id: msg.user.id,
           displayName: msg.user.displayName,
+        } : null,
+        recipientId: msg.recipientId,
+        recipientName: msg.recipient?.displayName || null,
+        recipient: msg.recipient ? {
+          id: msg.recipient.id,
+          displayName: msg.recipient.displayName,
         } : null,
         content: msg.content,
         type: msg.type,
@@ -2261,7 +2302,7 @@ router.post('/import/preview', authenticated, oneCampaignArchiveAtATime, campaig
  * Requires: Authentication. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
  * (20 by default), and one archive operation at a time.
  */
-router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportLimiter, takeImportUpload, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportLimiter, takeImportUpload, refuseNulCharacters, async (req: AuthenticatedRequest, res: Response) => {
   await answerAfterRemovingArchive(req, res, async (archivePath) => {
     try {
       const userId = req.session.userId!;

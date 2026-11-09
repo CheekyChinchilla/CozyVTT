@@ -7,6 +7,7 @@
 import React from 'react';
 import NumberField from '../../../ui/NumberField';
 import { Dices } from 'lucide-react';
+import { sheetRoll } from '../../useSheetRolls';
 
 interface CharacteristicBlockProps {
   /** Characteristic label (e.g., "STR", "CON") */
@@ -55,11 +56,12 @@ export const CharacteristicBlock: React.FC<CharacteristicBlockProps> = ({
       className={`flex flex-col items-center space-y-1 rounded-lg p-1 transition-colors group ${isClickable ? 'cursor-pointer hover:bg-ink/5 select-none' : ''}`}
       onClick={isClickable ? () => onRoll!('1d100', purpose) : undefined}
       title={isClickable ? `Click to roll ${label} (target: ${regular}%)` : undefined}
+      {...(isClickable ? sheetRoll : undefined)}
     >
       {/* Label */}
       <div className="flex items-center gap-1 text-xs font-semibold text-ink-secondary uppercase tracking-wider">
         {label}
-        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 transition-opacity" />}
+        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 [@media(hover:none)]:opacity-60 transition-opacity" />}
       </div>
 
       {/* Regular Value */}

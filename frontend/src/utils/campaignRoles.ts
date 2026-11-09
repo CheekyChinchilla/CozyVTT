@@ -15,7 +15,20 @@
  * One place to ask, so the answer cannot drift apart again.
  */
 
-import type { Campaign, CampaignMembership, CampaignRole } from '@/types';
+import { CampaignRole } from '@/types';
+import type { Campaign, CampaignMembership } from '@/types';
+
+/**
+ * Each role in a campaign by the name the page gives it: on the dashboard's
+ * campaign card (CampaignCard), beside a whisper's recipient whose name
+ * another member shares (utils/chatWhisper.ts), and on the Members tab's
+ * badges, Remove's question and its toast (CampaignSettingsModal).
+ */
+export const CAMPAIGN_ROLE_LABEL: Record<CampaignRole, string> = {
+  [CampaignRole.DM]: 'DM',
+  [CampaignRole.PLAYER]: 'Player',
+  [CampaignRole.SPECTATOR]: 'Spectator',
+};
 
 /** The membership of whoever currently runs the campaign, if it is loaded. */
 export function campaignDmMembership(

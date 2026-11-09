@@ -153,7 +153,7 @@ export default function AssetLibraryPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-page bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <div className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -180,7 +180,7 @@ export default function AssetLibraryPage() {
                 className="flex items-center gap-2"
               >
                 <Upload className="w-5 h-5" />
-                <span className="hidden sm:inline">Upload Asset</span>
+                <span className="max-sm:sr-only">Upload Asset</span>
               </Button>
             ) : (
               <div className="px-4 py-2 text-sm text-stone-gray/60 italic hidden sm:block">
@@ -227,7 +227,7 @@ export default function AssetLibraryPage() {
                   className="flex items-center gap-2 rounded-lg!"
                 >
                   {icon}
-                  <span className="hidden sm:inline">{label}</span>
+                  <span className="max-sm:sr-only">{label}</span>
                 </Button>
               ))}
             </div>

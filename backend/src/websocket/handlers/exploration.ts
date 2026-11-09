@@ -17,12 +17,15 @@ import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { ExplorationRevealSchema } from '../../validators/walls';
+import { MAX_EXPLORATION_REPORT_CELLS, MAX_FOG_CELLS } from '../../validators/mapLimits';
 import type { FogState } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
 import { explorationRevealLimiter, limiterKey, stateRequestAllowed, withinCeiling, loadFogState, applyWsFogOperation, revealedCellIndices, broadcastExplorationState, fogFits, FogTooLargeError } from '../shared';
+import { emitNewestState } from '../outgoingQueue';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap } from '../../services/permissions';
+import { inBackgroundAfter, type WaitingWork } from '../../utils/backgroundWork';
 
 const MAP_SELECT = {
   campaignId: true, explorationEnabled: true, width: true, height: true, gridSize: true,
@@ -30,11 +33,20 @@ const MAP_SELECT = {
 } as const;
 
 /**
- * Reports a second, per user. The page reports at most every 300 ms per tab,
- * so two tabs of one player send under seven; a dropped report's cells are
- * never remembered, since the page does not send them again.
+ * The reports one sight of the largest map is sent in: a page reports what
+ * its sight covers in parts of at most MAX_EXPLORATION_REPORT_CELLS.
  */
-export const REVEALS_PER_SECOND = 40;
+const REPORTS_PER_SIGHT = Math.ceil(MAX_FOG_CELLS / MAX_EXPLORATION_REPORT_CELLS);
+
+/**
+ * Reports a second, per user, all their tabs together. A page reports at
+ * most every 300 ms per tab, a sight of the largest map in REPORTS_PER_SIGHT
+ * parts (13), so this is five times one tab's first sight of it: four tabs
+ * or devices of one player seeing it at once send 52, and a few more with
+ * their next reports. A dropped report's cells are never remembered, since
+ * the page does not send them again.
+ */
+export const REVEALS_PER_SECOND = 5 * REPORTS_PER_SIGHT;
 
 /** At most one write of a player's memory of a map in this long. */
 const REVEAL_WRITE_MS = 1000;
@@ -50,7 +62,7 @@ interface QueuedReveal {
   userId: string;
   cells: Set<number>;
   lastWrite: number;
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: WaitingWork | null;
   writing: boolean;
 }
 const queuedReveals = new Map<string, QueuedReveal>();
@@ -69,8 +81,7 @@ function queueReveal(io: Server, campaignId: string, mapId: string, userId: stri
 function scheduleRevealWrite(io: Server, key: string, queued: QueuedReveal): void {
   if (queued.timer || queued.writing || queued.cells.size === 0) return;
   const wait = Math.max(0, queued.lastWrite + REVEAL_WRITE_MS - Date.now());
-  queued.timer = setTimeout(() => void writeQueuedReveal(io, key, queued), wait);
-  queued.timer.unref?.();
+  queued.timer = inBackgroundAfter('explored ground written', wait, () => writeQueuedReveal(io, key, queued));
 }
 
 async function writeQueuedReveal(io: Server, key: string, queued: QueuedReveal): Promise<void> {
@@ -133,7 +144,7 @@ async function writeQueuedReveal(io: Server, key: string, queued: QueuedReveal):
 function forgetQueuedReveals(mapId: string): void {
   for (const [key, queued] of queuedReveals) {
     if (queued.mapId !== mapId) continue;
-    if (queued.timer) clearTimeout(queued.timer);
+    queued.timer?.cancel();
     queued.timer = null;
     queued.cells.clear();
     if (!queued.writing) queuedReveals.delete(key);
@@ -142,8 +153,8 @@ function forgetQueuedReveals(mapId: string): void {
 
 export function registerExplorationHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * exploration:reveal — a player's vision covered these cells; remember them (a DM may name another member with userId to record theirs).
-   * Any member. Throttled to 40/s per user; over-limit reveals are dropped.
+   * exploration:reveal — a player's vision covered these cells; remember them (a DM names a player with userId to record theirs).
+   * Any member; the DM only for a player. Throttled to REVEALS_PER_SECOND per user; over-limit reveals are dropped.
    * Written at most once a second per map and user (queueReveal).
    * A DM may name another member and write that player's memory: Player
    * Preview records what the previewed token has seen, so a table the DM
@@ -162,6 +173,12 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         return;
       }
       const { mapId, cells, userId: named } = parsed.data;
+      const isDM = socket.role === 'DM';
+      // The page reports as the DM only for the player Player Preview shows,
+      // so a report of the DM's own memory comes from no page; each would
+      // write, and send back, the whole map's memory. Dropped without an
+      // answer, before anything is read.
+      if (isDM && (named === undefined || named === socket.userId)) return;
 
       // A prepared map is the DM's until they switch to it, for writes as
       // for reads (canReadMap). A report is sent by the page on its own and
@@ -176,7 +193,6 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       // moves, so it is dropped without a word.
       if (!fogFits(map)) return;
 
-      const isDM = socket.role === 'DM';
       let userId = socket.userId;
       if (named !== undefined && named !== socket.userId) {
         if (!isDM) {
@@ -191,6 +207,11 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
           socket.emit('error', { message: 'That user is not a member of this campaign' });
           return;
         }
+        // Player Preview shows the table's map, so a report for someone else
+        // on a map the table is not on would remember ground they never saw
+        // once the table goes there. Dropped as quietly as the rest: one can
+        // cross a map switch in flight.
+        if (map.campaign.currentMapId !== mapId) return;
         userId = named;
       }
       queueReveal(io, socket.campaignId, mapId, userId, cells);
@@ -228,7 +249,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         select: { explored: true },
       });
       const explored: FogState = loadFogState(map, (row?.explored as FogState | null) ?? null);
-      socket.emit('exploration:state', { mapId, userId, cells: revealedCellIndices(explored) });
+      emitNewestState(socket, 'exploration:state', { mapId, userId, cells: revealedCellIndices(explored) }, `${mapId}:${userId}`);
     } catch (error) {
       if (error instanceof FogTooLargeError) {
         socket.emit('error', { message: error.message });

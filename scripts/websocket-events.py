@@ -65,13 +65,17 @@ CALLS = (
     (r"\bbroadcastTo(?:Campaign|User)\(", r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*" + NAME),
     (r"\bemitMoveToVisibleSockets\(", r"emitMoveToVisibleSockets\(\s*" + NAME),
     (r"\b(?:emitToMapReaders|tellMapReaders)(?:As)?\(", r"(?:emitToMapReaders|tellMapReaders)(?:As)?\(\s*[^'\"()]*" + NAME),
+    # A whole state, sent to one socket so that only the newest waits for it
+    # (websocket/outgoingQueue.ts): the socket first, then the event.
+    (r"\bemitNewestState\(", r"emitNewestState\(\s*[^,()]+,\s*" + NAME),
 )
 
 # The helpers whose call sites are read above. Inside them the event is a
 # parameter passed on, by design, so a call there that names no event is not
 # a declaration this table misses.
 FORWARDERS = ('broadcastToCampaign', 'broadcastToUser', 'emitMoveToVisibleSockets',
-              'emitToMapReaders', 'emitToMapReadersAs', 'tellMapReaders', 'tellMapReadersAs')
+              'emitToMapReaders', 'emitToMapReadersAs', 'tellMapReaders', 'tellMapReadersAs',
+              'emitNewestState')
 
 
 def sources():
@@ -132,6 +136,11 @@ def function_body(code, i):
     i = FUNCTION_START.match(code, i).end()
     if re.compile(r'function\b').match(code, i):
         params = code.find('(', i)
+        # TODO(docs): the body is taken to start at the first `{` after the
+        # parameters, which for `function f(): Promise<{ ok: boolean }> {` is
+        # the return type's, so the gates in the real body go unseen and the
+        # handler that calls f reads "Any member". Right: step over a return
+        # type annotation before looking for the body's brace.
         start = code.find('{', closing(code, params)) if params != -1 else -1
         return (start, closing(code, start) + 1, True) if start != -1 else None
     if code.startswith('(', i):
@@ -294,6 +303,10 @@ def collect():
                 'owner': 'character.userId !== socket.userId' in body,
                 'spectator': "socket.role === 'SPECTATOR'" in body,
                 'paused': 'canMoveTokensNow(' in body,
+                # Drawing on a map (utils/drawingRules.ts): adding or
+                # previewing a drawing, and erasing one.
+                'draw': 'canDraw(' in body,
+                'erase': 'canEraseDrawing(' in body,
                 # A player's door toggle: on a lit map only a door their
                 # tokens see, under manual fog only one beside a revealed
                 # square (utils/doorFog.ts).
@@ -386,7 +399,11 @@ def sent_to(plain, m, handlers=()):
     helper = re.match(r'\.?([A-Za-z]+)', m.group(0)).group(1)
     if helper in HELPER_RECIPIENTS:
         return HELPER_RECIPIENTS[helper]
-    on = receiver(plain, m.start())
+    if helper == 'emitNewestState':
+        # The socket it is sent to is the call's first argument.
+        on = re.match(r'emitNewestState\(\s*([^,()]+?)\s*,', m.group(0)).group(1)
+    else:
+        on = receiver(plain, m.start())
     if on == 'socket':
         return 'the sender' if any(start <= m.start() <= end for start, end in handlers) else 'one socket'
     if on.startswith('socket.to(') or on.startswith('socket.broadcast'):
@@ -440,6 +457,10 @@ def who_may_send(info):
             ('once', 'once each time it joins the order'),
         ) if info[flag]]
         return base + (f": {', '.join(terms)}" if terms else '')
+    if info['draw']:
+        return 'DM, or a player while **Players may draw** is on and the session is live'
+    if info['erase']:
+        return "DM, or the drawing's player"
     if info['owner']:
         return "DM, or the character's owner, never a spectator" if info['spectator'] else "DM, or the character's owner"
     if info['players']:

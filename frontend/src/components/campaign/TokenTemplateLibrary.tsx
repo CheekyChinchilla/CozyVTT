@@ -5,7 +5,7 @@
  */
 
 import { tokenPlaceholder } from '@/utils/tokenColours';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 import {
   X,
   Search,
@@ -35,6 +35,8 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { assetNameFrom } from '@/utils/assetName';
+import { cn } from '@/utils/cn';
+import { BackToList, useLibraryFormStep } from './libraryFormStep';
 
 function defaultStatBlockForNpc(): NpcStatBlock {
   return {
@@ -58,7 +60,7 @@ interface TokenTemplateLibraryProps {
 // ============================================
 
 export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateLibraryProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
 
   // ── Data state ──
   const [templates, setTemplates] = useState<TokenTemplate[]>([]);
@@ -70,6 +72,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** The search the list was last asked for, so opening is not a change to search for. */
+  const searchedFor = useRef('');
 
   // ── UI state ──
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -84,6 +88,15 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // What the last copy did, named for the campaign it went to.
   const [notice, setNotice] = useState<string | null>(null);
   const [dmCampaigns, setDmCampaigns] = useState<Campaign[]>([]);
+  // On a narrow screen the form is a step of its own, in place of the list.
+  const {
+    asStep: formAsStep,
+    compact,
+    headingRef: formHeadingRef,
+    createButtonRef: formCreateButtonRef,
+    opened: formOpened,
+    closed: formClosed,
+  } = useLibraryFormStep(showForm);
 
   // ── Fetch templates ──
   const fetchTemplates = useCallback(async () => {
@@ -113,9 +126,11 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches on opening and on a type change; typing searches through the debounce below
   }, [isOpen, campaign?.id, typeFilter]);
 
-  // Debounced search
+  // Debounced search, once the text has changed: opening loads the list
+  // already, and a second load would clear a message just shown.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || searchQuery === searchedFor.current) return;
+    searchedFor.current = searchQuery;
     clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => fetchTemplates(), 300);
     return () => clearTimeout(searchTimeoutRef.current);
@@ -136,12 +151,12 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
 
   // ── Place template on map ──
   const handlePlace = useCallback(async (template: TokenTemplate) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setPlacingId(template.id);
 
     const position = {
-      x: Math.floor(currentMap.width / 2),
-      y: Math.floor(currentMap.height / 2),
+      x: Math.floor(viewedMap.width / 2),
+      y: Math.floor(viewedMap.height / 2),
     };
 
     try {
@@ -166,16 +181,16 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
 
       const result = await api.addToken(
         campaign.id,
-        currentMap.id,
+        viewedMap.id,
         tokenPayload
       );
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, viewedMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place token on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap]);
+  }, [campaign, viewedMap]);
 
   // ── Delete template ──
   const handleDelete = useCallback(async (id: string) => {
@@ -192,11 +207,21 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   }, [campaign, expandedId]);
 
   // ── Edit ──
-  const handleEdit = useCallback((template: TokenTemplate) => {
+  // A wide screen folds the row away to make room for the form under the
+  // list. On a narrow one the list is out of sight while the form is open,
+  // and the row stays open so its Edit button can take focus back.
+  const handleEdit = useCallback((template: TokenTemplate, opener: HTMLElement) => {
     setEditingTemplate(template);
     setShowForm(true);
-    setExpandedId(null);
-  }, []);
+    if (!compact) setExpandedId(null);
+    formOpened(opener);
+  }, [compact, formOpened]);
+
+  const closeForm = useCallback(() => {
+    setShowForm(false);
+    setEditingTemplate(null);
+    formClosed();
+  }, [formClosed]);
 
   // ── Copy to campaign ──
   const handleCopyToCampaign = useCallback(async (template: TokenTemplate, target: Campaign) => {
@@ -234,6 +259,12 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
         <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" title="Close" />
       </div>
 
+      {/* The list, with its search and filters: out of sight while the form
+          is a step of its own, and kept mounted, so the control that opened
+          the form is there to take focus back. Hidden by its class, which
+          needs no help from the base styles' [hidden] rule against
+          `contents`, and by the attribute, for assistive technology */}
+      <div hidden={formAsStep} className={formAsStep ? 'hidden' : 'contents'}>
       {/* Search & Filters */}
       <div className="px-4 py-3 border-b border-moss-green/10 space-y-2">
         <div className="relative">
@@ -259,7 +290,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
             <option value="player">Players</option>
           </select>
           <button
-            onClick={() => { setEditingTemplate(null); setShowForm(true); }}
+            ref={formCreateButtonRef}
+            onClick={(e) => { setEditingTemplate(null); setShowForm(true); formOpened(e.currentTarget); }}
             className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
           >
             <Plus className="w-3 h-3" /> New Template
@@ -308,7 +340,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
                 dmCampaigns={dmCampaigns}
                 onToggle={() => setExpandedId(expandedId === template.id ? null : template.id)}
                 onPlace={() => handlePlace(template)}
-                onEdit={() => handleEdit(template)}
+                onEdit={(opener) => handleEdit(template, opener)}
                 onDelete={() => setTemplateToDelete(template)}
                 onToggleCopyMenu={() => setCopyMenuId(copyMenuId === template.id ? null : template.id)}
                 isCopying={copyingId === template.id}
@@ -318,8 +350,11 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
           </div>
         )}
       </div>
+      </div>{/* the list */}
 
-      {/* Create / Edit Form */}
+      {formAsStep && <BackToList onClick={closeForm} />}
+
+      {/* Create / Edit Form: under the list, or in its place on a narrow screen */}
       {showForm && (
         // Keyed so switching straight from one template to another
         // remounts the form — handleEdit leaves showForm true, so
@@ -329,18 +364,18 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
           key={editingTemplate?.id ?? 'new'}
           campaignId={campaign?.id || ''}
           editingTemplate={editingTemplate}
+          asStep={formAsStep}
+          headingRef={formHeadingRef}
           onCreated={(t) => {
             setTemplates((prev) => [t, ...prev]);
             setTotal((prev) => prev + 1);
-            setShowForm(false);
-            setEditingTemplate(null);
+            closeForm();
           }}
           onEdited={(t) => {
             setTemplates((prev) => prev.map((x) => x.id === t.id ? t : x));
-            setShowForm(false);
-            setEditingTemplate(null);
+            closeForm();
           }}
-          onCancel={() => { setShowForm(false); setEditingTemplate(null); }}
+          onCancel={closeForm}
         />
       )}
     </SlideOver>
@@ -371,7 +406,8 @@ interface TemplateRowProps {
   dmCampaigns: Campaign[];
   onToggle: () => void;
   onPlace: () => void;
-  onEdit: () => void;
+  /** Called with the Edit button, which takes focus back when the form's step closes. */
+  onEdit: (opener: HTMLElement) => void;
   onDelete: () => void;
   onToggleCopyMenu: () => void;
   onCopyToCampaign: (target: Campaign) => void;
@@ -447,7 +483,7 @@ function TemplateRow({
               {isPlacing ? 'Placing...' : 'Place on Map'}
             </button>
             <button
-              onClick={onEdit}
+              onClick={(e) => onEdit(e.currentTarget)}
               className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-moss-green/20 text-brand-ink hover:bg-moss-green/10 transition-colors"
               title="Edit template"
             >
@@ -581,12 +617,16 @@ function changedTemplateFields(
 interface TemplateFormProps {
   campaignId: string;
   editingTemplate: TokenTemplate | null;
+  /** The form is a step of its own, in the list's place: it fills the panel. */
+  asStep: boolean;
+  /** For the heading, which takes focus as the step opens. */
+  headingRef: RefObject<HTMLHeadingElement | null>;
   onCreated: (t: TokenTemplate) => void;
   onEdited: (t: TokenTemplate) => void;
   onCancel: () => void;
 }
 
-function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCancel }: TemplateFormProps) {
+function TemplateForm({ campaignId, editingTemplate, asStep, headingRef, onCreated, onEdited, onCancel }: TemplateFormProps) {
   const isEdit = !!editingTemplate;
   const { data: serverConfig } = useServerConfigQuery();
   // The stat block editor interprets a template differently per game system,
@@ -690,14 +730,22 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
   };
 
   return (
-    <div className="border-t border-moss-green/20 bg-parchment/40 p-4 space-y-3 max-h-[60vh] overflow-y-auto">
+    <div
+      className={cn(
+        'bg-parchment/40 p-4 space-y-3 overflow-y-auto',
+        asStep ? 'flex-1 min-h-0' : 'border-t border-moss-green/20 max-h-[60vh]'
+      )}
+    >
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-brand-ink uppercase tracking-wide">
+        <h3 ref={headingRef} tabIndex={-1} className="text-xs font-semibold text-brand-ink uppercase tracking-wide">
           {isEdit ? 'Edit Template' : 'New Token Template'}
         </h3>
-        <button onClick={onCancel} className="text-stone-gray hover:text-stone-gray/80 p-0.5">
-          <X className="w-4 h-4" />
-        </button>
+        {/* As a step, Back to the list above the form does this. */}
+        {!asStep && (
+          <button onClick={onCancel} aria-label="Close form" className="text-stone-gray hover:text-stone-gray/80 p-0.5">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {formError && (

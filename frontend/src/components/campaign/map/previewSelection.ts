@@ -3,7 +3,9 @@
 //
 // A preview used to mean one player. A table that projects a single screen
 // and moves every token itself has no player accounts to preview as, so the
-// choice is now a player, one token, or every player-type token (the party).
+// choice is now a player, one token, or every player-type token (the party),
+// or Follow my selection, which looks through whichever token the DM has
+// selected and is resolved to that token before anything else reads it.
 // Pure: the predicate this produces is what MapCanvas feeds everywhere it
 // already asks "is this token the viewer's".
 // ============================================
@@ -36,7 +38,7 @@ function onViewersPlane(t: Token, plane: PreviewPlane): boolean {
  * crosses only while the plane is open to all.
  */
 export function previewPlane(
-  selection: PreviewSelection | null,
+  selection: ResolvedPreviewSelection | null,
   tokens: ReadonlyArray<Token>,
   spiritLayerEnabled: boolean
 ): PreviewPlane {
@@ -53,10 +55,38 @@ export function previewPlane(
   }
 }
 
-export type PreviewSelection =
+/** Whose eyes a preview looks through: a player, one token, or the party. */
+export type ResolvedPreviewSelection =
   | { kind: 'player'; userId: string }
   | { kind: 'token'; tokenId: string }
   | { kind: 'party' };
+
+/**
+ * What the picker holds: one of those, or Follow my selection, which
+ * `resolvePreviewSelection` turns into the selected token before anything
+ * else reads it.
+ */
+export type PreviewSelection = ResolvedPreviewSelection | { kind: 'selected' };
+
+/** An id no token has: Follow my selection with nothing to follow looks through no token. */
+const FOLLOWING_NOBODY = '';
+
+/**
+ * The viewer a preview looks through. Follow my selection is the selected
+ * token, or with none the one `followedTokenId` names, the last followed; with
+ * neither it is a token that matches nothing, a viewer with no tokens of its
+ * own, which on a lit map sees nothing. Never null for a selection that is
+ * not null: a preview that resolved to nothing would draw the DM's own view,
+ * every hidden token and the whole fog, onto a projector.
+ */
+export function resolvePreviewSelection(
+  selection: PreviewSelection | null,
+  followedTokenId: string | null
+): ResolvedPreviewSelection | null {
+  if (!selection) return null;
+  if (selection.kind !== 'selected') return selection;
+  return { kind: 'token', tokenId: followedTokenId ?? FOLLOWING_NOBODY };
+}
 
 /** One entry in the preview picker. */
 export interface PreviewOption {
@@ -66,6 +96,7 @@ export interface PreviewOption {
 }
 
 const PARTY = 'party';
+const FOLLOW = 'selected';
 
 /** The <select> value for a selection. */
 export function encodePreviewSelection(selection: PreviewSelection): string {
@@ -73,12 +104,14 @@ export function encodePreviewSelection(selection: PreviewSelection): string {
     case 'player': return `player:${selection.userId}`;
     case 'token': return `token:${selection.tokenId}`;
     case 'party': return PARTY;
+    case 'selected': return FOLLOW;
   }
 }
 
 /** The selection a <select> value names, or null for anything else. */
 export function decodePreviewSelection(value: string): PreviewSelection | null {
   if (value === PARTY) return { kind: 'party' };
+  if (value === FOLLOW) return { kind: 'selected' };
   const sep = value.indexOf(':');
   if (sep <= 0) return null;
   const kind = value.slice(0, sep);
@@ -97,7 +130,7 @@ export function decodePreviewSelection(value: string): PreviewSelection | null {
  * player-type token, whoever controls it, which is the union an in-person
  * table wants on the projector.
  */
-export function previewOwnFor(selection: PreviewSelection | null, plane: PreviewPlane): (t: Token) => boolean {
+export function previewOwnFor(selection: ResolvedPreviewSelection | null, plane: PreviewPlane): (t: Token) => boolean {
   if (!selection) return () => false;
   const chosen = ownByKind(selection);
   return (t) => onViewersPlane(t, plane) && chosen(t);
@@ -111,12 +144,12 @@ export function previewOwnFor(selection: PreviewSelection | null, plane: Preview
  * party, but they are two questions, and the party is where conflating them
  * put a disguised character's name and art on the projector.
  */
-export function previewControlsFor(selection: PreviewSelection | null): (t: Token) => boolean {
+export function previewControlsFor(selection: ResolvedPreviewSelection | null): (t: Token) => boolean {
   if (!selection || selection.kind === 'party') return () => false;
   return ownByKind(selection);
 }
 
-function ownByKind(selection: PreviewSelection): (t: Token) => boolean {
+function ownByKind(selection: ResolvedPreviewSelection): (t: Token) => boolean {
   switch (selection.kind) {
     case 'player': {
       // The previewed member is a player: previewOptions lists only those.
@@ -185,7 +218,7 @@ export function previewTokens(
  * over each other would describe nobody, so it shows none.
  */
 export function previewMemoryUser(
-  selection: PreviewSelection | null,
+  selection: ResolvedPreviewSelection | null,
   tokens: ReadonlyArray<Token>,
   memberships: ReadonlyArray<Pick<CampaignMembership, 'userId' | 'role'>>
 ): string | null {
@@ -237,7 +270,7 @@ export function previewOptions(
  * The selection to keep: the current one while the picker still offers it,
  * else the default. A token that left the map (a switch, a deletion) would
  * otherwise leave a preview with no viewer and a picker showing a value it
- * does not hold.
+ * does not hold. Follow my selection is always offered, so it is kept.
  */
 export function reconcilePreviewSelection(
   selection: PreviewSelection | null,
@@ -245,6 +278,7 @@ export function reconcilePreviewSelection(
   tokens: ReadonlyArray<Token>
 ): PreviewSelection | null {
   if (!selection) return null;
+  if (selection.kind === 'selected') return selection;
   const value = encodePreviewSelection(selection);
   if (previewOptions(memberships, tokens).some((o) => o.value === value)) return selection;
   return defaultPreviewSelection(memberships, tokens);
@@ -260,4 +294,22 @@ export function defaultPreviewSelection(
 ): PreviewSelection | null {
   const first = previewOptions(memberships, tokens)[0];
   return first ? decodePreviewSelection(first.value) : null;
+}
+
+/**
+ * What `,` and `.` step through while the preview follows the selection:
+ * whatever the preview draws, and every visible party token on the plane it
+ * is on, wherever that token stands. Stepping by what the followed token
+ * sees alone left a split party out of reach, and found nothing at all on a
+ * lit map before a first selection. A hidden token is never among them, nor
+ * a creature the current view does not draw.
+ */
+export function followStepTokens(
+  tokens: ReadonlyArray<Token>,
+  drawn: ReadonlyArray<Token>,
+  plane: PreviewPlane
+): Token[] {
+  const drawnIds = new Set(drawn.map((t) => t.id));
+  const party = tokens.filter((t) => t.type === TokenType.PLAYER && onViewersPlane(t, plane) && !drawnIds.has(t.id));
+  return [...drawn, ...party];
 }

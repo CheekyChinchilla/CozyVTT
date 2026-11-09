@@ -23,7 +23,7 @@ import { COC_BLANK_SHEET, cocCharacter } from '../call-of-cthulhu-7e/__tests__/c
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
-const activeTab = () => screen.getByRole('button', { name: /Stats & Skills/ });
+const activeTab = () => screen.getByRole('tab', { name: /Stats & Skills/ });
 const noop = () => Promise.resolve();
 
 describe('the active tab', () => {
@@ -57,13 +57,13 @@ describe('the Call of Cthulhu sheet', () => {
   const ticked = (themeColor: string) => {
     const skills = COC_BLANK_SHEET.skills as Record<string, Record<string, unknown>>;
     render(<CallOfCthulhu7eCharacterView character={cocCharacter({ themeColor, skills: { ...skills, accounting: { ...skills.accounting, improvementChecked: true } } })} />);
-    screen.getAllByRole('button', { name: /^Skills$/ }).forEach((tab) => fireEvent.click(tab));
+    screen.getAllByRole('tab', { name: /^Skills$/ }).forEach((tab) => fireEvent.click(tab));
     return screen.getAllByRole('img', { name: 'Marked for improvement' })[0];
   };
 
   it('underlines the open tab in a custom colour', () => {
     render(<CallOfCthulhu7eCharacterView character={cocCharacter({ themeColor: '#123456' })} />);
-    expect(screen.getByRole('button', { name: /^Overview$/ })).toHaveStyle({ borderBottomColor: '#123456' });
+    expect(screen.getByRole('tab', { name: /^Overview$/ })).toHaveStyle({ borderBottomColor: '#123456' });
   });
 
   it('ticks a skill in a custom colour, with a tick that reads on it', () => {

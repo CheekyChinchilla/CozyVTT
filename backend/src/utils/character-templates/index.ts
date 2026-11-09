@@ -5,12 +5,13 @@
  */
 
 import { GameSystem } from '@prisma/client';
-import { CharacterTemplate, getDnD5eTemplate } from './dnd5e-templates';
+import type { CharacterTemplate } from './types';
+import { getDnD5eTemplate } from './dnd5e-templates';
 import { getPF2eTemplate } from './pathfinder2e-templates';
 import { getSR6Template } from './shadowrun6e-templates';
 import { getCoC7eTemplate } from './callOfCthulhu7e-templates';
 
-export { CharacterTemplate };
+export type { CharacterTemplate };
 
 /**
  * Get a specific template for a game system

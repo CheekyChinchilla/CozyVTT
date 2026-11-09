@@ -29,6 +29,8 @@ import {
   User,
   GripVertical,
   Eye,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,11 +38,15 @@ import { useTokenListIgnoringMovement, useCombatState, usePeekTokenId, useGameSt
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
+import { useCoarsePointer } from '@/hooks/useMediaQuery';
+import { useLongPress } from '@/hooks/useLongPress';
+import { showRowWhileDraggedByGrip } from '@/utils/rowDrag';
 import { api } from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
 import CharacterContextMenu from '@/components/campaign/CharacterContextMenu';
+import type { FlatMenuItem } from '@/components/ui/menu';
 import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
 import NpcRollPicker from '@/components/campaign/NpcRollPicker';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -50,6 +56,7 @@ import { TokenType } from '@/types';
 import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/utils/tokenDisplayName';
 import { controlsToken } from '@/utils/tokenOwnership';
 import { campaignHasCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -134,12 +141,17 @@ function AddCombatantModal({ open, tokens, combatantIds, onAdd, onClose }: AddCo
 // CombatantRow
 // ---------------------------------------------------------------------------
 
+/** What moved a combatant one place, which keeps the cursor after the move. */
+type MoveControl = 'grip' | 'up' | 'down';
+
 interface CombatantRowProps {
   entry: CombatantEntry;
   isActive: boolean;
   /** This token is being pointed at — from this list, or from the map. */
   isPeeked: boolean;
   isDM: boolean;
+  /** The primary pointer is a finger: the DM drags the row by its grip only. */
+  coarsePointer: boolean;
   /**
    * Whether this viewer may roll initiative for this combatant. True for the DM
    * on every row, and for a player only on a token they control — so a player
@@ -157,9 +169,12 @@ interface CombatantRowProps {
   onDragOver: (e: React.DragEvent, tokenId: string) => void;
   onDrop: (e: React.DragEvent, tokenId: string) => void;
   onDragEnd: () => void;
-  /** Move this combatant one place up (-1) or down (1). */
-  onMove: (tokenId: string, step: -1 | 1) => void;
-  /** Right-clicking the row offers this viewer something: the sheet, rolls, or both. */
+  /** Move this combatant one place up (-1) or down (1), from the control named, which keeps the cursor. */
+  onMove: (tokenId: string, step: -1 | 1, from: MoveControl) => void;
+  /** First and last in the order: Up and Down go no further. */
+  isFirst: boolean;
+  isLast: boolean;
+  /** Right-clicking the row, or a finger's long-press on it, offers this viewer something: the sheet, rolls, or both. */
   hasMenu: boolean;
   /** Double-clicking the row opens the combatant's character sheet. */
   hasSheet: boolean;
@@ -181,9 +196,9 @@ function menuPoint(e: React.MouseEvent): { x: number; y: number; byKeyboard: boo
 }
 
 function CombatantRow({
-  entry, isActive, isPeeked, isDM, canRoll, isDragOver, reorderHintId,
+  entry, isActive, isPeeked, isDM, coarsePointer, canRoll, isDragOver, reorderHintId,
   onSetInitiative, onRoll, onRemove,
-  onDragStart, onDragOver, onDrop, onDragEnd, onMove,
+  onDragStart, onDragOver, onDrop, onDragEnd, onMove, isFirst, isLast,
   hasMenu, hasSheet, onOpenMenu, onOpenSheet,
 }: CombatantRowProps) {
   const [editing, setEditing] = useState(false);
@@ -194,6 +209,13 @@ function CombatantRow({
   // (the input's blur) leaves it where the click put it.
   const refocusValue = useRef(false);
   const name = tokenDisplayName(entry);
+  // A finger held on the row opens its menu, as a right-click does; the grip
+  // and an input being typed in never long-press.
+  const longPress = useLongPress((at) => onOpenMenu(entry.tokenId, at.clientX, at.clientY, false));
+  // On a touch screen the row drags by its grip only, so the long-press is
+  // free to open the menu: an iPad's own drag would otherwise lift the row
+  // at about the same moment.
+  const rowDrags = isDM && !coarsePointer;
 
   useEffect(() => {
     if (editing) {
@@ -220,16 +242,25 @@ function CombatantRow({
 
   return (
     <div
-      draggable={isDM}
-      onDragStart={isDM ? (e) => onDragStart(e, entry.tokenId) : undefined}
+      draggable={rowDrags}
+      onDragStart={isDM ? (e) => {
+        showRowWhileDraggedByGrip(e);
+        onDragStart(e, entry.tokenId);
+      } : undefined}
       onDragOver={isDM ? (e) => onDragOver(e, entry.tokenId) : undefined}
       onDrop={isDM ? (e) => onDrop(e, entry.tokenId) : undefined}
       onDragEnd={isDM ? onDragEnd : undefined}
       onMouseEnter={() => useGameStore.getState().setPeekToken(entry.tokenId, 'tracker')}
       onMouseLeave={() => useGameStore.getState().setPeekToken(null, 'tracker')}
-      // With nothing to offer, the browser keeps its own menu.
+      onPointerDown={hasMenu ? longPress.onPointerDown : undefined}
+      onPointerMove={hasMenu ? longPress.onPointerMove : undefined}
+      onPointerUp={hasMenu ? longPress.onPointerUp : undefined}
+      onPointerCancel={hasMenu ? longPress.onPointerCancel : undefined}
+      // With nothing to offer, the browser keeps its own menu, as it does in
+      // a value being typed. Android's own long-press is the hook's.
       onContextMenu={hasMenu ? (e) => {
         if ((e.target as Element).closest('input')) return;
+        if (longPress.takeContextMenu(e)) return;
         e.preventDefault();
         const at = menuPoint(e);
         onOpenMenu(entry.tokenId, at.x, at.y, at.byKeyboard);
@@ -239,7 +270,12 @@ function CombatantRow({
         if ((e.target as Element).closest('input, button:not([data-combatant-name])')) return;
         onOpenSheet(entry.tokenId);
       } : undefined}
-      className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
+      // On a touch screen the die and bin are 44 pixels each, too wide to
+      // sit beside everything else in a narrow rail: they go to a line of
+      // their own, on the right.
+      // No text selection or callout from a held finger; a value being
+      // typed stays selectable.
+      className={`flex items-center gap-2 p-2 rounded-lg transition-colors pointer-coarse:flex-wrap select-none [-webkit-touch-callout:none] [&_input]:select-text ${
         isDragOver
           ? 'border-t-2 border-moss-green'
           : isActive
@@ -248,15 +284,18 @@ function CombatantRow({
               // Mirrors the map: hovering a token there tints its row here.
               ? 'bg-moss-green/10 border border-moss-green/40'
               : 'hover:bg-moss-green/5 border border-transparent'
-      } ${isDM ? 'cursor-grab active:cursor-grabbing' : ''}`}
+      } ${rowDrags ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
       {/* Drag handle (DM) or active dot (players). The handle also takes the
-          Up and Down arrow keys, which move the row one place. */}
+          Up and Down arrow keys, which move the row one place. It drags with
+          every pointer, and is the only part of the row a finger drags. */}
       {isDM
         ? (
           <button
             type="button"
             data-grip-token={entry.tokenId}
+            data-drag-grip
+            draggable
             aria-label={`Move ${name}`}
             aria-describedby={reorderHintId}
             onKeyDown={(e) => {
@@ -264,10 +303,10 @@ function CombatantRow({
                 // The map nudges selected walls on these keys at the window.
                 e.preventDefault();
                 e.stopPropagation();
-                onMove(entry.tokenId, e.key === 'ArrowUp' ? -1 : 1);
+                onMove(entry.tokenId, e.key === 'ArrowUp' ? -1 : 1, 'grip');
               }
             }}
-            className="shrink-0 rounded-sm cursor-grab active:cursor-grabbing focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50"
+            className="shrink-0 touch-target inline-flex items-center justify-center rounded-sm cursor-grab active:cursor-grabbing focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50"
           >
             <GripVertical className="w-3.5 h-3.5 text-stone-gray/40 hover:text-stone-gray transition-colors" aria-hidden="true" />
           </button>
@@ -283,6 +322,9 @@ function CombatantRow({
         <img
           src={entry.imageUrl}
           alt={entry.name}
+          // A picture is a drag of its own to a browser: on a touch screen
+          // only the grip drags.
+          draggable={coarsePointer ? false : undefined}
           className={`w-8 h-8 rounded-full object-cover shrink-0 border-2 ${
             isActive ? 'border-warm-amber' : 'border-moss-green/20'
           }`}
@@ -295,22 +337,24 @@ function CombatantRow({
         </div>
       )}
 
-      {/* Name + disposition */}
-      <div className="flex-1 min-w-0">
+      {/* Name + disposition. On a touch screen the name keeps 80 pixels
+          before the die and bin go to a line of their own. */}
+      <div className="flex-1 min-w-0 pointer-coarse:basis-20">
         {hasMenu ? (
-          // A button so that the menu opens from the keyboard: Enter or Space
-          // is a click with no mouse button count. A mouse opens it with the
-          // right button, and a single left click does nothing.
+          // A button, so the menu opens from a click, a tap or the keyboard,
+          // under the name. From the keyboard (a click with no mouse button
+          // count) the cursor goes into the menu. The second click of a
+          // double-click opens nothing: the double-click opens the sheet.
           <button
             type="button"
             data-combatant-name={entry.tokenId}
-            title={hasSheet ? 'Double-click to open the sheet, or right-click for the sheet and rolls' : 'Right-click for rolls'}
+            title={hasSheet ? 'Click for the sheet and rolls, or double-click to open the sheet' : 'Click for rolls'}
             onClick={(e) => {
-              if (e.detail !== 0) return;
+              if (e.detail > 1) return;
               const rect = e.currentTarget.getBoundingClientRect();
-              onOpenMenu(entry.tokenId, rect.left, rect.bottom, true);
+              onOpenMenu(entry.tokenId, rect.left, rect.bottom, e.detail === 0);
             }}
-            className={`block max-w-full text-left text-sm font-medium truncate rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}
+            className={`block max-w-full touch-target text-left text-sm font-medium truncate rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}
           >
             {name}
           </button>
@@ -368,12 +412,42 @@ function CombatantRow({
       {/* Actions. Rolling and removing are gated separately: a player may roll
           for their own combatant, but only the DM decides who is in the fight. */}
       {(canRoll || isDM) && (
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 pointer-coarse:ml-auto">
+          {/* The grip's Up and Down arrow keys, as buttons, where a finger is
+              the pointer: a drag by touch may not work in every browser. */}
+          {isDM && coarsePointer && (
+            <>
+              <button
+                type="button"
+                data-move-token={entry.tokenId}
+                data-move="up"
+                onClick={() => onMove(entry.tokenId, -1, 'up')}
+                disabled={isFirst}
+                aria-label={`Move ${name} up`}
+                title="Move up one place"
+                className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors disabled:opacity-40"
+              >
+                <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                data-move-token={entry.tokenId}
+                data-move="down"
+                onClick={() => onMove(entry.tokenId, 1, 'down')}
+                disabled={isLast}
+                aria-label={`Move ${name} down`}
+                title="Move down one place"
+                className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors disabled:opacity-40"
+              >
+                <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+              </button>
+            </>
+          )}
           {canRoll && (
             <button
               onClick={() => onRoll(entry.tokenId)}
               title={isDM ? 'Roll initiative for this token' : 'Roll your initiative'}
-              className="p-1 rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
+              className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
             >
               <Dices className="w-3.5 h-3.5" />
             </button>
@@ -382,7 +456,7 @@ function CombatantRow({
             <button
               onClick={() => onRemove(entry.tokenId)}
               title="Remove from initiative"
-              className="p-1 rounded-sm hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
+              className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -398,7 +472,7 @@ function CombatantRow({
 // ---------------------------------------------------------------------------
 
 export default function InitiativeTracker() {
-  const { userRole, currentMap, campaign } = useCampaign();
+  const { userRole, currentMap, viewedMap, campaign } = useCampaign();
   const { user } = useAuth();
   const { showToast } = useToast();
   // Initiative reads token names/ids, not coordinates — skip move re-renders.
@@ -413,44 +487,89 @@ export default function InitiativeTracker() {
   // hovered on the map. Either way the matching row tints.
   const peekTokenId = usePeekTokenId();
   const [collapsed, setCollapsed] = useState(false);
+  const compact = useCompactLayout();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Drag-to-reorder state (DM only)
   const dragTokenId = useRef<string | null>(null);
   const [dragOverTokenId, setDragOverTokenId] = useState<string | null>(null);
-  // Keyboard reorder: what the live region last said, and whose grip takes
-  // the cursor back once the list has re-rendered in its new order.
+  // A move of one place: what the live region last said, and which control
+  // of which row takes the cursor back once the list has re-rendered in its
+  // new order.
   const [moveAnnouncement, setMoveAnnouncement] = useState('');
-  const refocusGripOf = useRef<string | null>(null);
+  const refocusAfterMove = useRef<{ tokenId: string; from: MoveControl } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const reorderHintId = useId();
 
   const isDM = userRole === 'DM';
+  // The table's map, where a combatant is unless its entry says otherwise,
+  // and the map on screen, whose tokens the Add list offers: a DM preparing
+  // a map adds its tokens to the order from there.
   const mapId = currentMap?.id ?? null;
+  const viewedMapId = viewedMap?.id ?? null;
+  const coarsePointer = useCoarsePointer();
 
   // ── A combatant's sheet and rolls ────────────────────────────────────────
   //
   // What the map's right-click menu offers about a token's character, by the
-  // same rules (utils/tokenCharacter), and the DM a creature's rolls. Only for
-  // a token on the map being shown: one on another map is not loaded here.
+  // same rules (utils/tokenCharacter), and the DM a creature's rolls. The
+  // sheet is found from the combatant's entry, which names its character
+  // wherever its token stands; the rolls need the token itself, so only one
+  // on the map on screen offers them.
 
-  const [menu, setMenu] = useState<{ tokenId: string; x: number; y: number; byKeyboard: boolean } | null>(null);
+  // `opening` counts the menus opened, so each is a menu of its own, placed
+  // at its point: a long-press on another row brings no mousedown to close
+  // the one open.
+  const [menu, setMenu] = useState<{ tokenId: string; x: number; y: number; byKeyboard: boolean; opening: number } | null>(null);
+  const menuOpenings = useRef(0);
   const [sheet, setSheet] = useState<{ character: Character; tokenId: string } | null>(null);
   const [characterRolls, setCharacterRolls] = useState<{ tokenId: string; characterId: string; x: number; y: number } | null>(null);
   const [creatureRolls, setCreatureRolls] = useState<{ tokenId: string; x: number; y: number } | null>(null);
   const membership = campaign?.memberships?.find((m) => m.userId === user?.id);
 
   const tokenOf = (tokenId: string): Token | undefined => tokens.find((t) => t.id === tokenId);
-  const offersSheet = (token: Token | undefined): boolean => !!token && campaignHasCharacter(campaign, token.characterId);
+  const combatantOf = (tokenId: string): CombatantEntry | undefined => combatState.combatants.find((c) => c.tokenId === tokenId);
+  const offersSheet = (entry: CombatantEntry | undefined): boolean => !!entry && campaignHasCharacter(campaign, entry.characterId);
   const offersCharacterRolls = (token: Token | undefined): boolean => !!token && canRollTokenCharacter(user, campaign, token);
   // As on the map: a creature's rolls are the DM's, and a token bound to a
   // character rolls from the sheet whatever its type says.
   const offersCreatureRolls = (token: Token | undefined): boolean =>
     !!token && isDM && !token.characterId && (token.type ?? TokenType.NPC) === TokenType.NPC;
 
+  /**
+   * What a combatant's menu offers this viewer, in order. A row has a menu
+   * when this holds anything, so its right-click, long-press and name open
+   * exactly the menus there are. A roll picker opens where the menu is open.
+   */
+  const combatantMenuItems = (entry: CombatantEntry): FlatMenuItem[] => {
+    const items: FlatMenuItem[] = [];
+    if (offersSheet(entry)) {
+      items.push({ kind: 'command', id: 'view-sheet', icon: Eye, label: 'View Character Sheet', run: () => { void openSheet(entry.tokenId); } });
+    }
+    const token = tokenOf(entry.tokenId);
+    if (token && (offersCharacterRolls(token) || offersCreatureRolls(token))) {
+      items.push({
+        kind: 'command', id: 'roll', icon: Dices, label: 'Roll...',
+        run: () => {
+          if (!menu) return;
+          const { x, y } = menu;
+          if (offersCharacterRolls(token) && token.characterId) {
+            setCharacterRolls({ tokenId: token.id, characterId: token.characterId, x, y });
+          } else {
+            setCreatureRolls({ tokenId: token.id, x, y });
+          }
+        },
+      });
+    }
+    return items;
+  };
+
+  /** A combatant's token on the table's map, which the DM keeps while preparing another. */
+  const tableTokenOf = (tokenId: string): Token | undefined => currentMap?.tokens?.find((t) => t.id === tokenId);
+
   const openSheet = async (tokenId: string) => {
-    const characterId = tokenOf(tokenId)?.characterId;
+    const characterId = combatantOf(tokenId)?.characterId;
     if (!characterId) return;
     try {
       const { character } = await api.getCharacter(characterId);
@@ -494,9 +613,9 @@ export default function InitiativeTracker() {
   // ── DM Actions ───────────────────────────────────────────────────────────
 
   const handleAddToken = useCallback((token: Token) => {
-    if (!socket || !mapId) return;
-    socket.emitInitiativeAdd({ tokenId: token.id, mapId });
-  }, [socket, mapId]);
+    if (!socket || !viewedMapId) return;
+    socket.emitInitiativeAdd({ tokenId: token.id, mapId: viewedMapId });
+  }, [socket, viewedMapId]);
 
   const handleRemove = useCallback((tokenId: string) => {
     if (!socket) return;
@@ -510,6 +629,13 @@ export default function InitiativeTracker() {
   const mapOf = useCallback((tokenId: string): string | null =>
     combatState.combatants.find((c) => c.tokenId === tokenId)?.mapId ?? mapId,
   [combatState.combatants, mapId]);
+  /**
+   * The rolls of a combatant on a map the table is not on go to the DM
+   * alone: its name, or what it rolls, would tell the players of a map
+   * being prepared. As the server does with its initiative roll.
+   */
+  const rollFor = (tokenId: string) => (expression: string, purpose: string, characterName?: string) =>
+    tableRoll({ expression, purpose, characterName, ...(mapOf(tokenId) !== mapId ? { secret: true } : {}) });
 
   const handleSetInitiative = useCallback((tokenId: string, value: number | null) => {
     const onMap = mapOf(tokenId);
@@ -592,24 +718,28 @@ export default function InitiativeTracker() {
     if (toIndex !== -1) reorderTo(draggedId, toIndex);
   }, [combatState.combatants, reorderTo]);
 
-  /** The grip's Up and Down arrow keys: one place, through the same path a drop takes. */
-  const moveCombatant = useCallback((tokenId: string, step: -1 | 1) => {
+  /** The grip's Up and Down arrow keys, and the Up and Down buttons: one place, through the same path a drop takes. */
+  const moveCombatant = useCallback((tokenId: string, step: -1 | 1, from: MoveControl) => {
     const fromIndex = combatState.combatants.findIndex((c) => c.tokenId === tokenId);
     if (fromIndex === -1) return;
     const result = reorderTo(tokenId, fromIndex + step);
     if (!result) return;
-    refocusGripOf.current = tokenId;
+    refocusAfterMove.current = { tokenId, from };
     setMoveAnnouncement(`${tokenDisplayName(result.moved)} moved to ${result.toIndex + 1} of ${result.total}`);
   }, [combatState.combatants, reorderTo]);
 
   // Moving a focused row in the DOM can drop the cursor; put it back on the
-  // grip of the row that moved.
+  // control that moved the row, or on its grip where that control is now
+  // off, at the top or the bottom.
   useLayoutEffect(() => {
-    const tokenId = refocusGripOf.current;
-    if (!tokenId) return;
-    refocusGripOf.current = null;
-    const grip = listRef.current?.querySelector<HTMLElement>(`[data-grip-token="${CSS.escape(tokenId)}"]`);
-    if (grip && document.activeElement !== grip) grip.focus();
+    const moved = refocusAfterMove.current;
+    if (!moved) return;
+    refocusAfterMove.current = null;
+    const id = CSS.escape(moved.tokenId);
+    const button = moved.from === 'grip' ? null
+      : listRef.current?.querySelector<HTMLButtonElement>(`[data-move-token="${id}"][data-move="${moved.from}"]`);
+    const target = button && !button.disabled ? button : listRef.current?.querySelector<HTMLElement>(`[data-grip-token="${id}"]`);
+    if (target && document.activeElement !== target) target.focus();
   }, [combatState.combatants]);
 
   const handleDragEnd = useCallback(() => {
@@ -625,6 +755,21 @@ export default function InitiativeTracker() {
   // ── Render ───────────────────────────────────────────────────────────────
 
   const hasCombatants = combatState.combatants.length > 0;
+  /** Where the fight is: its round, or how many are ready before it starts. */
+  const statusBadges = (
+    <>
+      {combatState.active && (
+        <span className="text-xs font-bold text-accent-ink bg-warm-amber/10 border border-warm-amber/20 rounded-sm px-1.5 py-0.5">
+          Round {combatState.round}
+        </span>
+      )}
+      {hasCombatants && !combatState.active && (
+        <span className="text-xs text-stone-gray bg-stone-gray/10 rounded-sm px-1.5 py-0.5">
+          {combatState.combatants.length} ready
+        </span>
+      )}
+    </>
+  );
 
   return (
     <>
@@ -637,7 +782,16 @@ export default function InitiativeTracker() {
             <p role="status" aria-live="polite" className="sr-only">{moveAnnouncement}</p>
           </>
         )}
-        {/* Header */}
+        {/* Header. The compact layout's sheet names the panel already, and
+            folding the tracker there would only hide it: the round, or the
+            count ready, stands alone. */}
+        {compact ? (
+          (combatState.active || hasCombatants) && (
+            <div className="flex items-center gap-2 px-3 pt-3">
+              {statusBadges}
+            </div>
+          )
+        ) : (
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="w-full flex items-center justify-between px-4 py-3 bg-parchment/40 hover:bg-parchment/60 transition-colors"
@@ -645,16 +799,7 @@ export default function InitiativeTracker() {
           <div className="flex items-center gap-2">
             <Swords className="w-4 h-4 text-brand-ink" />
             <span className="font-semibold text-brand-ink text-sm">Initiative Tracker</span>
-            {combatState.active && (
-              <span className="text-xs font-bold text-accent-ink bg-warm-amber/10 border border-warm-amber/20 rounded-sm px-1.5 py-0.5">
-                Round {combatState.round}
-              </span>
-            )}
-            {hasCombatants && !combatState.active && (
-              <span className="text-xs text-stone-gray bg-stone-gray/10 rounded-sm px-1.5 py-0.5">
-                {combatState.combatants.length} ready
-              </span>
-            )}
+            {statusBadges}
           </div>
           {collapsed ? (
             <ChevronDown className="w-4 h-4 text-stone-gray" />
@@ -662,8 +807,9 @@ export default function InitiativeTracker() {
             <ChevronUp className="w-4 h-4 text-stone-gray" />
           )}
         </button>
+        )}
 
-        {!collapsed && (
+        {(compact || !collapsed) && (
           <div className="p-3 space-y-3">
             {/* Active turn banner */}
             {combatState.active && currentCombatant && (
@@ -678,13 +824,16 @@ export default function InitiativeTracker() {
             {/* Combatant list */}
             {hasCombatants ? (
               <div ref={listRef} className="space-y-1">
-                {combatState.combatants.map((entry) => (
+                {combatState.combatants.map((entry, index) => (
                   <CombatantRow
                     key={entry.tokenId}
+                    isFirst={index === 0}
+                    isLast={index === combatState.combatants.length - 1}
                     entry={entry}
                     isActive={combatState.active && entry.tokenId === combatState.currentTokenId}
                     isPeeked={entry.tokenId === peekTokenId}
                     isDM={isDM}
+                    coarsePointer={coarsePointer}
                     canRoll={canRollFor(entry.tokenId)}
                     mapId={mapId}
                     isDragOver={isDM && dragOverTokenId === entry.tokenId}
@@ -697,13 +846,17 @@ export default function InitiativeTracker() {
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
                     onMove={moveCombatant}
-                    hasMenu={(() => {
-                      const token = tokenOf(entry.tokenId);
-                      return offersSheet(token) || offersCharacterRolls(token) || offersCreatureRolls(token);
-                    })()}
-                    hasSheet={offersSheet(tokenOf(entry.tokenId))}
-                    onOpenMenu={(tokenId, x, y, byKeyboard) => setMenu({ tokenId, x, y, byKeyboard })}
-                    onOpenSheet={openSheet}
+                    hasMenu={combatantMenuItems(entry).length > 0}
+                    hasSheet={offersSheet(entry)}
+                    onOpenMenu={(tokenId, x, y, byKeyboard) => {
+                      menuOpenings.current += 1;
+                      setMenu({ tokenId, x, y, byKeyboard, opening: menuOpenings.current });
+                    }}
+                    onOpenSheet={(tokenId) => {
+                      // A double-click on the name: its first click opened the menu.
+                      setMenu(null);
+                      void openSheet(tokenId);
+                    }}
                   />
                 ))}
               </div>
@@ -721,7 +874,7 @@ export default function InitiativeTracker() {
             {isDM && (
               <div className="space-y-2 pt-1 border-t border-moss-green/10">
                 {/* Add combatant */}
-                {mapId && (
+                {viewedMapId && (
                   <button
                     onClick={() => setShowAddModal(true)}
                     className="w-full flex items-center justify-center gap-2 py-1.5 px-3 text-xs font-medium text-brand-ink border border-dashed border-moss-green/30 rounded-lg hover:bg-moss-green/5 transition-colors"
@@ -785,7 +938,7 @@ export default function InitiativeTracker() {
 
       {/* Add combatant modal */}
       <AddCombatantModal
-        open={showAddModal && mapId !== null}
+        open={showAddModal && viewedMapId !== null}
         tokens={tokens}
         combatantIds={combatantIds}
         onAdd={handleAddToken}
@@ -793,35 +946,17 @@ export default function InitiativeTracker() {
       />
 
       {menu && (() => {
-        const token = tokenOf(menu.tokenId);
-        if (!token) return null;
-        const { tokenId, x, y } = menu;
+        const entry = combatantOf(menu.tokenId);
+        if (!entry) return null;
         return (
           <CharacterContextMenu
-            x={x}
-            y={y}
+            key={menu.opening}
+            x={menu.x}
+            y={menu.y}
             autoFocus={menu.byKeyboard}
-            items={[
-              {
-                icon: Eye,
-                label: 'View Character Sheet',
-                onClick: () => { void openSheet(tokenId); },
-                visible: offersSheet(token),
-              },
-              {
-                icon: Dices,
-                label: 'Roll...',
-                onClick: () => {
-                  if (offersCharacterRolls(token) && token.characterId) {
-                    setCharacterRolls({ tokenId, characterId: token.characterId, x, y });
-                  } else {
-                    setCreatureRolls({ tokenId, x, y });
-                  }
-                },
-                visible: offersCharacterRolls(token) || offersCreatureRolls(token),
-              },
-            ]}
+            items={combatantMenuItems(entry)}
             onClose={closeMenu}
+            title={tokenDisplayName(tokenOf(menu.tokenId) ?? entry)}
           />
         );
       })()}
@@ -831,8 +966,12 @@ export default function InitiativeTracker() {
           character={sheet.character}
           campaignId={campaign.id}
           membership={membership}
-          // Rolls from it reach the whole table, as from Roll... below.
-          publicName={characterRollPublicName(tokenOf(sheet.tokenId), user?.id)}
+          // Rolls from it reach the whole table, as from Roll... below,
+          // or the DM alone for a combatant on a map the table is not on.
+          // Named as the map names the token, read from the table's map
+          // when the DM has another on screen.
+          publicName={characterRollPublicName(tokenOf(sheet.tokenId) ?? tableTokenOf(sheet.tokenId), user?.id)}
+          secretRolls={mapOf(sheet.tokenId) !== mapId}
           onClose={() => setSheet(null)}
         />
       )}
@@ -844,7 +983,7 @@ export default function InitiativeTracker() {
           anchorX={characterRolls.x}
           anchorY={characterRolls.y}
           publicName={characterRollPublicName(tokenOf(characterRolls.tokenId), user?.id)}
-          onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
+          onRoll={rollFor(characterRolls.tokenId)}
           onRollInitiative={canRollFor(characterRolls.tokenId) ? () => handleRollForToken(characterRolls.tokenId) : undefined}
           onClose={() => setCharacterRolls(null)}
         />
@@ -859,7 +998,7 @@ export default function InitiativeTracker() {
             gameSystem={campaign?.gameSystem ?? 'DND_5E'}
             anchorX={creatureRolls.x}
             anchorY={creatureRolls.y}
-            onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
+            onRoll={rollFor(creatureRolls.tokenId)}
             onClose={() => setCreatureRolls(null)}
           />
         );

@@ -11,12 +11,16 @@ import type { WallSegment, WallType } from '@/types/walls';
 import type { WallToolMode, DmWallControlsProps } from '@/components/campaign/DmWallControls';
 import { douglasPeucker, edgeSnapPoints } from '@/utils/geometry';
 import { randomId } from '@/utils/uuid';
+import { TOO_MANY_WALLS_MESSAGE } from '@/constants/mapLimits';
+import { carryChange } from '@/hooks/useWallHistory';
 import { rectFromDrag, segmentsInRect } from '../mapSelection';
 import { useWallSelection } from '../useWallSelection';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from '../mapGeometry';
 import type { OwnEdits } from '../ownEdits';
+import { answeredWithin, pastWallCap, refusalIn, WallSendLog, WALL_LIGHT_ANSWER_TIMEOUT_MS } from '../wallLightCaps';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
+import { DOUBLE_TAP_PX } from '../mapPointer';
 
 interface UseWallToolArgs {
   isDM: boolean;
@@ -26,8 +30,13 @@ interface UseWallToolArgs {
   wallSegments: WallSegment[];
   pushWallHistory: (walls: WallSegment[]) => void;
   replaceWallHistory: (walls: WallSegment[]) => void;
+  /** Change every history entry, as for someone else's edit (useWallHistory's carry). */
+  carryWallHistory: (change: (walls: WallSegment[]) => WallSegment[]) => void;
   undoWalls: () => WallSegment[] | null;
   redoWalls: () => WallSegment[] | null;
+  /** The history entry on screen, and putting back a step a refused undo or redo took. */
+  wallHistoryIndex: number;
+  stepWallHistoryBack: (from: number, to: number) => void;
   canUndoWalls: boolean;
   canRedoWalls: boolean;
   socket: ToolSocketSource | null | undefined;
@@ -38,6 +47,8 @@ interface UseWallToolArgs {
   /** The map picture, which the brush snaps to edges in when grid snap is off. */
   mapImage: HTMLImageElement | null;
   markDirty: (...layers: MapLayer[]) => void;
+  /** Tell the DM why a wall was not drawn, or was taken back. */
+  refuse: (message: string) => void;
 }
 
 /**
@@ -75,8 +86,8 @@ function withEndpointsAt(
 
 export function useWallTool({
   isDM, currentMap, wallMode, setWallMode, wallSegments,
-  pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
-  socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty,
+  pushWallHistory, replaceWallHistory, carryWallHistory, undoWalls, redoWalls, wallHistoryIndex, stepWallHistoryBack, canUndoWalls, canRedoWalls,
+  socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty, refuse,
 }: UseWallToolArgs) {
   // Wall tool state (DM only)
   const [wallType, setWallType] = useState<WallType>('wall');
@@ -98,25 +109,97 @@ export function useWallTool({
   const wallBrushActiveRef = useRef(false);
   const wallBrushPointsRef = useRef<Array<{ x: number; y: number }>>([]);
   const [nearEndpoint, setNearEndpoint] = useState(false);
+  // The panel's Add to selection: Shift held down, for a finger or a pen.
+  // It lasts while the Select tool is up.
+  const [addToSelection, setAddToSelection] = useState(false);
 
-  /** Send the whole wall list to everyone, as undo and redo do. */
-  const sendWalls = useCallback((segments: WallSegment[]) => {
-    const socketInstance = socket?.getSocket();
-    if (socketInstance && currentMap) {
-      socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments }));
-    }
-  }, [socket, currentMap, ownEdits]);
+  // The map an answer from the server is for has to be the one on screen
+  // for it to change anything: the history starts again on a new map.
+  const mapIdRef = useRef(currentMap?.id);
+  mapIdRef.current = currentMap?.id;
+  const historyIndexRef = useRef(wallHistoryIndex);
+  historyIndexRef.current = wallHistoryIndex;
+  // What the server has answered of the wall edits sent on this map
+  // (map/wallLightCaps.ts), so a refusal a later stored list carried stays.
+  const [sendLog] = useState(() => new WallSendLog());
+  /**
+   * Take back what the server refused: the change is made to every history
+   * entry and any drag in progress, as someone else's edit is, so neither
+   * undo nor a drop puts it back. Set once carryIntoDrags is made, below.
+   */
+  const takeBackRef = useRef<(change: (walls: WallSegment[]) => WallSegment[]) => void>(carryWallHistory);
 
   /**
-   * Send the whole wall list to everyone and add it to the undo stack.
+   * Send the whole wall list to everyone, as undo and redo do. `before` is
+   * the list it replaces: if the server refuses it, that is put back, with
+   * whatever has changed since, and the DM is told why, unless a later list
+   * that carried it is stored (WallSendLog). An undo or a redo passes its
+   * `step`, which a refusal puts back instead, while nothing has been done
+   * since, so the next Ctrl+Z tries again.
+   */
+  const sendWalls = useCallback((segments: WallSegment[], before: WallSegment[], step?: { from: number; to: number }) => {
+    const socketInstance = socket?.getSocket();
+    if (!socketInstance || !currentMap) return;
+    const mapId = currentMap.id;
+    const seq = sendLog.sent(true);
+    socketInstance.emit('walls:replace', ownEdits.tag({ mapId, segments }), answeredWithin(WALL_LIGHT_ANSWER_TIMEOUT_MS, (reply) => {
+      if (mapIdRef.current !== mapId) return;
+      const why = refusalIn(reply);
+      if (why === null) {
+        sendLog.stored(seq);
+        return;
+      }
+      sendLog.refused(seq, () => {
+        if (step && historyIndexRef.current === step.from) stepWallHistoryBack(step.from, step.to);
+        else takeBackRef.current((walls) => carryChange(segments, before, walls));
+        refuse(why);
+      });
+    }));
+  }, [socket, currentMap, ownEdits, refuse, sendLog, stepWallHistoryBack]);
+
+  /** Send one new wall; if the server refuses it, it is taken back and the DM told why, as a list is. */
+  const sendWallAdd = useCallback((segment: WallSegment) => {
+    const socketInstance = socket?.getSocket();
+    if (!socketInstance || !currentMap) return;
+    const mapId = currentMap.id;
+    const seq = sendLog.sent(false);
+    socketInstance.emit('wall:add', ownEdits.tag({ mapId, segment }), answeredWithin(WALL_LIGHT_ANSWER_TIMEOUT_MS, (reply) => {
+      if (mapIdRef.current !== mapId) return;
+      const why = refusalIn(reply);
+      if (why === null) {
+        sendLog.stored(seq);
+        return;
+      }
+      sendLog.refused(seq, () => {
+        takeBackRef.current((walls) => walls.filter((w) => w.id !== segment.id));
+        refuse(why);
+      });
+    }));
+  }, [socket, currentMap, ownEdits, refuse, sendLog]);
+
+  /**
+   * Whether an edit that takes the walls from `before` to `after` in number
+   * may be drawn: one past the map's cap is not, and the DM is told why.
+   */
+  const roomFor = useCallback((before: number, after: number): boolean => {
+    if (!pastWallCap(before, after)) return true;
+    refuse(TOO_MANY_WALLS_MESSAGE);
+    return false;
+  }, [refuse]);
+
+  /**
+   * Send the whole wall list to everyone and add it to the undo stack, unless
+   * it would take the map past its cap. `before` is the list it replaces:
+   * the walls on screen, or where a drag began.
    *
    * Bulk edits all go out this way: one message that replaces the array, which
    * is what the server validates and what "clear all" has always used.
    */
-  const commitWalls = useCallback((next: WallSegment[]) => {
+  const commitWalls = useCallback((next: WallSegment[], before: WallSegment[] = wallSegments) => {
+    if (!roomFor(before.length, next.length)) return;
     pushWallHistory(next);
-    sendWalls(next);
-  }, [pushWallHistory, sendWalls]);
+    sendWalls(next, before);
+  }, [pushWallHistory, sendWalls, wallSegments, roomFor]);
 
   const {
     selectedWallIds, setSelectedWallIds,
@@ -255,6 +338,7 @@ export function useWallTool({
   // or polygon would join the old map's points to the new map's, and a
   // selection names walls the new map does not have.
   useEffect(() => {
+    sendLog.reset();
     setWallInProgress([]);
     setPolygonPoints([]);
     setSelectedWallIds(new Set());
@@ -269,12 +353,18 @@ export function useWallTool({
     wallErasedIdsRef.current = new Set();
     wallBrushActiveRef.current = false;
     wallBrushPointsRef.current = [];
-  }, [currentMap?.id, setSelectedWallIds, setSelectedEndpoint, setWallMarquee, wallMarqueeRef, wallMoveRef, wallDragEndpointRef]);
+  }, [currentMap?.id, sendLog, setSelectedWallIds, setSelectedEndpoint, setWallMarquee, wallMarqueeRef, wallMoveRef, wallDragEndpointRef]);
 
-  // Clear polygon when leaving polygon mode
+  // Clear polygon when leaving polygon mode, and a half-drawn line when
+  // leaving Draw: only its own tool draws it, and kept, it took the next
+  // Escape, Ctrl+Z or Undo in another tool, and Draw chosen again carried on
+  // from its point. Leaving by the light or fog tools comes here too.
   useEffect(() => {
     if (wallMode !== 'wall-polygon') {
       setPolygonPoints([]);
+    }
+    if (wallMode !== 'wall-draw') {
+      setWallInProgress([]);
     }
   }, [wallMode]);
 
@@ -289,20 +379,43 @@ export function useWallTool({
     const endpoint = wallDragEndpointRef.current;
     if (endpoint?.preDragState) endpoint.preDragState = change(endpoint.preDragState);
   }, [wallMoveRef, wallDragEndpointRef]);
+  takeBackRef.current = (change) => {
+    carryWallHistory(change);
+    carryIntoDrags(change);
+  };
 
   /** Step the walls back one edit, or forward again, and send the result. */
   const undoEdit = () => {
+    const from = wallHistoryIndex;
     const prev = undoWalls();
-    if (prev !== null) sendWalls(prev);
+    if (prev !== null) sendWalls(prev, wallSegments, { from: from - 1, to: from });
   };
   const redoEdit = () => {
+    const from = wallHistoryIndex;
     const next = redoWalls();
-    if (next !== null) sendWalls(next);
+    if (next !== null) sendWalls(next, wallSegments, { from: from + 1, to: from });
   };
 
-  /** The walls with the selection carried by (dx, dy). */
-  const selectionMovedBy = (walls: WallSegment[], dx: number, dy: number) =>
-    walls.map((seg) => (selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg));
+  /**
+   * Whether a second click or tap ends what is being drawn. A finger's or a
+   * pen's taps count as one within a fingertip's room (DOUBLE_TAP_PX). With
+   * Snap to grid, where a square on screen is that wide or wider, their
+   * second must land on the corner the first placed, so two quick taps on
+   * neighbouring corners add the wall between them; two taps on one corner
+   * would add a wall of no length. Where a square is narrower, as at a low
+   * zoom, a fingertip cannot pick out a corner, and the second tap within the
+   * room ends the line. A mouse's double-click ends it as it always has.
+   */
+  const secondPressEnds = (e: PointerAt['e'], snapped: { x: number; y: number }, last: { x: number; y: number } | undefined) => {
+    if (e.detail < 2) return false;
+    if (e.kind === 'mouse' || !snapToGrid) return true;
+    if (currentMap && currentMap.gridSize * mapControls.zoom < DOUBLE_TAP_PX) return true;
+    return last !== undefined && last.x === snapped.x && last.y === snapped.y;
+  };
+
+  /** The walls with those selected carried by (dx, dy). */
+  const selectionMovedBy = (walls: WallSegment[], selection: ReadonlySet<string>, dx: number, dy: number) =>
+    walls.map((seg) => (selection.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg));
 
   const tool: MapTool = {
     down({ e, mapPx, screenX, screenY }: PointerAt) {
@@ -310,12 +423,8 @@ export function useWallTool({
       if (wallMode === 'wall-draw' && isDM) {
         const snapped = snapPoint(mapPx);
 
-        if (e.detail >= 2) {
-          // Double-click: finish polyline without adding a duplicate final point
-          if (wallInProgress.length >= 2) {
-            // The last clicked point was already added on the first click of this double-click;
-            // just end the polyline
-          }
+        if (secondPressEnds(e, snapped, wallInProgress[wallInProgress.length - 1])) {
+          // The first click of the double-click placed the last point; end the line there.
           setWallInProgress([]);
           return true;
         }
@@ -351,6 +460,7 @@ export function useWallTool({
             const replace = buildWallReplace(hitA.point, hitB.point, hitA.seg, wallType);
             if (replace) {
               const newSegs = wallSegments.filter((s) => !replace.remove.includes(s.id)).concat(replace.add);
+              if (!roomFor(wallSegments.length, newSegs.length)) return true;
               pushWallHistory(newSegs);
 
               const socketInstance = socket?.getSocket();
@@ -358,9 +468,7 @@ export function useWallTool({
                 for (const id of replace.remove) {
                   socketInstance.emit('wall:remove', ownEdits.tag({ mapId: currentMap.id, segmentId: id }));
                 }
-                for (const seg of replace.add) {
-                  socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: seg }));
-                }
+                for (const seg of replace.add) sendWallAdd(seg);
               }
 
               // End the polyline after placing a door/window
@@ -378,14 +486,11 @@ export function useWallTool({
           type: wallType,
         };
 
-        // Optimistic local add (push to undo history)
+        // Drawn at once (pushed to undo history) and sent, unless the map
+        // has no room for it; a refusal takes it back.
+        if (!roomFor(wallSegments.length, wallSegments.length + 1)) return true;
         pushWallHistory([...wallSegments, newSeg]);
-
-        // Emit to server
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: newSeg }));
-        }
+        sendWallAdd(newSeg);
 
         setWallInProgress((prev) => [...prev, snapped]);
         return true;
@@ -395,8 +500,7 @@ export function useWallTool({
       if (wallMode === 'wall-polygon' && isDM) {
         const snapped = snapPoint(mapPx);
 
-        if (e.detail >= 2) {
-          // Double-click closes the polygon
+        if (secondPressEnds(e, snapped, polygonPoints[polygonPoints.length - 1])) {
           closePolygon();
           return true;
         }
@@ -448,7 +552,7 @@ export function useWallTool({
         setSelectedEndpoint(null);
         const hitThreshold = 12 / mapControls.zoom;
         const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
-        const additive = e.shiftKey;
+        const additive = e.shiftKey || addToSelection;
 
         if (hit) {
           if (additive) {
@@ -469,6 +573,7 @@ export function useWallTool({
             startX: mapPx.x,
             startY: mapPx.y,
             preDragState: [...wallSegments],
+            selection,
             hasDragged: false,
           };
           return true;
@@ -494,12 +599,13 @@ export function useWallTool({
           const segA: WallSegment = { id: randomId(), x1: hit.x1, y1: hit.y1, x2: cp.x, y2: cp.y, type: hit.type };
           const segB: WallSegment = { id: randomId(), x1: cp.x, y1: cp.y, x2: hit.x2, y2: hit.y2, type: hit.type };
           const newSegs = wallSegments.filter((s) => s.id !== hit.id).concat(segA, segB);
+          if (!roomFor(wallSegments.length, newSegs.length)) return true;
           pushWallHistory(newSegs);
           const socketInstance = socket?.getSocket();
           if (socketInstance && currentMap) {
             socketInstance.emit('wall:remove', ownEdits.tag({ mapId: currentMap.id, segmentId: hit.id }));
-            socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: segA }));
-            socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: segB }));
+            sendWallAdd(segA);
+            sendWallAdd(segB);
           }
         }
         return true;
@@ -559,7 +665,7 @@ export function useWallTool({
           // Previewed against where the drag began, so the offset never
           // compounds. Changes from others reach preDragState (carryIntoDrags).
           move.offset = { dx, dy };
-          replaceWallHistory(selectionMovedBy(move.preDragState, dx, dy));
+          replaceWallHistory(selectionMovedBy(move.preDragState, move.selection, dx, dy));
           markDirty('overlay');
           return true;
         }
@@ -653,17 +759,17 @@ export function useWallTool({
     up() {
       // Commit a move of the selection
       if (wallMoveRef.current) {
-        const { hasDragged, preDragState: preDrag, offset } = wallMoveRef.current;
+        const { hasDragged, preDragState: preDrag, selection, offset } = wallMoveRef.current;
         wallMoveRef.current = null;
         if (hasDragged) {
           // Built again from where the drag began: a change from someone else
           // since the last pointer move reached preDragState, but put its own
           // unmoved copy on screen.
-          const finalSegments = offset ? selectionMovedBy(preDrag, offset.dx, offset.dy) : wallSegments;
+          const finalSegments = offset ? selectionMovedBy(preDrag, selection, offset.dx, offset.dy) : wallSegments;
           // Put the pre-drag state back on the stack, then the result, so undo
           // returns the walls where they started.
           replaceWallHistory(preDrag);
-          commitWalls(finalSegments);
+          commitWalls(finalSegments, preDrag);
         }
       }
 
@@ -688,7 +794,7 @@ export function useWallTool({
           if (preDrag) replaceWallHistory(preDrag);
           // The endpoints set again: a change from someone else since the last
           // pointer move may have put their wall back as it was.
-          commitWalls(withEndpointsAt(wallSegments, targets, point));
+          commitWalls(withEndpointsAt(wallSegments, targets, point), preDrag ?? wallSegments);
           setSelectedEndpoint(null);
         } else {
           if (preDrag) replaceWallHistory(preDrag);
@@ -738,6 +844,26 @@ export function useWallTool({
         }
         markDirty('overlay');
       }
+    },
+    // The browser or a second finger took the pointer: a drag puts the walls
+    // back as they were before it, and a box or a stroke is dropped unsent.
+    // Points already placed on a line or a polygon stay.
+    cancel() {
+      const moving = wallMoveRef.current;
+      wallMoveRef.current = null;
+      if (moving?.hasDragged) replaceWallHistory(moving.preDragState);
+      const endpoint = wallDragEndpointRef.current;
+      wallDragEndpointRef.current = null;
+      if (endpoint?.hasDragged && endpoint.preDragState) replaceWallHistory(endpoint.preDragState);
+      if (wallMarqueeRef.current) {
+        wallMarqueeRef.current = null;
+        setWallMarquee(null);
+      }
+      wallEraseBrushActiveRef.current = false;
+      wallErasedIdsRef.current = new Set();
+      wallBrushActiveRef.current = false;
+      wallBrushPointsRef.current = [];
+      markDirty('overlay');
     },
     escape() {
       // Polygon mode: clear in-progress polygon first
@@ -819,7 +945,7 @@ export function useWallTool({
     wallMode,
     onWallModeChange: (mode) => {
       setWallMode(mode);
-      if (mode !== 'wall-select') { setSelectedWallIds(new Set()); setSelectedEndpoint(null); wallDragEndpointRef.current = null; setNearEndpoint(false); }
+      if (mode !== 'wall-select') { setSelectedWallIds(new Set()); setSelectedEndpoint(null); wallDragEndpointRef.current = null; setNearEndpoint(false); setAddToSelection(false); }
       if (mode !== 'wall-split') setSplitHoverPoint(null);
       if (mode !== 'wall-erase') { wallEraseBrushActiveRef.current = false; wallErasedIdsRef.current = new Set(); }
       if (mode !== 'wall-brush') { wallBrushActiveRef.current = false; wallBrushPointsRef.current = []; }
@@ -827,6 +953,7 @@ export function useWallTool({
     },
     onCollapse: () => {
       setWallMode(null);
+      setAddToSelection(false);
       setSelectedWallIds(new Set());
       setSelectedEndpoint(null);
       wallDragEndpointRef.current = null;
@@ -847,9 +974,10 @@ export function useWallTool({
     onSnapToEndpointChange: setSnapToEndpoint,
     wallCount: wallSegments.length,
     onClearAll: () => commitWalls([]),
-    canUndo: canUndoWalls,
+    // The keyboard's Undo: a corner or a half-drawn line comes first.
+    canUndo: canUndoWalls || polygonPoints.length > 0 || wallInProgress.length > 0,
     canRedo: canRedoWalls,
-    onUndo: undoEdit,
+    onUndo: undoKey,
     onRedo: redoEdit,
     wallColor,
     onWallColorChange: setWallColor,
@@ -862,7 +990,16 @@ export function useWallTool({
         selectedWallIds.has(s.id) ? { ...s, type: newType } : s
       ));
     },
+    selectedCount: selectedWallIds.size,
     onDeleteSelected: deleteSelectedWalls,
+    addToSelection,
+    onAddToSelectionChange: setAddToSelection,
+    lineInProgress: wallInProgress.length > 0,
+    // A double-click's end of the line: its walls are already sent.
+    onFinishLine: () => setWallInProgress([]),
+    polygonCorners: polygonPoints.length,
+    onClosePolygon: closePolygon,
+    onDropPolygon: () => setPolygonPoints([]),
     selectedEndpoint: wallMode === 'wall-select' && selectedEndpoint ? (() => {
       const ep = selectedEndpoint;
       let count = 0;

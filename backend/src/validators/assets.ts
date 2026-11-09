@@ -9,7 +9,7 @@
 
 import path from 'path';
 import { z } from 'zod';
-import { ASSET_LIMITS } from './assetLimits';
+import { ASSET_LIMITS, DRAWN_MAP_TAG, DRAWN_MAP_TAG_REFUSAL } from './assetLimits';
 import { cutText } from '../utils/cutText';
 
 export const MAX_ASSET_NAME_LENGTH = ASSET_LIMITS.maxNameLength;
@@ -21,9 +21,48 @@ export const MAX_ORIGINAL_NAME_LENGTH = 255;
 
 const text = (field: string) => z.string({ error: `Send the ${field} once, as text.` });
 
-/** Comma-separated tags as one list: each trimmed, empty ones dropped, each kept once. */
+/**
+ * Tags as an asset keeps them: each split at its commas and trimmed, empty
+ * ones dropped, each kept once. An upload sends them as one comma-separated
+ * text, and a campaign archive as a list.
+ */
+export function tidyTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.flatMap((tag) => tag.split(',')).map((tag) => tag.trim()).filter(Boolean))];
+}
+
+/** Whether a tag is the one kept for the pictures Paint makes, in any case. */
+export function isDrawnMapTag(tag: string): boolean {
+  return tag.toLowerCase() === DRAWN_MAP_TAG;
+}
+
+export { DRAWN_MAP_TAG_REFUSAL };
+
+/**
+ * A picture Paint made, which a save writes over in place: a map picture
+ * carrying exactly DRAWN_MAP_TAG, as the web app reads it. Any case of the
+ * tag is refused on upload and dropped on import, so no other picture
+ * carries it.
+ */
+export function isDrawnPicture(asset: { type: string; tags: readonly string[] }): boolean {
+  return asset.type === 'MAP' && asset.tags.includes(DRAWN_MAP_TAG);
+}
+
+/**
+ * Whether an upload of `type` at `scope` may carry the tags it sends: the
+ * drawn-map tag only on a campaign map picture, which only the campaign's DM
+ * may place (canPlaceAssetAtScope), as Paint's own upload is.
+ */
+export function tagsAllowedOn(tags: readonly string[], type: string, scope: string): boolean {
+  return (type === 'MAP' && scope === 'CAMPAIGN') || !tags.some(isDrawnMapTag);
+}
+
+/**
+ * Comma-separated tags as one list, tidied. A form holding U+0000 never
+ * reaches here: the upload route refuses it once the form is read
+ * (middleware/nulCharacter.ts).
+ */
 const tagList = text('tags')
-  .transform((raw) => [...new Set(raw.split(',').map((tag) => tag.trim()).filter(Boolean))])
+  .transform((raw) => tidyTags([raw]))
   .pipe(
     z
       .array(z.string().max(MAX_ASSET_TAG_LENGTH, `Each tag must be ${MAX_ASSET_TAG_LENGTH} characters or fewer`))

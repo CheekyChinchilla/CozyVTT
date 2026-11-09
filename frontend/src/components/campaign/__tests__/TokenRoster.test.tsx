@@ -22,7 +22,10 @@ const emitMapChange = vi.fn();
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
     campaign: { id: 'campaign-1', memberships: [] },
-    currentMap: { id: 'map-1', width: 20, height: 20 },
+    // The table is on another map than the one on screen (the DM prepares
+    // map-1), so a request naming the table's map is caught.
+    currentMap: { id: 'map-table', width: 20, height: 20 },
+    viewedMap: { id: 'map-1', width: 20, height: 20 },
   }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({
@@ -43,7 +46,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.deleteToken.mockResolvedValue({ message: 'ok' });
   api.updateToken.mockResolvedValue({ token: goblin });
-  useGameStore.getState().setTokens([goblin]);
+  useGameStore.getState().setTokens([goblin], 'map-1');
 });
 
 describe('removing a token from the roster', () => {
@@ -91,6 +94,26 @@ describe('the roster row actions', () => {
     expect(classes).toContain('group-hover:opacity-100');
     expect(classes).toContain('focus-within:opacity-100');
     expect(classes).toContain('[@media(hover:none)]:opacity-100');
+  });
+
+  // Each was 26 pixels square, five abreast beside the name: at 44 they do
+  // not fit a 260-pixel panel's row, so on a touch screen the row lets them
+  // go under the name, and wrap there if they must. jsdom evaluates no media
+  // query, so the classes are what is checked.
+  it('are big enough for a finger on a touch screen, and go under the name when the row is too narrow', () => {
+    render(<TokenRoster onEditToken={() => undefined} />);
+    const names = [
+      'Edit Goblin Boss', 'Hide Goblin Boss from players', 'Obscure identity of Goblin Boss',
+      'Duplicate Goblin Boss', 'Remove Goblin Boss from map',
+    ];
+    for (const name of names) {
+      expect(screen.getByRole('button', { name }).className.split(/\s+/))
+        .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+    }
+    const strip = screen.getByRole('button', { name: 'Remove Goblin Boss from map' }).parentElement as HTMLElement;
+    expect(strip.className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['pointer-coarse:shrink', 'pointer-coarse:flex-wrap', 'pointer-coarse:justify-end', 'pointer-coarse:ml-auto']));
+    expect((strip.parentElement as HTMLElement).className.split(/\s+/)).toContain('pointer-coarse:flex-wrap');
   });
 
   it('report a failed hide', async () => {

@@ -1,6 +1,8 @@
+import { Fragment, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Dices, User, Target } from 'lucide-react';
-import type { DiceRolledEvent } from '@/types';
+import type { DiceRollDetail, DiceRolledEvent } from '@/types';
+import { cn } from '@/utils/cn';
 
 interface DiceResultProps {
   roll: DiceRolledEvent;
@@ -11,12 +13,14 @@ interface DiceResultProps {
    * cannot be claimed by whoever is rolling.
    */
   rollerIsDM?: boolean;
+  /** Two lines, as the compact layout's log draws a roll; the full card otherwise. */
+  dense?: boolean;
 }
 
 /**
  * Display a single dice roll result with breakdown and animations
  */
-export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResultProps) {
+export default function DiceResult({ roll, isCurrentUser, rollerIsDM, dense = false }: DiceResultProps) {
   const { userName, characterName, expression, result, breakdown, purpose, timestamp, secret } = roll;
 
   /**
@@ -71,8 +75,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
 
   // Color scheme based on result type
   const getResultColor = () => {
-    if (isCriticalSuccess) return 'text-success-ink dark:text-success-ink';
-    if (isCriticalFail) return 'text-danger-ink dark:text-danger-ink';
+    if (isCriticalSuccess) return 'text-success-ink';
+    if (isCriticalFail) return 'text-danger-ink';
     return 'text-ink';
   };
 
@@ -83,12 +87,20 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
   };
 
   const getBgColor = () => {
-    if (isCriticalSuccess) return 'bg-success/10 dark:bg-success/20';
-    if (isCriticalFail) return 'bg-danger/10 dark:bg-danger/20';
+    if (isCriticalSuccess) return 'bg-success/10';
+    if (isCriticalFail) return 'bg-danger/10';
     return isCurrentUser
       ? 'bg-moss-green/10'
       : 'bg-surface/30';
   };
+
+  // A secret roll's mark. The wording differs because the two cases mean
+  // different things: yours is hidden from the other players, and the one
+  // you are reading as DM is somebody else's.
+  const secretTitle = isCurrentUser
+    ? 'Hidden from the other players — your DM can still see it'
+    : 'A player rolled this secretly; you see it as DM';
+  const secretWhose = isCurrentUser ? '' : ' (DM view)';
 
   // Format timestamp
   const formatTimestamp = (ts: string) => {
@@ -103,6 +115,71 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
     if (diffMins < 60) return `${diffMins}m ago`;
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  /**
+   * The compact layout's log, where a sheet half a phone's height should show
+   * several rolls: two lines a roll. The first says whose it is, what for and
+   * when; the second the expression and its working, the dice as plain text
+   * with a dropped die struck through. The total stands beside both, large.
+   * Long lines are cut short on the screen and read in full.
+   */
+  if (dense) {
+    const crits = [
+      ...(isCriticalSuccess ? [{ shown: '🎉 Crit!', said: 'Critical success!', ink: 'text-success-ink' }] : []),
+      ...(isCriticalFail ? [{ shown: '💥 Fumble!', said: 'Critical fail!', ink: 'text-danger-ink' }] : []),
+    ];
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className={`flex items-center gap-2 rounded-md border ${getBorderColor()} ${getBgColor()} px-2 py-px`}
+      >
+        <div className="min-w-0 flex-1 text-xs leading-4">
+          <div className="flex items-center gap-1">
+            {/* Who keeps its width up to two thirds of the line, so it is
+                cut only when it is that long, from its end, another's
+                "(rolled by …)" going before the name does. Your own roll's
+                tag is read out and not shown: the line says whose it is
+                already. */}
+            <span className="min-w-0 max-w-[65%] shrink-0 truncate text-ink-secondary">
+              <span className="font-medium text-ink">{subject}</span>
+              {attribution && <span className={isCurrentUser ? 'sr-only' : 'opacity-70'}> {attribution}</span>}
+            </span>
+            {secret && (
+              <span className="shrink-0 rounded-sm bg-ink/10 px-1 text-ink-muted" title={secretTitle}>
+                🔒 Secret
+                {secretWhose && <span className="sr-only">{secretWhose}</span>}
+              </span>
+            )}
+            {/* What for gives way on a narrow line; the name, the Secret mark
+                and the time keep their width. */}
+            {purpose && (
+              <span className="min-w-0 shrink truncate text-ink-secondary">
+                <span aria-hidden="true">· </span>
+                {purpose}
+              </span>
+            )}
+            <span className="ml-auto shrink-0 pl-1 text-ink-muted">{formatTimestamp(timestamp)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="shrink-0 font-mono text-ink/90">{expression}</span>
+            <span className="min-w-0 truncate font-mono text-ink-secondary">{workingOf(breakdown?.formula, detail)}</span>
+            {crits.map((crit) => (
+              <span key={crit.said} className={`shrink-0 font-bold ${crit.ink}`}>
+                <span aria-hidden="true">{crit.shown}</span>
+                <span className="sr-only">{crit.said}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <span className={`shrink-0 text-xl leading-7 font-bold ${getResultColor()}`}>
+          <span className="sr-only">= </span>
+          {result}
+        </span>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -121,21 +198,13 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
               {/* Every secret roll in the list is labelled, whoever is looking.
                   It used to be marked only on someone *else's* roll — the DM's
                   audit view — which left your own secret rolls indistinguishable
-                  from open ones now that they appear in the list at all.
-
-                  The wording differs because the two cases mean different
-                  things: yours is hidden from the other players, and the one
-                  you are reading as DM is somebody else's. */}
+                  from open ones now that they appear in the list at all. */}
               {secret && (
                 <span
                   className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded-sm"
-                  title={
-                    isCurrentUser
-                      ? 'Hidden from the other players — your DM can still see it'
-                      : 'A player rolled this secretly; you see it as DM'
-                  }
+                  title={secretTitle}
                 >
-                  🔒 {isCurrentUser ? 'Secret' : 'Secret (DM view)'}
+                  🔒 Secret{secretWhose}
                 </span>
               )}
             </span>
@@ -210,8 +279,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                             className={`
                               font-mono text-xs px-1 rounded
                               ${!isKept ? 'line-through opacity-40' : ''}
-                              ${isCrit20 ? 'bg-success/15 text-success-ink dark:text-success-ink font-bold' : ''}
-                              ${isCrit1 ? 'bg-danger/15 text-danger-ink dark:text-danger-ink font-bold' : ''}
+                              ${isCrit20 ? 'bg-success/15 text-success-ink font-bold' : ''}
+                              ${isCrit1 ? 'bg-danger/15 text-danger-ink font-bold' : ''}
                             `}
                           >
                             {r}
@@ -248,8 +317,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
           transition={{ duration: 0.3, delay: 0.2 }}
           className={`
             mt-2 pt-2 border-t text-center text-sm font-bold
-            ${isCriticalSuccess ? 'text-success-ink dark:text-success-ink border-success/20' : ''}
-            ${isCriticalFail ? 'text-danger-ink dark:text-danger-ink border-danger/20' : ''}
+            ${isCriticalSuccess ? 'text-success-ink border-success/20' : ''}
+            ${isCriticalFail ? 'text-danger-ink border-danger/20' : ''}
           `}
         >
           {isCriticalSuccess && '🎉 CRITICAL SUCCESS!'}
@@ -257,6 +326,62 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
         </motion.div>
       )}
     </motion.div>
+  );
+}
+
+/** A number in a roll's formula: a group of dice's total or a modifier. */
+const FORMULA_NUMBER = /^\d+$/;
+
+/**
+ * A roll's working as its formula reads, each group of dice written as its
+ * faces in brackets: "[9 20]" for 2d20kh1, "[13] + 5" for 1d20+5. A roll
+ * whose formula does not name its groups one for one, as an imported or old
+ * one may not, lists the groups in order.
+ */
+function workingOf(formula: string | undefined, detail: DiceRollDetail[]): ReactNode {
+  const tokens = typeof formula === 'string' ? formula.split(' ').filter(Boolean) : [];
+  const byFormula = tokens.filter((token) => FORMULA_NUMBER.test(token)).length === detail.length;
+  let next = 0;
+  const parts: ReactNode[] = byFormula
+    ? tokens.map((token) => (FORMULA_NUMBER.test(token) ? groupText(detail[next++], false) : token))
+    : detail.map((group) => groupText(group, true));
+  return parts.map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && ' '}
+      {part}
+    </Fragment>
+  ));
+}
+
+/** A group of a roll as text: its dice's faces, or a modifier, signed where no formula gives the sign. */
+function groupText(group: DiceRollDetail, signed: boolean): ReactNode {
+  if (group.type === 'modifier') {
+    if (group.value === undefined) return null;
+    return `${signed && group.value >= 0 ? '+' : ''}${group.value}`;
+  }
+  const faces = group.results ?? [];
+  if (faces.length === 0) return group.total === undefined ? null : `[${group.total}]`;
+  const kept = keptMarks(group);
+  return (
+    <>
+      [
+      {faces.map((face, i) => (
+        <Fragment key={i}>
+          {i > 0 && ' '}
+          <span
+            className={cn(
+              !kept[i] && 'line-through opacity-60',
+              group.sides === 20 && face === 20 && 'font-bold text-success-ink',
+              group.sides === 20 && face === 1 && 'font-bold text-danger-ink'
+            )}
+          >
+            {face}
+          </span>
+          {!kept[i] && <span className="sr-only"> dropped</span>}
+        </Fragment>
+      ))}
+      ]
+    </>
   );
 }
 

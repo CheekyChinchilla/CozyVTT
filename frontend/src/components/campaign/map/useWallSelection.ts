@@ -24,6 +24,11 @@ export interface WallMoveDrag {
   startX: number;
   startY: number;
   preDragState: WallSegment[];
+  /**
+   * The walls being moved, as the press chose them. A finger's first move
+   * arrives in the same event as its press, before the new selection is drawn.
+   */
+  selection: ReadonlySet<string>;
   hasDragged: boolean;
   /** How far the selection has been carried, as of the last pointer move. */
   offset?: { dx: number; dy: number };

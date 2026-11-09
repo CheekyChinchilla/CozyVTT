@@ -24,7 +24,7 @@ const FULL = /This list is full: a sheet holds at most 2 entries here/;
 
 function open(tab: string, overrides: Record<string, unknown>) {
   render(<CallOfCthulhu7eCharacterEditor character={cocCharacter(overrides)} onSave={vi.fn()} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: tab }));
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
 }
 
 const weapon = (name: string) => ({ name, skill: 'Fighting (Brawl)', skillValue: 25, damage: '1d3', range: 'Touch', attacks: 1, ammo: null, malfunction: null, notes: '' });

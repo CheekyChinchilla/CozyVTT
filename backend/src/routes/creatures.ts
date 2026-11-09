@@ -13,8 +13,9 @@ import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { seedSrdCreatures, getSrdSeedStatus, SeedSourceError } from '../services/creatureSeed';
 import { normalizeAssetUrl } from '../utils/asset-urls';
-import { canReferenceAsset } from '../services/permissions';
+import { canReferenceAsset, isTokenPicture } from '../services/permissions';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
+import { TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { issueMessages } from '../validators/issueMessages';
 import { toJson } from '../utils/prisma-json';
 import { readEnumQuery, readStringQueries } from '../utils/queryEnum';
@@ -245,6 +246,10 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
+    // And only a token picture (isTokenPicture).
+    if (!(await isTokenPicture(imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
+    }
 
     const template = await prisma.creatureTemplate.create({
       data: {
@@ -319,6 +324,9 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
     const nextImageUrl = data.imageUrl === undefined ? undefined : data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
     if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+    }
+    if (nextImageUrl !== undefined && !(await isTokenPicture(nextImageUrl, existing.imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
     }
 
     const updated = await prisma.creatureTemplate.update({
@@ -397,6 +405,15 @@ router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedReque
       return res.status(404).json({ error: 'Not Found', message: 'Creature template not found' });
     }
 
+    // Duplicating an older SRD row is a chance to normalise its bare id.
+    const imageUrl = normalizeAssetUrl(source.imageUrl, 'tokens');
+    // The copy is a new picture, held to the rule as any other is
+    // (isTokenPicture), as a token template's copy is: a creature stored
+    // before the rule may hold a map picture.
+    if (!(await isTokenPicture(imageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE });
+    }
+
     const duplicate = await prisma.creatureTemplate.create({
       data: {
         id: randomUUID(),
@@ -406,8 +423,7 @@ router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedReque
         challengeRating: source.challengeRating,
         creatureType: source.creatureType,
         alignment: source.alignment,
-        // Duplicating an older SRD row is a chance to normalise its bare id.
-        imageUrl: normalizeAssetUrl(source.imageUrl, 'tokens'),
+        imageUrl,
         statBlock: source.statBlock as object,
         size: source.size as object,
         disposition: source.disposition,

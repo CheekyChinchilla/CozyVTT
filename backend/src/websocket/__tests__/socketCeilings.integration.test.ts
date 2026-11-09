@@ -195,6 +195,79 @@ describe('chat.message', () => {
   });
 });
 
+describe('drawing on the map', () => {
+  const drawn = (userId: string) => prisma.mapDrawing.count({ where: { mapId, authorId: userId } });
+  const line = (i: number) => ({ kind: 'line', color: '#3d8bd9', width: 2, points: [[i % 100, 0], [i % 100, 50]] });
+
+  it('takes 20 drawing:add a second from one user across their sockets, and says so once', async () => {
+    const player = await newPlayer();
+    const first = await server.connectAndAuth(player.cookie, campaignId);
+    const second = await server.connectAndAuth(player.cookie, campaignId);
+    const toldFirst = refusals(first);
+    const toldSecond = refusals(second);
+
+    for (let i = 0; i < 15; i += 1) {
+      first.emit('drawing:add', { mapId, drawing: line(i) });
+      second.emit('drawing:add', { mapId, drawing: line(i) });
+    }
+    await settle(async () => (await drawn(player.id)) >= 20);
+
+    expect(await drawn(player.id)).toBe(20);
+    const told = toldFirst.length + toldSecond.length;
+    expect(told).toBeGreaterThanOrEqual(1);
+    expect(told).toBeLessThanOrEqual(2);
+    first.disconnect();
+    second.disconnect();
+  });
+
+  it('takes 300 drawing:add a minute', async () => {
+    const player = await newPlayer();
+    const client = await server.connectAndAuth(player.cookie, campaignId);
+
+    for (let burst = 0; burst < 16; burst += 1) {
+      for (let i = 0; i < 20; i += 1) client.emit('drawing:add', { mapId, drawing: line(burst * 20 + i) });
+      await sleep(1050);
+    }
+    await settle(async () => (await drawn(player.id)) >= 300);
+
+    expect(await drawn(player.id)).toBe(300);
+    client.disconnect();
+    await prisma.mapDrawing.deleteMany({ where: { mapId } });
+  });
+
+  it('answers 20 drawing:remove a second, and says so once', async () => {
+    const player = await newPlayer();
+    const client = await server.connectAndAuth(player.cookie, campaignId);
+    let answered = 0;
+    let told = 0;
+    client.on('error', (data: { message: string }) => {
+      if (CEILING_REFUSAL.test(data.message)) told += 1;
+      else answered += 1;
+    });
+
+    for (let i = 0; i < 30; i += 1) client.emit('drawing:remove', { mapId, drawingId: randomUUID() });
+    await settle(() => answered >= 20);
+
+    expect(answered).toBe(20);
+    expect(told).toBe(1);
+    client.disconnect();
+  });
+
+  it.each([
+    ['drawing:clear_mine', 'player'],
+    ['drawing:clear', 'dm'],
+  ] as const)('takes 5 %s every ten seconds, refusing the rest through the acknowledgement', async (event, who) => {
+    const cookie = who === 'dm' ? dmCookie : (await newPlayer()).cookie;
+    const client = await server.connectAndAuth(cookie, campaignId);
+    const answers = await Promise.all(
+      Array.from({ length: 8 }, () => client.timeout(5000).emitWithAck(event, { mapId, layer: 'MARKUP' }) as Promise<{ ok: boolean; error?: string }>)
+    );
+    expect(answers.filter((a) => a.ok)).toHaveLength(5);
+    expect(answers.filter((a) => !a.ok).every((a) => CEILING_REFUSAL.test(a.error ?? ''))).toBe(true);
+    client.disconnect();
+  });
+});
+
 describe('dice.roll', () => {
   const stored = (userId: string) => prisma.diceRoll.count({ where: { campaignId, userId } });
 

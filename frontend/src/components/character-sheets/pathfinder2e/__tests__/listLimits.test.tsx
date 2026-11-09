@@ -25,7 +25,7 @@ const FULL = /This list is full: a sheet holds at most 2 entries here/;
 
 function open(tab: string, overrides: Record<string, unknown>) {
   render(<Pathfinder2eCharacterEditor character={pf2eCharacter(overrides)} onSave={vi.fn()} onCancel={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: tab }));
+  fireEvent.click(screen.getByRole('tab', { name: tab }));
 }
 
 const spellcasting = (fields: Record<string, unknown>) => ({

@@ -20,7 +20,7 @@ export default defineConfig({
   datasource: {
     url: process.env.DATABASE_URL,
     // Only `prisma migrate diff` and `migrate dev` use it; see
-    // backend/DATABASE_MIGRATIONS.md.
+    // docs/DEVELOPMENT.md, Running Migrations.
     shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
   },
 });

@@ -7,7 +7,7 @@
  */
 
 import { DISPOSITION_PICKED, tokenPlaceholder } from '@/utils/tokenColours';
-import { useState, useEffect, useEffectEvent, useCallback, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useCallback, useRef, type RefObject } from 'react';
 import {
   X,
   Search,
@@ -38,6 +38,8 @@ import {
 } from './npc-stat-blocks';
 import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency';
 import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
+import PrintedSkillsEditor from './npc-stat-blocks/PrintedSkillsEditor';
+import { creatureModel, scoreLabel } from './npc-stat-blocks/creatureModel';
 import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
@@ -45,6 +47,8 @@ import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/Slide
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { extractAssetId } from '@/utils/assetUrl';
+import { cn } from '@/utils/cn';
+import { BackToList, useLibraryFormStep } from './libraryFormStep';
 
 // ============================================
 // Constants
@@ -106,7 +110,7 @@ interface CreatureLibraryProps {
 // ============================================
 
 export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
 
   // ── Search & filter state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,6 +142,15 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const [editingCreature, setEditingCreature] = useState<CreatureTemplate | null>(null);
   // The creature whose Delete button was clicked, until it is confirmed or cancelled.
   const [creatureToDelete, setCreatureToDelete] = useState<CreatureTemplate | null>(null);
+  // On a narrow screen the form is a step of its own, in place of the list.
+  const {
+    asStep: formAsStep,
+    compact,
+    headingRef: formHeadingRef,
+    createButtonRef: formCreateButtonRef,
+    opened: formOpened,
+    closed: formClosed,
+  } = useLibraryFormStep(showCreateForm);
 
   // ── Favorites state ──
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
@@ -254,12 +267,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   // ── Place creature on map ──
   const handlePlace = useCallback(async (creature: CreatureTemplate) => {
-    if (!campaign || !currentMap) return;
+    if (!campaign || !viewedMap) return;
     setPlacingId(creature.id);
 
     const position = {
-      x: Math.floor(currentMap.width / 2),
-      y: Math.floor(currentMap.height / 2),
+      x: Math.floor(viewedMap.width / 2),
+      y: Math.floor(viewedMap.height / 2),
     };
 
     // HP from the creature's stat block; creatures saved before HP was tracked
@@ -288,16 +301,16 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
       const result = await api.addToken(
         campaign.id,
-        currentMap.id,
+        viewedMap.id,
         tokenPayload
       );
-      useGameStore.getState().addToken(result.token);
+      useGameStore.getState().addToken(result.token, viewedMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place creature on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap]);
+  }, [campaign, viewedMap]);
 
   // ── Duplicate creature ──
   const handleDuplicate = useCallback(async (creatureId: string) => {
@@ -333,19 +346,28 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   }, [campaign, expandedId]);
 
   // ── Edit creature (opens form with pre-filled data) ──
-  const handleEdit = useCallback((creature: CreatureTemplate) => {
+  // A wide screen folds the row away to make room for the form under the
+  // list. On a narrow one the list is out of sight while the form is open,
+  // and the row stays open so its Edit button can take focus back.
+  const handleEdit = useCallback((creature: CreatureTemplate, opener: HTMLElement) => {
     setEditingCreature(creature);
     setShowCreateForm(true);
-    setExpandedId(null);
-  }, []);
+    if (!compact) setExpandedId(null);
+    formOpened(opener);
+  }, [compact, formOpened]);
+
+  const closeForm = useCallback(() => {
+    setShowCreateForm(false);
+    setEditingCreature(null);
+    formClosed();
+  }, [formClosed]);
 
   // ── Handle edit completion ──
   const handleEdited = useCallback((updated: CreatureTemplate) => {
     setCreatures((prev) => prev.map((c) => c.id === updated.id ? updated : c));
     setFavoriteCreatures((prev) => prev.map((c) => c.id === updated.id ? updated : c));
-    setEditingCreature(null);
-    setShowCreateForm(false);
-  }, []);
+    closeForm();
+  }, [closeForm]);
 
   // ── Toggle favorite ──
   const handleToggleFavorite = useCallback(async (creatureId: string) => {
@@ -415,6 +437,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" title="Close" />
       </div>
 
+      {/* ── The list, with its search and filters: out of sight while the
+          form is a step of its own, and kept mounted, so the control that
+          opened the form is there to take focus back. Hidden by its class,
+          which needs no help from the base styles' [hidden] rule against
+          `contents`, and by the attribute, for assistive technology ── */}
+      <div hidden={formAsStep} className={formAsStep ? 'hidden' : 'contents'}>
       {/* ── Search & Filters ── */}
       <div className="px-4 py-3 border-b border-moss-green/10 space-y-2">
         {/* Search bar */}
@@ -432,7 +460,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         {/* Filter toggle */}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+          className="touch-target flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
         >
           {showFilters ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
           Filters
@@ -481,9 +509,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
         {/* Action buttons */}
         <div className="flex gap-2">
+          {/* An empty form, in place of a creature's edit form that a wide
+              screen may show under the list, as New Template does. */}
           <button
-            onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+            ref={formCreateButtonRef}
+            onClick={(e) => { setEditingCreature(null); setShowCreateForm(true); formOpened(e.currentTarget); }}
+            className="touch-target flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
           >
             <Plus className="w-3 h-3" /> Create Custom
           </button>
@@ -523,7 +554,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         <div className="border-b border-moss-green/20">
           <button
             onClick={() => setShowFavorites(!showFavorites)}
-            className="w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
+            className="touch-target w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
           >
             <div className="flex items-center gap-2">
               <Star className="w-3.5 h-3.5 text-warning-ink fill-warning" />
@@ -559,7 +590,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                     onDuplicate={() => handleDuplicate(creature.id)}
                     onDelete={() => setCreatureToDelete(creature)}
                     onToggleFavorite={() => handleToggleFavorite(creature.id)}
-                    onEdit={() => handleEdit(creature)}
+                    onEdit={(opener) => handleEdit(creature, opener)}
                   />
                 ))
               )}
@@ -646,7 +677,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 onDuplicate={() => handleDuplicate(creature.id)}
                 onDelete={() => setCreatureToDelete(creature)}
                 onToggleFavorite={() => handleToggleFavorite(creature.id)}
-                onEdit={() => handleEdit(creature)}
+                onEdit={(opener) => handleEdit(creature, opener)}
               />
             ))}
 
@@ -675,8 +706,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       {creatures.some((c) => c.source === 'srd') && (
         <SrdCredit className="px-4 py-2 border-t border-moss-green/10" />
       )}
+      </div>{/* the list */}
 
-      {/* ── Create / Edit Custom Form (inline) ── */}
+      {formAsStep && <BackToList onClick={closeForm} />}
+
+      {/* ── Create / Edit Custom Form: under the list, or in its place on a
+          narrow screen ── */}
       {showCreateForm && (
         // Keyed on the creature being edited so switching directly from
         // one creature to another remounts the form. handleEdit leaves
@@ -688,14 +723,15 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           campaignId={campaign?.id || ''}
           gameSystem={campaign?.gameSystem ?? null}
           editingCreature={editingCreature}
+          asStep={formAsStep}
+          headingRef={formHeadingRef}
           onCreated={(creature) => {
             setCreatures((prev) => [creature, ...prev]);
             setTotal((prev) => prev + 1);
-            setShowCreateForm(false);
-            setEditingCreature(null);
+            closeForm();
           }}
           onEdited={handleEdited}
-          onCancel={() => { setShowCreateForm(false); setEditingCreature(null); }}
+          onCancel={closeForm}
         />
       )}
     </SlideOver>
@@ -727,7 +763,8 @@ interface CreatureRowProps {
   onDuplicate: () => void;
   onDelete: () => void;
   onToggleFavorite: () => void;
-  onEdit: () => void;
+  /** Called with the Edit button, which takes focus back when the form's step closes. */
+  onEdit: (opener: HTMLElement) => void;
 }
 
 function CreatureRow({
@@ -775,7 +812,8 @@ function CreatureRow({
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-ink-black truncate">{creature.name}</div>
             <div className="text-[10px] text-stone-gray/60 flex gap-2">
-              {creature.challengeRating && <span>CR {creature.challengeRating}</span>}
+              {/* A rating kept from before on a creature of a system with none (creatureModel) stays stored, unshown. */}
+              {creature.challengeRating && creatureModel(creature.gameSystem) !== 'printed' && <span>CR {creature.challengeRating}</span>}
               {statBlock.creatureType && <span className="truncate">{statBlock.creatureType}</span>}
             </div>
           </div>
@@ -789,8 +827,8 @@ function CreatureRow({
             {creature.source === 'srd' ? 'SRD' : 'Custom'}
           </span>
 
-          {/* Room for the favourite star */}
-          <span className="w-4.5 shrink-0" aria-hidden="true" />
+          {/* Room for the favourite star: a finger's width on a touch screen. */}
+          <span className="w-4.5 pointer-coarse:w-11 shrink-0" aria-hidden="true" />
 
           {/* Expand icon */}
           {isExpanded ? (
@@ -805,8 +843,9 @@ function CreatureRow({
         <button
           type="button"
           onClick={onToggleFavorite}
-          className="absolute top-1/2 right-11 -translate-y-1/2 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
+          className="touch-target absolute top-1/2 right-11 -translate-y-1/2 inline-flex items-center justify-center p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`w-3.5 h-3.5 transition-colors ${
             isFavorite
@@ -835,7 +874,7 @@ function CreatureRow({
             </button>
             {creature.source !== 'srd' && (
               <button
-                onClick={onEdit}
+                onClick={(e) => onEdit(e.currentTarget)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-cozy border border-moss-green/20 text-brand-ink hover:bg-moss-green/10 transition-colors"
                 title="Edit creature"
               >
@@ -933,6 +972,7 @@ function NameDescriptionList({
             onClick={() => onChange(items.filter((_, idx) => idx !== i))}
             className="p-1 text-danger-ink hover:text-danger-ink shrink-0 mt-0.5"
             title="Remove"
+            aria-label="Remove"
           >
             <Trash2 className="w-3 h-3" />
           </button>
@@ -950,12 +990,16 @@ interface CreatureFormProps {
   campaignId: string;
   gameSystem: GameSystem | null;
   editingCreature: CreatureTemplate | null;
+  /** The form is a step of its own, in the list's place: it fills the panel. */
+  asStep: boolean;
+  /** For the heading, which takes focus as the step opens. */
+  headingRef: RefObject<HTMLHeadingElement | null>;
   onCreated: (creature: CreatureTemplate) => void;
   onEdited: (creature: CreatureTemplate) => void;
   onCancel: () => void;
 }
 
-function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEdited, onCancel }: CreatureFormProps) {
+function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, headingRef, onCreated, onEdited, onCancel }: CreatureFormProps) {
   const isEdit = !!editingCreature;
   const sb = editingCreature?.statBlock;
 
@@ -1009,8 +1053,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
   const [formError, setFormError] = useState<string | null>(null);
 
   // Pathfinder 2e rates creatures by Level rather than Challenge Rating, and
-  // stores printed modifiers instead of deriving them.
-  const isPf2e = gameSystem === GameSystem.PATHFINDER_2E;
+  // stores printed modifiers instead of deriving them; Call of Cthulhu and
+  // Shadowrun 6e have no rating at all, and store what is typed.
+  const model = creatureModel(gameSystem);
+  const isPf2e = model === 'pf2e';
   const [level, setLevel] = useState<number | undefined>(sb?.level);
 
   // The stat block the proficiency editor sees: live ability scores and CR from
@@ -1027,9 +1073,9 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
 
   // Ability scores and CR feed every derived save and skill, so a change
   // moves them, as in the token editor: the form used to show the new totals
-  // and save the old ones. Pathfinder modifiers are printed values, not derived.
+  // and save the old ones. Only D&D 5e works anything out from them.
   const changeNumbers = (changes: Partial<Pick<NpcStatBlock, 'abilities' | 'challengeRating'>>) => {
-    if (isPf2e) return;
+    if (model !== 'derived') return;
     const next = changeAbilitiesOrRating(workingStatBlock, changes);
     setProficiencyFields({ savingThrows: next.savingThrows, skills: next.skills, proficiencies: next.proficiencies });
   };
@@ -1108,14 +1154,22 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
   };
 
   return (
-    <div className="border-t border-moss-green/20 bg-parchment/40 p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+    <div
+      className={cn(
+        'bg-parchment/40 p-4 space-y-3 overflow-y-auto',
+        asStep ? 'flex-1 min-h-0' : 'border-t border-moss-green/20 max-h-[70vh]'
+      )}
+    >
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-brand-ink uppercase tracking-wide">
+        <h3 ref={headingRef} tabIndex={-1} className="text-xs font-semibold text-brand-ink uppercase tracking-wide">
           {isEdit ? 'Edit Creature' : 'Create Custom Creature'}
         </h3>
-        <button onClick={onCancel} className="text-stone-gray hover:text-stone-gray/80 p-0.5">
-          <X className="w-4 h-4" />
-        </button>
+        {/* As a step, Back to the list above the form does this. */}
+        {!asStep && (
+          <button onClick={onCancel} aria-label="Close form" className="text-stone-gray hover:text-stone-gray/80 p-0.5">
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {formError && (
@@ -1203,7 +1257,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
               className="input-cozy w-full text-xs text-center"
             />
           </div>
-        ) : (
+        ) : model === 'derived' ? (
           <div>
             <label className="text-[10px] text-stone-gray block mb-0.5" htmlFor="creature-cr">CR</label>
             {/* A select, not free text: CR determines the proficiency bonus, so a
@@ -1223,7 +1277,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
               ))}
             </select>
           </div>
-        )}
+        ) : null}
         <div>
           <label className="text-[10px] text-stone-gray block mb-0.5">HP Max</label>
           <input
@@ -1273,9 +1327,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
           <div className="grid grid-cols-6 gap-1.5">
             {ABILITY_KEYS.map((ability) => (
               <div key={ability} className="text-center">
-                <label className="text-[8px] font-bold text-brand-ink block">{ability.toUpperCase()}</label>
+                <label className="text-[8px] font-bold text-brand-ink block">{scoreLabel(gameSystem, ability)}</label>
                 <input
                   type="number"
+                  aria-label={scoreLabel(gameSystem, ability)}
                   value={workingStatBlock.abilities[ability]}
                   onChange={(e) => changeScore(ability, parseInt(e.target.value, 10) || 10)}
                   className="input-cozy w-full text-xs text-center"
@@ -1286,12 +1341,24 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
         </div>
       )}
 
-      {/* Saves & skills — derived from the ability scores and CR above. This
-          form had no fields for these at all, which is why editing a duplicated
-          SRD creature used to delete them. */}
+      {/* Saves & skills: in D&D 5e derived from the ability scores and CR
+          above, elsewhere typed as printed. This form had no fields for these
+          at all, which is why editing a duplicated SRD creature used to delete
+          them. */}
       <div>
-        <label className="text-[10px] text-stone-gray block mb-1">Saving Throws &amp; Skills</label>
-        {isPf2e ? (
+        <label className="text-[10px] text-stone-gray block mb-1">{model === 'printed' ? 'Skills' : <>Saving Throws &amp; Skills</>}</label>
+        {model === 'printed' ? (
+          <PrintedSkillsEditor
+            statBlock={workingStatBlock}
+            onChange={(updated) =>
+              setProficiencyFields({
+                savingThrows: updated.savingThrows,
+                skills: updated.skills,
+                proficiencies: updated.proficiencies,
+              })
+            }
+          />
+        ) : isPf2e ? (
           <Pf2eProficiencyEditor
             statBlock={workingStatBlock}
             onChange={(updated) =>

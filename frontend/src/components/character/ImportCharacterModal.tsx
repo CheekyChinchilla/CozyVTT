@@ -50,7 +50,7 @@ export default function ImportCharacterModal({
   const [error, setError] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<{
     name: string;
-    gameSystem: string | null;
+    gameSystem: GameSystem | null;
     data: CharacterData;
   } | null>(null);
   const [nameConflict, setNameConflict] = useState(false);
@@ -312,7 +312,7 @@ export default function ImportCharacterModal({
                     Game System
                   </label>
                   {previewData.gameSystem ? (
-                    <GameSystemBadge gameSystem={previewData.gameSystem as GameSystem} size="lg" />
+                    <GameSystemBadge gameSystem={previewData.gameSystem} size="lg" />
                   ) : (
                     <span className="text-sm text-ink-muted italic">Flexible (No specific system)</span>
                   )}

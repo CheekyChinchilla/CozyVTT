@@ -78,6 +78,7 @@ export default function VibeTracker() {
               onClick={() => setIsConfigureOpen(true)}
               className="p-1.5 rounded-lg hover:bg-moss-green/10 transition-colors text-stone-gray hover:text-brand-ink"
               title="Configure periods"
+              aria-label="Configure periods"
             >
               <Settings className="w-3.5 h-3.5" />
             </button>

@@ -5,8 +5,9 @@
 // ============================================
 
 import { useNavigate } from 'react-router';
-import { campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
-import type { Campaign, CampaignRole, CampaignStatus } from '@/types';
+import { CAMPAIGN_ROLE_LABEL, campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
+import { CampaignRole } from '@/types';
+import type { Campaign, CampaignStatus } from '@/types';
 import { Users, Calendar, Crown, Eye, Gamepad2, KeyRound} from 'lucide-react';
 import GameSystemBadge from './common/GameSystemBadge';
 
@@ -54,17 +55,17 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
   const getRoleBadge = (role: CampaignRole) => {
     const badges = {
       DM: {
-        label: 'DM',
+        label: CAMPAIGN_ROLE_LABEL[CampaignRole.DM],
         icon: Crown,
         class: 'bg-moss-green/15 text-brand-ink border-moss-green/40',
       },
       PLAYER: {
-        label: 'Player',
+        label: CAMPAIGN_ROLE_LABEL[CampaignRole.PLAYER],
         icon: Gamepad2,
         class: 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40',
       },
       SPECTATOR: {
-        label: 'Spectator',
+        label: CAMPAIGN_ROLE_LABEL[CampaignRole.SPECTATOR],
         icon: Eye,
         class: 'bg-warm-amber/15 text-accent-ink border-warm-amber/40',
       },

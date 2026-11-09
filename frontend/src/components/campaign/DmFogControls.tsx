@@ -35,6 +35,14 @@ interface DmFogControlsProps {
   onCollapse?: () => void;
 }
 
+/**
+ * A Confirm? state's pulse: a ring round the button, so its label keeps its
+ * contrast through the pulse (DmFogControls.test.tsx). Its colour is the fill's.
+ */
+function ConfirmPulse({ ring }: { ring: 'ring-lime-300' | 'ring-warning' }) {
+  return <span aria-hidden="true" className={`absolute inset-0 rounded ring-2 ${ring} animate-pulse pointer-events-none`} />;
+}
+
 export default function DmFogControls({
   fogMode,
   onFogModeChange,
@@ -78,7 +86,7 @@ export default function DmFogControls({
         type="button"
         aria-expanded={!collapsed}
         aria-controls={bodyId}
-        className="w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
+        className="touch-target w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
         onClick={() => {
           const next = !collapsed;
           setCollapsed(next);
@@ -93,7 +101,7 @@ export default function DmFogControls({
 
       {/* The per-map switch. Off puts an armed tool down first: a reveal box
           dragged with fog off would change nothing players can see. */}
-      <label className="flex items-center gap-2 px-1 py-0.5 text-xs text-stone-300 cursor-pointer select-none">
+      <label className="touch-target flex items-center gap-2 px-1 py-0.5 text-xs text-stone-300 cursor-pointer select-none">
         <input
           type="checkbox"
           className="w-3.5 h-3.5 accent-lime-500"
@@ -120,7 +128,7 @@ export default function DmFogControls({
       <div className="flex gap-1">
         <button
           onClick={() => onFogModeChange(fogMode === 'fog-reveal' ? null : 'fog-reveal')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+          className={`touch-target flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
             fogMode === 'fog-reveal'
               ? 'bg-lime-600/30 text-lime-400 border border-lime-500/50'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700'
@@ -133,7 +141,7 @@ export default function DmFogControls({
         </button>
         <button
           onClick={() => onFogModeChange(fogMode === 'fog-hide' ? null : 'fog-hide')}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+          className={`touch-target flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
             fogMode === 'fog-hide'
               ? 'bg-warning/30 text-warning-ink border border-warning/50'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700'
@@ -157,33 +165,34 @@ export default function DmFogControls({
 
       {/* Bulk actions */}
       <div className="flex gap-1 pt-1 border-t border-stone-700/50">
-        {/* TODO(ui): the Confirm? state below is white on lime-500, about 2:1;
-            give it dark text (text-stone-900), as Hide all and Reset explored
-            areas have on their amber Confirm? state. */}
+        {/* Each Confirm? state takes dark text on its light fill, readable
+            in every theme, and pulses a ring round it, never its label. */}
         <button
           onClick={handleRevealAll}
-          className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+          className={`touch-target relative flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
             confirmRevealAll
-              ? 'bg-lime-500 text-white animate-pulse'
+              ? 'bg-lime-500 text-stone-900'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-lime-700/30 hover:text-lime-400'
           }`}
           title={confirmRevealAll ? 'Click again to confirm: reveal entire map' : 'Reveal all — show entire map to players'}
           aria-label="Reveal entire map"
           onBlur={() => setConfirmRevealAll(false)}
         >
+          {confirmRevealAll && <ConfirmPulse ring="ring-lime-300" />}
           {confirmRevealAll ? 'Confirm?' : 'Reveal all'}
         </button>
         <button
           onClick={handleHideAll}
-          className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+          className={`touch-target relative flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
             confirmHideAll
-              ? 'bg-warning text-stone-900 animate-pulse'
+              ? 'bg-warning text-stone-900'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
           }`}
           title={confirmHideAll ? 'Click again to confirm: hide entire map' : 'Hide all — cover entire map with fog'}
           aria-label="Hide entire map"
           onBlur={() => setConfirmHideAll(false)}
         >
+          {confirmHideAll && <ConfirmPulse ring="ring-warning" />}
           {confirmHideAll ? 'Confirm?' : 'Hide all'}
         </button>
       </div>
@@ -195,15 +204,16 @@ export default function DmFogControls({
         <div className="pt-1 border-t border-stone-700/50">
           <button
             onClick={handleResetExploration}
-            className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
+            className={`touch-target relative w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
               confirmReset
-                ? 'bg-warning text-stone-900 animate-pulse'
+                ? 'bg-warning text-stone-900'
                 : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
             }`}
             title={confirmReset ? 'Click again to confirm: forget what every player has seen' : 'Reset explored areas: players forget what they have seen of this map'}
             aria-label="Reset explored areas"
             onBlur={() => setConfirmReset(false)}
           >
+            {confirmReset && <ConfirmPulse ring="ring-warning" />}
             {confirmReset ? 'Confirm?' : 'Reset explored areas'}
           </button>
           <p className="px-1 mt-1 text-[10px] leading-snug text-stone-500">

@@ -5,7 +5,7 @@
  * Organized in tabs for easy navigation. Uses vintage 1920s aesthetic.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId } from 'react';
 import {
   User,
   Target,
@@ -32,6 +32,7 @@ import { BackstorySection } from './components/BackstorySection';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
+import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
 
 interface CallOfCthulhu7eCharacterViewProps {
   character: Character;
@@ -42,13 +43,7 @@ interface CallOfCthulhu7eCharacterViewProps {
 
 type TabId = 'overview' | 'skills' | 'combat' | 'possessions' | 'backstory';
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'overview', label: 'Overview', icon: User },
   { id: 'skills', label: 'Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
@@ -65,6 +60,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   onRoll,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const sheetTabsId = useId();
   const data = character.data as CoC7eCharacterData;
   // Worked out from the characteristics, as the editor saves them.
   const derived = cocDerivedAttributes(data);
@@ -99,16 +95,16 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     // Pathfinder 2e sheets choose it.
     const ink = headerInk(isCustomColor ? customColorHex : themeColor.hex);
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative border-b-4 ${ink.border}`
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${ink.border}`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Edit Button */}
         {onEdit && (
           <button
             onClick={onEdit}
-            className={`absolute top-4 right-4 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
+            className={`ml-auto mb-3 w-fit sm:absolute sm:top-4 sm:right-4 sm:mb-0 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
             title="Edit investigator"
           >
             <Edit className="w-4 h-4" />
@@ -116,8 +112,10 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           </button>
         )}
 
-      <div className="flex items-start justify-between pr-24">
-        <div className="flex items-start space-x-4">
+      {/* Below sm, Edit is in the flow above this row and the player goes
+          under the name; from sm up the row clears the corner Edit sits in. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0 sm:pr-24">
+        <div className="flex items-start space-x-4 min-w-0">
           {/* Token Image */}
           <div className="shrink-0">
             {character.tokenImageUrl ? (
@@ -134,12 +132,12 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           </div>
 
           {/* Character Info */}
-          <div>
+          <div className="min-w-0">
             <h2 className="text-3xl font-bold mb-2 drop-shadow-lg">
               {data.investigatorName || 'Unnamed Investigator'}
             </h2>
             <div className={`space-y-1 ${ink.softer}`}>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-x-4">
                 <span className="font-medium">{data.occupation || 'No Occupation'}</span>
                 {data.era && <span>• {data.era}</span>}
               </div>
@@ -148,7 +146,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                   <span className={ink.soft}>Residence:</span> {data.residence}
                 </div>
               )}
-              <div className="flex items-center space-x-4 text-sm">
+              <div className="flex flex-wrap items-center gap-x-4 text-sm">
                 {data.age && <span>Age {data.age}</span>}
                 {data.sex && <span>• {data.sex}</span>}
                 {data.birthplace && <span>• Born in {data.birthplace}</span>}
@@ -159,7 +157,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
 
         {/* Player Name */}
         {data.playerName && (
-          <div className="text-right">
+          <div className="sm:text-right">
             <div className={`text-xs ${ink.soft} uppercase tracking-wide`}>Player</div>
             <div className="text-lg font-semibold">{data.playerName}</div>
           </div>
@@ -168,35 +166,6 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     </div>
     );
   };
-
-  // Render tabs
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              flex items-center space-x-2 px-4 py-3 font-medium transition-colors
-              ${
-                isActive
-                  ? 'text-ink border-b-2 -mb-0.5 bg-paper'
-                  : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
-              }
-            `}
-            // The underline in the header colour; the label in the theme's text.
-            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   // Render Overview tab
   const renderOverviewTab = () => (
@@ -207,7 +176,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           <Target className="w-5 h-5" />
           <span>Characteristics</span>
         </h3>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-8 gap-4">
           {data.characteristics && (
             <>
               {orderedCharacteristics(data.characteristics as unknown as Record<string, unknown>).map((key) => (
@@ -405,7 +374,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
             <Package className="w-5 h-5" />
             <span>Wealth & Assets</span>
           </h3>
-          <div className="grid grid-cols-3 gap-4 mb-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-3">
             <div>
               <div className="text-xs text-ink-secondary uppercase mb-1">Spending Level</div>
               <div className="text-xl font-bold text-warning-ink">{data.wealth.spendingLevel}</div>
@@ -569,8 +538,8 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   return (
     <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
       {renderHeader()}
-      {renderTabs()}
-      <div className="p-6 bg-paper">
+      <SheetTabs id={sheetTabsId} tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
+      <div data-sheet-body {...sheetTabPanel(sheetTabsId, activeTab)} className="p-3 sm:p-6 bg-paper">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}

@@ -59,6 +59,7 @@ export enum MessageType {
   SYSTEM = 'SYSTEM',
   DICE_ROLL = 'DICE_ROLL',
   CHARACTER_ACTION = 'CHARACTER_ACTION',
+  WHISPER = 'WHISPER',
 }
 
 export enum TokenLayer {
@@ -485,6 +486,11 @@ export interface AdminBackup {
   createdAt: string;
 }
 
+/** A backup just made (POST /api/admin/backups), with why the restore would refuse it, if it would. */
+export interface CreatedBackup extends AdminBackup {
+  warning?: string;
+}
+
 /** A file in the uploads folder that no asset names (GET /api/admin/orphaned-files). */
 export interface OrphanedFile {
   /** Relative to the uploads folder. */
@@ -560,6 +566,8 @@ export interface Campaign {
   spiritLayerStyle: string;
   chatCooldownEnabled: boolean;
   chatCooldownSeconds: number;
+  /** Players may draw on the map and point the laser; the DM always may. */
+  playersMayDraw: boolean;
   createdAt: string;
   updatedAt: string;
   lastPlayedAt: string | null;
@@ -724,6 +732,10 @@ export interface DiceMacro {
   campaignId: string;
   name: string;
   expression: string;
+  /** Who it is rolled as while the Character box is empty; free text, naming no character. */
+  characterName: string | null;
+  /** What it is rolled for; without one, its name. */
+  purpose: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -839,6 +851,8 @@ export interface CampaignMap {
   gridSize: number;
   feetPerSquare: number;
   diagonalRule: 'flat' | 'alternating';
+  /** The colour a map drawn in CozyVTT was made in, as #rrggbb; null for one made from a picture. */
+  drawnBackground: string | null;
   tokens: Token[];
   annotations: Annotation[];
   wallSegments?: import('./walls').WallSegment[];
@@ -989,7 +1003,8 @@ export type AssetUseKind =
   | 'creature'
   | 'tokenTemplate'
   | 'campaignSetting'
-  | 'vibePeriod';
+  | 'vibePeriod'
+  | 'document';
 
 /**
  * One place an asset is used, from the server's refusal to delete it. `name`
@@ -1026,6 +1041,13 @@ export interface Message {
   campaignId: string;
   userId: string | null;
   user?: MessageUser;
+  /**
+   * The one member a whisper is for. Null on a message to everyone, and on a
+   * whisper whose recipient's account was deleted. A copy still being sent
+   * carries it with the type that was asked for, so Retry sends it to them.
+   */
+  recipientId?: string | null;
+  recipient?: MessageUser | null;
   type: MessageType;
   content: string;
   metadata: MessageMetadata | null;
@@ -1189,6 +1211,7 @@ export interface UpdateCampaignRequest {
   spiritLayerStyle?: string;
   chatCooldownEnabled?: boolean;
   chatCooldownSeconds?: number;
+  playersMayDraw?: boolean;
 }
 
 // Character
@@ -1220,6 +1243,8 @@ export interface CreateMapRequest {
   gridSize?: number;
   feetPerSquare?: number;
   diagonalRule?: 'flat' | 'alternating';
+  /** For a map drawn in CozyVTT: the colour it is made in, as #rrggbb. */
+  drawnBackground?: string;
   spiritLayerUrl?: string;
 }
 
@@ -1329,6 +1354,8 @@ export interface TokenMoveEndEvent {
 
 export interface TokenMovedEvent {
   tokenId: string;
+  /** The map the token is on: a page applies only the moves on the map it shows. */
+  mapId: string;
   x: number;
   y: number;
   /** Null for anyone but the DM and the mover while the token is obscured. */
@@ -1380,15 +1407,19 @@ export interface DiceRolledSecretEvent extends DiceRolledEvent {
 }
 
 // Chat Events
+/** The `chat.message` the client sends; its fields and types are ChatMessageSchema's (keepInStep.test.ts). */
 export interface ChatMessageEvent {
   content: string;
-  type: MessageType;
+  /** The type asked for. The server decides the rest: a player's is PLAYER, and a whisper is WHISPER. */
+  type: MessageType.PLAYER | MessageType.DM;
   /**
    * The sender's own name for the message, 1 to 64 letters, digits, hyphens
    * or underscores. It comes back on the sender's copy of the broadcast, and
    * a message resent with it is stored and sent once.
    */
   clientId?: string;
+  /** Whisper the message to this member alone, by user id. */
+  recipientId?: string;
 }
 
 /** The server's answer to a `chat.message` sent with an acknowledgement. */
@@ -1406,6 +1437,7 @@ export interface ChatSystemBroadcast {
   timestamp: string;
 }
 
+/** The `chat.message` the server sends; its fields are held to the server's by keepInStep.test.ts. */
 export interface ChatMessageBroadcast {
   id: string;
   userId: string;
@@ -1413,6 +1445,9 @@ export interface ChatMessageBroadcast {
   content: string;
   type: MessageType;
   timestamp: string;
+  /** On a whisper: the one member it is for, beside its sender, and their name. */
+  recipientId?: string;
+  recipientName?: string;
   /** On the sender's own copy only: the `clientId` it was sent with. */
   clientId?: string;
 }
@@ -1469,6 +1504,7 @@ export interface CampaignSettingsUpdatedBroadcast {
   gameSystem: GameSystem | null;
   chatCooldownEnabled: boolean;
   chatCooldownSeconds: number;
+  playersMayDraw: boolean;
 }
 
 // Atmosphere Events
@@ -1545,17 +1581,19 @@ export interface CharacterHpUpdateEvent {
   delta: number;
 }
 
+/** `character.hp.temporary`: the character takes `temporary`, from 1 to 99,999, in place of any it has. */
+export interface CharacterTemporaryHpEvent {
+  characterId: string;
+  temporary: number;
+}
+
 export interface CharacterHpUpdatedBroadcast {
   characterId: string;
   hp: { current: number; max: number; temp: number };
 }
 
-/**
- * The DM seat moved to another member. Campaign ownership is a separate thing
- * and does not move with it.
- */
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
-export type AccessRevokedReason = 'removed' | 'campaign-deleted' | 'signed-out';
+export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
 
 /**
  * `campaign.access.revoked`: this connection may no longer use its campaign.
@@ -1577,6 +1615,10 @@ export interface MemberRoleChangedBroadcast {
   role: CampaignRole;
 }
 
+/**
+ * The DM seat moved to another member. Campaign ownership is a separate thing
+ * and does not move with it.
+ */
 export interface DmTransferredBroadcast {
   campaignId: string;
   /** Null only if the campaign somehow had no DM to demote. */
@@ -1598,6 +1640,8 @@ export interface CombatantEntry {
   hp: { current: number; max: number; temp: number } | null;
   type: 'player' | 'npc' | 'object';
   disposition: 'friendly' | 'neutral' | 'hostile' | null;
+  /** The token's character, as this viewer may know it; null for a creature. */
+  characterId: string | null;
 }
 
 export interface CombatState {

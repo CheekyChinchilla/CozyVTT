@@ -30,7 +30,7 @@ function open(total: number, current: number, spells: unknown[] = []) {
       onCancel={vi.fn()}
     />
   );
-  fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
+  fireEvent.click(screen.getByRole('tab', { name: /Spells/ }));
   return async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());

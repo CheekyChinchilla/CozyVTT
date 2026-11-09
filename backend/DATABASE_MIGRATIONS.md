@@ -20,7 +20,7 @@ When you start CozyVTT with Docker Compose, the backend container will automatic
 
 This ensures that your database schema is always up-to-date.
 
-A restore from the Admin Dashboard also runs `prisma migrate deploy` once the
+A restore from the Admin Panel also runs `prisma migrate deploy` once the
 backup has loaded, so a backup taken on an older release is brought up to the
 running version without a restart. If that step fails the restore reports it
 and asks for a backend restart, which runs the same command.
@@ -135,6 +135,65 @@ about; the list is not exhaustive.
   creature stays. It is safe to run twice: a second run finds nothing to clear,
   makes the index only if it is missing, and drops the key and adds the same
   one again.
+- `20261027065007_add_message_recipient` - `Message.recipientId`, the one
+  member a whisper is for, with a foreign key to `User` that sets it to null
+  when that account is deleted, an index on `campaignId`, `recipientId` and
+  `createdAt`, and `WHISPER` added to `MessageType`. One `ALTER TYPE ... ADD
+  VALUE`, one `ALTER TABLE ... ADD COLUMN` with no default (every existing
+  message gets null, as a message to everyone has), one index and one foreign
+  key. No existing row is changed or removed. Nothing else in it names
+  `WHISPER`: PostgreSQL does not let a new enum value be used in the
+  transaction that adds it. PostgreSQL cannot remove an enum value either, so
+  going back to 1.5.4 means restoring a backup taken before the upgrade:
+  1.5.4's client does not know `WHISPER`, and its chat history route answers
+  500 for any page that holds a whisper.
+- `20261027171654_add_map_drawings` - The `MapDrawing` table, one row per
+  drawing on a map, with its two enums, `DrawingAudience` (`ALL`, `DM`) and
+  `DrawingLayer` (`MARKUP`, `GROUND`), and `Campaign.playersMayDraw`. Two
+  `CREATE TYPE ... AS ENUM`, one `ALTER TABLE ... ADD COLUMN` with a
+  constant default, one `CREATE TABLE`, one index on `mapId` and two foreign
+  keys: `mapId` to `Map` with `ON DELETE CASCADE`, so a drawing goes with its
+  map and so with its campaign, and `authorId` to `User` with `ON DELETE SET
+  NULL`, so a drawing stays when its author's account is deleted. No
+  existing row is changed or removed. `playersMayDraw` is `NOT NULL DEFAULT
+  true`: every existing campaign lets its players draw, as a new one does,
+  and on PostgreSQL 11 and later a constant default is written to the
+  catalogue alone, with no rewrite of the table. Nothing here adds a value to
+  an existing enum, so the new types can be used at once. 1.5.4 runs on an
+  upgraded database: it reads neither the table nor the column, and a
+  campaign it makes takes the default.
+- `20261101181352_add_dice_macro_character` - `DiceMacro.characterName` and
+  `DiceMacro.purpose`, the character a saved roll is made as when the dice
+  panel's **Character** box is empty and what it is for. One `ALTER TABLE`
+  adding both, `TEXT` with no default, so every existing saved roll gets null
+  for both and rolls as it did. Their 200-character limit is the
+  validator's (`validators/diceMacros.ts`), as with the other text columns. No
+  existing row is changed or removed. 1.5.4 runs on an upgraded database: it
+  reads neither column, and a saved roll it makes or edits leaves them as they
+  are.
+- `20261102224331_add_document_picture_links` - The `DocumentPicture` table,
+  one row for each asset a plain text or Markdown document names by its
+  address, and `Asset.picturesReadAt`, when a document's text was last read
+  for it. One `ALTER TABLE ... ADD COLUMN` with no default, so every existing
+  asset gets null; one `CREATE TABLE` keyed on `(documentId, pictureId)`, an
+  index on `pictureId`, an index on `Asset (type, picturesReadAt)`, and two
+  foreign keys to `Asset`, both `ON DELETE CASCADE`, so a row goes with its
+  document and with the asset it names. No existing row is changed or
+  removed, and the migration reads no file. The server fills the table as a
+  document is uploaded, written or saved; a document stored before it, with
+  `picturesReadAt` null, is read by the requests that need it, five at a
+  time, until none is left (`services/sharedDocumentPictures.ts`); one whose
+  file cannot be read stays null and is read again ten minutes later. Until a
+  document is read, a map picture it shows is not shown to players through
+  it. 1.5.4 runs on an upgraded database: it reads neither the table nor the
+  column. A document saved by 1.5.4 keeps the rows of its earlier text until
+  it is next saved on this version.
+- `20261108215941_add_map_drawn_background` - `Map.drawnBackground`, the
+  colour a map drawn in CozyVTT is made in, written `#rrggbb`, which
+  Mapmaker's eraser paints. One `ALTER TABLE ... ADD COLUMN` with no default,
+  so every existing map gets null; Mapmaker then reads the colour off the
+  picture's top-left pixel, as before. No existing row is changed or removed.
+  1.5.4 runs on an upgraded database: it reads no such column.
 
 ## Data migrations (one-off scripts)
 

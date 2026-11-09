@@ -33,9 +33,9 @@ describe('manual bonuses in the D&D 5e editor', () => {
     // Higher where -30 would take passive Perception below the 1 the server
     // stores: 10 + Perception 0 leaves -9.
     expect(range(screen.getByLabelText('Other bonus to passive Perception'))).toEqual(['-9', String(MAX_BONUS_OVERRIDE)]);
-    fireEvent.click(screen.getByRole('button', { name: /Combat/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Combat/ }));
     expect(range(screen.getByLabelText('Initiative — other bonus'))).toEqual(expected);
-    fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Spells/ }));
     // Higher, where -30 would take the DC below the 1 the server stores:
     // 8 + proficiency 2 + Intelligence 0 leaves -9.
     expect(range(screen.getByLabelText('Spell save DC other bonus'))).toEqual(['-9', String(MAX_BONUS_OVERRIDE)]);
@@ -44,7 +44,7 @@ describe('manual bonuses in the D&D 5e editor', () => {
 
   it('reads an older sheet with an initiative far out of range back within it', async () => {
     const onSave = open({ initiative: 9999, initiativeBonus: undefined, spellcasting });
-    fireEvent.click(screen.getByRole('button', { name: /Combat/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Combat/ }));
     expect(screen.getByLabelText('Initiative — other bonus')).toHaveValue(MAX_BONUS_OVERRIDE);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

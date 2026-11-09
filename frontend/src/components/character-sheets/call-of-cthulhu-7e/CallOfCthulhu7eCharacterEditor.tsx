@@ -5,7 +5,7 @@
  * derived stats, half/fifth values, and validation.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import {
   User,
   Target,
@@ -67,9 +67,11 @@ import {
 import { parsePossessions, formatPossessions } from './possessions';
 import { SHEET_LIST_MAX, SHEET_LONG_TEXT_MAX, SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
+import PortraitNotes from '../PortraitNotes';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { COLOR_PRESETS } from './colorPresets';
+import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -91,13 +93,7 @@ type TabId = 'overview' | 'skills' | 'combat' | 'possessions' | 'backstory';
 /** The required names Save checks, whose old messages a new check replaces. */
 const REQUIRED_NAMES_CHECKED = { occupation: true, era: true };
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'overview', label: 'Overview', icon: User },
   { id: 'skills', label: 'Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
@@ -141,6 +137,23 @@ function withOneCthulhuMythos(sheet: CoC7eFormData): CoC7eFormData {
 }
 
 /**
+ * The stored age as the Age box takes it. The schema stores every age as
+ * text, and a template or the API may have stored text that is not a whole
+ * number, which a number box cannot show: that is returned as `text`, for the
+ * header to show and keep until a number is typed. A sheet with no age shows
+ * 0, and an empty age an empty box, as they always have; an empty age is kept
+ * empty until a number is typed.
+ */
+function splitStoredAge(age: string | number | undefined): { number: number | null; text: string | null } {
+  if (age === undefined) return { number: 0, text: null };
+  if (typeof age === 'number') return { number: age, text: null };
+  const trimmed = age.trim();
+  if (trimmed === '') return { number: null, text: null };
+  if (/^\d+$/.test(trimmed)) return { number: Number(trimmed), text: null };
+  return { number: null, text: age };
+}
+
+/**
  * CallOfCthulhu7eCharacterEditor - Editable CoC 7e character sheet
  */
 export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEditorProps> = ({
@@ -152,6 +165,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   allowTokenPicture = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const sheetTabsId = useId();
   const [isSaving, setIsSaving] = useState(false);
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
@@ -544,12 +558,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       ? 'bg-black/5 border-black/30 placeholder:text-black/50 focus:ring-black/40'
       : 'bg-white/10 border-white/30 placeholder:text-white/50 focus:ring-white/60';
     const refusedBox = dark ? 'border-2 border-black' : 'border-2 border-white';
+    const age = splitStoredAge(formData.age);
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative border-b-4 ${ink.border}`
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${ink.border}`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Color Picker Button */}
         <button
           onClick={() => setShowColorPicker(!showColorPicker)}
@@ -655,11 +670,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       {/* sm:pr-64, matching the other sheets: from sm up the absolute
           Save/Cancel cluster is 203px wide and starts 64px in, so it needs
           more clearance than the pr-48 that was here. On a phone the cluster
-          is in the flow above this row instead. */}
-      <div className="flex items-start space-x-4 sm:pr-64">
-        {/* Token Image */}
+          is in the flow above this row instead, and the portrait is above the
+          name. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:pr-64">
+        {/* Token Image, as wide as the portrait so its caption wraps under it
+            on a phone. */}
         {allowTokenPicture && (
-        <div className="shrink-0 relative">
+        <div className="shrink-0 relative w-24">
           <label htmlFor="token-upload" className="cursor-pointer group">
             {tokenImagePreview ? (
               <img
@@ -680,22 +697,14 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             onChange={handleTokenImageChange}
             className="hidden"
           />
-          {errors.tokenImage && (
-            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
-              {errors.tokenImage}
-            </div>
-          )}
-          {!character.campaignId && (
-            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
-              Saves as personal token
-            </div>
-          )}
+          <PortraitNotes error={errors.tokenImage} personal={!character.campaignId} errorClassName={ink.soft} noteClassName={ink.soft} />
         </div>
         )}
 
         {/* Character Info — min-w-0 alongside flex-1 so the column can shrink
-            below its content width and stay inside the reserved padding. */}
-        <div className="flex-1 min-w-0 space-y-3">
+            below its content width and stay inside the reserved padding. In
+            the phone's column it simply takes the full width. */}
+        <div className="sm:flex-1 min-w-0 space-y-3">
           <input
             type="text"
             value={formData.investigatorName || ''}
@@ -706,7 +715,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             className={`text-3xl font-bold border-2 ${box} rounded-sm px-3 py-1 w-full ${ink.text} focus:outline-hidden focus:ring-2`}
           />
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Read-only: the player name is whoever owns this investigator,
                 filled from their display name at creation. */}
             <span className={`text-sm px-2 py-1 ${ink.text} self-center`}>
@@ -732,17 +741,15 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             />
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
-            {/* TODO(typing): the age is stored as text and handed to this number box
-                as it is, which shows text that is not a number as blank. Right:
-                decide what such text should show, then pass the box a number. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* While the age is text or empty, leaving the box empty keeps it. */}
             <NumberField
-              value={(formData.age ?? 0) as number}
+              value={age.number}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               aria-label="Age"
               className={`text-sm border ${box} rounded-sm px-2 py-1 ${ink.text} focus:outline-hidden focus:ring-2`}
-              fallback={0}
+              fallback={age.number === null ? null : 0}
             />
             <input
               type="text"
@@ -763,6 +770,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               className={`text-sm border ${box} rounded-sm px-2 py-1 col-span-2 ${ink.text} focus:outline-hidden focus:ring-2`}
             />
           </div>
+          {age.text !== null && (
+            <p className={`text-xs ${ink.soft}`}>
+              Age saved as text: <span className="font-medium">{age.text}</span>. Type a number to replace it.
+            </p>
+          )}
 
           <input
             type="text"
@@ -779,42 +791,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     );
   };
 
-  // Render tabs
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              flex items-center space-x-2 px-4 py-3 font-medium transition-colors
-              ${
-                isActive
-                  ? 'text-ink border-b-2 -mb-0.5 bg-paper'
-                  : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
-              }
-            `}
-            // The underline in the header colour; the label in the theme's text.
-            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-
   // Render Overview tab
   const renderOverviewTab = () => (
     <div className="space-y-6">
       {/* Characteristics */}
       <div>
         <h3 className="text-lg font-bold text-ink mb-4">Characteristics</h3>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-8 gap-4">
           {orderedCharacteristics(formData.characteristics as unknown as Record<string, unknown>).map((charKey) => (
             <CharacteristicBlock
               key={charKey}
@@ -925,7 +908,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       {/* Current HP, MP, Luck (editable) */}
       <div>
         <h3 className="text-lg font-bold text-ink mb-4">Current Status</h3>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div className="bg-paper border border-ink/20 rounded-md p-3">
             <label htmlFor="coc-current-hp" className="text-xs text-ink-secondary uppercase block mb-1">Current HP</label>
             <NumberField
@@ -965,7 +948,8 @@ value={formData.derivedStats?.magicPoints?.current}
             fallback={0}
             />
           </div>
-          <div className="bg-paper border border-ink/20 rounded-md p-3">
+          {/* Under hit points and magic points on a phone, across both. */}
+          <div className="col-span-2 sm:col-span-1 bg-paper border border-ink/20 rounded-md p-3">
             <label htmlFor="coc-luck" className="text-xs text-ink-secondary uppercase block mb-1">Luck Score</label>
             <NumberField
 id="coc-luck"
@@ -1166,7 +1150,7 @@ value={formData.wealth?.cash}
 
       {/* Contacts, which the read-only sheet lists on this tab. */}
       <div>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 mb-4">
           <h3 className="text-lg font-bold text-ink">Contacts</h3>
           <button
             type="button"
@@ -1188,7 +1172,9 @@ value={formData.wealth?.cash}
               }));
             return (
               <div key={index} className="bg-paper border border-ink/20 rounded-md p-3 space-y-2">
-                <div className="flex items-center gap-2">
+                {/* Below sm the role takes a line of its own under the name
+                    and the remove button. */}
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                   <input
                     type="text"
                     value={contact.name}
@@ -1196,7 +1182,7 @@ value={formData.wealth?.cash}
                     aria-label={`Name of contact ${index + 1}`}
                     placeholder="Name"
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
+                    className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <input
                     type="text"
@@ -1205,13 +1191,13 @@ value={formData.wealth?.cash}
                     aria-label={`Role of contact ${index + 1}`}
                     placeholder="Role"
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="w-40 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+                    className="order-last w-full sm:order-none sm:w-40 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <button
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, contacts: (prev.contacts ?? []).filter((_, i) => i !== index) }))}
                     aria-label={`Remove ${contact.name || `contact ${index + 1}`}`}
-                    className="p-1 rounded-sm text-danger-ink hover:bg-danger/10"
+                    className="touch-target inline-flex items-center justify-center p-1 rounded-sm text-danger-ink hover:bg-danger/10"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1364,9 +1350,9 @@ value={formData.wealth?.cash}
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
-      {renderTabs()}
+      <SheetTabs id={sheetTabsId} tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
       {refusals.length > 0 && (
-        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+        <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
           <ul className="list-disc pl-5">
             {refusals.map((message) => (
@@ -1375,7 +1361,11 @@ value={formData.wealth?.cash}
           </ul>
         </div>
       )}
-      <div className="p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
+      {/* From sm up a tab scrolls in a box of its own, under the header and
+          the tabs. On a phone the sheet scrolls as one, in the shell's own
+          scroller, with no second scroller inside it sized from a 100vh that
+          is taller than the part of the screen the browser shows. */}
+      <div data-sheet-body {...sheetTabPanel(sheetTabsId, activeTab)} className="p-3 sm:p-6 bg-paper sm:max-h-[calc(100vh-200px)] sm:overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}
@@ -1383,7 +1373,7 @@ value={formData.wealth?.cash}
         {activeTab === 'backstory' && renderBackstoryTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 py-3 text-sm text-danger-ink bg-paper">{errors.submit}</div>
+        <div className="px-3 sm:px-6 py-3 text-sm text-danger-ink bg-paper">{errors.submit}</div>
       )}
     </div>
   );

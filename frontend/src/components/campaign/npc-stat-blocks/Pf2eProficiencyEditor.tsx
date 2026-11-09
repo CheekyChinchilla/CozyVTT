@@ -16,6 +16,7 @@
 import { AlertTriangle, X } from 'lucide-react';
 import { useState } from 'react';
 import type { NpcStatBlock } from '@/types';
+import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 import { formatModifier } from '@/utils/rules/dnd5e';
 import {
   PF2E_SAVES,
@@ -28,9 +29,6 @@ interface Pf2eProficiencyEditorProps {
   statBlock: NpcStatBlock;
   onChange: (updated: NpcStatBlock) => void;
 }
-
-const MIN_PF2E_BONUS = -20;
-const MAX_PF2E_BONUS = 50;
 
 export default function Pf2eProficiencyEditor({
   statBlock,
@@ -59,8 +57,8 @@ export default function Pf2eProficiencyEditor({
           type="number"
           aria-label={`${label} modifier`}
           value={value}
-          min={MIN_PF2E_BONUS}
-          max={MAX_PF2E_BONUS}
+          min={STAT_BLOCK_LIMITS.minBonus}
+          max={STAT_BLOCK_LIMITS.maxBonus}
           onChange={(e) => {
             const parsed = parseInt(e.target.value, 10);
             onChange(setPf2eBonus(statBlock, kind, key, Number.isFinite(parsed) ? parsed : 0));

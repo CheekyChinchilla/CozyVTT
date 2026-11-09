@@ -1,14 +1,16 @@
-import { useState, useEffect, useEffectEvent, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
+import { Fragment, useState, useEffect, useEffectEvent, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus } from 'lucide-react';
+import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus, ChevronDown } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useCompactLayout } from '@/contexts/LayoutContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { getDiceRolls } from '@/services/dice.service';
 import api from '@/services/api';
 import { mayDisplayRoll, visibleRolls } from '@/utils/secretRolls';
 import type { DiceRolledEvent, DiceRolledSecretEvent, DiceMacro } from '@/types';
-import { rollDice as rollExpression, parseDiceExpression, DiceParserError } from '@/utils/dice-parser';
+import { rollDice as rollExpression } from '@/utils/dice-parser';
+import { diceExpressionProblem } from '@/utils/diceExpression';
 import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -16,6 +18,10 @@ import Modal from '@/components/ui/Modal';
 import DiceMacroManager from './DiceMacroManager';
 import JumpToNewest from './JumpToNewest';
 import { errorSummary } from '@/utils/errors';
+import { rollLabels, savedRollDetail } from '@/utils/savedRolls';
+import { MAX_ROLL_CHARACTER_NAME_LENGTH, MAX_ROLL_PURPOSE_LENGTH } from '@/constants/diceLimits';
+import { cn } from '@/utils/cn';
+import { useDiceLogOnScreen } from '@/utils/diceLogOnScreen';
 
 /**
  * Stable identity for a roll, used to dedupe the live socket stream against
@@ -33,7 +39,7 @@ function rollKey(roll: DiceRolledEvent): string {
  * A roll worked out in the browser, for a paused table: no server, no
  * database, no DM visibility. It uses the server's own parser (the same
  * file, byte for byte), so it reads every expression as a running table
- * would. Call it with an expression `validateExpression` has passed.
+ * would. Call it with an expression `diceExpressionProblem` has passed.
  */
 function rollLocally(
   expression: string,
@@ -55,15 +61,17 @@ function rollLocally(
   };
 }
 
-// Quick roll button configurations with whimsical forest colors
+// Quick roll button configurations with whimsical forest colors: a 15% tint,
+// 30% under the pointer, on which the theme's ink reads in every theme.
+/** The dice, d20 first: the die rolled most. */
 const QUICK_ROLLS = [
-  { label: 'd4', expression: '1d4', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
-  { label: 'd6', expression: '1d6', color: 'bg-success/15 dark:bg-success/30 border-success/50 hover:bg-success/80 dark:hover:bg-success/40' },
-  { label: 'd8', expression: '1d8', color: 'bg-spirit/15 dark:bg-spirit/30 border-spirit/50 hover:bg-spirit/80 dark:hover:bg-spirit/40' },
-  { label: 'd10', expression: '1d10', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
-  { label: 'd12', expression: '1d12', color: 'bg-token-friendly/15 dark:bg-token-friendly/30 border-token-friendly/50 hover:bg-token-friendly/80 dark:hover:bg-token-friendly/40' },
-  { label: 'd20', expression: '1d20', color: 'bg-danger/15 dark:bg-danger/30 border-danger/50 hover:bg-danger/80 dark:hover:bg-danger/40' },
-  { label: 'd100', expression: '1d100', color: 'bg-info/15 dark:bg-info/30 border-info/50 hover:bg-info/80 dark:hover:bg-info/40' },
+  { label: 'd20', expression: '1d20', color: 'bg-danger/15 border-danger/50 hover:bg-danger/30' },
+  { label: 'd4', expression: '1d4', color: 'bg-warning/15 border-warning/50 hover:bg-warning/30' },
+  { label: 'd6', expression: '1d6', color: 'bg-success/15 border-success/50 hover:bg-success/30' },
+  { label: 'd8', expression: '1d8', color: 'bg-spirit/15 border-spirit/50 hover:bg-spirit/30' },
+  { label: 'd10', expression: '1d10', color: 'bg-warning/15 border-warning/50 hover:bg-warning/30' },
+  { label: 'd12', expression: '1d12', color: 'bg-token-friendly/15 border-token-friendly/50 hover:bg-token-friendly/30' },
+  { label: 'd100', expression: '1d100', color: 'bg-info/15 border-info/50 hover:bg-info/30' },
 ];
 
 const SPECIAL_ROLLS = [
@@ -102,6 +110,14 @@ export default function DiceRoller() {
   const [isSecret, setIsSecret] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * The compact layout's footer: the seven dice in one row, Roll beside the
+   * expression, and the rest behind More options, so in a short sheet the
+   * log keeps its room.
+   */
+  const compact = useCompactLayout();
+  const [moreOptions, setMoreOptions] = useState(false);
+
   // Roll history state
   const [rolls, setRolls] = useState<DiceRolledEvent[]>([]);
   const [isRolling, setIsRolling] = useState(false);
@@ -119,6 +135,8 @@ export default function DiceRoller() {
   /** Scroll anchor, so a new roll brings the list to the bottom. */
   const rollsEndRef = useRef<HTMLDivElement>(null);
   const rollsContainerRef = useRef<HTMLDivElement>(null);
+  // A roll from a character sheet says its result while this log is off the screen.
+  useDiceLogOnScreen(rollsContainerRef);
   const wasAtBottomRef = useRef(true);
   /** Rolls that arrived live while the history was being read, by key. */
   const liveDuringRead = useRef<Set<string> | null>(null);
@@ -362,26 +380,12 @@ export default function DiceRoller() {
   }, [socket]);
 
   // ============================================
-  // Input Validation
-  // ============================================
-
-  /** Why the server would refuse this expression, in its words, or null. */
-  const validateExpression = (expr: string): string | null => {
-    try {
-      parseDiceExpression(expr);
-      return null;
-    } catch (err) {
-      return err instanceof DiceParserError ? `Invalid dice expression: ${err.message}` : 'Invalid dice expression';
-    }
-  };
-
-  // ============================================
   // Roll Handlers
   // ============================================
 
-  /** `named` is a saved roll's name, sent as the roll's purpose in place of the Purpose box. */
-  const rollDice = (expr: string, named?: string) => {
-    const rollPurpose = (named ?? purpose).trim();
+  /** `saved` is the saved roll whose button was pressed; see rollLabels for what it changes. */
+  const rollDice = (expr: string, saved?: DiceMacro) => {
+    const { characterName: rollCharacter, purpose: rollPurpose } = rollLabels({ characterName, purpose }, saved);
     if (isSpectator) {
       setError('Spectators watch the dice; they cannot roll.');
       return;
@@ -389,11 +393,11 @@ export default function DiceRoller() {
     // When session is paused, roll entirely client-side — no server, no DB, no DM visibility
     if (isPaused) {
       if (!user) return;
-      const validationError = validateExpression(expr);
+      const validationError = diceExpressionProblem(expr);
       if (validationError) { setError(validationError); return; }
       setError(null);
       setIsRolling(true);
-      const localResult = rollLocally(expr, user, characterName.trim(), rollPurpose);
+      const localResult = rollLocally(expr, user, rollCharacter, rollPurpose);
       setRolls((prev) => [localResult, ...prev]);
       clearPendingRoll();
       return;
@@ -409,7 +413,7 @@ export default function DiceRoller() {
       return;
     }
 
-    const validationError = validateExpression(expr);
+    const validationError = diceExpressionProblem(expr);
     if (validationError) {
       setError(validationError);
       return;
@@ -426,7 +430,7 @@ export default function DiceRoller() {
     void socket
       .rollDice({
         expression: expr.trim(),
-        characterName: characterName.trim() || undefined,
+        characterName: rollCharacter || undefined,
         purpose: rollPurpose || undefined,
         secret: isSecret,
       })
@@ -452,9 +456,9 @@ export default function DiceRoller() {
     rollDice(expression);
   };
 
-  const handleQuickRoll = (expr: string, named?: string) => {
+  const handleQuickRoll = (expr: string, saved?: DiceMacro) => {
     setExpression(expr);
-    rollDice(expr, named);
+    rollDice(expr, saved);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -513,6 +517,22 @@ export default function DiceRoller() {
     setNewBelow(false);
   }, [newestRollKey, newestIsMine]);
 
+  /**
+   * A reader at the newest roll stays there as the log's box changes size: a
+   * window made shorter, or on a phone the Dice sheet made full height and
+   * half again. The browser keeps the scroll position, which put the newest
+   * rolls below the view. The chat panel does the same.
+   */
+  useEffect(() => {
+    const container = rollsContainerRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (wasAtBottomRef.current) container.scrollTo({ top: container.scrollHeight });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
   const jumpToNewest = () => {
     rollsContainerRef.current?.scrollTo({ top: rollsContainerRef.current.scrollHeight });
     wasAtBottomRef.current = true;
@@ -552,6 +572,269 @@ export default function DiceRoller() {
   // Render
   // ============================================
 
+  // The footer's controls, laid out below in one of two ways: the desktop's,
+  // and the compact layout's, which leaves the log its room in a short sheet.
+  const quickRollButtons = QUICK_ROLLS.map((btn) => (
+    <button
+      key={btn.label}
+      onClick={() => handleQuickRoll(btn.expression)}
+      disabled={isRolling}
+      className={`
+        min-w-0 px-0 py-1.5 rounded-md text-xs font-medium transition-all
+        disabled:opacity-50 disabled:cursor-not-allowed
+        text-ink
+        ${btn.color}${compact ? ' touch-target' : ''}
+      `}
+    >
+      {btn.label}
+    </button>
+  ));
+
+  const specialRollButtons = SPECIAL_ROLLS.map((btn) => (
+    <button
+      key={btn.label}
+      onClick={() => handleQuickRoll(btn.expression)}
+      disabled={isRolling}
+      className={`
+        px-2 py-1 rounded-md border border-warm-amber/30 text-xs font-medium
+        bg-warm-amber/10 hover:bg-warm-amber/20 transition-all
+        disabled:opacity-50 disabled:cursor-not-allowed
+        text-ink${compact ? ' shrink-0 touch-target' : ''}
+      `}
+    >
+      {btn.label}
+    </button>
+  ));
+
+  const savedRollButtons = macros.map((macro) => (
+    <button
+      key={macro.id}
+      onClick={() => handleQuickRoll(macro.expression, macro)}
+      disabled={isRolling}
+      title={[`${macro.name} — ${macro.expression}`, savedRollDetail(macro)].filter(Boolean).join(', ')}
+      className={`
+        px-2 py-1 rounded-md border border-spirit-purple/30 text-xs font-medium
+        bg-spirit-purple/10 hover:bg-spirit-purple/20 transition-all
+        disabled:opacity-50 disabled:cursor-not-allowed
+        text-ink max-w-40 truncate${compact ? ' shrink-0 touch-target' : ''}
+      `}
+    >
+      {macro.name}
+    </button>
+  ));
+
+  const savedButton = (
+    <button
+      onClick={() => setIsMacroManagerOpen(true)}
+      title="Saved rolls — add, edit or delete"
+      aria-label="Manage saved rolls"
+      className={`
+        px-2 py-1 rounded-md border border-dashed border-ink-muted/40 text-xs
+        hover:bg-surface transition-all text-ink-secondary
+        flex items-center gap-1${compact ? ' shrink-0 touch-target' : ''}
+      `}
+    >
+      <Plus className="w-3 h-3" />
+      Saved
+    </button>
+  );
+
+  const expressionInput = (
+    <input
+      id="expression"
+      type="text"
+      value={expression}
+      onChange={(e) => setExpression(e.target.value)}
+      onKeyDown={handleKeyDown}
+      placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
+      aria-label="Dice expression"
+      // Read-only while a roll is on its way: disabled, it threw keyboard
+      // focus to the page after every roll.
+      readOnly={isRolling}
+      aria-disabled={isRolling}
+      className={cn('input-cozy px-2 py-1.5 font-mono text-xs read-only:opacity-50 read-only:cursor-not-allowed', compact && 'flex-1 min-w-0 touch-target')}
+    />
+  );
+
+  const characterAndPurpose = (
+    <div className="grid grid-cols-2 gap-1.5">
+      <input
+        id="characterName"
+        type="text"
+        value={characterName}
+        onChange={(e) => setCharacterName(e.target.value)}
+        placeholder="Character"
+        aria-label="Character name"
+        // The longest name and purpose the server stores with a roll.
+        maxLength={MAX_ROLL_CHARACTER_NAME_LENGTH}
+        // Read-only while a roll is on its way: disabled, it threw keyboard
+        // focus to the page after every roll.
+        readOnly={isRolling}
+        aria-disabled={isRolling}
+        className={cn('input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed', compact && 'touch-target')}
+      />
+
+      <input
+        id="purpose"
+        type="text"
+        value={purpose}
+        onChange={(e) => setPurpose(e.target.value)}
+        placeholder="Purpose"
+        aria-label="Purpose"
+        maxLength={MAX_ROLL_PURPOSE_LENGTH}
+        // Read-only while a roll is on its way: disabled, it threw keyboard
+        // focus to the page after every roll.
+        readOnly={isRolling}
+        aria-disabled={isRolling}
+        className={cn('input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed', compact && 'touch-target')}
+      />
+    </div>
+  );
+
+  // Closed, More options names what the next roll still carries that it hides.
+  const optionsInUse = [
+    ...(characterName.trim() ? ['Character'] : []),
+    ...(purpose.trim() ? ['Purpose'] : []),
+    ...(compact && isSecret ? ['Secret'] : []),
+  ];
+  const moreOptionsLabel = !moreOptions && optionsInUse.length > 0 ? `More options: ${optionsInUse.join(', ')}` : 'More options';
+
+  const secretRollBox = (
+    <input
+      id="secretRoll"
+      type="checkbox"
+      checked={isSecret}
+      onChange={(e) => setIsSecret(e.target.checked)}
+      disabled={isRolling}
+      className="w-3 h-3 rounded-sm border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
+    />
+  );
+  // Not "only you": the server sends every secret roll to the DM as well,
+  // deliberately, for audit and dispute resolution. Saying otherwise promises
+  // a privacy the app does not provide.
+  const secretRollWords = <span>{compact ? 'Secret Roll' : 'Secret Roll (hidden from other players)'}</span>;
+  const secretRoll = compact ? (
+    // The box inside its label, which a finger presses; the label short, to share its row.
+    <label title="Hidden from other players" className="touch-target flex items-center gap-2 text-xs text-ink-secondary cursor-pointer">
+      {secretRollBox}
+      <EyeOff className="w-3 h-3" />
+      {secretRollWords}
+    </label>
+  ) : (
+    <div className="flex items-center gap-2">
+      {secretRollBox}
+      <label
+        htmlFor="secretRoll"
+        className="flex items-center gap-1 text-xs text-ink-secondary cursor-pointer"
+      >
+        <EyeOff className="w-3 h-3" />
+        {secretRollWords}
+      </label>
+    </div>
+  );
+
+  const rollButton = (
+    <button
+      type="submit"
+      disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
+      className={cn('shrink-0', compact && 'touch-target', `
+        flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
+        bg-success/15 hover:bg-success/25 border border-success/30 text-success-ink font-semibold text-xs shadow-xs
+        disabled:opacity-50 disabled:cursor-not-allowed
+        transition-all duration-200
+        focus:outline-hidden focus:ring-2 focus:ring-success/50
+      `)}
+    >
+      {isRolling ? (
+        <>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          >
+            <Dices className="w-4 h-4" />
+          </motion.div>
+          <span>Rolling...</span>
+        </>
+      ) : (
+        <>
+          <Send className="w-4 h-4" />
+          <span>Roll</span>
+        </>
+      )}
+    </button>
+  );
+
+  const clearFieldsButton = (
+    <button
+      type="button"
+      onClick={handleClear}
+      disabled={isRolling}
+      className={cn(`
+        px-2 py-1.5 rounded-md border border-ink-muted/30
+        bg-paper/50 hover:bg-paper/70
+        text-ink
+        disabled:opacity-50 disabled:cursor-not-allowed
+        transition-all duration-200
+        focus:outline-hidden focus:ring-2 focus:ring-brand/50
+      `, compact && 'touch-target inline-flex items-center justify-center')}
+      title="Clear all fields"
+      aria-label="Clear all fields"
+    >
+      <RotateCcw className="w-4 h-4" />
+    </button>
+  );
+
+  const moreOptionsButton = (
+    <button
+      type="button"
+      onClick={() => setMoreOptions((open) => !open)}
+      aria-expanded={moreOptions}
+      aria-controls="dice-more-options"
+      aria-label={moreOptionsLabel}
+      title={moreOptionsLabel}
+      className={cn('shrink-0 flex items-center justify-center gap-1 px-2 py-1 rounded-md border border-ink-muted/30 text-xs text-ink-secondary hover:bg-surface transition-all', compact && 'touch-target')}
+    >
+      <ChevronDown className={cn('w-3 h-3 transition-transform', moreOptions && 'rotate-180')} aria-hidden="true" />
+      {/* Short, to share the row; what it hides that the next roll carries is counted, and named in its name. */}
+      {!moreOptions && optionsInUse.length > 0 ? `More (${optionsInUse.length})` : 'More'}
+    </button>
+  );
+
+  // Only worth offering once there is a secret roll to hide. Purely a view
+  // preference over rolls this person may already see.
+  const secretRollsToggle = hasSecretRolls && (
+    <button
+      onClick={() => setShowSecretRolls((show) => !show)}
+      aria-pressed={showSecretRolls}
+      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${
+        showSecretRolls
+          ? 'border-ink-muted/30 bg-paper/50 text-ink hover:bg-paper/70'
+          : 'border-warm-amber/40 bg-warm-amber/10 text-accent-ink'
+      }${compact ? ' touch-target' : ''}`}
+      title={
+        showSecretRolls
+          ? 'Hide secret rolls in this list (only affects your view)'
+          : 'Show secret rolls in this list (only affects your view)'
+      }
+    >
+      {showSecretRolls ? <Eye className="w-3 h-3" aria-hidden="true" /> : <EyeOff className="w-3 h-3" aria-hidden="true" />}
+      {/* On a phone, the icon alone, to share the row with Secret Roll. */}
+      {compact ? <span className="sr-only">Secret</span> : <span>Secret</span>}
+    </button>
+  );
+
+  // DM only.
+  const clearHistoryButton = userRole === 'DM' && rolls.length > 0 && (
+    <button
+      onClick={handleClearHistory}
+      className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 transition-all${compact ? ' touch-target' : ''}`}
+      title="Clear all roll history"
+    >
+      <Trash2 className="w-3 h-3" aria-hidden="true" />
+      {compact ? <span className="sr-only">Clear</span> : <span>Clear</span>}
+    </button>
+  );
+
   return (
     <>
     {campaign?.id && (
@@ -574,53 +857,29 @@ export default function DiceRoller() {
       onCancel={() => setConfirmClear(false)}
     />
     <div className="h-full flex flex-col bg-surface/50 backdrop-blur-xs rounded-lg border border-ink-muted/20 relative">
-      {/* Header */}
+      {/* Header. The compact layout's sheet names the panel already, so
+          there the log starts at the top, and Secret and Clear go under the
+          controls. */}
+      {!compact && (
       <div className="shrink-0 p-3 border-b border-ink-muted/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Dices className="w-4 h-4 text-brand-ink dark:text-brand-ink" />
+            <Dices className="w-4 h-4 text-brand-ink" />
             <h2 className="text-base font-semibold text-ink">
               Dice Roller
             </h2>
           </div>
           <div className="flex items-center gap-1.5">
-          {/* Only worth offering once there is a secret roll to hide. Purely a
-              view preference over rolls this person may already see. */}
-          {hasSecretRolls && (
-            <button
-              onClick={() => setShowSecretRolls((show) => !show)}
-              aria-pressed={showSecretRolls}
-              className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${
-                showSecretRolls
-                  ? 'border-ink-muted/30 bg-paper/50 text-ink hover:bg-paper/70'
-                  : 'border-warm-amber/40 bg-warm-amber/10 text-accent-ink'
-              }`}
-              title={
-                showSecretRolls
-                  ? 'Hide secret rolls in this list (only affects your view)'
-                  : 'Show secret rolls in this list (only affects your view)'
-              }
-            >
-              {showSecretRolls ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-              <span>Secret</span>
-            </button>
-          )}
-          {/* DM Only: Clear History Button */}
-          {userRole === 'DM' && rolls.length > 0 && (
-            <button
-              onClick={handleClearHistory}
-              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/15 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all"
-              title="Clear all roll history"
-            >
-              <Trash2 className="w-3 h-3" />
-              <span>Clear</span>
-            </button>
-          )}
+          {secretRollsToggle}
+          {clearHistoryButton}
           </div>
         </div>
       </div>
+      )}
 
-      {/* Roll list — a running log, oldest first, like the chat beside it */}
+      {/* Roll list — a running log, oldest first, like the chat beside it.
+          It takes the room the controls leave and is the panel's one scroll
+          area; on the compact layout the controls keep their own height. */}
       <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         ref={rollsContainerRef}
@@ -629,7 +888,7 @@ export default function DiceRoller() {
         aria-live={historyIn ? 'polite' : 'off'}
         aria-label="Dice rolls"
         aria-relevant="additions"
-        className="flex-1 overflow-y-auto p-3 min-h-0"
+        className={compact ? 'flex-1 overflow-y-auto px-2 py-1 min-h-0' : 'flex-1 overflow-y-auto p-3 min-h-0'}
       >
         {rolls.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-4">
@@ -642,13 +901,14 @@ export default function DiceRoller() {
           // Oldest at the top, newest at the bottom, like the chat panel beside
           // it. `shownRolls` is newest-first in state, so this reverses a copy
           // rather than mutating it.
-          <div className="space-y-2">
+          <div className={compact ? 'space-y-1' : 'space-y-1.5'}>
             {[...shownRolls].reverse().map((roll) => (
               <DiceResult
                 key={rollKey(roll)}
                 roll={roll}
                 isCurrentUser={user?.id === roll.userId}
                 rollerIsDM={roll.userId !== null && dmUserIds.has(roll.userId)}
+                dense
               />
             ))}
             {shownRolls.length === 0 && (
@@ -664,7 +924,9 @@ export default function DiceRoller() {
       </div>
 
       {/* Input Area */}
-      <div className="shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs">
+      {/* The controls never scroll as they are; only More options open on a
+          very short half sheet can take them past four fifths of the panel. */}
+      <div className={cn('shrink-0', compact ? 'max-h-[80%] overflow-y-auto overscroll-contain p-2' : 'p-3', 'border-t border-ink-muted/20 bg-surface/80 backdrop-blur-xs')}>
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-accent-ink text-center mb-2 italic">
@@ -683,7 +945,7 @@ export default function DiceRoller() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="mb-2 flex items-center gap-2 text-danger-ink dark:text-danger-ink text-xs"
+              className="mb-2 flex items-center gap-2 text-danger-ink text-xs"
             >
               <AlertCircle className="w-3 h-3 shrink-0" />
               <span>{error}</span>
@@ -691,214 +953,66 @@ export default function DiceRoller() {
           )}
         </AnimatePresence>
 
-        {/* Quick Roll Buttons */}
-        <div className="mb-2">
-          <div className="text-xs text-ink-secondary mb-1">
-            Quick Roll:
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_ROLLS.map((btn) => (
-              <button
-                key={btn.label}
-                onClick={() => handleQuickRoll(btn.expression)}
-                disabled={isRolling}
-                className={`
-                  px-2 py-1 rounded-md text-xs font-medium transition-all
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink
-                  ${btn.color}
-                `}
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {SPECIAL_ROLLS.map((btn) => (
-              <button
-                key={btn.label}
-                onClick={() => handleQuickRoll(btn.expression)}
-                disabled={isRolling}
-                className="
-                  px-2 py-1 rounded-md border border-warm-amber/30 text-xs font-medium
-                  bg-warm-amber/10 hover:bg-warm-amber/20 transition-all
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink
-                "
-              >
-                {btn.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Saved rolls — the player's own, in the order they were saved so a
-              button does not move when one is edited. The row wraps; the panel
-              is a 300px rail at its narrowest and this block never scrolls. */}
-          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-            {macros.map((macro) => (
-              <button
-                key={macro.id}
-                onClick={() => handleQuickRoll(macro.expression, macro.name)}
-                disabled={isRolling}
-                title={`${macro.name} — ${macro.expression}`}
-                className="
-                  px-2 py-1 rounded-md border border-spirit-purple/30 text-xs font-medium
-                  bg-spirit-purple/10 hover:bg-spirit-purple/20 transition-all
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink max-w-40 truncate
-                "
-              >
-                {macro.name}
-              </button>
-            ))}
-            <button
-              onClick={() => setIsMacroManagerOpen(true)}
-              title="Saved rolls — add, edit or delete"
-              aria-label="Manage saved rolls"
-              className="
-                px-2 py-1 rounded-md border border-dashed border-ink-muted/40 text-xs
-                hover:bg-surface transition-all text-ink-secondary
-                flex items-center gap-1
-              "
-            >
-              <Plus className="w-3 h-3" />
-              Saved
-            </button>
-          </div>
+        {/* The seven dice, one row, each a share of the width. */}
+        <div role="group" aria-label="Dice" className={cn('grid grid-cols-7 gap-1', compact ? 'mb-1.5' : 'mb-2')}>
+          {quickRollButtons}
         </div>
 
-        {/* Expression Input */}
+        {/* The expression, Roll and More options, then what More options hides.
+            The two arrangements put the same parts in different places; each
+            part has a key, so a change of arrangement keeps its element and
+            the keyboard (a turned tablet once put the focus from Character on
+            Secret Roll). */}
         <form onSubmit={handleSubmit} className="space-y-1.5">
-          <div>
-            <input
-              id="expression"
-              type="text"
-              value={expression}
-              onChange={(e) => setExpression(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
-              aria-label="Dice expression"
-              // Read-only while a roll is on its way: disabled, it threw keyboard
-              // focus to the page after every roll.
-              readOnly={isRolling}
-              aria-disabled={isRolling}
-              className="input-cozy px-2 py-1.5 font-mono text-xs read-only:opacity-50 read-only:cursor-not-allowed"
-            />
+          <div key="expression" className="flex gap-1.5">
+            {expressionInput}
+            {rollButton}
+            {compact ? moreOptionsButton : clearFieldsButton}
           </div>
-
-          <div className="grid grid-cols-2 gap-1.5">
-            <input
-              id="characterName"
-              type="text"
-              value={characterName}
-              onChange={(e) => setCharacterName(e.target.value)}
-              placeholder="Character"
-              aria-label="Character name"
-              // The longest name and purpose the server stores with a roll.
-              maxLength={200}
-              // Read-only while a roll is on its way: disabled, it threw keyboard
-              // focus to the page after every roll.
-              readOnly={isRolling}
-              aria-disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
-            />
-
-            <input
-              id="purpose"
-              type="text"
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              placeholder="Purpose"
-              aria-label="Purpose"
-              maxLength={300}
-              // Read-only while a roll is on its way: disabled, it threw keyboard
-              // focus to the page after every roll.
-              readOnly={isRolling}
-              aria-disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
-            />
-          </div>
-
-          {/* Secret Roll Checkbox */}
-          <div className="flex items-center gap-2">
-            <input
-              id="secretRoll"
-              type="checkbox"
-              checked={isSecret}
-              onChange={(e) => setIsSecret(e.target.checked)}
-              disabled={isRolling}
-              className="w-3 h-3 rounded-sm border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <label
-              htmlFor="secretRoll"
-              className="flex items-center gap-1 text-xs text-ink-secondary cursor-pointer"
-            >
-              <EyeOff className="w-3 h-3" />
-              {/* Not "only you": the server sends every secret roll to the DM
-                  as well, deliberately, for audit and dispute resolution.
-                  Saying otherwise promises a privacy the app does not provide. */}
-              <span>Secret Roll (hidden from other players)</span>
-            </label>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-1.5">
-            <button
-              type="submit"
-              disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
-              className="
-                flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
-                bg-success/15 hover:bg-success/25 border border-success/30 text-success-ink font-semibold text-xs shadow-xs
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-all duration-200
-                focus:outline-hidden focus:ring-2 focus:ring-success/50
-              "
-            >
-              {isRolling ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  >
-                    <Dices className="w-4 h-4" />
-                  </motion.div>
-                  <span>Rolling...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  <span>Roll</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={isRolling}
-              className="
-                px-2 py-1.5 rounded-md border border-ink-muted/30
-                bg-paper/50 hover:bg-paper/70
-                text-ink
-                disabled:opacity-50 disabled:cursor-not-allowed
-                transition-all duration-200
-                focus:outline-hidden focus:ring-2 focus:ring-brand/50
-              "
-              title="Clear all fields"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
+          {!compact && (
+            // The other rolls and Secret Roll stay in sight on the desktop.
+            <div key="chips" className="flex flex-wrap items-center gap-1.5">
+              {specialRollButtons}
+              {savedRollButtons}
+              {savedButton}
+              {moreOptionsButton}
+              <span className="ml-auto">{secretRoll}</span>
+            </div>
+          )}
+          <div
+            key="more"
+            id="dice-more-options"
+            hidden={!moreOptions}
+            // A box here with the keyboard opens More options, so a turn of a
+            // tablet leaves the box being typed in on screen.
+            onFocus={() => setMoreOptions(true)}
+            className={cn('space-y-1.5', !moreOptions && 'hidden')}
+          >
+            {compact && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {specialRollButtons}
+                {savedRollButtons}
+                {savedButton}
+              </div>
+            )}
+            <Fragment key="character-and-purpose">{characterAndPurpose}</Fragment>
+            {compact && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {secretRoll}
+                <span className="ml-auto flex items-center gap-1.5">
+                  {clearFieldsButton}
+                  {secretRollsToggle}
+                  {clearHistoryButton}
+                </span>
+              </div>
+            )}
           </div>
         </form>
 
-        {/* Hint / Rate Limit Countdown */}
-        {rateLimitCooldown > 0 ? (
-          <div className="mt-1.5 text-xs text-danger-ink dark:text-danger-ink text-center font-medium">
+        {/* The countdown after too many rolls. */}
+        {rateLimitCooldown > 0 && (
+          <div className="mt-1.5 text-xs text-danger-ink text-center font-medium">
             You may roll again in: {rateLimitCooldown} second{rateLimitCooldown !== 1 ? 's' : ''}
-          </div>
-        ) : (
-          <div className="mt-1.5 text-xs text-ink-muted text-center">
-            Press Enter to roll
           </div>
         )}
       </div>

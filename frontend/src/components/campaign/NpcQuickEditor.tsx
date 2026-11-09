@@ -10,7 +10,7 @@
 
 import { DISPOSITION_PICKED, HP_HUES, TEMP_HP_FILL, hpTier, hueColour } from '@/utils/tokenColours';
 import { applyHitPointChange } from '@/utils/rules/hitPoints';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useId } from 'react';
 import {
   X,
   Eye,
@@ -26,7 +26,7 @@ import {
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/contexts/ToastContext';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
-import { conditionsOffered } from '@/utils/conditions';
+import { conditionKey, conditionsOffered, effectsOffered } from '@/utils/conditions';
 import { TOKEN_LIMITS } from '@/constants/tokenLimits';
 import { tokenControllerStanding } from '@/utils/tokenCopy';
 import api from '@/services/api';
@@ -93,6 +93,35 @@ interface NpcQuickEditorProps {
 // Helpers
 // ============================================
 
+/** What the editor says while a token carries as many conditions as it may. */
+const CONDITIONS_FULL_NOTE = `A token carries at most ${TOKEN_LIMITS.maxConditions} conditions and effects. Take one off to add another.`;
+
+/** A condition or an effect the game system lists, lit while the token has it. */
+function OfferedCondition({ name, active, onToggle, full }: {
+  name: string;
+  active: boolean;
+  onToggle: (name: string) => void;
+  /** The id of the note saying the token carries all it may, while it does; one it carries can still come off. */
+  full?: string;
+}) {
+  const off = !active && full !== undefined;
+  return (
+    <button
+      aria-pressed={active}
+      disabled={off}
+      aria-describedby={off ? full : undefined}
+      onClick={() => onToggle(name)}
+      className={`px-2 py-1 text-xs rounded-cozy border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+        active
+          ? 'border-warning/50 bg-warning/15 text-warning-ink'
+          : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+      }`}
+    >
+      {name}
+    </button>
+  );
+}
+
 /** The colour of the map's HP bar at this fraction left. */
 function getHpColor(pct: number): string {
   return hueColour(HP_HUES[hpTier(pct)]);
@@ -108,7 +137,7 @@ function getEffectiveType(token: Token): TokenType {
 // ============================================
 
 export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTokenUpdate }: NpcQuickEditorProps) {
-  const { campaign, currentMap } = useCampaign();
+  const { campaign, viewedMap } = useCampaign();
   const { showToast } = useToast();
 
   // The token as the table holds it (the game store), which a change made
@@ -142,6 +171,9 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   // A condition of the DM's own, as typed.
   const [customCondition, setCustomCondition] = useState('');
   const offeredConditions = conditionsOffered(campaign?.gameSystem ?? null);
+  const offeredEffects = effectsOffered(campaign?.gameSystem ?? null);
+  const effectsHeadingId = useId();
+  const conditionsFullId = useId();
   // Hidden and obscured are shown from the table alone, never ahead of it: a
   // button saying "hidden" while every player still saw the token was worse
   // than one that waits for the save.
@@ -435,26 +467,41 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   }, [saveUpdate, showOwnDisposition, dropOwnDisposition]);
 
   // ── Conditions ──
-  const toggleCondition = useCallback(async (condition: string) => {
-    const newConditions = conditions.includes(condition)
-      ? conditions.filter((c) => c !== condition)
-      : [...conditions, condition];
+  const saveConditions = useCallback(async (newConditions: string[]) => {
     const shown = showOwnConditions(newConditions);
     await saveUpdate({ conditions: newConditions });
     dropOwnConditions(shown);
-  }, [conditions, saveUpdate, showOwnConditions, dropOwnConditions]);
+  }, [saveUpdate, showOwnConditions, dropOwnConditions]);
 
-  // A typed condition is added once: one the list offers takes the list's
-  // spelling, and one the token already has (in any capitals) adds nothing.
+  const toggleCondition = useCallback((condition: string) => saveConditions(
+    conditions.includes(condition) ? conditions.filter((c) => c !== condition) : [...conditions, condition]
+  ), [conditions, saveConditions]);
+
+  // A listed condition or effect is on while the token carries it in any
+  // spelling (conditionKey): one typed in other capitals before it was
+  // listed, or with a curly apostrophe. Pressing it takes every such
+  // spelling off, so no copy is left behind.
+  const carries = useCallback((name: string) => conditions.some((c) => conditionKey(c) === conditionKey(name)), [conditions]);
+  const toggleListed = useCallback((name: string) => saveConditions(
+    carries(name) ? conditions.filter((c) => conditionKey(c) !== conditionKey(name)) : [...conditions, name]
+  ), [conditions, carries, saveConditions]);
+
+  // At the most a token may carry, the server refuses one more: nothing adds
+  // one, and a note says why.
+  const conditionsFull = conditions.length >= TOKEN_LIMITS.maxConditions;
+
+  // A typed condition is added once: one the lists offer, a condition or an
+  // effect, takes the list's spelling, and one the token already has (in any
+  // spelling) adds nothing.
   const typedCondition = customCondition.trim();
-  const canAddCondition = typedCondition !== '' && conditions.length < TOKEN_LIMITS.maxConditions;
+  const canAddCondition = typedCondition !== '' && !conditionsFull;
   const addCustomCondition = useCallback(() => {
     if (!canAddCondition) return;
-    const same = (c: string) => c.toLowerCase() === typedCondition.toLowerCase();
+    const same = (c: string) => conditionKey(c) === conditionKey(typedCondition);
     setCustomCondition('');
     if (conditions.some(same)) return;
-    void toggleCondition(offeredConditions.find(same) ?? typedCondition);
-  }, [canAddCondition, typedCondition, conditions, offeredConditions, toggleCondition]);
+    void toggleCondition(offeredConditions.find(same) ?? offeredEffects.find(same) ?? typedCondition);
+  }, [canAddCondition, typedCondition, conditions, offeredConditions, offeredEffects, toggleCondition]);
 
   // ── Name save on blur ──
   const handleNameBlur = useCallback(async () => {
@@ -1003,7 +1050,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             <TokenVisionField
               value={current.sightRadius ?? 0}
               onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
-              feetPerSquare={currentMap?.feetPerSquare ?? 5}
+              feetPerSquare={viewedMap?.feetPerSquare ?? 5}
             />
           </section>
         )}
@@ -1038,25 +1085,28 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             </div>
           )}
 
-          {/* The game system's conditions */}
+          {/* Always there, empty until the token is full, so a screen reader
+              reads the note out when it appears. */}
+          <p id={conditionsFullId} role="status" className={`text-[11px] text-stone-gray italic ${conditionsFull ? 'mb-2' : ''}`}>
+            {conditionsFull ? CONDITIONS_FULL_NOTE : null}
+          </p>
+
+          {/* The game system's conditions, then its effects under them */}
           {offeredConditions.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-2">
-              {offeredConditions.map((c) => {
-                const active = conditions.includes(c);
-                return (
-                  <button
-                    key={c}
-                    onClick={() => toggleCondition(c)}
-                    className={`px-2 py-1 text-xs rounded-cozy border transition-all ${
-                      active
-                        ? 'border-warning/50 bg-warning/15 text-warning-ink'
-                        : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                );
-              })}
+            <div role="group" aria-label="Conditions" className="flex flex-wrap gap-1 mb-2">
+              {offeredConditions.map((c) => (
+                <OfferedCondition key={c} name={c} active={carries(c)} onToggle={toggleListed} full={conditionsFull ? conditionsFullId : undefined} />
+              ))}
+            </div>
+          )}
+          {offeredEffects.length > 0 && (
+            <div role="group" aria-labelledby={effectsHeadingId} className="mb-2">
+              <h4 id={effectsHeadingId} className="text-[11px] font-semibold text-stone-gray mb-1">Effects</h4>
+              <div className="flex flex-wrap gap-1">
+                {offeredEffects.map((c) => (
+                  <OfferedCondition key={c} name={c} active={carries(c)} onToggle={toggleListed} full={conditionsFull ? conditionsFullId : undefined} />
+                ))}
+              </div>
             </div>
           )}
 
@@ -1081,6 +1131,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               type="submit"
               disabled={!canAddCondition}
               aria-label="Add condition"
+              aria-describedby={conditionsFull ? conditionsFullId : undefined}
               className="px-2 py-1 text-xs rounded-cozy border border-moss-green/30 text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-3.5 h-3.5" />

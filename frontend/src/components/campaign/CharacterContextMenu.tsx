@@ -1,25 +1,31 @@
 /**
- * Character Context Menu
+ * Character Context Menu: the roster's and the initiative tracker's menu on
+ * a character or a combatant, a popover at the pointer drawing the items it
+ * is given (components/ui/menu.ts), each with its icon. It is drawn on the
+ * body (components/ui/FloatingLayer.tsx), where the panel dividers beside
+ * the party column and the rail cannot take the presses on its items.
+ * On the compact layout the same items are an action sheet
+ * (compact/ActionSheet.tsx), which closes itself: the popover's closers, a
+ * press anywhere else and its own Escape, are off there.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-
-
-interface ContextMenuItem {
-  icon: React.ElementType;
-  label: string;
-  onClick: () => void;
-  visible: boolean;
-  className?: string;
-}
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { MENU_ROW_CLASSES, commandLook, flipOntoScreen, type FlatMenuItem, type MenuAction } from '@/components/ui/menu';
+import FloatingLayer from '@/components/ui/FloatingLayer';
+import { menuOpened, menuShown, whenMenuOpens } from '@/components/ui/openMenus';
+import { useCompactLayout } from '@/contexts/LayoutContext';
+import ActionSheet from '@/components/campaign/compact/ActionSheet';
 
 interface CharacterContextMenuProps {
   x: number;
   y: number;
-  items: ContextMenuItem[];
+  /** What the menu offers, in order. With none, no menu is drawn. */
+  items: FlatMenuItem[];
   onClose: () => void;
   /** Put the cursor on the first item: the menu was opened from the keyboard. */
   autoFocus?: boolean;
+  /** What the menu is on, the character or the combatant, which names it as an action sheet. */
+  title?: string;
 }
 
 export default function CharacterContextMenu({
@@ -28,22 +34,41 @@ export default function CharacterContextMenu({
   items,
   onClose,
   autoFocus = false,
+  title = 'Character',
 }: CharacterContextMenuProps) {
+  const compact = useCompactLayout();
   const menuRef = useRef<HTMLDivElement>(null);
   // Start invisible; adjusted position set after measuring
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
-  // On mount: measure menu and flip if it would overflow viewport
+  // On mount: measure menu and flip if it would overflow viewport. Again
+  // when the layout turns from the compact one, which drew the menu as an
+  // action sheet, so the popover drawn in its place is placed and shown.
   useEffect(() => {
     if (!menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const adjustedX = x + rect.width > vw ? Math.max(0, x - rect.width) : x;
-    const adjustedY = y + rect.height > vh ? Math.max(0, y - rect.height) : y;
-    setPos({ x: adjustedX, y: adjustedY });
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- measured once, as the menu opens at its point
-  }, []);
+    setPos(flipOntoScreen({ x, y }, rect, { width: window.innerWidth, height: window.innerHeight }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- measured as the menu opens at its point, and on a change of layout
+  }, [compact]);
+
+  // Its opening closes the map's token or door menu, which a right-click or a
+  // long-press here, sending no click, would leave open beside it. A menu
+  // with no items is not drawn and closes nothing. Each opening mounts a new
+  // menu: the roster and the tracker key it by opening. While it is drawn it
+  // is a menu on the screen, so the tap on the map that closes it is not the
+  // first of a double tap to ping.
+  const drawn = items.length > 0;
+  useEffect(() => {
+    if (!drawn) return;
+    menuOpened();
+    return menuShown();
+  }, [drawn]);
+  // And another menu's opening closes this one: a long-press that opens the
+  // map's, or the other list's, brings no mousedown here. It listens from
+  // after its own opening was told, and stays listening while the list hands
+  // it a new onClose on each render, as the roster and the tracker do.
+  const closeOnOtherMenu = useEffectEvent(() => onClose());
+  useEffect(() => (drawn ? whenMenuOpens(() => closeOnOtherMenu()) : undefined), [drawn]);
 
   // Once placed, and so visible: a hidden button cannot take the cursor.
   const placed = pos !== null;
@@ -53,6 +78,7 @@ export default function CharacterContextMenu({
 
   // Close on click outside
   useEffect(() => {
+    if (compact) return;
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         onClose();
@@ -63,12 +89,15 @@ export default function CharacterContextMenu({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [onClose]);
+  }, [onClose, compact]);
 
-  // Close on escape key
+  // Close on Escape, which is used up: the map hears keys after this and
+  // would otherwise also put its tool away on the same press.
   useEffect(() => {
+    if (compact) return;
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         onClose();
       }
     };
@@ -77,43 +106,65 @@ export default function CharacterContextMenu({
     return () => {
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [onClose]);
+  }, [onClose, compact]);
 
-  // Filter visible items
-  const visibleItems = items.filter((item) => item.visible);
-
-  if (visibleItems.length === 0) {
+  if (items.length === 0) {
     return null;
   }
 
+  if (compact) return <ActionSheet open title={title} items={items} onClose={onClose} />;
+
+  /** A command's colour: its look, less the hover its own classes already hold for the plain tone. */
+  const toneClass = (item: MenuAction): string => {
+    const { text, hover, dims } = commandLook(item);
+    const plain = (item.tone ?? 'plain') === 'plain';
+    return `${plain ? text : `${text} ${hover}`}${dims ? ` ${dims}` : ''}`;
+  };
+
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl py-2 min-w-[200px]"
-      style={{
-        left: pos ? pos.x : x,
-        top: pos ? pos.y : y,
-        visibility: pos ? 'visible' : 'hidden',
-      }}
-    >
-      {visibleItems.map((item, index) => {
-        const Icon = item.icon;
-        return (
-          <button
-            key={index}
-            onClick={() => {
-              item.onClick();
-              onClose();
-            }}
-            className={`w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-moss-green/10 transition-colors ${
-              item.className || 'text-stone-gray'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
+    <FloatingLayer>
+      <div
+        ref={menuRef}
+        // Never taller than the screen on a touch screen: with a finger's
+        // 44-pixel items a long menu scrolls inside, where it would run off the
+        // bottom. A mouse's menu fits, and keeps the sides of a keyboard's
+        // focus ring, which a scrolling box would cut off.
+        className="fixed z-50 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl py-2 min-w-[200px] pointer-coarse:max-h-[calc(100dvh-1rem)] pointer-coarse:overflow-y-auto pointer-coarse:overscroll-contain"
+        style={{
+          left: pos ? pos.x : x,
+          top: pos ? pos.y : y,
+          visibility: pos ? 'visible' : 'hidden',
+        }}
+      >
+        {items.map((item) => {
+          switch (item.kind) {
+            case 'separator':
+              return <div key={item.id} className={MENU_ROW_CLASSES.separator} />;
+            case 'heading':
+              return <p key={item.id} className={MENU_ROW_CLASSES.heading}>{item.label}</p>;
+            case 'text':
+              return <p key={item.id} className={MENU_ROW_CLASSES.text}>{item.label}</p>;
+            case 'command': {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  title={item.title}
+                  disabled={item.busy?.active}
+                  onClick={() => {
+                    item.run();
+                    if (!item.keepsOpen) onClose();
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-2 pointer-coarse:min-h-11 text-sm hover:bg-moss-green/10 transition-colors ${toneClass(item)}`}
+                >
+                  {Icon && <Icon className="w-4 h-4" />}
+                  <span>{item.busy?.active ? item.busy.label : item.label}</span>
+                </button>
+              );
+            }
+          }
+        })}
+      </div>
+    </FloatingLayer>
   );
 }

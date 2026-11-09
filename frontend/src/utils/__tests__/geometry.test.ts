@@ -6,8 +6,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   calcGridDistance,
+  gridMeasure,
+  gridDistanceLabel,
   douglasPeucker,
   snapPointsToEdges,
+  diagonalStepCosts,
   type Point,
   type EdgeSnapRegion,
 } from '../geometry';
@@ -42,6 +45,26 @@ describe('calcGridDistance', () => {
     expect(calcGridDistance(2, 2, 10, 'alternating')).toBe(30);
     expect(calcGridDistance(4, 2, 10, 'alternating')).toBe(50);
     expect(calcGridDistance(1, 1, 1.5, 'alternating')).toBe(1.5);
+  });
+});
+
+// The ruler's and a carried token's distance (map/tokenHold.ts carriedDistance).
+describe('gridMeasure', () => {
+  it('counts the larger of the two steps as the squares, and prices them by the diagonal rule', () => {
+    expect(gridMeasure({ x: 0, y: 0 }, { x: 3, y: 2 }, 5, 'flat')).toEqual({ squares: 3, feet: 15 });
+    expect(gridMeasure({ x: 4, y: 4 }, { x: 2, y: 2 }, 5, 'alternating')).toEqual({ squares: 2, feet: 15 });
+    expect(gridMeasure({ x: 6, y: 1 }, { x: 2, y: 3 }, 10, 'alternating')).toEqual({ squares: 4, feet: 50 });
+  });
+
+  it('is nothing from a square to itself', () => {
+    expect(gridMeasure({ x: 1, y: 1 }, { x: 1, y: 1 }, 5, 'flat')).toEqual({ squares: 0, feet: 0 });
+  });
+});
+
+describe('gridDistanceLabel', () => {
+  it('writes the feet, then the squares in brackets', () => {
+    expect(gridDistanceLabel({ squares: 3, feet: 15 })).toBe('15 ft  (3 sq)');
+    expect(gridDistanceLabel({ squares: 1, feet: 1.5 })).toBe('1.5 ft  (1 sq)');
   });
 });
 
@@ -138,5 +161,18 @@ describe('snapPointsToEdges', () => {
     const gray = (x: number) => (x < 30 ? 0 : 255);
     const pts: Point[] = [{ x: 50, y: 50 }, { x: 60, y: 60 }]; // 20+px from the edge
     expect(snapPointsToEdges(pts, gray, region, 4)).toEqual(pts);
+  });
+});
+
+// Listed beside the alternating rule in Create Map and Edit Map.
+describe('diagonalStepCosts', () => {
+  it('costs every second diagonal two squares under the alternating rule, at the map scale', () => {
+    expect(diagonalStepCosts(5, 'alternating')).toEqual([5, 10, 5, 10]);
+    expect(diagonalStepCosts(10, 'alternating')).toEqual([10, 20, 10, 20]);
+    expect(diagonalStepCosts(3, 'alternating', 6)).toEqual([3, 6, 3, 6, 3, 6]);
+  });
+
+  it('costs each diagonal one square under the flat rule', () => {
+    expect(diagonalStepCosts(5, 'flat')).toEqual([5, 5, 5, 5]);
   });
 });

@@ -17,7 +17,7 @@ import {
 import logger from '../../utils/logger';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked } from '../../utils/mapTokens';
-import { filterTokensByRole, getSpiritVisibilityBatch } from '../../utils/spirit-layer';
+import { filterTokensByRole, getSpiritVisibilityBatch, tokensSentTo, type MapTokenSight } from '../../utils/spirit-layer';
 import { canControlToken, canReadMap, canRollDice } from '../../services/permissions';
 import {
   getState as getCombatState,
@@ -71,12 +71,28 @@ async function recipientsSentToken(
 }
 
 /**
+ * A player's or a spectator's copy of the table map's tokens, with a token's
+ * character named only where the map sends them that token (tokensSentTo,
+ * which the map's own copy asks too): on a lit map, one in their sight, and
+ * on any other map, every one the role filter keeps. The order still lists
+ * a combatant out of their sight, so its name and picture stay; its
+ * character goes, so the order tells them no more than the map does.
+ */
+function tokensForOrder(map: MapTokenSight | undefined, role: string, spiritVisible: boolean, userId: string): CombatantSource[] {
+  if (!map) return [];
+  const forRole = filterTokensByRole(readTokens(map.tokens), role, spiritVisible, userId);
+  const sent = new Set(tokensSentTo(map, role, spiritVisible, userId).map((t) => t.id));
+  return forRole.map((t) => (sent.has(t.id) ? t : { ...t, characterId: null }));
+}
+
+/**
  * Send the order to the given sockets, or to every socket in the campaign,
  * each as they may see it. The combatants' tokens are read as they are now,
  * so a name, picture or hit points the DM changes follow the token, and a
  * player's copy goes through the same role filter as the map itself: a hidden
  * token's entry, one on a map the campaign is not showing, and hit points
- * behind a bar the DM keeps off, never reach them. The stored state is the DM's view and is not changed.
+ * behind a bar the DM keeps off, never reach them, nor the character of a
+ * combatant the map does not send them (tokensForOrder). The stored state is the DM's view and is not changed.
  */
 export async function sendInitiativeState(io: Server, campaignId: string, only?: Recipient[]): Promise<void> {
   const state = getCombatState(campaignId);
@@ -105,14 +121,17 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
 
   const mapIds = [...new Set(state.combatants.map((c) => c.mapId))];
   const [maps, campaign] = await Promise.all([
-    prisma.map.findMany({ where: { id: { in: mapIds }, campaignId }, select: { id: true, tokens: true } }),
+    prisma.map.findMany({
+      where: { id: { in: mapIds }, campaignId },
+      select: { id: true, tokens: true, lightingEnabled: true, globalIllumination: true, wallSegments: true, lights: true, width: true, height: true, gridSize: true },
+    }),
     prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
   ]);
   const tokens = maps.flatMap((m) => readTokens(m.tokens));
   // A player is sent the map the campaign is showing and no other, so the
   // order names for them only what stands on it. A combatant on a prepared
   // map, added there or moved there mid-fight, stays the DM's.
-  const shown = maps.filter((m) => m.id === campaign?.currentMapId).flatMap((m) => readTokens(m.tokens));
+  const shown = maps.find((m) => m.id === campaign?.currentMapId);
   const playerIds = recipients.filter((r) => r.role !== 'DM' && r.userId).map((r) => r.userId as string);
   const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
   if (overtaken()) return;
@@ -125,7 +144,7 @@ export async function sendInitiativeState(io: Server, campaignId: string, only?:
       continue;
     }
     if (!r.userId) continue;
-    const forRole = filterTokensByRole(shown, r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId);
+    const forRole = tokensForOrder(shown, r.role ?? 'PLAYER', spiritVisibility.get(r.userId) ?? false, r.userId);
     r.emit('initiative.state', projectCombatState(state, byId(forRole), false));
   }
 }
@@ -249,6 +268,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         hp: token.hp ?? null,
         type: token.type ?? 'npc',
         disposition: token.disposition ?? null,
+        characterId: token.characterId ?? null,
       };
 
       state.combatants = sortCombatants([...state.combatants, entry]);
@@ -522,6 +542,7 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           hp: token.hp ?? null,
           type: token.type ?? 'npc',
           disposition: token.disposition ?? null,
+          characterId: token.characterId ?? null,
         });
         current.combatants = sortCombatants(current.combatants);
         setCombatState(socket.campaignId, current);

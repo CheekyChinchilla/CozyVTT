@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { sessionIsSignedIn, sessionHasAgedOut } from '../services/signedIn';
 import { pastAdminMfaDeadline } from '../services/adminMfaPolicy';
+import { NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 
 /**
  * WebSocket Authentication Middleware
@@ -34,6 +35,12 @@ export interface AuthenticatedSocket extends Socket {
    * member's memory it is sent as it grows.
    */
   previewingMemoryOf?: string;
+  /**
+   * Put the tokens this socket is carrying in a campaign back where they
+   * stand on that table's screens (handlers/tokens.ts), for when the socket
+   * stops being in it while its connection stays open.
+   */
+  releaseHeldTokens?: (campaignId: string) => void;
 }
 
 /**
@@ -43,7 +50,7 @@ export interface AuthenticatedSocket extends Socket {
  * there to read and write. Casting to this, not to a literal of its own,
  * keeps the fields declared once.
  */
-export type AuthenticatedFields = Pick<AuthenticatedSocket, 'userId' | 'campaignId' | 'role' | 'sessionId'>;
+export type AuthenticatedFields = Pick<AuthenticatedSocket, 'userId' | 'campaignId' | 'role' | 'sessionId' | 'releaseHeldTokens'>;
 
 /**
  * Whether the account has to set up two-factor authentication before it may
@@ -209,7 +216,7 @@ export async function authenticateCampaign(
     });
 
     if (!membership) {
-      return { success: false, error: 'You are not a member of this campaign' };
+      return { success: false, error: NOT_A_MEMBER_MESSAGE };
     }
 
     return {

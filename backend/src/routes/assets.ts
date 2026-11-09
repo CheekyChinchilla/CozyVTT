@@ -7,7 +7,9 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { positiveIntegerFromEnv } from '../config/env';
 import { createTurnQueue } from '../utils/turnQueue';
+import { storedFilePath } from '../utils/storedPath';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
+import { refuseNulCharacters } from '../middleware/nulCharacter';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import {
   AssetType,
@@ -18,6 +20,7 @@ import {
   ensureDirectory,
   generateUniqueFilename,
   writeFileAtomically,
+  copyFileAtomically,
   SERVER_BUILT_PATH,
 } from '../utils/fileUtils';
 import {
@@ -26,10 +29,12 @@ import {
   TYPED_DOCUMENT_MIME,
 } from '../validators/documents';
 import {
-  canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, mayChangeAsset, spiritLayerAssetIdsHiddenFrom,
+  canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, mayChangeAsset, mapPictureAssetIdsHiddenFrom,
   assetChangeFactsFor,
 } from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
+import { mayRemoveAsset } from '../services/assetRemoval';
+import { recordDocumentPictures, assetIdsNamedInBytes, assetIdsNamedInFile } from '../services/sharedDocumentPictures';
 import { UpdateAssetScopeSchema } from '../validators/assetScope';
 import { removeAvatars, clearAvatarIfNoneLeft } from '../services/avatars';
 import path from 'path';
@@ -38,11 +43,15 @@ import { pipeline } from 'stream';
 import { generateThumbnail } from '../utils/thumbnails';
 import logger from '../utils/logger';
 import { errorCode } from '../utils/errors';
+import { mapPictureAddress } from '../utils/asset-urls';
 import { readEnumQuery, readStringQueries } from '../utils/queryEnum';
 import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
 import {
   parseUploadMetadata,
+  tagsAllowedOn,
+  DRAWN_MAP_TAG_REFUSAL,
+  isDrawnPicture,
   shortenFileName,
   downloadNameOf,
   MAX_ASSET_NAME_LENGTH,
@@ -79,14 +88,6 @@ export const uploadLimiter = rateLimit({
   },
 });
 
-/**
- * Normalize a stored file path for cross-platform compatibility.
- * Converts Windows backslashes to forward slashes so paths recorded during
- * local Windows development (npm run dev) resolve correctly in Linux Docker.
- */
-function normalizePath(filePath: string): string {
-  return path.resolve(filePath.replace(/\\/g, '/'));
-}
 
 /**
  * What a client is told about an asset. Selected, not included: where a file
@@ -133,11 +134,14 @@ async function canReadAssetFile(
 
 /**
  * Set cache headers for a served asset and answer conditional requests.
- * Asset files are stored under UUID filenames and never mutated in place
- * (re-upload creates a new asset row), so asset-id URLs can be cached as
- * immutable. Avatar URLs are keyed by USER id and resolve to the newest
- * AVATAR asset, so they get a short max-age instead — the ETag still
- * changes when a new avatar is uploaded, keeping 304 revalidation correct.
+ * Most asset files are stored under UUID filenames and never written over
+ * (a re-upload creates a new asset row), so their asset-id URLs can be
+ * cached as immutable. Two kinds are written over in place and go through
+ * answerRewritableFile instead: a text or Markdown document, and a picture
+ * Paint made (isDrawnPicture), with its thumbnail. Avatar URLs are keyed by
+ * USER id and resolve to the newest AVATAR asset, so they get a short
+ * max-age instead — the ETag still changes when a new avatar is uploaded,
+ * keeping 304 revalidation correct.
  *
  * Must be called AFTER permission checks (a 304 must not leak asset
  * existence to non-members). Returns true if a 304 was sent and the
@@ -160,6 +164,36 @@ function handleAssetCaching(
     return true;
   }
   return false;
+}
+
+/**
+ * Cache headers for a file written over in place under its asset's id: it is
+ * revalidated on every request, with an ETag from `tag` (the asset's id, or
+ * its thumbnail's) and the file's size and modified time, so an unchanged
+ * file still answers 304 and a changed one is sent again. Called, like
+ * handleAssetCaching, after the permission checks; true if a 304 was sent.
+ */
+function answerRewritableFile(req: AuthenticatedRequest, res: Response, tag: string, stat: fs.Stats): boolean {
+  const etag = `"${tag}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
+  res.set('Cache-Control', 'private, no-cache');
+  res.set('ETag', etag);
+  if (req.headers['if-none-match'] === etag) {
+    res.status(304).end();
+    return true;
+  }
+  return false;
+}
+
+/** Cache headers for a map picture or its thumbnail: answerRewritableFile for a drawn one, unchanging for any other. */
+async function answerMapPictureCaching(
+  req: AuthenticatedRequest,
+  res: Response,
+  asset: { id: string; type: AssetTypes; tags: string[] },
+  tag: string,
+  filePath: string
+): Promise<boolean> {
+  if (!isDrawnPicture(asset)) return handleAssetCaching(req, res, tag);
+  return answerRewritableFile(req, res, tag, await fs.promises.stat(filePath));
 }
 
 /**
@@ -231,22 +265,35 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       where.scope = scope;
     }
 
+    // Conditions that must all hold, each with an OR of its own: the search
+    // and the map pictures kept from a member.
+    const conditions: Prisma.AssetWhereInput[] = [];
+
     // Search: a name in part, matched as typed (a % or _ in it is not a
     // wildcard), or a tag whole, whatever its case. Tags are kept as typed and
     // Prisma matches an array's items by exact case, so the spellings of the
     // tag in use are looked up first (Dragon, dragon), a handful at most, and
     // matched as they are; the visibility rules below then apply as to any
-    // filter. In AND, as those rules use OR and id.
+    // filter. In AND, as those rules use OR.
     if (search) {
       const spellings = await prisma.$queryRaw<Array<{ tag: string }>>`
         SELECT DISTINCT tag FROM "Asset", unnest(tags) AS tag WHERE lower(tag) = lower(${search})`;
-      where.AND = [{
+      conditions.push({
         OR: [
           { name: { contains: escapeLikePattern(search), mode: 'insensitive' } },
           ...(spellings.length > 0 ? [{ tags: { hasSome: spellings.map((row) => row.tag) } }] : []),
         ],
-      }];
+      });
     }
+
+    // A map's pictures are kept from a member who is not the DM until the
+    // table is on a map showing them (mapPictureHidden, the rule the read
+    // asks too). Only campaign assets: a member's own personal upload is
+    // theirs wherever it is used.
+    const hideMapPictures = async (memberCampaignIds: string[]) => {
+      const hidden = await mapPictureAssetIdsHiddenFrom(userId, memberCampaignIds);
+      if (hidden.length > 0) conditions.push({ OR: [{ scope: { not: 'CAMPAIGN' } }, { id: { notIn: hidden } }] });
+    };
 
     // Campaign filter
     const isAdmin = req.session.platformRole === 'ADMIN';
@@ -258,7 +305,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     }
 
     if (campaignId) {
-      // Admin bypasses membership check
+      // Admin bypasses membership check, and is shown the whole library.
       if (!isAdmin) {
         const membership = await prisma.campaignMembership.findUnique({
           where: {
@@ -275,13 +322,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
             message: 'You do not have access to this campaign',
           });
         }
+        if (membership.role !== 'DM') await hideMapPictures([campaignId]);
       }
 
       where.campaignId = campaignId;
-      if (!isAdmin) {
-        const hidden = await spiritLayerAssetIdsHiddenFrom(userId, [campaignId]);
-        if (hidden.length > 0) where.id = { notIn: hidden };
-      }
     } else if (!isAdmin || usable === 'true') {
       // Non-admin: enforce three-scope visibility rules. So for an admin who
       // asks for what they may use (`usable=true`, the map and token picture
@@ -289,19 +333,19 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       // anything else on the instance would be offered and then refused.
       const userMemberships = await prisma.campaignMembership.findMany({
         where: { userId },
-        select: { campaignId: true },
+        select: { campaignId: true, role: true },
       });
 
-      const campaignIds = userMemberships.map((m: { campaignId: string }) => m.campaignId);
+      const campaignIds = userMemberships.map((m) => m.campaignId);
 
       where.OR = [
         { scope: 'GLOBAL' },                          // Platform-wide assets
         { scope: 'USER', uploadedById: userId },       // User's own personal assets
         ...campaignIds.map((cId: string) => ({ scope: 'CAMPAIGN' as const, campaignId: cId })), // Campaign assets
       ];
-      const hidden = await spiritLayerAssetIdsHiddenFrom(userId, campaignIds);
-      if (hidden.length > 0) where.id = { notIn: hidden };
+      await hideMapPictures(userMemberships.filter((m) => m.role !== 'DM').map((m) => m.campaignId));
     }
+    if (conditions.length > 0) where.AND = conditions;
     // Admin with no campaignId: no OR filter — sees all assets across all scopes/users
 
     // Get total count for pagination
@@ -369,6 +413,8 @@ router.post(
       next();
     });
   },
+  // The form's fields and the file's name, read only now.
+  refuseNulCharacters,
   // Now validate and set asset metadata (req.body is populated)
   async (req: UploadRequest, res: Response, next: NextFunction) => {
     try {
@@ -438,6 +484,13 @@ router.post(
           await deleteFile(req.file.path);
         }
         return res.status(400).json({ error: 'Validation Error', message: metadata.message });
+      }
+      // The tag a save in Paint writes over a picture on the word of is its own upload's alone.
+      if (!tagsAllowedOn(metadata.value.tags, type, assetScope)) {
+        if (req.file?.path) {
+          await deleteFile(req.file.path);
+        }
+        return res.status(400).json({ error: 'Validation Error', message: DRAWN_MAP_TAG_REFUSAL });
       }
       req.uploadMetadata = metadata.value;
 
@@ -522,6 +575,14 @@ router.post(
         },
         select: ASSET_PUBLIC_SELECT,
       });
+
+      // What a document names is kept as it is stored, for the handouts'
+      // pictures and the delete's check; a PDF names nothing.
+      // One that cannot be read now is left to be read later.
+      if (asset.type === 'DOCUMENT') {
+        const named = await assetIdsNamedInFile(asset.id, file.path);
+        if (named) await recordDocumentPictures(asset.id, named);
+      }
 
       // A new avatar replaces the ones before it: the avatar route serves the
       // newest, and an older one left behind would come back if this one were
@@ -619,10 +680,24 @@ const MOVE_REFUSALS: Record<AssetScopes, string> = {
   CAMPAIGN: 'Only the asset owner or campaign DM can move this asset',
 };
 
+/** Why an uploader who does not run the campaign may not delete, or move, an asset others there use (mayRemoveAsset). */
+const USED_BY_OTHERS = {
+  delete: "Others in the campaign use this asset, so only the campaign's DM can delete it",
+  move: "Others in the campaign use this asset, so only the campaign's DM can move it out of the campaign",
+};
+
+/** The same, when the only such use is a character template, which everyone on the instance is offered. */
+const USED_BY_A_TEMPLATE = {
+  delete: "A character template uses this asset, so only the campaign's DM can delete it",
+  move: "A character template uses this asset, so only the campaign's DM can move it out of the campaign",
+};
+
 /**
  * DELETE /api/assets/:id
  * Delete an asset
- * Requires: Authentication + ownership or campaign DM
+ * Requires: Authentication + ownership or campaign DM. A campaign asset's
+ * uploader who does not run the campaign is refused with 403 while anything
+ * but their own characters, tokens and documents uses it (mayRemoveAsset).
  *
  * Answers 409 with code ASSET_IN_USE and the list of uses while a map, token,
  * character, template, creature or campaign setting still names the asset,
@@ -646,9 +721,17 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
 
     const isAdmin = req.session.platformRole === 'ADMIN';
 
-    // Scope-based permission matrix, shared with the scope move and the
-    // document editor (mayChangeAsset).
-    if (!(await mayChangeAsset(asset, userId, isAdmin))) {
+    // Scope-based permission matrix, shared with the scope move
+    // (mayRemoveAsset, which narrows mayChangeAsset for a campaign asset's
+    // uploader who does not run the campaign).
+    const removal = await mayRemoveAsset(asset, userId, isAdmin);
+    if (!removal.allowed) {
+      if (removal.reason === 'used-by-others') {
+        return res.status(403).json({ error: 'Forbidden', message: USED_BY_OTHERS.delete });
+      }
+      if (removal.reason === 'used-by-a-template') {
+        return res.status(403).json({ error: 'Forbidden', message: USED_BY_A_TEMPLATE.delete });
+      }
       // One the caller may not even read is answered as if it were not there.
       if (!(await canReadAssetFile(asset, req))) {
         return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
@@ -746,7 +829,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const downloadPath = normalizePath(asset.filePath);
+    const downloadPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(downloadPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -833,6 +916,7 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
         );
         throw error;
       });
+    await recordDocumentPictures(asset.id, assetIdsNamedInBytes(bytes));
 
     return res.status(201).json({ asset });
   } catch (error) {
@@ -844,7 +928,7 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
 /**
  * PUT /api/assets/documents/:id/content
  * Replace the text of a plain text or Markdown document.
- * Requires: whoever may delete it (mayChangeAsset): for a campaign's document
+ * Requires: whoever may change it (mayChangeAsset): for a campaign's document
  * its uploader while still a member, the campaign's DM, or an admin; for a
  * global one an admin, or its uploader while they manage global assets; for a
  * personal one its uploader, or an admin
@@ -885,7 +969,7 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
       });
     }
 
-    const documentPath = normalizePath(asset.filePath);
+    const documentPath = storedFilePath(asset.filePath);
     const bytes = Buffer.from(parsed.data.content, 'utf8');
 
     // One save of a document at a time, its file and its recorded size
@@ -901,6 +985,8 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
         data: { fileSize: bytes.length },
         select: ASSET_PUBLIC_SELECT,
       });
+      // Within the document's turn, so saves keep what each names in order.
+      await recordDocumentPictures(asset.id, assetIdsNamedInBytes(bytes));
     } catch (error) {
       // Deleted while this save was writing: the delete has already removed
       // the file, so the one written here is named by no row and is removed too.
@@ -921,6 +1007,150 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to save document' });
   }
 });
+
+/** What a request to write over a picture other than a drawn one is told. */
+export const NOT_A_DRAWN_PICTURE = 'Only a picture drawn in CozyVTT can be saved over. Upload a new picture instead.';
+
+/** An upload of the picture that replaces a drawn one, and the asset it replaces. */
+interface PictureReplaceRequest extends UploadRequest {
+  replacing?: string;
+}
+
+/** Each drawn picture's saves, in turn: see the route below. */
+const pictureSaveTurns = createTurnQueue();
+
+/**
+ * PUT /api/assets/:id/picture
+ * Write a new picture over a drawn map's picture: Paint's Save. The asset
+ * keeps its id, so the map, a shared Document and a note naming it all show
+ * the new painting; no earlier version is kept.
+ * Requires: authentication, and to be the DM of the asset's campaign. A
+ * platform admin who is not is refused like anyone else: overwriting a
+ * campaign's picture is the DM's choice at their table.
+ *
+ * Only a picture Paint made (isDrawnPicture, in a campaign's library) may be
+ * written over; any other answers 400, and an asset the caller may not read
+ * answers 404. The file is parsed and checked as the map upload's is (the
+ * map size limit, the type from the bytes, the picture limits), and must be
+ * of the format it replaces, since the file keeps its name. It is copied
+ * beside the old one and renamed over it, so a reader gets one or the other
+ * whole, and the thumbnail is made again the same way. The answer is the
+ * asset and `imageUrl`, the address the map should be given: the picture's
+ * own with `?v=<the time in ms>`, which changes every save, so each open
+ * table asks for the new picture.
+ */
+router.put(
+  '/:id/picture',
+  authenticated,
+  uploadLimiter,
+  // Before anything is written: the upload is put in the picture's own folder.
+  async (req: PictureReplaceRequest, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const asset = typeof id === 'string' ? await prisma.asset.findUnique({ where: { id } }) : null;
+      if (!asset || !(await canReadAsset(asset, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+        return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
+      }
+      if (!isDrawnPicture(asset) || asset.scope !== 'CAMPAIGN' || !asset.campaignId) {
+        return res.status(400).json({ error: 'Validation Error', message: NOT_A_DRAWN_PICTURE });
+      }
+      const membership = await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId: req.session.userId!, campaignId: asset.campaignId } },
+        select: { role: true },
+      });
+      if (membership?.role !== 'DM') {
+        return res.status(403).json({ error: 'Forbidden', message: "Only the campaign's DM can save over its drawn pictures" });
+      }
+      req.replacing = asset.id;
+      req.assetType = 'MAP';
+      req.assetScope = 'CAMPAIGN';
+      req.campaignId = asset.campaignId;
+      return next();
+    } catch (error) {
+      logger.error('Error checking a drawn picture to save over', { err: error });
+      return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to save the picture' });
+    }
+  },
+  (req: UploadRequest, res: Response, next: NextFunction) => {
+    uploadGeneric.single('file')(req, res, (err: unknown): Response | void => {
+      if (err) {
+        return handleUploadError(err, req, res, next);
+      }
+      next();
+    });
+  },
+  refuseNulCharacters,
+  validateFileSize,
+  validateFileType,
+  async (req: PictureReplaceRequest, res: Response) => {
+    const upload = req.file!.path;
+    let thumbnail: string | null = null;
+    try {
+      const done = await pictureSaveTurns.turnFor(req.replacing!);
+      try {
+        // Read again in the picture's turn: a save, a delete or a move may have landed meanwhile.
+        const asset = await prisma.asset.findUnique({ where: { id: req.replacing! } });
+        if (!asset) {
+          return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
+        }
+        if (!isDrawnPicture(asset) || asset.scope !== 'CAMPAIGN' || asset.campaignId !== req.campaignId) {
+          return res.status(400).json({ error: 'Validation Error', message: NOT_A_DRAWN_PICTURE });
+        }
+        const target = storedFilePath(asset.filePath);
+        const format = path.extname(target).toLowerCase();
+        if (path.extname(upload).toLowerCase() !== format) {
+          return res.status(400).json({
+            error: 'Validation Error',
+            message: `The new picture must be a ${format.slice(1).toUpperCase()} file, as the picture it replaces is.`,
+          });
+        }
+
+        thumbnail = await generateThumbnail(upload);
+        await copyFileAtomically(upload, target);
+        // The thumbnail's name as stored, or one beside the picture for a picture that had none.
+        const thumbnailPath = thumbnail
+          ? (asset.thumbnailPath ?? path.posix.join(path.posix.dirname(asset.filePath), `thumb_${path.posix.basename(asset.filePath)}`))
+          : null;
+        if (thumbnail && thumbnailPath) {
+          await copyFileAtomically(thumbnail, storedFilePath(thumbnailPath));
+        } else if (asset.thumbnailPath) {
+          // One of the picture before would show it in the library: none is better.
+          await deleteFile(storedFilePath(asset.thumbnailPath));
+        }
+
+        let updated: Prisma.AssetGetPayload<{ select: typeof ASSET_PUBLIC_SELECT }>;
+        try {
+          updated = await prisma.asset.update({
+            where: { id: asset.id },
+            data: { fileSize: (await fs.promises.stat(target)).size, mimeType: req.detectedMimeType ?? asset.mimeType, thumbnailPath },
+            select: ASSET_PUBLIC_SELECT,
+          });
+        } catch (error) {
+          // Deleted while this save was writing: the delete has already
+          // removed the files, so the ones written here are named by no row.
+          if (errorCode(error) === 'P2025') {
+            for (const leftover of [target, thumbnailPath && storedFilePath(thumbnailPath)]) {
+              if (leftover) await deleteFile(leftover).catch((err) => logger.error('Error removing a picture saved after it was deleted', { err }));
+            }
+            return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
+          }
+          throw error;
+        }
+        return res.status(200).json({ message: 'Picture saved', asset: updated, imageUrl: mapPictureAddress(asset.id, Date.now()) });
+      } finally {
+        done();
+      }
+    } catch (error) {
+      logger.error('Error saving over a drawn picture', { err: error });
+      return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to save the picture' });
+    } finally {
+      // The upload and its thumbnail were copied into place, or are not wanted.
+      for (const leftover of [upload, thumbnail]) {
+        if (leftover) await deleteFile(leftover).catch((err) => logger.error('Error removing an upload after saving a picture', { err }));
+      }
+    }
+  }
+);
 
 /**
  * The content type an audio file is served with, decided from its validated
@@ -1025,7 +1255,7 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
     }
 
-    const documentPath = normalizePath(asset.filePath);
+    const documentPath = storedFilePath(asset.filePath);
     let stat: fs.Stats;
     try {
       stat = await fs.promises.stat(documentPath);
@@ -1059,15 +1289,8 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       if (handleAssetCaching(req, res, asset.id)) return;
     } else {
       // Text and Markdown can be rewritten in place, so the same caching would
-      // hand a reader the old text for a year. Revalidate on every request,
-      // with an ETag from the file itself so an unchanged document still
-      // answers 304.
-      const etag = `"${asset.id}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
-      res.set('Cache-Control', 'private, no-cache');
-      res.set('ETag', etag);
-      if (req.headers['if-none-match'] === etag) {
-        return res.status(304).end();
-      }
+      // hand a reader the old text for a year.
+      if (answerRewritableFile(req, res, asset.id, stat)) return;
     }
 
     return res.sendFile(documentPath, {
@@ -1112,7 +1335,7 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const mapPath = normalizePath(asset.filePath);
+    const mapPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(mapPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -1121,7 +1344,7 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
     }
 
     // Send file with appropriate content type
-    if (handleAssetCaching(req, res, asset.id)) return;
+    if (await answerMapPictureCaching(req, res, asset, asset.id, mapPath)) return;
     return sendImageAsset(res, mapPath);
   } catch (error) {
     logger.error('Error serving map', { err: error });
@@ -1158,7 +1381,7 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const tokenPath = normalizePath(asset.filePath);
+    const tokenPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(tokenPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -1194,16 +1417,16 @@ function serveThumbnail(type: 'MAP' | 'TOKEN', notFound: string, label: string) 
       if (!asset || !(await canReadAssetFile(asset, req))) {
         return res.status(404).json({ error: 'Not Found', message: notFound });
       }
-      const thumbnail = asset.thumbnailPath ? normalizePath(asset.thumbnailPath) : null;
+      const thumbnail = asset.thumbnailPath ? storedFilePath(asset.thumbnailPath) : null;
       if (thumbnail && fs.existsSync(thumbnail)) {
-        if (handleAssetCaching(req, res, `${asset.id}-thumbnail`)) return;
+        if (await answerMapPictureCaching(req, res, asset, `${asset.id}-thumbnail`, thumbnail)) return;
         return sendImageAsset(res, thumbnail);
       }
-      const full = normalizePath(asset.filePath);
+      const full = storedFilePath(asset.filePath);
       if (!fs.existsSync(full)) {
         return res.status(404).json({ error: 'Not Found', message: 'Asset file not found on server' });
       }
-      if (handleAssetCaching(req, res, asset.id)) return;
+      if (await answerMapPictureCaching(req, res, asset, asset.id, full)) return;
       return sendImageAsset(res, full);
     } catch (error) {
       logger.error(`Error serving ${label} thumbnail`, { err: error });
@@ -1243,7 +1466,7 @@ router.get('/audio/:id', authenticated, async (req: AuthenticatedRequest, res: R
     }
 
     // Check the file exists (normalize path for cross-platform compatibility)
-    const audioPath = normalizePath(asset.filePath);
+    const audioPath = storedFilePath(asset.filePath);
     const stat = await fs.promises.stat(audioPath).catch(() => null);
     if (!stat?.isFile()) {
       return res.status(404).json({
@@ -1350,7 +1573,7 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
-    const avatarPath = normalizePath(asset.filePath);
+    const avatarPath = storedFilePath(asset.filePath);
     if (!fs.existsSync(avatarPath)) {
       return res.status(404).json({
         error: 'Not Found',
@@ -1379,9 +1602,10 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
  *
  * Permission matrix:
  *   Admin → any move
- *   Moving out of a scope → whoever may delete the asset there (mayChangeAsset):
+ *   Moving out of a scope → whoever may delete the asset there (mayRemoveAsset):
  *     GLOBAL: its uploader while a global asset manager; USER: its owner;
- *     CAMPAIGN: its uploader while still a member, or the campaign's DM
+ *     CAMPAIGN: the campaign's DM, or its uploader while still a member and
+ *     while nothing but their own characters, tokens and documents uses it
  *   Moving to or from GLOBAL → also a global asset manager
  *   Moving to CAMPAIGN → also whoever may upload that type there
  *
@@ -1463,9 +1687,14 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     if (!isAdmin) {
       // Moving out of where it is: whoever may delete it there. A global asset
       // manager moving another manager's global asset out of the library
-      // would take it from every DM, which deleting it forbids.
-      if (!(await mayChangeAsset(asset, userId, false))) {
-        return res.status(403).json({ error: 'Forbidden', message: MOVE_REFUSALS[asset.scope] });
+      // would take it from every DM, which deleting it forbids; a campaign
+      // asset others there use is its DM's alone, a former DM's included.
+      const removal = await mayRemoveAsset(asset, userId, false);
+      if (!removal.allowed) {
+        const message = removal.reason === 'used-by-others' ? USED_BY_OTHERS.move
+          : removal.reason === 'used-by-a-template' ? USED_BY_A_TEMPLATE.move
+          : MOVE_REFUSALS[asset.scope];
+        return res.status(403).json({ error: 'Forbidden', message });
       }
 
       // A personal asset is its uploader's, so only they move one there. A

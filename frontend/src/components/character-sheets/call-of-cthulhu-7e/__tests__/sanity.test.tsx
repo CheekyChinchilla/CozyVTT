@@ -37,7 +37,7 @@ describe('Sanity', () => {
 
   it('comes down to a lowered maximum', async () => {
     const save = open({ derivedStats: { ...derivedStats, sanity: { starting: 90, current: 90, maximum: 99, formula: 'POW' } } });
-    fireEvent.click(screen.getByRole('button', { name: /Backstory/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Backstory/ }));
     fireEvent.change(screen.getByLabelText('Cthulhu Mythos'), { target: { value: '20' } });
     expect(await save()).toMatchObject({ current: 79, maximum: 79 });
   });

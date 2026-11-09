@@ -7,9 +7,10 @@
  * name is passed in and used instead.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import CharacterRollPicker from '../CharacterRollPicker';
+import { anyMenuShown, menuOpened, whenMenuOpens } from '@/components/ui/openMenus';
 import type { Character, CharacterData, GameSystem } from '@/types';
 
 const seelah: Character = {
@@ -73,6 +74,93 @@ describe('the close button', () => {
     const onClose = vi.fn();
     render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // It was 20 pixels square. The size is set on a touch screen only, which
+  // jsdom cannot show, so the classes are what is checked.
+  it('is big enough for a finger, with its cross in the middle', () => {
+    render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    expect(screen.getByRole('button', { name: 'Close' }).className.split(/\s+/))
+      .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
+  });
+});
+
+describe('the roll mode', () => {
+  // The picker's mode and a sheet's Roll mode apply one helper, so these pin
+  // what the picker rolled before it used it.
+  it('rolls a Pathfinder 2e check twice with Fortune, keeping the higher, and the log says so', () => {
+    const onRoll = vi.fn();
+    render(<CharacterRollPicker character={seelah} onRoll={onRoll} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fortune' }));
+    fireEvent.click(screen.getByRole('button', { name: /^STR / }));
+    expect(onRoll).toHaveBeenCalledWith('2d20kh1+4', 'Strength Check (Fortune)', 'Seelah');
+  });
+});
+
+// The panel library takes a press in a divider's strip whenever the pressed
+// element is inside its group ([data-group]); the picker is opened from the
+// roster, the tracker and the map, all inside it.
+describe('where it is drawn', () => {
+  it('is on the body, outside the panel group it is opened from', () => {
+    render(
+      <div data-group>
+        <CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />
+      </div>,
+    );
+
+    const picker = screen.getByText('Roll for Seelah').closest('.fixed');
+    expect(picker).not.toBeNull();
+    expect(picker?.closest('[data-group]')).toBeNull();
+    expect(picker?.parentElement).toBe(document.body);
+  });
+});
+
+// The map asks, so a tap on it that closes the picker is not the first of a
+// double tap to ping.
+// Placed as the map's menus are (components/ui/menu.ts flipOntoScreen): the
+// screen is jsdom's, 1,024 by 768, and the picker measures 300 by 400.
+describe('near the edge of the screen', () => {
+  const originalRect = HTMLDivElement.prototype.getBoundingClientRect;
+  afterEach(() => { HTMLDivElement.prototype.getBoundingClientRect = originalRect; });
+
+  it('flips to the left of and above the point', () => {
+    HTMLDivElement.prototype.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 300, bottom: 400, width: 300, height: 400, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={900} anchorY={600} />);
+
+    const picker = screen.getByText(/^Roll for Seelah/).closest<HTMLElement>('.fixed')!;
+    expect([picker.style.left, picker.style.top]).toEqual(['600px', '200px']);
+  });
+});
+
+describe('while it is open', () => {
+  it('is a menu on the screen, until it closes', () => {
+    const { unmount } = render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={vi.fn()} anchorX={0} anchorY={0} />);
+    expect(anyMenuShown()).toBe(true);
+    unmount();
+    expect(anyMenuShown()).toBe(false);
+  });
+});
+
+// A long-press that opens another menu, the map's or a list's, brings no
+// mousedown here; and this one's opening closes theirs the same way.
+describe('beside another menu', () => {
+  it('says it has opened, and closes when another menu opens, not on its own opening', () => {
+    const told = vi.fn();
+    const stop = whenMenuOpens(told);
+    const onClose = vi.fn();
+    try {
+      render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+      expect(told).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      stop();
+    }
+
+    act(() => { menuOpened(); });
+
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

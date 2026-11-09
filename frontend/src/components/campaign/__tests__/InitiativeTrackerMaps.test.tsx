@@ -19,7 +19,7 @@ const emitInitiativeRoll = vi.fn();
 const emitInitiativeSet = vi.fn();
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: 'DM', currentMap: { id: 'map-shown' } }),
+  useCampaign: () => ({ userRole: 'DM', currentMap: { id: 'map-shown' }, viewedMap: { id: 'map-shown' } }),
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -42,7 +42,7 @@ const token = (id: string, name: string): Token => ({
 });
 
 const moved: CombatantEntry = {
-  tokenId: 'goblin', mapId: 'map-elsewhere', name: 'Goblin', imageUrl: '', initiative: 7, hp: null, type: 'npc', disposition: null,
+  tokenId: 'goblin', mapId: 'map-elsewhere', name: 'Goblin', imageUrl: '', initiative: 7, hp: null, type: 'npc', disposition: null, characterId: null,
 };
 
 beforeEach(() => {

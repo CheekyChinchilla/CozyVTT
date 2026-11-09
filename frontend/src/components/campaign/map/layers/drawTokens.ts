@@ -1,7 +1,7 @@
 // ============================================
 // Token layer — token images/placeholders, spirit + disposition rings,
-// turn highlight, HP bars, hidden-token dots, hover outline, condition
-// badges, and the drag ghost.
+// turn highlight, the selection ring, HP bars, hidden-token dots, hover
+// outline, condition badges, and the drag ghost.
 // Pure: no React, no component closures. Ownership checks arrive as a
 // predicate; animation progress uses the caller-provided `now`.
 // ============================================
@@ -19,6 +19,14 @@ import { facing } from '@/utils/tokenRotation';
 /** How much of its opacity a token at zero hit points keeps. */
 export const DOWNED_TOKEN_ALPHA = 0.45;
 
+/** The held token's picture is drawn this faded, on its square or carried. */
+const HELD_TOKEN_ALPHA = 0.6;
+
+/** Whether the held token is drawn on the square it stands on. */
+function heldOnOwnSquare(token: Token, drawnAt: { x: number; y: number } | null): boolean {
+  return drawnAt !== null && drawnAt.x === token.position.x && drawnAt.y === token.position.y;
+}
+
 export interface TokenDrawState {
   tokens: readonly Token[];
   tokenImages: ReadonlyMap<string, HTMLImageElement>;
@@ -30,9 +38,13 @@ export interface TokenDrawState {
   heldAt: Readonly<Record<string, { x: number; y: number }>>;
   /** Timestamp for tween progress (Date.now() at frame time). */
   now: number;
+  /** The token this page holds, drawn faded at `heldDrawnAt` and nowhere else. */
   draggedToken: Token | null;
-  dragOffset: { x: number; y: number } | null;
-  hoverCoords: { x: number; y: number } | null;
+  /**
+   * The square the held token is drawn on (map/tokenHold.ts): under the
+   * pointer carrying it, or its own square while none does.
+   */
+  heldDrawnAt: { x: number; y: number } | null;
   hoverTokenId: string | null;
   /** Player fog cells — tokens centered in unrevealed cells are hidden. */
   revealedCells: Set<number> | null;
@@ -56,6 +68,12 @@ export interface TokenDrawState {
    * static treatment than the turn ring, and can apply at the same time.
    */
   peekTokenId: string | null;
+  /**
+   * The token this page has selected (the store's `selectedTokenId`), which
+   * the keyboard acts on. Ringed only where the token is drawn, so a token
+   * this viewer cannot see shows nothing.
+   */
+  selectedTokenId: string | null;
 }
 
 // ── Turn highlight ──────────────────────────────────────────────────────────
@@ -93,6 +111,19 @@ const PEEK_RING_CASING_WIDTH = 4;
 const PEEK_RING_CORE_WIDTH = 2;
 const PEEK_WASH = 'rgba(255, 255, 255, 0.18)';
 
+// ── Selection ring ──────────────────────────────────────────────────────────
+// The token the keyboard acts on. The same dark casing, a cyan core and a
+// dash, so it reads apart from the solid gold turn ring and the solid white
+// tracker ring, and outside both of them, so a token that is acting, pointed
+// at and selected shows three distinct rings. Static: it marks a choice, not
+// something happening.
+const SELECT_RING_CASING = 'rgba(0, 0, 0, 0.85)';
+const SELECT_RING_CORE = '#4dd8ff';
+const SELECT_RING_GAP = 23;
+const SELECT_RING_CASING_WIDTH = 4;
+const SELECT_RING_CORE_WIDTH = 2;
+const SELECT_RING_DASH = [7, 4];
+
 /**
  * Trace a token's outline, optionally inflated by `gap`: a circle for
  * pog/top-down, a rounded rect for full-art. `gap: 0` gives the token's own
@@ -103,7 +134,7 @@ function traceTokenOutline(
   displayMode: string,
   gap: number,
   zoom: number,
-  geom: { tokenX: number; tokenY: number; tokenWidth: number; tokenHeight: number; centerX: number; centerY: number; radius: number }
+  geom: TokenGeometry
 ): void {
   ctx.beginPath();
   if (displayMode === 'full-art') {
@@ -120,6 +151,24 @@ function traceTokenOutline(
   } else {
     ctx.arc(geom.centerX, geom.centerY, geom.radius + gap, 0, Math.PI * 2);
   }
+}
+
+type TokenGeometry = { tokenX: number; tokenY: number; tokenWidth: number; tokenHeight: number; centerX: number; centerY: number; radius: number };
+
+/** The selection ring around a token's outline, dashed, in screen pixels at any zoom. */
+function drawSelectionRing(ctx: CanvasRenderingContext2D, displayMode: string, zoom: number, geom: TokenGeometry): void {
+  const gap = SELECT_RING_GAP / zoom;
+  ctx.save();
+  ctx.setLineDash(SELECT_RING_DASH.map((d) => d / zoom));
+  ctx.strokeStyle = SELECT_RING_CASING;
+  ctx.lineWidth = SELECT_RING_CASING_WIDTH / zoom;
+  traceTokenOutline(ctx, displayMode, gap, zoom, geom);
+  ctx.stroke();
+  ctx.strokeStyle = SELECT_RING_CORE;
+  ctx.lineWidth = SELECT_RING_CORE_WIDTH / zoom;
+  traceTokenOutline(ctx, displayMode, gap, zoom, geom);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**
@@ -179,6 +228,8 @@ export function drawTokens(
     mapHeight,
   };
 
+  /** Whether the loop drew the held token, on its own square. */
+  let heldDrawn = false;
   for (const token of state.tokens) {
     if (!isTokenVisibleTo(token, view)) continue;
 
@@ -187,8 +238,11 @@ export function drawTokens(
     // address decides whether art is drawn, not the cache.
     const tokenImg = cachedTokenImage(token, state.tokenImages);
 
-    // Skip dragged token (drawn separately as ghost)
-    if (state.draggedToken?.id === token.id) continue;
+    // The held token is drawn here while it sits on its own square, faded,
+    // with its rings, bar and badges; carried elsewhere it is the ghost below.
+    const heldHere = state.draggedToken?.id === token.id && heldOnOwnSquare(token, state.heldDrawnAt);
+    if (state.draggedToken?.id === token.id && !heldHere) continue;
+    if (heldHere) heldDrawn = true;
 
     // Check if token is animating
     const animation = state.animatingTokens.get(token.id);
@@ -236,6 +290,7 @@ export function drawTokens(
     if (isTokenDowned(token, state.characterHpCache)) {
       ctx.globalAlpha *= DOWNED_TOKEN_ALPHA;
     }
+    if (heldHere) ctx.globalAlpha *= HELD_TOKEN_ALPHA;
     // Which way the token faces: its picture, or its letter, turns about its
     // centre. The restore below undoes it, so the rings, the hit point bar
     // and the badges drawn after stay upright. An obscured token reaches a
@@ -324,6 +379,12 @@ export function drawTokens(
       ctx.lineWidth = PEEK_RING_CORE_WIDTH / zoom;
       traceTokenOutline(ctx, displayMode, gap, zoom, geom);
       ctx.stroke();
+    }
+
+    // Selection ring, outside the other two, inside the loop for the same
+    // reason as the turn ring: only a token this viewer can see is ringed.
+    if (state.selectedTokenId === token.id) {
+      drawSelectionRing(ctx, displayMode, zoom, geom);
     }
 
     // Spirit-layer ring for DM (dashed accent-colored outline)
@@ -534,18 +595,15 @@ export function drawTokens(
     }
   }
 
-  // Dragged token as ghost — ghost position = cursor cell minus the pickup
-  // offset, so whichever cell of the token was clicked stays anchored under
-  // the cursor during drag.
-  if (state.draggedToken && state.dragOffset && state.hoverCoords) {
+  // The held token as a faded ghost under the pointer carrying it, with the
+  // square it was taken by under the pointer. On its own square (nothing
+  // carries it: a finger has lifted, a pen is out of range; or the pointer
+  // is over that square) the loop above drew it, decorations and all.
+  if (state.draggedToken && state.heldDrawnAt && !heldDrawn) {
     const draggedToken = state.draggedToken;
     const tokenImg = cachedTokenImage(draggedToken, state.tokenImages);
-    const maxPosX = mapWidth - draggedToken.size.width;
-    const maxPosY = mapHeight - draggedToken.size.height;
-    const ghostPosX = Math.max(0, Math.min(maxPosX, state.hoverCoords.x - state.dragOffset.x));
-    const ghostPosY = Math.max(0, Math.min(maxPosY, state.hoverCoords.y - state.dragOffset.y));
-    const ghostX = ghostPosX * gridSize;
-    const ghostY = gridYToTopPx(ghostPosY, draggedToken.size.height, mapHeight, gridSize);
+    const ghostX = state.heldDrawnAt.x * gridSize;
+    const ghostY = gridYToTopPx(state.heldDrawnAt.y, draggedToken.size.height, mapHeight, gridSize);
 
     const ghostW = draggedToken.size.width * gridSize;
     const ghostH = draggedToken.size.height * gridSize;
@@ -555,9 +613,12 @@ export function drawTokens(
     const ghostDisplayMode = draggedToken.displayMode || 'pog';
 
     ctx.save();
-    ctx.globalAlpha = 0.6;
-    // Carried facing the way it faces.
-    turnAboutCentre(ctx, draggedToken.rotation, ghostCX, ghostCY);
+    ctx.globalAlpha = HELD_TOKEN_ALPHA;
+    // Carried facing the way it faces now: the token as the store has it, so
+    // a turn while it is held shows on the ghost. The held copy is the token
+    // as it was picked up.
+    const live = state.tokens.find((t) => t.id === draggedToken.id) ?? draggedToken;
+    turnAboutCentre(ctx, live.rotation, ghostCX, ghostCY);
 
     if (tokenImg) {
       if (ghostDisplayMode === 'full-art') {
@@ -588,5 +649,11 @@ export function drawTokens(
     }
 
     ctx.restore();
+
+    if (state.selectedTokenId === draggedToken.id) {
+      drawSelectionRing(ctx, ghostDisplayMode, zoom, {
+        tokenX: ghostX, tokenY: ghostY, tokenWidth: ghostW, tokenHeight: ghostH, centerX: ghostCX, centerY: ghostCY, radius: ghostR,
+      });
+    }
   }
 }

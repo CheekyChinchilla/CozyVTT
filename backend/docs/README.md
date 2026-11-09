@@ -32,7 +32,7 @@ Two checks, run from the repository root:
 ```bash
 python3 scripts/spec-coverage.py       # HTTP routes
 python3 scripts/websocket-events.py --check   # Socket.io events
-python3 -m unittest discover -s scripts/tests # their tests, and the nginx and coverage scripts'
+python3 -m unittest discover -s scripts/tests # their tests, the nginx and coverage scripts', and no other company's product named in a tracked file
 ```
 
 The first covers `API_DOCUMENTATION.yaml`, which must be complete in both
@@ -63,7 +63,9 @@ every `.emit(` (on a socket, a room or the server) alongside the
 the token move handlers' `emitMoveToVisibleSockets`, which takes the event
 name as its first argument, and `emitToMapReaders` and the map routes'
 `tellMapReaders`, with their per-role forms `emitToMapReadersAs` and
-`tellMapReadersAs`, whose event name is their first quoted argument —
+`tellMapReadersAs`, whose event name is their first quoted argument, and
+`emitNewestState`, which sends one socket a whole state and takes the socket
+and then the event —
 a route pushing an event through a helper reaches a client just as surely as a
 handler emitting one, and while the scan covered only handlers the table called
 itself complete while omitting seven such events. The connection's own
@@ -80,6 +82,8 @@ body. The first row that matches decides the cell:
 | Turns every non-DM away: an `if` among its own statements (inside a `try` counts; a nested block, an `else` or a callback does not) whose branch ends in a bare `return;`, and whose condition is `socket.role !== 'DM'` alone or as one side of an *or*, or whose refusal says "Only the DM" | DM only |
 | Calls `canToggleDoor` | DM; a player may toggle an unlocked door (adding which ones: "on a lit map, one their tokens see" when it also calls `.seesPoint(`, "under manual fog, one beside a square revealed to them" when it also calls `doorBesideRevealedFog`) |
 | Calls `canControlToken` | DM, or the token's player (adding "while the session is live" when it also calls `canMoveTokensNow`, and "once the DM has put it in the order", "before the fight starts" and "once each time it joins the order" when it tests `existingIndex === -1`, reads `state.active` and calls `playerHasRolled`) |
+| Calls `canDraw` | DM, or a player while **Players may draw** is on and the session is live |
+| Calls `canEraseDrawing` | DM, or the drawing's player |
 | Tests `character.userId !== socket.userId` | DM, or the character's owner (adding "never a spectator" when it also tests `socket.role === 'SPECTATOR'`) |
 | Calls `canRollDice` | DM and players |
 | None of these | Any member |

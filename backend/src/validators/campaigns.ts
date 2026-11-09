@@ -122,6 +122,7 @@ export const UpdateCampaignSchema = z.object({
     .optional(),
   chatCooldownEnabled: z.boolean({ error: 'chatCooldownEnabled must be true or false' }).optional(),
   chatCooldownSeconds: z.number({ error: COOLDOWN_MESSAGE }).int(COOLDOWN_MESSAGE).min(1, COOLDOWN_MESSAGE).max(300, COOLDOWN_MESSAGE).optional(),
+  playersMayDraw: z.boolean({ error: 'playersMayDraw must be true or false' }).optional(),
 });
 
 export type UpdateCampaignInput = z.infer<typeof UpdateCampaignSchema>;

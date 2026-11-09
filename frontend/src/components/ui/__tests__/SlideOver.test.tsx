@@ -7,6 +7,7 @@ import { AnimatePresence, MotionConfig } from 'framer-motion';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '../SlideOver';
 import Modal from '../Modal';
 import { waitForDialogFocus } from '@/test/dialogFocus';
+import { LayoutProvider } from '@/contexts/LayoutContext';
 
 // framer-motion reads the reduce-motion setting once, the first time a
 // component asks for it, so it is switched on before anything here renders.
@@ -87,6 +88,25 @@ describe('SlideOver', () => {
     render(<Panel onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  // Every panel's X was its own size, the Creature Library's and Token
+  // Templates' about 28 px. On a touch screen it is at least 44 px, its icon
+  // centred in it, whatever look the panel gives it; with a mouse it keeps
+  // that look's size. jsdom evaluates no media query, so the classes are
+  // what is checked.
+  it("gives its Close button 44 px on a touch screen, keeping the panel's own look", () => {
+    render(
+      <SlideOver open onClose={() => {}}>
+        <SlideOverTitle>Creature Library</SlideOverTitle>
+        <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" />
+      </SlideOver>
+    );
+    const close = screen.getByRole('button', { name: 'Close' });
+    const classes = (close.getAttribute('class') ?? '').split(/\s+/);
+    expect(classes).toEqual(
+      expect.arrayContaining(['touch-target', 'pointer-coarse:[&>svg]:mx-auto', 'btn-secondary', 'p-1.5', 'shrink-0'])
+    );
   });
 
   it('closes when the backdrop is clicked', () => {
@@ -198,5 +218,27 @@ describe('a window opened from a panel', () => {
     const modalBackdrop = screen.getByRole('dialog', { name: 'Invite Player' }).parentElement?.previousElementSibling ?? null;
     expect(modalBackdrop?.getAttribute('aria-hidden')).toBe('true');
     expect(layer(modalBackdrop)).toBeGreaterThanOrEqual(layer(panel));
+  });
+});
+
+// On the campaign page's compact layout its sheets are on the panel's layer
+// (compact/BottomSheet.tsx), so a panel opened over one dims it there; the
+// backdrop takes the panel's layer only there.
+describe("the backdrop's layer", () => {
+  it('is below the panel on every other screen', () => {
+    render(<SlideOver open onClose={() => {}}><SlideOverTitle>Token Manager</SlideOverTitle></SlideOver>);
+    expect(screen.getByTestId('slide-over-backdrop').className).toContain('z-40');
+  });
+
+  it("is the panel's on the compact layout, before the panel in the page", () => {
+    render(
+      <LayoutProvider compact>
+        <SlideOver open onClose={() => {}}><SlideOverTitle>Token Manager</SlideOverTitle></SlideOver>
+      </LayoutProvider>
+    );
+    const backdrop = screen.getByTestId('slide-over-backdrop');
+    expect(backdrop.className).toContain('z-50');
+    expect(backdrop.className).not.toContain('z-40');
+    expect(backdrop.nextElementSibling).toBe(screen.getByRole('dialog', { name: 'Token Manager' }));
   });
 });

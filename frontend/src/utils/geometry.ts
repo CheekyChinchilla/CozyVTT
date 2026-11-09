@@ -30,6 +30,38 @@ export function calcGridDistance(
   return Math.max(dx, dy) * feetPerSquare;
 }
 
+/** A distance over the grid: the squares crossed, and the feet they come to. */
+export interface GridMeasure {
+  squares: number;
+  feet: number;
+}
+
+/**
+ * The distance from square `from` to square `to` on a map: the larger of the
+ * two steps in squares, a diagonal counting one, and the feet by the map's
+ * diagonal rule. The ruler measures with it, and so does the readout of how
+ * far a held token has come (map/tokenHold.ts), so the two never disagree.
+ */
+export function gridMeasure(
+  from: Point,
+  to: Point,
+  feetPerSquare: number,
+  diagonalRule: 'flat' | 'alternating'
+): GridMeasure {
+  const dx = Math.abs(to.x - from.x);
+  const dy = Math.abs(to.y - from.y);
+  return { squares: Math.max(dx, dy), feet: calcGridDistance(dx, dy, feetPerSquare, diagonalRule) };
+}
+
+/**
+ * A distance as the ruler and the held token's readout write it,
+ * "15 ft  (3 sq)". The two spaces part the numbers on the ruler's canvas
+ * label; a page shows them as one.
+ */
+export function gridDistanceLabel({ squares, feet }: GridMeasure): string {
+  return `${feet} ft  (${squares} sq)`;
+}
+
 /**
  * Ramer–Douglas–Peucker polyline simplification.
  * Returns the subset of points needed to approximate the input polyline
@@ -170,4 +202,18 @@ export function edgeSnapPoints(
     { minX: roiX + 1, minY: roiY + 1, maxX: roiX + roiW - 2, maxY: roiY + roiH - 2 },
     searchRadius
   );
+}
+
+/**
+ * What each of the first `count` diagonal steps costs in feet under a rule
+ * (calcGridDistance), as Create Map and Edit Map list them beside the
+ * alternating rule: 5/10/5/10 on 5 ft squares, 10/20/10/20 on 10 ft ones.
+ */
+export function diagonalStepCosts(
+  feetPerSquare: number,
+  diagonalRule: 'flat' | 'alternating',
+  count = 4
+): number[] {
+  return Array.from({ length: count }, (_, i) =>
+    calcGridDistance(i + 1, i + 1, feetPerSquare, diagonalRule) - calcGridDistance(i, i, feetPerSquare, diagonalRule));
 }

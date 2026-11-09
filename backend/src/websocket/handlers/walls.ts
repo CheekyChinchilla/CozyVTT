@@ -6,7 +6,7 @@
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
-import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
+import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE, MAX_WALL_SEGMENTS, TOO_MANY_WALLS_MESSAGE } from '../../validators/walls';
 import type { FogState, WallSegment } from '../../types/walls';
 import { doorBesideRevealed } from '../../utils/doorFog';
 import logger from '../../utils/logger';
@@ -15,12 +15,14 @@ import {
   filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeReachesPlayers, wallChangeSentTo,
   wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
-import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
+import { mapEditLimiter, MAP_EDITS_PER_SECOND, TOO_MANY_MAP_EDITS_MESSAGE, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
+import { emitNewestState } from '../outgoingQueue';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 import { wallOutsideMap, WALL_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
 import { withMapsLocked } from '../../utils/mapTokens';
 import { echoedOpId } from '../opId';
+import { ackFrom, refuseRequest } from '../ack';
 
 /** What a wall edit reads of the map to check it: whose it is, and its extent. */
 const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
@@ -85,23 +87,32 @@ async function doorSightFor(
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * wall:add — DM adds a single wall segment.
+   * wall:add — DM adds a single wall segment. Sent with an acknowledgement,
+   * it is answered once, `{ ok: true }` or `{ ok: false, error }`, the edit
+   * ceiling included, so the page can take back a wall it drew and the
+   * server refused.
    */
-  socket.on('wall:add', async (data: { mapId: string; segment: unknown; opId?: unknown }) => {
+  socket.on('wall:add', async (data: { mapId: string; segment: unknown; opId?: unknown }, ackArg?: unknown) => {
+    const ack = ackFrom(ackArg);
+    const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) return;
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can add wall segments' });
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) {
+        // Flood ceiling, per user: dropped without a word unless it asked for an answer.
+        ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (socket.role !== 'DM') {
+        refuse('Only DMs can add wall segments');
+        return;
+      }
 
       const { mapId, segment } = data;
-      if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
+      if (!mapId) { refuse('mapId required'); return; }
 
       const parsed = WallSegmentSchema.safeParse(segment);
       if (!parsed.success) {
-        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Invalid wall segment' });
+        refuse(parsed.error.issues[0]?.message ?? 'Invalid wall segment');
         return;
       }
 
@@ -113,16 +124,18 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         if (wallOutsideMap([added], map)) return { refused: WALL_OUTSIDE_MAP_MESSAGE };
 
         const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-        if (existing.length >= 5000) return { refused: 'Maximum 5000 wall segments per map' };
+        if (existing.length >= MAX_WALL_SEGMENTS) return { refused: TOO_MANY_WALLS_MESSAGE };
         if (existing.some((w) => w.id === added.id)) return { refused: DUPLICATE_WALL_ID_MESSAGE };
 
         await tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson([...existing, added]) } });
         return { done: null };
       });
       if ('refused' in outcome) {
-        socket.emit('error', { message: outcome.refused });
+        refuse(outcome.refused);
         return;
       }
+      // Stored: answered now, so a failure to tell the table takes nothing back.
+      ack?.({ ok: true });
 
       await emitToMapReadersAs(io, campaignId, mapId, 'wall:added', (role) => ({
         event: 'wall:added', data: { mapId, segment: wallSentTo(role, added), ...echoedOpId(data) },
@@ -130,7 +143,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:add failed', { err: error });
-      socket.emit('error', { message: 'Failed to add wall segment' });
+      refuse('Failed to add wall segment');
     }
   });
 
@@ -140,11 +153,11 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   socket.on('wall:remove', async (data: { mapId: string; segmentId: string; opId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
       if (socket.role !== 'DM') {
         socket.emit('error', { message: 'Only DMs can remove wall segments' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
 
       const { mapId, segmentId } = data;
       if (!mapId || !segmentId) { socket.emit('error', { message: 'mapId and segmentId required' }); return; }
@@ -186,7 +199,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         socket.emit('error', { message: 'Spectators cannot open or close doors' });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) return; // flood ceiling, per user
 
       const { mapId, segment } = data;
       if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
@@ -289,23 +302,29 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
   });
 
   /**
-   * walls:replace — DM bulk-replaces all wall segments.
+   * walls:replace — DM bulk-replaces all wall segments. Answered through an
+   * acknowledgement as wall:add is.
    */
-  socket.on('walls:replace', async (data: { mapId: string; segments: unknown; opId?: unknown }) => {
+  socket.on('walls:replace', async (data: { mapId: string; segments: unknown; opId?: unknown }, ackArg?: unknown) => {
+    const ack = ackFrom(ackArg);
+    const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) return;
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can replace wall segments' });
+      if (!mapEditLimiter.check(limiterKey(socket), MAP_EDITS_PER_SECOND, 1000)) {
+        ack?.({ ok: false, error: TOO_MANY_MAP_EDITS_MESSAGE });
         return;
       }
-      if (!mapEditLimiter.check(limiterKey(socket), 40, 1000)) return; // flood ceiling, per user
+      if (socket.role !== 'DM') {
+        refuse('Only DMs can replace wall segments');
+        return;
+      }
 
       const { mapId, segments } = data;
-      if (!mapId) { socket.emit('error', { message: 'mapId required' }); return; }
+      if (!mapId) { refuse('mapId required'); return; }
 
       const parsed = WallSegmentsArraySchema.safeParse(segments);
       if (!parsed.success) {
-        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Invalid segments array' });
+        refuse(parsed.error.issues[0]?.message ?? 'Invalid segments array');
         return;
       }
 
@@ -321,9 +340,10 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return { done: map.wallSegments };
       });
       if ('refused' in outcome) {
-        socket.emit('error', { message: outcome.refused });
+        refuse(outcome.refused);
         return;
       }
+      ack?.({ ok: true });
 
       // A player whose walls are as they were, closed doors locked or
       // unlocked, is told nothing, and is not sent the map again.
@@ -334,7 +354,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       if (wallListChangeReachesPlayers(before, next)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('walls:replace failed', { err: error });
-      socket.emit('error', { message: 'Failed to replace wall segments' });
+      refuse('Failed to replace wall segments');
     }
   });
 
@@ -358,7 +378,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
       // A locked door goes to anyone but the DM as a closed one.
-      socket.emit('walls:replaced', { mapId, segments: wallsSentTo(socket.role, map.wallSegments) });
+      emitNewestState(socket, 'walls:replaced', { mapId, segments: wallsSentTo(socket.role, map.wallSegments) }, mapId);
     } catch (error) {
       logger.error('walls:request failed', { err: error });
     }

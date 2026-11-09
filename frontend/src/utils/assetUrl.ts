@@ -14,15 +14,30 @@
 // ============================================
 
 import { AssetType, AssetScope } from '@/types';
+import { PICTURE_VERSION_QUERY } from '@/constants/assetLimits';
 
 /**
- * Pull the asset id out of a stored reference, whichever shape it is in.
- * Returns null for empty/missing values.
+ * Pull the asset id out of a stored reference, whichever shape it is in. A
+ * drawn map picture's version (`?v=<n>`, assetAddressVersion) names the
+ * same asset, and is left out. Returns null for empty/missing values.
  */
 export function extractAssetId(url: string | null | undefined): string | null {
   if (!url) return null;
-  const parts = url.split('/');
+  const parts = url.replace(/[?#].*$/, '').split('/');
   return parts[parts.length - 1] || null;
+}
+
+/**
+ * The version a drawn map picture's address carries after a save in Paint
+ * wrote over the picture (PICTURE_VERSION_QUERY), or '' for none: put after
+ * another address of the same picture, such as its thumbnail's, so it is
+ * loaded again when the picture changes.
+ */
+export function assetAddressVersion(url: string | null | undefined): string {
+  const query = url?.indexOf('?') ?? -1;
+  if (!url || query === -1) return '';
+  const version = url.slice(query);
+  return PICTURE_VERSION_QUERY.test(version) ? version : '';
 }
 
 /**

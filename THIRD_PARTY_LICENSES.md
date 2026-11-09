@@ -44,7 +44,7 @@ UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC L
 
 | Package | Purpose | License |
 |---------|---------|---------|
-| [archiver](https://github.com/archiverjs/node-archiver) | ZIP archive creation for campaign export | MIT |
+| [yazl](https://github.com/thejoshwolfe/yazl) | Writes the ZIP archives of campaign exports and instance backups; it brings one package, buffer-crc32 (MIT) | MIT |
 | [unzipper](https://github.com/ZJONSSON/node-unzipper) | ZIP archive extraction for campaign import | MIT |
 | [file-type](https://github.com/sindresorhus/file-type) | Magic byte detection for asset file validation | MIT |
 
