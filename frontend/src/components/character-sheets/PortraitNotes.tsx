@@ -18,6 +18,9 @@ interface PortraitNotesProps {
 
 export default function PortraitNotes({ error, personal, errorClassName, noteClassName }: PortraitNotesProps) {
   if (!error && !personal) return null;
+  // TODO(ui): from `sm` up the box is wider than the portrait and does not
+  // wrap, so on the Call of Cthulhu editor "Saves as personal token" runs into
+  // the Age box beside it. The notes should stay within the portrait's column.
   return (
     <div className="sm:absolute sm:top-full sm:whitespace-nowrap">
       {error && <div className={`mt-1 text-xs ${errorClassName}`}>{error}</div>}
