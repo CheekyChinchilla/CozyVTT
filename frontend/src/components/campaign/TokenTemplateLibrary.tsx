@@ -72,6 +72,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** The search the list was last asked for, so opening is not a change to search for. */
+  const searchedFor = useRef('');
 
   // ── UI state ──
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -124,9 +126,11 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches on opening and on a type change; typing searches through the debounce below
   }, [isOpen, campaign?.id, typeFilter]);
 
-  // Debounced search
+  // Debounced search, once the text has changed: opening loads the list
+  // already, and a second load would clear a message just shown.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || searchQuery === searchedFor.current) return;
+    searchedFor.current = searchQuery;
     clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => fetchTemplates(), 300);
     return () => clearTimeout(searchTimeoutRef.current);
