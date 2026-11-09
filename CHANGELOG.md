@@ -8,7 +8,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ---
 
-## [1.6.0] - 2026-11-11
+## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4
 
