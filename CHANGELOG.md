@@ -100,7 +100,7 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 ### Changed
 
-- **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).
+- **Changes for scripts and integrations.** See [API changes in 1.6.0](docs/api-changes/1.6.0.md).
 
 - **A player can no longer turn their token while the session is paused or has ended, as with moving it.** The DM turns any token at any time, and a player can still change their token's conditions.
 
