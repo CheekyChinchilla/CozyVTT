@@ -9,7 +9,7 @@
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { TokenTemplate } from '@/types';
 import { TokenType, TokenDisposition, CampaignRole } from '@/types';
@@ -55,6 +55,17 @@ it('names the campaign the template was copied to', async () => {
   expect(await screen.findByText('Copied "Goblin" to Curse of the Crow.')).toBeInTheDocument();
   expect(api.copyTokenTemplateToCampaign).toHaveBeenCalledWith('campaign-1', 'template-1', 'campaign-2');
   expect(screen.queryByRole('button', { name: 'Curse of the Crow' })).not.toBeInTheDocument();
+});
+
+// The search, waiting for a pause in typing, also ran 300 ms after the
+// library opened: it loaded the list a second time and cleared the message,
+// so on a slow machine a copy made by then said nothing.
+it('loads the list once on opening, and leaves the message of a copy made soon after', async () => {
+  await userEvent.click(await openCopyMenu());
+  expect(await screen.findByText('Copied "Goblin" to Curse of the Crow.')).toBeInTheDocument();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+  expect(screen.getByText('Copied "Goblin" to Curse of the Crow.')).toBeInTheDocument();
+  expect(api.listTokenTemplates).toHaveBeenCalledTimes(1);
 });
 
 it('says why a copy was refused', async () => {

@@ -132,6 +132,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **On a lit map without fog of war, players no longer see a strip of the map's edge.**
 
+- **A token template copied to another campaign soon after the library opened says where it went.** The library loaded its list a second time just after opening, which took the message away.
+
 - **Create Backup says when the Admin Panel could not restore the backup it made.** A backup over the restore's limits (4 GB, 100,000 files or 10 GiB unpacked) is still made, now with a warning pointing to the command-line restore. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
 
 - **A backup of tens of thousands of uploaded files no longer runs the backend out of memory.** With the usual 512 MB a backup of about 60,000 files used to stop part-way; 100,000 files now back up within about 275 MB.
