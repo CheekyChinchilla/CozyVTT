@@ -368,7 +368,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   on canvas images, and a test that renders the policy with an address set.
   **Revisit if** someone needs it with a setup a proxy cannot cover.
 
-- `next release` **The campaign header on an iPad on its side.** Since its
+- `after the next release` **The campaign header on an iPad on its side.** Since its
   icon buttons grew to 44 pixels for a finger, the header takes two rows on an
   iPad held sideways, about 45 pixels of the map's height. Tighter gaps between
   its icons on a touch screen would bring it back to one row, if a check on a
