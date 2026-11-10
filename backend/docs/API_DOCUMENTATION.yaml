@@ -857,7 +857,9 @@ paths:
       summary: Get current user
       description: >-
         Get the signed-in user, read fresh from the database rather than from
-        the session.
+        the session. An account whose `lastLoginAt` is still null (one signed
+        in before every completed sign-in set it) has it set now, once, and
+        the `user` answered carries it.
       operationId: getCurrentUser
       security:
         - cookieAuth: []
@@ -12622,8 +12624,9 @@ components:
             When the account last completed a sign-in: `POST /api/auth/login`
             without two-factor authentication, `POST /api/auth/mfa/verify-login`
             with it, `POST /api/auth/register` when it signs the person in, or
-            `POST /api/setup/init`. Null for an account that never has. The
-            password step of a two-factor sign-in, and a sign-in refused
+            `POST /api/setup/init`; `GET /api/auth/me` from a signed-in
+            session also sets it when it is still null. Null for an account
+            that never has. The password step of a two-factor sign-in, and a sign-in refused
             because the account awaits approval, leave it as it was. The
             `user` a sign-in answers with was read before the stamp, so it
             carries the one before.

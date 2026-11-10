@@ -148,3 +148,55 @@ describe('an invitation link', () => {
     expect(await prisma.systemLog.count({ where: { message: { startsWith: `${user.email} accepted an invitation` } } })).toBe(0);
   });
 });
+
+/**
+ * An account signed in before its sign-in was stamped (the setup wizard's
+ * administrator, anyone who registered) keeps an empty stamp until its owner
+ * next signs in, which can be the whole remember-me window away. The read
+ * every page makes at load, GET /api/auth/me, stamps it instead.
+ */
+describe('an account already in use with no stamp', () => {
+  /** Signed in, with the stamp emptied as an account from before it was set at registration has it. */
+  async function inUseUnstamped(label: string) {
+    const user = await createTestUser({ displayName: label });
+    created.push(user.id);
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: null } });
+    return { user, agent };
+  }
+
+  it('is stamped once, by the next GET /api/auth/me', async () => {
+    const { user, agent } = await inUseUnstamped('Stamp in use');
+
+    const first = await agent.get('/api/auth/me');
+    expect(first.status).toBe(200);
+    const stamped = await stampOf(user.id);
+    expect(stamped).not.toBeNull();
+    expect(first.body.user.lastLoginAt).toBe(stamped?.toISOString());
+
+    expect((await agent.get('/api/auth/me')).status).toBe(200);
+    expect(await stampOf(user.id)).toEqual(stamped);
+  });
+
+  it('is not stamped by a request with no session, or one still waiting for its code', async () => {
+    const secret = generateSecret();
+    const user = await createTestUser({ displayName: 'Stamp no session' });
+    created.push(user.id);
+    await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true, mfaSecret: secret } });
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).body.mfaRequired).toBe(true);
+
+    expect((await request(app).get('/api/auth/me')).status).toBe(401);
+    expect((await agent.get('/api/auth/me')).status).toBe(401);
+    expect(await stampOf(user.id)).toBeNull();
+  });
+
+  it('is refused Resend Invite once stamped', async () => {
+    const { user, agent } = await inUseUnstamped('Stamp in use resend');
+    expect((await agent.get('/api/auth/me')).status).toBe(200);
+
+    expect((await admin.post(`/api/admin/users/${user.id}/resend-invite`)).status).toBe(409);
+    expect(sendInvitationEmail).not.toHaveBeenCalled();
+  });
+});

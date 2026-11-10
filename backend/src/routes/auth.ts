@@ -49,7 +49,8 @@ const invalid = (res: Response, message: string) => res.status(400).json({ error
  * two-factor days); and remove the account's oldest sessions beyond the cap.
  *
  * Neither the account's stamp nor the cap may stop a sign-in that has already
- * been made, so a failure of either is logged and the sign-in goes on.
+ * been made, so a failure of either is logged and the sign-in goes on. An
+ * account left unstamped is stamped by its next GET /api/auth/me.
  */
 export async function recordSignIn(req: Request, userId: string): Promise<void> {
   req.session.signedInAt = Date.now();
@@ -423,6 +424,22 @@ router.get('/me', async (req: Request, res: Response) => {
         error: 'Unauthorized',
         message: 'User not found',
       });
+    }
+
+    // An account signed in before every completed sign-in was stamped (the
+    // setup wizard's administrator, anyone who registered) has no stamp until
+    // its owner signs in again, which can be the whole remember-me window
+    // away. Every page reads this route at load, so a live session stamps it
+    // here, once: the write is conditional on the stamp still being empty, and
+    // an account with one costs nothing beyond this read.
+    if (user.lastLoginAt === null) {
+      const now = new Date();
+      try {
+        const stamped = await prisma.user.updateMany({ where: { id: user.id, lastLoginAt: null }, data: { lastLoginAt: now } });
+        if (stamped.count > 0) user.lastLoginAt = now;
+      } catch (err) {
+        logger.error('Failed to stamp the account\'s last sign-in', { err, userId: user.id });
+      }
     }
 
     return res.status(200).json({
