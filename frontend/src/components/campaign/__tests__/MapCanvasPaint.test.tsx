@@ -2284,6 +2284,56 @@ describe('drafts', () => {
     expect(drafts().writes.map((w) => w.tiles)).toEqual([['0,0', '1,0']]);
   });
 
+  /** Choose a tool in the Mapmaker panel. */
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
+  /** Where a drawImage onto the picture put its pixels: x, y, width, height. */
+  const drawnAt = () => callsOn(pictureCanvas()).filter((c) => c.method === 'drawImage').map((c) => c.args.slice(-4));
+
+  it('puts a moved selection down as the page is hidden, so the draft written then holds it, though it was the only change', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    drag({ clientX: 150, clientY: 120 }, { clientX: 450, clientY: 420 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    // Where the box was, and where it went.
+    expect(drafts().writes.map((w) => w.tiles)).toEqual([['0,0', '1,1']]);
+    expect([...drafts().kept.get(key)!.keys()]).toEqual(['0,0', '1,1']);
+    expect(drawnAt()).toContainEqual([400, 400, 100, 50]);
+  });
+
+  it('puts a paste down as the page is hidden, so the draft written then holds it', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 300, clientY: 100 }, { clientX: 400, clientY: 150 });
+    press('c', { ctrlKey: true });
+    press('Escape');
+    fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Paste' }));
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      await settle();
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    }
+    expect(drafts().writes.map((w) => w.tiles)).toEqual([['1,0']]);
+    // A square right and down from where it was copied.
+    expect(drawnAt()).toContainEqual([350, 150, 100, 50]);
+  });
+
+  it('leaves a box chosen and not moved where it is as the page is hidden', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(drafts().writes).toEqual([]);
+    expect(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Copy' })).toBeEnabled();
+  });
+
   it('writes what is not saved as another map is shown', async () => {
     await showMap();
     await paintOn();

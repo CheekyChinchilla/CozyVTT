@@ -1076,9 +1076,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (surface && !on && !unsaved && pictureSettled) dispose();
   }, [surface, on, unsaved, pictureSettled, dispose]);
   // The page hidden (another tab or app, a phone's screen off) may not come
-  // back: what is new goes into the draft at once.
+  // back: what is new goes into the draft at once. Pixels moved or pasted
+  // and not yet put down are put down first, as showing another map does,
+  // so the draft holds them; a box chosen and not moved stays as it is.
   useEffect(() => {
-    const now = () => writeDraft(surfaceRef.current);
+    const now = () => {
+      const s = surfaceRef.current;
+      const selection = selectionRef.current;
+      if (s && selection?.mapId === s.mapId && selectionPending(selection)) endSelectionRef.current();
+      writeDraft(s);
+    };
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') now();
     };

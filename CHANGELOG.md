@@ -62,6 +62,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Mapmaker adds your rooms' walls where their floors are, even if the map's size is changed on another device while you save.** The walls went in at the size your screen still showed, away from the floors.
 
+- **Mapmaker keeps a selection you moved or pasted in your draft when you switch to another tab or app.** It is put down then. A phone that closed the page in the background lost it, and kept no draft at all if it was your only change. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4
