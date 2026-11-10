@@ -17,7 +17,7 @@ import { TokenLayer, TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
 import { menuShown } from '@/components/ui/openMenus';
-import { recordDrawing, nextFrame, pictures } from '@/test/recordingCanvas';
+import { recordDrawing, recordPaint, nextFrame, pictures } from '@/test/recordingCanvas';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -2564,7 +2564,7 @@ describe('the window losing focus', () => {
   });
 });
 
-describe('a wall polygon placed by taps', () => {
+describe('the wall tool with no hover', () => {
   const drawing = recordDrawing();
   const overlay = () => document.querySelectorAll('canvas')[2];
   /** Where the overlay's next frame draws a polygon's corner dots, 4 pixels across at 100%. */
@@ -2588,6 +2588,22 @@ describe('a wall polygon placed by taps', () => {
     expect(await cornersDrawn()).toEqual([[100, 100]]);
     tap(2, px(300, 100));
     expect(await cornersDrawn()).toEqual([[100, 100], [300, 100]]);
+  });
+
+  // The colour picked under Walls waited for a hover too.
+  it('draws the walls in a colour picked under Walls in the next frame', async () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A] }) });
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    wallTool('Wall draw mode');
+    await nextFrame();
+    const { strokes } = recordPaint(overlay().getContext('2d')!);
+
+    fireEvent.click(screen.getByLabelText('Wall color: Red'));
+    await nextFrame();
+
+    expect(strokes).toContain('rgba(239,68,68,0.9)');
   });
 });
 

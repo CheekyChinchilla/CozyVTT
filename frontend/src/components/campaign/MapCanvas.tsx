@@ -2320,12 +2320,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   }, [markDirty, hoverCoords, draggedToken, dragOffset, carrierSquare, wallMode, showRuler, showAoE, fogMode]);
 
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
-  // TODO(maps): the wall colour (wallColor) is drawn by the overlay but is not
-  // in this list, so a colour picked under Walls shows on a touch screen only
-  // when something else redraws the overlay; it should be listed here.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, polygonPoints, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
+  }, [markDirty, wallSegments, wallColor, wallMode, wallInProgress, polygonPoints, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
 
   // ============================================
   // Token Hit Testing
