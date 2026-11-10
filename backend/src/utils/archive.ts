@@ -13,11 +13,13 @@
  */
 import path from 'path';
 import zlib from 'zlib';
-import { createReadStream, createWriteStream } from 'fs';
+import { once } from 'events';
+import { createReadStream, createWriteStream, type WriteStream } from 'fs';
 import fs from 'fs/promises';
 import { Readable, Transform, Writable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { fromFdPromise, type Entry as DirectoryRecord, type ZipFile } from 'yauzl';
+import { errorCode } from './errors';
 
 /**
  * Reject archive entry paths that attempt traversal or absolute escape.
@@ -47,10 +49,36 @@ function gibibytes(bytes: number): string {
 }
 
 /**
+ * What the file system says when an archive names a file it cannot make:
+ * a folder in its place (EISDIR), a file where a folder is needed (ENOTDIR,
+ * EEXIST), or a part of the name too long (ENAMETOOLONG).
+ */
+const NAME_CANNOT_BE_WRITTEN = new Set(['EISDIR', 'ENOTDIR', 'EEXIST', 'ENAMETOOLONG']);
+
+/**
+ * A stream writing a file at `destPath`, its file already open. A stream
+ * left to open its own file reports a failure as an 'error' event, and one
+ * that comes before anything listens ends the process; this rejects instead.
+ */
+async function openNewFile(destPath: string, flags: 'w' | 'wx'): Promise<WriteStream> {
+  const handle = await fs.open(destPath, flags);
+  return handle.createWriteStream();
+}
+
+/** Stop `out` and wait for its file to close, listening for any error closing it. */
+async function discard(out: WriteStream): Promise<void> {
+  if (out.closed) return;
+  const closed = once(out, 'close').catch(() => undefined);
+  out.destroy();
+  await closed;
+}
+
+/**
  * Extract every file entry in `directory`, the directory of the archive at
  * `archivePath`, beneath `destRoot`, streaming each to disk. Throws
- * ArchiveRefusedError if any entry escapes `destRoot`, the entry count exceeds
- * `maxFiles`, or an entry cannot be read, and ArchiveLimitError ('total') if
+ * ArchiveRefusedError if any entry escapes `destRoot`, names a file that
+ * cannot be written there, the entry count exceeds `maxFiles`, or an entry
+ * cannot be read, and ArchiveLimitError ('total') if
  * the running decompressed total exceeds `maxTotalBytes`, each with a message
  * for the person who sent the archive.
  *
@@ -95,15 +123,26 @@ export async function extractArchiveSafely(
       throw new ArchiveRefusedError(`The archive has an unsafe file path, which a backup never has: ${entry.path}`);
     }
 
-    await fs.mkdir(path.dirname(destPath), { recursive: true });
+    // A name the folder cannot take: the folder itself ("./" with content),
+    // a file where an earlier entry made a folder or the other way round, or
+    // a part of the name longer than the file system allows.
+    const cannotBeWritten = () => new ArchiveRefusedError(`The archive is damaged, or holds a file name that cannot be written: ${entry.path}`);
+    if (destPath === resolvedRoot) throw cannotBeWritten();
+    let out: WriteStream;
+    try {
+      await fs.mkdir(path.dirname(destPath), { recursive: true });
+      out = await openNewFile(destPath, 'w');
+    } catch (error) {
+      if (NAME_CANNOT_BE_WRITTEN.has(errorCode(error) ?? '')) throw cannotBeWritten();
+      throw error;
+    }
 
     // Decompressed bytes are counted as they flow, so a zip bomb is stopped
     // part-way and never lands on disk whole.
-    const out = createWriteStream(destPath);
     try {
       await unpackEntry(archivePath, entry, limits, out);
     } catch (error) {
-      out.destroy();
+      await discard(out);
       if (error instanceof ArchiveLimitError) {
         throw new ArchiveLimitError(`The archive unpacks to more than the ${gibibytes(options.maxTotalBytes)} a backup may hold.`, 'total');
       }

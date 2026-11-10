@@ -365,7 +365,10 @@ describe('POST /api/admin/backups/restore', () => {
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump']);
   });
 
-  it('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
+  // Linux only: the backup's own file is told apart by the name its handle
+  // has in /proc/self/fd, since the restore unpacks the upload through the
+  // same call.
+  (process.platform === 'linux' ? it : it.skip)('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
     stubTools();
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
     // The zip's output stream fails once writing starts, as a full disk does.
@@ -374,7 +377,9 @@ describe('POST /api/admin/backups/restore', () => {
     const probe = await fs.open(path.join(SCRATCH, 'stream-probe'), 'w');
     const proto = Object.getPrototypeOf(probe) as { createWriteStream(this: FileHandle): NodeJS.WritableStream };
     await probe.close();
+    const realCreateWriteStream = proto.createWriteStream;
     const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(function (this: FileHandle) {
+      if (!fsSync.readlinkSync(`/proc/self/fd/${this.fd}`).startsWith(fsSync.realpathSync(BACKUP_DIR) + path.sep)) return realCreateWriteStream.call(this);
       const stream = new PassThrough();
       // A real stream closes the file when it is destroyed; this stand-in
       // does the same, or the backup's handle is left open.
@@ -800,6 +805,32 @@ describe('a refused restore', () => {
       expect(fsSync.existsSync(path.join(UPLOAD_DIR, '..', 'evil.png'))).toBe(false);
     } finally {
       await fs.rm(file, { force: true });
+    }
+  });
+
+  // An entry the restore could not write ended the backend.
+  it.each([
+    ['a file where an earlier entry made a folder', { 'uploads/x/y': 'a', 'uploads/x': 'b' }, 'uploads/x'],
+    ['a folder where an earlier entry made a file', { 'uploads/x': 'a', 'uploads/x/y': 'b' }, 'uploads/x/y'],
+    ['a name longer than a folder can hold', { [`uploads/${'b'.repeat(300)}`]: 'a' }, `uploads/${'b'.repeat(300)}`],
+  ])('says a backup with %s is not taken, with 400, and changes nothing', async (_label, files, refusedName) => {
+    const calls = stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map' });
+    try {
+      const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, ...files }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: 'Invalid Backup',
+        message: `The archive is damaged, or holds a file name that cannot be written: ${refusedName} Nothing was changed.`,
+      });
+      expect(calls).toEqual([]);
+      expect(await filesIn(UPLOAD_DIR)).toEqual({ 'maps/global/cellar.png': Buffer.from('a map') });
+    } finally {
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
     }
   });
 

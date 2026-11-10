@@ -298,6 +298,49 @@ describe('extractArchiveSafely', () => {
     expect(await fs.readFile(path.join(dest, 'database.sql'), 'utf8')).toBe('SELECT 1;\n');
     expect((await fs.readFile(path.join(dest, 'uploads/maps/a.png'))).equals(Buffer.alloc(3 * MB, 7))).toBe(true);
   });
+
+  // A file that cannot be opened, left to a stream with no one listening,
+  // was an uncaught exception, which ends the backend. Jest fails the test
+  // it lands in, and the wait gives it time to land.
+  describe('an entry the folder cannot take', () => {
+    const NAME_CANNOT_BE_WRITTEN = 'The archive is damaged, or holds a file name that cannot be written: ';
+
+    async function refusalOf(file: string): Promise<unknown> {
+      const dest = path.join(root, 'unpacked');
+      const refused = await extractArchiveSafely(file, await openArchiveFile(file, 10), dest, LIMITS).then(
+        () => undefined,
+        (error: unknown) => error
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return refused;
+    }
+
+    it.each([
+      ['a file named as a folder already written', [{ name: 'x/y', data: 'a' }, { name: 'x', data: 'b' }], 'x'],
+      ['a folder named as a file already written', [{ name: 'x', data: 'a' }, { name: 'x/y', data: 'b' }], 'x/y'],
+      ['a name longer than a folder can hold', [{ name: `a/${'b'.repeat(300)}`, data: 'a' }], `a/${'b'.repeat(300)}`],
+    ])('refuses %s', async (_label, entries, refusedName) => {
+      const file = path.join(root, 'clash.zip');
+      await writeZip(file, entries);
+
+      const error = await refusalOf(file);
+      expect(error).toBeInstanceOf(ArchiveRefusedError);
+      expect(error).not.toBeInstanceOf(ArchiveLimitError);
+      expect((error as Error).message).toBe(`${NAME_CANNOT_BE_WRITTEN}${refusedName}`);
+    });
+
+    it('refuses a file entry that names the folder it is unpacked into', async () => {
+      const file = path.join(root, 'dot.zip');
+      await writeZip(file, [{ name: 'q9', data: 'hello', store: true }]);
+      renameEntry(file, 'q9', './');
+      const directory = await openArchiveFile(file, 10);
+      expect(directory.files).toMatchObject([{ path: './', type: 'File' }]);
+
+      const error = await refusalOf(file);
+      expect(error).toBeInstanceOf(ArchiveRefusedError);
+      expect((error as Error).message).toBe(`${NAME_CANNOT_BE_WRITTEN}./`);
+    });
+  });
 });
 
 describe('countListedEntries', () => {

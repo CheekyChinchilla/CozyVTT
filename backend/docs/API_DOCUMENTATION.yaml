@@ -12492,7 +12492,9 @@ paths:
         until the restore ends. The upload is capped at 4 GB (413) and its filename
         must end in `.zip` (400). Once accepted, a file that is not a ZIP archive is
         refused with 400, as is an archive listing more than 100,000 entries or
-        holding an entry whose path could escape the destination folder; an archive
+        holding an entry whose path could escape the destination folder or that
+        cannot be written there (a file and a folder of the same name, a part of
+        a name longer than the file system allows, or the folder itself); an archive
         that unpacks to more than 10 GiB answers 413. Each refusal names its reason
         and changes nothing. Replaces the
         database from an archive downloaded earlier and copies the archive's uploaded
