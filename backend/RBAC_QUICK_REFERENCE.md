@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31. The sections on saving over a drawn picture, a campaign's map pictures, deleting an asset as its uploader and temporary hit points were added after that, and were read against the code on 2026-11-08, as was the section on what ends a live socket. Four paragraphs were added after that: the one on the walls batch route's guard, under Campaign DM Only; the one on the email-change cap; the one on the DM making the campaign's owner a spectator; and the one on older documents in the section on deleting an asset as its uploader. All four were read against the code on 2026-11-10._
+_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31. The sections on saving over a drawn picture, a campaign's map pictures, deleting an asset as its uploader and temporary hit points were added after that, and were read against the code on 2026-11-08, as was the section on what ends a live socket. Four paragraphs were added after that: the one on the walls batch route's guard, under Campaign DM Only; the one on the email-change cap; the one on the DM making the campaign's owner a spectator; and the one on older documents in the section on deleting an asset as its uploader. All four were read against the code on 2026-11-10, as was the sentence on a refused `authenticate` under Membership changes under open sockets._
 
 ## Middleware Cheat Sheet
 
@@ -1008,7 +1008,11 @@ stops it acting: every handler refuses a socket that is not authenticated to a
 campaign. A socket belongs to one campaign, so somebody playing elsewhere in
 another tab is untouched. `authenticate` keeps a socket in one campaign room:
 it handles the events one at a time per socket and leaves every other campaign
-room on each success, and every fan-out that walks a room and reads each
+room on each success. One it refuses because the campaign is gone or the user is
+not a member clears the socket's campaign and role and leaves every campaign
+room, so a socket playing in one campaign that asks to join another it is not
+in is out of both (`websocket/events.ts`; whether it is told it was removed,
+left or is not a member comes from `websocket/memberDepartures.ts`). Every fan-out that walks a room and reads each
 socket's role goes through `campaignSockets`, which skips a socket whose
 `campaignId` is not that room. A fan-out that awaits anything between that
 fetch and reading the roles filters again with `stillInCampaign` right before

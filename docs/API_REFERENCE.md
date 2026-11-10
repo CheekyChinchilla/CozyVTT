@@ -1057,15 +1057,15 @@ every write — see [Stat block validation](#stat-block-validation).
 |---|---|---|
 | `ac` | number | Required. 0–99 |
 | `speed` | string | Required |
-| `abilities` | object | Required. `str`/`dex`/`con`/`int`/`wis`/`cha`, each 0–30. Ability **scores** (D&D 5e's model) |
+| `abilities` | object | Required. `str`/`dex`/`con`/`int`/`wis`/`cha`, each 0–30, or 0–9,999 when `gameSystem` is `CALL_OF_CTHULHU_7E`. Ability **scores** (D&D 5e's model; a Call of Cthulhu creature keeps its characteristics here) |
 | `hpMax`, `hitDice` | number, string | Optional |
 | `attributeModifiers` | object | Optional. Same six keys, each −10 to +20. Ability **modifiers**, for systems that print modifiers instead of scores (Pathfinder 2e) |
 | `challengeRating` | string | Optional, at most 10 characters; the server checks only the length. D&D 5e's are `"0"`, `"1/8"`, `"1/4"`, `"1/2"` and `"1"` to `"30"`, and there this determines the proficiency bonus |
 | `level` | number | Optional, −1 to 30. Creature level, for systems that rate by level rather than CR |
 | `savingThrows` | object | Optional. Keys to **final totals**, each −50 to +50 |
-| `skills` | object | Optional. Same shape as `savingThrows` |
+| `skills` | object | Optional. Same shape as `savingThrows`, but up to 999 when `gameSystem` is `CALL_OF_CTHULHU_7E` (its skills are percentages) |
 | `proficiencies` | object | Optional. Why each total is what it is — see below |
-| `gameSystem` | string | Optional |
+| `gameSystem` | string | Optional. The system the stat block was written for; it sets the bounds on `abilities` and `skills` |
 
 `savingThrows` and `skills` keys are **not enumerated**, because the stat block is
 shared across systems: D&D 5e uses the six ability keys (`str`…`cha`), Pathfinder
@@ -1096,13 +1096,15 @@ metadata means the stored totals are taken as given.
 
 ### Stat block validation
 
-Enforced on every creature, token-template and campaign-import write:
+Enforced on every creature, token, token-template and campaign-import write:
 
 - Save and skill bonuses: integers, −50 to +50, at most 60 entries per record.
   The range is a cross-system backstop against absurd data, not a rules check —
   Pathfinder 2e modifiers legitimately exceed +30 at high level, so a bound
   fitted to D&D 5e would reject real creatures.
 - Ability scores: integers 0–30. Attribute modifiers: −10 to +20.
+- A stat block whose own `gameSystem` is `CALL_OF_CTHULHU_7E` takes scores
+  from 0 to 9,999 and skills from −50 to 999; its saves keep −50 to +50.
 - Up to 20 unknown top-level keys are preserved, so older stat blocks survive a
   round trip; more than 20 answers `400`.
 - The whole stat block, as stored, may be at most 64 KB (65,536 characters of
