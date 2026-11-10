@@ -9,17 +9,21 @@
  * to its first tab.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, expectTypeOf, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import type { Campaign } from '@/types';
+import { CampaignRole, type Campaign } from '@/types';
+import type realApi from '@/services/api';
 import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 let current: Campaign;
 const viewer = vi.hoisted(() => ({ role: 'DM', user: { id: 'dm', platformRole: 'USER' } }));
 const updateCampaign = vi.hoisted(() => vi.fn());
-const invitationsApi = vi.hoisted(() => ({ listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn(), removeCampaignMember: vi.fn() }));
+const invitationsApi = vi.hoisted(() => ({
+  listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn(), removeCampaignMember: vi.fn(), changeCampaignMemberRole: vi.fn(),
+}));
 vi.mock('@/services/api', () => ({ default: invitationsApi, api: invitationsApi }));
-vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ campaign: current, refreshCampaign: vi.fn(), userRole: viewer.role }) }));
+const refreshCampaign = vi.hoisted(() => vi.fn());
+vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ campaign: current, refreshCampaign, userRole: viewer.role }) }));
 // Stable, as the real one is.
 const showToast = vi.hoisted(() => vi.fn());
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
@@ -37,6 +41,8 @@ beforeEach(() => {
   invitationsApi.listCampaignInvitations.mockReset().mockResolvedValue({ invitations: [] });
   invitationsApi.withdrawCampaignInvitation.mockReset().mockResolvedValue({ message: 'Invitation withdrawn' });
   invitationsApi.removeCampaignMember.mockReset().mockResolvedValue({ message: 'Member removed' });
+  invitationsApi.changeCampaignMemberRole.mockReset().mockResolvedValue({ message: 'Member role updated successfully' });
+  refreshCampaign.mockReset().mockResolvedValue(undefined);
   showToast.mockReset();
 });
 
@@ -255,9 +261,13 @@ describe('Remove under Members', () => {
 // The badge printed the stored role, so a player read PLAYER and a
 // spectator SPECTATOR.
 describe("Members' role badges", () => {
+  // Seen by an owner who handed the seat over: the DM has the Role picker.
   it('name each role as the rest of the page does', () => {
+    viewer.role = 'PLAYER';
+    viewer.user = { id: 'pia', platformRole: 'USER' };
     current = {
       ...campaign(),
+      ownerId: 'pia',
       memberships: [
         { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
         { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
@@ -316,5 +326,90 @@ describe("Remove's question and its toast", () => {
     await remove('Pia', 'Remove Player');
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Player removed from campaign', 'success'));
+  });
+});
+
+// The DM could make someone a spectator only by calling the server directly:
+// every invitation makes a player, and nothing in the app changed a role.
+describe('the Role picker under Members', () => {
+  const table = (): Campaign => ({
+    ...campaign(),
+    ownerId: 'owner-1',
+    memberships: [
+      { userId: 'owner-1', role: 'PLAYER', user: { displayName: 'Olwen' } },
+      { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+      { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
+      { userId: 'sam', role: 'SPECTATOR', user: { displayName: 'Sam' } },
+    ],
+  }) as unknown as Campaign;
+  const picker = (name: string) => screen.getByRole<HTMLSelectElement>('combobox', { name: `Role of ${name}` });
+
+  function openMembers() {
+    render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+  }
+
+  it('asks for only the roles the server lets a DM give', () => {
+    expectTypeOf<Parameters<typeof realApi.changeCampaignMemberRole>[2]>().toEqualTypeOf<CampaignRole.PLAYER | CampaignRole.SPECTATOR>();
+  });
+
+  it('offers Player and Spectator beside every member but the DM, the owner included', () => {
+    current = table();
+    openMembers();
+
+    expect(picker('Pia').value).toBe(CampaignRole.PLAYER);
+    expect(picker('Sam').value).toBe(CampaignRole.SPECTATOR);
+    expect(picker('Olwen').value).toBe(CampaignRole.PLAYER);
+    expect(within(picker('Pia')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Player', 'Spectator']);
+    expect(screen.queryByRole('combobox', { name: 'Role of Dain' })).toBeNull();
+  });
+
+  it('is not offered to an owner who has handed the seat over', () => {
+    viewer.role = 'PLAYER';
+    viewer.user = { id: 'owner-1', platformRole: 'USER' };
+    current = table();
+    openMembers();
+
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('changes the role, and the row keeps the new one once the server answers', async () => {
+    current = table();
+    let answer: (value: { message: string }) => void = () => undefined;
+    invitationsApi.changeCampaignMemberRole.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    refreshCampaign.mockImplementation(async () => {
+      current = {
+        ...current,
+        memberships: current.memberships?.map((m) => (m.userId === 'pia' ? { ...m, role: CampaignRole.SPECTATOR } : m)),
+      };
+    });
+    openMembers();
+
+    fireEvent.change(picker('Pia'), { target: { value: CampaignRole.SPECTATOR } });
+
+    expect(invitationsApi.changeCampaignMemberRole).toHaveBeenCalledWith('c1', 'pia', CampaignRole.SPECTATOR);
+    expect(picker('Pia').value).toBe(CampaignRole.SPECTATOR);
+    expect(picker('Pia')).toBeDisabled();
+
+    answer({ message: 'Member role updated successfully' });
+
+    await waitFor(() => expect(picker('Pia')).not.toBeDisabled());
+    expect(refreshCampaign).toHaveBeenCalledTimes(1);
+    expect(picker('Pia').value).toBe(CampaignRole.SPECTATOR);
+    expect(showToast).toHaveBeenCalledWith('Pia is now a spectator', 'success');
+  });
+
+  it("says the server's refusal and goes back to the member's role", async () => {
+    current = table();
+    invitationsApi.changeCampaignMemberRole.mockRejectedValueOnce(
+      Object.assign(new Error('Request failed'), { response: { status: 404, data: { message: 'User is not a member of this campaign' } } }),
+    );
+    openMembers();
+
+    fireEvent.change(picker('Pia'), { target: { value: CampaignRole.SPECTATOR } });
+
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('User is not a member of this campaign', 'error'));
+    expect(picker('Pia').value).toBe(CampaignRole.PLAYER);
+    expect(picker('Pia')).not.toBeDisabled();
   });
 });

@@ -67,6 +67,7 @@ import type {
   ServerConfig,
   RosterMember,
   CampaignMembership,
+  AssignableCampaignRole,
 } from '@/types';
 import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/knownChoices';
 import { saveBlob } from '@/utils/download';
@@ -609,7 +610,16 @@ class ApiClient {
     return response.data;
   }
 
-  async changeCampaignMemberRole(campaignId: string, userId: string, role: string): Promise<{ message: string }> {
+  /**
+   * Make a member a player or a spectator (DM only). Refused for the DM and
+   * for someone no longer in the campaign, with a message that says which.
+   * Every open page of the campaign hears `campaign.role.changed`.
+   */
+  async changeCampaignMemberRole(
+    campaignId: string,
+    userId: string,
+    role: AssignableCampaignRole,
+  ): Promise<{ message: string; membership: CampaignMembership }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/members/${userId}/role`, { role });
     return response.data;
   }
