@@ -6156,14 +6156,17 @@ paths:
             delete it". Before deciding, the route reads the documents of
             the campaign's other members stored before 1.6.0 (a PDF among
             them, which names nothing) that have not yet been read for the
-            assets they name, at most 100 of them a request; while any is
-            still unread (more than
-            100 were waiting, another request is reading it, or its file
-            could not be read) that uploader is told "Some older documents
-            have not yet been checked for the pictures they show, so for now
-            only the campaign's DM can delete this asset. Try again later.",
-            with or without `force`. A later request reads the next 100. The
-            campaign's DM and an admin are not refused this way.
+            assets they name, newest first, at most 100 of them a request;
+            while any is still unread (more were waiting, another request is
+            reading it, or its file could not be read) that uploader is told
+            "Some older documents have not yet been checked for the pictures
+            they show, so for now only the campaign's DM can delete this
+            asset. Try again later.", with or without `force`. A later
+            request reads the ones still waiting, again at most 100. A file
+            that cannot be read is tried again by every request and keeps the
+            refusal until it can be read, so the asset stays the campaign's
+            DM's to delete until then. The campaign's DM and an admin are not
+            refused this way.
           content:
             application/json:
               schema:

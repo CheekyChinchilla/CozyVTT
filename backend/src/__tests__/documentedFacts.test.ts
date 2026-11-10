@@ -13,6 +13,7 @@ import { createApp } from '../app';
 import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../routes/admin';
 import { appLayers } from './helpers/routeInventory';
 import { BACKGROUND_WAIT_MS, backgroundLeftMessage } from '../utils/shutdown';
+import { MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL } from '../services/sharedDocumentPictures';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -845,5 +846,21 @@ describe('the keyboard shortcuts the guides list', () => {
     expect(listed.length).toBeGreaterThan(0);
     expect(listed.filter((s) => !rows.some((row) => same(row, s.keys))).map((s) => s.keys)).toEqual([]);
     expect(rows.filter((row) => !listed.some((s) => same(row, s.keys)))).toEqual([]);
+  });
+});
+
+describe('how many older documents a delete by a campaign asset\'s uploader reads', () => {
+  // The cap is a constant in the code and a number in four documents.
+  const stated: Array<[string, RegExp]> = [
+    ['docs/USER_GUIDE.md', /first checks up to (\d+) of the older documents/],
+    ['docs/api-changes/unreleased.md', /first read up to (\d+) of the campaign's other members' documents/],
+    ['backend/docs/API_DOCUMENTATION.yaml', /newest first, at most (\d+) of them a request/],
+    ['backend/RBAC_QUICK_REFERENCE.md', /`MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL` \((\d+)\) a request/],
+  ];
+
+  it.each(stated)('%s states the cap the code reads up to', (rel, pattern) => {
+    const match = pattern.exec(read(rel).replace(/\s+/g, ' '));
+    if (!match) throw new Error(`${rel} no longer states how many older documents the check reads`);
+    expect(Number(match[1])).toBe(MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL);
   });
 });

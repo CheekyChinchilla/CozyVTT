@@ -468,7 +468,10 @@ uploader the check first reads the campaign's other members' unread documents
 (`readUnreadDocumentsBy` in `services/sharedDocumentPictures.ts`), at most
 `MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL` (100) a request, and refuses with 403
 while any is still unread: past the cap, being read by another request, or
-with a file that could not be read.
+with a file that could not be read. Such a file is tried again by every
+request, so it keeps the asset the campaign's DM's until it can be read. Once
+none is left unread the uses are looked at again, since any request may have
+read one in the meantime.
 
 ## Reading an asset: access follows use
 
