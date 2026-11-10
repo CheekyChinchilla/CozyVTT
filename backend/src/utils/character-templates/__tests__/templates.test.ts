@@ -236,12 +236,12 @@ describe('Character Templates Validation', () => {
       expect(sheet(blank)?.armorClass).toHaveProperty('armorPenalty');
     });
 
-    it('classDC should be an object', () => {
+    // The key attribute is the class's, which a blank sheet does not know yet:
+    // the player chooses it in the editor, and the Class DC is stored then.
+    it('stores no Class DC', () => {
       const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
-      expect(typeof sheet(blank)?.classDC).toBe('object');
-      expect(sheet(blank)?.classDC).toHaveProperty('total');
-      expect(sheet(blank)?.classDC).toHaveProperty('keyAttribute');
-      expect(sheet(blank)?.classDC).toHaveProperty('proficiencyRank');
+      expect(sheet(blank)).toBeDefined();
+      expect(sheet(blank)).not.toHaveProperty('classDC');
     });
 
     it('speed should be an object', () => {

@@ -57,11 +57,8 @@ export const pf2eBlankTemplate: CharacterTemplate = {
       bonus: 0,
       senses: [],
     },
-    classDC: {
-      total: 10,
-      keyAttribute: 'strength',
-      proficiencyRank: 'untrained',
-    },
+    // No Class DC: its key attribute is the class's, which the player chooses
+    // in the editor, and the Class DC is stored then.
     speed: {
       land: 25,
       other: [],

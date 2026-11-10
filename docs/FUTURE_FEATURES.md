@@ -271,13 +271,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   attribute and item bonus, which the editor does not edit, and would change
   every stored strike's bonus, so it waits for its own change.
 
-- **Pathfinder Class DC assumes Intelligence.** When a sheet has no `classDC`
-  stored, the editor fills one in with Intelligence as its key attribute, but
-  the key attribute depends on the class: Strength for a fighter, Charisma for
-  a sorcerer. Until such a sheet is saved, the editor shows 10 plus the
-  Intelligence modifier while the read-only view shows a plain 10. Only sheets
-  that never set it are affected, and the DM can correct it by hand.
-
 - **`docs/API_REFERENCE.md` covers 86 of the 169 routes.** Deliberate: it is a
   hand-written guide to the endpoints people ask about, and
   `backend/docs/API_DOCUMENTATION.yaml` is the complete list.

@@ -113,6 +113,8 @@ describe('what the Pathfinder 2e editor writes', () => {
       experiencePoints: 0,
       heroPoints: 1,
       loreSkills: [{ name: 'New Lore', attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }],
+      // A blank sheet has none; the editor writes this once a key attribute is chosen.
+      classDC: { keyAttribute: 'strength', proficiencyRank: 'untrained', total: 10 },
       deathAndDying: { dying: 0, wounded: 0, doomed: 0 },
       conditions: ['frightened'],
       proficiencies: {
