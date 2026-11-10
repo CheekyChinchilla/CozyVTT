@@ -166,6 +166,9 @@ export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
                   : 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40'
               }`}
             >
+              {/* TODO(ui): prints the stored role (PLAYER, SPECTATOR); should be
+                  CAMPAIGN_ROLE_LABEL[userRole] (Player, Spectator), as the
+                  Members tab's badges and Role pickers name it. */}
               {userRole}
             </div>
           </div>
