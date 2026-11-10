@@ -871,7 +871,11 @@ and backup codes; `mfaSetupLimiter` on enrolment's code step,
 An admin changing someone else's email gives no password, since they do not
 have it. The email check runs before the new address is looked up, so a
 session without the password cannot use it to learn which addresses have
-accounts. A new address also voids the account's unused reset and invitation
+accounts. A user changing their own address is also held to 5 attempts an
+hour for the account (`takeEmailChangeTurn`, `middleware/emailChangeLimiter.ts`),
+every attempt counting whatever its answer, so someone who knows the password
+cannot test address after address either; an admin changing someone else's is
+not. A new address also voids the account's unused reset and invitation
 links (`voidOutstandingResetLinks`), and the old address is sent a notice when
 SMTP is configured.
 

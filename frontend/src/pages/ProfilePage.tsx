@@ -10,6 +10,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { profileService } from '@/services/profile.service';
 import { api } from '@/services/api';
 import MFASection from '@/components/profile/MFASection';
+import ChangeEmailForm from '@/components/profile/ChangeEmailForm';
 import ThemePicker, { DEFAULT_CUSTOM_COLORS, type ThemePickerColors } from '@/components/appearance/ThemePicker';
 import { AssetType } from '@/types';
 import type { UserPreferences } from '@/types';
@@ -813,11 +814,18 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {/* Email (read-only) */}
+              {/* Email */}
               <div>
                 <label className="block text-xs font-medium text-stone-gray mb-1">Email</label>
-                <p className="text-brand-ink">{user?.email}</p>
-                <p className="text-xs text-warm-gray/70">Email cannot be changed.</p>
+                <p className="text-brand-ink break-all">{user?.email}</p>
+                {user && (
+                  <ChangeEmailForm
+                    userId={user.id}
+                    currentEmail={user.email}
+                    sendsEmail={serverConfig?.smtp?.configured}
+                    onChanged={refreshUser}
+                  />
+                )}
               </div>
 
               {/* Role (read-only) */}

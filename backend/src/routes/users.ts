@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, signInLockedUntil, asksForPassword } from '../middleware/authLimiters';
 import { hashingPerAddress, hashingPerAddressWhen } from '../middleware/hashingPerAddress';
+import { takeEmailChangeTurn, EMAIL_CHANGE_LIMIT_MESSAGE } from '../middleware/emailChangeLimiter';
 import { prisma } from '../config/database';
 import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
@@ -103,8 +104,8 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
  * Requires: Authentication (users can update their own profile, admins can update any)
  * Allowed fields: displayName, email, avatarUrl (own avatar address or null), bio
  * Admins can also update: platformRole
- * Changing your own email needs currentPassword; an admin changing someone
- * else's does not.
+ * Changing your own email needs currentPassword and is capped per account
+ * (EMAIL_CHANGES_PER_HOUR); an admin changing someone else's needs neither.
  */
 router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), passwordCheckLimiter, async (req: Request<{ id: string }>, res: Response) => {
   try {
@@ -187,6 +188,14 @@ router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), password
         // to learn which addresses have accounts. An admin changing someone
         // else's has no password to give.
         if (id === requestingUserId) {
+          // Every attempt counts, whatever its answer, so a known password
+          // cannot be used to test address after address
+          // (middleware/emailChangeLimiter).
+          const turn = takeEmailChangeTurn(id);
+          if (!turn.allowed) {
+            res.setHeader('Retry-After', String(turn.retryAfterSeconds));
+            return res.status(429).json({ error: 'Rate Limited', message: EMAIL_CHANGE_LIMIT_MESSAGE });
+          }
           if (typeof currentPassword !== 'string' || currentPassword === '') {
             return res.status(400).json({
               error: 'Validation Error',

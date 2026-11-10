@@ -117,7 +117,9 @@ const ROWS: Row[] = [
   { route: 'POST /api/auth/mfa/backup-codes', limiter: 'credentialLimiter', limit: 5, mfa: true, send: (c) => c.agent.post('/api/auth/mfa/backup-codes').send({ password: WRONG }) },
   { route: 'POST /api/auth/change-password', limiter: 'passwordCheckLimiter', limit: 10, send: (c) => c.agent.post('/api/auth/change-password').send({ currentPassword: WRONG, newPassword: 'Another1!Cozy' }) },
   { route: 'DELETE /api/auth/account', limiter: 'passwordCheckLimiter', limit: 10, send: (c) => c.agent.delete('/api/auth/account').send({ password: WRONG }) },
-  { route: 'PUT /api/users/:id', limiter: 'passwordCheckLimiter', limit: 10, send: (c) => c.agent.put(`/api/users/${c.user.id}`).send({ email: 'moved@test.invalid', currentPassword: WRONG }) },
+  // Ten wrong passwords through this route alone would meet the cap on
+  // changing one's own email first (emailChangeCap.e2e.test.ts).
+  { route: 'PUT /api/users/:id', limiter: 'passwordCheckLimiter', limit: 10, testedIn: 'routes/__tests__/passwordCheckLimiter.e2e.test.ts' },
   { route: 'POST /api/assets/upload', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post('/api/assets/upload') },
   { route: 'POST /api/assets/documents', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post('/api/assets/documents').send({}) },
   { route: 'PUT /api/assets/:id/picture', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.put(`/api/assets/${c.campaignId}/picture`) },

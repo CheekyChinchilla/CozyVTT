@@ -14,6 +14,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The DM can make a member a spectator, or a player again.** On the **Members** tab of **Campaign Settings**, choose **Player** or **Spectator** beside them, and their open page follows at once. Every button on a member's row is now big enough for a finger on a phone or a tablet. See [Changing a member's role](docs/DM_GUIDE.md#changing-a-members-role).
 
+- **You can change your email address from your Profile & Settings page.** **Change Email** asks for your current password, and the old address is sent a notice when your instance sends email. Five tries an hour are allowed. See [Changing Your Email Address](docs/USER_GUIDE.md#changing-your-email-address).
+
 ### Changed
 
 - **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).

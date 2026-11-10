@@ -18,6 +18,16 @@ class ProfileService {
     return response.user;
   }
 
+  /**
+   * Change the current user's email address, confirmed with their password.
+   * The server's refusals (a wrong password, an address in use, too many
+   * attempts) come back as the thrown error's message.
+   */
+  async changeEmail(userId: string, email: string, currentPassword: string): Promise<User> {
+    const response = await api.updateUser(userId, { email, currentPassword });
+    return response.user;
+  }
+
   /** Upload avatar file and update user's avatarUrl */
   async uploadAvatar(userId: string, displayName: string, file: File): Promise<void> {
     const formData = new FormData();
