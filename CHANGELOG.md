@@ -30,7 +30,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Mapmaker shows a texture while you drag.** A **Brush** stroke, a filled **Rectangle** or **Ellipse** and a **Room**'s floor showed in their plain colour until you let go. They now show in the **Texture** they are painted in. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
-- **The backend no longer installs the unzipper package and the eleven packages it brought.** Campaign imports and backup restores read archives with yauzl, which brings one. Every archive CozyVTT has written is read as before.
+- **The backend no longer installs the unzipper package and the ten packages it brought.** Campaign imports and backup restores read archives with yauzl, which brings one. Every archive CozyVTT has written is read as before.
 
 ### Fixed
 
@@ -42,7 +42,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The setup wizard's administrator and people who registered now show when they last signed in.** In the Admin Panel's **Users** tab they showed **Never signed in**, with **Invite** offered. Accounts already in use correct themselves when their owner next opens CozyVTT. See [User Accounts](docs/USER_GUIDE.md#user-accounts).
 
-- **A player who uploaded a campaign picture, a former DM among them, can no longer delete or move it while a handout from before 1.6.0 still shows it.** Those handouts are checked first, and you are asked to try again later while some are unchecked. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
+- **Someone who uploaded a campaign picture but does not run the campaign, a former DM among them, can no longer delete or move it while a handout from before 1.6.0 still shows it.** Those handouts are checked first, and you are asked to try again later while some are unchecked. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
 
 - **The notes under the portrait in the sheet editors stay under the portrait.** On a wider screen **Saves as personal token** ran into the field beside it, such as the Call of Cthulhu **Age** box. They now wrap to the portrait's width.
 
@@ -72,9 +72,9 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A damaged campaign archive is refused with a plain message.** One whose directory placed a file far past its end was answered as a server problem. The import window now says "The file is not a ZIP archive, or it is damaged." See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
 
-- **A campaign exports and imports with a picture or sound uploaded before 1.5.2 under a file name over 500 characters.** The import left that file out. The archive now carries the name shortened to 255 characters. See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
+- **A campaign exports and imports with a picture or sound uploaded before 1.5.2 under a file name over 500 characters.** The import left that file out. The archive now carries the name shortened to 255 characters, so export the campaign again from this version. See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
 
-- **After you remove a member, the keyboard focus stays in the Members list.** It fell to the page, so you had to tab from the top again. It now moves to the next member. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
+- **After you remove a member, the keyboard focus stays in the Members list.** It fell to the page, so you had to tab from the top again. It now moves to the next member, or the one above when you removed the last. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
 
 - **A creature's ability score of 0 stays 0 in the Creature Library and the token editor.** Typing 0, or emptying the box, changed it to 10. An emptied box now keeps its score, and one past the highest allowed drops to it when you leave the box. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
 
