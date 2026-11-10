@@ -12,6 +12,7 @@ import ProficiencyEditor from './ProficiencyEditor';
 import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
 import PrintedSkillsEditor from './PrintedSkillsEditor';
 import { creatureModel, scoreLabel, withGameSystem } from './creatureModel';
+import NumberField from '@/components/ui/NumberField';
 import { changeAbilitiesOrRating } from './statBlockProficiency';
 import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
 import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from '@/constants/statBlockLimits';
@@ -225,14 +226,13 @@ export default function StatBlockEditor({
           {ABILITY_KEYS.map((ab) => (
             <div key={ab} className="text-center">
               <label className="text-[9px] font-bold text-brand-ink uppercase block mb-0.5">{scoreLabel(gameSystem, ab)}</label>
-              <input
-                type="number"
+              <NumberField
                 aria-label={scoreLabel(gameSystem, ab)}
                 min={minScore}
                 max={maxScore}
+                fallback={null}
                 value={statBlock.abilities[ab]}
-                onChange={(e) => {
-                  const value = parseInt(e.target.value, 10) || 10;
+                onChange={(value) => {
                   // Only D&D 5e works anything out from a score.
                   if (model === 'derived') updateAbility(ab, value);
                   else update({ abilities: { ...statBlock.abilities, [ab]: value } });

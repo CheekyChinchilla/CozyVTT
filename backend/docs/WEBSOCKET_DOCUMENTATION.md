@@ -566,6 +566,9 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
   others before the drop's. Events for different tokens do not wait for
   each other
 
+**Validation:**
+- `tokenId` and `mapId` must be non-empty strings (`error` "tokenId and mapId required" otherwise)
+
 **Broadcast:** `token.move.start` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded; on a lit map, only to those who can see the token where the drag begins. Who may be sent the drag at all, and on a lit map each player's line of sight, gets decided on this event or the first frame, and the drag's frames reuse it; it is decided again when the token is hidden, shown or moved to the other plane mid-drag, and at least once a second, so a player who changes plane or leaves the map the table is on stops receiving the frames within a second, and on a lit map a wall, door, light or token of theirs that changes counts within a second. Each frame's position is tested against the sight decided last. `movedBy` names the mover; while the token is obscured it is null for anyone but the DM and the mover, since its controller is part of what obscuring hides.
 **Broadcast Payload:**
 ```typescript
@@ -718,7 +721,7 @@ socket.on('token.moved', (data) => {
 - Player can only move assigned tokens
 
 **Validation:**
-- Coordinates must be whole numbers of grid squares (`error` "Invalid token move data" otherwise)
+- `tokenId` and `mapId` must be non-empty strings, and the coordinates whole numbers of grid squares (`error` "Invalid token move data" otherwise)
 - Position must be within map bounds
 - Token must exist
 - User must have permission

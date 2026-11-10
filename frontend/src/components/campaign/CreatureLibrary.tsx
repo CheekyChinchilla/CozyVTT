@@ -40,6 +40,7 @@ import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency'
 import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
 import PrintedSkillsEditor from './npc-stat-blocks/PrintedSkillsEditor';
 import { creatureModel, scoreLabel, withGameSystem } from './npc-stat-blocks/creatureModel';
+import NumberField from '@/components/ui/NumberField';
 import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
@@ -1331,13 +1332,13 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
             {ABILITY_KEYS.map((ability) => (
               <div key={ability} className="text-center">
                 <label className="text-[8px] font-bold text-brand-ink block">{scoreLabel(gameSystem, ability)}</label>
-                <input
-                  type="number"
+                <NumberField
                   aria-label={scoreLabel(gameSystem, ability)}
                   min={minScore}
                   max={maxScore}
+                  fallback={null}
                   value={workingStatBlock.abilities[ability]}
-                  onChange={(e) => changeScore(ability, parseInt(e.target.value, 10) || 10)}
+                  onChange={(value) => changeScore(ability, value)}
                   className="input-cozy w-full text-xs text-center"
                 />
               </div>

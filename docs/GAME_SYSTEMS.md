@@ -274,11 +274,13 @@ Advantage is one box, `initiativeAdvantage`: whatever grants it, the roll is the
 same, two d20s keeping the higher. `dnd5eInitiativeAdvantage` reads it. Advantage and disadvantage together cancel to one d20, so the box gives
 way when the sheet records something that always gives disadvantage on an ability
 check, as initiative is a Dexterity check: an `exhaustionLevel` of 1 or more, or a
-condition in `DND5E_CHECK_DISADVANTAGE_CONDITIONS` (`poisoned`). Frightened is not
+condition in `DND5E_CHECK_DISADVANTAGE_CONDITIONS` (`poisoned`, and `exhausted`,
+which a sheet saved before exhaustion had levels can still hold), matched in any
+letter case. Frightened is not
 in that list, since it applies only while the source of the fear is in sight. These
 give no disadvantage of their own: no roll from a sheet applies them, so they only
 cancel a box the player ticked. `keepInStep.test.ts` checks that the condition
-names are ones the sheet's condition boxes write.
+names are in the shared D&D 5e condition list (`DND5E_CONDITIONS`).
 
 ### Hit points: damage, healing and temporary hit points
 
@@ -312,7 +314,7 @@ Eight places, all plain conditionals with a fallback:
 | `npc-stat-blocks/StatBlockViewer.tsx` | Which read-only stat block renderer |
 | `utils/npcRolls.ts` (`buildNpcRolls`) | What can be rolled. A system with no case is treated as D&D 5e and offered d20 rolls; `CALL_OF_CTHULHU_7E` and `SHADOWRUN_6E` return nothing |
 | `utils/rollModes.ts` | Advantage-equivalent labels, and whether the system has one (the roll pickers and a character sheet's **Roll mode** and roll menu) |
-| `utils/rules/initiative.ts` (`resolveStatBlockInitiative`) | A creature's initiative: D&D 5e's from its Dexterity, a flat d20 in any other system |
+| `utils/rules/initiative.ts` (`resolveStatBlockInitiative`) | A creature's initiative: D&D 5e's from its Dexterity, a flat d20 in any other system or for a stat block labelled with a system other than the campaign's |
 | `utils/conditions.ts` (`conditionsOffered`, `effectsOffered`) | The conditions the token editor lists; none for a system with no case, where the DM types their own |
 | `MapCanvas.tsx` (`coneRule`) | A cone template's shape: Pathfinder 2e's quarter circle, D&D 5e's in every other system |
 
@@ -870,7 +872,7 @@ does not derive fabricates numbers that look authoritative.
 3. **Editor branches.** The token editor's form (`StatBlockEditor.tsx`) and the Creature Library's (`CreatureForm` in `CreatureLibrary.tsx`) both branch on `creatureModel` in `npc-stat-blocks/creatureModel.ts`, whose default is D&D 5e's. A system that prints its numbers and has no rating can join `printed`: no rating, the scores stored as typed under the names `scoreLabel` gives them, and skills typed in `PrintedSkillsEditor.tsx`. A system that needs other fields (a Level in place of a Challenge Rating, modifiers in place of scores) needs a model of its own and a branch in both forms. Add new fields to `NpcStatBlock` as **optional**, and to `backend/src/validators/statBlock.ts`; never repurpose an existing field, since a campaign can switch systems and the data has to survive.
 4. **Proficiency editor.** If saves and skills are derived, model it on `ProficiencyEditor.tsx`. If they are printed, model it on `Pf2eProficiencyEditor.tsx`, which computes nothing on purpose.
 5. **Roll mode labels.** The entries in `utils/rollModes.ts` from [Step 11](#step-11-rolls-initiative-and-hit-points) serve the creature pickers too.
-6. **Initiative.** `resolveStatBlockInitiative` in `utils/rules/initiative.ts` (two copies) derives a creature's initiative for D&D 5e only; any other creature rolls a flat d20. Extend it if your stat blocks hold what initiative is worked out from.
+6. **Initiative.** `resolveStatBlockInitiative` in `utils/rules/initiative.ts` (two copies) derives a creature's initiative for D&D 5e only; any other creature rolls a flat d20, as does a stat block whose own `gameSystem` names a system other than the campaign's. Extend it if your stat blocks hold what initiative is worked out from.
 7. **Conditions.** To list the system's conditions in the token editor, add a case to `conditionsOffered` (and to `effectsOffered`, if the system has effects) in `frontend/src/utils/conditions.ts`, with a two-letter code for each in `CONDITION_ABBREVIATIONS`, and add the list to the names `utils/__tests__/conditions.test.ts` checks the codes against. Without it the DM types each condition by hand.
 8. **Area templates.** A cone is drawn Pathfinder 2e's way in a Pathfinder campaign and D&D 5e's in every other (`coneRule` in `MapCanvas.tsx`). Add your system there if its cones differ.
 

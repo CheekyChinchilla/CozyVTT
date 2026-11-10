@@ -736,8 +736,12 @@ describe('the limits on a token\'s conditions', () => {
   });
 });
 
+// Poisoned is one of the D&D 5e sheet's condition boxes. Exhausted is not any
+// more, since the sheet records exhaustion as a level, but a sheet saved before
+// 1.3.0 can hold it; it is still a name in the shared list the token editor
+// offers.
 describe('the conditions that cancel advantage on initiative', () => {
-  it('are ones the D&D 5e sheet\'s condition boxes write', () => {
+  it('are names in the shared D&D 5e condition list', () => {
     const list = /export const DND5E_CONDITIONS[^=]*=\s*\[([^\]]*)\]/.exec(read('frontend/src/utils/conditions.ts'));
     if (!list) throw new Error('frontend/src/utils/conditions.ts no longer declares DND5E_CONDITIONS as a list');
     const written = [...list[1].matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
