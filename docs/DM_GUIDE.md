@@ -1160,12 +1160,12 @@ You keep everything else: only you decide who is in the fight, drag the order ar
 
 | System | Initiative |
 |---|---|
-| **D&D 5e** | `d20 +` Dexterity modifier, plus the sheet's **other bonus** box (Alert, Jack of All Trades, and so on) |
+| **D&D 5e** | `d20 +` Dexterity modifier, plus the sheet's **other bonus** box (Alert, Jack of All Trades, and so on); two d20s keeping the higher when the sheet's **Advantage on initiative** box is ticked |
 | **Pathfinder 2e** | `d20 +` the stat named by the sheet's **Uses:** dropdown — Perception by default, Stealth when someone is sneaking |
 | **Call of Cthulhu 7e** | **No roll.** Investigators are ranked in DEX order, so the control reads **Set Initiative** and takes their DEX. Nothing appears in the dice log, because no dice were thrown |
 | **NPCs** | A D&D 5e stat block rolls from its recorded Dexterity. A token with no sheet or stat block rolls a plain d20 |
 
-Two things worth knowing. **Call of Cthulhu's readied firearms** act at DEX + 50 — that depends on the round rather than the investigator, so click the value and type it in when it applies. And **advantage on initiative** (a Sentinel Shield) isn't automatic; roll `2d20kh1` in the dice panel and enter the result.
+Two things worth knowing. **Call of Cthulhu's readied firearms** act at DEX + 50 — that depends on the round rather than the investigator, so click the value and type it in when it applies. And a D&D 5e character with **Advantage on initiative** ticked rolls two d20s and keeps the higher, unless their sheet shows a level of exhaustion or the **Poisoned** condition, which cancel it ([Rolling Your Own Initiative](PLAYER_GUIDE.md#rolling-your-own-initiative)). A condition you mark on their token doesn't count, so type the value in by hand when one should.
 
 Since values are saved on the token, you can always click a number and correct it, whatever produced it.
 

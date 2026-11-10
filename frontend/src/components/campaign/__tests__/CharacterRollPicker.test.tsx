@@ -99,6 +99,54 @@ describe('the roll mode', () => {
   });
 });
 
+describe('the initiative entry', () => {
+  const wren = (extra: Record<string, unknown>): Character => ({
+    ...seelah,
+    gameSystem: 'DND_5E' as GameSystem,
+    name: 'Wren',
+    data: {
+      characterName: 'Wren',
+      stats: { dexterity: { score: 14, modifier: 2 } },
+      ...extra,
+    } as unknown as CharacterData,
+  });
+
+  function openFor(character: Character) {
+    const onRollInitiative = vi.fn();
+    render(
+      <CharacterRollPicker
+        character={character}
+        onRoll={vi.fn()}
+        onRollInitiative={onRollInitiative}
+        onClose={() => undefined}
+        anchorX={0}
+        anchorY={0}
+      />
+    );
+    return onRollInitiative;
+  }
+
+  it('shows the two d20s a D&D 5e character with advantage on initiative rolls', () => {
+    openFor(wren({ initiativeAdvantage: true }));
+    expect(screen.getByRole('button', { name: /Roll Initiative/ })).toHaveTextContent('Roll Initiative2d20kh1+2');
+  });
+
+  it('shows one d20 when the box is off', () => {
+    openFor(wren({ initiativeAdvantage: false }));
+    expect(screen.getByRole('button', { name: /Roll Initiative/ })).toHaveTextContent('Roll Initiative1d20+2');
+  });
+
+  // The server works out the roll from the sheet; the picker's Roll mode
+  // does not reach it.
+  it('sends no roll of its own, whatever the roll mode', () => {
+    const onRollInitiative = openFor(wren({ initiativeAdvantage: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Normal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disadvantage' }));
+    fireEvent.click(screen.getByRole('button', { name: /Roll Initiative/ }));
+    expect(onRollInitiative).toHaveBeenCalledWith();
+  });
+});
+
 // The panel library takes a press in a divider's strip whenever the pressed
 // element is inside its group ([data-group]); the picker is opened from the
 // roster, the tracker and the map, all inside it.

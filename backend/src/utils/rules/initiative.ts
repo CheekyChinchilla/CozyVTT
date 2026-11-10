@@ -19,6 +19,8 @@
  *
  * Rules references, per system:
  *   D&D 5e   — Basic Rules, "Initiative": d20 + Dexterity modifier.
+ *              With advantage, two d20s and the higher kept; advantage and
+ *              disadvantage together cancel to one d20.
  *   PF2e     — initiative is a Perception check, or another skill the GM calls
  *              for (Stealth when sneaking up on someone, and so on).
  *   CoC 7e   — Keeper Rulebook, "Rank in DEX Order: Highest goes first."
@@ -26,7 +28,7 @@
  *   SR6      — Initiative = (Reaction + Intuition) + initiative dice.
  */
 
-import { abilityModifier, formatModifier } from './dnd5e';
+import { abilityModifier, exhaustionLevel, formatModifier } from './dnd5e';
 import { pf2ePerceptionTotal, pf2eSkillTotal } from './pathfinder2e';
 
 // ---------------------------------------------------------------------------
@@ -77,9 +79,9 @@ function rec(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
-/** A d20 roll with the given total modifier. */
-function d20With(modifier: number): InitiativeResolution {
-  const expression = `1d20${formatModifier(modifier)}`;
+/** A d20 roll with the given total modifier, two d20s keeping the higher with advantage. */
+function d20With(modifier: number, advantage = false): InitiativeResolution {
+  const expression = `${advantage ? '2d20kh1' : '1d20'}${formatModifier(modifier)}`;
   return { kind: 'roll', expression, label: expression };
 }
 
@@ -193,6 +195,47 @@ export function dnd5eBackfilledInitiativeBonus(data: unknown): number | null {
   return dnd5eEffectiveInitiativeBonus(d);
 }
 
+/**
+ * Conditions a 5e sheet can record that give disadvantage on every ability
+ * check, and so on initiative, which is a Dexterity check. Named in lower case,
+ * as the sheet's condition boxes write them.
+ *
+ * Only the ones that always apply. Frightened gives disadvantage only while the
+ * source of the fear is in sight, which a sheet cannot tell, so it is left to
+ * the DM, who can set anyone's initiative by hand.
+ */
+export const DND5E_CHECK_DISADVANTAGE_CONDITIONS: readonly string[] = ['poisoned'];
+
+/**
+ * Whether a 5e character rolls initiative with advantage:
+ *
+ * - `advantage`: the sheet's box is ticked, and nothing on the sheet gives
+ *   disadvantage on the roll.
+ * - `cancelled`: the box is ticked, but a level of exhaustion or one of the
+ *   conditions above gives disadvantage on the roll. Advantage and
+ *   disadvantage together cancel to one d20, however many of each there are.
+ * - `none`: the box is not ticked, or the sheet is from before it existed.
+ *
+ * Exhaustion and conditions give no disadvantage of their own here. No roll
+ * from a sheet applies them, so they only cancel a box the player ticked.
+ */
+export type DnD5eInitiativeAdvantage = 'advantage' | 'cancelled' | 'none';
+
+export function dnd5eInitiativeAdvantage(data: unknown): DnD5eInitiativeAdvantage {
+  const d = rec(data);
+  if (d?.initiativeAdvantage !== true) return 'none';
+  return dnd5eHasCheckDisadvantage(d) ? 'cancelled' : 'advantage';
+}
+
+/** Whether a 5e sheet records something that gives disadvantage on every ability check. */
+function dnd5eHasCheckDisadvantage(d: Record<string, unknown>): boolean {
+  if (exhaustionLevel(d.exhaustionLevel) > 0) return true;
+  return Array.isArray(d.conditions) && d.conditions.some(
+    (condition) => typeof condition === 'string'
+      && DND5E_CHECK_DISADVANTAGE_CONDITIONS.includes(condition.toLowerCase())
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Pathfinder 2e
 // ---------------------------------------------------------------------------
@@ -257,7 +300,7 @@ export function resolveCharacterInitiative(
 
   switch (gameSystem) {
     case 'DND_5E':
-      return d20With(dnd5eInitiativeModifier(data));
+      return d20With(dnd5eInitiativeModifier(data), dnd5eInitiativeAdvantage(data) === 'advantage');
 
     case 'PATHFINDER_2E':
       return d20With(pf2eInitiativeBonus(data));

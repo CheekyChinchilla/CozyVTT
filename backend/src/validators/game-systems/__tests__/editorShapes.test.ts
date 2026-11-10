@@ -67,6 +67,7 @@ describe('what the D&D 5e editor writes', () => {
       speed: 30,
       initiative: 0,
       initiativeBonus: 0,
+      initiativeAdvantage: true,
       hp: { maximum: 10, current: 10, temporary: 0 },
       hitDice: [{ class: 'Fighter', die: 'd6', maximum: 1, remaining: 1 }],
       deathSaves: { successes: 0, failures: 0 },

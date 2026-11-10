@@ -63,6 +63,7 @@ export const dnd5eBlankTemplate: CharacterTemplate = {
     passivePerception: 10,
     armorClass: 10,
     initiative: 0,
+    initiativeAdvantage: false,
     speed: 30,
     hp: {
       maximum: 10,

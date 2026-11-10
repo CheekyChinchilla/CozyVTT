@@ -1849,6 +1849,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   // properly, in its six levels, just below. A tick box beside the level picker
   // would be the same fact recorded twice and free to disagree with itself. The
   // token editor keeps it in its list, since a token has no level to track.
+  //
+  // TODO(sheets): a sheet saved before exhaustion had levels (before 1.3.0) can
+  // still hold 'exhausted' in its conditions. The read-only sheet shows it and
+  // this list gives no box to clear it. Read it into exhaustionLevel (at least
+  // 1) when the sheet opens and drop it from the conditions.
   const conditions = DND5E_CONDITIONS.filter((c) => c !== 'Exhausted');
 
   // Render Combat tab
@@ -1918,6 +1923,24 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           <p className="mt-1 text-xs text-ink-muted">
             Alert (+5), Jack of All Trades, Remarkable Athlete, and anything else
             beyond your Dexterity modifier.
+          </p>
+        </div>
+        <div className="sm:col-span-2 sm:pt-7">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="initiative-advantage"
+              checked={formData.initiativeAdvantage === true}
+              onChange={(e) => updateField('initiativeAdvantage', e.target.checked)}
+              className="w-5 h-5 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+            />
+            <label htmlFor="initiative-advantage" className="text-sm font-semibold text-ink-secondary">
+              Advantage on initiative
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-ink-muted">
+            Initiative rolls two d20s and keeps the higher. A level of exhaustion
+            or the Poisoned condition cancels it, and one d20 is rolled.
           </p>
         </div>
       </div>

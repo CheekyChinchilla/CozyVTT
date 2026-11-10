@@ -18,6 +18,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A player who controls no token on a lit map is told why it is black.** A line at the foot of the map says they have no token to see through and to ask the DM for one, in the spirit realm too. **Preview Player View** shows it for that player. See [Why parts of the map are dark](docs/PLAYER_GUIDE.md#why-parts-of-the-map-are-dark).
 
+- **A D&D 5e character can roll initiative with advantage.** Tick **Advantage on initiative** on the sheet's **Combat** tab, and initiative rolls two d20s and keeps the higher. A level of exhaustion or the Poisoned condition on the sheet cancels it. See [Rolling Your Own Initiative](docs/PLAYER_GUIDE.md#rolling-your-own-initiative).
+
 ### Changed
 
 - **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).

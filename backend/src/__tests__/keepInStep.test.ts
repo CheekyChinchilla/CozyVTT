@@ -60,6 +60,11 @@
  * the token editor's condition box stops at them. The file is kept identical in
  * both packages.
  *
+ * The conditions that cancel advantage on initiative. The initiative rules read
+ * them from a D&D 5e sheet by the name its condition boxes write, in lower case,
+ * and the boxes come from the list of conditions the browser keeps. A name the
+ * rules read that no box writes would never cancel anything.
+ *
  * The limits on a campaign's name and description. The server refuses a
  * campaign over them and the campaign dialogs stop each box at them. The file
  * is kept identical in both packages.
@@ -219,6 +224,7 @@ import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIEL
 import { PASSWORD_FIELDS } from '../middleware/nulCharacter';
 import { PICTURE_LIMITS } from '../utils/pictureLimits';
 import { PICTURE_SIZE_LIMITS } from '../validators/pictureSizeLimits';
+import { DND5E_CHECK_DISADVANTAGE_CONDITIONS } from '../utils/rules/initiative';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -727,6 +733,21 @@ describe('the creature and stat block limits', () => {
 describe('the limits on a token\'s conditions', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/tokenLimits.ts')).toBe(read('backend/src/validators/tokenLimits.ts'));
+  });
+});
+
+describe('the conditions that cancel advantage on initiative', () => {
+  it('are ones the D&D 5e sheet\'s condition boxes write', () => {
+    const list = /export const DND5E_CONDITIONS[^=]*=\s*\[([^\]]*)\]/.exec(read('frontend/src/utils/conditions.ts'));
+    if (!list) throw new Error('frontend/src/utils/conditions.ts no longer declares DND5E_CONDITIONS as a list');
+    const written = [...list[1].matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
+    expect(DND5E_CHECK_DISADVANTAGE_CONDITIONS.length).toBeGreaterThan(0);
+    expect(DND5E_CHECK_DISADVANTAGE_CONDITIONS.filter((name) => !written.includes(name))).toEqual([]);
+  });
+
+  it('are written in lower case by the sheet', () => {
+    const editor = read('frontend/src/components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx');
+    expect(editor).toContain("updateField('conditions', [...currentConditions, condition.toLowerCase()]);");
   });
 });
 

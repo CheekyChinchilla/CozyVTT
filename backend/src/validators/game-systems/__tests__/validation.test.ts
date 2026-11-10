@@ -122,6 +122,36 @@ describe('Game Systems Validation', () => {
       });
     });
 
+    describe('advantage on initiative', () => {
+      const sheetWith = (initiativeAdvantage: unknown) => ({
+        ...loadExampleJSON('DnD_5e_character.json').data,
+        initiativeAdvantage,
+      });
+
+      it.each([true, false])('keeps %s', (value) => {
+        const result = validateCharacterData(GameSystem.DND_5E, sheetWith(value));
+        expect(result.success && (result.data as DnD5eCharacterData).initiativeAdvantage).toBe(value);
+      });
+
+      it.each([['text', 'yes'], ['a number', 1]])('refuses %s', (_label, value) => {
+        const result = validateCharacterData(GameSystem.DND_5E, sheetWith(value));
+        expect(result.success).toBe(false);
+        if (!result.success) expect(result.errors.issues[0].path).toEqual(['initiativeAdvantage']);
+      });
+
+      it('accepts a sheet stored before it existed', () => {
+        const stored: Record<string, unknown> = { ...loadExampleJSON('DnD_5e_character.json').data };
+        delete stored.initiativeAdvantage;
+        const result = validateCharacterData(GameSystem.DND_5E, stored);
+        expect(result.success).toBe(true);
+        if (result.success) expect('initiativeAdvantage' in result.data).toBe(false);
+      });
+
+      it('is off on a new blank sheet', () => {
+        expect((getBlankCharacterTemplate(GameSystem.DND_5E) as DnD5eCharacterData).initiativeAdvantage).toBe(false);
+      });
+    });
+
     describe('weapon properties are not limited to the eleven the rules name', () => {
       const weaponWith = (properties: unknown) => {
         const example = loadExampleJSON('DnD_5e_character.json');

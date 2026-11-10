@@ -8,9 +8,11 @@
  * at all, and a D&D character's bonus is not only Dexterity.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { rollDice } from '../dice-parser';
 import {
   dnd5eBackfilledInitiativeBonus,
+  dnd5eInitiativeAdvantage,
   dnd5eInitiativeModifier,
   pf2eInitiativeBonus,
   resolveCharacterInitiative,
@@ -164,6 +166,94 @@ describe('D&D 5e migration of hand-typed initiative', () => {
     expect(dnd5eBackfilledInitiativeBonus(untouched)).toBeNull();
     expect(dnd5eInitiativeModifier(untouched)).toBe(3);
     expect(resolveCharacterInitiative('DND_5E', untouched)).toMatchObject({ expression: '1d20+3' });
+  });
+});
+
+describe('D&D 5e advantage on initiative', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  /** Dice that come up 5, then 17, on a d20. */
+  const fiveThenSeventeen = () => {
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0.2).mockReturnValueOnce(0.8);
+  };
+
+  it('rolls two d20s and keeps the higher when the sheet says so', () => {
+    const sheet = dnd5e(14, undefined, { initiativeAdvantage: true });
+    expect(dnd5eInitiativeAdvantage(sheet)).toBe('advantage');
+    expect(resolveCharacterInitiative('DND_5E', sheet))
+      .toEqual({ kind: 'roll', expression: '2d20kh1+2', label: '2d20kh1+2' });
+  });
+
+  it('keeps the higher die when rolled, and the modifier with it', () => {
+    fiveThenSeventeen();
+    const resolved = resolveCharacterInitiative('DND_5E', dnd5e(14, 1, { initiativeAdvantage: true }));
+    const rolled = rollDice((resolved as { expression: string }).expression);
+    expect(rolled.rolls[0]).toMatchObject({ results: [5, 17], kept: [17] });
+    expect(rolled.total).toBe(20);
+  });
+
+  it('rolls one d20 when the box is off', () => {
+    fiveThenSeventeen();
+    const sheet = dnd5e(14, 1, { initiativeAdvantage: false });
+    expect(dnd5eInitiativeAdvantage(sheet)).toBe('none');
+    const resolved = resolveCharacterInitiative('DND_5E', sheet);
+    expect(resolved).toEqual({ kind: 'roll', expression: '1d20+3', label: '1d20+3' });
+    expect(rollDice((resolved as { expression: string }).expression).total).toBe(8);
+  });
+
+  it('rolls a sheet stored before the box existed as it always did', () => {
+    const stored = dnd5e(14);
+    expect('initiativeAdvantage' in stored).toBe(false);
+    expect(dnd5eInitiativeAdvantage(stored)).toBe('none');
+    expect(resolveCharacterInitiative('DND_5E', stored)).toEqual({ kind: 'roll', expression: '1d20+2', label: '1d20+2' });
+  });
+
+  it('keeps a negative modifier', () => {
+    expect(resolveCharacterInitiative('DND_5E', dnd5e(8, undefined, { initiativeAdvantage: true })))
+      .toMatchObject({ expression: '2d20kh1-1' });
+  });
+
+  it('reads only true as the box ticked', () => {
+    for (const stored of ['yes', 1, 'true', null]) {
+      expect(resolveCharacterInitiative('DND_5E', dnd5e(14, undefined, { initiativeAdvantage: stored })))
+        .toMatchObject({ expression: '1d20+2' });
+    }
+  });
+
+  // Advantage and disadvantage together cancel to one d20. A level of
+  // exhaustion and the poisoned condition each give disadvantage on every
+  // ability check, and initiative is a Dexterity check.
+  it('is cancelled by a level of exhaustion', () => {
+    const sheet = dnd5e(14, undefined, { initiativeAdvantage: true, exhaustionLevel: 1 });
+    expect(dnd5eInitiativeAdvantage(sheet)).toBe('cancelled');
+    expect(resolveCharacterInitiative('DND_5E', sheet)).toMatchObject({ expression: '1d20+2' });
+    expect(resolveCharacterInitiative('DND_5E', { ...sheet, exhaustionLevel: 0 }))
+      .toMatchObject({ expression: '2d20kh1+2' });
+  });
+
+  it('is cancelled by the poisoned condition', () => {
+    const sheet = dnd5e(14, undefined, { initiativeAdvantage: true, conditions: ['prone', 'poisoned'] });
+    expect(dnd5eInitiativeAdvantage(sheet)).toBe('cancelled');
+    expect(resolveCharacterInitiative('DND_5E', sheet)).toMatchObject({ expression: '1d20+2' });
+  });
+
+  // Frightened gives disadvantage only while the source of the fear is in
+  // sight, which the sheet cannot tell, so it is left to the DM.
+  it('is not cancelled by a condition that does not always give disadvantage on the roll', () => {
+    const sheet = dnd5e(14, undefined, { initiativeAdvantage: true, conditions: ['frightened', 'restrained'] });
+    expect(dnd5eInitiativeAdvantage(sheet)).toBe('advantage');
+    expect(resolveCharacterInitiative('DND_5E', sheet)).toMatchObject({ expression: '2d20kh1+2' });
+  });
+
+  it('gives no disadvantage of its own to a character without the box', () => {
+    const sheet = dnd5e(14, undefined, { exhaustionLevel: 3, conditions: ['poisoned'] });
+    expect(dnd5eInitiativeAdvantage(sheet)).toBe('none');
+    expect(resolveCharacterInitiative('DND_5E', sheet)).toMatchObject({ expression: '1d20+2' });
+  });
+
+  it('is D&D 5e only', () => {
+    const sheet = { ...pf2e('perception', 9, 4), initiativeAdvantage: true };
+    expect(resolveCharacterInitiative('PATHFINDER_2E', sheet)).toMatchObject({ expression: '1d20+9' });
   });
 });
 
