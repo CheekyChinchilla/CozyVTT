@@ -835,6 +835,19 @@ describe('a refused restore', () => {
     }
   });
 
+  // The file system takes no name with a NUL in it, and the restore answered 500.
+  it('says a backup with a NUL character in a name is not taken, with 400', async () => {
+    const calls = stubTools();
+    const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, 'uploads/a\0b.png': 'a' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: 'Invalid Backup',
+      message: 'The archive has an unsafe file path, which a backup never has: uploads/a\0b.png Nothing was changed.',
+    });
+    expect(calls).toEqual([]);
+  });
+
   it('can be followed by another restore', async () => {
     stubTools();
     expect((await restore(admin, Buffer.from('not a zip'))).status).toBe(400);

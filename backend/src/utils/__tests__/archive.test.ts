@@ -114,6 +114,7 @@ describe('isSafeArchivePath', () => {
     ['a backslash parent folder', '..\\evil.txt'],
     ['an absolute path', '/etc/passwd'],
     ['a name longer than an archive may hold', `maps/${'é'.repeat(510)}`],
+    ['a NUL character', 'maps/a\0b.png'],
   ])('refuses %s', (_label, name) => {
     expect(isSafeArchivePath(name)).toBe(false);
   });

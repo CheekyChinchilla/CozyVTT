@@ -34,8 +34,8 @@ import { errorCode } from './errors';
 export const MAX_ARCHIVE_NAME_BYTES = 1024;
 
 /**
- * Reject archive entry paths that attempt traversal or absolute escape, or
- * are longer than MAX_ARCHIVE_NAME_BYTES.
+ * Reject archive entry paths that attempt traversal or absolute escape, hold
+ * a NUL character, or are longer than MAX_ARCHIVE_NAME_BYTES.
  * Accepts only simple relative paths that stay beneath the extraction root.
  */
 export function isSafeArchivePath(name: string): boolean {
@@ -43,6 +43,8 @@ export function isSafeArchivePath(name: string): boolean {
   if (Buffer.byteLength(name, 'utf8') > MAX_ARCHIVE_NAME_BYTES) return false;
   if (name.includes('..')) return false;
   if (name.includes('\\')) return false;
+  // No file system takes a name with a NUL in it.
+  if (name.includes('\0')) return false;
   // Must be a simple relative path under the expected directory.
   const normalized = path.posix.normalize(name);
   if (normalized.startsWith('/') || normalized.startsWith('..')) return false;
