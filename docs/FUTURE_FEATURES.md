@@ -87,6 +87,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - `after the next release` **A room's walls move with it under Select.** Select moves a picture's pixels only, so a room drawn and not yet saved leaves its walls where it was drawn (the DM guide says so). The walls waiting for Save that lie inside a lifted box could move and resize with it, and go back with it on Undo.
 - **Add room to a drawn map without stretching it.** Edit Map's **Width** and **Height** stretch a map's picture, a drawn one's too, and move its walls and lights with it. Growing a drawn map by squares, with the new ground blank and everything already on it left in place, needs the picture made larger in the browser and the fog of war kept for the squares that were there.
 - **A token template that keeps its facing.** A token placed from a template always faces the default way, because `TokenTemplate` has no rotation column. It needs one (a migration), the template editor and the placement.
+- **Hex and gridless maps.** ([#104](https://github.com/CheekyChinchilla/CozyVTT/issues/104)) Every map is a square grid, and a token always lands on its squares. Each person can hide the grid lines with **Toggle Grid**, which helps on a picture printed with hexes or with no grid, but tokens still snap. The smallest step, a switch on a map to place its tokens anywhere, needs a setting stored on the map (a migration) and more besides: the server checks a token's position as whole squares, and what a token covers, the fog of war, moving a token with the keyboard and measuring all count in squares. A hex grid needs its own coordinates, drawing, distances and spell areas.
 
 ### Polish / tech debt
 
@@ -116,37 +117,38 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   nowhere but the data volume and `/var/run/postgresql`.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
-- **Move the remaining libraries to their current major versions.** 1.5.2
-  updated every package within its current major version, moved to ESLint 10,
-  and made CI fail on a high or critical advisory in what an instance runs.
-  1.5.3 was the release for the major versions. **Done** for the data layer:
-  Prisma 7.10, connecting through the `pg` driver adapter and still generating
-  the client with the `prisma-client-js` generator. **Done** for the frontend's
-  build and test tools: Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30
-  and jest-dom 7. **Done** for the backend's web framework: Express 5, with
-  express-rate-limit 8 and helmet 8, and for its smaller libraries:
-  connect-pg-simple 10, dotenv 18 and file-type 22. mathjs is no longer used,
-  since the dice parser needs no library, nor is archiver 8: yazl 3 writes the
-  backups and campaign exports.
-  **Done** for React: React 19.3 with React Router 8.5, and for framer-motion
-  14, lucide-react 1 and react-markdown 10. React Router 6 had two moderate
-  advisories that could not be reached in CozyVTT, a single-page app with no
-  server rendering whose one address taken from a link, the page to go back to
-  after signing in, is followed only when it is a path on this site with no
-  backslash in it; React Router 8.4 clears both. **Done** for the advisories
-  against the backend's developer tools: an npm override gives the coverage
-  tool js-yaml 4 in place of the js-yaml 3 it asks for, and Node's own watch
-  mode restarts the development server in place of nodemon. **Done** for
-  TypeScript: 6.0 in both packages. **Done** for Tailwind CSS: version 4,
-  which leaves no advisory against the app's build tools and needs Firefox
-  128 where 114 was enough. Dependabot held back major
-  versions of npm packages until 1.5.3; since then each comes as a pull
-  request of its own, apart from those it names as waiting, and its automatic
-  security pull requests have been on since 1.5.3 reached `main`.
+- **Move the remaining libraries to their current major versions.** Every
+  other library is on its current major version; the changelog of each
+  release says which moved. Dependabot opens a pull request for each new
+  major version, apart from those `.github/dependabot.yml` holds back.
   **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
   candidate, so wait until it is stable with a patch release or two, and move
   to the `prisma-client` generator with it. **Defer** TypeScript 6.1 and 7
   until typescript-eslint supports them, and for 7 the backend's ts-jest too.
+  **Defer** argon2 0.45 until its upstream bug in the order of its hashing
+  parameters is fixed. jsdom 31, a test tool, comes through Dependabot once
+  its two weeks of waiting are up.
+
+- **Small database changes to make with the next migration.** Each of these is
+  a change to the database too small to be a release's only migration. The
+  next release that changes the database anyway, the move to a current
+  PostgreSQL major at the latest, should take them, each in a reviewed,
+  data-preserving migration:
+  - Indexes for foreign keys that no index starts with:
+    `Message(userId)`, `DiceRoll(userId)`, `MapExploration(userId)`,
+    `CreatureFavorite(creatureId)`, `PersonalNote(campaignId)`,
+    `DiceMacro(campaignId)` and `CampaignInvitation(campaignId)`. Deleting an
+    account or a campaign reads through each of those tables in full, and chat
+    and dice history grow for as long as an instance runs. Not slow at the
+    sizes seen so far.
+  - The two indexes that repeat a unique index on the same column:
+    `User_email_idx` and `PasswordResetToken_token_idx`. They cost every write
+    to those tables and speed up nothing.
+  - `Map.baseLayerUrl`, which every create, update and import has set to the
+    same address as `imageUrl` since 1.0. Its readers (who may see a picture,
+    what uses an asset, the campaign export) move to `imageUrl` first.
+  - `SystemSettings.timezone`, which nothing reads since setup stopped asking
+    for it.
 
 - **Read zip files with yauzl in place of unzipper.** Restoring a backup and
   importing a campaign read the archive with unzipper, which brings seven
