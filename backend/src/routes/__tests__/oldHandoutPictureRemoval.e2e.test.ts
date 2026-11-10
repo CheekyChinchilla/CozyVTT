@@ -32,6 +32,12 @@ import { MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL } from '../../services/sharedDocu
 
 const app = createTestApp();
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-old-handouts-'));
+// The documents are stored under paths relative to DIR, and the file runs
+// from DIR. Jest runs other files at the same time against the same
+// database, and a delete there reads unread documents of any campaign
+// (assetUsage); from their folder these paths name nothing, so they leave
+// this file's documents unread, as its tests need.
+const startedIn = process.cwd();
 
 type Agent = ReturnType<typeof request.agent>;
 
@@ -84,8 +90,8 @@ async function storedBefore(
   options: { missingFile?: boolean; by?: string; personal?: boolean; inCampaign?: string } = {}
 ): Promise<{ id: string; filePath: string }> {
   const filename = `before-${Date.now()}-${Math.random().toString(36).slice(2)}.md`;
-  const filePath = path.join(DIR, filename);
-  if (!options.missingFile) fs.writeFileSync(filePath, content);
+  const filePath = filename;
+  if (!options.missingFile) fs.writeFileSync(path.join(DIR, filename), content);
   const doc = await prisma.asset.create({
     data: {
       type: 'DOCUMENT',
@@ -127,6 +133,7 @@ async function settleUnread(): Promise<void> {
 }
 
 beforeAll(async () => {
+  process.chdir(DIR);
   const stamp = Date.now();
   const make = (who: string, role?: 'ADMIN') => createTestUser({ email: `old-handout-${who}-${stamp}@test.invalid`, role });
   const [admin, n, f, p, s, x, l] = await Promise.all([
@@ -169,6 +176,7 @@ afterAll(async () => {
   await cleanupCampaigns(campaignIds);
   await cleanupUsers(userIds);
   await prisma.$disconnect();
+  process.chdir(startedIn);
   fs.rmSync(DIR, { recursive: true, force: true });
 });
 
