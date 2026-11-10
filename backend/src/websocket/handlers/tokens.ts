@@ -20,6 +20,7 @@ import { withMapsLocked, clampTokenPosition } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import { bestEffort, campaignSockets, stillInCampaign } from '../utils';
 import { inBackground } from '../../utils/backgroundWork';
+import { createTurnQueue } from '../../utils/turnQueue';
 
 /** How one member is sent a dragged token. */
 interface FrameRecipient {
@@ -68,6 +69,15 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    */
   const drags = new Map<string, { seenAs: string; at: number; mapId: string; deciding: Promise<DragAudience> }>();
   const seenAs = (token: Pick<Token, 'visible' | 'layer'>) => `${token.visible !== false}|${token.layer}`;
+  /**
+   * This connection's token.move.start and token.move.end take turns, by
+   * token, in the order they arrive. An arrow key sends the two back to back,
+   * and each awaits its own reads, so a drop handled beside its pick-up would
+   * be judged before the drag is recorded: refused then, it would be put back
+   * only on the mover's screen, and the pick-up would record a drag that
+   * nothing ends. Another token's events do not wait.
+   */
+  const moveTurns = createTurnQueue();
   function dragAudienceFor(mapId: string, token: Token): Promise<DragAudience> {
     const cached = drags.get(token.id);
     const now = Date.now();
@@ -314,6 +324,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * Validates permission and broadcasts to campaign
    */
   socket.on('token.move.start', async (data: { tokenId: string; mapId: string }) => {
+    let done: (() => void) | undefined;
     try {
       if (!socket.campaignId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
@@ -333,9 +344,12 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return;
       }
 
+      // After this token's last drop has been judged, which reads the drag.
+      done = await moveTurns.turnFor(tokenId);
+
       // A new drag: whoever this token's frames went to last time is decided
       // afresh, in case the last drag never reached token.move.end. Cleared
-      // before the first await, so frames sent right behind this event share
+      // before the first read, so frames sent right behind this event share
       // the one decision instead of making one this then throws away.
       drags.delete(tokenId);
 
@@ -386,6 +400,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     } catch (error) {
       logger.error('token.move.start failed', { err: error });
       socket.emit('error', { message: 'Failed to start token movement' });
+    } finally {
+      done?.();
     }
   });
 
@@ -479,6 +495,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * Updates database and broadcasts to campaign
    */
   socket.on('token.move.end', async (data: { tokenId: string; mapId: string; x: number; y: number }) => {
+    let done: (() => void) | undefined;
     try {
       if (!socket.campaignId) {
         socket.emit('error', { message: 'Not authenticated to a campaign' });
@@ -499,6 +516,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         socket.emit('error', { message: 'Invalid token move data' });
         return;
       }
+
+      // After this token's pick-up, so the drag it began is recorded.
+      done = await moveTurns.turnFor(tokenId);
 
       // Fetch the map, with the campaign's status for the pause rule below
       // and its current map, for whether this socket may move tokens on it
@@ -525,29 +545,25 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       const token = tokensArray[tokenIndex];
       // The drag is over; the next one is decided afresh. Who its frames
       // went to is kept for a refused drop, below.
-      // TODO(play): one socket's token.move.start and token.move.end run side by side, so the end can read
-      // `drags` before the start has recorded the drag, as an arrow key's pair can. `sawTheDrag` is then
-      // undefined and a drop refused for control or the plane is not put back on the mover's screen; the
-      // start then records a drag nothing ends. Answer the mover for a drop with no recorded drag.
       const sawTheDrag = drags.get(tokenId)?.deciding;
       drags.delete(tokenId);
       const campaignId = socket.campaignId;
 
       /**
-       * A drop refused after the token was picked up: the mover's screen has
-       * already drawn it, and the frames reached everyone the drag went to.
-       * Tell them where the token is; the correction names no mover, since
-       * nobody moved it. Only when the drag began here with frames this
-       * socket was allowed to send (`sawTheDrag`), or `evenWithoutDrag` says
-       * the mover is told regardless. And only a screen that opening the map
-       * now would give the token to: the drag may be long over (a cancelled
-       * hold sends no token.move.end), and the DM may since have hidden the
-       * token and moved it somewhere secret. On a lit map a frame may have
-       * taken the token from a screen, or given it one that cannot see where
-       * it stands; each is put back in step.
+       * A refused drop: the mover's screen has already drawn it, and if the
+       * drag began here with frames this socket was allowed to send
+       * (`sawTheDrag`), the frames reached everyone the drag went to. Tell
+       * them where the token is; the correction names no mover, since nobody
+       * moved it. The mover is told even with no drag recorded: its pick-up
+       * was refused too, or never sent, and its screen has the token where
+       * it was dropped. Only a screen that opening the map now would give the
+       * token to: the drag may be long over (a cancelled hold sends no
+       * token.move.end), and the DM may since have hidden the token and moved
+       * it somewhere secret. On a lit map a frame may have taken the token
+       * from a screen, or given it one that cannot see where it stands; each
+       * is put back in step.
        */
-      const putBack = async (evenWithoutDrag: boolean) => {
-        if (!sawTheDrag && !evenWithoutDrag) return;
+      const putBack = async () => {
         const audience = sawTheDrag ? await sawTheDrag : null;
         const told = stillInCampaign(await campaignSockets(io, campaignId), campaignId)
           .filter((s) => s.id === socket.id || audience?.recipients.has(s.id));
@@ -573,23 +589,22 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       // Control can be taken away mid-drag (a demotion, a new controller).
       if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
         socket.emit('error', { message: moveRefusal(socket.role) });
-        await putBack(false);
+        await putBack();
         return;
       }
 
       // The same plane rule the REST update route applies.
       if (!(await canActOnTokenPlane(socket.role, token, socket.campaignId, socket.userId!))) {
         socket.emit('error', { message: 'You cannot interact with spirit layer tokens' });
-        await putBack(false);
+        await putBack();
         return;
       }
 
       // And the same session rule: a player's move waits for the session.
-      // A pause can land after the token was picked up; the mover controls
-      // the token, so they are told where it is whenever they may see it.
+      // A pause can land after the token was picked up.
       if (!canMoveTokensNow(socket.role, map.campaign.status)) {
         socket.emit('error', { message: PAUSED_MOVE_REFUSAL });
-        await putBack(true);
+        await putBack();
         return;
       }
 
@@ -623,6 +638,9 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         return { written: tokens[index], stored: { ...fresh, tokens } };
       });
       if ('refused' in dropped) {
+        // TODO(play): a drop refused here for its bounds (the DM shrank the map during the drag) is put back
+        // on no screen, so the mover and those the frames reached keep the token where it was carried. Put it
+        // back as the refusals above do, judged from the map as read under the lock.
         socket.emit('error', { message: dropped.refused });
         return;
       }
@@ -713,6 +731,8 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     } catch (error) {
       logger.error('token.move.end failed', { err: error });
       socket.emit('error', { message: 'Failed to finalize token movement' });
+    } finally {
+      done?.();
     }
   });
 }
