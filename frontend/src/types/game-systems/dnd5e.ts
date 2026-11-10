@@ -316,6 +316,12 @@ export interface DnD5eCharacterData extends SheetChrome {
   initiative?: number;
   /** Non-Dexterity initiative bonuses (Alert, Jack of All Trades, subclasses). */
   initiativeBonus?: number;
+  /**
+   * Initiative rolled with advantage, two d20s keeping the higher, unless a
+   * level of exhaustion or the poisoned condition cancels it. Absent on a
+   * sheet saved before it existed.
+   */
+  initiativeAdvantage?: boolean;
   speed?: number;
   hp?: DnD5eHitPoints;
   conditions?: string[];

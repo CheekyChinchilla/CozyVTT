@@ -445,6 +445,7 @@ The classic. Covers all the D&D 5e essentials:
 - Hit points, armor class, and saving throws
 - Skill and saving throw bonuses worked out from your scores, with an **Other** box beside each for anything else that adds to it
 - Initiative, passive Perception, spell save DC and spell attack worked out for you, each with an **Other bonus** box that takes -30 to +30
+- An **Advantage on initiative** box, for a character whose initiative rolls two d20s and keeps the higher ([Rolling Your Own Initiative](PLAYER_GUIDE.md#rolling-your-own-initiative))
 - Spells, spell slots (up to 20 of each level), and spellcasting stats
 - Equipment, weapons, and inventory
 - Features, traits, and background info

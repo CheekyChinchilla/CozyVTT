@@ -41,7 +41,7 @@ import {
   dnd5eSkillBonus,
   dnd5eSaveBonus,
 } from '../../../utils/rules/dnd5e';
-import { dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
+import { dnd5eInitiativeAdvantage, dnd5eInitiativeModifier } from '../../../utils/rules/initiative';
 import { collectSheetFeatures } from '../../../utils/featureEntries';
 import { readProficiencyGroups } from '../../../utils/proficiencies';
 import { isHexColor } from '@/utils/styleAllowlists';
@@ -339,6 +339,15 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
             <div className="text-2xl font-bold text-ink">
               {formatModifier(dnd5eInitiativeModifier(data))}
             </div>
+            {/* Worked out by the same rule the roll uses, so a level of
+                exhaustion or the poisoned condition that cancels the box is
+                shown as it is rolled. */}
+            {dnd5eInitiativeAdvantage(data) === 'advantage' && (
+              <div className="text-xs text-ink-secondary mt-1">With advantage</div>
+            )}
+            {dnd5eInitiativeAdvantage(data) === 'cancelled' && (
+              <div className="text-xs text-ink-muted mt-1">Advantage cancelled</div>
+            )}
           </div>
         )}
         {data.speed !== undefined && (

@@ -1920,6 +1920,24 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             beyond your Dexterity modifier.
           </p>
         </div>
+        <div className="sm:col-span-2 sm:pt-7">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="initiative-advantage"
+              checked={formData.initiativeAdvantage === true}
+              onChange={(e) => updateField('initiativeAdvantage', e.target.checked)}
+              className="w-5 h-5 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+            />
+            <label htmlFor="initiative-advantage" className="text-sm font-semibold text-ink-secondary">
+              Advantage on initiative
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-ink-muted">
+            Initiative rolls two d20s and keeps the higher. A level of exhaustion
+            or the Poisoned condition cancels it, and one d20 is rolled.
+          </p>
+        </div>
       </div>
 
       {/* Hit Points */}

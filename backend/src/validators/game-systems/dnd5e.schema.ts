@@ -390,6 +390,11 @@ export const dnd5eCharacterDataSchema = z.object({
   // adds it to the Dexterity modifier. `initiative` above is the resulting
   // total, kept for exports and anything else reading the blob.
   initiativeBonus: manualBonusSchema.optional(),
+  // Initiative rolled with advantage: two d20s, keeping the higher. Left out
+  // of a sheet saved before it existed, which rolls one d20 as it always did.
+  // A level of exhaustion or the poisoned condition cancels it (see
+  // utils/rules/initiative.ts).
+  initiativeAdvantage: z.boolean().optional(),
   speed: z.number().int().min(0).optional(),
   hp: hitPointsSchema.optional(),
   conditions: sheetList(shortText).optional(),

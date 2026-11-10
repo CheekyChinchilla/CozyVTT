@@ -245,7 +245,7 @@ in `frontend/src/utils/rules/initiative.ts` (duplicated at
 
 | System | Rule | Shape |
 |---|---|---|
-| **D&D 5e** | `d20 +` Dexterity modifier `+ initiativeBonus` | `roll` |
+| **D&D 5e** | `d20 +` Dexterity modifier `+ initiativeBonus`; `2d20kh1` in place of the d20 when `initiativeAdvantage` is true, unless the sheet records disadvantage (below) | `roll` |
 | **Pathfinder 2e** | `d20 +` the stat named by `initiative.usedStat` — Perception by default, or a skill the GM calls for | `roll` |
 | **Call of Cthulhu 7e** | **No roll.** Combatants are ranked in DEX order, highest first | `fixed` |
 | **Shadowrun 6e** | `derivedStats.initiative.meatspace`: its dice pool plus its base | `roll` |
@@ -269,6 +269,16 @@ D&D 5e's `initiativeBonus` is a single manual field covering everything that is
 not Dexterity — the Alert feat, Jack of All Trades, Remarkable Athlete,
 subclasses that swap the ability. Those are too open-ended to enumerate, and
 inventing a toggle per feature would be the same mistake as inventing CoC's dice.
+
+Advantage is one box, `initiativeAdvantage`: whatever grants it, the roll is the
+same, two d20s keeping the higher. `dnd5eInitiativeAdvantage` reads it. Advantage and disadvantage together cancel to one d20, so the box gives
+way when the sheet records something that always gives disadvantage on an ability
+check, as initiative is a Dexterity check: an `exhaustionLevel` of 1 or more, or a
+condition in `DND5E_CHECK_DISADVANTAGE_CONDITIONS` (`poisoned`). Frightened is not
+in that list, since it applies only while the source of the fear is in sight. These
+give no disadvantage of their own: no roll from a sheet applies them, so they only
+cancel a box the player ticked. `keepInStep.test.ts` checks that the condition
+names are ones the sheet's condition boxes write.
 
 ### Hit points: damage, healing and temporary hit points
 

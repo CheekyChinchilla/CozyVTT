@@ -191,13 +191,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   #33 covers the cases reported so far (handing off, stepping back, an agent DM
   narrating while the owner plays).
 
-- **Advantage on initiative.** Initiative is worked out per system in
-  `utils/rules/initiative.ts`, but nothing expresses *advantage* on the roll,
-  such as a Sentinel Shield gives in D&D 5e. The dice layer already understands
-  `2d20kh1` (the roll pickers use it), so this needs a sheet field and a branch
-  in the resolver, and no new dice work. Left out of 1.2.2 to keep that change
-  to the modifier.
-
 - **Shadowrun 6e initiative base is taken as stored.** The resolver in
   `utils/rules/initiative.ts` reads `derivedStats.initiative.meatspace.base`
   and does not work it out from Reaction + Intuition. Nothing shows or edits
