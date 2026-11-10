@@ -899,9 +899,34 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 ### Updating Your Profile
 
-Click **Edit** beside **Profile Information** to change your display name or bio, then click **Save Changes**. Your email address is shown there but cannot be changed (see [How do I change my email address?](#how-do-i-change-my-email-address)).
+Click **Edit** beside **Profile Information** to change your display name or bio, then click **Save Changes**. Your email address is changed on its own, with **Change Email** under it (see [Changing Your Email Address](#changing-your-email-address)).
 
 The Profile page takes a display name of 1 to 50 characters, and a bio of up to 500. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
+
+### Changing Your Email Address
+
+Your email address is how you sign in, and where a password reset link is sent.
+
+1. On your **Profile & Settings** page, click **Change Email** under your address in **Profile Information**.
+2. Type the new address in **New Email Address** and your password in **Current Password**.
+3. Click **Change Email**.
+
+If it worked, the page says "Email changed to" and the new address, and shows the new address in **Profile Information**. Sign in with the new address from now on.
+
+When the address changes:
+
+- Any password reset or invitation link already sent to your account stops working.
+- If your instance sends email, the old address gets a notice that the address was changed, so you hear about it if it was not you. The form says whether a notice will be sent.
+
+If it is refused, the form says why and keeps what you typed:
+
+| Message | What it means |
+|---|---|
+| "Current password is incorrect" | The password was wrong. It counts towards the ten wrong passwords in fifteen minutes described under [Logging In](#logging-in) |
+| "Email already in use" | Another account on this instance has that address |
+| "You have tried to change your email address 5 times in the last hour, the most this server allows. Please try again later." | Every try counts, with the right password or a wrong one, and whether or not the address was taken. You can try again an hour after the first of the five. The limit stops someone using your sign-in to find out which addresses have accounts |
+
+The count is kept in the backend's memory, so restarting it also clears it.
 
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder), or press **Tab** until it is outlined and then **Enter**, to choose an image file (JPEG, PNG or WebP). The **Crop Avatar** window opens: drag the picture with the mouse, a finger or a pen to frame it, or move it with the arrow keys (hold **Shift** to move it further), and use the zoom slider to dial in exactly the right framing, then click **Apply & Upload** to save. **Cancel** or **Esc** closes the window without changing your avatar. On a phone turned on its side the picture and its controls sit side by side, so the whole window fits on the screen.
@@ -1004,7 +1029,7 @@ Rolls appear in the **Dice** panel, the tab beside Chat — not in the conversat
 
 ### How do I change my email address?
 
-Email addresses cannot be changed from the app. Contact your platform administrator. The Admin Panel has no control for it either: an admin changes it through the API, with `PUT /api/users/:id` (see the [API Reference](API_REFERENCE.md)).
+Click **Change Email** on your **Profile & Settings** page; see [Changing Your Email Address](#changing-your-email-address). If you can no longer sign in, ask your platform administrator. The Admin Panel has no control for changing someone else's address: an admin does it through the API, with `PUT /api/users/:id` (see the [API Reference](API_REFERENCE.md)).
 
 ### How do I delete my account?
 
