@@ -26,6 +26,9 @@
 // - cancel (the browser took the pointer) ends whatever is in progress: a
 //   drag is cancelled, a pinch ends, a press is dropped;
 // - a sample for a pointer it never saw go down is ignored.
+//
+// `pressing` names the finger of a press whose gesture is not yet known,
+// where it landed, so a tool can show what a tap there would do.
 // ============================================
 
 export type PointerKind = 'mouse' | 'touch' | 'pen';
@@ -87,6 +90,12 @@ export interface GestureRecognizer {
   hold(id: number): boolean;
   /** Whether this finger's press is held, by the timer's long-press or by `hold`, until it lifts. */
   isHeld(id: number): boolean;
+  /**
+   * The finger of a press whose gesture is not yet known, as it landed: a
+   * tap there if it lifts, a drag once it moves the slop. Null when there is
+   * none, and once the press has become anything else or ended.
+   */
+  pressing(): PointerSample | null;
   /** Forget every pointer and gesture without emitting anything. */
   reset(): void;
 }
@@ -269,6 +278,11 @@ export function createGestureRecognizer(emit: (g: Gesture) => void, options: Ges
     },
     isHeld(id) {
       return phase === 'held' && fingers.has(id);
+    },
+    pressing() {
+      if (phase !== 'press') return null;
+      const [only] = fingers.values();
+      return only?.down ?? null;
     },
     reset() {
       stopTimer();

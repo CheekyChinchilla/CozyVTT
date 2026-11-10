@@ -908,6 +908,30 @@ describe('a room', () => {
     await waitFor(() => expect(wallsAdded()).toEqual(larger));
   });
 
+  it("adds its walls at the map's size as the save found it, when Edit Map on another device changes it while the picture uploads", async () => {
+    // The room's top side is a wall the map has already.
+    const map = mapWith({ wallSegments: [{ id: 'w1', x1: 150, y1: 50, x2: 50, y2: 50, type: 'wall' }] });
+    await showMap(map);
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    let finishUpload: () => void = () => undefined;
+    h.replaceDrawnPicture.mockImplementationOnce((id: string) => new Promise((resolve) => {
+      finishUpload = () => resolve({ message: 'Picture saved', asset: { id, type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] }, imageUrl: `/api/assets/maps/${id}?v=1` });
+    }));
+    await pressSave();
+    await waitFor(() => expect(h.replaceDrawnPicture).toHaveBeenCalledTimes(1));
+    // Meanwhile Edit Map on another device makes the map 30 squares each way,
+    // and the server scales its walls with it; this page has not heard yet.
+    const resized = { ...map, width: 30, height: 30, wallSegments: [{ id: 'w1', x1: 225, y1: 75, x2: 75, y2: 75, type: 'wall' }] };
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
+      Promise.resolve({ ...resized, id: mapId, imageUrl: storedAs(data.imageUrl) }));
+    await act(async () => { finishUpload(); });
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
+    const larger = fourWalls.slice(1).map((w) => ({ ...w, x1: w.x1 * 1.5, y1: w.y1 * 1.5, x2: w.x2 * 1.5, y2: w.y2 * 1.5 }));
+    expect(wallsAdded()).toEqual(larger);
+  });
+
   it('holds a reload while its walls are added, and says it saved once they are', async () => {
     await showMap();
     await paintOn();
@@ -1271,6 +1295,47 @@ describe('a stamp', () => {
     expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[325, 275]]);
   });
 
+  it('on a touch screen, shows the stamp where a finger is held before it lifts, and paints it there once as it lifts', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+    const finger = contact('touch', 1);
+
+    finger.down(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([125, 275]);
+    expect(callsOfPicture('translate')).toEqual([]);
+
+    finger.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[125, 275]]);
+    take(input());
+    await nextFrame();
+    expect(previewAt()).toEqual([]);
+  });
+
+  it('on a touch screen, takes away the stamp a finger is holding when a second finger lands, and paints nothing', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+    const first = contact('touch', 1);
+    const second = contact('touch', 2, false);
+
+    first.down(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([125, 275]);
+    second.down(input(), { clientX: 400, clientY: 400 });
+    take(input());
+    await nextFrame();
+    expect(previewAt()).toEqual([]);
+    second.up(input(), { clientX: 400, clientY: 400 });
+    first.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate')).toEqual([]);
+  });
+
   it('leaves a curve a finger was bending straight and waiting when a second finger lands', async () => {
     await showMap();
     await paintOn();
@@ -1389,6 +1454,69 @@ describe('polygons and curves', () => {
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 100 });
     press('Enter');
     expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 100, 300, 100]);
+  });
+
+  const done = () => fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
+
+  it('closes a polygon of three corners or more, and paints a curve not bent, when Done puts Mapmaker away, as Enter does', async () => {
+    await showMap();
+    await paintOn();
+    choose('Polygon');
+    click(100, 100);
+    click(200, 100);
+    click(150, 200);
+    done();
+    expect(corners()).toEqual(expect.arrayContaining([[100, 100], [200, 100], [150, 200]]));
+    expect(callsOfPicture('closePath')).toHaveLength(1);
+
+    await paintOn();
+    choose('Curve');
+    drag({ clientX: 100, clientY: 300 }, { clientX: 300, clientY: 300 });
+    done();
+    expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 300, 300, 300]);
+  });
+
+  it('keeps a polygon of fewer than three corners when Done puts Mapmaker away, unseen and leaving Esc alone, to go on with when it is opened again', async () => {
+    await showMap();
+    await paintOn();
+    choose('Polygon');
+    click(130, 370);
+    click(270, 370);
+    take(input());
+    done();
+    await nextFrame();
+    expect(take(input()).filter((c) => c.method === 'lineTo').map((c) => c.args)).not.toContainEqual([270, 370]);
+    expect(callsOfPicture('closePath')).toHaveLength(0);
+    // Nothing painted: Mapmaker lets go of its picture once the map's own is back.
+    pictures[1].load();
+    await pictures[1].decoded();
+    expect(pictureCanvas()).toBeUndefined();
+    press('Escape');
+
+    await paintOn();
+    click(200, 450);
+    press('Enter');
+    expect(corners()).toEqual(expect.arrayContaining([[130, 370], [270, 370], [200, 450]]));
+    expect(callsOfPicture('closePath')).toHaveLength(1);
+  });
+
+  it('lets go of a polygon Done kept once another map is shown', async () => {
+    const first = mapWith();
+    await showMap(first);
+    await paintOn();
+    choose('Polygon');
+    click(130, 370);
+    click(270, 370);
+    done();
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    act(() => { h.set({ currentMap: first }); });
+    pictures[pictures.length - 1].load();
+    await pictures[pictures.length - 1].decoded();
+
+    await paintOn();
+    click(200, 450);
+    press('Enter');
+    expect(callsOfPicture('closePath')).toHaveLength(0);
   });
 });
 
@@ -2154,6 +2282,56 @@ describe('drafts', () => {
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
     }
     expect(drafts().writes.map((w) => w.tiles)).toEqual([['0,0', '1,0']]);
+  });
+
+  /** Choose a tool in the Mapmaker panel. */
+  const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
+  /** Where a drawImage onto the picture put its pixels: x, y, width, height. */
+  const drawnAt = () => callsOn(pictureCanvas()).filter((c) => c.method === 'drawImage').map((c) => c.args.slice(-4));
+
+  it('puts a moved selection down as the page is hidden, so the draft written then holds it, though it was the only change', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    drag({ clientX: 150, clientY: 120 }, { clientX: 450, clientY: 420 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    // Where the box was, and where it went.
+    expect(drafts().writes.map((w) => w.tiles)).toEqual([['0,0', '1,1']]);
+    expect([...drafts().kept.get(key)!.keys()]).toEqual(['0,0', '1,1']);
+    expect(drawnAt()).toContainEqual([400, 400, 100, 50]);
+  });
+
+  it('puts a paste down as the page is hidden, so the draft written then holds it', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 300, clientY: 100 }, { clientX: 400, clientY: 150 });
+    press('c', { ctrlKey: true });
+    press('Escape');
+    fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Paste' }));
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    try {
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+      await settle();
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    }
+    expect(drafts().writes.map((w) => w.tiles)).toEqual([['1,0']]);
+    // A square right and down from where it was copied.
+    expect(drawnAt()).toContainEqual([350, 150, 100, 50]);
+  });
+
+  it('leaves a box chosen and not moved where it is as the page is hidden', async () => {
+    await showMap();
+    await paintOn();
+    choose('Select');
+    drag({ clientX: 100, clientY: 100 }, { clientX: 200, clientY: 150 });
+    act(() => { window.dispatchEvent(new Event('pagehide')); });
+    await settle();
+    expect(drafts().writes).toEqual([]);
+    expect(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: 'Copy' })).toBeEnabled();
   });
 
   it('writes what is not saved as another map is shown', async () => {

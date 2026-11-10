@@ -314,6 +314,10 @@ const releaseLifted = (canvas: HTMLCanvasElement, clipboard: HTMLCanvasElement |
 /** Paint on `s` not saved. */
 const paintUnsaved = (s: Surface | null) => s !== null && s.revision !== s.saved;
 
+// TODO(maps): a polygon being clicked out with three corners or more, and a
+// curve waiting to be bent, count for nothing here, so a reload or leaving
+// the map asks nothing and drops them, and no draft keeps them. They should
+// count as paint not saved while they could be painted, as a moved selection does.
 /** Paint on `s` not saved, or `selection` moved or pasted on its map. */
 const unsavedWith = (s: Surface | null, selection: Selection | null) =>
   paintUnsaved(s) || (s !== null && selection?.mapId === s.mapId && selectionPending(selection));
@@ -414,21 +418,33 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const strokeRef = useRef<Stroke | null>(null);
   const shapeRef = useRef<ShapeUnderWay | null>(null);
   const selectionRef = useRef<Selection | null>(null);
-  /** A polygon being clicked out, corner by corner, and where the pointer is now, in map pixels. */
+  /**
+   * A polygon being clicked out, corner by corner, and where the pointer is
+   * now, in map pixels. One too small to paint is kept while Mapmaker is put
+   * away, unseen, and goes on when it is opened again on its map.
+   */
   const polygonRef = useRef<{ mapId: string; points: PaintPoint[]; cursor: PaintPoint | null } | null>(null);
   /** Where a mouse or a pen hovers with Stamp, Brush or Eraser chosen, for the stamp's or the brush's preview. */
   const hoverRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
   /**
-   * A finger's press with Stamp chosen: the stamp's preview follows it, and
+   * A finger's drag with Stamp chosen: the stamp's preview follows it, and
    * it is painted where the finger lifts; a second finger drops it.
    */
   const stampPressRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
+  /**
+   * A finger down and not yet a tap or a drag, where it landed: with Stamp
+   * chosen, the stamp's preview shows where a tap would paint it.
+   */
+  const pressingRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
   /** A curve dragged end to end, waiting for a second drag to bend it (`bending` while that drag is under way). */
   const curveRef = useRef<{ mapId: string; shape: PaintShape; bending: boolean } | null>(null);
   /** What Copy or Cut took, for Paste, on any map Paint opens on. */
   const clipboardRef = useRef<{ canvas: HTMLCanvasElement; box: SelectBox } | null>(null);
   /** Put the selection down (or, with false, let it go), from callbacks made before it. */
   const endSelectionRef = useRef<(place?: boolean) => void>(() => undefined);
+  /** Close the polygon being clicked out, and paint the curve waiting to be bent, from callbacks made before them. */
+  const finishPolygonRef = useRef<() => void>(() => undefined);
+  const finishCurveRef = useRef<() => void>(() => undefined);
   /** The map whose own colour the second colour last started at. */
   const secondStartedFor = useRef<string | null>(null);
   /** Whether there is a selection, and something to paste, for the panel's buttons. */
@@ -749,7 +765,6 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     selectionRef.current = null;
     setSelectionShown(false);
     setSelectionUnsaved(false);
-    polygonRef.current = null;
     curveRef.current = null;
     s.history.clear();
     s.store.dispose();
@@ -947,17 +962,23 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * to save, the canvas is let go of once the map's own picture is back.
    */
   const close = useCallback(() => {
-    // A line of text being written is painted, as the next press would; a selection is put down.
+    // A line of text being written is painted, as the next press would; a
+    // selection is put down; a polygon of three corners or more is closed and
+    // a curve waiting to be bent is painted, as Enter does them. A polygon of
+    // fewer corners cannot be painted, so it is kept to go on with.
     if (textRef.current) commitTextRef.current();
     endSelectionRef.current();
-    polygonRef.current = null;
-    curveRef.current = null;
+    const polygon = polygonRef.current;
+    if (polygon && polygon.points.length >= 3) finishPolygonRef.current();
+    else if (polygon) polygon.cursor = null;
+    finishCurveRef.current();
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
     // No brush or stamp is left showing where the pointer was.
     hoverRef.current = null;
     stampPressRef.current = null;
+    pressingRef.current = null;
     setOn(false);
     onRef.current = false;
     markDirty('overlay');
@@ -992,6 +1013,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       onRef.current = false;
     }
   }, [mapId, isDM, on, dispose, writeDraft, strand]);
+  // A polygon kept while Mapmaker is put away goes with its map, and with the DM.
+  useEffect(() => {
+    const polygon = polygonRef.current;
+    if (polygon && (polygon.mapId !== mapId || !isDM)) polygonRef.current = null;
+  }, [mapId, isDM]);
   // A draft offered for a map no longer on screen, or to a viewer no longer
   // the DM, is no longer asked about: its answer would act on nothing.
   useEffect(() => {
@@ -1054,9 +1080,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (surface && !on && !unsaved && pictureSettled) dispose();
   }, [surface, on, unsaved, pictureSettled, dispose]);
   // The page hidden (another tab or app, a phone's screen off) may not come
-  // back: what is new goes into the draft at once.
+  // back: what is new goes into the draft at once. Pixels moved or pasted
+  // and not yet put down are put down first, as showing another map does,
+  // so the draft holds them; a box chosen and not moved stays as it is.
   useEffect(() => {
-    const now = () => writeDraft(surfaceRef.current);
+    const now = () => {
+      const s = surfaceRef.current;
+      const selection = selectionRef.current;
+      if (s && selection?.mapId === s.mapId && selectionPending(selection)) endSelectionRef.current();
+      writeDraft(s);
+    };
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') now();
     };
@@ -1295,8 +1328,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // before the save counts as done: until they are in, a reload asks and
       // the draft keeps them. A wall the map has already, or a side two rooms
       // share, is added once. One request adds them all; the map skips any
-      // it refuses and says which and why.
-      const walls = wallsToAdd(wallsOnMap(liveWalls(roomsSaved), ...xy(s)), latest.wallSegments ?? []);
+      // it refuses and says which and why. They are placed by the map as the
+      // server had it when the picture was pointed, its size and its walls:
+      // Edit Map on another device may have changed both during the upload,
+      // before this page has heard.
+      const onMap: [number, number] = [s.canvas.width / (saved.width * saved.gridSize), s.canvas.height / (saved.height * saved.gridSize)];
+      const walls = wallsToAdd(wallsOnMap(liveWalls(roomsSaved), ...onMap), saved.wallSegments ?? latest.wallSegments ?? []);
       let notAdded: { missed: number; reasons: string[] } | null = null;
       if (walls.length > 0) {
         try {
@@ -1339,7 +1376,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [map, campaignId, bump, onSaved, onMapRead, mapsSharing, refuse, clearDrafts, touched, xy]);
+  }, [map, campaignId, bump, onSaved, onMapRead, mapsSharing, refuse, clearDrafts, touched]);
   /** Save, answering whether it saved; pressed again while one is under way, that one's answer. */
   const save = useCallback((overwrite = false): Promise<boolean> => {
     if (savingRef.current && saveRun.current) return saveRun.current;
@@ -1356,6 +1393,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     if (!s) return;
     clearDrafts(s);
+    polygonRef.current = null;
     setAsking(false);
     setOn(false);
     onRef.current = false;
@@ -1406,6 +1444,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     else if (choice === 'discard') {
       const s = surfaceRef.current;
       if (s) clearDrafts(s);
+      polygonRef.current = null;
       dispose();
     }
   }, [save, dispose, clearDrafts]);
@@ -1500,6 +1539,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     markDirty('overlay');
     paintShape(curve.mapId, curve.shape);
   }, [markDirty, paintShape]);
+
+  useEffect(() => {
+    finishPolygonRef.current = finishPolygon;
+    finishCurveRef.current = finishCurve;
+  }, [finishPolygon, finishCurve]);
 
   // Another tool chosen: a polygon not closed and a curve not bent are let go.
   useEffect(() => {
@@ -1972,9 +2016,21 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         markDirty('overlay');
       }
     },
+    press(at: PointerAt | null) {
+      const pressing = pressingRef.current;
+      if (at && onRef.current && map) {
+        const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+        pressingRef.current = { mapId: map.id, at: point };
+      } else if (pressing) {
+        pressingRef.current = null;
+      } else {
+        return;
+      }
+      markDirty('overlay');
+    },
     escape() {
       if (dropStroke()) return true;
-      if (polygonRef.current || curveRef.current) {
+      if (onRef.current && (polygonRef.current || curveRef.current)) {
         polygonRef.current = null;
         curveRef.current = null;
         markDirty('overlay');
@@ -2083,14 +2139,14 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (stroke) shown.push(strokePreview(s, stroke));
     if (shapeRef.current) shown.push(shapePreview(s, shapeRef.current.shape));
     const polygon = polygonRef.current;
-    if (polygon && polygon.mapId === s.mapId) {
+    if (polygon && polygon.mapId === s.mapId && onRef.current) {
       const look = settingsRef.current;
       const points = polygon.cursor ? [...polygon.points, polygon.cursor] : polygon.points;
       const shape: PaintShape = { kind: 'polygon', from: points[0], to: points[points.length - 1], points, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'outline' };
       shown.push(shapePreview(s, shape));
     }
     if (curveRef.current && curveRef.current.mapId === s.mapId) shown.push(shapePreview(s, curveRef.current.shape));
-    const stampAtPointer = stampPressRef.current ?? hoverRef.current;
+    const stampAtPointer = stampPressRef.current ?? pressingRef.current ?? hoverRef.current;
     const m = mapRef.current;
     if (stampAtPointer && stampAtPointer.mapId === s.mapId && m && settingsRef.current.tool === 'stamp') {
       const look = settingsRef.current;

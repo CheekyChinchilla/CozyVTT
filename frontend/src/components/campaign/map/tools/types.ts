@@ -4,7 +4,8 @@
 // MapCanvas owns the canvas and its pointer and keyboard listeners; each tool
 // owns what it does with them. A mouse or a pen reaches the tools as it
 // happens; a finger through the gesture recogniser (map/gestures.ts), a tap
-// as a down and an up and a drag as a down, moves and an up. A tool is asked
+// as a down and an up and a drag as a down, moves and an up, and a press
+// still waiting to be either as `press`. A tool is asked
 // in a fixed order, so the order in MapCanvas decides which tool a click goes
 // to when two are up at once (a measuring tool can sit beside a DM tool).
 // ============================================
@@ -53,6 +54,14 @@ export interface MapTool {
   escape?(): boolean;
   /** The mouse, or a pen not touching, left the map: drop what follows the pointer (a preview). Every tool is told. */
   leave?(): void;
+  /**
+   * A finger is down and its gesture not yet known: a tap where it landed
+   * if it lifts, a drag once it moves. `at` is where it landed, as a tap
+   * would reach `down`, for a tool to show what a tap would do there (a
+   * preview); null once the press has become anything else or ended. Every
+   * tool is told.
+   */
+  press?(at: PointerAt | null): void;
 }
 
 /**

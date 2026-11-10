@@ -56,6 +56,14 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The Admin Panel's Status card checks live connections from your browser.** Its **WS** light was green whenever the backend ran, even behind a proxy that refused live connections. Each part now says **Working** or **Down** in words, and **WS** can say **Polling only**. See [Health Check Endpoint](docs/DEPLOYMENT.md#health-check-endpoint).
 
+- **On a touch screen, Mapmaker shows the see-through stamp as soon as your finger touches the map.** It showed only once the finger slid, so you could not see where a tap would paint the stamp before lifting. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
+- **Done in Mapmaker finishes the polygon or curve you are drawing.** It dropped them. Each is painted as `Enter` paints it, and a polygon with fewer than three corners is kept for when you open Mapmaker again. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
+- **Mapmaker adds your rooms' walls where their floors are, even if the map's size is changed on another device while you save.** The walls went in at the size your screen still showed, away from the floors.
+
+- **Mapmaker keeps a selection you moved or pasted in your draft when you switch to another tab or app.** It is put down then. A phone that closed the page in the background lost it, and kept no draft at all if it was your only change. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

@@ -2944,7 +2944,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
   // A finger reaches the tools through the gesture recogniser
   // (map/gestures.ts): a tap as a down and an up where it landed, a drag as a
-  // down where it landed, moves and an up. A drag the tools do not take pans
+  // down where it landed, moves and an up. Until it is either, its press is
+  // shown to them where it landed (`press`), so Mapmaker's stamp shows where
+  // a tap would paint it. A drag the tools do not take pans
   // the map, through the token tool; a door opens on a tap only. A second
   // finger cancels what the first began and pinches the zoom. A long-press
   // reaches no tool: it opens the menu a right-click opens there, or pings
@@ -2974,6 +2976,23 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const [gestures] = useState(() => createGestureRecognizer((g) => gestureHandlerRef.current(g), {
     longPressAt: () => longPressAllowedRef.current,
   }));
+  /** The finger whose press the tools were last shown, by pointer id; null for none. */
+  const pressShownRef = useRef<number | null>(null);
+  /**
+   * Show the tools a finger's press whose gesture is not yet known, where it
+   * landed, or tell them it is over, whatever it became: read off the
+   * recogniser after every sample it is fed, and whenever it lets go of a
+   * press by itself.
+   */
+  const followPress = () => {
+    const pressing = gestures.pressing();
+    const id = pressing?.id ?? null;
+    if (id === pressShownRef.current) return;
+    pressShownRef.current = id;
+    const down = pressing ? fingerDownsRef.current.get(pressing.id) : undefined;
+    const at = (down && pointerAt(down, 'tap')) ?? null;
+    for (const tool of pointerTools) tool.press?.(at);
+  };
 
   const handleGesture = (g: Gesture) => {
     const current = gestureEventRef.current;
@@ -2991,6 +3010,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       releaseButton(0, at('tap'));
       countTap(mayPing && onGround ? { kind: down.kind, t: g.at.t, x: g.at.x, y: g.at.y } : null);
     } else if (g.type === 'long-press') {
+      // The timer's, outside any sample: the press is over.
+      followPress();
       if (!fingerDownsRef.current.has(g.at.id)) return;
       longPress(g.at.id, g.at.x, g.at.y);
     } else if (g.type === 'drag') {
@@ -3065,12 +3086,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     } finally {
       gestureEventRef.current = null;
     }
+    followPress();
   };
 
   // A gesture under way is forgotten when the window loses focus or a DM tool
   // changes; a finger's drag that reached the tools is cancelled for them.
   const dropGestures = useEffectEvent(() => {
     gestures.reset();
+    followPress();
     fingerDownsRef.current.clear();
     fingerMenusRef.current.clear();
     penTipsRef.current.clear();
@@ -3767,6 +3790,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // ignores beside a stylus, leaves a right-click a right-click.
     for (const pointerId of fingerDownsRef.current.keys()) {
       if (gestures.hold(pointerId)) {
+        followPress();
         longPress(pointerId, e.clientX, e.clientY);
         return;
       }
