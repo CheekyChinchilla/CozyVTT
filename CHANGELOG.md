@@ -60,6 +60,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Done in Mapmaker finishes the polygon or curve you are drawing.** It dropped them. Each is painted as `Enter` paints it, and a polygon with fewer than three corners is kept for when you open Mapmaker again. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
+- **Mapmaker adds your rooms' walls where their floors are, even if the map's size is changed on another device while you save.** The walls went in at the size your screen still showed, away from the floors.
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

@@ -1317,8 +1317,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // before the save counts as done: until they are in, a reload asks and
       // the draft keeps them. A wall the map has already, or a side two rooms
       // share, is added once. One request adds them all; the map skips any
-      // it refuses and says which and why.
-      const walls = wallsToAdd(wallsOnMap(liveWalls(roomsSaved), ...xy(s)), latest.wallSegments ?? []);
+      // it refuses and says which and why. They are placed by the map as the
+      // server had it when the picture was pointed, its size and its walls:
+      // Edit Map on another device may have changed both during the upload,
+      // before this page has heard.
+      const onMap: [number, number] = [s.canvas.width / (saved.width * saved.gridSize), s.canvas.height / (saved.height * saved.gridSize)];
+      const walls = wallsToAdd(wallsOnMap(liveWalls(roomsSaved), ...onMap), saved.wallSegments ?? latest.wallSegments ?? []);
       let notAdded: { missed: number; reasons: string[] } | null = null;
       if (walls.length > 0) {
         try {
@@ -1361,7 +1365,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [map, campaignId, bump, onSaved, onMapRead, mapsSharing, refuse, clearDrafts, touched, xy]);
+  }, [map, campaignId, bump, onSaved, onMapRead, mapsSharing, refuse, clearDrafts, touched]);
   /** Save, answering whether it saved; pressed again while one is under way, that one's answer. */
   const save = useCallback((overwrite = false): Promise<boolean> => {
     if (savingRef.current && saveRun.current) return saveRun.current;

@@ -908,6 +908,30 @@ describe('a room', () => {
     await waitFor(() => expect(wallsAdded()).toEqual(larger));
   });
 
+  it("adds its walls at the map's size as the save found it, when Edit Map on another device changes it while the picture uploads", async () => {
+    // The room's top side is a wall the map has already.
+    const map = mapWith({ wallSegments: [{ id: 'w1', x1: 150, y1: 50, x2: 50, y2: 50, type: 'wall' }] });
+    await showMap(map);
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    let finishUpload: () => void = () => undefined;
+    h.replaceDrawnPicture.mockImplementationOnce((id: string) => new Promise((resolve) => {
+      finishUpload = () => resolve({ message: 'Picture saved', asset: { id, type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] }, imageUrl: `/api/assets/maps/${id}?v=1` });
+    }));
+    await pressSave();
+    await waitFor(() => expect(h.replaceDrawnPicture).toHaveBeenCalledTimes(1));
+    // Meanwhile Edit Map on another device makes the map 30 squares each way,
+    // and the server scales its walls with it; this page has not heard yet.
+    const resized = { ...map, width: 30, height: 30, wallSegments: [{ id: 'w1', x1: 225, y1: 75, x2: 75, y2: 75, type: 'wall' }] };
+    h.updateMap.mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
+      Promise.resolve({ ...resized, id: mapId, imageUrl: storedAs(data.imageUrl) }));
+    await act(async () => { finishUpload(); });
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
+    const larger = fourWalls.slice(1).map((w) => ({ ...w, x1: w.x1 * 1.5, y1: w.y1 * 1.5, x2: w.x2 * 1.5, y2: w.y2 * 1.5 }));
+    expect(wallsAdded()).toEqual(larger);
+  });
+
   it('holds a reload while its walls are added, and says it saved once they are', async () => {
     await showMap();
     await paintOn();
