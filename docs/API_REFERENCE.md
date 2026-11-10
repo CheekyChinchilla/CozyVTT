@@ -1723,7 +1723,7 @@ it was is written to the backup list first, and the response names it as `safety
 
 One restore runs at a time: a second sent while the first takes its upload or writes that
 backup answers `409`. A refused file answers `400` (not named `.zip`, not a ZIP archive,
-more than 100,000 entries, not a complete CozyVTT backup, a backup of a schema other than
+more than 100,000 entries, a file name it cannot write, not a complete CozyVTT backup, a backup of a schema other than
 the one `DATABASE_URL` names, or an upload that could not be read, such as one cut off) or `413` (over 4 GB, or
 unpacking to more than 10 GiB), with the reason. While the database is being replaced,
 live connections are closed and every other API request, a second restore included,

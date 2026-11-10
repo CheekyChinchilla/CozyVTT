@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { readdirSync, readlinkSync, realpathSync } from 'fs';
+import { existsSync, readdirSync, readlinkSync, realpathSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import {
@@ -11,6 +11,7 @@ import {
   writeArchiveEntry,
   ArchiveLimitError,
   ArchiveRefusedError,
+  MAX_ARCHIVE_NAME_BYTES,
   UnpackedTotal,
   type ArchiveEntry,
 } from '../archive';
@@ -21,6 +22,9 @@ import {
   zipBuffer,
   repeatedBytes,
   claimUnpackedSize,
+  claimPackedSize,
+  claimZip64Field,
+  claimLocalExtraLength,
   renameEntry,
   writeManyEntryZip,
   writeZip64Claiming,
@@ -109,8 +113,15 @@ describe('isSafeArchivePath', () => {
     ['a backslash', 'maps\\evil.txt'],
     ['a backslash parent folder', '..\\evil.txt'],
     ['an absolute path', '/etc/passwd'],
+    ['a name longer than an archive may hold', `maps/${'é'.repeat(510)}`],
+    ['a NUL character', 'maps/a\0b.png'],
   ])('refuses %s', (_label, name) => {
     expect(isSafeArchivePath(name)).toBe(false);
+  });
+
+  it('accepts a name as long as an archive may hold, counted in bytes', () => {
+    expect(isSafeArchivePath(`maps/${'é'.repeat(509)}a`)).toBe(true);
+    expect(Buffer.byteLength(`maps/${'é'.repeat(509)}a`)).toBe(MAX_ARCHIVE_NAME_BYTES);
   });
 });
 
@@ -298,6 +309,71 @@ describe('extractArchiveSafely', () => {
     expect(await fs.readFile(path.join(dest, 'database.sql'), 'utf8')).toBe('SELECT 1;\n');
     expect((await fs.readFile(path.join(dest, 'uploads/maps/a.png'))).equals(Buffer.alloc(3 * MB, 7))).toBe(true);
   });
+
+  // A file that cannot be opened, left to a stream with no one listening,
+  // was an uncaught exception, which ends the backend. Jest fails the test
+  // it lands in, and the wait gives it time to land.
+  describe('an entry the folder cannot take', () => {
+    const NAME_CANNOT_BE_WRITTEN = 'The archive is damaged, or holds a file name that cannot be written: ';
+
+    async function refusalOf(file: string): Promise<unknown> {
+      const dest = path.join(root, 'unpacked');
+      const refused = await extractArchiveSafely(file, await openArchiveFile(file, 10), dest, LIMITS).then(
+        () => undefined,
+        (error: unknown) => error
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return refused;
+    }
+
+    it.each([
+      ['a file named as a folder already written', [{ name: 'x/y', data: 'a' }, { name: 'x', data: 'b' }], 'x'],
+      ['a folder named as a file already written', [{ name: 'x', data: 'a' }, { name: 'x/y', data: 'b' }], 'x/y'],
+      ['a name longer than a folder can hold', [{ name: `a/${'b'.repeat(300)}`, data: 'a' }], `a/${'b'.repeat(300)}`],
+    ])('refuses %s', async (_label, entries, refusedName) => {
+      const file = path.join(root, 'clash.zip');
+      await writeZip(file, entries);
+
+      const error = await refusalOf(file);
+      expect(error).toBeInstanceOf(ArchiveRefusedError);
+      expect(error).not.toBeInstanceOf(ArchiveLimitError);
+      expect((error as Error).message).toBe(`${NAME_CANNOT_BE_WRITTEN}${refusedName}`);
+    });
+
+    it('refuses a file entry that names the folder it is unpacked into', async () => {
+      const file = path.join(root, 'dot.zip');
+      await writeZip(file, [{ name: 'q9', data: 'hello', store: true }]);
+      renameEntry(file, 'q9', './');
+      const directory = await openArchiveFile(file, 10);
+      expect(directory.files).toMatchObject([{ path: './', type: 'File' }]);
+
+      const error = await refusalOf(file);
+      expect(error).toBeInstanceOf(ArchiveRefusedError);
+      expect((error as Error).message).toBe(`${NAME_CANNOT_BE_WRITTEN}./`);
+    });
+
+    // A restore or import removes its folder the moment a refusal reaches
+    // it. A file still being opened then failed with no one listening.
+    it('refuses an entry before it is unpacked, however soon its folder is removed', async () => {
+      const dest = path.join(root, 'unpacked');
+      const file = path.join(root, 'odd.zip');
+      await writeZip(file, [{ name: 'secret.txt', data: 'x'.repeat(1000) }]);
+      rewriteEntryHeader(file, 'secret.txt', { flags: 0x1 });
+      const directory = await openArchiveFile(file, 10);
+
+      const refused = await extractArchiveSafely(file, directory, dest, LIMITS).then(
+        () => undefined,
+        (error: unknown) => {
+          rmSync(dest, { recursive: true, force: true });
+          return error;
+        }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(refused).toBeInstanceOf(ArchiveRefusedError);
+      expect(existsSync(dest)).toBe(false);
+    });
+  });
 });
 
 describe('countListedEntries', () => {
@@ -399,6 +475,25 @@ describe('openArchiveFile', () => {
     await expect(openArchiveFile(file, 10)).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
   });
 
+  // The reader keeps every name it lists, and a name can be 65,535 bytes.
+  it('refuses an archive with a name longer than it may hold, without repeating it', async () => {
+    const file = path.join(root, 'long.zip');
+    const name = `maps/${'b'.repeat(MAX_ARCHIVE_NAME_BYTES - 4)}`;
+    await writeZip(file, [{ name: 'a.json', data: '{}' }, { name, data: 'x' }]);
+
+    const refusal = openArchiveFile(file, 10);
+    await expect(refusal).rejects.toThrow('The archive has a file name longer than 1,024 bytes, which an archive from this server never has.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
+  });
+
+  it('reads an archive whose longest name is as long as it may hold', async () => {
+    const file = path.join(root, 'longest.zip');
+    const name = `maps/${'b'.repeat(MAX_ARCHIVE_NAME_BYTES - 5)}`;
+    await writeZip(file, [{ name, data: 'x' }]);
+
+    expect((await openArchiveFile(file, 10)).files.map((f) => f.path)).toEqual([name]);
+  });
+
   it('opens an archive within the limit', async () => {
     const file = path.join(root, 'few.zip');
     await writeManyEntryZip(file, 10);
@@ -406,6 +501,31 @@ describe('openArchiveFile', () => {
     expect((await openArchiveFile(file, 10)).files).toHaveLength(10);
     // The spy sees the entries read, so a refusal it saw none of read none.
     expect(read).toHaveBeenCalled();
+  });
+
+  // A ZIP64 field can claim up to 2^64 bytes. Read as it claimed, such an
+  // offset or size was a range error from the file system, which the import
+  // answered as the server's own failure.
+  it.each([
+    ['whose local header the directory places far past the end of the file', 'localHeaderOffset' as const],
+    ['whose packed bytes the directory claims run far past the end of the file', 'compressedSize' as const],
+  ])('refuses an entry %s, saying it is damaged', async (_label, field) => {
+    const file = path.join(root, 'zip64.zip');
+    await writeZip(file, [{ name: 'a.json', data: '{"a":1}' }], { zip64: true });
+    claimZip64Field(file, 'a.json', field, 1n << 60n);
+
+    const refusal = openArchiveFile(file, 10);
+    await expect(refusal).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
+  });
+
+  it('refuses a stored entry whose packed bytes the directory claims run past the end of the file', async () => {
+    const file = path.join(root, 'stored.zip');
+    await writeZip(file, [{ name: 'a.json', data: '{"a":1}', store: true }]);
+    // Shorter than the file, longer than what follows the entry's header.
+    claimPackedSize(file, 'a.json', (await fs.stat(file)).size - 20);
+
+    await expect(openArchiveFile(file, 10)).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
   });
 });
 
@@ -460,6 +580,30 @@ describe('reading one entry within limits', () => {
     await expect(fs.access(dest)).rejects.toThrow();
   });
 
+  it('refuses an entry whose local header puts its packed bytes past the end of the file', async () => {
+    const file = path.join(root, 'moved.zip');
+    await writeZip(file, [{ name: 'a.json', data: '{"a":1}', store: true }]);
+    const entry = (await openArchiveFile(file, 100)).files[0];
+    claimLocalExtraLength(file, 'a.json', 1000);
+
+    const refusal = readArchiveEntry(file, entry, { maxEntryBytes: MB, total: new UnpackedTotal(MB) });
+    await expect(refusal).rejects.toThrow('The archive is damaged: a.json cannot be read.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
+  });
+
+  it('leaves no file behind when an entry is refused before it is unpacked', async () => {
+    const file = path.join(root, 'odd.zip');
+    await writeZip(file, [{ name: 'secret.png', data: 'x'.repeat(1000) }]);
+    rewriteEntryHeader(file, 'secret.png', { flags: 0x1 });
+    const entry = (await openArchiveFile(file, 100)).files[0];
+    const dest = path.join(root, 'out.png');
+
+    await expect(writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(MB) })).rejects.toThrow(/is encrypted/);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(existsSync(dest)).toBe(false);
+  });
+
   it('writes an entry within its limit and reports its size', async () => {
     const file = path.join(root, 'pic.zip');
     await writeZip(file, [{ name: 'pic.png', data: Buffer.alloc(3000, 7) }]);
@@ -467,6 +611,26 @@ describe('reading one entry within limits', () => {
     const dest = path.join(root, 'pic.png');
     expect(await writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(MB) })).toBe(3000);
     expect(await fs.readFile(dest)).toEqual(Buffer.alloc(3000, 7));
+  });
+
+  (process.platform === 'linux' ? it : it.skip)('closes the file it opened when its stream cannot be made', async () => {
+    const file = path.join(root, 'pic.zip');
+    await writeZip(file, [{ name: 'pic.png', data: Buffer.alloc(3000, 7) }]);
+    const entry = (await openArchiveFile(file, 100)).files[0];
+    const dest = path.join(root, 'pic.png');
+    const probe = await fs.open(path.join(root, 'probe'), 'w');
+    const proto = Object.getPrototypeOf(probe) as { createWriteStream(): NodeJS.WritableStream };
+    await probe.close();
+    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementationOnce(() => {
+      throw new Error('no stream');
+    });
+    try {
+      await expect(writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(MB) })).rejects.toThrow('no stream');
+    } finally {
+      failing.mockRestore();
+    }
+
+    expect(handlesTo(dest)).toBe(0);
   });
 
   // An entry stream that kept the archive open when stopped part-way would

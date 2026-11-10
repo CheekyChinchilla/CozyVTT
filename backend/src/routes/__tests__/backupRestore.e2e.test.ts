@@ -53,6 +53,7 @@ import {
 import logger from '../../utils/logger';
 import * as setupGate from '../../middleware/setup';
 import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../admin';
+import { getFilePath } from '../../utils/fileUtils';
 
 /**
  * The migration run: the project's own Prisma, from the folder the backend
@@ -365,7 +366,10 @@ describe('POST /api/admin/backups/restore', () => {
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump']);
   });
 
-  it('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
+  // Linux only: the backup's own file is told apart by the name its handle
+  // has in /proc/self/fd, since the restore unpacks the upload through the
+  // same call.
+  (process.platform === 'linux' ? it : it.skip)('answers the restore, instead of exiting the process, when the safety copy fails while being written', async () => {
     stubTools();
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
     // The zip's output stream fails once writing starts, as a full disk does.
@@ -374,7 +378,9 @@ describe('POST /api/admin/backups/restore', () => {
     const probe = await fs.open(path.join(SCRATCH, 'stream-probe'), 'w');
     const proto = Object.getPrototypeOf(probe) as { createWriteStream(this: FileHandle): NodeJS.WritableStream };
     await probe.close();
+    const realCreateWriteStream = proto.createWriteStream;
     const failing = jest.spyOn(proto, 'createWriteStream').mockImplementation(function (this: FileHandle) {
+      if (!fsSync.readlinkSync(`/proc/self/fd/${this.fd}`).startsWith(fsSync.realpathSync(BACKUP_DIR) + path.sep)) return realCreateWriteStream.call(this);
       const stream = new PassThrough();
       // A real stream closes the file when it is destroyed; this stand-in
       // does the same, or the backup's handle is left open.
@@ -803,6 +809,47 @@ describe('a refused restore', () => {
     }
   });
 
+  // An entry the restore could not write ended the backend.
+  it.each([
+    ['a file where an earlier entry made a folder', { 'uploads/x/y': 'a', 'uploads/x': 'b' }, 'uploads/x'],
+    ['a folder where an earlier entry made a file', { 'uploads/x': 'a', 'uploads/x/y': 'b' }, 'uploads/x/y'],
+    ['a name longer than a folder can hold', { [`uploads/${'b'.repeat(300)}`]: 'a' }, `uploads/${'b'.repeat(300)}`],
+    ['a folder deeper inside an earlier file', { 'uploads/x': 'a', 'uploads/x/y/z': 'b' }, 'uploads/x/y/z'],
+    ['a folder name longer than a folder can hold', { [`uploads/${'b'.repeat(300)}/f`]: 'a' }, `uploads/${'b'.repeat(300)}/f`],
+  ])('says a backup with %s is not taken, with 400, and changes nothing', async (_label, files, refusedName) => {
+    const calls = stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map' });
+    try {
+      const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, ...files }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: 'Invalid Backup',
+        message: `The archive is damaged, or holds a file name that cannot be written: ${refusedName} Nothing was changed.`,
+      });
+      expect(calls).toEqual([]);
+      expect(await filesIn(UPLOAD_DIR)).toEqual({ 'maps/global/cellar.png': Buffer.from('a map') });
+    } finally {
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // The file system takes no name with a NUL in it, and the restore answered 500.
+  it('says a backup with a NUL character in a name is not taken, with 400', async () => {
+    const calls = stubTools();
+    const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, 'uploads/a\0b.png': 'a' }));
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: 'Invalid Backup',
+      message: 'The archive has an unsafe file path, which a backup never has: uploads/a\0b.png Nothing was changed.',
+    });
+    expect(calls).toEqual([]);
+  });
+
   it('can be followed by another restore', async () => {
     stubTools();
     expect((await restore(admin, Buffer.from('not a zip'))).status).toBe(400);
@@ -1161,6 +1208,37 @@ describe('POST /api/admin/backups', () => {
       await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
       await fs.mkdir(UPLOAD_DIR, { recursive: true });
     }
+  });
+
+  // A restore refuses a name longer than an archive may hold.
+  it('leaves out a folder nested so deep that its name is longer than a restore takes', async () => {
+    stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    const deep = Array.from({ length: 5 }, (_, i) => `${i}${'d'.repeat(249)}`);
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map', [`${deep.join('/')}/far.png`]: 'copied in by hand' });
+    const warned = jest.spyOn(logger, 'warn');
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      const names = (await readZip(path.join(BACKUP_DIR, res.body.filename))).map((e) => e.path);
+
+      expect(names).toEqual(['database.sql', 'uploads/maps/global/cellar.png']);
+      expect(warned).toHaveBeenCalledWith(NAME_LEFT_OUT_OF_BACKUP, { path: deep.join('/') });
+      await fs.rm(path.join(BACKUP_DIR, res.body.filename), { force: true });
+    } finally {
+      warned.mockRestore();
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // Each part of a stored file's name is one the file system holds to 255
+  // bytes, in folders of CozyVTT's own, so the longest has room to spare.
+  it('gives every file CozyVTT stores a name a restore takes', () => {
+    const folder = path.relative(UPLOAD_DIR, getFilePath('DOCUMENT', 'CAMPAIGN', crypto.randomUUID()));
+    const longest = `uploads/${folder.split(path.sep).join('/')}/${'f'.repeat(255)}`;
+    expect(Buffer.byteLength(longest)).toBeLessThanOrEqual(archive.MAX_ARCHIVE_NAME_BYTES / 3);
+    expect(archive.isSafeArchivePath(longest)).toBe(true);
   });
 
   // Root reads a file whatever its mode, so the refusal below cannot be set

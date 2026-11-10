@@ -20,7 +20,9 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { randomUUID } from 'crypto';
 import { importCampaign } from '../campaignImporter';
-import { prepareCampaignExport } from '../campaignExporter';
+import { prepareCampaignExport, assetEntryName } from '../campaignExporter';
+import { MAX_ARCHIVE_NAME_BYTES } from '../../utils/archive';
+import { MAX_EXTENSION_LENGTH } from '../../validators/assets';
 import { ASSET_LIMITS } from '../../validators/assetLimits';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip, readZip } from '../../__tests__/helpers/zipFixtures';
@@ -187,6 +189,48 @@ async function archiveOf(entries: Array<[file: string, fields: Record<string, un
   ]);
   return file;
 }
+
+// An import refuses an entry name longer than MAX_ARCHIVE_NAME_BYTES, and an
+// asset's entry ends in its original name's extension.
+describe('the name an asset has in the archive', () => {
+  it('is never longer than an import takes, whatever its original name', () => {
+    const id = randomUUID();
+    // The longest extension kept, in letters of three bytes each.
+    const longest = assetEntryName(id, `x.${'地'.repeat(MAX_EXTENSION_LENGTH - 1)}`, 'image/png');
+    expect(longest).toBe(`assets/${id}.${'地'.repeat(MAX_EXTENSION_LENGTH - 1)}`);
+    expect(Buffer.byteLength(longest)).toBeLessThanOrEqual(MAX_ARCHIVE_NAME_BYTES / 4);
+    expect(assetEntryName(id, `x.${'地'.repeat(MAX_EXTENSION_LENGTH)}`, 'image/png')).toBe(`assets/${id}.png`);
+    expect(assetEntryName(id, 'x', 'image/webp')).toBe(`assets/${id}.webp`);
+  });
+
+  it('takes the format for its extension when the original name ends in a long one, and imports', async () => {
+    const source = await createTestCampaign(userId, { name: 'Long Names' });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    // Older versions stored an upload's own name at any length; this is the
+    // longest an archive's list of assets takes, all after one dot.
+    const longName = `map.${'地'.repeat(496)}`;
+    const map = await picture(source.id, 'MAP', 'placeholder', 'Long', null);
+    await prisma.asset.update({ where: { id: map.id }, data: { originalName: longName } });
+    await prisma.map.create({
+      data: {
+        campaignId: source.id, name: 'Long', imageUrl: `/api/assets/maps/${map.id}`, baseLayerUrl: `/api/assets/maps/${map.id}`,
+        width: 10, height: 10, gridSize: 70, tokens: [], annotations: [], wallSegments: [], lights: [],
+      },
+    });
+
+    const file = path.join(SCRATCH, 'long-names.cozyvtt');
+    const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
+    await prepared.writeTo(fs.createWriteStream(file));
+    const names = (await readZip(file)).map((f) => f.path);
+
+    expect(names).toContain(`assets/${map.id}.png`);
+    for (const name of names) expect(Buffer.byteLength(name)).toBeLessThanOrEqual(MAX_ARCHIVE_NAME_BYTES);
+    const result = await importCampaign(file, userId);
+    expect(result).toMatchObject({ skipped: [] });
+    // An extension a map picture cannot have gives way to its format's.
+    expect(Object.keys(await imported(result.campaignId))).toEqual(['map.png']);
+  });
+});
 
 describe('an archive made by hand', () => {
   it('names an asset after its file, with no description, when its entry has neither, as archives made before they were carried', async () => {

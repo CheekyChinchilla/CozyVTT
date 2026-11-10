@@ -22,7 +22,7 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
-import { writeZip, renameEntry } from '../../__tests__/helpers/zipFixtures';
+import { writeZip, renameEntry, claimZip64Field } from '../../__tests__/helpers/zipFixtures';
 import * as importContent from '../../services/campaignImportContent';
 
 const app = createTestApp();
@@ -355,5 +355,23 @@ describe('POST /api/campaigns/import', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('The archive is damaged: campaign.json cannot be read.');
+  });
+
+  // Read where it claimed, such an entry was a range error, answered 500.
+  it.each([
+    ['the preview', '/api/campaigns/import/preview'],
+    ['the import', '/api/campaigns/import'],
+  ])('%s refuses an archive whose ZIP64 field places an entry far past its end, saying it is damaged', async (_label, route) => {
+    const file = path.join(SCRATCH, 'far.cozyvtt');
+    await writeZip(file, [{ name: 'manifest.json', data: manifest }], { zip64: true });
+    claimZip64Field(file, 'manifest.json', 'localHeaderOffset', 1n << 60n);
+    const before = await prisma.campaign.count({ where: { ownerId: playerId } });
+
+    const res = await player.post(route).attach('file', file);
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('The file is not a ZIP archive, or it is damaged.');
+    expect(await prisma.campaign.count({ where: { ownerId: playerId } })).toBe(before);
+    expect(tempFiles()).toEqual([]);
   });
 });
