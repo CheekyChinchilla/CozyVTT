@@ -1290,6 +1290,28 @@ describe("a player's right-click on a token", () => {
   });
 });
 
+// A spectator made a player again takes their token up at once. A spectator's
+// press on it, which takes nothing, drags the map, so the token is found
+// where the map now draws it.
+describe('a spectator made a player again', () => {
+  it('picks up their own token where the map draws it', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(token('tok-mine', 'Aldra', 5, 10, { type: TokenType.PLAYER, controlledBy: 'me' }));
+
+    act(() => h.set({ userRole: 'SPECTATOR' }));
+    drag(square(5, 10), px(275, 525), px(275, 625));
+    expect(sentOf('token.move.start')).toEqual([]);
+
+    act(() => h.set({ userRole: 'PLAYER' }));
+    // Where it stood on screen before the drag is now three squares above it.
+    click(square(5, 10));
+    expect(sentOf('token.move.start')).toEqual([]);
+    click(square(5, 7));
+    expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-mine', mapId: 'map-a' }]);
+  });
+});
+
 describe('letting go of the mouse outside the map', () => {
   const releaseOutside = (button = 0) => mouse.up(document.body, px(1200, 300), button);
 

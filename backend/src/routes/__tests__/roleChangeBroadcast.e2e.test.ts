@@ -109,6 +109,34 @@ it("sends the member the map the table is on again, as their new role sees it", 
   }
 });
 
+// On a map with no lighting a spectator is sent every token, with who
+// controls it, and a spectator made a player again is sent theirs as their
+// own: the page decides what it may pick up from that and its own role.
+it("sends a spectator made a player again their token, naming them its controller", async () => {
+  const mapId = await litMapWith([mapToken('theirs', playerId, { hp: { current: 7, max: 9 } })]);
+  await prisma.map.update({ where: { id: mapId }, data: { lightingEnabled: false } });
+  type Sent = { mapData: { tokens: { id: string; controlledBy?: string | null; hp?: unknown }[] } };
+  try {
+    const member = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
+    const demoted = waitForEvent<Sent>(member, 'map.changed');
+    expect((await dm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' })).status).toBe(200);
+    const asSpectator = (await demoted).mapData.tokens;
+    expect(asSpectator).toEqual([expect.objectContaining({ id: 'theirs', controlledBy: playerId })]);
+    expect(asSpectator[0].hp).toBeUndefined();
+
+    const promoted = waitForEvent<Sent>(member, 'map.changed');
+    expect((await dm.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'PLAYER' })).status).toBe(200);
+    expect((await promoted).mapData.tokens).toEqual([
+      expect.objectContaining({ id: 'theirs', controlledBy: playerId, hp: { current: 7, max: 9 } }),
+    ]);
+    member.disconnect();
+  } finally {
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId } }, data: { role: 'PLAYER' } });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
+    await prisma.map.deleteMany({ where: { id: mapId } });
+  }
+});
+
 // Handing over the DM's seat changes two roles at once, and the open pages
 // need what a role change gives them: the roster regrouped, and the map as
 // each new role sees it. The new DM's page held a player's map, with no
