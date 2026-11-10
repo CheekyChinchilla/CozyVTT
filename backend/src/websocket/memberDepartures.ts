@@ -2,11 +2,12 @@
  * Why a member went out of a campaign, kept for a minute.
  *
  * A removal and a leave tell the member's open connections why
- * (`tellTableMemberLeft` in services/campaignMembers.ts). A connection that
- * was joining at that moment, or that reconnects soon after (a computer
- * that slept through it), finds only that the membership is gone. This
- * record lets it be told the same reason. Once it has run out, or with no
- * record at all, the reason is `not-member`.
+ * (`tellTableMemberLeft` in services/campaignMembers.ts), and record it here
+ * just before the membership's delete commits (`takeMemberOut`). A
+ * connection that was joining at that moment, or that reconnects soon after
+ * (a computer that slept through it), finds only that the membership is
+ * gone. This record lets it be told the same reason. Once it has run out,
+ * or with no record at all, the reason is `not-member`.
  *
  * The record is per process: it lives in this backend process's memory, as
  * the live table's rooms do. A restart forgets it, and with more than one

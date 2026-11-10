@@ -17,10 +17,11 @@
 import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
-import { clearCampaignFromLiveSockets } from '../utils';
+import { clearCampaignFromLiveSockets, type AccessRevoked, type AccessRevokedReason } from '../utils';
 import type { AuthenticatedSocket } from '../auth';
-import { tellTableMemberLeft } from '../../services/campaignMembers';
-import { DEPARTURE_MEMORY_MS } from '../memberDepartures';
+import { takeMemberOut, tellTableMemberLeft } from '../../services/campaignMembers';
+import { DEPARTURE_MEMORY_MS, whyNotAMember } from '../memberDepartures';
+import * as serializable from '../../utils/serializable';
 import {
   createWsTestServer,
   waitForEvent,
@@ -155,7 +156,7 @@ describe('clearCampaignFromLiveSockets', () => {
     const playerClient = await server.connectAndAuth(playerCookie, campaignId);
     const elsewhere = await server.connectAndAuth(playerCookie, otherCampaignId);
 
-    const told = waitForEvent<{ campaignId: string | null; reason: string; message: string }>(playerClient, 'campaign.access.revoked');
+    const told = waitForEvent<AccessRevoked>(playerClient, 'campaign.access.revoked');
     const notTold = expectNoEvent(elsewhere, 'campaign.access.revoked', 500);
     await clearCampaignFromLiveSockets(playerId, campaignId);
 
@@ -180,8 +181,6 @@ describe('clearCampaignFromLiveSockets', () => {
  * page stayed on a table it could not use.
  */
 describe('a refused join', () => {
-  type Revoked = { campaignId: string | null; reason: string; message: string };
-
   /** The server's socket for a client. */
   function serverSocket(client: ClientSocket): AuthenticatedSocket {
     const found = server.io.of('/').sockets.get(client.id ?? '');
@@ -197,7 +196,7 @@ describe('a refused join', () => {
 
   it('tells someone who is not a member, with no plain error and nothing about the campaign', async () => {
     const client = await server.connectClient(outsiderCookie);
-    const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+    const told = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
     const noError = expectNoEvent(client, 'error', 500);
     client.emit('authenticate', { campaignId });
 
@@ -213,7 +212,7 @@ describe('a refused join', () => {
   it('tells a connection asking for a campaign that does not exist', async () => {
     const client = await server.connectClient(outsiderCookie);
     const gone = randomUUID();
-    const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+    const told = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
     const noError = expectNoEvent(client, 'error', 500);
     client.emit('authenticate', { campaignId: gone });
 
@@ -233,7 +232,7 @@ describe('a refused join', () => {
     const client = await server.connectAndAuth(playerCookie, otherCampaignId);
     await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: otherCampaignId } } });
     try {
-      const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+      const told = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
       client.emit('authenticate', { campaignId: otherCampaignId });
 
       await expect(told).resolves.toMatchObject({ campaignId: otherCampaignId, reason: 'not-member' });
@@ -246,12 +245,14 @@ describe('a refused join', () => {
       client.disconnect();
     }
   });
+
   // A computer that slept through the removal: its tab reconnects and asks
   // to join again. Told the removal while it is recent, and after that only
   // that the user is not a member.
   describe('a connection coming back after its member was removed', () => {
     beforeEach(async () => {
-      await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId } } });
+      // What the DM's Remove does.
+      expect(await takeMemberOut(campaignId, playerId, 'removed')).toBeNull();
       await tellTableMemberLeft(playerId, campaignId, 'removed');
     });
 
@@ -262,7 +263,7 @@ describe('a refused join', () => {
 
     it('is told it was removed, within the minute', async () => {
       const client = await server.connectClient(playerCookie);
-      const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+      const told = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
       client.emit('authenticate', { campaignId });
 
       await expect(told).resolves.toEqual({ campaignId, reason: 'removed', message: 'You were removed from this campaign.' });
@@ -274,12 +275,63 @@ describe('a refused join', () => {
       const later = Date.now() + DEPARTURE_MEMORY_MS;
       jest.spyOn(Date, 'now').mockReturnValue(later);
       const client = await server.connectClient(playerCookie);
-      const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+      const told = waitForEvent<AccessRevoked>(client, 'campaign.access.revoked');
       client.emit('authenticate', { campaignId });
 
       await expect(told).resolves.toEqual({ campaignId, reason: 'not-member', message: 'You are not a member of this campaign.' });
       expect(campaignRooms(client, playerId)).toEqual([]);
       client.disconnect();
     });
+  });
+});
+
+/**
+ * A leave or a removal records why before its delete is committed. A join
+ * whose membership read lands between the commit and the route telling the
+ * table finds the membership gone, and must find the reason too.
+ */
+describe('taking a member out', () => {
+  let freshCampaignId: string;
+
+  beforeEach(async () => {
+    // A campaign of its own each time: a record left by another test would
+    // answer for this one.
+    const fresh = await prisma.campaign.create({ data: { name: `Departure ${runId}`, ownerId: dmId, vibeSettings: {} } });
+    freshCampaignId = fresh.id;
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: dmId, campaignId: freshCampaignId, role: 'DM', characterIds: [] },
+        { userId: playerId, campaignId: freshCampaignId, role: 'PLAYER', characterIds: [] },
+      ],
+    });
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await prisma.campaign.delete({ where: { id: freshCampaignId } });
+  });
+
+  /** What a join would be told the moment the delete has committed, before the route goes on. */
+  function toldAtCommit(): { reason: AccessRevokedReason | null } {
+    const seen: { reason: AccessRevokedReason | null } = { reason: null };
+    const real = serializable.inSerializableTransaction;
+    jest.spyOn(serializable, 'inSerializableTransaction').mockImplementation(async (work, options) => {
+      const result = await real(work, options);
+      seen.reason = whyNotAMember(playerId, freshCampaignId);
+      return result;
+    });
+    return seen;
+  }
+
+  it('has recorded a leave by the time it is committed', async () => {
+    const seen = toldAtCommit();
+    expect(await takeMemberOut(freshCampaignId, playerId, 'left')).toBeNull();
+    expect(seen.reason).toBe('left');
+  });
+
+  it('has recorded a removal by the time it is committed', async () => {
+    const seen = toldAtCommit();
+    expect(await takeMemberOut(freshCampaignId, playerId, 'removed')).toBeNull();
+    expect(seen.reason).toBe('removed');
   });
 });

@@ -22,10 +22,14 @@ export type TakeOutRefusal = 'not-member' | 'dm' | 'owner';
  * changed, for someone who is not a member, for the DM, and for the owner.
  * Returns the refusal, or null once it is done.
  *
- * `checkFirst` is which refusal an owner sitting as DM is given. The DM
- * removing someone is told about the seat. A member leaving is told about
+ * `reason` is the DM removing them (`removed`) or the member leaving
+ * (`left`). It decides which refusal an owner sitting as DM is given: the DM
+ * removing someone is told about the seat; a member leaving is told about
  * owning the campaign, since handing the seat over and asking again would
- * only be refused for that.
+ * only be refused for that. It is also recorded, just before the delete, as
+ * why they went out (websocket/memberDepartures.ts), so a tab of theirs
+ * whose join reads the membership as soon as the delete is committed is told
+ * it.
  *
  * Who the member is, and the change, are one serializable transaction
  * (utils/serializable.ts): a DM hand-over landing in between could otherwise
@@ -35,8 +39,9 @@ export type TakeOutRefusal = 'not-member' | 'dm' | 'owner';
 export async function takeMemberOut(
   campaignId: string,
   userId: string,
-  checkFirst: 'dm' | 'owner' = 'dm'
+  reason: MemberLeftReason
 ): Promise<TakeOutRefusal | null> {
+  const checkFirst = reason === 'left' ? 'owner' : 'dm';
   return inSerializableTransaction(async (tx): Promise<TakeOutRefusal | null> => {
     const membership = await tx.campaignMembership.findUnique({
       where: { userId_campaignId: { userId, campaignId } },
@@ -61,6 +66,9 @@ export async function takeMemberOut(
     // every member and editable by the DM, and each save the owner made was
     // still sent to the table they had left.
     await tx.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } });
+    // Before the delete commits. Read only while the membership is absent,
+    // so a transaction that is refused or run again leaves nothing wrong.
+    rememberDeparture(userId, campaignId, reason);
     await tx.campaignMembership.delete({ where: { userId_campaignId: { userId, campaignId } } });
     return null;
   });
@@ -69,14 +77,11 @@ export async function takeMemberOut(
 /**
  * Tell everyone a member taken out of the campaign is gone: their open
  * connections to it leave it, each told why (`reason`: the DM removed them,
- * or they left, which a tab joining soon after is told too), the table is sent who is online now, and its pages refresh
+ * or they left), the table is sent who is online now, and its pages refresh
  * their member lists (`roster.updated`, `member.left`). Never throws: the
  * membership is already gone.
  */
 export async function tellTableMemberLeft(userId: string, campaignId: string, reason: MemberLeftReason): Promise<void> {
-  // First, before anything is awaited: a tab of theirs joining now, or
-  // reconnecting within the minute, is told the same reason.
-  rememberDeparture(userId, campaignId, reason);
   // A socket caches the campaign from when it authenticated, so without this
   // the person carries on playing until they close the tab. Best-effort: a
   // socket layer that is not up must not fail the request.

@@ -839,13 +839,14 @@ with the reason (`removed`, `left`, `campaign-deleted`, `signed-out`). A join
 refused because the campaign is gone or the user is not a member
 (`authenticateCampaign` in `websocket/auth.ts` says which) is answered the
 same way, with `campaign-deleted` or `not-member`, after the socket has left
-every campaign room. `tellTableMemberLeft` also records for a minute why the
-member went out (`websocket/memberDepartures.ts`, in the process's memory),
-so a join that finds the membership gone, refused or caught by
-`settleMembership`, is told `removed` or `left` while that is recent. On the client, `socket.ts` stops reconnecting after it, the
-connection badge shows the reason, and `hooks/useAccessRevoked.ts` on the
-campaign page goes to the dashboard with a notice, or to the sign-in page,
-unless an editor holds unsaved changes.
+every campaign room. `takeMemberOut` records why the member went out, just
+before the delete commits, and keeps it for a minute
+(`websocket/memberDepartures.ts`, in the process's memory), so a join that
+finds the membership gone, refused or caught by `settleMembership`, is told
+`removed` or `left` while that is recent. On the client, `socket.ts` stops
+reconnecting after it, the connection badge shows the reason, and
+`hooks/useAccessRevoked.ts` on the campaign page goes to the dashboard with a
+notice, or to the sign-in page, unless an editor holds unsaved changes.
 
 ### MFA (TOTP)
 

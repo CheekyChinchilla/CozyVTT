@@ -984,7 +984,7 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
   try {
     const { campaignId, userId } = req.params;
 
-    const refusal = await takeMemberOut(campaignId, userId);
+    const refusal = await takeMemberOut(campaignId, userId, 'removed');
     if (refusal) {
       const refused = REMOVAL_REFUSED[refusal];
       return res.status(refused.status).json({ error: refused.error, message: refused.message });
@@ -1036,7 +1036,7 @@ router.post('/:campaignId/leave', campaignMember, async (req: AuthenticatedReque
     const { campaignId } = req.params;
     const userId = req.session.userId!;
 
-    const refusal = await takeMemberOut(campaignId, userId, 'owner');
+    const refusal = await takeMemberOut(campaignId, userId, 'left');
     if (refusal) {
       const refused = LEAVE_REFUSED[refusal];
       return res.status(refused.status).json({ error: refused.error, message: refused.message });
