@@ -309,12 +309,12 @@ export interface DnD5eCharacterData extends SheetChrome {
   customSkills?: DnD5eCustomSkill[];
   /** Total passive Perception: 10 + Perception bonus + `passivePerceptionBonus`. */
   passivePerception?: number;
-  /** Non-skill additions to passive Perception (Observant, items). */
+  /** Non-skill additions to passive Perception (a feat, items). */
   passivePerceptionBonus?: number;
   armorClass?: number;
   /** Total initiative modifier: Dexterity modifier plus `initiativeBonus`. */
   initiative?: number;
-  /** Non-Dexterity initiative bonuses (Alert, Jack of All Trades, subclasses). */
+  /** Non-Dexterity initiative bonuses (a feat, Jack of All Trades, subclasses). */
   initiativeBonus?: number;
   /**
    * Initiative rolled with advantage, two d20s keeping the higher, unless a

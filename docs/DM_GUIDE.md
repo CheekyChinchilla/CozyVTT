@@ -1160,7 +1160,7 @@ You keep everything else: only you decide who is in the fight, drag the order ar
 
 | System | Initiative |
 |---|---|
-| **D&D 5e** | `d20 +` Dexterity modifier, plus the sheet's **other bonus** box (Alert, Jack of All Trades, and so on); two d20s keeping the higher when the sheet's **Advantage on initiative** box is ticked |
+| **D&D 5e** | `d20 +` Dexterity modifier, plus the sheet's **other bonus** box (a feat's +5, Jack of All Trades, and so on); two d20s keeping the higher when the sheet's **Advantage on initiative** box is ticked |
 | **Pathfinder 2e** | `d20 +` the stat named by the sheet's **Uses:** dropdown — Perception by default, Stealth when someone is sneaking |
 | **Call of Cthulhu 7e** | **No roll.** Investigators are ranked in DEX order, so the control reads **Set Initiative** and takes their DEX. Nothing appears in the dice log, because no dice were thrown |
 | **NPCs** | A D&D 5e stat block rolls from its recorded Dexterity. A token with no sheet or stat block rolls a plain d20 |

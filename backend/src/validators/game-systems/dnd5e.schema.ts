@@ -378,13 +378,13 @@ export const dnd5eCharacterDataSchema = z.object({
   customSkills: z.array(customSkillSchema).max(DND5E_CUSTOM_SKILLS_MAX).optional(),
   passivePerception: z.number().int().min(1).optional(),
   // Additions to passive Perception that are not the Perception skill itself:
-  // the Observant feat's +5, and items that raise passive scores. Mirrors
+  // a feat's flat +5, and items that raise passive scores. Mirrors
   // `initiativeBonus` below — the total above is derived from this plus the
   // skill, and kept for exports.
   passivePerceptionBonus: manualBonusSchema.optional(),
   armorClass: z.number().int().min(1).optional(),
   initiative: z.number().int().optional(),
-  // Bonuses to initiative that are not Dexterity: the Alert feat's flat +5,
+  // Bonuses to initiative that are not Dexterity: a feat's flat +5,
   // Jack of All Trades / Remarkable Athlete, subclasses that add another
   // ability. Too varied to derive, so the sheet keeps one manual number and
   // adds it to the Dexterity modifier. `initiative` above is the resulting

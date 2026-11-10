@@ -686,7 +686,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       //
       // A sheet that carries a total but no `passivePerceptionBonus` predates
       // that field, so the difference is read back as the bonus. Without this a
-      // character imported with the Observant feat would silently lose its +5
+      // character imported with a feat's +5 to passive Perception would lose it
       // the first time the sheet was saved.
       const perceptionBonus = updatedSkills.perception?.bonus ?? 0;
       const storedTotal = prev.passivePerception;
@@ -764,7 +764,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
    * Convert a character saved before `initiativeBonus` existed, and keep the
    * stored total in step afterwards.
    *
-   * Initiative used to be one hand-typed number. Someone with the Alert feat and
+   * Initiative used to be one hand-typed number. Someone with a feat worth +5 and
    * Dexterity 14 typed `7`; now that the total is derived, that has to be read
    * back as "Dexterity +2, other +5" or their character would quietly lose five
    * points. The conversion runs once, only where the new field is absent.
@@ -1837,7 +1837,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         </div>
         <p className="mt-2 text-xs text-ink-muted">
           10 + your Perception bonus, plus anything that raises passive scores
-          without changing the skill — the Observant feat (+5), for instance.
+          without changing the skill, such as a feat worth +5.
         </p>
       </div>
     </div>
@@ -1903,7 +1903,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Everything that is not Dexterity. Kept as one box rather than a list of
-          toggles because the sources are open-ended — the Alert feat's +5, Jack
+          toggles because the sources are open-ended: a feat's flat +5, Jack
           of All Trades and Remarkable Athlete's share of the proficiency bonus,
           subclasses that swap in Wisdom or Intelligence. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1921,8 +1921,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             fallback={0}
           />
           <p className="mt-1 text-xs text-ink-muted">
-            Alert (+5), Jack of All Trades, Remarkable Athlete, and anything else
-            beyond your Dexterity modifier.
+            A feat that adds to initiative, Jack of All Trades, Remarkable Athlete,
+            and anything else beyond your Dexterity modifier.
           </p>
         </div>
         <div className="sm:col-span-2 sm:pt-7">

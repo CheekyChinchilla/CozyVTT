@@ -784,8 +784,8 @@ describe('initiative', () => {
       dm.disconnect();
     });
 
-    it('adds the manual bonus for feats like Alert', async () => {
-      // Dexterity 14 (+2) with Alert (+5) is +7, so results land in [8, 27].
+    it('adds the manual bonus a feat gives', async () => {
+      // Dexterity 14 (+2) with a feat's +5 is +7, so results land in [8, 27].
       await linkCharacter('DND_5E', dnd5eSheet(14, 5));
       const dm = await server.connectAndAuth(dmCookie, campaignId);
 
