@@ -23,6 +23,10 @@ import {
   renameEntry,
   writeManyEntryZip,
   writeZip64Claiming,
+  rewriteEntryHeader,
+  damageLocalHeader,
+  damagePackedData,
+  moveDirectoryPastEnd,
 } from '../../__tests__/helpers/zipFixtures';
 
 const MB = 1024 * 1024;
@@ -69,6 +73,13 @@ async function expectHandlesSeen(file: string): Promise<void> {
   } finally {
     await handle.close();
   }
+}
+
+/** The bytes held by every file under `dir`. */
+async function bytesUnder(dir: string): Promise<number> {
+  let bytes = 0;
+  for (const name of await filesUnder(dir)) bytes += (await fs.stat(path.join(dir, name))).size;
+  return bytes;
 }
 
 /** Every file under `dir`, relative to it. */
@@ -159,6 +170,7 @@ describe('extractArchiveSafely', () => {
     ['a parent folder', 'xx/evil.txt', '../evil.txt'],
     ['an absolute path', 'xtmp/evil.txt', '/tmp/evil.txt'],
     ['a backslash', 'xx_evil.txt', '..\\evil.txt'],
+    ['a backslash inside a name', 'a_b.txt', 'a\\b.txt'],
   ])('refuses an entry that leaves the folder through %s, writing nothing outside it', async (_label, built, crafted) => {
     const dest = path.join(root, 'unpacked');
     const file = path.join(root, 'slip.zip');
@@ -169,6 +181,66 @@ describe('extractArchiveSafely', () => {
 
     await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toThrow(/unsafe file path/);
     expect(await filesUnder(root)).toEqual(['slip.zip', path.join('unpacked', 'ok.txt')].sort());
+  });
+
+  // On Linux a drive letter is only a folder's name, and the resolved path
+  // stays inside; where it is a drive, the resolved-path check refuses it.
+  it('keeps an entry whose name starts with a drive letter inside the folder', async () => {
+    const dest = path.join(root, 'unpacked');
+    const file = path.join(root, 'drive.zip');
+    await writeZip(file, [{ name: 'xx/evil.txt', data: 'kept in' }]);
+    renameEntry(file, 'xx/evil.txt', 'C:/evil.txt');
+
+    if (process.platform === 'win32') {
+      await expect(extractArchiveSafely(file, await openArchiveFile(file, 10), dest, LIMITS)).rejects.toThrow(/unsafe file path/);
+      return;
+    }
+    await extractArchiveSafely(file, await openArchiveFile(file, 10), dest, LIMITS);
+    expect(await filesUnder(root)).toEqual(['drive.zip', path.join('unpacked', 'C:', 'evil.txt')].sort());
+  });
+
+  it('makes a folder entry a folder, without counting it as a file', async () => {
+    const dest = path.join(root, 'unpacked');
+    const file = path.join(root, 'folders.zip');
+    const many = Array.from({ length: LIMITS.maxFiles }, (_, i) => ({ name: `maps/f${i}.txt`, data: 'x' }));
+    await writeZip(file, [{ name: 'maps/', data: '' }, ...many]);
+    const directory = await openArchiveFile(file, 100);
+    expect(directory.files.find((f) => f.path === 'maps/')?.type).toBe('Directory');
+
+    await extractArchiveSafely(file, directory, dest, LIMITS);
+
+    expect((await fs.stat(path.join(dest, 'maps'))).isDirectory()).toBe(true);
+    expect(await fs.readdir(path.join(dest, 'maps'))).toHaveLength(LIMITS.maxFiles);
+  });
+
+  it.each([
+    ['encrypted', { flags: 0x1 }, 'secret.txt is encrypted, which an archive from this server never is.'],
+    ['packed in a way it cannot read', { compressionMethod: 12 }, 'secret.txt is packed in a way this server cannot read.'],
+  ])('refuses an entry that is %s, writing nothing of it', async (_label, fields, message) => {
+    const dest = path.join(root, 'unpacked');
+    const file = path.join(root, 'odd.zip');
+    await writeZip(file, [{ name: 'secret.txt', data: 'x'.repeat(1000) }]);
+    rewriteEntryHeader(file, 'secret.txt', fields);
+
+    const refusal = extractArchiveSafely(file, await openArchiveFile(file, 10), dest, LIMITS);
+    await expect(refusal).rejects.toThrow(message);
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
+    await expect(refusal).rejects.not.toBeInstanceOf(ArchiveLimitError);
+    expect(await bytesUnder(dest)).toBe(0);
+  });
+
+  it.each([
+    ['whose local header is damaged', damageLocalHeader],
+    ['whose packed bytes do not unpack', damagePackedData],
+  ])('refuses an entry %s, saying the archive is damaged', async (_label, damage) => {
+    const dest = path.join(root, 'unpacked');
+    const file = path.join(root, 'damaged.zip');
+    await writeZip(file, [{ name: 'database.sql', data: 'SELECT 1;\n'.repeat(500) }]);
+    damage(file, 'database.sql');
+
+    const refusal = extractArchiveSafely(file, await openArchiveFile(file, 10), dest, LIMITS);
+    await expect(refusal).rejects.toThrow('The archive is damaged: database.sql cannot be read.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
   });
 
   // A restore refused part-way must not keep the upload open: the deleted
@@ -257,6 +329,22 @@ describe('openArchiveFile', () => {
 
     await expect(openArchiveFile(file, 10)).rejects.toThrow('The archive lists 11 files, more than the 10 it may hold.');
     expect(read).not.toHaveBeenCalled();
+  });
+
+  it('refuses an archive whose directory cannot be read, saying it is damaged', async () => {
+    const file = path.join(root, 'cut.zip');
+    await writeZip(file, [{ name: 'a', data: '1' }, { name: 'b', data: '2' }]);
+    moveDirectoryPastEnd(file);
+
+    const refusal = openArchiveFile(file, 10);
+    await expect(refusal).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
+  });
+
+  it('says plainly when a file is not an archive', async () => {
+    const file = path.join(root, 'not.zip');
+    await fs.writeFile(file, 'just some text, not a ZIP at all');
+    await expect(openArchiveFile(file, 10)).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
   });
 
   it('opens an archive within the limit', async () => {

@@ -23,6 +23,8 @@ declare module 'yazl' {
     /** The archive's bytes, as they are written. */
     readonly outputStream: Readable;
     addBuffer(buffer: Buffer, metadataPath: string, options?: EntryOptions): void;
+    /** A folder entry, its name ending in a slash. */
+    addEmptyDirectory(metadataPath: string, options?: Pick<EntryOptions, 'mtime' | 'mode'>): void;
     /** The entry's content is read from `readStream` when its turn comes. */
     addReadStream(readStream: Readable, metadataPath: string, options?: EntryOptions): void;
     /**

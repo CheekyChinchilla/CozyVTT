@@ -45,7 +45,7 @@ import { io as ioc } from 'socket.io-client';
 import * as archive from '../../utils/archive';
 import { removeLeftoverRestoreUploads } from '../../services/restoreState';
 import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
-import { zipBuffer } from '../../__tests__/helpers/zipFixtures';
+import { zipBuffer, renameEntry } from '../../__tests__/helpers/zipFixtures';
 import {
   clearState as clearCombatState,
   getState as getCombatState,
@@ -786,6 +786,24 @@ describe('a refused restore', () => {
     }
   });
 
+  it('says a backup with an entry that leaves its folder is not taken, with 400', async () => {
+    const calls = stubTools();
+    const file = path.join(SCRATCH, 'slip.zip');
+    await fs.writeFile(file, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, 'uploads/xx/evil.png': 'escaped' }));
+    renameEntry(file, 'uploads/xx/evil.png', 'uploads/../evil.png');
+    try {
+      const res = await restore(admin, await fs.readFile(file));
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid Backup');
+      expect(res.body.message).toBe('The archive has an unsafe file path, which a backup never has: uploads/../evil.png Nothing was changed.');
+      expect(calls).toEqual([]);
+      expect(fsSync.existsSync(path.join(UPLOAD_DIR, '..', 'evil.png'))).toBe(false);
+    } finally {
+      await fs.rm(file, { force: true });
+    }
+  });
+
   it('can be followed by another restore', async () => {
     stubTools();
     expect((await restore(admin, Buffer.from('not a zip'))).status).toBe(400);
@@ -1049,6 +1067,35 @@ describe('POST /api/admin/backups', () => {
     }
   });
 
+  // A backup written by 1.6.0, kept as it was made: pictures stored, the
+  // dump compressed, a name outside ASCII, an empty file.
+  it('restores a backup made by 1.6.0', async () => {
+    const calls = stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    const made: string[] = [];
+    try {
+      const restored = await restore(admin, await fs.readFile(path.resolve(__dirname, '../../__tests__/fixtures/instance-backup-1.6.0.zip')));
+
+      expect(restored.status).toBe(200);
+      made.push(restored.body.safetyBackup);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
+      expect(calls[1].sqlLoaded).toContain('CREATE TABLE public."Note"');
+      expect(calls[1].sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
+      expect(await filesIn(UPLOAD_DIR)).toEqual({
+        'maps/global/cellar.png': Buffer.from('a map, stored as the backup stores pictures '.repeat(20)),
+        'maps/global/thumb_cellar.png': Buffer.from('its thumbnail'),
+        'tokens/campaigns/c1/Göblin König.png': Buffer.from('a name with a space and letters outside ASCII'),
+        'documents/global/.notes.md': Buffer.from('a name starting with a dot'),
+        'audio/global/silence.ogg': Buffer.alloc(0),
+      });
+    } finally {
+      for (const name of made) await fs.rm(path.join(BACKUP_DIR, name), { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
   // A link in the uploads folder can point anywhere on the server. A backup
   // holds what is in the folder, never what a link reaches.
   it('never follows a symbolic link out of the uploads folder', async () => {
@@ -1142,3 +1189,4 @@ describe('POST /api/admin/backups', () => {
     }
   });
 });
+

@@ -13,6 +13,7 @@ import { pipeline } from 'stream/promises';
 import { ZipFile } from 'yazl';
 
 export interface FixtureEntry {
+  /** A name ending in a slash makes a folder entry, whose data is left out. */
   name: string;
   /** The entry's content, or a function giving a fresh stream of it. */
   data: string | Buffer | (() => Readable);
@@ -35,7 +36,8 @@ function zipOf(entries: FixtureEntry[], zip64 = false): ZipFile {
       forceZip64Format: zip64,
       ...(entry.mode === undefined ? {} : { mode: entry.mode }),
     };
-    if (typeof entry.data === 'function') zip.addReadStream(entry.data(), entry.name, options);
+    if (entry.name.endsWith('/')) zip.addEmptyDirectory(entry.name, entry.mode === undefined ? {} : { mode: entry.mode });
+    else if (typeof entry.data === 'function') zip.addReadStream(entry.data(), entry.name, options);
     else zip.addBuffer(Buffer.from(entry.data), entry.name, options);
   }
   zip.end({ forceZip64Format: zip64 });
@@ -73,6 +75,22 @@ export async function writeZip(dest: string, entries: FixtureEntry[], options: {
   await pipeline(zipOf(entries, options.zip64).outputStream, fs.createWriteStream(dest));
 }
 
+/** Where the central directory record of `entryName` starts in `bytes`. */
+function directoryRecordOf(bytes: Buffer, entryName: string, zipPath: string): number {
+  const name = Buffer.from(entryName, 'utf8');
+  const signature = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
+  for (let at = bytes.indexOf(signature); at !== -1; at = bytes.indexOf(signature, at + 1)) {
+    const nameLength = bytes.readUInt16LE(at + 28);
+    if (nameLength === name.length && bytes.subarray(at + 46, at + 46 + nameLength).equals(name)) return at;
+  }
+  throw new Error(`${entryName} is not in the central directory of ${zipPath}`);
+}
+
+/** Where the local header of `entryName` starts in `bytes`, as its directory record says. */
+function localHeaderOf(bytes: Buffer, entryName: string, zipPath: string): number {
+  return bytes.readUInt32LE(directoryRecordOf(bytes, entryName, zipPath) + 42);
+}
+
 /**
  * Rewrite what the archive's central directory says an entry unpacks to.
  *
@@ -81,17 +99,55 @@ export async function writeZip(dest: string, entries: FixtureEntry[], options: {
  */
 export function claimUnpackedSize(zipPath: string, entryName: string, claimed: number): void {
   const bytes = fs.readFileSync(zipPath);
-  const name = Buffer.from(entryName, 'utf8');
-  const signature = Buffer.from([0x50, 0x4b, 0x01, 0x02]);
-  for (let at = bytes.indexOf(signature); at !== -1; at = bytes.indexOf(signature, at + 1)) {
-    const nameLength = bytes.readUInt16LE(at + 28);
-    if (nameLength === name.length && bytes.subarray(at + 46, at + 46 + nameLength).equals(name)) {
-      bytes.writeUInt32LE(claimed, at + 24);
-      fs.writeFileSync(zipPath, bytes);
-      return;
-    }
+  bytes.writeUInt32LE(claimed, directoryRecordOf(bytes, entryName, zipPath) + 24);
+  fs.writeFileSync(zipPath, bytes);
+}
+
+/**
+ * Rewrite an entry's general purpose flags or its compression method, in its
+ * local header and in the directory: flag 0x1 marks it encrypted.
+ */
+export function rewriteEntryHeader(zipPath: string, entryName: string, fields: { flags?: number; compressionMethod?: number }): void {
+  const bytes = fs.readFileSync(zipPath);
+  const record = directoryRecordOf(bytes, entryName, zipPath);
+  const local = localHeaderOf(bytes, entryName, zipPath);
+  if (fields.flags !== undefined) {
+    bytes.writeUInt16LE(fields.flags, record + 8);
+    bytes.writeUInt16LE(fields.flags, local + 6);
   }
-  throw new Error(`${entryName} is not in the central directory of ${zipPath}`);
+  if (fields.compressionMethod !== undefined) {
+    bytes.writeUInt16LE(fields.compressionMethod, record + 10);
+    bytes.writeUInt16LE(fields.compressionMethod, local + 8);
+  }
+  fs.writeFileSync(zipPath, bytes);
+}
+
+/** Overwrite the signature of an entry's local header, as in a damaged archive. */
+export function damageLocalHeader(zipPath: string, entryName: string): void {
+  const bytes = fs.readFileSync(zipPath);
+  bytes.fill(0, localHeaderOf(bytes, entryName, zipPath), localHeaderOf(bytes, entryName, zipPath) + 4);
+  fs.writeFileSync(zipPath, bytes);
+}
+
+/**
+ * Overwrite the start of an entry's packed bytes, after its local header's
+ * name and extra field, with a block type deflate does not have.
+ */
+export function damagePackedData(zipPath: string, entryName: string): void {
+  const bytes = fs.readFileSync(zipPath);
+  const local = localHeaderOf(bytes, entryName, zipPath);
+  const dataAt = local + 30 + bytes.readUInt16LE(local + 26) + bytes.readUInt16LE(local + 28);
+  bytes.fill(0xff, dataAt, dataAt + 16);
+  fs.writeFileSync(zipPath, bytes);
+}
+
+/** Point the archive's end-of-directory record at a directory past the end of the file. */
+export function moveDirectoryPastEnd(zipPath: string): void {
+  const bytes = fs.readFileSync(zipPath);
+  const end = bytes.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (end === -1) throw new Error(`${zipPath} has no end-of-directory record`);
+  bytes.writeUInt32LE(bytes.length + 1000, end + 16);
+  fs.writeFileSync(zipPath, bytes);
 }
 
 /** An archive of `count` tiny entries, for the entry-count limit. */
