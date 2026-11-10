@@ -237,7 +237,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   attribute and item bonus, which the editor does not edit, and would change
   every stored strike's bonus, so it waits for its own change.
 
-- **`docs/API_REFERENCE.md` covers 86 of the 169 routes.** Deliberate: it is a
+- **`docs/API_REFERENCE.md` covers 86 of the 170 routes.** Deliberate: it is a
   hand-written guide to the endpoints people ask about, and
   `backend/docs/API_DOCUMENTATION.yaml` is the complete list.
   `scripts/spec-coverage.py` enforces the split and prints the current counts:

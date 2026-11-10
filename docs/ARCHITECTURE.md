@@ -166,6 +166,8 @@ src/
 │   ├── utils.ts       System-message / broadcast helpers
 │   ├── signInSweep.ts Ends connections whose sign-in has ended, on a timer
 │   ├── initiativeState.ts  Each campaign's combat order and round, kept in memory
+│   ├── memberDepartures.ts  Why a member left or was removed, kept in memory for a
+│   │                  minute, so a connection joining or reconnecting then is told why
 │   ├── opId.ts        The id a page attaches to a wall, light or drawing edit, echoed back so it
 │   │                  can tell its own edit from anyone else's
 │   └── handlers/      One module per domain: tokens, dice, chat, spirit,
