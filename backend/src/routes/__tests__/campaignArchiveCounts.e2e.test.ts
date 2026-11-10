@@ -25,8 +25,8 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-archive-counts-')
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
 import request from 'supertest';
-import unzipper from 'unzipper';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { readZip } from '../../__tests__/helpers/zipFixtures';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { IMPORT_LIMITS } from '../../validators/campaignImport';
 
@@ -101,14 +101,14 @@ it('carries no chat message, a whisper least of all', async () => {
   const exported = await exportOf(campaignId);
 
   expect(exported.status).toBe(200);
-  const entries = (await unzipper.Open.buffer(exported.body as Buffer)).files;
+  const entries = await readZip(exported.body as Buffer);
   for (const entry of entries) {
-    const text = (await entry.buffer()).toString('utf8');
+    const text = entry.data.toString('utf8');
     expect(text).not.toContain('said-to-everyone-7f3a');
     expect(text).not.toContain('said-in-a-whisper-9c1d');
   }
   expect(entries.map((e) => e.path).filter((name) => /message|chat|whisper/i.test(name))).toEqual([]);
-  const manifest: unknown = JSON.parse((await entries.find((e) => e.path === 'manifest.json')!.buffer()).toString('utf8'));
+  const manifest: unknown = JSON.parse(entries.find((e) => e.path === 'manifest.json')!.data.toString('utf8'));
   expect(Object.keys(manifest as object).filter((key) => /message|chat|whisper/i.test(key))).toEqual([]);
   await cleanupUsers([player.id]);
 });

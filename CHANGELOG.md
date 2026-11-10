@@ -30,6 +30,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Mapmaker shows a texture while you drag.** A **Brush** stroke, a filled **Rectangle** or **Ellipse** and a **Room**'s floor showed in their plain colour until you let go. They now show in the **Texture** they are painted in. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
+- **The backend no longer installs the unzipper package and the eleven packages it brought.** Campaign imports and backup restores read archives with yauzl, which brings one. Every archive CozyVTT has written is read as before.
+
 ### Fixed
 
 - **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it on your screen until the token moved again or the page was reloaded.

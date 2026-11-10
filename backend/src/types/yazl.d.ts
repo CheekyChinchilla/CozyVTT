@@ -17,6 +17,8 @@ declare module 'yazl' {
     compressionLevel?: number;
     /** Give the entry ZIP64 fields whatever its size, as one past 4 GB gets them. */
     forceZip64Format?: boolean;
+    /** The entry's comment in the central directory; none if not given. */
+    fileComment?: string | Buffer;
   }
 
   export class ZipFile extends EventEmitter<{ error: [Error] }> {
@@ -38,8 +40,9 @@ declare module 'yazl' {
     ): void;
     /**
      * No more entries: write the central directory and end `outputStream`,
-     * with the ZIP64 end records whatever the count if `forceZip64Format`.
+     * with the ZIP64 end records whatever the count if `forceZip64Format`,
+     * and the archive's own `comment` after them.
      */
-    end(options?: { forceZip64Format?: boolean }): void;
+    end(options?: { forceZip64Format?: boolean; comment?: string | Buffer }): void;
   }
 }

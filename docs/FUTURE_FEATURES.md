@@ -136,18 +136,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   - `SystemSettings.timezone`, which nothing reads since setup stopped asking
     for it.
 
-- **Read zip files with yauzl in place of unzipper.** Restoring a backup and
-  importing a campaign read the archive with unzipper, which brings seven
-  packages of its own (bluebird, fs-extra and five more); yauzl, the reading
-  half of yazl, which now writes them, brings one. The reading
-  side is where an uploaded archive is held to its limits: the entry count, the
-  sizes it declares against what it inflates to, the end-of-directory record's
-  place, and every name kept inside its folder (`backend/src/utils/archive.ts`
-  and the campaign importer). A move keeps each of those checks and their
-  tests, and has a security review of its own before it merges.
-  **Do**: the writing side, which this waited for, has moved to yazl. Nothing
-  is wrong today.
-
 - **A backup of tens of thousands of uploaded files is slow to make.** yazl,
   which writes backups, looks through every entry before the one it writes
   next, so the time grows with the square of the file count: about 3 seconds

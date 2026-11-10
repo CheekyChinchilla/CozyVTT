@@ -2,7 +2,6 @@ import fs from 'fs/promises';
 import { readdirSync, readlinkSync, realpathSync } from 'fs';
 import os from 'os';
 import path from 'path';
-import unzipper from 'unzipper';
 import {
   extractArchiveSafely,
   isSafeArchivePath,
@@ -13,7 +12,9 @@ import {
   ArchiveLimitError,
   ArchiveRefusedError,
   UnpackedTotal,
+  type ArchiveEntry,
 } from '../archive';
+import { ZipFile } from 'yauzl';
 import { expectFileMode } from '../../__tests__/helpers/fileModes';
 import {
   writeZip,
@@ -122,7 +123,7 @@ describe('extractArchiveSafely', () => {
     const file = path.join(root, 'backup.zip');
     await fs.writeFile(file, await zipBuffer({ 'database.sql': 'SELECT 1;\n', 'uploads/a/b.txt': 'b' }));
 
-    await extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
+    await extractArchiveSafely(file, await openArchiveFile(file, 100), dest, LIMITS);
 
     await expectFileMode(dest, 0o077, 0);
     expect(await fs.readFile(path.join(dest, 'database.sql'), 'utf8')).toBe('SELECT 1;\n');
@@ -134,7 +135,7 @@ describe('extractArchiveSafely', () => {
     const many = Object.fromEntries(Array.from({ length: LIMITS.maxFiles + 1 }, (_, i) => [`f${i}.txt`, 'x']));
     const file = path.join(root, 'many.zip');
     await fs.writeFile(file, await zipBuffer(many));
-    const directory = await unzipper.Open.file(file);
+    const directory = await openArchiveFile(file, 100);
 
     await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toThrow(/more than the \d+ it may hold/);
     await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toBeInstanceOf(ArchiveRefusedError);
@@ -147,7 +148,7 @@ describe('extractArchiveSafely', () => {
     await writeZip(file, [{ name: 'big.bin', data: () => repeatedBytes(4 * MB) }]);
     // The directory says it is small, so only unpacking it shows otherwise.
     claimUnpackedSize(file, 'big.bin', 1000);
-    const directory = await unzipper.Open.file(file);
+    const directory = await openArchiveFile(file, 100);
 
     const refusal = extractArchiveSafely(file, directory, dest, LIMITS);
     await expect(refusal).rejects.toThrow(/unpacks to more than the .* a backup may hold/);
@@ -161,7 +162,7 @@ describe('extractArchiveSafely', () => {
     const file = path.join(root, 'big.zip');
     await writeZip(file, [{ name: 'big.bin', data: () => repeatedBytes(4 * MB) }]);
 
-    const refusal = extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
+    const refusal = extractArchiveSafely(file, await openArchiveFile(file, 100), dest, LIMITS);
     await expect(refusal).rejects.toThrow(/unpacks to more than the .* a backup may hold/);
     await expect(refusal).rejects.toBeInstanceOf(ArchiveLimitError);
   });
@@ -176,7 +177,7 @@ describe('extractArchiveSafely', () => {
     const file = path.join(root, 'slip.zip');
     await writeZip(file, [{ name: 'ok.txt', data: 'fine' }, { name: built, data: 'escaped' }]);
     renameEntry(file, built, crafted);
-    const directory = await unzipper.Open.file(file);
+    const directory = await openArchiveFile(file, 100);
     expect(directory.files.map((f) => f.path)).toContain(crafted);
 
     await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toThrow(/unsafe file path/);
@@ -253,7 +254,7 @@ describe('extractArchiveSafely', () => {
 
     for (let i = 0; i < 3; i++) {
       const dest = path.join(root, `unpacked-${i}`);
-      await expect(extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS)).rejects.toBeInstanceOf(ArchiveLimitError);
+      await expect(extractArchiveSafely(file, await openArchiveFile(file, 100), dest, LIMITS)).rejects.toBeInstanceOf(ArchiveLimitError);
     }
 
     expect(await handlesLeftOn(file)).toBe(0);
@@ -264,7 +265,7 @@ describe('extractArchiveSafely', () => {
     const file = path.join(root, 'link.zip');
     await writeZip(file, [{ name: 'uploads/link', data: '../../../../etc', mode: 0o120777 }]);
 
-    await extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
+    await extractArchiveSafely(file, await openArchiveFile(file, 100), dest, LIMITS);
 
     const written = await fs.lstat(path.join(dest, 'uploads/link'));
     expect(written.isSymbolicLink()).toBe(false);
@@ -325,10 +326,29 @@ describe('openArchiveFile', () => {
   it('refuses an archive listing more entries than allowed before reading its directory', async () => {
     const file = path.join(root, 'many.zip');
     await writeManyEntryZip(file, 11);
-    const read = jest.spyOn(unzipper.Open, 'file');
+    const read = jest.spyOn(ZipFile.prototype, 'readEntry');
 
     await expect(openArchiveFile(file, 10)).rejects.toThrow('The archive lists 11 files, more than the 10 it may hold.');
     expect(read).not.toHaveBeenCalled();
+  });
+
+  // A restore or import refused at its directory must not keep the upload
+  // open: the deleted file's disk space stays in use while a handle does.
+  (process.platform === 'linux' ? it : it.skip)('leaves no handle to the archive open, whether it reads it or refuses it', async () => {
+    const many = path.join(root, 'many.zip');
+    await writeManyEntryZip(many, 11);
+    const cut = path.join(root, 'cut.zip');
+    await writeZip(cut, [{ name: 'a', data: '1' }]);
+    moveDirectoryPastEnd(cut);
+    await expectHandlesSeen(many);
+
+    expect((await openArchiveFile(many, 100)).files).toHaveLength(11);
+    await expect(openArchiveFile(many, 10)).rejects.toBeInstanceOf(ArchiveRefusedError);
+    await expect(openArchiveFile(cut, 10)).rejects.toBeInstanceOf(ArchiveRefusedError);
+    expect(await countListedEntries(many)).toBe(11);
+
+    expect(handlesTo(many)).toBe(0);
+    expect(handlesTo(cut)).toBe(0);
   });
 
   it('refuses an archive whose directory cannot be read, saying it is damaged', async () => {
@@ -347,26 +367,61 @@ describe('openArchiveFile', () => {
     await expect(openArchiveFile(file, 10)).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
   });
 
+  // The count checked is the one the reader goes on to read, so an
+  // end-of-directory record hidden in the archive's last bytes, before the
+  // real one, cannot stand in for it.
+  it('refuses an archive listing more entries than allowed, whatever record its last bytes hide', async () => {
+    const file = path.join(root, 'hidden.zip');
+    const hidden = Buffer.alloc(22);
+    hidden.writeUInt32LE(0x06054b50, 0);
+    hidden.writeUInt16LE(1, 8);
+    hidden.writeUInt16LE(1, 10);
+    const fillers = Array.from({ length: 10 }, (_, i) => ({ name: `filler/${i}.txt`, data: 'x', store: true }));
+    await writeZip(file, [...fillers, { name: 'last.txt', data: 'x', store: true, comment: hidden }]);
+
+    expect(await countListedEntries(file)).toBe(11);
+    await expect(openArchiveFile(file, 10)).rejects.toThrow('The archive lists 11 files, more than the 10 it may hold.');
+  });
+
+  it('reads an archive whose own comment is long', async () => {
+    const file = path.join(root, 'commented.zip');
+    await writeZip(file, [{ name: 'a', data: '1' }, { name: 'b', data: '2' }], { comment: 'made by hand '.repeat(20) });
+
+    expect(await countListedEntries(file)).toBe(2);
+    expect((await openArchiveFile(file, 10)).files.map((f) => f.path)).toEqual(['a', 'b']);
+  });
+
+  it('refuses an archive with bytes after its end, saying it is damaged', async () => {
+    const file = path.join(root, 'trailing.zip');
+    await writeZip(file, [{ name: 'a', data: '1' }]);
+    await fs.appendFile(file, Buffer.alloc(10, 7));
+
+    await expect(openArchiveFile(file, 10)).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
+  });
+
   it('opens an archive within the limit', async () => {
     const file = path.join(root, 'few.zip');
     await writeManyEntryZip(file, 10);
+    const read = jest.spyOn(ZipFile.prototype, 'readEntry');
     expect((await openArchiveFile(file, 10)).files).toHaveLength(10);
+    // The spy sees the entries read, so a refusal it saw none of read none.
+    expect(read).toHaveBeenCalled();
   });
 });
 
 describe('reading one entry within limits', () => {
-  async function bomb(name: string, claimed?: number): Promise<{ file: string; entry: unzipper.File }> {
+  async function bomb(name: string, claimed?: number): Promise<{ file: string; entry: ArchiveEntry }> {
     const file = path.join(root, `${name}.zip`);
     await writeZip(file, [{ name, data: () => repeatedBytes(50 * MB) }]);
     if (claimed !== undefined) claimUnpackedSize(file, name, claimed);
-    const entry = (await unzipper.Open.file(file)).files[0];
+    const entry = (await openArchiveFile(file, 100)).files[0];
     return { file, entry };
   }
 
   it('reads an entry within its limit, packed or stored', async () => {
     const file = path.join(root, 'small.zip');
     await writeZip(file, [{ name: 'packed.json', data: '{"a":1}' }, { name: 'stored.json', data: '{"b":2}', store: true }]);
-    const [packed, stored] = (await unzipper.Open.file(file)).files;
+    const [packed, stored] = (await openArchiveFile(file, 100)).files;
     const total = new UnpackedTotal(MB);
 
     expect((await readArchiveEntry(file, packed, { maxEntryBytes: 100, total })).toString()).toBe('{"a":1}');
@@ -408,14 +463,14 @@ describe('reading one entry within limits', () => {
   it('writes an entry within its limit and reports its size', async () => {
     const file = path.join(root, 'pic.zip');
     await writeZip(file, [{ name: 'pic.png', data: Buffer.alloc(3000, 7) }]);
-    const entry = (await unzipper.Open.file(file)).files[0];
+    const entry = (await openArchiveFile(file, 100)).files[0];
     const dest = path.join(root, 'pic.png');
     expect(await writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(MB) })).toBe(3000);
     expect(await fs.readFile(dest)).toEqual(Buffer.alloc(3000, 7));
   });
 
-  // unzipper's own entry stream keeps the archive open when it is stopped
-  // part-way; a few hundred refused pictures would use up the process's files.
+  // An entry stream that kept the archive open when stopped part-way would
+  // let a few hundred refused pictures use up the process's files.
   (process.platform === 'linux' ? it : it.skip)('closes the archive file when it stops an entry', async () => {
     const file = path.join(root, 'stored.zip');
     await writeZip(file, [{ name: 'big.bin', data: () => repeatedBytes(30 * MB, 1), store: true }]);
@@ -423,10 +478,8 @@ describe('reading one entry within limits', () => {
     // stopped part-way, where a claim over it is refused before the file is
     // opened at all.
     claimUnpackedSize(file, 'big.bin', 1000);
-    // Counted before the directory is read: unzipper keeps the file open a
-    // moment after it has read it.
     await expectHandlesSeen(file);
-    const entry = (await unzipper.Open.file(file)).files[0];
+    const entry = (await openArchiveFile(file, 100)).files[0];
     // Within the limit, so each read opens the file and is stopped while
     // reading it, never refused before it is opened.
     expect(entry.uncompressedSize).toBeLessThanOrEqual(MB);

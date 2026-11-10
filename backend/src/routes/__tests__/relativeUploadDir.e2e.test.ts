@@ -22,8 +22,8 @@ process.chdir(SCRATCH);
 process.env.UPLOAD_DIR = 'uploads';
 
 import request from 'supertest';
-import unzipper from 'unzipper';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { readZip } from '../../__tests__/helpers/zipFixtures';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
@@ -98,10 +98,9 @@ it('puts the picture in a campaign export', async () => {
       r.on('end', () => done(null, Buffer.concat(chunks)));
     });
   expect(res.status).toBe(200);
-  const archive = await unzipper.Open.buffer(res.body as Buffer);
-  const entry = archive.files.find((f) => f.path === `assets/${assetId}.png`);
+  const entry = (await readZip(res.body as Buffer)).find((f) => f.path === `assets/${assetId}.png`);
   expect(entry).toBeDefined();
-  expect(await entry?.buffer()).toEqual(PNG);
+  expect(entry?.data).toEqual(PNG);
 });
 
 it('removes the picture from the disk when the asset is deleted', async () => {

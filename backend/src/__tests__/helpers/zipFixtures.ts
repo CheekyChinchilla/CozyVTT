@@ -1,5 +1,5 @@
 /**
- * Archives built for tests, written to disk as they are made.
+ * Archives built for tests, written to disk as they are made, and read back.
  *
  * A zip bomb is a few hundred kilobytes that unpacks to hundreds of
  * megabytes. Building one in memory would cost the test what it is meant to
@@ -9,8 +9,10 @@
 
 import fs from 'fs';
 import { Readable } from 'stream';
+import { buffer } from 'stream/consumers';
 import { pipeline } from 'stream/promises';
 import { ZipFile } from 'yazl';
+import { fromBufferPromise, openPromise } from 'yauzl';
 
 export interface FixtureEntry {
   /** A name ending in a slash makes a folder entry, whose data is left out. */
@@ -21,6 +23,8 @@ export interface FixtureEntry {
   store?: boolean;
   /** The entry's Unix mode, its file type included: 0o120777 makes it a symbolic link. */
   mode?: number;
+  /** The entry's comment, the last bytes of its record in the central directory. */
+  comment?: Buffer;
 }
 
 /**
@@ -28,19 +32,20 @@ export interface FixtureEntry {
  * stored. With `zip64`, every entry and the end of the archive carry the
  * ZIP64 fields an archive past 4 GB or 65,535 entries has.
  */
-function zipOf(entries: FixtureEntry[], zip64 = false): ZipFile {
+function zipOf(entries: FixtureEntry[], zip64 = false, comment?: string): ZipFile {
   const zip = new ZipFile();
   for (const entry of entries) {
     const options = {
       compressionLevel: entry.store ? 0 : 9,
       forceZip64Format: zip64,
       ...(entry.mode === undefined ? {} : { mode: entry.mode }),
+      ...(entry.comment === undefined ? {} : { fileComment: entry.comment }),
     };
     if (entry.name.endsWith('/')) zip.addEmptyDirectory(entry.name, entry.mode === undefined ? {} : { mode: entry.mode });
     else if (typeof entry.data === 'function') zip.addReadStream(entry.data(), entry.name, options);
     else zip.addBuffer(Buffer.from(entry.data), entry.name, options);
   }
-  zip.end({ forceZip64Format: zip64 });
+  zip.end({ forceZip64Format: zip64, ...(comment === undefined ? {} : { comment }) });
   return zip;
 }
 
@@ -70,9 +75,12 @@ export function repeatedBytes(bytes: number, fill = 0x20): Readable {
   });
 }
 
-/** Write a ZIP of `entries` to `dest`, with ZIP64 fields throughout if `zip64`. */
-export async function writeZip(dest: string, entries: FixtureEntry[], options: { zip64?: boolean } = {}): Promise<void> {
-  await pipeline(zipOf(entries, options.zip64).outputStream, fs.createWriteStream(dest));
+/**
+ * Write a ZIP of `entries` to `dest`, with ZIP64 fields throughout if
+ * `zip64`, and the archive's own `comment` at its very end.
+ */
+export async function writeZip(dest: string, entries: FixtureEntry[], options: { zip64?: boolean; comment?: string } = {}): Promise<void> {
+  await pipeline(zipOf(entries, options.zip64, options.comment).outputStream, fs.createWriteStream(dest));
 }
 
 /** Where the central directory record of `entryName` starts in `bytes`. */
@@ -215,4 +223,39 @@ export function writeZip64Claiming(dest: string, listed: bigint): void {
   end.writeUInt32LE(0xffffffff, 12);
   end.writeUInt32LE(0xffffffff, 16);
   fs.writeFileSync(dest, Buffer.concat([local, record, zip64, locator, end]));
+}
+
+/** An entry read back from an archive, with what it unpacks to. */
+export interface ReadBackEntry {
+  path: string;
+  /** A folder entry, whose name ends in a slash, or a file. */
+  type: 'File' | 'Directory';
+  compressionMethod: number;
+  uncompressedSize: number;
+  data: Buffer;
+}
+
+/**
+ * Every entry of an archive, a file's path or its bytes, unpacked in memory.
+ * yauzl reads it with all its own checks on (names, sizes against what each
+ * entry unpacks to, the end record), apart from the server's reader, so an
+ * archive the server writes is held to them too.
+ */
+export async function readZip(source: string | Buffer): Promise<ReadBackEntry[]> {
+  const zip = typeof source === 'string' ? await openPromise(source) : await fromBufferPromise(source);
+  const entries: ReadBackEntry[] = [];
+  try {
+    for await (const entry of zip.eachEntry()) {
+      entries.push({
+        path: entry.fileName,
+        type: entry.fileName.endsWith('/') ? 'Directory' : 'File',
+        compressionMethod: entry.compressionMethod,
+        uncompressedSize: entry.uncompressedSize,
+        data: await buffer(await zip.openReadStreamPromise(entry)),
+      });
+    }
+  } finally {
+    zip.close();
+  }
+  return entries;
 }

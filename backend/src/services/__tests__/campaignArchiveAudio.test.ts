@@ -19,11 +19,11 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-archive-audio-'))
 const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-import unzipper from 'unzipper';
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport } from '../campaignExporter';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
 import { oggVorbis } from '../../__tests__/helpers/wholeFiles';
+import { readZip } from '../../__tests__/helpers/zipFixtures';
 
 const OGG = oggVorbis();
 
@@ -57,9 +57,8 @@ async function exportSource(includeAudio: boolean): Promise<string> {
 }
 
 async function readManifest(file: string): Promise<{ includesAudio: boolean; assetCount: number }> {
-  const directory = await unzipper.Open.file(file);
-  const entry = directory.files.find((f) => f.path === 'manifest.json');
-  return JSON.parse((await entry!.buffer()).toString());
+  const entry = (await readZip(file)).find((f) => f.path === 'manifest.json');
+  return JSON.parse(entry!.data.toString());
 }
 
 beforeAll(async () => {

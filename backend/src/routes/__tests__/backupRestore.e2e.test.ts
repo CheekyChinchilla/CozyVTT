@@ -35,7 +35,6 @@ process.env.BACKUP_DIR = BACKUP_DIR;
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { PassThrough } from 'stream';
-import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
@@ -45,7 +44,7 @@ import { io as ioc } from 'socket.io-client';
 import * as archive from '../../utils/archive';
 import { removeLeftoverRestoreUploads } from '../../services/restoreState';
 import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
-import { zipBuffer, renameEntry } from '../../__tests__/helpers/zipFixtures';
+import { zipBuffer, renameEntry, readZip } from '../../__tests__/helpers/zipFixtures';
 import {
   clearState as clearCombatState,
   getState as getCombatState,
@@ -302,7 +301,7 @@ describe('POST /api/admin/backups/restore', () => {
     const list = await admin.get('/api/admin/backups');
     expect(list.body.backups.map((b: { filename: string }) => b.filename)).toContain(named);
     const file = path.join(BACKUP_DIR, named!);
-    const entries = (await unzipper.Open.file(file)).files.map((f) => f.path);
+    const entries = (await readZip(file)).map((f) => f.path);
     expect(entries).toEqual(['database.sql']);
 
     // Readable by the backend's user alone: it holds every credential on the instance.
@@ -1000,10 +999,10 @@ describe('POST /api/admin/backups', () => {
       expect(res.status).toBe(201);
       made = path.join(BACKUP_DIR, res.body.filename);
 
-      const zip = await unzipper.Open.file(made);
+      const zip = await readZip(made);
       const held: Record<string, string> = {};
-      for (const entry of zip.files) {
-        if (entry.type === 'File') held[entry.path] = (await entry.buffer()).toString('utf8');
+      for (const entry of zip) {
+        if (entry.type === 'File') held[entry.path] = entry.data.toString('utf8');
       }
       expect(held).toEqual({
         'database.sql': SAFETY_DUMP,
@@ -1014,7 +1013,7 @@ describe('POST /api/admin/backups', () => {
       });
       // The database compressed; the uploads stored as they are, since
       // pictures and sound are compressed already.
-      expect(zip.files.map((f) => [f.path, f.compressionMethod])).toEqual([
+      expect(zip.map((f) => [f.path, f.compressionMethod])).toEqual([
         ['database.sql', 8],
         ['uploads/documents/global/.notes.md', 0],
         ['uploads/maps/global/cellar.png', 0],
@@ -1022,7 +1021,7 @@ describe('POST /api/admin/backups', () => {
         ['uploads/tokens/campaigns/c1/goblin.png', 0],
       ]);
       // Not even the folder itself, which would restore as an empty one.
-      const backupsEntries = zip.files.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
+      const backupsEntries = zip.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
       expect(backupsEntries).toEqual([]);
     } finally {
       if (made) await fs.rm(made, { force: true });
@@ -1114,8 +1113,7 @@ describe('POST /api/admin/backups', () => {
       expect(res.status).toBe(201);
       made = path.join(BACKUP_DIR, res.body.filename);
 
-      const zip = await unzipper.Open.file(made);
-      const held = await Promise.all(zip.files.map(async (f) => ({ path: f.path, body: (await f.buffer()).toString('utf8') })));
+      const held = (await readZip(made)).map((f) => ({ path: f.path, body: f.data.toString('utf8') }));
       expect(held.filter((f) => secrets.includes(f.body))).toEqual([]);
       expect(held.filter((f) => f.path.startsWith('uploads/linked/'))).toEqual([]);
       expect(held).toContainEqual({ path: 'uploads/maps/global/cellar.png', body: 'a map' });

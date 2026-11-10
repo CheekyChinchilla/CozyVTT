@@ -360,15 +360,15 @@ socket.io 4.x
   License: MIT
   https://github.com/socketio/socket.io
 
-unzipper 0.12.x
-  Copyright (c) Ziggy Jonsson
-  License: MIT
-  https://github.com/ZJONSSON/node-unzipper
-
 winston 3.x
   Copyright (c) Charlie Robbins & Contributors
   License: MIT
   https://github.com/winstonjs/winston
+
+yauzl 3.x
+  Copyright (c) 2014 Josh Wolfe
+  License: MIT
+  https://github.com/thejoshwolfe/yauzl
 
 yazl 3.x
   Copyright (c) 2014 Josh Wolfe

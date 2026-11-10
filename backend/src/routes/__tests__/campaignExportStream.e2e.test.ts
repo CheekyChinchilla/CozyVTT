@@ -23,8 +23,8 @@ const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import request from 'supertest';
-import unzipper from 'unzipper';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { readZip } from '../../__tests__/helpers/zipFixtures';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { prisma as appPrisma } from '../../config/database';
 import logger from '../../utils/logger';
@@ -131,7 +131,7 @@ describe('a campaign export', () => {
     expect(finishedAtFirstChunk).toBe(false);
     expect(finished()).toBe(true);
     // And it is a whole archive, picture included.
-    const entries = (await unzipper.Open.buffer(res.body)).files;
+    const entries = await readZip(res.body as Buffer);
     expect(entries.map((e) => e.path)).toEqual(expect.arrayContaining(['manifest.json', 'campaign.json', 'maps/map-0.json']));
     const picture = entries.find((e) => e.path.startsWith('assets/') && e.path.endsWith('.png'));
     expect(picture?.uncompressedSize).toBe(40 * MB);
