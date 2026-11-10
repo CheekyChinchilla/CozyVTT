@@ -10056,7 +10056,8 @@ paths:
             bytes), or a name such as `a[b][c]` nested more than five levels
             deep or with a number above 1000 between the brackets; or an
             archive that is not a ZIP, is damaged, is over the size setting,
-            lists more than 1,000 files, or has a missing, oversized or
+            lists more than 1,000 files, has a file name longer than 1,024
+            bytes, or has a missing, oversized or
             invalid manifest (`Invalid Archive`, with the reason in
             `message`).
           content:
@@ -12492,8 +12493,8 @@ paths:
         until the restore ends. The upload is capped at 4 GB (413) and its filename
         must end in `.zip` (400). Once accepted, a file that is not a ZIP archive is
         refused with 400, as is an archive listing more than 100,000 entries or
-        holding an entry whose path could escape the destination folder or that
-        cannot be written there (a file and a folder of the same name, a part of
+        holding an entry whose path could escape the destination folder, is
+        longer than 1,024 bytes, or cannot be written there (a file and a folder of the same name, a part of
         a name longer than the file system allows, or the folder itself); an archive
         that unpacks to more than 10 GiB answers 413. Each refusal names its reason
         and changes nothing. Replaces the

@@ -22,11 +22,25 @@ import { fromFdPromise, type Entry as DirectoryRecord, type ZipFile } from 'yauz
 import { errorCode } from './errors';
 
 /**
- * Reject archive entry paths that attempt traversal or absolute escape.
+ * The longest entry name, in bytes, an archive may have. The reader keeps
+ * every name of a directory in memory, and a name can be 65,535 bytes, so
+ * an import of 1,000 such names held about 131 MB. CozyVTT writes at most
+ * about 320 bytes: a backup's uploads (`uploads/`, three folders and a
+ * stored file's name, which the file system holds to 255 bytes) and an
+ * export's assets (`assets/`, the asset's id and an extension of at most 20
+ * characters). A backup leaves out a longer name, as it does any other this
+ * check refuses.
+ */
+export const MAX_ARCHIVE_NAME_BYTES = 1024;
+
+/**
+ * Reject archive entry paths that attempt traversal or absolute escape, or
+ * are longer than MAX_ARCHIVE_NAME_BYTES.
  * Accepts only simple relative paths that stay beneath the extraction root.
  */
 export function isSafeArchivePath(name: string): boolean {
   if (!name) return false;
+  if (Buffer.byteLength(name, 'utf8') > MAX_ARCHIVE_NAME_BYTES) return false;
   if (name.includes('..')) return false;
   if (name.includes('\\')) return false;
   // Must be a simple relative path under the expected directory.
@@ -255,6 +269,12 @@ async function withArchive<T>(filePath: string, read: (zip: ZipFile) => Promise<
 function entryOf(record: DirectoryRecord, fileSize: number): ArchiveEntry {
   if (record.relativeOffsetOfLocalHeader + 30 + record.compressedSize > fileSize) {
     throw new ArchiveRefusedError(NOT_A_ZIP);
+  }
+  // Refused before it is kept, and without repeating it.
+  if (record.fileNameRaw.length > MAX_ARCHIVE_NAME_BYTES) {
+    throw new ArchiveRefusedError(
+      `The archive has a file name longer than ${MAX_ARCHIVE_NAME_BYTES.toLocaleString('en-US')} bytes, which an archive from this server never has.`
+    );
   }
   const name = record.fileNameRaw.toString('utf8');
   return {

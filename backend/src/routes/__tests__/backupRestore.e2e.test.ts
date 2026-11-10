@@ -53,6 +53,7 @@ import {
 import logger from '../../utils/logger';
 import * as setupGate from '../../middleware/setup';
 import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../admin';
+import { getFilePath } from '../../utils/fileUtils';
 
 /**
  * The migration run: the project's own Prisma, from the folder the backend
@@ -1192,6 +1193,37 @@ describe('POST /api/admin/backups', () => {
       await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
       await fs.mkdir(UPLOAD_DIR, { recursive: true });
     }
+  });
+
+  // A restore refuses a name longer than an archive may hold.
+  it('leaves out a folder nested so deep that its name is longer than a restore takes', async () => {
+    stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    const deep = Array.from({ length: 5 }, (_, i) => `${i}${'d'.repeat(249)}`);
+    await writeFiles(UPLOAD_DIR, { 'maps/global/cellar.png': 'a map', [`${deep.join('/')}/far.png`]: 'copied in by hand' });
+    const warned = jest.spyOn(logger, 'warn');
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      const names = (await readZip(path.join(BACKUP_DIR, res.body.filename))).map((e) => e.path);
+
+      expect(names).toEqual(['database.sql', 'uploads/maps/global/cellar.png']);
+      expect(warned).toHaveBeenCalledWith(NAME_LEFT_OUT_OF_BACKUP, { path: deep.join('/') });
+      await fs.rm(path.join(BACKUP_DIR, res.body.filename), { force: true });
+    } finally {
+      warned.mockRestore();
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
+  // Each part of a stored file's name is one the file system holds to 255
+  // bytes, in folders of CozyVTT's own, so the longest has room to spare.
+  it('gives every file CozyVTT stores a name a restore takes', () => {
+    const folder = path.relative(UPLOAD_DIR, getFilePath('DOCUMENT', 'CAMPAIGN', crypto.randomUUID()));
+    const longest = `uploads/${folder.split(path.sep).join('/')}/${'f'.repeat(255)}`;
+    expect(Buffer.byteLength(longest)).toBeLessThanOrEqual(archive.MAX_ARCHIVE_NAME_BYTES / 3);
+    expect(archive.isSafeArchivePath(longest)).toBe(true);
   });
 
   // Root reads a file whatever its mode, so the refusal below cannot be set

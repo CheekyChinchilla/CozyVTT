@@ -25,6 +25,7 @@ import { extractAssetId } from '../utils/asset-urls';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
+import { MAX_EXTENSION_LENGTH } from '../validators/assets';
 import { DRAWING_ORDER, campaignDmId, drawingForArchive } from './mapDrawings';
 
 // ── Exported types ──────────────────────────────────────────────────────────
@@ -274,6 +275,10 @@ export async function prepareCampaignExport(
   const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath' | 'details'> & Partial<AssetDetails>> = {};
   for (const [id, info] of assetMap.entries()) {
     assetManifest[id] = {
+      // TODO(archives): an original name over 500 characters, which versions
+      // before 1.5.2 stored, is written as it is, and the import refuses the
+      // asset's entry ("Its entry in the archive cannot be read."). Right:
+      // write it shortened with shortenFileName to MAX_ORIGINAL_NAME_LENGTH.
       originalName: info.originalName,
       mimeType: info.mimeType,
       type: info.type,
@@ -388,7 +393,7 @@ export async function prepareCampaignExport(
         // space the size check above counted. One deleted since it was
         // listed is left out, and an import says its file is missing.
         ...[...assetMap.entries()].map(([id, info]) => ({
-          name: `assets/${id}${path.extname(info.originalName) || mimeToExt(info.mimeType)}`,
+          name: assetEntryName(id, info.originalName, info.mimeType),
           file: info.filePath,
           store: true,
           skipIfGone: true,
@@ -428,6 +433,18 @@ function atmosphereTrackIds(vibeSettings: Parameters<typeof readJsonObject>[0]):
 }
 
 /** Map MIME type to file extension. */
+/**
+ * The name an asset's file has in the archive: its id, by which an import
+ * finds it, and the extension of its original name, or of its format when
+ * that name has none or one too long to be one. Older versions stored an
+ * upload's own name at any length, so its last dot could start an entry name
+ * longer than an import takes (MAX_ARCHIVE_NAME_BYTES).
+ */
+export function assetEntryName(id: string, originalName: string, mimeType: string): string {
+  const ext = path.extname(originalName);
+  return `assets/${id}${ext.length > 0 && ext.length <= MAX_EXTENSION_LENGTH ? ext : mimeToExt(mimeType)}`;
+}
+
 function mimeToExt(mime: string): string {
   const map: Record<string, string> = {
     'image/png': '.png',

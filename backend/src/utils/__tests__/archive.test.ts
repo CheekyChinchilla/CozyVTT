@@ -11,6 +11,7 @@ import {
   writeArchiveEntry,
   ArchiveLimitError,
   ArchiveRefusedError,
+  MAX_ARCHIVE_NAME_BYTES,
   UnpackedTotal,
   type ArchiveEntry,
 } from '../archive';
@@ -112,8 +113,14 @@ describe('isSafeArchivePath', () => {
     ['a backslash', 'maps\\evil.txt'],
     ['a backslash parent folder', '..\\evil.txt'],
     ['an absolute path', '/etc/passwd'],
+    ['a name longer than an archive may hold', `maps/${'é'.repeat(510)}`],
   ])('refuses %s', (_label, name) => {
     expect(isSafeArchivePath(name)).toBe(false);
+  });
+
+  it('accepts a name as long as an archive may hold, counted in bytes', () => {
+    expect(isSafeArchivePath(`maps/${'é'.repeat(509)}a`)).toBe(true);
+    expect(Buffer.byteLength(`maps/${'é'.repeat(509)}a`)).toBe(MAX_ARCHIVE_NAME_BYTES);
   });
 });
 
@@ -465,6 +472,25 @@ describe('openArchiveFile', () => {
     await fs.appendFile(file, Buffer.alloc(10, 7));
 
     await expect(openArchiveFile(file, 10)).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
+  });
+
+  // The reader keeps every name it lists, and a name can be 65,535 bytes.
+  it('refuses an archive with a name longer than it may hold, without repeating it', async () => {
+    const file = path.join(root, 'long.zip');
+    const name = `maps/${'b'.repeat(MAX_ARCHIVE_NAME_BYTES - 4)}`;
+    await writeZip(file, [{ name: 'a.json', data: '{}' }, { name, data: 'x' }]);
+
+    const refusal = openArchiveFile(file, 10);
+    await expect(refusal).rejects.toThrow('The archive has a file name longer than 1,024 bytes, which an archive from this server never has.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
+  });
+
+  it('reads an archive whose longest name is as long as it may hold', async () => {
+    const file = path.join(root, 'longest.zip');
+    const name = `maps/${'b'.repeat(MAX_ARCHIVE_NAME_BYTES - 5)}`;
+    await writeZip(file, [{ name, data: 'x' }]);
+
+    expect((await openArchiveFile(file, 10)).files.map((f) => f.path)).toEqual([name]);
   });
 
   it('opens an archive within the limit', async () => {

@@ -104,6 +104,9 @@ export function parseUploadMetadata(body: unknown): { ok: true; value: UploadMet
   };
 }
 
+/** The longest part after a file name's last dot, in characters, taken as its extension. */
+export const MAX_EXTENSION_LENGTH = 20;
+
 /**
  * A file name cut to at most `max` characters, keeping its extension, so a
  * name typed as the asset's own, or taken from a very long file name, stays
@@ -112,7 +115,7 @@ export function parseUploadMetadata(body: unknown): { ok: true; value: UploadMet
 export function shortenFileName(name: string, max: number): string {
   if (name.length <= max) return name;
   const ext = path.extname(name);
-  if (ext.length === 0 || ext.length > 20) return cutText(name, max);
+  if (ext.length === 0 || ext.length > MAX_EXTENSION_LENGTH) return cutText(name, max);
   return `${cutText(name.slice(0, name.length - ext.length), max - ext.length)}${ext}`;
 }
 
