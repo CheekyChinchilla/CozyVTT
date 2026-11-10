@@ -4,7 +4,8 @@ import type { CampaignRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
 import { databaseBeingReplaced, RESTORING_MESSAGE } from '../services/restoreState';
-import { broadcastPresence, getOnlineUserIds, clearCampaignFromLiveSockets, applyRoleToLiveSockets } from './utils';
+import { broadcastPresence, getOnlineUserIds, clearCampaignFromLiveSockets, applyRoleToLiveSockets, tellJoinRefused } from './utils';
+import { whyNotAMember } from './memberDepartures';
 import logger from '../utils/logger';
 import { holdsNulCharacter, NUL_REFUSAL } from '../validators/nulCharacter';
 import { ackFrom } from './ack';
@@ -151,12 +152,20 @@ export function registerEventHandlers(io: Server): void {
 
         const result = await authenticateCampaign(socket, data.campaignId);
 
-        // TODO(play): a tab that reconnects after its member left or was removed (a laptop that slept
-        // through it) is refused here with a plain `error`, "You are not a member of this campaign", and
-        // its page stays on the campaign. A socket whose user is no longer a member should be sent
-        // campaign.access.revoked instead, so the page says so and goes to the dashboard.
         if (!result.success) {
-          socket.emit('error', { message: result.error });
+          // A tab that reconnects after its member left or was removed, or
+          // after the campaign was deleted (a computer that slept through
+          // it), or an address the user was never in: out of every campaign
+          // room, and told so, as an open tab is.
+          const reason = result.refusal === 'no-campaign'
+            ? 'campaign-deleted'
+            : result.refusal === 'not-member' && socket.userId ? whyNotAMember(socket.userId, data.campaignId) : null;
+          if (reason) {
+            await leaveCampaignRooms([...socket.rooms].filter((room) => room !== socket.id && room !== socket.userId));
+            tellJoinRefused(socket, data.campaignId, reason);
+          } else {
+            socket.emit('error', { message: result.error });
+          }
           return;
         }
 
@@ -188,20 +197,7 @@ export function registerEventHandlers(io: Server): void {
         // where it stands there: its put-down would go to this campaign now.
         if (previous && previous !== data.campaignId) socket.releaseHeldTokens?.(previous);
         await Promise.all(leaving);
-
-        for (const room of oldRooms) {
-          // Notify old campaign that user left
-          socket.to(room).emit('user.left', {
-            userId: socket.userId,
-            timestamp: new Date().toISOString(),
-          });
-
-          // Re-broadcast the old campaign's presence too. The roster is driven
-          // by the full `presence.state` snapshot, so telling only the new
-          // campaign would leave the old one showing this user online forever.
-          // Recomputed after the leave above, so a second tab still counts.
-          await broadcastPresence(room);
-        }
+        await tellRoomsLeft(oldRooms);
 
         // Removed meanwhile, and told so: the join is over.
         if (socket.campaignId !== data.campaignId) return;
@@ -244,6 +240,38 @@ export function registerEventHandlers(io: Server): void {
     }
 
     /**
+     * Take the socket out of these campaign rooms and out of its campaign,
+     * for a join the server refused. The same as switching campaigns does,
+     * with no campaign to switch to.
+     */
+    async function leaveCampaignRooms(rooms: string[]): Promise<void> {
+      const previous = socket.campaignId;
+      const leaving = rooms.map((room) => socket.leave(room));
+      socket.campaignId = undefined;
+      socket.role = undefined;
+      if (previous) socket.releaseHeldTokens?.(previous);
+      await Promise.all(leaving);
+      await tellRoomsLeft(rooms);
+    }
+
+    /** Tell each campaign this socket has just left that it has gone. */
+    async function tellRoomsLeft(rooms: string[]): Promise<void> {
+      for (const room of rooms) {
+        // Notify old campaign that user left
+        socket.to(room).emit('user.left', {
+          userId: socket.userId,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Re-broadcast the old campaign's presence too. The roster is driven
+        // by the full `presence.state` snapshot, so telling only the new
+        // campaign would leave the old one showing this user online forever.
+        // Recomputed after the leave above, so a second tab still counts.
+        await broadcastPresence(room);
+      }
+    }
+
+    /**
      * Read the membership once more and apply it. A removal or role change
      * committed after `authenticate` read the membership, whose live update
      * ran before the socket had joined, is caught here. A failed read leaves
@@ -264,10 +292,8 @@ export function registerEventHandlers(io: Server): void {
       }
       if (socket.campaignId !== campaignId) return;
       if (!membership) {
-        // TODO(play): this says "removed" whatever took the member out, so a leaver's tab re-joining at the
-        // moment of the leave is told "You were removed from this campaign.". It should be told the reason
-        // the leave gave, `left`.
-        await clearCampaignFromLiveSockets(userId, campaignId);
+        // Told why, as the leave or removal told the tabs open at the time.
+        await clearCampaignFromLiveSockets(userId, campaignId, whyNotAMember(userId, campaignId));
         await broadcastPresence(campaignId);
       } else if (membership.role !== socket.role) {
         await applyRoleToLiveSockets(userId, campaignId, membership.role);

@@ -42,6 +42,7 @@ import type {
   InitiativeReorderEvent,
   MapPingEvent,
   MapPingedBroadcast,
+  AccessRevoked,
 } from '@/types';
 import type {
   DrawingAddEvent,
@@ -117,8 +118,10 @@ class SocketClient {
   private signInRefused = false;
   /**
    * The server said this connection may no longer use its campaign
-   * (`campaign.access.revoked`): removed, the campaign deleted, or the
-   * sign-in ended. Nothing is reconnected after that; the page says why.
+   * (`campaign.access.revoked`): removed, left, the campaign deleted, the
+   * sign-in ended, or a join refused because the user is not a member
+   * (`not-member`) or the campaign is gone. Nothing is reconnected after
+   * that; the page says why.
    */
   private accessRevoked = false;
   /**
@@ -332,8 +335,14 @@ class SocketClient {
 
       // The connection's access has ended, with the reason: the page shows
       // it (useAccessRevoked), and the disconnect that may follow is final.
-      this.socket.on('campaign.access.revoked', () => {
+      // A join refused because the user is not a member or the campaign is
+      // gone is answered this way too, and ends the connect under way.
+      this.socket.on('campaign.access.revoked', (revoked: AccessRevoked) => {
         this.accessRevoked = true;
+        if (this.joined) return;
+        clearTimeout(connectionTimeout);
+        this.isConnecting = false;
+        reject(new Error(revoked.message));
       });
 
       // Error events from server

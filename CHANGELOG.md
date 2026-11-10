@@ -18,6 +18,10 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it on your screen until the token moved again or the page was reloaded.
 
+- **A campaign page that reconnects after you left, were removed or the campaign was deleted says so and goes to your dashboard.** A computer that slept through it stayed on a table that no longer worked. Opening a campaign you are not in does the same. See [Your Own Notes](docs/PLAYER_GUIDE.md#your-own-notes).
+
+- **A campaign page joining the table as you leave the campaign says you left.** It used to say you were removed.
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

@@ -10,6 +10,7 @@
 
 import { inSerializableTransaction } from '../utils/serializable';
 import { clearCampaignFromLiveSockets, announceRosterChange, broadcastPresence, type MemberLeftReason } from '../websocket/utils';
+import { rememberDeparture } from '../websocket/memberDepartures';
 import logger from '../utils/logger';
 
 /** Why a member was not taken out: not a member, the DM, or the campaign's owner. */
@@ -21,10 +22,14 @@ export type TakeOutRefusal = 'not-member' | 'dm' | 'owner';
  * changed, for someone who is not a member, for the DM, and for the owner.
  * Returns the refusal, or null once it is done.
  *
- * `checkFirst` is which refusal an owner sitting as DM is given. The DM
- * removing someone is told about the seat. A member leaving is told about
+ * `reason` is the DM removing them (`removed`) or the member leaving
+ * (`left`). It decides which refusal an owner sitting as DM is given: the DM
+ * removing someone is told about the seat; a member leaving is told about
  * owning the campaign, since handing the seat over and asking again would
- * only be refused for that.
+ * only be refused for that. It is also recorded, just before the delete, as
+ * why they went out (websocket/memberDepartures.ts), so a tab of theirs
+ * whose join reads the membership as soon as the delete is committed is told
+ * it.
  *
  * Who the member is, and the change, are one serializable transaction
  * (utils/serializable.ts): a DM hand-over landing in between could otherwise
@@ -34,8 +39,9 @@ export type TakeOutRefusal = 'not-member' | 'dm' | 'owner';
 export async function takeMemberOut(
   campaignId: string,
   userId: string,
-  checkFirst: 'dm' | 'owner' = 'dm'
+  reason: MemberLeftReason
 ): Promise<TakeOutRefusal | null> {
+  const checkFirst = reason === 'left' ? 'owner' : 'dm';
   return inSerializableTransaction(async (tx): Promise<TakeOutRefusal | null> => {
     const membership = await tx.campaignMembership.findUnique({
       where: { userId_campaignId: { userId, campaignId } },
@@ -60,6 +66,9 @@ export async function takeMemberOut(
     // every member and editable by the DM, and each save the owner made was
     // still sent to the table they had left.
     await tx.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } });
+    // Before the delete commits. Read only while the membership is absent,
+    // so a transaction that is refused or run again leaves nothing wrong.
+    rememberDeparture(userId, campaignId, reason);
     await tx.campaignMembership.delete({ where: { userId_campaignId: { userId, campaignId } } });
     return null;
   });
