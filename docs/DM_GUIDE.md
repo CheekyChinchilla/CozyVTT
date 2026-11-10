@@ -661,7 +661,8 @@ Change its Dexterity or CR and the bonuses it is proficient in follow: give that
 Goblin Dexterity 16 and its Stealth becomes +7.
 
 **Ability scores.** A creature's ability score can be from 0 to 30. A bigger
-number stops at 30, and a box you empty keeps the score it had.
+number stops at 30 when you leave the box, and a box you leave empty keeps the
+score it had.
 
 **In Pathfinder 2e** this section looks different, because PF2e works
 differently: creature stat blocks print final modifiers rather than deriving them

@@ -178,8 +178,9 @@ describe('Call of Cthulhu numbers', () => {
   });
 });
 
-// A score of 0 is legal. A box left empty, or holding no number, keeps the
-// score it had, and a score past the bound stops at it.
+// A score of 0 is legal. A box can be emptied and retyped; left empty, it
+// keeps the score it had. A score past the bound stops at it when the box is
+// left, so typing is never cut short on the way to a number.
 describe('a typed score', () => {
   const ogre: NpcStatBlock = {
     ac: 11, hpMax: 30, speed: '40 ft.', abilities: { str: 19, dex: 8, con: 16, int: 5, wis: 7, cha: 7 },
@@ -188,33 +189,43 @@ describe('a typed score', () => {
   it('keeps a 0 in the token editor', () => {
     const onChange = vi.fn();
     render(<StatBlockEditor statBlock={ogre} onChange={onChange} gameSystem="DND_5E" />);
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'STR' }), { target: { value: '0' } });
+    const str = screen.getByRole('spinbutton', { name: 'STR' });
+    fireEvent.change(str, { target: { value: '0' } });
+    fireEvent.blur(str);
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ abilities: { ...ogre.abilities, str: 0 } }));
   });
 
   it('keeps a Call of Cthulhu POW of 0 in the token editor', () => {
     const onChange = vi.fn();
     render(<StatBlockEditor statBlock={cultist} onChange={onChange} gameSystem="CALL_OF_CTHULHU_7E" />);
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'POW' }), { target: { value: '0' } });
+    const pow = screen.getByRole('spinbutton', { name: 'POW' });
+    fireEvent.change(pow, { target: { value: '0' } });
+    fireEvent.blur(pow);
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ abilities: { ...cultist.abilities, wis: 0 } }));
   });
 
-  it('keeps the score it had when the token editor\'s box is emptied', () => {
+  it('lets the token editor\'s box be emptied, and keeps the score it had when it is left empty', () => {
     const onChange = vi.fn();
     render(<StatBlockEditor statBlock={ogre} onChange={onChange} gameSystem="DND_5E" />);
-    const str = screen.getByRole('spinbutton', { name: 'STR' });
+    const str = screen.getByRole('spinbutton', { name: 'STR' }) as HTMLInputElement;
     fireEvent.change(str, { target: { value: '' } });
+    expect(str.value).toBe('');
+    fireEvent.blur(str);
+    expect(str.value).toBe('19');
     expect(onChange).not.toHaveBeenCalled();
-    expect((str as HTMLInputElement).value).toBe('19');
   });
 
   it.each([
-    ['DND_5E', 'STR', '45', 30],
-    ['CALL_OF_CTHULHU_7E', 'STR', '12000', STAT_BLOCK_LIMITS.maxCallOfCthulhuCharacteristic],
-  ] as const)('stops at the bound in the token editor in %s', (system, label, typed, bound) => {
+    ['DND_5E', '45', 30],
+    ['CALL_OF_CTHULHU_7E', '12000', STAT_BLOCK_LIMITS.maxCallOfCthulhuCharacteristic],
+  ] as const)('stops at the bound in the token editor in %s when the box is left', (system, typed, bound) => {
     const onChange = vi.fn();
     render(<StatBlockEditor statBlock={system === 'DND_5E' ? ogre : cultist} onChange={onChange} gameSystem={system} />);
-    fireEvent.change(screen.getByRole('spinbutton', { name: label }), { target: { value: typed } });
+    const str = screen.getByRole('spinbutton', { name: 'STR' }) as HTMLInputElement;
+    fireEvent.change(str, { target: { value: typed } });
+    expect(str.value).toBe(typed);
+    fireEvent.blur(str);
+    expect(str.value).toBe(String(bound));
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ abilities: expect.objectContaining({ str: bound }) }));
   });
 
@@ -233,22 +244,30 @@ describe('a typed score', () => {
 
   it('keeps a Call of Cthulhu POW of 0 in the Creature Library\'s form', async () => {
     await openForm('CALL_OF_CTHULHU_7E');
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'POW' }), { target: { value: '0' } });
+    const pow = screen.getByRole('spinbutton', { name: 'POW' });
+    fireEvent.change(pow, { target: { value: '0' } });
+    fireEvent.blur(pow);
     expect((await savedAbilities()).wis).toBe(0);
   });
 
-  it('keeps the score it had when the Creature Library\'s box is emptied', async () => {
+  it('lets the Creature Library\'s box be emptied, and keeps the score it had when it is left empty', async () => {
     await openForm('DND_5E');
-    const str = screen.getByRole('spinbutton', { name: 'STR' });
+    const str = screen.getByRole('spinbutton', { name: 'STR' }) as HTMLInputElement;
     fireEvent.change(str, { target: { value: '14' } });
     fireEvent.change(str, { target: { value: '' } });
-    expect((str as HTMLInputElement).value).toBe('14');
+    expect(str.value).toBe('');
+    fireEvent.blur(str);
+    expect(str.value).toBe('14');
     expect((await savedAbilities()).str).toBe(14);
   });
 
-  it('stops at the bound in the Creature Library\'s form', async () => {
+  it('stops at the bound in the Creature Library\'s form when the box is left', async () => {
     await openForm('DND_5E');
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'STR' }), { target: { value: '45' } });
+    const str = screen.getByRole('spinbutton', { name: 'STR' }) as HTMLInputElement;
+    fireEvent.change(str, { target: { value: '45' } });
+    expect(str.value).toBe('45');
+    fireEvent.blur(str);
+    expect(str.value).toBe('30');
     expect((await savedAbilities()).str).toBe(30);
   });
 });
