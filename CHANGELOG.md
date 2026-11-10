@@ -42,6 +42,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A Call of Cthulhu creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them, though an ordinary person's characteristics run higher. A characteristic can now be up to 9,999 and a skill up to 999. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
 
+- **Mapmaker's notice of room walls not added after a save reads correctly.** When none of them were added it had a capital letter in the middle of its sentence, and a reason ending in a full stop was followed by a second one.
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

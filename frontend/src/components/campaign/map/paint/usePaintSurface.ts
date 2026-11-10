@@ -236,8 +236,9 @@ const liveWalls = (rooms: readonly PendingRoom[]): WallLine[] => rooms.filter((r
 
 /** Said when the picture saved but some of its rooms' walls were not added to the map. */
 export function roomWallsNotAdded(missed: number, of: number, reason: string): string {
-  const which = missed === of ? (of === 1 ? 'The wall' : `The ${of} walls`) : `${missed} of the ${of} walls`;
-  return `The picture was saved, but ${which} of your rooms ${missed === 1 ? 'was' : 'were'} not added to the map${reason ? `: ${reason}` : ''}. Draw ${missed === 1 ? 'it' : 'them'} with the wall tool.`;
+  const which = missed === of ? (of === 1 ? 'the wall' : `the ${of} walls`) : `${missed} of the ${of} walls`;
+  const why = reason.trim().replace(/\.$/, '');
+  return `The picture was saved, but ${which} of your rooms ${missed === 1 ? 'was' : 'were'} not added to the map${why ? `: ${why}` : ''}. Draw ${missed === 1 ? 'it' : 'them'} with the wall tool.`;
 }
 
 /** A pending room, with the note that takes its walls back on Undo and puts them back on Redo. */
