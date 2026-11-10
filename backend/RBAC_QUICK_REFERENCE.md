@@ -63,6 +63,12 @@ nothing, and keeps 403 for one they may read but not change;
 `src/routes/__tests__/unreadableRecords.e2e.test.ts` holds each of them to
 that.
 
+A map's walls, lights and fog are written by the DM alone: every route under
+`.../maps/:id/walls`, `.../lights` and `.../fog` but the `GET`s of walls and
+lights runs `campaignDM`, `POST .../maps/:id/walls/batch` (many walls in one
+request, as Mapmaker's Save sends a room's) among them. A player changes a
+wall only by opening or closing a door with `wall:update` (below).
+
 #### Characters in a campaign
 Any member may read a character assigned to the campaign, and the DM may edit
 it, only while its owner is still a member (`mayReadCharacter` and

@@ -122,6 +122,7 @@ const TESTED: Record<string, string> = {
   'GET /api/campaigns/:campaignId/maps/:id/drawings': 'routes/__tests__/mapDrawingsRead.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/maps/:id/walls': 'routes/__tests__/wallLightBounds.e2e.test.ts',
   'POST /api/campaigns/:campaignId/maps/:id/walls': 'routes/__tests__/wallRestBroadcast.e2e.test.ts',
+  'POST /api/campaigns/:campaignId/maps/:id/walls/batch': 'routes/__tests__/wallBatch.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/maps/:id/walls/:sid': 'routes/__tests__/mapEditLocking.e2e.test.ts',
   'PATCH /api/campaigns/:campaignId/maps/:id/walls/:sid': 'routes/__tests__/mapEditLocking.e2e.test.ts',
   'GET /api/campaigns/:campaignId/maps/:id/lights': 'routes/__tests__/preparedMapsDmOnly.e2e.test.ts',

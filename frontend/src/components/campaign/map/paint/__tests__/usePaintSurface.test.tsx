@@ -11,7 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import { useEffect } from 'react';
-import { usePaintSurface, type PaintSurface } from '../usePaintSurface';
+import { usePaintSurface, roomWallsNotAdded, type PaintSurface } from '../usePaintSurface';
 import { recordingContext } from '@/test/recordingCanvas';
 import type { MapControls } from '../../tools/types';
 import type { CampaignMap } from '@/types';
@@ -94,3 +94,27 @@ describe('the picture Paint opens on', () => {
 
 vi.mock('@/services/map.service', () => ({ default: { updateMap: vi.fn(), getMap: vi.fn() } }));
 vi.mock('@/services/api', () => ({ api: { deleteAsset: vi.fn(), getAsset: vi.fn(), getServerConfig: vi.fn(), uploadAsset: vi.fn() } }));
+
+describe('what Save says of room walls not added', () => {
+  it('names some of them by count', () => {
+    expect(roomWallsNotAdded(3, 4, ['Maximum 5000 wall segments per map']))
+      .toBe('The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: Maximum 5000 wall segments per map. Draw them with the wall tool.');
+  });
+
+  it('names all of them in the middle of its sentence, without a capital', () => {
+    expect(roomWallsNotAdded(4, 4, ['Map not found']))
+      .toBe('The picture was saved, but the 4 walls of your rooms were not added to the map: Map not found. Draw them with the wall tool.');
+    expect(roomWallsNotAdded(1, 1, ['']))
+      .toBe('The picture was saved, but the wall of your rooms was not added to the map. Draw it with the wall tool.');
+  });
+
+  it('ends a reason that has its own full stop with one full stop', () => {
+    expect(roomWallsNotAdded(2, 2, ['A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges.']))
+      .toBe('The picture was saved, but the 2 walls of your rooms were not added to the map: A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges. Draw them with the wall tool.');
+  });
+
+  it('gives each different reason once, in the order they came', () => {
+    expect(roomWallsNotAdded(4, 6, ['Map full', 'Too far out.', 'Map full', 'Too far out']))
+      .toBe('The picture was saved, but 4 of the 6 walls of your rooms were not added to the map: Map full. Too far out. Draw them with the wall tool.');
+  });
+});

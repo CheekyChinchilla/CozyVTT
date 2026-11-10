@@ -19,6 +19,19 @@ export interface WallSegment {
   type: WallType;
 }
 
+/** A wall a batch add did not add: its place in the request, and why (the single add's message). */
+export interface SkippedWall {
+  index: number;
+  reason: string;
+}
+
+/** What a batch add of walls answers: the walls added, those skipped, and how many the map now holds. */
+export interface WallsAdded {
+  added: WallSegment[];
+  skipped: SkippedWall[];
+  total: number;
+}
+
 // ── Fog of War ────────────────────────────────────────────────────────────────
 
 /**

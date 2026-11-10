@@ -117,6 +117,7 @@ const SOURCES: Array<[string, string, string, (mapId: string) => Promise<unknown
   ['lights:replace', 'lights:replaced', 'DM', (mapId) => { dm.emit('lights:replace', { mapId, lights: [lightFor()] }); }],
   ['PUT walls', 'walls:replaced', 'DM', (mapId) => rest.put(`${maps(mapId)}/walls`).send({ segments: [wallFor()] })],
   ['POST walls', 'wall:added', 'DM', (mapId) => rest.post(`${maps(mapId)}/walls`).send(wallFor())],
+  ['POST walls/batch', 'walls:replaced', 'DM', (mapId) => rest.post(`${maps(mapId)}/walls/batch`).send({ segments: [wallFor()] })],
   ['PATCH walls', 'wall:updated', 'DM', async (mapId) => {
     const door = await withWall(mapId, doorFor());
     return rest.patch(`${maps(mapId)}/walls/${door.id}`).send({ type: 'door-open' });

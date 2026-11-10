@@ -8227,6 +8227,115 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /api/campaigns/{campaignId}/maps/{id}/walls/batch:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    post:
+      tags:
+        - Walls & Lighting
+      summary: Add many wall segments
+      description: |
+        Append many wall segments in one request, after those the map holds,
+        as Mapmaker's Save adds the walls of the rooms painted. DM only.
+        Each segment is as `addWall` takes it: the server assigns an `id` to
+        one that omits it, and keeps one it sent.
+
+        The list is refused whole with 400 (`error: Validation Error`),
+        changing nothing, when `segments` is not a list, holds more than
+        5000 segments (`Maximum 5000 wall segments per map`), or holds a
+        segment that is not a valid one (the message starts `Wall <index>: `,
+        counting from 0). Otherwise each segment is judged in order, as
+        `addWall` would judge it alone against the map as it is then, the
+        segments added before it in this request included. A segment whose
+        ends lie more than 500 of the map's grid squares outside its edges
+        (`A wall reaches too far outside the map. Walls can extend up to 500
+        squares past its edges.`), one that finds the map holding 5000
+        segments (`Maximum 5000 wall segments per map`), or one whose `id`
+        the map or an earlier segment of this request already holds (`A wall
+        segment with that id is already on this map`) is skipped. The rest
+        are added, in the order sent, in one write.
+
+        The answer is 200 when every segment was judged, even when none was
+        added: each refusal depends on the map as it stands, which another
+        device may have changed, and `skipped` says which and why.
+
+        When any segment was added, connected clients are sent one
+        `walls:replaced` with the map's whole list (see `replaceWalls`), and
+        on a lit map the campaign is showing each player is then sent
+        `map.changed`. When none was added, nothing is sent.
+      operationId: addWallsBatch
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                segments:
+                  type: array
+                  maxItems: 5000
+                  items:
+                    $ref: '#/components/schemas/WallInput'
+              required: [segments]
+            example:
+              segments:
+                - { x1: 100, y1: 100, x2: 300, y2: 100, type: wall }
+                - { x1: 300, y1: 100, x2: 300, y2: 250, type: wall }
+      responses:
+        '200':
+          description: Every segment judged; those added and those skipped.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [added, skipped, total]
+                properties:
+                  added:
+                    type: array
+                    description: The segments added, in the order sent, each with its `id`.
+                    items:
+                      $ref: '#/components/schemas/Wall'
+                  skipped:
+                    type: array
+                    description: The segments not added, in the order sent.
+                    items:
+                      type: object
+                      required: [index, reason]
+                      properties:
+                        index:
+                          type: integer
+                          description: The segment's place in `segments`, counting from 0.
+                          example: 1
+                        reason:
+                          type: string
+                          description: Why it was not added, as `addWall` would answer for it alone.
+                          enum:
+                            - A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges.
+                            - Maximum 5000 wall segments per map
+                            - A wall segment with that id is already on this map
+                  total:
+                    type: integer
+                    description: How many segments the map holds now.
+                    example: 48
+              example:
+                added:
+                  - { id: 0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8, x1: 100, y1: 100, x2: 300, y2: 100, type: wall }
+                skipped:
+                  - index: 1
+                    reason: Maximum 5000 wall segments per map
+                total: 5000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /api/campaigns/{campaignId}/maps/{id}/walls/{sid}:
     parameters:
       - $ref: '#/components/parameters/CampaignId'

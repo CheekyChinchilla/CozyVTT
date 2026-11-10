@@ -24,6 +24,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The initiative tracker shows you its up and down arrows while you move through a combatant's row with the keyboard.** They show over the combatant's picture. A screen reader now names the combatant on each row's dice button and bin. See [Managing Turn Order](docs/DM_GUIDE.md#managing-turn-order).
 
+- **Mapmaker adds the walls of the rooms you painted in one step when you save.** A save with many rooms can no longer be stopped part-way by the limit on requests everyone on one internet connection shares. The walls the map takes are added, and Mapmaker says how many were not added and why. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
 ### Fixed
 
 - **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it on your screen until the token moved again or the page was reloaded.
@@ -41,6 +43,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 - **A Pathfinder 2e sheet waits for you to choose its Class DC's Key Attribute.** New sheets started with Strength, and on a sheet with none the editor filled in Intelligence and showed a different Class DC from the sheet. Now both read 10 until you choose one. See [Pathfinder 2nd Edition](docs/USER_GUIDE.md#pathfinder-2nd-edition).
 
 - **A Call of Cthulhu creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them, though an ordinary person's characteristics run higher. A characteristic can now be up to 9,999 and a skill up to 999. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+
+- **Mapmaker's notice of room walls not added after a save reads correctly.** When none of them were added it had a capital letter in the middle of its sentence, and a reason ending in a full stop was followed by a second one.
 
 ## [1.6.0] - 2026-11-09
 
