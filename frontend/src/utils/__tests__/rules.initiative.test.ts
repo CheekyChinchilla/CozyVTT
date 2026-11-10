@@ -385,4 +385,18 @@ describe('NPC stat blocks', () => {
   it('returns null for systems whose stat blocks are not structured this way', () => {
     expect(resolveStatBlockInitiative('PATHFINDER_2E', { abilities: { dex: 14 } })).toBeNull();
   });
+
+  // A Call of Cthulhu DEX of 80 is not a D&D score: read as one it is +35.
+  it('returns null for a stat block labelled with another game system', () => {
+    const investigator = { gameSystem: 'CALL_OF_CTHULHU_7E', abilities: { dex: 80 } };
+    expect(resolveStatBlockInitiative('DND_5E', investigator)).toBeNull();
+    expect(resolveStatBlockInitiative('DND_5E', { gameSystem: 'PATHFINDER_2E', abilities: { dex: 14 } })).toBeNull();
+  });
+
+  it('reads a stat block labelled with the campaign\'s game system, or with none', () => {
+    expect(resolveStatBlockInitiative('DND_5E', { gameSystem: 'DND_5E', abilities: { dex: 14 } }))
+      .toMatchObject({ expression: '1d20+2' });
+    expect(resolveStatBlockInitiative('DND_5E', { gameSystem: '', abilities: { dex: 14 } }))
+      .toMatchObject({ expression: '1d20+2' });
+  });
 });

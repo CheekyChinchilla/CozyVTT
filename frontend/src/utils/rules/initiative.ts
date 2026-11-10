@@ -340,13 +340,21 @@ export function resolveCharacterInitiative(
  * stored as raw scores keyed by `dex`. Everything else returns null and rolls a
  * plain d20, which is what a stat block without recorded ability scores can
  * honestly support.
+ *
+ * So does a stat block labelled with a game system other than the campaign's:
+ * its scores are on that system's scale, and a Call of Cthulhu DEX of 80 read
+ * as a D&D score would be +35.
  */
 export function resolveStatBlockInitiative(
   gameSystem: string | null | undefined,
   statBlock: unknown
 ): InitiativeResolution | null {
   if (gameSystem !== 'DND_5E') return null;
-  const abilities = rec(rec(statBlock)?.abilities);
+  const block = rec(statBlock);
+  if (typeof block?.gameSystem === 'string' && block.gameSystem !== '' && block.gameSystem !== gameSystem) {
+    return null;
+  }
+  const abilities = rec(block?.abilities);
   if (!abilities || typeof abilities.dex !== 'number') return null;
   return d20With(abilityModifier(abilities.dex));
 }
