@@ -983,7 +983,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
               the reserved padding on a narrow window and back under the
               buttons. */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start min-w-0">
-            {/* As wide as the portrait, so its caption wraps under it on a phone. */}
+            {/* As wide as the portrait, so its caption wraps under it. */}
             {allowTokenPicture && (
             <div className="shrink-0 relative group w-24 sm:w-40">
               <input type="file" id="token-upload" accept="image/*" onChange={handleTokenImageChange} className="hidden" />

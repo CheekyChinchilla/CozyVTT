@@ -7,24 +7,42 @@
  * over the other. The D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible
  * editors now draw one box under the portrait holding both, one under the
  * other.
+ *
+ * That box was then hung under the portrait out of the flow, on one line, so
+ * from `sm` up "Saves as personal token" ran past the portrait into the field
+ * beside it (the Call of Cthulhu Age box). It now stays in the flow of the
+ * portrait's column at every width, so it takes the portrait's width and
+ * wraps. jsdom lays nothing out: the classes are asserted here, and the
+ * browser shows the layout.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import PortraitNotes from '../PortraitNotes';
 
 const classes = (el: Element | null) => (el?.getAttribute('class') ?? '').split(/\s+/);
+/** The utility applies at some width: bare, or behind any breakpoint. */
+const atSomeWidth = (list: string[], utility: string) => list.some((c) => c === utility || c.endsWith(`:${utility}`));
 
 describe('the notes under a portrait', () => {
-  it('stand one under the other in one box placed under the portrait', () => {
+  it('stand one under the other in one box under the portrait', () => {
     render(<PortraitNotes error="That picture is not a token picture." personal errorClassName="text-danger-ink" noteClassName="text-warning-ink" />);
     const error = screen.getByText('That picture is not a token picture.');
     const note = screen.getByText('Saves as personal token');
     const box = error.parentElement!;
     expect(note.parentElement).toBe(box);
-    expect(classes(box)).toEqual(expect.arrayContaining(['sm:absolute', 'sm:top-full']));
     for (const line of [error, note]) expect(classes(line)).not.toContain('sm:absolute');
     expect(classes(error)).toContain('text-danger-ink');
     expect(classes(note)).toContain('text-warning-ink');
+  });
+
+  it('stay in the flow at every width, so they wrap within the portrait\'s column', () => {
+    render(<PortraitNotes error="That picture is not a token picture." personal errorClassName="" noteClassName="" />);
+    const box = screen.getByText('Saves as personal token').parentElement!;
+    for (const list of [classes(box), ...[...box.children].map(classes)]) {
+      for (const utility of ['absolute', 'fixed', 'whitespace-nowrap', 'w-max', 'w-fit']) {
+        expect(atSomeWidth(list, utility), `${utility} in "${list.join(' ')}"`).toBe(false);
+      }
+    }
   });
 
   it('draws nothing with neither', () => {

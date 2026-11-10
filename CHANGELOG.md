@@ -26,6 +26,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A player who uploaded a campaign picture, a former DM among them, can no longer delete or move it while an older handout still shows it.** Handouts from before 1.6.0 are now checked for the picture first, and you are asked to try again later while some are left unchecked. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
 
+- **The notes under the portrait in the sheet editors stay under the portrait.** On a wider screen **Saves as personal token** ran into the field beside it, such as the Call of Cthulhu **Age** box. The notes now wrap to the portrait's width in the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors.
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

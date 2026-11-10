@@ -9,8 +9,10 @@
  * `sm` the Edit button now sits in the flow above the name, the right-hand
  * block goes under it, the editors' portrait is 96 px above the name with its
  * caption under it, and lines of details wrap. From `sm` up the classes that
- * drew the old layout are all still there, behind `sm:`. jsdom evaluates no
- * media query, so the classes are asserted; the matrix shows the layout.
+ * drew the old layout are all still there, behind `sm:`, except the
+ * caption's: it stays in the flow under the portrait at every width. jsdom
+ * evaluates no media query, so the classes are asserted; the matrix shows the
+ * layout.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -112,14 +114,6 @@ describe.each([
     });
   }
 
-  it('puts the caption under the portrait in the flow on a phone', () => {
-    show();
-    // Placed by the box holding the notes under the portrait (PortraitNotes).
-    const caption = classes(screen.getByText('Saves as personal token').parentElement);
-    expect(caption).not.toContain('absolute');
-    expect(caption).not.toContain('whitespace-nowrap');
-    expect(caption).toEqual(expect.arrayContaining(['sm:absolute', 'sm:top-full', 'sm:whitespace-nowrap']));
-  });
 });
 
 describe('the Call of Cthulhu editor header', () => {
@@ -142,23 +136,48 @@ describe('the flexible read-only header', () => {
   });
 });
 
-describe('the flexible editor header', () => {
-  const flexible = {
-    id: 'flex-1', userId: 'user-1', name: 'Freeform', gameSystem: null, campaignId: null, tokenImageUrl: null,
-    data: { sections: [] }, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
-  } as unknown as Character;
+/** A flexible character in no campaign, for its editor. */
+const freeform = {
+  id: 'flex-1', userId: 'user-1', name: 'Freeform', gameSystem: null, campaignId: null, tokenImageUrl: null,
+  data: { sections: [] }, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+} as unknown as Character;
 
+describe('the flexible editor header', () => {
   it('puts Save and Cancel under the name where they do not fit beside it', () => {
-    render(<FlexibleCharacterSheetEdit character={flexible} onSave={noop} onCancel={vi.fn()} />);
+    render(<FlexibleCharacterSheetEdit character={freeform} onSave={noop} onCancel={vi.fn()} />);
     const row = around(screen.getByRole('heading', { name: /Editing:/ }), screen.getByRole('button', { name: 'Cancel' }));
     expect(classes(row)).toEqual(expect.arrayContaining(['flex', 'flex-wrap']));
   });
+});
 
-  it('puts the caption under the portrait in the flow on a phone', () => {
-    render(<FlexibleCharacterSheetEdit character={flexible} onSave={noop} onCancel={vi.fn()} />);
-    // Placed by the box holding the notes under the portrait (PortraitNotes).
-    const caption = classes(screen.getByText('Saves as personal token').parentElement);
-    expect(caption).not.toContain('absolute');
-    expect(caption).toEqual(expect.arrayContaining(['sm:absolute', 'sm:top-full', 'sm:whitespace-nowrap']));
+/** The utility applies at some width: bare, or behind any breakpoint. */
+const atSomeWidth = (list: string[], utility: string) => list.some((c) => c === utility || c.endsWith(`:${utility}`));
+/** The width classes, bare and behind a breakpoint, such as `w-24 sm:w-40`. */
+const widths = (element: Element | null) => classes(element).filter((c) => /^(?:[a-z0-9-]+:)?w-/.test(c)).sort();
+
+describe.each([
+  ['D&D 5e', () => render(<DnD5eCharacterEditor character={dnd5eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Pathfinder 2e', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Call of Cthulhu', () => render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Flexible', () => render(<FlexibleCharacterSheetEdit character={freeform} onSave={noop} onCancel={vi.fn()} />)],
+] as const)('the %s editor\'s portrait caption', (_system, show) => {
+  // From sm up the caption was hung under the portrait out of the flow, on
+  // one line, and ran into the field beside it. jsdom lays nothing out, so
+  // the classes that decide its width are asserted; the browser shows it.
+  it('stays in the portrait\'s column at every width, as wide as the portrait, and wraps', () => {
+    show();
+    // The box holding the notes under the portrait (PortraitNotes).
+    const box = screen.getByText('Saves as personal token').parentElement;
+    const column = box?.parentElement ?? null;
+    if (!column) throw new Error('no portrait column');
+    expect(column.querySelector('input[type="file"]')).not.toBeNull();
+    const circle = column.querySelector('label > :first-child');
+    expect(widths(column).length).toBeGreaterThan(0);
+    expect(widths(column)).toEqual(widths(circle));
+    for (const list of [classes(box), classes(column)]) {
+      for (const utility of ['absolute', 'fixed', 'whitespace-nowrap', 'w-max', 'w-fit']) {
+        expect(atSomeWidth(list, utility), `${utility} in "${list.join(' ')}"`).toBe(false);
+      }
+    }
   });
 });
