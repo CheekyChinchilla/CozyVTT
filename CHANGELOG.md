@@ -58,6 +58,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **On a touch screen, Mapmaker shows the see-through stamp as soon as your finger touches the map.** It showed only once the finger slid, so you could not see where a tap would paint the stamp before lifting. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
+- **Done in Mapmaker finishes the polygon or curve you are drawing.** It dropped them. Each is painted as `Enter` paints it, and a polygon with fewer than three corners is kept for when you open Mapmaker again. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

@@ -1431,6 +1431,69 @@ describe('polygons and curves', () => {
     press('Enter');
     expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 100, 300, 100]);
   });
+
+  const done = () => fireEvent.click(screen.getByRole('button', { name: 'Done painting' }));
+
+  it('closes a polygon of three corners or more, and paints a curve not bent, when Done puts Mapmaker away, as Enter does', async () => {
+    await showMap();
+    await paintOn();
+    choose('Polygon');
+    click(100, 100);
+    click(200, 100);
+    click(150, 200);
+    done();
+    expect(corners()).toEqual(expect.arrayContaining([[100, 100], [200, 100], [150, 200]]));
+    expect(callsOfPicture('closePath')).toHaveLength(1);
+
+    await paintOn();
+    choose('Curve');
+    drag({ clientX: 100, clientY: 300 }, { clientX: 300, clientY: 300 });
+    done();
+    expect(callsOfPicture('quadraticCurveTo')[0]?.args).toEqual([200, 300, 300, 300]);
+  });
+
+  it('keeps a polygon of fewer than three corners when Done puts Mapmaker away, unseen and leaving Esc alone, to go on with when it is opened again', async () => {
+    await showMap();
+    await paintOn();
+    choose('Polygon');
+    click(130, 370);
+    click(270, 370);
+    take(input());
+    done();
+    await nextFrame();
+    expect(take(input()).filter((c) => c.method === 'lineTo').map((c) => c.args)).not.toContainEqual([270, 370]);
+    expect(callsOfPicture('closePath')).toHaveLength(0);
+    // Nothing painted: Mapmaker lets go of its picture once the map's own is back.
+    pictures[1].load();
+    await pictures[1].decoded();
+    expect(pictureCanvas()).toBeUndefined();
+    press('Escape');
+
+    await paintOn();
+    click(200, 450);
+    press('Enter');
+    expect(corners()).toEqual(expect.arrayContaining([[130, 370], [270, 370], [200, 450]]));
+    expect(callsOfPicture('closePath')).toHaveLength(1);
+  });
+
+  it('lets go of a polygon Done kept once another map is shown', async () => {
+    const first = mapWith();
+    await showMap(first);
+    await paintOn();
+    choose('Polygon');
+    click(130, 370);
+    click(270, 370);
+    done();
+    act(() => { h.set({ currentMap: mapWith({ id: 'map-b', name: 'Map B' }) }); });
+    act(() => { h.set({ currentMap: first }); });
+    pictures[pictures.length - 1].load();
+    await pictures[pictures.length - 1].decoded();
+
+    await paintOn();
+    click(200, 450);
+    press('Enter');
+    expect(callsOfPicture('closePath')).toHaveLength(0);
+  });
 });
 
 describe('textures', () => {

@@ -414,7 +414,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const strokeRef = useRef<Stroke | null>(null);
   const shapeRef = useRef<ShapeUnderWay | null>(null);
   const selectionRef = useRef<Selection | null>(null);
-  /** A polygon being clicked out, corner by corner, and where the pointer is now, in map pixels. */
+  /**
+   * A polygon being clicked out, corner by corner, and where the pointer is
+   * now, in map pixels. One too small to paint is kept while Mapmaker is put
+   * away, unseen, and goes on when it is opened again on its map.
+   */
   const polygonRef = useRef<{ mapId: string; points: PaintPoint[]; cursor: PaintPoint | null } | null>(null);
   /** Where a mouse or a pen hovers with Stamp, Brush or Eraser chosen, for the stamp's or the brush's preview. */
   const hoverRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
@@ -434,6 +438,9 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const clipboardRef = useRef<{ canvas: HTMLCanvasElement; box: SelectBox } | null>(null);
   /** Put the selection down (or, with false, let it go), from callbacks made before it. */
   const endSelectionRef = useRef<(place?: boolean) => void>(() => undefined);
+  /** Close the polygon being clicked out, and paint the curve waiting to be bent, from callbacks made before them. */
+  const finishPolygonRef = useRef<() => void>(() => undefined);
+  const finishCurveRef = useRef<() => void>(() => undefined);
   /** The map whose own colour the second colour last started at. */
   const secondStartedFor = useRef<string | null>(null);
   /** Whether there is a selection, and something to paste, for the panel's buttons. */
@@ -754,7 +761,6 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     selectionRef.current = null;
     setSelectionShown(false);
     setSelectionUnsaved(false);
-    polygonRef.current = null;
     curveRef.current = null;
     s.history.clear();
     s.store.dispose();
@@ -952,11 +958,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * to save, the canvas is let go of once the map's own picture is back.
    */
   const close = useCallback(() => {
-    // A line of text being written is painted, as the next press would; a selection is put down.
+    // A line of text being written is painted, as the next press would; a
+    // selection is put down; a polygon of three corners or more is closed and
+    // a curve waiting to be bent is painted, as Enter does them. A polygon of
+    // fewer corners cannot be painted, so it is kept to go on with.
     if (textRef.current) commitTextRef.current();
     endSelectionRef.current();
-    polygonRef.current = null;
-    curveRef.current = null;
+    const polygon = polygonRef.current;
+    if (polygon && polygon.points.length >= 3) finishPolygonRef.current();
+    else if (polygon) polygon.cursor = null;
+    finishCurveRef.current();
     (strokeRef.current ?? shapeRef.current)?.step.drop();
     strokeRef.current = null;
     shapeRef.current = null;
@@ -998,6 +1009,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       onRef.current = false;
     }
   }, [mapId, isDM, on, dispose, writeDraft, strand]);
+  // A polygon kept while Mapmaker is put away goes with its map, and with the DM.
+  useEffect(() => {
+    const polygon = polygonRef.current;
+    if (polygon && (polygon.mapId !== mapId || !isDM)) polygonRef.current = null;
+  }, [mapId, isDM]);
   // A draft offered for a map no longer on screen, or to a viewer no longer
   // the DM, is no longer asked about: its answer would act on nothing.
   useEffect(() => {
@@ -1362,6 +1378,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     const s = surfaceRef.current;
     if (!s) return;
     clearDrafts(s);
+    polygonRef.current = null;
     setAsking(false);
     setOn(false);
     onRef.current = false;
@@ -1412,6 +1429,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     else if (choice === 'discard') {
       const s = surfaceRef.current;
       if (s) clearDrafts(s);
+      polygonRef.current = null;
       dispose();
     }
   }, [save, dispose, clearDrafts]);
@@ -1506,6 +1524,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     markDirty('overlay');
     paintShape(curve.mapId, curve.shape);
   }, [markDirty, paintShape]);
+
+  useEffect(() => {
+    finishPolygonRef.current = finishPolygon;
+    finishCurveRef.current = finishCurve;
+  }, [finishPolygon, finishCurve]);
 
   // Another tool chosen: a polygon not closed and a curve not bent are let go.
   useEffect(() => {
@@ -1992,7 +2015,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     },
     escape() {
       if (dropStroke()) return true;
-      if (polygonRef.current || curveRef.current) {
+      if (onRef.current && (polygonRef.current || curveRef.current)) {
         polygonRef.current = null;
         curveRef.current = null;
         markDirty('overlay');
@@ -2101,7 +2124,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (stroke) shown.push(strokePreview(s, stroke));
     if (shapeRef.current) shown.push(shapePreview(s, shapeRef.current.shape));
     const polygon = polygonRef.current;
-    if (polygon && polygon.mapId === s.mapId) {
+    if (polygon && polygon.mapId === s.mapId && onRef.current) {
       const look = settingsRef.current;
       const points = polygon.cursor ? [...polygon.points, polygon.cursor] : polygon.points;
       const shape: PaintShape = { kind: 'polygon', from: points[0], to: points[points.length - 1], points, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'outline' };
