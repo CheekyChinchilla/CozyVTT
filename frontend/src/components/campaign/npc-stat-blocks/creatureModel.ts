@@ -13,6 +13,7 @@
 
 import type { NpcStatBlock } from '@/types';
 import type { AbilityKey } from '@/utils/rules/dnd5e';
+import { statBlockNumberBounds } from '@/constants/statBlockLimits';
 
 export type CreatureModel = 'derived' | 'pf2e' | 'printed';
 
@@ -40,6 +41,19 @@ export function scoreLabel(gameSystem: string | null | undefined, ability: Abili
     if (ability === 'cha') return 'APP';
   }
   return ability.toUpperCase();
+}
+
+/**
+ * The score a score box's text gives, in the game system it is edited in.
+ * A 0 is a legal score and is kept. Text that is no number (an emptied box)
+ * keeps the score it had, and a score past the bounds the server keeps
+ * (statBlockNumberBounds) stops at them.
+ */
+export function typedScore(text: string, previous: number, gameSystem: string | null | undefined): number {
+  const parsed = parseInt(text, 10);
+  if (!Number.isFinite(parsed)) return previous;
+  const { minScore, maxScore } = statBlockNumberBounds(gameSystem);
+  return Math.max(minScore, Math.min(maxScore, parsed));
 }
 
 /**

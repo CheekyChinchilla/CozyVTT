@@ -11,7 +11,7 @@ import { ABILITY_KEYS, CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
 import ProficiencyEditor from './ProficiencyEditor';
 import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
 import PrintedSkillsEditor from './PrintedSkillsEditor';
-import { creatureModel, scoreLabel, withGameSystem } from './creatureModel';
+import { creatureModel, scoreLabel, typedScore, withGameSystem } from './creatureModel';
 import { changeAbilitiesOrRating } from './statBlockProficiency';
 import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
 import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from '@/constants/statBlockLimits';
@@ -232,7 +232,8 @@ export default function StatBlockEditor({
                 max={maxScore}
                 value={statBlock.abilities[ab]}
                 onChange={(e) => {
-                  const value = parseInt(e.target.value, 10) || 10;
+                  const value = typedScore(e.target.value, statBlock.abilities[ab], gameSystem);
+                  if (value === statBlock.abilities[ab]) return;
                   // Only D&D 5e works anything out from a score.
                   if (model === 'derived') updateAbility(ab, value);
                   else update({ abilities: { ...statBlock.abilities, [ab]: value } });

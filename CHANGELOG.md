@@ -74,6 +74,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **After you remove a member, the keyboard focus stays in the Members list.** It fell to the page, so you had to tab from the top again. It now moves to the next member. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
 
+- **A creature's ability score of 0 stays 0 in the Creature Library and the token editor.** Typing 0, or emptying the box, changed it to 10. An emptied box now keeps the score it had, and a score past the highest allowed stops there. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

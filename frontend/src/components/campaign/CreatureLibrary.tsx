@@ -39,7 +39,7 @@ import {
 import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency';
 import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
 import PrintedSkillsEditor from './npc-stat-blocks/PrintedSkillsEditor';
-import { creatureModel, scoreLabel, withGameSystem } from './npc-stat-blocks/creatureModel';
+import { creatureModel, scoreLabel, typedScore, withGameSystem } from './npc-stat-blocks/creatureModel';
 import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
@@ -1337,7 +1337,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
                   min={minScore}
                   max={maxScore}
                   value={workingStatBlock.abilities[ability]}
-                  onChange={(e) => changeScore(ability, parseInt(e.target.value, 10) || 10)}
+                  onChange={(e) => changeScore(ability, typedScore(e.target.value, workingStatBlock.abilities[ability], gameSystem))}
                   className="input-cozy w-full text-xs text-center"
                 />
               </div>

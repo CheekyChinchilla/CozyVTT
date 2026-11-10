@@ -660,6 +660,9 @@ expertise, still at its printed +6. Where a printed value doesn't fit the rules
 Change its Dexterity or CR and the bonuses it is proficient in follow: give that
 Goblin Dexterity 16 and its Stealth becomes +7.
 
+**Ability scores.** A creature's ability score can be from 0 to 30. A bigger
+number stops at 30, and a box you empty keeps the score it had.
+
 **In Pathfinder 2e** this section looks different, because PF2e works
 differently: creature stat blocks print final modifiers rather than deriving them
 from proficiency ranks. You'll see **Fortitude, Reflex and Will** instead of six
@@ -675,7 +678,7 @@ Challenge Rating or proficiency bonus. There's no Challenge Rating box, and a
 rating a creature was given before 1.6.0 is kept but no longer shown. The six
 score boxes are named as the stat block shows them (STR, DEX, CON, INT, POW and
 APP), and **Skills** takes each skill by name with the number the creature's
-stat block prints. A characteristic can be up to 9,999 and a skill up to 999,
+stat block prints. A characteristic can be from 0 to 9,999 and a skill up to 999,
 enough for the largest creatures the rules describe. There's no box for SIZ or
 EDU yet.
 
