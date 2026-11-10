@@ -101,7 +101,7 @@ CozyVTT has two platform-level roles:
 
 Your role badge is visible on your profile page.
 
-**Never signed in (admins).** In the **Users** tab of the Admin Panel, the **Last Login** column shows when each account last signed in. An account whose owner has not signed in yet, such as one you invited or created, shows **Never signed in** there instead. On an instance with email set up, such a row also has an **Invite** button, which emails a fresh invitation link and cancels any link sent before. Registering and running the setup wizard count as signing in. Once the owner has signed in, the button goes away and **Send Reset Link** is the way to help them.
+**Never signed in (admins).** In the **Users** tab of the Admin Panel, the **Last Login** column shows when each account last signed in. An account whose owner has not signed in yet, such as one you invited or created, shows **Never signed in** there instead. On an instance with email set up, such a row also has an **Invite** button, which emails a fresh invitation link and cancels any link sent before. Running the setup wizard counts as signing in, and so does registering when it signs the person in straight away; an account that had to wait for an administrator's approval counts from its first sign-in. Once the owner has signed in, the button goes away and **Send Reset Link** is the way to help them.
 
 ### The activity log (admins)
 
