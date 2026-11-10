@@ -8,8 +8,13 @@
  * and learn which ones have accounts on an instance whose registration is
  * closed.
  *
- * Every attempt to change one's own address counts: right password or wrong,
- * taken address or free, missing password, and a change that is made. Keyed
+ * An attempt to change one's own address counts once it reaches the check:
+ * after the display name and avatar pass theirs, and the email is a valid
+ * address other than the current one in any letter case. From there it
+ * counts whatever its answer: right password or wrong, taken address or free,
+ * missing password, and a change that is made. A request refused before the
+ * check (an invalid address, a refused display name or avatar, or the
+ * wrong-password and at-once hashing limits that run first) is not. Keyed
  * by the signed-in account, so a second sign-in or another address shares the
  * same allowance. A profile edit that leaves the address as it is does not
  * count and is not held. An admin changing someone else's address is not

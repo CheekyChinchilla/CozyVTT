@@ -10141,7 +10141,10 @@ paths:
         any codec (Opus included) as `audio/ogg` and `.ogg`; its
         `originalName` is
         kept unless that name's extension is not allowed for the type, when
-        the detected extension replaces it. Any other asset is skipped, and
+        the detected extension replaces it; either way a name over 255
+        characters is then cut to 255, its extension kept when that is 20
+        characters or fewer, as `POST /api/assets/upload` cuts an upload's
+        name. Any other asset is skipped, and
         so is a picture over the picture limits `POST /api/assets/upload`
         holds a MAP or TOKEN to (at most 16,384 pixels on a side; animated,
         at most 1,000 frames and 200,000,000 pixels across them for a MAP,
@@ -10384,7 +10387,9 @@ paths:
         is `ok`. A request that cannot reach this route at all (no answer, or an
         error before it) is how a client tells the API itself is down. The public
         `GET /health` is the probe for uptime monitors; this one is behind the
-        admin session.
+        admin session. The Admin Panel's status card no longer shows
+        `services.websocket` as its WS part, which is `ok` whenever the backend
+        runs: the browser checks live connections itself.
       operationId: adminGetHealth
       security:
         - cookieAuth: []
