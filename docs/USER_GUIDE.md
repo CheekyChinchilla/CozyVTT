@@ -922,11 +922,15 @@ If it is refused, the form says why and keeps what you typed:
 
 | Message | What it means |
 |---|---|
+| "Enter a valid email address" | The new address is not shaped like an address. Nothing was sent |
+| "That is already your email address" | The new address is the one you have now, perhaps in different capitals. Nothing was sent |
 | "Current password is incorrect" | The password was wrong. It counts towards the ten wrong passwords in fifteen minutes described under [Logging In](#logging-in) |
+| "Too many wrong passwords, please try again later" | Ten wrong passwords in fifteen minutes, counted together with changing your password and deleting your account. Try again fifteen minutes after the first of the ten |
 | "Email already in use" | Another account on this instance has that address |
-| "You have tried to change your email address 5 times in the last hour, the most this server allows. Please try again later." | Every try counts, with the right password or a wrong one, and whether or not the address was taken. You can try again an hour after the first of the five. The limit stops someone using your sign-in to find out which addresses have accounts |
+| "You have tried to change your email address 5 times in the last hour, the most this server allows. Please try again later." | Every try the server checks counts, with the right password or a wrong one, and whether or not the address was taken; the two refusals at the top of this table are made by the page and do not count. You can try again an hour after the first of the five. The limit stops someone using your sign-in to find out which addresses have accounts |
+| "The server is busy, try again in a moment." | Too many passwords were being checked on the server at once. Try again shortly; the try still counts towards the five |
 
-The count is kept in the backend's memory, so restarting it also clears it.
+The count is kept in the backend's memory, so restarting it also clears it. Someone using your signed-in browser can use up your five tries for an hour even without your password, since a try with a wrong password counts; they cannot change the address without it.
 
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder), or press **Tab** until it is outlined and then **Enter**, to choose an image file (JPEG, PNG or WebP). The **Crop Avatar** window opens: drag the picture with the mouse, a finger or a pen to frame it, or move it with the arrow keys (hold **Shift** to move it further), and use the zoom slider to dial in exactly the right framing, then click **Apply & Upload** to save. **Cancel** or **Esc** closes the window without changing your avatar. On a phone turned on its side the picture and its controls sit side by side, so the whole window fits on the screen.

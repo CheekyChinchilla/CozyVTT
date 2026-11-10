@@ -124,7 +124,11 @@ info:
       from every sign-in and address, then 429 `You have tried to change your
       email address 5 times in the last hour, the most this server allows.
       Please try again later.` until the oldest counted attempt is an hour
-      old. Every attempt counts, whatever its answer; the refusal does not.
+      old. Every such request counts once the address, and any display name
+      or avatar address sent with it, have passed their checks, whatever its
+      answer after that; one refused before then (a malformed address, a bad
+      display name or avatar address, a password-check limit's 429) and the
+      cap's own refusal do not.
       It sends no `RateLimit-*` headers of its own. An admin changing someone
       else's address is not limited by it
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
