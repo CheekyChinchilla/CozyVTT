@@ -1271,6 +1271,47 @@ describe('a stamp', () => {
     expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[325, 275]]);
   });
 
+  it('on a touch screen, shows the stamp where a finger is held before it lifts, and paints it there once as it lifts', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+    const finger = contact('touch', 1);
+
+    finger.down(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([125, 275]);
+    expect(callsOfPicture('translate')).toEqual([]);
+
+    finger.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate').map((c) => c.args)).toEqual([[125, 275]]);
+    take(input());
+    await nextFrame();
+    expect(previewAt()).toEqual([]);
+  });
+
+  it('on a touch screen, takes away the stamp a finger is holding when a second finger lands, and paints nothing', async () => {
+    await showMap();
+    await paintOn();
+    fireEvent.click(panel().getByRole('button', { name: 'Stamp' }));
+    fireEvent.click(panel().getByRole('button', { name: 'Chest' }));
+    take(input());
+    const first = contact('touch', 1);
+    const second = contact('touch', 2, false);
+
+    first.down(input(), { clientX: 130, clientY: 260 });
+    await nextFrame();
+    expect(previewAt()).toContainEqual([125, 275]);
+    second.down(input(), { clientX: 400, clientY: 400 });
+    take(input());
+    await nextFrame();
+    expect(previewAt()).toEqual([]);
+    second.up(input(), { clientX: 400, clientY: 400 });
+    first.up(input(), { clientX: 130, clientY: 260 });
+    expect(callsOfPicture('translate')).toEqual([]);
+  });
+
   it('leaves a curve a finger was bending straight and waiting when a second finger lands', async () => {
     await showMap();
     await paintOn();

@@ -56,6 +56,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The Admin Panel's Status card checks live connections from your browser.** Its **WS** light was green whenever the backend ran, even behind a proxy that refused live connections. Each part now says **Working** or **Down** in words, and **WS** can say **Polling only**. See [Health Check Endpoint](docs/DEPLOYMENT.md#health-check-endpoint).
 
+- **On a touch screen, Mapmaker shows the see-through stamp as soon as your finger touches the map.** It showed only once the finger slid, so you could not see where a tap would paint the stamp before lifting. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

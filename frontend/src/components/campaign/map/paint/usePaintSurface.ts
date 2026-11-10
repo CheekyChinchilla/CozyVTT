@@ -419,10 +419,15 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   /** Where a mouse or a pen hovers with Stamp, Brush or Eraser chosen, for the stamp's or the brush's preview. */
   const hoverRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
   /**
-   * A finger's press with Stamp chosen: the stamp's preview follows it, and
+   * A finger's drag with Stamp chosen: the stamp's preview follows it, and
    * it is painted where the finger lifts; a second finger drops it.
    */
   const stampPressRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
+  /**
+   * A finger down and not yet a tap or a drag, where it landed: with Stamp
+   * chosen, the stamp's preview shows where a tap would paint it.
+   */
+  const pressingRef = useRef<{ mapId: string; at: PaintPoint } | null>(null);
   /** A curve dragged end to end, waiting for a second drag to bend it (`bending` while that drag is under way). */
   const curveRef = useRef<{ mapId: string; shape: PaintShape; bending: boolean } | null>(null);
   /** What Copy or Cut took, for Paste, on any map Paint opens on. */
@@ -958,6 +963,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     // No brush or stamp is left showing where the pointer was.
     hoverRef.current = null;
     stampPressRef.current = null;
+    pressingRef.current = null;
     setOn(false);
     onRef.current = false;
     markDirty('overlay');
@@ -1972,6 +1978,18 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         markDirty('overlay');
       }
     },
+    press(at: PointerAt | null) {
+      const pressing = pressingRef.current;
+      if (at && onRef.current && map) {
+        const point: PaintPoint = [at.mapPx.x, at.mapPx.y];
+        pressingRef.current = { mapId: map.id, at: point };
+      } else if (pressing) {
+        pressingRef.current = null;
+      } else {
+        return;
+      }
+      markDirty('overlay');
+    },
     escape() {
       if (dropStroke()) return true;
       if (polygonRef.current || curveRef.current) {
@@ -2090,7 +2108,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       shown.push(shapePreview(s, shape));
     }
     if (curveRef.current && curveRef.current.mapId === s.mapId) shown.push(shapePreview(s, curveRef.current.shape));
-    const stampAtPointer = stampPressRef.current ?? hoverRef.current;
+    const stampAtPointer = stampPressRef.current ?? pressingRef.current ?? hoverRef.current;
     const m = mapRef.current;
     if (stampAtPointer && stampAtPointer.mapId === s.mapId && m && settingsRef.current.tool === 'stamp') {
       const look = settingsRef.current;
