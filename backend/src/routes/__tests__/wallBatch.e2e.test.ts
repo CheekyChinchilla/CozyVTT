@@ -19,6 +19,7 @@ import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, expectNoEvent, waitForEvent, type WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { toJson } from '../../utils/prisma-json';
+import type { Prisma } from '@prisma/client';
 import { withMapsLocked, writersWaitingFor } from '../../utils/mapTokens';
 import * as shared from '../../websocket/shared';
 import { DUPLICATE_WALL_ID_MESSAGE, MAX_WALL_SEGMENTS, TOO_MANY_WALLS_MESSAGE } from '../../validators/walls';
@@ -53,11 +54,11 @@ interface BatchAnswer {
   total: number;
 }
 
-async function newMap(walls: unknown[] = [], campaign = campaignId): Promise<string> {
+async function newMap(walls: unknown[] = [], campaign = campaignId, gridSize = 10): Promise<string> {
   const map = await prisma.map.create({
     data: {
       campaignId: campaign, name: 'Rooms', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
-      width: 20, height: 20, gridSize: 10, tokens: [], annotations: [], wallSegments: toJson(walls), lights: [],
+      width: 20, height: 20, gridSize, tokens: [], annotations: [], wallSegments: toJson(walls), lights: [],
     },
   });
   return map.id;
@@ -315,6 +316,59 @@ async function writeWaitingForLock(mapId: string): Promise<void> {
   }
   throw new Error('the write never reached the map lock');
 }
+
+/**
+ * Hold the map's lock, send `segments`, and once the batch waits for the lock
+ * write `change` to the map and commit. Resolves with the batch's answer.
+ */
+async function batchWhileMapChanges(mapId: string, segments: unknown[], change: Prisma.MapUpdateInput) {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let locked!: () => void;
+  const holding = new Promise<void>((resolve) => { locked = resolve; });
+  const holder = withMapsLocked([mapId], async (tx) => {
+    locked();
+    await gate;
+    await tx.map.update({ where: { id: mapId }, data: change });
+  });
+  await holding;
+  const answer = dm.post(batchUrl(mapId)).send({ segments }).then((r) => r);
+  await writeWaitingForLock(mapId);
+  release();
+  await holder;
+  return answer;
+}
+
+describe('a batch judged against the map as it is under the lock', () => {
+  // At 10,000 px a wall fits the margin at a 50 px grid (26,000) and not at a 10 px one (5,200).
+  it('skips a wall the grid cut from 50 to 10 puts too far off the map, while it waited', async () => {
+    const mapId = await newMap([], campaignId, 50);
+    const kept = wall(60);
+    const farOut = { id: randomUUID(), x1: 100, y1: 100, x2: 10000, y2: 100, type: 'wall' };
+    const res = await batchWhileMapChanges(mapId, [kept, farOut], { gridSize: 10 });
+    expect(res.status).toBe(200);
+    const body = res.body as BatchAnswer;
+    expect(body.added.map((w) => w.id)).toEqual([kept.id]);
+    expect(body.skipped).toEqual([{ index: 1, reason: WALL_OUTSIDE_MAP_MESSAGE }]);
+    expect((await storedWalls(mapId)).map((w) => w.id)).toEqual([kept.id]);
+  });
+
+  it('counts the walls another write added while it waited against the cap', async () => {
+    const mapId = await newMap();
+    const res = await batchWhileMapChanges(mapId, [wall(60), wall(70), wall(80)], {
+      wallSegments: toJson(Array.from({ length: MAX_WALL_SEGMENTS - 1 }, () => wall())),
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as BatchAnswer;
+    expect(body.added.map((w) => w.x1)).toEqual([60]);
+    expect(body.skipped).toEqual([
+      { index: 1, reason: TOO_MANY_WALLS_MESSAGE },
+      { index: 2, reason: TOO_MANY_WALLS_MESSAGE },
+    ]);
+    expect(body.total).toBe(MAX_WALL_SEGMENTS);
+    expect(await storedWalls(mapId)).toHaveLength(MAX_WALL_SEGMENTS);
+  });
+});
 
 describe('a map deleted while the request waits for its lock', () => {
   it('is answered as not there, with nothing sent to open pages', async () => {
