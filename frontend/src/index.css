@@ -56,7 +56,7 @@
   --color-info: rgb(var(--rgb-info));
   --color-info-ink: rgb(var(--rgb-info-ink));
 
-  /* ── Legacy aliases (the same channels) ── */
+  /* ── Colour names the components use (the same channels as the theme tokens above) ── */
   --color-moss-green: rgb(var(--rgb-brand));
   --color-forest-shadow: rgb(var(--rgb-brand-dark));
   --color-warm-amber: rgb(var(--rgb-accent));
