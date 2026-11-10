@@ -10,6 +10,14 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ## [Unreleased]
 
+### Changed
+
+- **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).
+
+### Fixed
+
+- **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it on your screen until the token moved again or the page was reloaded.
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

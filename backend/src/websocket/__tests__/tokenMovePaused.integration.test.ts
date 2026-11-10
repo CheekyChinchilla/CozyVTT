@@ -212,9 +212,31 @@ describe('control taken away in the middle of a drag', () => {
     dm.disconnect();
   });
 
-  it('sends a drop that never began as a drag nothing but the refusal', async () => {
+  // Its pick-up was refused too, or never sent, and the mover's screen has
+  // the token where it was dropped. Nobody else saw a drag to undo.
+  it('puts a drop that never began as a drag back on the mover\'s screen alone', async () => {
     await setStatus('ACTIVE');
     await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    const back = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(player, 'token.moved');
+    const quietDm = expectNoEvent(dm, 'token.moved', 600);
+    player.emit('token.move.end', { tokenId: NPC, mapId, x: 5, y: 5 });
+    expect((await refused).message).toMatch(/permission/i);
+    expect(await back).toEqual({ tokenId: NPC, mapId, x: 1, y: 1, movedBy: null });
+    await quietDm;
+    expect(await positionOf(NPC)).toEqual({ x: 1, y: 1 });
+    player.disconnect();
+    dm.disconnect();
+  });
+
+  it('tells nobody where a hidden token stands for a drop that never began as a drag', async () => {
+    await setStatus('ACTIVE');
+    await prisma.map.update({
+      where: { id: mapId },
+      data: { tokens: [token(OWN, playerId), token(NPC, null, { visible: false, position: { x: 9, y: 9 } })] },
+    });
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const refused = waitForEvent<{ message: string }>(player, 'error');
     const quiet = expectNoEvent(player, 'token.moved', 600);
