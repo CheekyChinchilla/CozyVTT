@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { readdirSync, readlinkSync, realpathSync } from 'fs';
+import { existsSync, readdirSync, readlinkSync, realpathSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import {
@@ -340,6 +340,28 @@ describe('extractArchiveSafely', () => {
       expect(error).toBeInstanceOf(ArchiveRefusedError);
       expect((error as Error).message).toBe(`${NAME_CANNOT_BE_WRITTEN}./`);
     });
+
+    // A restore or import removes its folder the moment a refusal reaches
+    // it. A file still being opened then failed with no one listening.
+    it('refuses an entry before it is unpacked, however soon its folder is removed', async () => {
+      const dest = path.join(root, 'unpacked');
+      const file = path.join(root, 'odd.zip');
+      await writeZip(file, [{ name: 'secret.txt', data: 'x'.repeat(1000) }]);
+      rewriteEntryHeader(file, 'secret.txt', { flags: 0x1 });
+      const directory = await openArchiveFile(file, 10);
+
+      const refused = await extractArchiveSafely(file, directory, dest, LIMITS).then(
+        () => undefined,
+        (error: unknown) => {
+          rmSync(dest, { recursive: true, force: true });
+          return error;
+        }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      expect(refused).toBeInstanceOf(ArchiveRefusedError);
+      expect(existsSync(dest)).toBe(false);
+    });
   });
 });
 
@@ -501,6 +523,19 @@ describe('reading one entry within limits', () => {
     const dest = path.join(root, 'out.png');
     await expect(writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(100 * MB) })).rejects.toThrow(ArchiveLimitError);
     await expect(fs.access(dest)).rejects.toThrow();
+  });
+
+  it('leaves no file behind when an entry is refused before it is unpacked', async () => {
+    const file = path.join(root, 'odd.zip');
+    await writeZip(file, [{ name: 'secret.png', data: 'x'.repeat(1000) }]);
+    rewriteEntryHeader(file, 'secret.png', { flags: 0x1 });
+    const entry = (await openArchiveFile(file, 100)).files[0];
+    const dest = path.join(root, 'out.png');
+
+    await expect(writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(MB) })).rejects.toThrow(/is encrypted/);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(existsSync(dest)).toBe(false);
   });
 
   it('writes an entry within its limit and reports its size', async () => {

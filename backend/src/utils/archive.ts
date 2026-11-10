@@ -14,7 +14,7 @@
 import path from 'path';
 import zlib from 'zlib';
 import { once } from 'events';
-import { createReadStream, createWriteStream, type WriteStream } from 'fs';
+import { createReadStream, type WriteStream } from 'fs';
 import fs from 'fs/promises';
 import { Readable, Transform, Writable } from 'stream';
 import { pipeline } from 'stream/promises';
@@ -321,14 +321,12 @@ export interface EntryLimits {
  * stream is in one pipeline, so a stopped entry closes the archive file. A
  * stream that left it open when stopped part-way would let a few hundred
  * refused entries use up the process's files.
+ *
+ * A file `destination` is opened before it comes here (openNewFile): the
+ * quick refusals below destroy it, and a file still being opened then would
+ * fail later with no one listening, once its folder had been removed.
  */
 async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: EntryLimits, destination: Writable): Promise<void> {
-  // TODO(archives): these quick refusals destroy `destination` before a file
-  // stream has opened its file. The open still completes, leaving an empty
-  // file, and if the folder is removed first (a refused restore or import
-  // cleaning up) the stream emits an 'error' no one listens to, which ends
-  // the process. Right: make these checks before the caller creates the
-  // stream, or wait for the stream to close before throwing.
   // The size the directory claims is a quick refusal, never the only check.
   if (entry.uncompressedSize > limits.maxEntryBytes) {
     destination.destroy();
@@ -417,12 +415,14 @@ export async function writeArchiveEntry(
   destPath: string,
   limits: EntryLimits
 ): Promise<number> {
-  const out = createWriteStream(destPath, { flags: 'wx' });
+  // Opened before the entry is read, so a quick refusal below cannot leave
+  // a file still opening once its folder is removed.
+  const out = await openNewFile(destPath, 'wx');
   try {
     await unpackEntry(archivePath, entry, limits, out);
     return out.bytesWritten;
   } catch (error) {
-    out.destroy();
+    await discard(out);
     await fs.unlink(destPath).catch(() => undefined);
     throw error;
   }
