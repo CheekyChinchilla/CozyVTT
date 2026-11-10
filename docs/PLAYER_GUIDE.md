@@ -240,7 +240,7 @@ do not need to ask the DM.
 | Your characters in it | On **My Characters**, yours as before, in no campaign |
 | Your tokens on its maps | They stay where they are; only the DM can move or remove them |
 | Your place in the initiative order | It stays until the DM removes it |
-| Your notes and saved rolls | Kept, and readable from your dashboard under **Notes From Campaigns You Have Left** (see [Your Own Notes](#your-own-notes)) |
+| Your notes and saved rolls | Kept, and readable from your dashboard under **Notes From Campaigns You Have Left** (see [If you leave or are removed](#if-you-leave-or-are-removed)) |
 
 To come back, ask the DM to invite you again. Your notes and saved rolls are
 then in the campaign again; your characters you assign again yourself.
@@ -467,6 +467,8 @@ The **Notes** tab is yours alone. Keep up to 200 notes for a campaign — a plan
 Notes save themselves a moment after you stop typing — there's no Save button to forget. Pick between them with the dropdown at the top, and the **+** button starts a new one.
 
 A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
+
+### If you leave or are removed
 
 **If you leave the campaign or are removed from it,** an open campaign page says "You left this campaign." or "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). A page that was not connected at the time, such as one on a computer that was asleep, also goes to your dashboard when it reconnects. Within a minute of your leaving or removal it says the same as an open page, and after that "You are not a member of this campaign."; for a deleted campaign it says "This campaign does not exist. It may have been deleted." Opening a campaign you are not in does the same. Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, with each roll's **Character** and **Purpose**, and **Download** in that window to save them all, those included, as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
 

@@ -12,11 +12,11 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ### Added
 
-- **The DM can make a member a spectator, or a player again.** On the **Members** tab of **Campaign Settings**, choose **Player** or **Spectator** beside them, and their open page follows at once. Every button on a member's row is now big enough for a finger on a phone or a tablet. See [Changing a member's role](docs/DM_GUIDE.md#changing-a-members-role).
+- **The DM can make a member a spectator, or a player again.** Choose **Player** or **Spectator** beside them on the **Members** tab of **Campaign Settings**, and their open page follows at once. Each button on a member's row is now big enough for a finger. See [Changing a member's role](docs/DM_GUIDE.md#changing-a-members-role).
 
 - **You can change your email address from your Profile & Settings page.** **Change Email** asks for your current password, and the old address is sent a notice when your instance sends email. Five tries an hour are allowed. See [Changing Your Email Address](docs/USER_GUIDE.md#changing-your-email-address).
 
-- **A player who controls no token on a lit map is told why it is black.** A line at the foot of the map says they have no token to see through and to ask the DM for one, in the spirit realm too. **Preview Player View** shows it for that player. See [Why parts of the map are dark](docs/PLAYER_GUIDE.md#why-parts-of-the-map-are-dark).
+- **A player with no token on a lit map is told why it is black.** A line at the foot of the map tells them to ask the DM for a token to see through, in the spirit realm too. **Preview Player View** shows it. See [Why parts of the map are dark](docs/PLAYER_GUIDE.md#why-parts-of-the-map-are-dark).
 
 - **A D&D 5e character can roll initiative with advantage.** Tick **Advantage on initiative** on the sheet's **Combat** tab, and initiative rolls two d20s and keeps the higher. A level of exhaustion or the Poisoned condition on the sheet cancels it. See [Rolling Your Own Initiative](docs/PLAYER_GUIDE.md#rolling-your-own-initiative).
 
@@ -26,7 +26,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The initiative tracker shows you its up and down arrows while you move through a combatant's row with the keyboard.** They show over the combatant's picture. A screen reader now names the combatant on each row's dice button and bin. See [Managing Turn Order](docs/DM_GUIDE.md#managing-turn-order).
 
-- **Mapmaker adds the walls of the rooms you painted in one step when you save.** A save with many rooms can no longer be stopped part-way by the limit on requests everyone on one internet connection shares. The walls the map takes are added, and Mapmaker says how many were not added and why. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+- **Mapmaker adds your rooms' walls in one step when you save.** A save with many rooms can no longer be stopped part-way by the request limit everyone on one internet connection shares. Mapmaker says how many walls the map could not take, and why. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
 - **Mapmaker shows a texture while you drag.** A **Brush** stroke, a filled **Rectangle** or **Ellipse** and a **Room**'s floor showed in their plain colour until you let go. They now show in the **Texture** they are painted in. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
@@ -34,27 +34,27 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ### Fixed
 
-- **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it on your screen until the token moved again or the page was reloaded.
+- **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it until the token moved again or the page was reloaded.
 
-- **A campaign page that reconnects after you left, were removed or the campaign was deleted says so and goes to your dashboard.** A computer that slept through it stayed on a table that no longer worked. Opening a campaign you are not in does the same. See [Your Own Notes](docs/PLAYER_GUIDE.md#your-own-notes).
+- **A campaign page that reconnects after you left, were removed or the campaign was deleted says so and goes to your dashboard.** It stayed on a table that no longer worked. Opening a campaign you are not in does the same. See [If you leave or are removed](docs/PLAYER_GUIDE.md#if-you-leave-or-are-removed).
 
 - **A campaign page joining the table as you leave the campaign says you left.** It used to say you were removed.
 
-- **The setup wizard's administrator and people who registered now show when they last signed in.** In the Admin Panel's **Users** tab they showed **Never signed in**, with **Invite** offered. An account that waited for approval counts from its first sign-in; accounts already in use correct themselves when their owner next opens CozyVTT. See [User Accounts](docs/USER_GUIDE.md#user-accounts).
+- **The setup wizard's administrator and people who registered now show when they last signed in.** In the Admin Panel's **Users** tab they showed **Never signed in**, with **Invite** offered. Accounts already in use correct themselves when their owner next opens CozyVTT. See [User Accounts](docs/USER_GUIDE.md#user-accounts).
 
-- **A player who uploaded a campaign picture, a former DM among them, can no longer delete or move it while an older handout still shows it.** Handouts from before 1.6.0 are now checked for the picture first, and you are asked to try again later while some are left unchecked. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
+- **A player who uploaded a campaign picture, a former DM among them, can no longer delete or move it while a handout from before 1.6.0 still shows it.** Those handouts are checked first, and you are asked to try again later while some are unchecked. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
 
-- **The notes under the portrait in the sheet editors stay under the portrait.** On a wider screen **Saves as personal token** ran into the field beside it, such as the Call of Cthulhu **Age** box. The notes now wrap to the portrait's width in the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors.
+- **The notes under the portrait in the sheet editors stay under the portrait.** On a wider screen **Saves as personal token** ran into the field beside it, such as the Call of Cthulhu **Age** box. They now wrap to the portrait's width.
 
-- **A Pathfinder 2e sheet waits for you to choose its Class DC's Key Attribute.** New sheets started with Strength, and on a sheet with none the editor filled in Intelligence and showed a different Class DC from the sheet. Now both read 10 until you choose one. See [Pathfinder 2nd Edition](docs/USER_GUIDE.md#pathfinder-2nd-edition).
+- **A Pathfinder 2e sheet waits for you to choose its Class DC's Key Attribute.** New sheets started with Strength, and on a sheet with none the editor showed a different Class DC from the sheet. Both now read 10 until you choose one. See [Pathfinder 2nd Edition](docs/USER_GUIDE.md#pathfinder-2nd-edition).
 
-- **A Call of Cthulhu creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them, though an ordinary person's characteristics run higher. A characteristic can now be up to 9,999 and a skill up to 999. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+- **A Call of Cthulhu creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them. A characteristic can now be up to 9,999 and a skill up to 999. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
 
 - **Mapmaker's notice of room walls not added after a save reads correctly.** When none of them were added it had a capital letter in the middle of its sentence, and a reason ending in a full stop was followed by a second one.
 
 - **A turn the server refuses shows the token facing the way the server holds it, another member's turn included.** If someone else turned the token while your turn waited, the refusal showed the facing from before your turn until something on the map changed again. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
 
-- **A quick third tap or click where you ended a wall line starts a new line there.** It did nothing with a mouse, or on a touch screen zoomed out or with **Snap to grid** off. A double tap or double-click on a wall polygon of fewer than three corners no longer throws them away. See [The Wall Drawing Tool](docs/DM_GUIDE.md#the-wall-drawing-tool).
+- **A quick third tap or click where you ended a wall line starts a new line there.** It did nothing with a mouse, on a zoomed-out touch screen or with **Snap to grid** off. A double tap or double-click no longer drops a wall polygon under three corners. See [The Wall Drawing Tool](docs/DM_GUIDE.md#the-wall-drawing-tool).
 
 - **The Admin Panel's Status card checks live connections from your browser.** Its **WS** light was green whenever the backend ran, even behind a proxy that refused live connections. Each part now says **Working** or **Down** in words, and **WS** can say **Polling only**. See [Health Check Endpoint](docs/DEPLOYMENT.md#health-check-endpoint).
 
@@ -64,17 +64,17 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Mapmaker adds your rooms' walls where their floors are, even if the map's size is changed on another device while you save.** The walls went in at the size your screen still showed, away from the floors.
 
-- **Mapmaker keeps a selection you moved or pasted in your draft when you switch to another tab or app.** It is put down then. A phone that closed the page in the background lost it, and kept no draft at all if it was your only change. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+- **Mapmaker puts down a selection you moved or pasted, and keeps it in your draft, when you switch to another tab or app.** A phone that closed the page in the background lost it, with no draft at all if it was your only change. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
-- **A damaged or hand-made backup or campaign archive no longer stops the server.** A backup holding a file name the server cannot write, such as a file and a folder with the same name, ended the backend, and an archive the import refused could too. Both are now refused with the reason, and nothing changes. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
+- **A damaged or hand-made backup or campaign archive no longer stops the server.** A backup holding a file name the server cannot write ended the backend, and an archive the import refused could too. Both are now refused with the reason, and nothing changes. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
 
-- **A damaged campaign archive is refused with a plain message.** An archive whose directory placed a file far past its end was answered as a problem with the server, with the details in its log. The import window now says "The file is not a ZIP archive, or it is damaged." See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
+- **A damaged campaign archive is refused with a plain message.** One whose directory placed a file far past its end was answered as a server problem. The import window now says "The file is not a ZIP archive, or it is damaged." See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
 
-- **A campaign holding a picture or sound uploaded with a very long file name in an old version now exports and imports with it.** A file name over 500 characters, which versions before 1.5.2 kept, left that file out of the import. The archive now carries the name shortened to 255 characters. See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
+- **A campaign exports and imports with a picture or sound uploaded before 1.5.2 under a file name over 500 characters.** The import left that file out. The archive now carries the name shortened to 255 characters. See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
 
 - **After you remove a member, the keyboard focus stays in the Members list.** It fell to the page, so you had to tab from the top again. It now moves to the next member. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
 
-- **A creature's ability score of 0 stays 0 in the Creature Library and the token editor.** Typing 0, or emptying the box, changed it to 10. A box left empty now keeps the score it had, and a score past the highest allowed stops there when you leave the box. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+- **A creature's ability score of 0 stays 0 in the Creature Library and the token editor.** Typing 0, or emptying the box, changed it to 10. An emptied box now keeps its score, and one past the highest allowed drops to it when you leave the box. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
 
 - **Campaign Info names your role as Player or Spectator.** **Your role** showed it in capitals, as PLAYER or SPECTATOR.
 
