@@ -341,11 +341,17 @@ describe('Up and Down on a touch screen', () => {
       .toEqual(expect.arrayContaining(['touch-target', 'inline-flex', 'items-center', 'justify-center']));
   });
 
-  it('are not there with a mouse, nor for a player', () => {
-    const { unmount } = render(<InitiativeTracker />);
-    expect(screen.queryByRole('button', { name: 'Move Ogre down' })).toBeNull();
-    unmount();
+  // With a mouse they wait for the keyboard; on a touch screen they always show.
+  it('show all the time, beside the die', () => {
+    onATouchScreen();
+    render(<InitiativeTracker />);
 
+    const down = screen.getByRole('button', { name: 'Move Ogre down' });
+    expect(down.parentElement).toBe(screen.getByRole('button', { name: 'Roll initiative for Ogre' }).parentElement);
+    expect(classesOf(down.parentElement)).not.toContain('opacity-0');
+  });
+
+  it('are not there for a player', () => {
     onATouchScreen();
     seat.role = 'PLAYER';
     render(<InitiativeTracker />);
