@@ -459,6 +459,7 @@ The action-economy tactician's dream:
 - Skills with trained/expert/master/legendary proficiencies
 - Class features, feats, and focus points: the pool holds 1 point with your first focus spell, up to 3 as you set it, and the points left stay within it
 - Spells and spell slots, with the spell attack and spell DC worked out from one **Spellcasting proficiency** and each its own item bonus
+- Class DC worked out from the **Key Attribute** your class names and its proficiency. A new sheet has none chosen: its Class DC reads 10, the proficiency is greyed out, and nothing is saved for it until you choose one
 - Inventory with bulk tracking: ten light items make 1 Bulk, and you are encumbered only above 5 + Strength
 - Ancestry, background, and heritage
 

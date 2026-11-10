@@ -28,6 +28,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The notes under the portrait in the sheet editors stay under the portrait.** On a wider screen **Saves as personal token** ran into the field beside it, such as the Call of Cthulhu **Age** box. The notes now wrap to the portrait's width in the D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible editors.
 
+- **A Pathfinder 2e sheet waits for you to choose its Class DC's Key Attribute.** New sheets started with Strength, and on a sheet with none the editor filled in Intelligence and showed a different Class DC from the sheet. Now both read 10 until you choose one. See [Pathfinder 2nd Edition](docs/USER_GUIDE.md#pathfinder-2nd-edition).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

@@ -58,6 +58,7 @@ import {
   pf2eBulkLimits,
   formatPf2eBulk,
   pf2eMaxHitPoints,
+  PF2E_ATTRIBUTE_NAMES,
 } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { toStoredHexColor, HEX_COLOUR_HINT, headerInk } from '@/utils/themeColor';
@@ -294,9 +295,11 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     },
     loreSkills: (data.loreSkills || []).map((lore) => ({ ...lore, attribute: fullAttributeName(lore.attribute) })),
     armorClass: data.armorClass || { total: 10, proficiencyRank: 'untrained', capDex: null, itemBonus: 0, armorPenalty: 0 },
+    // None until the player chooses the key attribute their class names: any
+    // attribute filled in here would be stored for every class.
     classDC: data.classDC
       ? { ...data.classDC, keyAttribute: fullAttributeName(data.classDC.keyAttribute) }
-      : { total: 10, keyAttribute: 'intelligence', proficiencyRank: 'untrained' },
+      : undefined,
     initiative: data.initiative || { usedStat: 'perception', bonus: 0 },
     speed: data.speed || { land: 30, other: [] },
     hp: data.hp || { maximum: 0, ancestryHp: 6, classHpPerLevel: 6, current: 0, temporary: 0, resistances: [], immunities: [], weaknesses: [] },
@@ -896,12 +899,24 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     return modifier + pf2eProficiencyBonus(formData.level, strike.proficiencyRank) + (strike.itemBonus ?? 0);
   };
 
-  const renderProficiencySelector = (path: string, currentRank: ProficiencyRank, label: string) => (
+  /**
+   * The Class DC with the key attribute chosen: the whole entry, so a sheet
+   * that had none stores it with a rank and a total.
+   */
+  const chooseClassKeyAttribute = (keyAttribute: string) => {
+    setFormData((prev) => {
+      const classDC: PF2eClassDC = { proficiencyRank: 'untrained', total: 10, ...prev.classDC, keyAttribute };
+      return { ...prev, classDC: { ...classDC, total: pf2eClassDC({ ...prev, classDC }) } };
+    });
+  };
+
+  const renderProficiencySelector = (path: string, currentRank: ProficiencyRank, label: string, disabled = false) => (
     <select
       aria-label={label}
       value={currentRank}
+      disabled={disabled}
       onChange={(e) => updateField(path, e.target.value as ProficiencyRank)}
-      className="px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
+      className="px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {PROFICIENCY_RANKS.map((rank) => (
         <option key={rank} value={rank}>
@@ -1212,16 +1227,19 @@ aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <label className="text-sm text-ink-secondary sm:w-32">Key Attribute:</label>
-              <select aria-label="Key Attribute" value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
-                {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((attr) => (
+              <select aria-label="Key Attribute" value={formData.classDC?.keyAttribute ?? ''} onChange={(e) => chooseClassKeyAttribute(e.target.value)} className="min-w-0 flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
+                {/* Offered only while nothing is chosen; a key attribute once chosen can be changed but not cleared. */}
+                {!formData.classDC && <option value="" disabled>Choose one</option>}
+                {PF2E_ATTRIBUTE_NAMES.map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
                 ))}
               </select>
             </div>
-            {renderProficiencySelector('classDC.proficiencyRank', formData.classDC?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in Class DC')}
+            {renderProficiencySelector('classDC.proficiencyRank', formData.classDC?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in Class DC', !formData.classDC)}
             <div className="text-center pt-2 border-t border-ink/20">
               <div className="text-xs text-ink-secondary mb-1">Total DC</div>
-              <div className="text-4xl font-bold text-spirit-ink">{formData.classDC?.total || 10}</div>
+              {/* Worked out as the read-only sheet does, so the two agree. */}
+              <div className="text-4xl font-bold text-spirit-ink">{pf2eClassDC(formData)}</div>
             </div>
           </div>
         </div>

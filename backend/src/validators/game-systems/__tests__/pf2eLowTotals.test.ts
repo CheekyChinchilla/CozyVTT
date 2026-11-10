@@ -22,7 +22,8 @@ describe('Pathfinder 2e totals under 10', () => {
 
   it('stores a Class DC of 9', () => {
     const sheet = blank();
-    sheet.classDC = { ...sheet.classDC, total: 9 };
+    // Intelligence 8, untrained, as the editor writes it.
+    sheet.classDC = { keyAttribute: 'intelligence', proficiencyRank: 'untrained', total: 9 };
     expect(validateCharacterData(GameSystem.PATHFINDER_2E, sheet).success).toBe(true);
   });
 

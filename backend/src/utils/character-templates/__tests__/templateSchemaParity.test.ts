@@ -169,8 +169,9 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const skills = Object.values(data.skills as Record<string, { attribute: string }>).map((s) => s.attribute);
       const lore = ((data.loreSkills ?? []) as { attribute: string }[]).map((l) => l.attribute);
       const spellcasting = data.spellcasting as { tradition: string; type: string; keyAttribute: string };
-      const classDC = data.classDC as { keyAttribute: string };
-      const named = [...skills, ...lore, classDC.keyAttribute, spellcasting.keyAttribute];
+      // The blank template stores no Class DC.
+      const classDC = data.classDC as { keyAttribute: string } | undefined;
+      const named = [...skills, ...lore, ...(classDC ? [classDC.keyAttribute] : []), spellcasting.keyAttribute];
 
       expect(named.filter((name) => !attributes.includes(name))).toEqual([]);
       expect(['arcane', 'divine', 'primal', 'occult']).toContain(spellcasting.tradition);
