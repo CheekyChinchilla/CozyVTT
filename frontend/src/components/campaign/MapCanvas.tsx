@@ -1253,6 +1253,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per map switch; the spirit flag is only read then
   }, [currentMap?.id]);
 
+  /** What a refused turn says; a ref, so the turns made once keep the newest. */
+  const turnRefusedRef = useRef<(err: unknown) => void>(() => undefined);
+  turnRefusedRef.current = (err) => showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
+  /**
+   * A token's turns, sent one at a time (map/tokenTurns.ts), told each facing
+   * the server sends by the map.changed listener below.
+   */
+  const [tokenTurns] = useState(() => createTokenTurns({
+    send: ({ campaignId, mapId, tokenId }, rotation) => api.updateToken(campaignId, mapId, tokenId, { rotation }),
+    show: ({ mapId, tokenId }, rotation) => useGameStore.getState().patchToken(tokenId, { rotation }, mapId),
+    refused: (err) => turnRefusedRef.current(err),
+  }));
+
   // Listen for map.changed events broadcast by the DM.
   //
   // Through the client, never the raw socket: the client rebuilds its socket
@@ -1273,6 +1286,9 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (!socket) return;
 
     const handleMapChanged = ({ mapData, spiritVisible: sv }: { mapId: string; mapData: CampaignMap; spiritVisible?: boolean }) => {
+      // Each facing as the server stores it, another member's turn included,
+      // for a refused turn of this page's to put back.
+      for (const t of mapData.tokens ?? []) tokenTurns.heard({ mapId: mapData.id, tokenId: t.id }, t.rotation);
       // The table's map, which this page shows with its tokens unless the
       // DM is preparing another here; then only the table's map follows.
       if (!receiveTableMap(mapData)) return;
@@ -1298,7 +1314,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     return () => {
       socket.off('map.changed', handleMapChanged);
     };
-  }, [socket, receiveTableMap, setPlayerSpiritVisible, playEtherealTransition]);
+  }, [socket, receiveTableMap, setPlayerSpiritVisible, playEtherealTransition, tokenTurns]);
 
   // ============================================
   // Spirit Layer WebSocket Listeners
@@ -3351,16 +3367,6 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     maps: campaign?.maps ?? [],
     busy: { crossing: isMovingTokenLayer, moving: isMoveToMapLoading },
   });
-
-  /** What a refused turn says; a ref, so the turns made once keep the newest. */
-  const turnRefusedRef = useRef<(err: unknown) => void>(() => undefined);
-  turnRefusedRef.current = (err) => showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
-  /** A token's turns, sent one at a time (map/tokenTurns.ts). */
-  const [tokenTurns] = useState(() => createTokenTurns({
-    send: ({ campaignId, mapId, tokenId }, rotation) => api.updateToken(campaignId, mapId, tokenId, { rotation }),
-    show: ({ mapId, tokenId }, rotation) => useGameStore.getState().patchToken(tokenId, { rotation }, mapId),
-    refused: (err) => turnRefusedRef.current(err),
-  }));
 
   /**
    * Turn a token one step, shown at once. Read from the store, so presses in

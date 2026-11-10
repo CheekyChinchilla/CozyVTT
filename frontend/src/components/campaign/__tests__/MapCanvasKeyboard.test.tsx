@@ -744,6 +744,27 @@ describe('turns sent close together', () => {
     expect(h.updateToken).toHaveBeenCalledTimes(3);
   });
 
+  // Another member's turn reaches this page in the map sent again. A refusal
+  // put back the facing from before this page's first turn, and it stayed
+  // until the map was sent again.
+  it("put back another member's turn that arrived while they waited, when they are refused", async () => {
+    const first = deferred();
+    const second = deferred();
+    h.updateToken.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    select('tok-goblin');
+
+    await act(async () => { press(']'); });
+    await act(async () => { press(']'); });
+    fire('map.changed', { mapId: 'map-a', mapData: mapNamed('map-a', { tokens: [token('tok-goblin', 'Goblin Scout', 5, 10, { rotation: 270 })] }) });
+    await act(async () => { first.reject(new Error('Session paused')); });
+    expect(h.updateToken).toHaveBeenLastCalledWith('campaign-1', 'map-a', 'tok-goblin', { rotation: 90 });
+    await act(async () => { second.reject(new Error('Session paused')); });
+
+    expect(rotationOf('tok-goblin')).toBe(270);
+  });
+
   it('keep the newest facing when the one before it is refused and it is stored', async () => {
     const first = deferred();
     h.updateToken.mockReturnValueOnce(first.promise).mockResolvedValueOnce({});
