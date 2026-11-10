@@ -284,6 +284,12 @@ export interface EntryLimits {
  * refused entries use up the process's files.
  */
 async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: EntryLimits, destination: Writable): Promise<void> {
+  // TODO(archives): these quick refusals destroy `destination` before a file
+  // stream has opened its file. The open still completes, leaving an empty
+  // file, and if the folder is removed first (a refused restore or import
+  // cleaning up) the stream emits an 'error' no one listens to, which ends
+  // the process. Right: make these checks before the caller creates the
+  // stream, or wait for the stream to close before throwing.
   // The size the directory claims is a quick refusal, never the only check.
   if (entry.uncompressedSize > limits.maxEntryBytes) {
     destination.destroy();
