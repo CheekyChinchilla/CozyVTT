@@ -814,6 +814,8 @@ describe('a refused restore', () => {
     ['a file where an earlier entry made a folder', { 'uploads/x/y': 'a', 'uploads/x': 'b' }, 'uploads/x'],
     ['a folder where an earlier entry made a file', { 'uploads/x': 'a', 'uploads/x/y': 'b' }, 'uploads/x/y'],
     ['a name longer than a folder can hold', { [`uploads/${'b'.repeat(300)}`]: 'a' }, `uploads/${'b'.repeat(300)}`],
+    ['a folder deeper inside an earlier file', { 'uploads/x': 'a', 'uploads/x/y/z': 'b' }, 'uploads/x/y/z'],
+    ['a folder name longer than a folder can hold', { [`uploads/${'b'.repeat(300)}/f`]: 'a' }, `uploads/${'b'.repeat(300)}/f`],
   ])('says a backup with %s is not taken, with 400, and changes nothing', async (_label, files, refusedName) => {
     const calls = stubTools();
     await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
