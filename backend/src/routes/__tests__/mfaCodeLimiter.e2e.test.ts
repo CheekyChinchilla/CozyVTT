@@ -83,3 +83,29 @@ it('does not count a request with no sign-in pending, or one refused for its sha
   }
   expect((await agent.post('/api/auth/mfa/verify-login').send({ token: code(secret) })).status).toBe(200);
 });
+
+// The per-account limiter runs second, and wrote its own headers over the
+// address's, as the password step's per-account limiter once did. A code
+// sent from a new address then said one try was left there, though the
+// address had all five.
+it('says in the headers how many wrong codes the address has left, whatever the account has had from elsewhere', async () => {
+  const secret = generateSecret();
+  const user = await createTestUser({ displayName: 'Code limiter headers' });
+  created.push(user.id);
+  await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true, mfaSecret: secret } });
+  const signIn = async (address: string) => {
+    const agent = request.agent(app).set('X-Forwarded-For', address);
+    expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).body.mfaRequired).toBe(true);
+    return agent;
+  };
+
+  const elsewhere = await signIn(freshAddress());
+  for (let i = 0; i < 3; i += 1) expect((await elsewhere.post('/api/auth/mfa/verify-login').send({ token: '000000' })).status).toBe(401);
+
+  const res = await (await signIn(freshAddress())).post('/api/auth/mfa/verify-login').send({ token: '000000' });
+
+  expect(res.status).toBe(401);
+  expect(res.headers['ratelimit-policy']).toBe('5;w=900');
+  // This request is being checked, so four of the address's five are left.
+  expect(res.headers['ratelimit-remaining']).toBe('4');
+});
