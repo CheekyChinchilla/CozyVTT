@@ -22,7 +22,8 @@ import { randomUUID } from 'crypto';
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport, assetEntryName } from '../campaignExporter';
 import { MAX_ARCHIVE_NAME_BYTES } from '../../utils/archive';
-import { MAX_EXTENSION_LENGTH } from '../../validators/assets';
+import { storedFilePath } from '../../utils/storedPath';
+import { MAX_EXTENSION_LENGTH, MAX_ORIGINAL_NAME_LENGTH } from '../../validators/assets';
 import { ASSET_LIMITS } from '../../validators/assetLimits';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip, readZip } from '../../__tests__/helpers/zipFixtures';
@@ -229,6 +230,37 @@ describe('the name an asset has in the archive', () => {
     expect(result).toMatchObject({ skipped: [] });
     // An extension a map picture cannot have gives way to its format's.
     expect(Object.keys(await imported(result.campaignId))).toEqual(['map.png']);
+  });
+
+  it('goes into the list of assets shortened when the original name is over what an import takes, and imports with its picture', async () => {
+    const source = await createTestCampaign(userId, { name: 'Very Long Name' });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    // Older versions stored an upload's own name at any length.
+    const longName = `${'b'.repeat(596)}.png`;
+    const shortened = `${'b'.repeat(MAX_ORIGINAL_NAME_LENGTH - 4)}.png`;
+    const map = await picture(source.id, 'MAP', 'placeholder', 'Sunken Hall', null);
+    await prisma.asset.update({ where: { id: map.id }, data: { originalName: longName } });
+    await prisma.map.create({
+      data: {
+        campaignId: source.id, name: 'Sunken Hall', imageUrl: `/api/assets/maps/${map.id}`, baseLayerUrl: `/api/assets/maps/${map.id}`,
+        width: 10, height: 10, gridSize: 70, tokens: [], annotations: [], wallSegments: [], lights: [],
+      },
+    });
+
+    const file = path.join(SCRATCH, 'very-long-name.cozyvtt');
+    const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
+    await prepared.writeTo(fs.createWriteStream(file));
+    const manifestEntry = (await readZip(file)).find((f) => f.path === 'assets/asset-manifest.json');
+    const manifest = JSON.parse(manifestEntry!.data.toString()) as Record<string, Record<string, unknown>>;
+    expect(manifest[map.id]).toMatchObject({ originalName: shortened, name: 'Sunken Hall' });
+
+    const result = await importCampaign(file, userId);
+    expect(result).toMatchObject({ skipped: [], warnings: [] });
+    expect(await imported(result.campaignId)).toEqual({ [shortened]: ['Sunken Hall', null] });
+    const [asset] = await prisma.asset.findMany({ where: { campaignId: result.campaignId } });
+    expect(fs.readFileSync(storedFilePath(asset.filePath))).toEqual(PNG);
+    const [importedMap] = await prisma.map.findMany({ where: { campaignId: result.campaignId } });
+    expect(importedMap.imageUrl).toBe(`/api/assets/maps/${asset.id}`);
   });
 });
 

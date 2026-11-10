@@ -25,7 +25,7 @@ import { extractAssetId } from '../utils/asset-urls';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
-import { MAX_EXTENSION_LENGTH } from '../validators/assets';
+import { MAX_EXTENSION_LENGTH, MAX_ORIGINAL_NAME_LENGTH, shortenFileName } from '../validators/assets';
 import { DRAWING_ORDER, campaignDmId, drawingForArchive } from './mapDrawings';
 
 // ── Exported types ──────────────────────────────────────────────────────────
@@ -275,11 +275,10 @@ export async function prepareCampaignExport(
   const assetManifest: Record<string, Omit<ArchivedAsset, 'filePath' | 'details'> & Partial<AssetDetails>> = {};
   for (const [id, info] of assetMap.entries()) {
     assetManifest[id] = {
-      // TODO(archives): an original name over 500 characters, which versions
-      // before 1.5.2 stored, is written as it is, and the import refuses the
-      // asset's entry ("Its entry in the archive cannot be read."). Right:
-      // write it shortened with shortenFileName to MAX_ORIGINAL_NAME_LENGTH.
-      originalName: info.originalName,
+      // Cut to what an upload keeps: versions before 1.5.2 stored an upload's
+      // name at any length, and an import cannot read an entry whose name is
+      // over 500 characters.
+      originalName: shortenFileName(info.originalName, MAX_ORIGINAL_NAME_LENGTH),
       mimeType: info.mimeType,
       type: info.type,
       fileSize: info.fileSize,

@@ -70,6 +70,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A damaged campaign archive is refused with a plain message.** An archive whose directory placed a file far past its end was answered as a problem with the server, with the details in its log. The import window now says "The file is not a ZIP archive, or it is damaged." See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
 
+- **A campaign holding a picture or sound uploaded with a very long file name in an old version now exports and imports with it.** A file name over 500 characters, which versions before 1.5.2 kept, left that file out of the import. The archive now carries the name shortened to 255 characters. See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

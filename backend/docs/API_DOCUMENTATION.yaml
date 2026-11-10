@@ -9886,7 +9886,9 @@ paths:
         names that the caller cannot read, or that no longer exists, is left
         out, and the map, token, creature or template that used it is imported
         without a picture. Each asset's entry in `assets/asset-manifest.json`
-        gives its `originalName`, `mimeType`, `type` and `fileSize`, and for
+        gives its `originalName` (one over 255 characters, which versions
+        before 1.5.2 stored, cut to 255 with its extension kept, as an upload
+        cuts it), `mimeType`, `type` and `fileSize`, and for
         an asset of the campaign's own library (CAMPAIGN scope, this
         campaign) or of the exporter's own (USER scope, uploaded by them)
         its `name`, `description` (`null` when it has none) and `tags` as
