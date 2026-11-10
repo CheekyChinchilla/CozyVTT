@@ -78,6 +78,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Campaign Info names your role as Player or Spectator.** **Your role** showed it in capitals, as PLAYER or SPECTATOR.
 
+- **A wall polygon's corners show as you tap them on a touch screen.** With **Polygon** under **Walls**, the corners and the edges between them stayed hidden until something else redrew the map, though the polygon closed where you tapped. See [Polygon Drawing Mode](docs/DM_GUIDE.md#polygon-drawing-mode).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

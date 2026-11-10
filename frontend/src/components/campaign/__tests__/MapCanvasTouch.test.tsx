@@ -2564,6 +2564,33 @@ describe('the window losing focus', () => {
   });
 });
 
+describe('a wall polygon placed by taps', () => {
+  const drawing = recordDrawing();
+  const overlay = () => document.querySelectorAll('canvas')[2];
+  /** Where the overlay's next frame draws a polygon's corner dots, 4 pixels across at 100%. */
+  async function cornersDrawn(): Promise<number[][]> {
+    drawing.take(overlay());
+    await nextFrame();
+    return drawing.take(overlay())
+      .filter((c) => c.method === 'arc' && c.args[2] === 4)
+      .map((c) => [c.args[0] as number, c.args[1] as number]);
+  }
+
+  // A finger has no hover, and the corners waited for a mouse's to be drawn.
+  it('draws each corner in the frame after its tap', async () => {
+    render(<MapCanvas />);
+    pictures.find((p) => p.src === '/api/assets/maps/x')!.load();
+    await nextFrame();
+    wallTool('Polygon wall mode');
+    await nextFrame();
+
+    tap(1, px(100, 100));
+    expect(await cornersDrawn()).toEqual([[100, 100]]);
+    tap(2, px(300, 100));
+    expect(await cornersDrawn()).toEqual([[100, 100], [300, 100]]);
+  });
+});
+
 describe('the AoE template by touch', () => {
   const drawing = recordDrawing();
   const overlay = () => document.querySelectorAll('canvas')[2];
