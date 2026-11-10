@@ -20,6 +20,8 @@ import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { tellTableMemberLeft } from '../../services/campaignMembers';
+import type { AccessRevoked } from '../utils';
+import type { AuthenticatedSocket } from '../auth';
 import * as backgroundWork from '../../utils/backgroundWork';
 
 jest.setTimeout(20000);
@@ -32,6 +34,7 @@ let playerId: string;
 let watcherId: string;
 let campaignId: string;
 let otherCampaignId: string;
+let strangerCampaignId: string;
 let mapId: string;
 let dmCookie: string;
 let playerCookie: string;
@@ -47,6 +50,8 @@ beforeAll(async () => {
   watcherId = watcher.id;
   campaignId = (await prisma.campaign.create({ data: { name: `Carrier gone ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
   otherCampaignId = (await prisma.campaign.create({ data: { name: `Carrier elsewhere ${runId}`, ownerId: playerId, vibeSettings: {} } })).id;
+  // One the player is not in.
+  strangerCampaignId = (await prisma.campaign.create({ data: { name: `Carrier stranger ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
       { userId: dmId, campaignId, role: 'DM', characterIds: [] },
@@ -71,7 +76,7 @@ afterAll(async () => {
   await server?.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
-  await prisma.campaign.deleteMany({ where: { id: { in: [campaignId, otherCampaignId] } } });
+  await prisma.campaign.deleteMany({ where: { id: { in: [campaignId, otherCampaignId, strangerCampaignId] } } });
   await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, watcherId] } } });
   await prisma.$disconnect();
 });
@@ -145,6 +150,49 @@ it('sends the token back where it stands when its carrier joins another campaign
   const moved = await back;
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
   expect(moved.dragging).toBeFalsy();
+  player.disconnect();
+  dm.disconnect();
+});
+
+// A join of a campaign the carrier is not in is refused, and the connection
+// leaves the campaign it was in: the table is told it left, and the token
+// goes back.
+it('sends the token back, and tells the table, when its carrier asks to join a campaign it is not in', async () => {
+  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const player = await server.connectAndAuth(playerCookie, campaignId);
+
+  const frame = waitForEvent<Moved>(dm, 'token.moved');
+  player.emit('token.move.start', { tokenId: 'hero', mapId });
+  player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
+  await frame;
+
+  const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  const left = waitForEvent<{ userId: string }>(dm, 'user.left', 5000);
+  const offline = new Promise<string[]>((resolve) => {
+    const onPresence = (data: { onlineUserIds: string[] }) => {
+      if (data.onlineUserIds.includes(playerId)) return;
+      dm.off('presence.state', onPresence);
+      resolve(data.onlineUserIds);
+    };
+    dm.on('presence.state', onPresence);
+  });
+  const revoked = waitForEvent<AccessRevoked>(player, 'campaign.access.revoked', 5000);
+  player.emit('authenticate', { campaignId: strangerCampaignId });
+
+  await expect(revoked).resolves.toEqual({
+    campaignId: strangerCampaignId, reason: 'not-member', message: 'You are not a member of this campaign.',
+  });
+  expect((await left).userId).toBe(playerId);
+  expect(await offline).toEqual([dmId]);
+  const moved = await back;
+  expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
+  expect(moved.dragging).toBeFalsy();
+
+  const socket = server.io.of('/').sockets.get(player.id ?? '') as AuthenticatedSocket | undefined;
+  expect(socket).toBeDefined();
+  expect([...(socket?.rooms ?? [])].filter((room) => room !== socket?.id && room !== playerId)).toEqual([]);
+  expect(socket?.campaignId).toBeUndefined();
+  expect(socket?.role).toBeUndefined();
   player.disconnect();
   dm.disconnect();
 });
