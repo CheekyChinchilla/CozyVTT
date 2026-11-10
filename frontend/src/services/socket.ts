@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import type { ManagerOptions, SocketOptions } from 'socket.io-client';
 import { socketTarget } from '@/utils/socketTarget';
 import { api } from '@/services/api';
 import { apiErrorStatus, errorMessage } from '@/utils/errors';
@@ -74,6 +75,27 @@ import type {
 const { origin: SOCKET_ORIGIN, path: SOCKET_PATH } = socketTarget(
   import.meta.env.VITE_SOCKET_URL
 );
+
+/**
+ * Where and how a page reaches the live connection: the campaign page's
+ * connect below, and the Admin Panel's check of live connections
+ * (services/liveConnectionCheck), which must find what a table would find.
+ * A fresh object each time, so neither can change the other's.
+ */
+export function liveConnectionTarget(): { origin: string; options: Partial<ManagerOptions & SocketOptions> } {
+  return {
+    origin: SOCKET_ORIGIN,
+    options: {
+      path: SOCKET_PATH,
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+      // Polling when the WebSocket is refused, as by a proxy that does not
+      // pass the browser's host name, which the page's policy names for it:
+      // a slower table, where without this there was none.
+      tryAllTransports: true,
+    },
+  };
+}
 
 type EventCallback<T = unknown> = (data: T) => void;
 
@@ -246,14 +268,9 @@ class SocketClient {
 
       this.connectionTimer = connectionTimeout;
 
-      this.socket = io(SOCKET_ORIGIN, {
-        path: SOCKET_PATH,
-        withCredentials: true,
-        transports: ['websocket', 'polling'],
-        // Polling when the WebSocket is refused, as by a proxy that does not
-        // pass the browser's host name, which the page's policy names for it:
-        // a slower table, where without this there was none.
-        tryAllTransports: true,
+      const target = liveConnectionTarget();
+      this.socket = io(target.origin, {
+        ...target.options,
         reconnection: true,
         reconnectionDelay: this.reconnectDelay,
         reconnectionDelayMax: 30000,       // Cap backoff at 30s

@@ -236,17 +236,24 @@ describe('SMTP, in the deployment guide', () => {
 });
 
 describe('the Admin Panel status card, in the deployment guide', () => {
-  // The card's WS light is green when the backend's live-connection server
-  // exists in the process (GET /api/admin/health), which it does whenever the
-  // backend is running. The guide said it checked that connections can be
-  // made, which a proxy that refuses WebSocket upgrades defeats unseen.
-  it('does not say the card tests whether live connections can be made', () => {
-    expect(read('docs/DEPLOYMENT.md')).not.toMatch(/also whether live game connections can be made/);
+  // The card's WS part is the browser's own live connection
+  // (frontend/src/services/liveConnectionCheck.ts), made as a campaign page
+  // makes one, so a proxy that refuses WebSocket upgrades shows. GET
+  // /api/admin/health cannot see that proxy: its `websocket` is `ok` whenever
+  // the backend runs, and the card once showed WS from it.
+  const guide = section('docs/DEPLOYMENT.md', '### Health Check Endpoint', '\n### ');
+  const card = read('frontend/src/pages/AdminPage.tsx');
+
+  it('says WS is a connection the browser opens of its own', () => {
+    expect(guide).toContain('your browser opens a live connection of its own');
+    expect(guide).not.toContain('practically always green');
   });
 
-  it('says what the live-connections light does check, and where to see whether they work', () => {
-    const guide = read('docs/DEPLOYMENT.md');
-    expect(guide).toContain('does not tell you that a proxy in front lets live connections through');
+  it('names each thing WS can show, as the card words it', () => {
+    for (const shown of ['Working', 'Polling only', 'Down']) {
+      expect(guide).toContain(`**${shown}**`);
+      expect(card).toContain(`'${shown}'`);
+    }
   });
 });
 

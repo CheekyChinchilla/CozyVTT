@@ -54,6 +54,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A quick third tap or click where you ended a wall line starts a new line there.** It did nothing with a mouse, or on a touch screen zoomed out or with **Snap to grid** off. A double tap or double-click on a wall polygon of fewer than three corners no longer throws them away. See [The Wall Drawing Tool](docs/DM_GUIDE.md#the-wall-drawing-tool).
 
+- **The Admin Panel's Status card checks live connections from your browser.** Its **WS** light was green whenever the backend ran, even behind a proxy that refused live connections. Each part now says **Working** or **Down** in words, and **WS** can say **Polling only**. See [Health Check Endpoint](docs/DEPLOYMENT.md#health-check-endpoint).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

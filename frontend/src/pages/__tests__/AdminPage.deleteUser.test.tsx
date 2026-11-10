@@ -35,6 +35,8 @@ const adminService = vi.hoisted(() => ({
   getConfig: vi.fn(),
 }));
 vi.mock('@/services/admin.service', () => ({ adminService }));
+// The status card's check of live connections would open a real socket.
+vi.mock('@/services/liveConnectionCheck', () => ({ checkLiveConnection: () => () => undefined }));
 
 const api = vi.hoisted(() => ({
   listAssets: vi.fn(),

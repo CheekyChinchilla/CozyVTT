@@ -25,6 +25,8 @@ const adminService = vi.hoisted(() => ({
   getHealth: vi.fn(),
 }));
 vi.mock('@/services/admin.service', () => ({ adminService }));
+// The status card's check of live connections would open a real socket.
+vi.mock('@/services/liveConnectionCheck', () => ({ checkLiveConnection: () => () => undefined }));
 vi.mock('@/services/api', () => ({ api: {}, default: {} }));
 
 const GB = 1024 * 1024 * 1024;
