@@ -599,7 +599,7 @@ Your DM can still roll for you (and re-roll, or type a value in by hand) — han
 
 **D&D 5e players: advantage on initiative.** If something gives your character advantage on initiative, tick **Advantage on initiative** beside the other bonus box on the Combat tab. Initiative then rolls two d20s and keeps the higher, **Roll Initiative** shows it as `2d20kh1` plus your modifier, and the sheet says **With advantage** under Initiative.
 
-Advantage and disadvantage cancel out, as the rules say, and one d20 is rolled. The sheet does this for you when it shows a level of exhaustion or the **Poisoned** condition, which both give disadvantage on the roll, and says **Advantage cancelled** under Initiative. Only what your sheet records counts: a condition the DM marks on your token doesn't. Frightened gives disadvantage only while you can see what frightens you, which the sheet can't tell, so ask your DM to set your initiative by hand then. Neither **Roll mode**, in the roll menu or in the sheet's header, changes initiative.
+Advantage and disadvantage cancel out, as the rules say, and one d20 is rolled. The sheet does this for you when it shows a level of exhaustion or the **Poisoned** condition, which both give disadvantage on the roll, and says **Advantage cancelled** under Initiative. A sheet saved before exhaustion had levels may show exhaustion as the **Exhausted** condition instead, and that cancels it too. Only what your sheet records counts: a condition the DM marks on your token doesn't. Frightened gives disadvantage only while you can see what frightens you, which the sheet can't tell, so ask your DM to set your initiative by hand then. Neither **Roll mode**, in the roll menu or in the sheet's header, changes initiative.
 
 ---
 

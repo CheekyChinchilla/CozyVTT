@@ -198,13 +198,18 @@ export function dnd5eBackfilledInitiativeBonus(data: unknown): number | null {
 /**
  * Conditions a 5e sheet can record that give disadvantage on every ability
  * check, and so on initiative, which is a Dexterity check. Named in lower case,
- * as the sheet's condition boxes write them.
+ * as the sheet's condition boxes write them, and matched in any case.
+ *
+ * `exhausted` is no longer one of the boxes: the sheet records exhaustion as a
+ * level. A sheet saved before exhaustion had levels (before 1.3.0) can still
+ * hold it as a condition, with no level beside it, and that is at least one
+ * level.
  *
  * Only the ones that always apply. Frightened gives disadvantage only while the
  * source of the fear is in sight, which a sheet cannot tell, so it is left to
  * the DM, who can set anyone's initiative by hand.
  */
-export const DND5E_CHECK_DISADVANTAGE_CONDITIONS: readonly string[] = ['poisoned'];
+export const DND5E_CHECK_DISADVANTAGE_CONDITIONS: readonly string[] = ['poisoned', 'exhausted'];
 
 /**
  * Whether a 5e character rolls initiative with advantage:

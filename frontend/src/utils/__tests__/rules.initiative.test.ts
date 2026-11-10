@@ -237,6 +237,18 @@ describe('D&D 5e advantage on initiative', () => {
     expect(resolveCharacterInitiative('DND_5E', sheet)).toMatchObject({ expression: '1d20+2' });
   });
 
+  // A sheet saved before exhaustion had levels records it as a condition, with
+  // no level beside it. That is at least one level.
+  it.each([['exhausted'], ['Exhausted'], ['EXHAUSTED']])(
+    'is cancelled by the condition %s from a sheet saved before exhaustion had levels',
+    (name) => {
+      const sheet = dnd5e(14, undefined, { initiativeAdvantage: true, conditions: [name] });
+      expect('exhaustionLevel' in sheet).toBe(false);
+      expect(dnd5eInitiativeAdvantage(sheet)).toBe('cancelled');
+      expect(resolveCharacterInitiative('DND_5E', sheet)).toMatchObject({ expression: '1d20+2' });
+    },
+  );
+
   // Frightened gives disadvantage only while the source of the fear is in
   // sight, which the sheet cannot tell, so it is left to the DM.
   it('is not cancelled by a condition that does not always give disadvantage on the roll', () => {

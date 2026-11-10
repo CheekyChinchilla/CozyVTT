@@ -274,11 +274,13 @@ Advantage is one box, `initiativeAdvantage`: whatever grants it, the roll is the
 same, two d20s keeping the higher. `dnd5eInitiativeAdvantage` reads it. Advantage and disadvantage together cancel to one d20, so the box gives
 way when the sheet records something that always gives disadvantage on an ability
 check, as initiative is a Dexterity check: an `exhaustionLevel` of 1 or more, or a
-condition in `DND5E_CHECK_DISADVANTAGE_CONDITIONS` (`poisoned`). Frightened is not
+condition in `DND5E_CHECK_DISADVANTAGE_CONDITIONS` (`poisoned`, and `exhausted`,
+which a sheet saved before exhaustion had levels can still hold), matched in any
+letter case. Frightened is not
 in that list, since it applies only while the source of the fear is in sight. These
 give no disadvantage of their own: no roll from a sheet applies them, so they only
 cancel a box the player ticked. `keepInStep.test.ts` checks that the condition
-names are ones the sheet's condition boxes write.
+names are in the shared D&D 5e condition list (`DND5E_CONDITIONS`).
 
 ### Hit points: damage, healing and temporary hit points
 

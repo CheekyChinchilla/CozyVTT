@@ -78,6 +78,7 @@ describe('the D&D 5e read-only sheet', () => {
   it.each([
     ['a level of exhaustion', { exhaustionLevel: 2 }],
     ['the poisoned condition', { conditions: ['poisoned'] }],
+    ['exhaustion recorded as a condition before it had levels', { conditions: ['exhausted'] }],
   ])('says the advantage is cancelled by %s', (_label, overrides) => {
     openView({ initiativeAdvantage: true, ...overrides });
     expect(screen.getByText('Advantage cancelled')).toBeInTheDocument();
