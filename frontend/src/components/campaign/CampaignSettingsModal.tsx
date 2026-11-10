@@ -230,6 +230,10 @@ export default function CampaignSettingsModal({
     setMemberToRemove(membership);
   };
 
+  // TODO(ui): the confirmation hands the focus back to Remove, which is
+  // disabled in the same render, so the focus falls to the page and stays
+  // there once the row goes. It should land on the next member's row, or on
+  // Invite Player when none is left.
   const handleConfirmRemoveMember = async () => {
     if (!memberToRemove) return;
     setRemovingMemberId(memberToRemove.userId);
@@ -684,15 +688,22 @@ export default function CampaignSettingsModal({
                             themselves, the campaign's owner included; a
                             badge otherwise */}
                         {isDmViewer && !isDm ? (
+                          // Left enabled while busy: a browser moves the
+                          // focus off a control disabled under it, and a
+                          // change from the keyboard is sent at once. A
+                          // change made meanwhile is ignored, and the
+                          // controlled value puts the choice back.
                           <select
                             aria-label={`Role of ${memberName}`}
                             value={pendingRole ?? membership.role}
-                            disabled={pendingRole !== undefined || isRemoving}
+                            aria-busy={pendingRole !== undefined || undefined}
+                            aria-disabled={pendingRole !== undefined || isRemoving || undefined}
                             onChange={(e) => {
+                              if (pendingRole !== undefined || isRemoving) return;
                               const role = roleChoice(e.target.value);
                               if (role) void handleChangeRole(membership, role);
                             }}
-                            className="touch-target rounded-cozy border border-ink-muted/30 bg-paper/80 px-2 py-1 text-xs font-medium text-ink focus:outline-hidden focus:ring-2 focus:ring-brand disabled:opacity-60"
+                            className="touch-target rounded-cozy border border-ink-muted/30 bg-paper/80 px-2 py-1 text-xs font-medium text-ink focus:outline-hidden focus:ring-2 focus:ring-brand aria-disabled:opacity-60"
                           >
                             {ROLE_CHOICES.map((role) => (
                               <option key={role} value={role}>{CAMPAIGN_ROLE_LABEL[role]}</option>
