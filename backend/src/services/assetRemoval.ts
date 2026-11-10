@@ -16,8 +16,10 @@
 // documents stored before that was kept are read a few at a time as the
 // table plays, so this reads the campaign's other members' unread ones
 // first (readUnreadDocumentsBy, at most MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL
-// of them), and refuses while any stays unread: past the cap, or with a
-// file that could not be read.
+// of them), and refuses while any stays unread: past the cap, being read by
+// another request, or with a file that could not be read, which keeps it
+// the DM's until the file can be read. Once none is left the uses are
+// looked at again, since any request may have read one meanwhile.
 
 import type { AssetScope } from '@prisma/client';
 import { prisma } from '../config/database';
@@ -55,12 +57,11 @@ export async function mayRemoveAsset(
     where: { campaignId: asset.campaignId, userId: { not: userId } },
     select: { userId: true },
   });
-  const documents = await readUnreadDocumentsBy(others.map((m) => m.userId));
-  if (documents.stillUnread) return { allowed: false, reason: 'documents-unread' };
-  if (documents.read > 0) {
-    using = await usedByOthersThan(asset.id, userId);
-    if (using === 'others') return { allowed: false, reason: 'used-by-others' };
+  if ((await readUnreadDocumentsBy(others.map((m) => m.userId))) === 'some-unread') {
+    return { allowed: false, reason: 'documents-unread' };
   }
+  using = await usedByOthersThan(asset.id, userId);
+  if (using === 'others') return { allowed: false, reason: 'used-by-others' };
   if (using === 'character-template') return { allowed: false, reason: 'used-by-a-template' };
   return { allowed: true };
 }

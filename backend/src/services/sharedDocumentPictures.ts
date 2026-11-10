@@ -250,25 +250,21 @@ async function readDocuments(docs: ReadonlyArray<{ id: string; filePath: string 
   }));
 }
 
-/** What readUnreadDocumentsBy did: how many documents it tried to read, and whether any of the writers' is still not read. */
-export interface UnreadDocumentsRead {
-  read: number;
-  stillUnread: boolean;
-}
-
 /**
  * Read the documents `writerIds` uploaded that were stored before what
  * documents name was kept, DOCUMENTS_READ_PER_REQUEST at a time and at most
  * MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL in all, newest first, for a check
  * that must decide now whether one of them shows an asset. One whose file
- * could not be read before is tried again. Answers whether any of theirs is
- * still not read afterwards: one past the cap, one another request in this
- * process is reading, or one whose file could not be read. Once none is
- * left, it is two queries that find none.
+ * could not be read before is tried again, in its turn by age, so when the
+ * newest cap's worth all have files that cannot be read, the older ones are
+ * never reached. Answers whether any of theirs is still not read afterwards: one past
+ * the cap, one another request in this process is reading, or one whose
+ * file could not be read. Once none is left, it is two queries that find
+ * none.
  */
-export async function readUnreadDocumentsBy(writerIds: readonly string[], now = Date.now()): Promise<UnreadDocumentsRead> {
+export async function readUnreadDocumentsBy(writerIds: readonly string[], now = Date.now()): Promise<'all-read' | 'some-unread'> {
   const writers = [...new Set(writerIds)];
-  if (writers.length === 0) return { read: 0, stillUnread: false };
+  if (writers.length === 0) return 'all-read';
   const theirs: Prisma.AssetWhereInput = { type: 'DOCUMENT', picturesReadAt: null, uploadedById: { in: writers } };
   const tried = new Set<string>();
   while (tried.size < MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL) {
@@ -284,7 +280,7 @@ export async function readUnreadDocumentsBy(writerIds: readonly string[], now = 
     await readDocuments(batch.filter((doc) => !reading.has(doc.id)), now);
   }
   const left = await prisma.asset.findFirst({ where: theirs, select: { id: true } });
-  return { read: tried.size, stillUnread: left !== null };
+  return left ? 'some-unread' : 'all-read';
 }
 
 /** What the handout grant reads of a document. */
