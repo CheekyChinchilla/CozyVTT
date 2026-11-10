@@ -613,6 +613,26 @@ describe('reading one entry within limits', () => {
     expect(await fs.readFile(dest)).toEqual(Buffer.alloc(3000, 7));
   });
 
+  (process.platform === 'linux' ? it : it.skip)('closes the file it opened when its stream cannot be made', async () => {
+    const file = path.join(root, 'pic.zip');
+    await writeZip(file, [{ name: 'pic.png', data: Buffer.alloc(3000, 7) }]);
+    const entry = (await openArchiveFile(file, 100)).files[0];
+    const dest = path.join(root, 'pic.png');
+    const probe = await fs.open(path.join(root, 'probe'), 'w');
+    const proto = Object.getPrototypeOf(probe) as { createWriteStream(): NodeJS.WritableStream };
+    await probe.close();
+    const failing = jest.spyOn(proto, 'createWriteStream').mockImplementationOnce(() => {
+      throw new Error('no stream');
+    });
+    try {
+      await expect(writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(MB) })).rejects.toThrow('no stream');
+    } finally {
+      failing.mockRestore();
+    }
+
+    expect(handlesTo(dest)).toBe(0);
+  });
+
   // An entry stream that kept the archive open when stopped part-way would
   // let a few hundred refused pictures use up the process's files.
   (process.platform === 'linux' ? it : it.skip)('closes the archive file when it stops an entry', async () => {

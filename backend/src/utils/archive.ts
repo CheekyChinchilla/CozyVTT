@@ -78,7 +78,12 @@ const NAME_CANNOT_BE_WRITTEN = new Set(['EISDIR', 'ENOTDIR', 'EEXIST', 'ENAMETOO
  */
 async function openNewFile(destPath: string, flags: 'w' | 'wx'): Promise<WriteStream> {
   const handle = await fs.open(destPath, flags);
-  return handle.createWriteStream();
+  try {
+    return handle.createWriteStream();
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
+  }
 }
 
 /** Stop `out` and wait for its file to close, listening for any error closing it. */
