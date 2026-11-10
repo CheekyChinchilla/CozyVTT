@@ -11,6 +11,7 @@
  *   nor a proficiency bonus. The scores and skills are stored as typed.
  */
 
+import type { NpcStatBlock } from '@/types';
 import type { AbilityKey } from '@/utils/rules/dnd5e';
 
 export type CreatureModel = 'derived' | 'pf2e' | 'printed';
@@ -39,4 +40,14 @@ export function scoreLabel(gameSystem: string | null | undefined, ability: Abili
     if (ability === 'cha') return 'APP';
   }
   return ability.toUpperCase();
+}
+
+/**
+ * The stat block named for the game system it is edited in. The server reads
+ * that name to choose the bounds on its scores and skills
+ * (statBlockNumberBounds), so a Call of Cthulhu creature may hold STR 60.
+ * With no game system the stat block keeps the one it has.
+ */
+export function withGameSystem<T extends Partial<NpcStatBlock>>(statBlock: T, gameSystem: string | null | undefined): T {
+  return gameSystem ? { ...statBlock, gameSystem } : statBlock;
 }

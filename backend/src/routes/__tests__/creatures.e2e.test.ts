@@ -150,6 +150,28 @@ describe('Creature template routes', () => {
       expect(res.status).toBe(400);
     });
 
+    it('takes a Call of Cthulhu creature\'s STR 60 and a skill of 55', async () => {
+      const statBlock = {
+        ...commonerStatBlock,
+        gameSystem: 'CALL_OF_CTHULHU_7E',
+        abilities: { ...commonerStatBlock.abilities, str: 60 },
+        skills: { 'Lurk in Mud': 55 },
+      };
+      const res = await dmAgent
+        .post(`/api/campaigns/${campaignId}/creatures`)
+        .send({ name: 'Mire Lurker', gameSystem: 'CALL_OF_CTHULHU_7E', statBlock });
+
+      expect(res.status).toBe(201);
+      expect(res.body.statBlock.abilities.str).toBe(60);
+      expect(res.body.statBlock.skills).toEqual({ 'Lurk in Mud': 55 });
+
+      const dnd = await dmAgent
+        .post(`/api/campaigns/${campaignId}/creatures`)
+        .send({ name: 'Strong Commoner', statBlock: { ...statBlock, gameSystem: 'DND_5E', skills: undefined } });
+      expect(dnd.status).toBe(400);
+      expect(dnd.body.message).toBe('statBlock.abilities.str: Too big: expected number to be <=30');
+    });
+
     it('refuses a player who is not the DM', async () => {
       const res = await playerAgent
         .post(`/api/campaigns/${campaignId}/creatures`)

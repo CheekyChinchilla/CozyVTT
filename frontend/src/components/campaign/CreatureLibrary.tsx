@@ -27,7 +27,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
-import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
+import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from '@/constants/statBlockLimits';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
 import { TokenType, GameSystem, AssetType, TokenDisposition } from '@/types';
 import {
@@ -39,7 +39,7 @@ import {
 import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency';
 import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
 import PrintedSkillsEditor from './npc-stat-blocks/PrintedSkillsEditor';
-import { creatureModel, scoreLabel } from './npc-stat-blocks/creatureModel';
+import { creatureModel, scoreLabel, withGameSystem } from './npc-stat-blocks/creatureModel';
 import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
@@ -1057,6 +1057,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
   // Shadowrun 6e have no rating at all, and store what is typed.
   const model = creatureModel(gameSystem);
   const isPf2e = model === 'pf2e';
+  const { minScore, maxScore } = statBlockNumberBounds(gameSystem);
   const [level, setLevel] = useState<number | undefined>(sb?.level);
 
   // The stat block the proficiency editor sees: live ability scores and CR from
@@ -1103,8 +1104,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
     setFormError(null);
 
     // Merge the proficiency edits over the source before assembling, so the
-    // carry-forward below sees the current saves and skills.
-    const statBlock = buildCreatureStatBlock({ ...sb, ...proficiencyFields, level, ...(isPf2e ? { attributeModifiers } : {}) }, {
+    // carry-forward below sees the current saves and skills. The stat block is
+    // named for the campaign's game system, as the creature is.
+    const source = withGameSystem({ ...sb, ...proficiencyFields }, gameSystem);
+    const statBlock = buildCreatureStatBlock({ ...source, level, ...(isPf2e ? { attributeModifiers } : {}) }, {
       ac,
       hpMax,
       speed,
@@ -1331,6 +1334,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
                 <input
                   type="number"
                   aria-label={scoreLabel(gameSystem, ability)}
+                  min={minScore}
+                  max={maxScore}
                   value={workingStatBlock.abilities[ability]}
                   onChange={(e) => changeScore(ability, parseInt(e.target.value, 10) || 10)}
                   className="input-cozy w-full text-xs text-center"
@@ -1350,6 +1355,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
         {model === 'printed' ? (
           <PrintedSkillsEditor
             statBlock={workingStatBlock}
+            gameSystem={gameSystem}
             onChange={(updated) =>
               setProficiencyFields({
                 savingThrows: updated.savingThrows,

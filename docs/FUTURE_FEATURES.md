@@ -24,7 +24,7 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Creatures
 
-- `after the next release` **A Call of Cthulhu creature's characteristics stop at 30 and its skills at 50.** The stat block keeps D&D 5e's ability score bound and one skill bound for every system, so a characteristic over 30 is refused when saved, and the skills box stops at 50. It needs a Call of Cthulhu creature model, with its eight characteristics and percentile skills (`validators/statBlock.ts`).
+- `after the next release` **A Call of Cthulhu creature has no SIZ or EDU.** It keeps its characteristics in the stat block's six score slots, POW in Wisdom's and APP in Charisma's, so SIZ and EDU have nowhere to go, and its percentile skills sit in the same list as D&D 5e's skill bonuses. It needs a Call of Cthulhu creature model, with its eight characteristics and percentile skills (`validators/statBlock.ts`).
 
 ### Maps
 

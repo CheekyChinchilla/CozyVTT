@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TokenDisposition } from '@/types';
 import type { CreatureTemplate, GameSystem, NpcStatBlock } from '@/types';
@@ -29,12 +29,14 @@ const api = vi.hoisted(() => ({
   getSeedStatus: vi.fn(),
   listCreatureFavorites: vi.fn(),
   listCampaigns: vi.fn(),
+  createCreature: vi.fn(),
   storedAssetSrc: (s: string) => s,
 }));
 vi.mock('@/services/api', () => ({ api, default: api }));
 
 import CreatureLibrary from '../CreatureLibrary';
 import StatBlockEditor from '../npc-stat-blocks/StatBlockEditor';
+import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 
 const cultist: NpcStatBlock = {
   ac: 0, hpMax: 12, speed: '8', abilities: { str: 25, dex: 25, con: 25, int: 25, wis: 25, cha: 25 },
@@ -47,6 +49,8 @@ beforeEach(() => {
   api.getSeedStatus.mockResolvedValue({ srdCount: 0 });
   api.listCreatureFavorites.mockResolvedValue({ favoriteIds: [], creatures: [] });
   api.listCampaigns.mockResolvedValue({ campaigns: [] });
+  api.createCreature.mockReset();
+  api.createCreature.mockImplementation((_c: string, payload: object) => Promise.resolve({ id: 'new', ...payload }));
 });
 
 describe('the token editor\'s stat block', () => {
@@ -68,12 +72,12 @@ describe('the token editor\'s stat block', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ skills: { 'Spot Hidden': 40 } }));
   });
 
-  it('changes nothing else when a Call of Cthulhu score changes', async () => {
+  it('changes nothing else, bar naming the game system, when a Call of Cthulhu score changes', async () => {
     const onChange = vi.fn();
     render(<StatBlockEditor statBlock={cultist} onChange={onChange} gameSystem="CALL_OF_CTHULHU_7E" />);
     const str = screen.getByRole('spinbutton', { name: 'STR' });
     await userEvent.type(str, '0');
-    expect(onChange).toHaveBeenLastCalledWith({ ...cultist, abilities: { ...cultist.abilities, str: 250 } });
+    expect(onChange).toHaveBeenLastCalledWith({ ...cultist, gameSystem: 'CALL_OF_CTHULHU_7E', abilities: { ...cultist.abilities, str: 250 } });
   });
 });
 
@@ -109,5 +113,67 @@ describe('the Creature Library\'s list', () => {
     expect(await screen.findByText('Cultist')).toBeTruthy();
     expect(screen.queryByText('CR 1')).toBeNull();
     expect(screen.getByText('CR 1/4')).toBeTruthy();
+  });
+});
+
+// A Call of Cthulhu creature's characteristics run past D&D 5e's 30 and its
+// skills past the 50 every other system shares. The stat block names its game
+// system, which is what the server reads to choose the bounds.
+describe('Call of Cthulhu numbers', () => {
+  it('lets the Creature Library\'s form save STR 60 and a skill of 55', async () => {
+    campaign.gameSystem = 'CALL_OF_CTHULHU_7E';
+    render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Create Custom/ }));
+    await userEvent.type(screen.getByPlaceholderText('e.g. Goblin Boss'), 'Mire Lurker');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'STR' }), { target: { value: '60' } });
+    await userEvent.type(screen.getByRole('textbox', { name: 'New skill' }), 'Lurk in Mud{Enter}');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Lurk in Mud' }), { target: { value: '55' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Create Creature' }));
+
+    await waitFor(() => expect(api.createCreature).toHaveBeenCalled());
+    const statBlock = api.createCreature.mock.calls[0][1].statBlock;
+    expect(statBlock.skills).toEqual({ 'Lurk in Mud': 55 });
+    expect(statBlock.abilities.str).toBe(60);
+    expect(statBlock.gameSystem).toBe('CALL_OF_CTHULHU_7E');
+  });
+
+  it('offers the score boxes the bounds the server keeps, in each system', async () => {
+    campaign.gameSystem = 'CALL_OF_CTHULHU_7E';
+    const { unmount } = render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Create Custom/ }));
+    expect(screen.getByRole('spinbutton', { name: 'POW' }).getAttribute('max')).toBe(String(STAT_BLOCK_LIMITS.maxCallOfCthulhuCharacteristic));
+    unmount();
+
+    campaign.gameSystem = 'DND_5E';
+    render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Create Custom/ }));
+    expect(screen.getByRole('spinbutton', { name: 'WIS' }).getAttribute('max')).toBe('30');
+  });
+
+  it('lets the token editor keep a skill of 55 and names the stat block\'s game system', async () => {
+    const onChange = vi.fn();
+    render(<StatBlockEditor statBlock={cultist} onChange={onChange} gameSystem="CALL_OF_CTHULHU_7E" />);
+    await userEvent.click(screen.getByRole('button', { name: /^Skills/ }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Spot Hidden' }), { target: { value: '55' } });
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ gameSystem: 'CALL_OF_CTHULHU_7E', skills: { 'Spot Hidden': 55 } })
+    );
+    expect(screen.getByRole('spinbutton', { name: 'STR' }).getAttribute('max')).toBe(String(STAT_BLOCK_LIMITS.maxCallOfCthulhuCharacteristic));
+  });
+
+  it('stops a skill at the Call of Cthulhu bound', async () => {
+    const onChange = vi.fn();
+    render(<StatBlockEditor statBlock={cultist} onChange={onChange} gameSystem="CALL_OF_CTHULHU_7E" />);
+    await userEvent.click(screen.getByRole('button', { name: /^Skills/ }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Spot Hidden' }), { target: { value: '5000' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ skills: { 'Spot Hidden': STAT_BLOCK_LIMITS.maxCallOfCthulhuSkill } }));
+  });
+
+  it('keeps Shadowrun 6e\'s skills at the shared bound of 50', async () => {
+    const onChange = vi.fn();
+    render(<StatBlockEditor statBlock={cultist} onChange={onChange} gameSystem="SHADOWRUN_6E" />);
+    await userEvent.click(screen.getByRole('button', { name: /^Skills/ }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Spot Hidden' }), { target: { value: '55' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ skills: { 'Spot Hidden': 50 } }));
   });
 });
