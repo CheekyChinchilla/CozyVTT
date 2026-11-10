@@ -24,7 +24,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The initiative tracker shows you its up and down arrows while you move through a combatant's row with the keyboard.** They show over the combatant's picture. A screen reader now names the combatant on each row's dice button and bin. See [Managing Turn Order](docs/DM_GUIDE.md#managing-turn-order).
 
-- **Mapmaker adds the walls of the rooms you painted in one step when you save.** Each wall was a request of its own, counted against the limit everyone on one internet connection shares. A wall the map refuses no longer keeps the walls after it from being added. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+- **Mapmaker adds the walls of the rooms you painted in one step when you save.** A save with many rooms can no longer be stopped part-way by the limit on requests everyone on one internet connection shares. The walls the map takes are added, and Mapmaker says how many were not added and why. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
 ### Fixed
 
