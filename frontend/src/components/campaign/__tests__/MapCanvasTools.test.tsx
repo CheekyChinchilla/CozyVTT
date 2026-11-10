@@ -279,6 +279,24 @@ describe('the wall draw tool', () => {
     expect(sentOf('wall:add')).toHaveLength(1);
   });
 
+  // The third click of a quick three counted as one more second click, and
+  // ended a line already ended.
+  it('starts a new line at a quick third click on the corner a double-click ended on', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    click(px(100, 300));
+    click(px(200, 300));
+    click(px(200, 300));
+    click(px(200, 300));
+    click(px(400, 400));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
+      expect.objectContaining({ x1: 200, y1: 300, x2: 400, y2: 400 }),
+    ]);
+  });
+
   // A pointer event's own click count is always 0; the page counts them.
   it('takes a second click more than 4 pixels from the first as a click of its own', () => {
     render(<MapCanvas />);
@@ -393,6 +411,25 @@ describe('the polygon tool', () => {
 
     expect(lastWalls()).toEqual([
       WALL_A, WALL_B,
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  // A double-click on a shape of one or two corners closed it, and so threw
+  // it away, as Done, which waits for three, never does.
+  it('keeps a shape of under three corners through a double-click, adding no corner', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(500, 500));
+    click(px(700, 500));
+    click(px(700, 500));
+    click(px(700, 700));
+    click(px(700, 700));
+
+    expect(lastWalls().slice(2)).toEqual([
       { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
       { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
       { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
