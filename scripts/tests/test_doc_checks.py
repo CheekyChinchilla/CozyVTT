@@ -256,6 +256,26 @@ class WebsocketEvents(unittest.TestCase):
         self.assertEqual(we.who_may_send(inbound['drawing:remove']), "DM, or the drawing's player")
         self.assertEqual(we.who_may_send(inbound['drawing:other']), 'Any member')
 
+    def test_finds_the_body_of_a_helper_after_its_return_type(self):
+        signatures = {
+            'object literal': 'function guard(role: string): { ok: boolean } {',
+            'nested generic': 'async function guard(role: string): Promise<{ a: number; b: { c: string } }> {',
+            'multi-line': 'function guard(\n  role: string,\n  other: number,\n): {\n  ok: boolean;\n} {',
+            'union of literals': 'function guard(role: string): { ok: true } | { ok: false } {',
+            'arrow with object literal': 'const guard = (role: string): { ok: boolean } => {',
+            'arrow with generic': 'const guard = async (role: string): Promise<{ a: number }> => {',
+            'arrow over lines': 'const guard = (\n  role: string,\n): {\n  ok: boolean;\n} => {',
+            'plain': 'function guard(role: string): boolean {',
+        }
+        for label, signature in signatures.items():
+            with self.subTest(label):
+                we = self.events({'handlers/helper.ts': (
+                    "socket.on('token.nudge', async (data) => {\n  guard(socket.role);\n});\n"
+                    + signature + "\n  if (!canControlToken(role, token.controlledBy, userId)) return;\n}\n"
+                )})
+                inbound, _ = we.collect()
+                self.assertEqual(we.who_may_send(inbound['token.nudge']), "DM, or the token's player")
+
     def test_says_who_each_outbound_event_is_sent_to(self):
         we = self.events({
             'handlers/a.ts': '''
