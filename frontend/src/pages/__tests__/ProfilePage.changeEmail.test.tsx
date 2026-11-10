@@ -146,11 +146,17 @@ describe('Change Email on the Profile page', () => {
       return { message: 'User updated successfully', user: { ...account, email: stored } };
     });
     renderPage();
+    // One status region, on the page before anything is said, so a screen
+    // reader announces the text set in it when the form closes.
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('');
     await fillAndSubmit(NEW, 'My-current-password1!');
 
     expect(sent).toEqual([{ email: NEW, currentPassword: 'My-current-password1!' }]);
     expect(refreshUser).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(`Email changed to ${NEW}.`)).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status).toHaveTextContent(`Email changed to ${NEW}.`);
     expect(screen.getByText(NEW)).toBeInTheDocument();
     expect(screen.queryByText(OLD)).not.toBeInTheDocument();
     // The form has closed and its password is gone.
@@ -173,6 +179,7 @@ describe('Change Email on the Profile page', () => {
     expect(handleUnauthorized).not.toHaveBeenCalled();
     expect(refreshUser).not.toHaveBeenCalled();
     expect(screen.getByLabelText('New Email Address')).toHaveValue(NEW);
+    expect(screen.getByLabelText('New Email Address')).toHaveFocus();
     expect(screen.getByText(OLD)).toBeInTheDocument();
   });
 
@@ -181,6 +188,7 @@ describe('Change Email on the Profile page', () => {
     renderPage();
     await fillAndSubmit(OLD.toUpperCase(), 'My-current-password1!');
     expect(await screen.findByRole('alert')).toHaveTextContent('That is already your email address');
+    expect(screen.getByLabelText('New Email Address')).toHaveFocus();
 
     const form = emailForm();
     const input = within(form).getByLabelText('New Email Address');
@@ -196,6 +204,7 @@ describe('Change Email on the Profile page', () => {
     renderPage();
     await userEvent.click(screen.getByRole('button', { name: 'Change Email' }));
     expect(screen.getByText(`A notice that the address changed goes to ${OLD}.`)).toBeInTheDocument();
+    expect(screen.getByLabelText('New Email Address')).toHaveAccessibleDescription(`A notice that the address changed goes to ${OLD}.`);
   });
 
   it('promises no notice when the server does not send email', async () => {

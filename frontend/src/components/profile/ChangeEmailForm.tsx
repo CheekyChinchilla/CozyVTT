@@ -38,6 +38,7 @@ export default function ChangeEmailForm({ userId, currentEmail, sendsEmail, onCh
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const openButtonRef = useRef<HTMLButtonElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
   const returnFocus = useRef(false);
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const emailId = useId();
@@ -64,20 +65,23 @@ export default function ChangeEmailForm({ userId, currentEmail, sendsEmail, onCh
     setError('');
   };
 
+  // A refusal leaves the focus on the address, where the fix usually is; the
+  // submit button it was on is disabled while the request runs.
+  const refuse = (message: string) => {
+    setError(message);
+    emailInputRef.current?.focus();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     const address = newEmail.trim();
     if (!isValidEmail(address)) {
-      setError('Enter a valid email address');
+      refuse('Enter a valid email address');
       return;
     }
     if (address.toLowerCase() === currentEmail.toLowerCase()) {
-      setError('That is already your email address');
-      return;
-    }
-    if (!password) {
-      setError('Enter your current password');
+      refuse('That is already your email address');
       return;
     }
 
@@ -90,41 +94,21 @@ export default function ChangeEmailForm({ userId, currentEmail, sendsEmail, onCh
       if (successTimer.current) clearTimeout(successTimer.current);
       successTimer.current = setTimeout(() => setSuccess(''), 6000);
     } catch (err) {
-      setError(apiErrorMessage(err) || 'Failed to change email');
+      refuse(apiErrorMessage(err) || 'Failed to change email');
     } finally {
       setSaving(false);
     }
   };
 
-  if (!open) {
-    return (
-      <div className="mt-1 space-y-1">
-        {success && (
-          <p role="status" className="text-xs text-success-ink flex items-center gap-1">
-            <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" /> {success}
-          </p>
-        )}
-        <Button
-          ref={openButtonRef}
-          type="button"
-          variant="secondary"
-          className="text-sm py-1.5 px-3"
-          onClick={() => { setSuccess(''); setOpen(true); }}
-        >
-          Change Email
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="mt-2 space-y-3 max-w-sm" aria-describedby={noticeId} noValidate>
+  const formElement = (
+    <form onSubmit={handleSubmit} className="mt-2 space-y-3 max-w-sm" noValidate>
       {error && (
         <div role="alert" className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-sm text-danger-ink">{error}</div>
       )}
       <div>
         <label htmlFor={emailId} className="block text-xs font-medium text-stone-gray mb-1">New Email Address</label>
         <input
+          ref={emailInputRef}
           id={emailId}
           type="email"
           value={newEmail}
@@ -132,6 +116,7 @@ export default function ChangeEmailForm({ userId, currentEmail, sendsEmail, onCh
           maxLength={MAX_EMAIL_LENGTH}
           className="input-cozy w-full"
           autoComplete="email"
+          aria-describedby={noticeId}
           autoFocus
         />
       </div>
@@ -156,5 +141,27 @@ export default function ChangeEmailForm({ userId, currentEmail, sendsEmail, onCh
         </Button>
       </div>
     </form>
+  );
+
+  return (
+    <div className="mt-1 space-y-1">
+      {/* Always on the page, so a screen reader announces the text when it
+          is set, in the same moment the form closes. */}
+      <p role="status" className={success ? 'text-xs text-success-ink flex items-center gap-1' : 'sr-only'}>
+        {success && <CheckCircle className="w-3.5 h-3.5" aria-hidden="true" />}
+        {success}
+      </p>
+      {open ? formElement : (
+        <Button
+          ref={openButtonRef}
+          type="button"
+          variant="secondary"
+          className="text-sm py-1.5 px-3"
+          onClick={() => { setSuccess(''); setOpen(true); }}
+        >
+          Change Email
+        </Button>
+      )}
+    </div>
   );
 }
