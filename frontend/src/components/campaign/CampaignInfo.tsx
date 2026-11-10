@@ -4,7 +4,7 @@
 // ============================================
 
 import { useState } from 'react';
-import { campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
+import { CAMPAIGN_ROLE_LABEL, campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { Info, Users, Crown, Calendar, UserPlus, KeyRound} from 'lucide-react';
 import type { AccessRevoked, CampaignStatus } from '@/types';
@@ -166,10 +166,7 @@ export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
                   : 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40'
               }`}
             >
-              {/* TODO(ui): prints the stored role (PLAYER, SPECTATOR); should be
-                  CAMPAIGN_ROLE_LABEL[userRole] (Player, Spectator), as the
-                  Members tab's badges and Role pickers name it. */}
-              {userRole}
+              {CAMPAIGN_ROLE_LABEL[userRole]}
             </div>
           </div>
           <LeaveCampaign campaign={campaign} userRole={userRole} onLeft={onLeft} />
