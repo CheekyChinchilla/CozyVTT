@@ -727,7 +727,7 @@ export default function CampaignSettingsModal({
                             onClick={() => setMemberToPromote(membership)}
                             disabled={promotingMemberId === membership.userId}
                             title={`Make ${membership.user?.displayName ?? 'this player'} the DM`}
-                            className="p-1.5 rounded-lg text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
+                            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
                             aria-label={`Make ${membership.user?.displayName} the Dungeon Master`}
                           >
                             {promotingMemberId === membership.userId ? (
@@ -744,7 +744,7 @@ export default function CampaignSettingsModal({
                             type="button"
                             onClick={() => handleRemoveMemberClick(membership)}
                             disabled={isRemoving}
-                            className="p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                            className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                             aria-label={`Remove ${membership.user?.displayName} from campaign`}
                           >
                             {isRemoving ? (
@@ -781,7 +781,7 @@ export default function CampaignSettingsModal({
                         type="button"
                         onClick={() => handleWithdrawInvitation(invitation)}
                         disabled={withdrawingId === invitation.id}
-                        className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                        className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                         aria-label={`Withdraw the invitation to ${invitation.user.displayName}`}
                         title="Withdraw the invitation"
                       >

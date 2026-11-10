@@ -412,4 +412,21 @@ describe('the Role picker under Members', () => {
     expect(picker('Pia').value).toBe(CampaignRole.PLAYER);
     expect(picker('Pia')).not.toBeDisabled();
   });
+
+  // The crown and the remove button were about 28 pixels square.
+  it("gives every control on a member's row a finger's size on a touch screen", async () => {
+    invitationsApi.listCampaignInvitations.mockResolvedValue({
+      invitations: [{ id: 'inv-1', userId: 'u-gwen', createdAt: '2026-10-18T00:00:00.000Z', expiresAt: null, user: { displayName: 'Gwen' } }],
+    });
+    current = table();
+    openMembers();
+
+    const controls = [
+      picker('Pia'),
+      screen.getByRole('button', { name: 'Make Pia the Dungeon Master' }),
+      screen.getByRole('button', { name: 'Remove Pia from campaign' }),
+      await screen.findByRole('button', { name: 'Withdraw the invitation to Gwen' }),
+    ];
+    for (const control of controls) expect(control.className.split(/\s+/)).toContain('touch-target');
+  });
 });
