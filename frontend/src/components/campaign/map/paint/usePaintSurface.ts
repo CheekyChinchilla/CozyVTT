@@ -314,6 +314,10 @@ const releaseLifted = (canvas: HTMLCanvasElement, clipboard: HTMLCanvasElement |
 /** Paint on `s` not saved. */
 const paintUnsaved = (s: Surface | null) => s !== null && s.revision !== s.saved;
 
+// TODO(maps): a polygon being clicked out with three corners or more, and a
+// curve waiting to be bent, count for nothing here, so a reload or leaving
+// the map asks nothing and drops them, and no draft keeps them. They should
+// count as paint not saved while they could be painted, as a moved selection does.
 /** Paint on `s` not saved, or `selection` moved or pasted on its map. */
 const unsavedWith = (s: Surface | null, selection: Selection | null) =>
   paintUnsaved(s) || (s !== null && selection?.mapId === s.mapId && selectionPending(selection));
