@@ -2309,6 +2309,13 @@ router.post('/:id/walls/batch', campaignDM, async (req: AuthenticatedRequest, re
     const { before, after, added, skipped } = outcome.done;
     if (added.length > 0) {
       // One event for the whole batch, the one a replaced list sends.
+      // TODO(play): this whole list is sent after the lock is released, as
+      // every wall write's event is, so a door toggle or another device's add
+      // committed in between can reach a page first and then be overwritten
+      // there by this older list until a reload. Per-wall adds did not depend
+      // on order; a full list does. Right: build and send the event under the
+      // lock, or give the stored list a version a page can compare and refuse
+      // an older list by.
       await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, before, after));
       resendSightAfterChange(getSocketInstance(), campaignId, id);
     }
