@@ -50,6 +50,10 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Mapmaker's notice of room walls not added after a save reads correctly.** When none of them were added it had a capital letter in the middle of its sentence, and a reason ending in a full stop was followed by a second one.
 
+- **A turn the server refuses shows the token facing the way the server holds it, another member's turn included.** If someone else turned the token while your turn waited, the refusal showed the facing from before your turn until something on the map changed again. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
+
+- **A quick third tap or click where you ended a wall line starts a new line there.** It did nothing with a mouse, or on a touch screen zoomed out or with **Snap to grid** off. A double tap or double-click on a wall polygon of fewer than three corners no longer throws them away. See [The Wall Drawing Tool](docs/DM_GUIDE.md#the-wall-drawing-tool).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

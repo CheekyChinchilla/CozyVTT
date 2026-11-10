@@ -64,6 +64,40 @@ describe('createTokenTurns', () => {
     expect(refused).toHaveBeenCalledTimes(1);
   });
 
+  // Another member's turn reaches this page in the map sent again. A refusal
+  // put back the facing from before this page's first turn, which the server
+  // no longer stored.
+  it("puts back another member's facing, heard while this page's turns waited, when they are refused", async () => {
+    const { send, calls } = server();
+    const show = vi.fn();
+    const refused = vi.fn();
+    const turns = createTokenTurns({ send, show, refused });
+
+    turns.turn(goblin, 45, 0);
+    turns.turn(goblin, 90, 45);
+    turns.heard(goblin, 270);
+    calls[0].reject(new Error('paused'));
+    await flush();
+    calls[1].reject(new Error('paused'));
+    await flush();
+
+    expect(show).toHaveBeenLastCalledWith(goblin, 270);
+    expect(refused).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps no facing heard for a token with no turn waiting', async () => {
+    const { send, calls } = server();
+    const show = vi.fn();
+    const turns = createTokenTurns({ send, show, refused: vi.fn() });
+
+    turns.heard(goblin, 270);
+    turns.turn(goblin, 45, 90);
+    calls[0].reject(new Error('paused'));
+    await flush();
+
+    expect(show).toHaveBeenLastCalledWith(goblin, 90);
+  });
+
   it('takes the facing on screen as stored for a token with no turn waiting', async () => {
     const { send, calls } = server();
     const show = vi.fn();

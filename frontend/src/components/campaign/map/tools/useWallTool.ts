@@ -397,20 +397,33 @@ export function useWallTool({
   };
 
   /**
-   * Whether a second click or tap ends what is being drawn. A finger's or a
-   * pen's taps count as one within a fingertip's room (DOUBLE_TAP_PX). With
-   * Snap to grid, where a square on screen is that wide or wider, their
-   * second must land on the corner the first placed, so two quick taps on
-   * neighbouring corners add the wall between them; two taps on one corner
-   * would add a wall of no length. Where a square is narrower, as at a low
-   * zoom, a fingertip cannot pick out a corner, and the second tap within the
-   * room ends the line. A mouse's double-click ends it as it always has.
+   * The click count of the last press that ended what was being drawn as
+   * the second of a double tap or double-click. The quick presses after it
+   * count from one again, so a third starts a new line, or a new polygon,
+   * where it lands, and a fourth is that one's second.
+   */
+  const doubleTapAtRef = useRef(0);
+
+  /**
+   * Whether a second click or tap ends what is being drawn; one that does is
+   * used up (doubleTapAtRef). A finger's or a pen's taps count as one within
+   * a fingertip's room (DOUBLE_TAP_PX). With Snap to grid, where a square on
+   * screen is that wide or wider, their second must land on the corner the
+   * first placed, so two quick taps on neighbouring corners add the wall
+   * between them; two taps on one corner would add a wall of no length.
+   * Where a square is narrower, as at a low zoom, a fingertip cannot pick out
+   * a corner, and the second tap within the room ends the line. A mouse's
+   * double-click ends it as it always has.
    */
   const secondPressEnds = (e: PointerAt['e'], snapped: { x: number; y: number }, last: { x: number; y: number } | undefined) => {
-    if (e.detail < 2) return false;
-    if (e.kind === 'mouse' || !snapToGrid) return true;
-    if (currentMap && currentMap.gridSize * mapControls.zoom < DOUBLE_TAP_PX) return true;
-    return last !== undefined && last.x === snapped.x && last.y === snapped.y;
+    // A count that started again is a new run of presses.
+    if (e.detail <= doubleTapAtRef.current) doubleTapAtRef.current = 0;
+    if (e.detail - doubleTapAtRef.current < 2) return false;
+    const ends = e.kind === 'mouse' || !snapToGrid
+      || (currentMap !== null && currentMap.gridSize * mapControls.zoom < DOUBLE_TAP_PX)
+      || (last !== undefined && last.x === snapped.x && last.y === snapped.y);
+    if (ends) doubleTapAtRef.current = e.detail;
+    return ends;
   };
 
   /** The walls with those selected carried by (dx, dy). */
@@ -501,7 +514,9 @@ export function useWallTool({
         const snapped = snapPoint(mapPx);
 
         if (secondPressEnds(e, snapped, polygonPoints[polygonPoints.length - 1])) {
-          closePolygon();
+          // Closed once it has three corners, as Done waits for; before that
+          // the corners placed stay, and the double tap adds none.
+          if (polygonPoints.length >= 3) closePolygon();
           return true;
         }
 

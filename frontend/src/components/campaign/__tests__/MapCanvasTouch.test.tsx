@@ -2240,6 +2240,103 @@ describe('one finger', () => {
     expect(sentOf('wall:add')).toHaveLength(3);
   });
 
+  // A quick third tap, meant to start a new line from the corner a double
+  // tap ended on, counted as one more second tap and ended a line already
+  // ended.
+  it('starts a new line at a quick third tap where a square is smaller than a fingertip', () => {
+    h.set({ currentMap: mapWith({ gridSize: 10 }) });
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(206, 304));
+    tap(4, px(203, 302));
+    tap(5, px(300, 300));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
+      expect.objectContaining({ x1: 200, y1: 300, x2: 300, y2: 300 }),
+    ]);
+  });
+
+  it('with Snap to grid off, starts a new line at a quick third tap', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    fireEvent.click(screen.getByLabelText('Snap wall points to grid'));
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(205, 303));
+    tap(4, px(202, 301));
+    tap(5, px(300, 300));
+
+    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
+      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
+      expect.objectContaining({ x1: 202, y1: 301, x2: 300, y2: 300 }),
+    ]);
+  });
+
+  it('counts the taps after a double tap from one again, so a fourth ends the line the third began', () => {
+    h.set({ currentMap: mapWith({ gridSize: 10 }) });
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(204, 300));
+    tap(4, px(202, 302));
+    tap(5, px(204, 304));
+    tap(6, px(400, 400));
+
+    expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  // Two quick taps on neighbouring corners at a low zoom, or a fingertip
+  // apart with Snap to grid off, are a double tap, which closed a polygon of
+  // one or two corners and so threw them away.
+  it.each([
+    ['where a square is smaller than a fingertip', { gridSize: 10 }, false],
+    ['with Snap to grid off', {}, true],
+  ])('keeps a polygon of under three corners through a double tap %s', (_where, map, snapOff) => {
+    h.set({ currentMap: mapWith(map) });
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+    if (snapOff) fireEvent.click(screen.getByLabelText('Snap wall points to grid'));
+
+    tap(1, px(100, 100));
+    tap(2, px(108, 104));
+    tap(3, px(300, 100));
+    tap(4, px(300, 300));
+    tap(5, px(306, 304));
+
+    const replaces = sentOf('walls:replace') as Array<{ segments: WallSegment[] }>;
+    expect(replaces.map((r) => r.segments.map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2]))).toEqual([
+      [[100, 100, 300, 100], [300, 100, 300, 300], [300, 300, 100, 100]],
+    ]);
+  });
+
+  it('starts a new polygon at a quick third tap after a double tap closed one', () => {
+    h.set({ currentMap: mapWith({ gridSize: 10 }) });
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    tap(1, px(100, 100));
+    tap(2, px(300, 100));
+    tap(3, px(300, 300));
+    tap(4, px(304, 302));
+    tap(5, px(302, 301));
+    tap(6, px(500, 300));
+    tap(7, px(500, 500));
+    tap(8, px(504, 502));
+
+    const replaces = sentOf('walls:replace') as Array<{ segments: WallSegment[] }>;
+    expect(replaces).toHaveLength(2);
+    expect(replaces[1].segments.slice(3).map(({ x1, y1, x2, y2 }) => [x1, y1, x2, y2])).toEqual([
+      [300, 300, 500, 300], [500, 300, 500, 500], [500, 500, 300, 300],
+    ]);
+  });
+
   it('leaves a mouse its 4 pixels: two clicks 12 pixels apart do not end the line', () => {
     render(<MapCanvas />);
     wallTool('Wall draw mode');

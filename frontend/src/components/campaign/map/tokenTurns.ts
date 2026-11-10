@@ -3,7 +3,8 @@
 // of a token's turns waits for the server, a newer one waits behind it, and
 // only the newest, so the server stores the facing pressed last. A refused
 // turn puts back the facing the server last stored, once no newer turn of
-// that token is still to go.
+// that token is still to go: this page's own, or another member's that the
+// server sent while this page's turn waited.
 // ============================================
 
 /** The token a turn is for, on the map it was made on. */
@@ -28,11 +29,18 @@ export interface TokenTurns {
    * the stored one when none of its turns is waiting.
    */
   turn(target: TurnTarget, rotation: number, shown: number): void;
+  /**
+   * The server sent a token's facing as it stores it (the map sent again
+   * after a change, another member's turn included). Kept for a refusal to
+   * put back while a turn of that token waits; otherwise there is nothing
+   * to keep, since the screen already shows it.
+   */
+  heard(target: Pick<TurnTarget, 'mapId' | 'tokenId'>, rotation: number): void;
 }
 
 interface Pending {
   target: TurnTarget;
-  /** The facing the server last stored. */
+  /** The facing the server last stored, by this page's replies or as it sent since. */
   stored: number;
   /** A newer facing to send once the one on its way is answered. */
   next: number | null;
@@ -40,7 +48,7 @@ interface Pending {
 
 export function createTokenTurns({ send, show, refused }: TokenTurnsOptions): TokenTurns {
   const pending = new Map<string, Pending>();
-  const keyOf = (target: TurnTarget) => `${target.mapId}:${target.tokenId}`;
+  const keyOf = (target: Pick<TurnTarget, 'mapId' | 'tokenId'>) => `${target.mapId}:${target.tokenId}`;
 
   const sendNow = (entry: Pending, rotation: number) => {
     send(entry.target, rotation).then(
@@ -77,6 +85,10 @@ export function createTokenTurns({ send, show, refused }: TokenTurnsOptions): To
       const fresh: Pending = { target, stored: shown, next: null };
       pending.set(key, fresh);
       sendNow(fresh, rotation);
+    },
+    heard(target, rotation) {
+      const entry = pending.get(keyOf(target));
+      if (entry) entry.stored = rotation;
     },
   };
 }
