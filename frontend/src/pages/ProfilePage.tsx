@@ -38,14 +38,6 @@ import { apiErrorMessage } from '@/utils/errors';
 import { isStrongPassword } from '@/utils/validation';
 import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
-// Legacy localStorage key — superseded by backend-persisted preferences.
-// We delete it on first authenticated load so it doesn't linger on devices.
-const LEGACY_PREFS_KEY = 'cozyvtt_prefs';
-
-function clearLegacyPrefs() {
-  try { localStorage.removeItem(LEGACY_PREFS_KEY); } catch { /* noop */ }
-}
-
 /** How long a dragged custom colour has to stay put before it is saved. */
 const PREFS_SAVE_DELAY_MS = 400;
 
@@ -574,7 +566,6 @@ export default function ProfilePage() {
       try {
         const fetched = await api.getUserPreferences(user.id);
         if (cancelled) return;
-        clearLegacyPrefs();
         prefsRef.current = fetched ?? {};
         setPrefs(prefsRef.current);
       } catch (err) {
