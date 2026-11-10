@@ -673,8 +673,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           is in the flow above this row instead, and the portrait is above the
           name. */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:pr-64">
-        {/* Token Image, as wide as the portrait so its caption wraps under it
-            on a phone. */}
+        {/* Token Image, as wide as the portrait so its caption wraps under
+            it. */}
         {allowTokenPicture && (
         <div className="shrink-0 relative w-24">
           <label htmlFor="token-upload" className="cursor-pointer group">

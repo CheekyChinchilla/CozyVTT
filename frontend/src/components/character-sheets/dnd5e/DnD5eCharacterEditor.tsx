@@ -1299,7 +1299,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             buttons. */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start min-w-0">
           {/* Token Image Upload. As wide as the portrait, so its caption
-              wraps under it on a phone. */}
+              wraps under it. */}
           {allowTokenPicture && (
           <div className="shrink-0 relative group w-24 sm:w-40">
             <input

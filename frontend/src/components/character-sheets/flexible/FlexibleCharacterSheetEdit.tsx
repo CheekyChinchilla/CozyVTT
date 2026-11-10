@@ -210,7 +210,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-moss-green/20 mb-6">
         <div className="flex items-center gap-4 min-w-0">
           {/* Token Image Upload, as wide as the portrait so its caption wraps
-              under it on a phone */}
+              under it */}
           {allowTokenPicture && (
           <div className="relative group w-16 shrink-0">
             <input
