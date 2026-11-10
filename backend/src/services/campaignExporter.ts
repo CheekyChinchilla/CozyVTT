@@ -432,7 +432,6 @@ function atmosphereTrackIds(vibeSettings: Parameters<typeof readJsonObject>[0]):
   return ids;
 }
 
-/** Map MIME type to file extension. */
 /**
  * The name an asset's file has in the archive: its id, by which an import
  * finds it, and the extension of its original name, or of its format when
@@ -445,6 +444,7 @@ export function assetEntryName(id: string, originalName: string, mimeType: strin
   return `assets/${id}${ext.length > 0 && ext.length <= MAX_EXTENSION_LENGTH ? ext : mimeToExt(mimeType)}`;
 }
 
+/** Map MIME type to file extension. */
 function mimeToExt(mime: string): string {
   const map: Record<string, string> = {
     'image/png': '.png',
