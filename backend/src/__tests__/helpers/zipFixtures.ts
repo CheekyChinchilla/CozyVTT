@@ -111,6 +111,43 @@ export function claimUnpackedSize(zipPath: string, entryName: string, claimed: n
   fs.writeFileSync(zipPath, bytes);
 }
 
+/** Rewrite what the archive's central directory says an entry's packed bytes take. */
+export function claimPackedSize(zipPath: string, entryName: string, claimed: number): void {
+  const bytes = fs.readFileSync(zipPath);
+  bytes.writeUInt32LE(claimed, directoryRecordOf(bytes, entryName, zipPath) + 20);
+  fs.writeFileSync(zipPath, bytes);
+}
+
+/**
+ * Rewrite the ZIP64 field of an entry's central directory record, which an
+ * archive written with `zip64` has: the size of its packed bytes, or where
+ * its local header starts. Either can claim more than any file holds.
+ */
+export function claimZip64Field(zipPath: string, entryName: string, field: 'compressedSize' | 'localHeaderOffset', claimed: bigint): void {
+  const bytes = fs.readFileSync(zipPath);
+  const record = directoryRecordOf(bytes, entryName, zipPath);
+  const extraStart = record + 46 + bytes.readUInt16LE(record + 28);
+  const extraEnd = extraStart + bytes.readUInt16LE(record + 30);
+  for (let at = extraStart; at + 4 <= extraEnd; at += 4 + bytes.readUInt16LE(at + 2)) {
+    if (bytes.readUInt16LE(at) !== 0x0001) continue;
+    // Its fields, in order: the unpacked size, the packed size, the local header's offset.
+    bytes.writeBigUInt64LE(claimed, at + (field === 'compressedSize' ? 12 : 20));
+    fs.writeFileSync(zipPath, bytes);
+    return;
+  }
+  throw new Error(`${entryName} has no ZIP64 field in ${zipPath}`);
+}
+
+/**
+ * Rewrite the length of the extra field in an entry's local header, which
+ * moves where its packed bytes are read from.
+ */
+export function claimLocalExtraLength(zipPath: string, entryName: string, claimed: number): void {
+  const bytes = fs.readFileSync(zipPath);
+  bytes.writeUInt16LE(claimed, localHeaderOf(bytes, entryName, zipPath) + 28);
+  fs.writeFileSync(zipPath, bytes);
+}
+
 /**
  * Rewrite an entry's general purpose flags or its compression method, in its
  * local header and in the directory: flag 0x1 marks it encrypted.

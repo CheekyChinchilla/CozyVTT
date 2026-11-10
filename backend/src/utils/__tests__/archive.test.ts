@@ -21,6 +21,9 @@ import {
   zipBuffer,
   repeatedBytes,
   claimUnpackedSize,
+  claimPackedSize,
+  claimZip64Field,
+  claimLocalExtraLength,
   renameEntry,
   writeManyEntryZip,
   writeZip64Claiming,
@@ -472,6 +475,31 @@ describe('openArchiveFile', () => {
     // The spy sees the entries read, so a refusal it saw none of read none.
     expect(read).toHaveBeenCalled();
   });
+
+  // A ZIP64 field can claim up to 2^64 bytes. Read as it claimed, such an
+  // offset or size was a range error from the file system, which the import
+  // answered as the server's own failure.
+  it.each([
+    ['whose local header the directory places far past the end of the file', 'localHeaderOffset' as const],
+    ['whose packed bytes the directory claims run far past the end of the file', 'compressedSize' as const],
+  ])('refuses an entry %s, saying it is damaged', async (_label, field) => {
+    const file = path.join(root, 'zip64.zip');
+    await writeZip(file, [{ name: 'a.json', data: '{"a":1}' }], { zip64: true });
+    claimZip64Field(file, 'a.json', field, 1n << 60n);
+
+    const refusal = openArchiveFile(file, 10);
+    await expect(refusal).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
+  });
+
+  it('refuses a stored entry whose packed bytes the directory claims run past the end of the file', async () => {
+    const file = path.join(root, 'stored.zip');
+    await writeZip(file, [{ name: 'a.json', data: '{"a":1}', store: true }]);
+    // Shorter than the file, longer than what follows the entry's header.
+    claimPackedSize(file, 'a.json', (await fs.stat(file)).size - 20);
+
+    await expect(openArchiveFile(file, 10)).rejects.toThrow('The file is not a ZIP archive, or it is damaged.');
+  });
 });
 
 describe('reading one entry within limits', () => {
@@ -523,6 +551,17 @@ describe('reading one entry within limits', () => {
     const dest = path.join(root, 'out.png');
     await expect(writeArchiveEntry(file, entry, dest, { maxEntryBytes: MB, total: new UnpackedTotal(100 * MB) })).rejects.toThrow(ArchiveLimitError);
     await expect(fs.access(dest)).rejects.toThrow();
+  });
+
+  it('refuses an entry whose local header puts its packed bytes past the end of the file', async () => {
+    const file = path.join(root, 'moved.zip');
+    await writeZip(file, [{ name: 'a.json', data: '{"a":1}', store: true }]);
+    const entry = (await openArchiveFile(file, 100)).files[0];
+    claimLocalExtraLength(file, 'a.json', 1000);
+
+    const refusal = readArchiveEntry(file, entry, { maxEntryBytes: MB, total: new UnpackedTotal(MB) });
+    await expect(refusal).rejects.toThrow('The archive is damaged: a.json cannot be read.');
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveRefusedError);
   });
 
   it('leaves no file behind when an entry is refused before it is unpacked', async () => {

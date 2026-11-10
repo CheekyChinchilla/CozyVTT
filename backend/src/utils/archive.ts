@@ -245,8 +245,17 @@ async function withArchive<T>(filePath: string, read: (zip: ZipFile) => Promise<
   }
 }
 
-/** One directory record as an ArchiveEntry, keeping none of its buffers. */
-function entryOf(record: DirectoryRecord): ArchiveEntry {
+/**
+ * One directory record as an ArchiveEntry, keeping none of its buffers.
+ * A record whose entry cannot lie inside the archive's `fileSize` bytes is
+ * refused: a ZIP64 field can claim an offset or size near 2^64, which reading
+ * the file there would fail on, and a stored entry claiming more bytes than
+ * follow its header would be read on into the rest of the archive.
+ */
+function entryOf(record: DirectoryRecord, fileSize: number): ArchiveEntry {
+  if (record.relativeOffsetOfLocalHeader + 30 + record.compressedSize > fileSize) {
+    throw new ArchiveRefusedError(NOT_A_ZIP);
+  }
   const name = record.fileNameRaw.toString('utf8');
   return {
     path: name,
@@ -280,8 +289,9 @@ export async function openArchiveFile(filePath: string, maxEntries: number): Pro
     }
     const files: ArchiveEntry[] = [];
     try {
-      for await (const record of zip.eachEntry()) files.push(entryOf(record));
-    } catch {
+      for await (const record of zip.eachEntry()) files.push(entryOf(record, zip.fileSize));
+    } catch (error) {
+      if (error instanceof ArchiveRefusedError) throw error;
       // The end of the archive was found but its directory cannot be read.
       throw new ArchiveRefusedError(NOT_A_ZIP);
     }
@@ -345,11 +355,14 @@ async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: Ent
   let start: number;
   try {
     const header = await readAt(handle, entry.offsetToLocalFileHeader, 30);
-    if (header.length < 30 || header.readUInt32LE(0) !== LOCAL_FILE_HEADER) {
+    const damaged = header.length < 30 || header.readUInt32LE(0) !== LOCAL_FILE_HEADER;
+    start = damaged ? 0 : entry.offsetToLocalFileHeader + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
+    // The local header's name and extra field can push the packed bytes past
+    // the end, which the directory alone does not show.
+    if (damaged || start + entry.compressedSize > (await handle.stat()).size) {
       destination.destroy();
       throw new ArchiveRefusedError(`The archive is damaged: ${entry.path} cannot be read.`);
     }
-    start = entry.offsetToLocalFileHeader + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
   } finally {
     await handle.close();
   }

@@ -68,6 +68,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A damaged or hand-made backup no longer stops the server when you restore it.** A backup holding a file name the server cannot write, such as a file and a folder with the same name, ended the backend. The restore now refuses it with the reason and changes nothing. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
 
+- **A damaged campaign archive is refused with a plain message.** An archive whose directory placed a file far past its end was answered as a problem with the server, with the details in its log. The import window now says the file is not a ZIP archive, or is damaged.
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4
