@@ -286,14 +286,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   product decision, since it would affect legitimate users, so it was left
   alone when notes were added.
 
-- **A lit map is black for a player in the spirit realm.** Dynamic lighting draws
-  vision from the player's own tokens, and a player in the spirit realm receives
-  none unless they control a spirit-layer token, so the map renders fully dark
-  with no explanation. Documented in `docs/DM_GUIDE.md` under "The Spirit Layer
-  and dynamic lighting", and not fixed. A spirit-realm player with no spirit
-  token arguably wants either their own token back as a vision source, or a
-  message saying why the map is empty.
-
 - **CI holds back only pull requests into `main`.** `.github/workflows/ci.yml`
   runs on every push to `dev` and `main` and on pull requests into them. A
   ruleset in the repository's settings keeps a pull request into `main` from
