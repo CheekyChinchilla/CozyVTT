@@ -35,7 +35,6 @@ import { ASSET_LIMITS } from '../validators/assetLimits';
 import { cutText } from '../utils/cutText';
 import { removeNulCharacters } from '../validators/nulCharacter';
 import fs from 'fs';
-import type { File as ArchiveEntry } from 'unzipper';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { fileTypeFromFile } from 'file-type';
@@ -67,6 +66,7 @@ import {
   writeArchiveEntry,
   ArchiveLimitError,
   ArchiveRefusedError,
+  type ArchiveEntry,
   UnpackedTotal,
 } from '../utils/archive';
 import { getFileSizeLimit, getTempDirectory, isAcceptedContent, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS, uploadsDirectorySetting } from '../utils/fileUtils';

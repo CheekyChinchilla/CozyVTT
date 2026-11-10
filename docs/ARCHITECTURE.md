@@ -189,7 +189,7 @@ src/
 │   │                     readers only (see Decoding pictures)
 │   ├── thumbnails.ts     Map and token thumbnails, through sharpInput.ts
 │   ├── zipWriter.ts      Writes a backup or a campaign export ZIP, streamed, over yazl
-│   ├── archive.ts        Reads a backup or campaign archive safely (paths, entry and size caps)
+│   ├── archive.ts        Reads a backup or campaign archive safely over yauzl (paths, entry and size caps)
 │   ├── mapTokens.ts      withMapsLocked: a map's JSON columns written under its advisory lock
 │   ├── tokenMask.ts      What a player is sent of a token (shared)
 │   ├── drawingRules.ts   Who may draw and erase, and who is sent a drawing (shared)

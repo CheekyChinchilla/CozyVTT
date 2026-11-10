@@ -17,12 +17,16 @@ declare module 'yazl' {
     compressionLevel?: number;
     /** Give the entry ZIP64 fields whatever its size, as one past 4 GB gets them. */
     forceZip64Format?: boolean;
+    /** The entry's comment in the central directory; none if not given. */
+    fileComment?: string | Buffer;
   }
 
   export class ZipFile extends EventEmitter<{ error: [Error] }> {
     /** The archive's bytes, as they are written. */
     readonly outputStream: Readable;
     addBuffer(buffer: Buffer, metadataPath: string, options?: EntryOptions): void;
+    /** A folder entry, its name ending in a slash. */
+    addEmptyDirectory(metadataPath: string, options?: Pick<EntryOptions, 'mtime' | 'mode'>): void;
     /** The entry's content is read from `readStream` when its turn comes. */
     addReadStream(readStream: Readable, metadataPath: string, options?: EntryOptions): void;
     /**
@@ -36,8 +40,9 @@ declare module 'yazl' {
     ): void;
     /**
      * No more entries: write the central directory and end `outputStream`,
-     * with the ZIP64 end records whatever the count if `forceZip64Format`.
+     * with the ZIP64 end records whatever the count if `forceZip64Format`,
+     * and the archive's own `comment` after them.
      */
-    end(options?: { forceZip64Format?: boolean }): void;
+    end(options?: { forceZip64Format?: boolean; comment?: string | Buffer }): void;
   }
 }

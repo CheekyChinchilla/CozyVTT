@@ -35,7 +35,6 @@ process.env.BACKUP_DIR = BACKUP_DIR;
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { PassThrough } from 'stream';
-import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
@@ -45,7 +44,7 @@ import { io as ioc } from 'socket.io-client';
 import * as archive from '../../utils/archive';
 import { removeLeftoverRestoreUploads } from '../../services/restoreState';
 import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
-import { zipBuffer } from '../../__tests__/helpers/zipFixtures';
+import { zipBuffer, renameEntry, readZip } from '../../__tests__/helpers/zipFixtures';
 import {
   clearState as clearCombatState,
   getState as getCombatState,
@@ -302,7 +301,7 @@ describe('POST /api/admin/backups/restore', () => {
     const list = await admin.get('/api/admin/backups');
     expect(list.body.backups.map((b: { filename: string }) => b.filename)).toContain(named);
     const file = path.join(BACKUP_DIR, named!);
-    const entries = (await unzipper.Open.file(file)).files.map((f) => f.path);
+    const entries = (await readZip(file)).map((f) => f.path);
     expect(entries).toEqual(['database.sql']);
 
     // Readable by the backend's user alone: it holds every credential on the instance.
@@ -786,6 +785,24 @@ describe('a refused restore', () => {
     }
   });
 
+  it('says a backup with an entry that leaves its folder is not taken, with 400', async () => {
+    const calls = stubTools();
+    const file = path.join(SCRATCH, 'slip.zip');
+    await fs.writeFile(file, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT, 'uploads/xx/evil.png': 'escaped' }));
+    renameEntry(file, 'uploads/xx/evil.png', 'uploads/../evil.png');
+    try {
+      const res = await restore(admin, await fs.readFile(file));
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid Backup');
+      expect(res.body.message).toBe('The archive has an unsafe file path, which a backup never has: uploads/../evil.png Nothing was changed.');
+      expect(calls).toEqual([]);
+      expect(fsSync.existsSync(path.join(UPLOAD_DIR, '..', 'evil.png'))).toBe(false);
+    } finally {
+      await fs.rm(file, { force: true });
+    }
+  });
+
   it('can be followed by another restore', async () => {
     stubTools();
     expect((await restore(admin, Buffer.from('not a zip'))).status).toBe(400);
@@ -982,10 +999,10 @@ describe('POST /api/admin/backups', () => {
       expect(res.status).toBe(201);
       made = path.join(BACKUP_DIR, res.body.filename);
 
-      const zip = await unzipper.Open.file(made);
+      const zip = await readZip(made);
       const held: Record<string, string> = {};
-      for (const entry of zip.files) {
-        if (entry.type === 'File') held[entry.path] = (await entry.buffer()).toString('utf8');
+      for (const entry of zip) {
+        if (entry.type === 'File') held[entry.path] = entry.data.toString('utf8');
       }
       expect(held).toEqual({
         'database.sql': SAFETY_DUMP,
@@ -996,7 +1013,7 @@ describe('POST /api/admin/backups', () => {
       });
       // The database compressed; the uploads stored as they are, since
       // pictures and sound are compressed already.
-      expect(zip.files.map((f) => [f.path, f.compressionMethod])).toEqual([
+      expect(zip.map((f) => [f.path, f.compressionMethod])).toEqual([
         ['database.sql', 8],
         ['uploads/documents/global/.notes.md', 0],
         ['uploads/maps/global/cellar.png', 0],
@@ -1004,7 +1021,7 @@ describe('POST /api/admin/backups', () => {
         ['uploads/tokens/campaigns/c1/goblin.png', 0],
       ]);
       // Not even the folder itself, which would restore as an empty one.
-      const backupsEntries = zip.files.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
+      const backupsEntries = zip.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
       expect(backupsEntries).toEqual([]);
     } finally {
       if (made) await fs.rm(made, { force: true });
@@ -1049,6 +1066,35 @@ describe('POST /api/admin/backups', () => {
     }
   });
 
+  // A backup written by 1.6.0, kept as it was made: pictures stored, the
+  // dump compressed, a name outside ASCII, an empty file.
+  it('restores a backup made by 1.6.0', async () => {
+    const calls = stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    const made: string[] = [];
+    try {
+      const restored = await restore(admin, await fs.readFile(path.resolve(__dirname, '../../__tests__/fixtures/instance-backup-1.6.0.zip')));
+
+      expect(restored.status).toBe(200);
+      made.push(restored.body.safetyBackup);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
+      expect(calls[1].sqlLoaded).toContain('CREATE TABLE public."Note"');
+      expect(calls[1].sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
+      expect(await filesIn(UPLOAD_DIR)).toEqual({
+        'maps/global/cellar.png': Buffer.from('a map, stored as the backup stores pictures '.repeat(20)),
+        'maps/global/thumb_cellar.png': Buffer.from('its thumbnail'),
+        'tokens/campaigns/c1/Göblin König.png': Buffer.from('a name with a space and letters outside ASCII'),
+        'documents/global/.notes.md': Buffer.from('a name starting with a dot'),
+        'audio/global/silence.ogg': Buffer.alloc(0),
+      });
+    } finally {
+      for (const name of made) await fs.rm(path.join(BACKUP_DIR, name), { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
+  });
+
   // A link in the uploads folder can point anywhere on the server. A backup
   // holds what is in the folder, never what a link reaches.
   it('never follows a symbolic link out of the uploads folder', async () => {
@@ -1067,8 +1113,7 @@ describe('POST /api/admin/backups', () => {
       expect(res.status).toBe(201);
       made = path.join(BACKUP_DIR, res.body.filename);
 
-      const zip = await unzipper.Open.file(made);
-      const held = await Promise.all(zip.files.map(async (f) => ({ path: f.path, body: (await f.buffer()).toString('utf8') })));
+      const held = (await readZip(made)).map((f) => ({ path: f.path, body: f.data.toString('utf8') }));
       expect(held.filter((f) => secrets.includes(f.body))).toEqual([]);
       expect(held.filter((f) => f.path.startsWith('uploads/linked/'))).toEqual([]);
       expect(held).toContainEqual({ path: 'uploads/maps/global/cellar.png', body: 'a map' });
@@ -1142,3 +1187,4 @@ describe('POST /api/admin/backups', () => {
     }
   });
 });
+

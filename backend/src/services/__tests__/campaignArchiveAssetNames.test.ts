@@ -19,12 +19,11 @@ const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { randomUUID } from 'crypto';
-import unzipper from 'unzipper';
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport } from '../campaignExporter';
 import { ASSET_LIMITS } from '../../validators/assetLimits';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
-import { writeZip } from '../../__tests__/helpers/zipFixtures';
+import { writeZip, readZip } from '../../__tests__/helpers/zipFixtures';
 
 const PNG = Buffer.from(
   '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082',
@@ -81,9 +80,8 @@ describe('a campaign exported and imported again', () => {
     const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
     await prepared.writeTo(fs.createWriteStream(file));
 
-    const directory = await unzipper.Open.file(file);
-    const manifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
-    const manifest = JSON.parse((await manifestEntry!.buffer()).toString()) as Record<string, { name?: unknown; description?: unknown }>;
+    const manifestEntry = (await readZip(file)).find((f) => f.path === 'assets/asset-manifest.json');
+    const manifest = JSON.parse(manifestEntry!.data.toString()) as Record<string, { name?: unknown; description?: unknown }>;
     expect(manifest[crypt.id]).toMatchObject({ name: 'The Undercroft', description: 'Lower level, flooded in the second act' });
     expect(manifest[goblin.id]).toMatchObject({ name: 'Goblin Boss', description: null });
 
@@ -127,9 +125,8 @@ describe("a picture of someone's own library the campaign uses", () => {
       const file = path.join(SCRATCH, 'borrowing.cozyvtt');
       const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
       await prepared.writeTo(fs.createWriteStream(file));
-      const directory = await unzipper.Open.file(file);
-      const manifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
-      const manifest = JSON.parse((await manifestEntry!.buffer()).toString()) as Record<string, Record<string, unknown>>;
+      const manifestEntry = (await readZip(file)).find((f) => f.path === 'assets/asset-manifest.json');
+      const manifest = JSON.parse(manifestEntry!.data.toString()) as Record<string, Record<string, unknown>>;
 
       expect(manifest[own.id]).toEqual({ originalName: 'my-elf.png', mimeType: 'image/png', type: 'TOKEN', fileSize: PNG.length });
       expect(manifest[kept.id]).toMatchObject({ name: 'Goblin', description: 'A goblin' });
@@ -159,9 +156,8 @@ describe("a picture of the exporting DM's own library the campaign uses", () => 
     const file = path.join(SCRATCH, 'own-art.cozyvtt');
     const prepared = await prepareCampaignExport(source.id, { userId, isAdmin: false });
     await prepared.writeTo(fs.createWriteStream(file));
-    const directory = await unzipper.Open.file(file);
-    const manifestEntry = directory.files.find((f) => f.path === 'assets/asset-manifest.json');
-    const manifest = JSON.parse((await manifestEntry!.buffer()).toString()) as Record<string, Record<string, unknown>>;
+    const manifestEntry = (await readZip(file)).find((f) => f.path === 'assets/asset-manifest.json');
+    const manifest = JSON.parse(manifestEntry!.data.toString()) as Record<string, Record<string, unknown>>;
 
     expect(manifest[mine.id]).toMatchObject({ name: 'The Lich', description: 'Final form', tags: ['boss'] });
   });

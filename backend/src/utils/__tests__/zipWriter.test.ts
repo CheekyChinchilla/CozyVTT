@@ -3,7 +3,7 @@ import { createWriteStream } from 'fs';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import unzipper from 'unzipper';
+import { readZip } from '../../__tests__/helpers/zipFixtures';
 import { writeZipTo, ZipInputError, type ZipEntrySource } from '../zipWriter';
 
 let root: string;
@@ -29,14 +29,14 @@ describe('writeZipTo', () => {
     ]);
 
     expect(bytes).toBe((await fs.stat(file)).size);
-    const entries = (await unzipper.Open.file(file)).files;
+    const entries = await readZip(file);
     expect(entries.map((e) => [e.path, e.compressionMethod, e.uncompressedSize])).toEqual([
       ['manifest.json', 8, 7],
       ['assets/picture.png', 0, 200_000],
       ['maps/map-0.json', 8, 10_000],
     ]);
-    expect((await entries[1].buffer()).equals(Buffer.alloc(200_000, 7))).toBe(true);
-    expect((await entries[2].buffer()).toString()).toBe('x'.repeat(10_000));
+    expect(entries[1].data.equals(Buffer.alloc(200_000, 7))).toBe(true);
+    expect(entries[2].data.toString()).toBe('x'.repeat(10_000));
   });
 
   it('leaves out a file that is gone, or a link in its place, when told it may be', async () => {
@@ -50,7 +50,7 @@ describe('writeZipTo', () => {
       { name: 'kept.txt', content: 'kept' },
     ]);
 
-    expect((await unzipper.Open.file(file)).files.map((e) => e.path)).toEqual(['kept.txt']);
+    expect((await readZip(file)).map((e) => e.path)).toEqual(['kept.txt']);
   });
 
   it.each([
@@ -74,7 +74,7 @@ describe('writeZipTo', () => {
       { name: 'pipe.png', file: pipe, skipIfGone: true },
       { name: 'kept.txt', content: 'kept' },
     ]);
-    expect((await unzipper.Open.file(file)).files.map((e) => e.path)).toEqual(['kept.txt']);
+    expect((await readZip(file)).map((e) => e.path)).toEqual(['kept.txt']);
 
     await expect(written([{ name: 'database.sql', file: pipe }])).rejects.toBeInstanceOf(ZipInputError);
   });
