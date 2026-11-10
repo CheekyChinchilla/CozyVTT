@@ -10,10 +10,16 @@ export default defineConfig({
     },
   },
   // Vite serves files from inside frontend/ only. One test reads the proxy's
-  // settings in the repository's nginx/ folder, so that folder is allowed too.
+  // settings in the repository's nginx/ folder, and one the deployment guide
+  // in docs/, whose sections the Admin Panel links to, so those two folders
+  // are allowed too.
   server: {
     fs: {
-      allow: [import.meta.dirname, path.resolve(import.meta.dirname, '../nginx')],
+      allow: [
+        import.meta.dirname,
+        path.resolve(import.meta.dirname, '../nginx'),
+        path.resolve(import.meta.dirname, '../docs'),
+      ],
     },
   },
   test: {

@@ -300,6 +300,7 @@ src/
 ├── services/
 │   ├── api.ts         Axios-based REST API client (singleton)
 │   ├── socket.ts      Socket.io client wrapper (singleton)
+│   ├── liveConnectionCheck.ts  The Admin Panel status card's check of live connections: a connection of its own, made as socket.ts makes one, that joins no campaign, reports WebSocket, polling only or down, and closes
 │   ├── unsavedWork.ts What a lost session does while an editor has unsaved changes
 │   ├── pageLoad.ts    The full page loads the API client sends a page on with (sign in, required pages)
 │   ├── signInNotice.ts  The reason a sign-in ended, carried to the sign-in page across that load

@@ -10,6 +10,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useAssetDelete } from '@/hooks/useAssetDelete';
+import { useLiveConnectionCheck } from '@/hooks/useLiveConnectionCheck';
 import { useNavigate } from 'react-router';
 import {
   Users,
@@ -201,6 +202,9 @@ export default function AdminPage() {
   // not be asked, whether the request reached the server at all.
   const [health, setHealth] = useState<AdminHealth | null>(null);
   const [healthFailed, setHealthFailed] = useState<{ reachedServer: boolean } | null>(null);
+  // Counts the answers, so the card checks live connections after each one:
+  // a check open while the server counts them would be counted.
+  const [healthAnswers, setHealthAnswers] = useState(0);
 
   // ---- Users ----
   const [users, setUsers] = useState<AdminListedUser[]>([]);
@@ -361,6 +365,8 @@ export default function AdminPage() {
     } catch (err: unknown) {
       setHealth(null);
       setHealthFailed({ reachedServer: apiErrorStatus(err) !== undefined });
+    } finally {
+      setHealthAnswers((answers) => answers + 1);
     }
   }, []);
 
@@ -1167,7 +1173,7 @@ export default function AdminPage() {
                     )}
                   </div>
 
-                  <HealthCard health={health} failed={healthFailed} />
+                  <HealthCard health={health} failed={healthFailed} answers={healthAnswers} />
                 </div>
 
                 {/* Asset Breakdown Table */}
@@ -3013,46 +3019,92 @@ export default function AdminPage() {
 // Status card
 // ============================================
 
-type PartState = 'working' | 'down' | 'not known';
+type PartState = 'working' | 'polling only' | 'down' | 'not known' | 'checking';
+
+const PART_TEXT: Record<PartState, string> = {
+  working: 'Working',
+  'polling only': 'Polling only',
+  down: 'Down',
+  'not known': 'Not known',
+  checking: 'Checking…',
+};
+
+const PART_COLOUR: Record<PartState, string> = {
+  working: 'text-success-ink',
+  'polling only': 'text-warning-ink',
+  down: 'text-danger-ink',
+  'not known': 'text-warm-gray',
+  checking: 'text-warm-gray',
+};
+
+/** The deployment guide, where the card's hints send a self-hoster. */
+const DEPLOYMENT_GUIDE = 'https://github.com/CheekyChinchilla/CozyVTT/blob/main/docs/DEPLOYMENT.md';
 
 /**
- * The dashboard's status card, from GET /api/admin/health. When that could
- * not be asked, the API is down if the request never reached the server, and
- * the database and live connections are not known.
+ * The dashboard's status card. API and DB are as GET /api/admin/health says;
+ * when that could not be asked, the API is down if the request never reached
+ * the server, and the database is not known. WS is this browser's own check
+ * of live connections, made after each of those answers: the server can only
+ * say that its live-connection service runs, which stays true behind a proxy
+ * that refuses WebSocket connections.
  */
-function HealthCard({ health, failed }: { health: AdminHealth | null; failed: { reachedServer: boolean } | null }) {
+function HealthCard({ health, failed, answers }: { health: AdminHealth | null; failed: { reachedServer: boolean } | null; answers: number }) {
+  const live = useLiveConnectionCheck(answers);
   const api: PartState = health || failed?.reachedServer ? 'working' : failed ? 'down' : 'not known';
-  const part = (state: 'ok' | 'error' | undefined): PartState => (state === 'ok' ? 'working' : state === 'error' ? 'down' : 'not known');
+  const database = health?.services.database;
   const parts: [string, PartState][] = [
     ['API', api],
-    ['DB', part(health?.services.database)],
-    ['WS', part(health?.services.websocket)],
+    ['DB', database === 'ok' ? 'working' : database === 'error' ? 'down' : 'not known'],
+    ['WS', live],
   ];
-  const status = health ? (health.status === 'healthy' ? 'Healthy' : 'Degraded') : failed ? 'Unknown' : 'Checking…';
+  const status = !health
+    ? failed ? 'Unknown' : 'Checking…'
+    : health.status === 'degraded' || live === 'down' || live === 'polling only'
+      ? 'Degraded'
+      : live === 'checking' ? 'Checking…' : 'Healthy';
   const tone = status === 'Healthy' ? 'text-success-ink' : status === 'Degraded' ? 'text-danger-ink' : 'text-warm-gray';
-  const colour: Record<PartState, string> = { working: 'text-success-ink', down: 'text-danger-ink', 'not known': 'text-warm-gray' };
 
   return (
     <div className="glass-panel p-5 flex flex-col items-center text-center">
       <Shield className={`w-7 h-7 mb-2 ${tone}`} aria-hidden="true" />
       <p className={`text-sm font-bold ${tone}`}>{status}</p>
       <p className="text-xs text-warm-gray mt-1">Status</p>
-      <div className="mt-2 space-y-1 text-left w-full">
+      <dl className="mt-2 space-y-1 text-left w-full">
         {parts.map(([label, state]) => (
-          <div key={label} className="flex items-center justify-between text-xs">
-            <span className="text-stone-gray">{label}</span>
-            <span className={colour[state]} aria-label={`${label}: ${state}`} title={state}>
-              {state === 'not known' ? '?' : '\u25CF'}
-            </span>
+          <div key={label} className="flex items-center justify-between gap-2 text-xs">
+            <dt className="text-stone-gray">{label}</dt>
+            <dd className={`font-medium text-right ${PART_COLOUR[state]}`}>{PART_TEXT[state]}</dd>
           </div>
         ))}
-      </div>
+      </dl>
       {health && (
         <p className="text-[10px] text-warm-gray mt-1">
           {health.connections} live {health.connections === 1 ? 'connection' : 'connections'}
         </p>
       )}
+      {live === 'polling only' && (
+        <p className="text-[11px] text-warm-gray mt-2 text-left w-full">
+          Tables work, but slower.{' '}
+          <GuideLink section="minimum-proxy-requirements">Check your proxy&apos;s WebSocket settings</GuideLink>
+        </p>
+      )}
+      {live === 'down' && (
+        <p className="text-[11px] text-warm-gray mt-2 text-left w-full">
+          Tables cannot connect.{' '}
+          <GuideLink section="live-features-dont-work-dice-token-movement-chat">Troubleshoot live connections</GuideLink>
+        </p>
+      )}
     </div>
+  );
+}
+
+/** A link to a section of the deployment guide, opened in a new tab. */
+function GuideLink({ section, children }: { section: string; children: React.ReactNode }) {
+  return (
+    <a href={`${DEPLOYMENT_GUIDE}#${section}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-brand-ink">
+      {children}
+      <span className="sr-only"> (opens in a new tab)</span>
+    </a>
   );
 }
 
