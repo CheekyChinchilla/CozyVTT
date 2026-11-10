@@ -24,6 +24,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **The setup wizard's administrator and people who registered now show when they last signed in.** In the Admin Panel's **Users** tab they showed **Never signed in**, with **Invite** offered. An account that waited for approval counts from its first sign-in; accounts already in use correct themselves when their owner next opens CozyVTT. See [User Accounts](docs/USER_GUIDE.md#user-accounts).
 
+- **A player who uploaded a campaign picture, a former DM among them, can no longer delete or move it while an older handout still shows it.** Handouts written before 1.6.0 were not all checked for their pictures yet; the delete now checks them first, and asks you to try again later while some are left. See [Viewing and Managing Assets](docs/USER_GUIDE.md#viewing-and-managing-assets).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

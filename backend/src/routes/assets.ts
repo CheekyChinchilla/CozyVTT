@@ -692,12 +692,20 @@ const USED_BY_A_TEMPLATE = {
   move: "A character template uses this asset, so only the campaign's DM can move it out of the campaign",
 };
 
+/** The same, while documents of the campaign's members stored before 1.6.0 are still to be read for the pictures they show (mayRemoveAsset). */
+const DOCUMENTS_UNREAD = {
+  delete: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's DM can delete this asset. Try again later.",
+  move: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's DM can move this asset out of the campaign. Try again later.",
+};
+
 /**
  * DELETE /api/assets/:id
  * Delete an asset
  * Requires: Authentication + ownership or campaign DM. A campaign asset's
  * uploader who does not run the campaign is refused with 403 while anything
- * but their own characters, tokens and documents uses it (mayRemoveAsset).
+ * but their own characters, tokens and documents uses it, or while documents
+ * of the campaign's other members stored before 1.6.0 are still to be read
+ * for the pictures they show (mayRemoveAsset).
  *
  * Answers 409 with code ASSET_IN_USE and the list of uses while a map, token,
  * character, template, creature or campaign setting still names the asset,
@@ -731,6 +739,9 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       }
       if (removal.reason === 'used-by-a-template') {
         return res.status(403).json({ error: 'Forbidden', message: USED_BY_A_TEMPLATE.delete });
+      }
+      if (removal.reason === 'documents-unread') {
+        return res.status(403).json({ error: 'Forbidden', message: DOCUMENTS_UNREAD.delete });
       }
       // One the caller may not even read is answered as if it were not there.
       if (!(await canReadAssetFile(asset, req))) {
@@ -1693,6 +1704,7 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       if (!removal.allowed) {
         const message = removal.reason === 'used-by-others' ? USED_BY_OTHERS.move
           : removal.reason === 'used-by-a-template' ? USED_BY_A_TEMPLATE.move
+          : removal.reason === 'documents-unread' ? DOCUMENTS_UNREAD.move
           : MOVE_REFUSALS[asset.scope];
         return res.status(403).json({ error: 'Forbidden', message });
       }
