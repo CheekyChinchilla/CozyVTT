@@ -183,6 +183,47 @@ interface CombatantRowProps {
   onOpenSheet: (tokenId: string) => void;
 }
 
+interface MoveButtonsProps {
+  tokenId: string;
+  name: string;
+  isFirst: boolean;
+  isLast: boolean;
+  onMove: CombatantRowProps['onMove'];
+  className: string;
+}
+
+/** The grip's Up and Down arrow keys, as buttons. */
+function MoveButtons({ tokenId, name, isFirst, isLast, onMove, className }: MoveButtonsProps) {
+  return (
+    <>
+      <button
+        type="button"
+        data-move-token={tokenId}
+        data-move="up"
+        onClick={() => onMove(tokenId, -1, 'up')}
+        disabled={isFirst}
+        aria-label={`Move ${name} up`}
+        title="Move up one place"
+        className={className}
+      >
+        <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        data-move-token={tokenId}
+        data-move="down"
+        onClick={() => onMove(tokenId, 1, 'down')}
+        disabled={isLast}
+        aria-label={`Move ${name} down`}
+        title="Move down one place"
+        className={className}
+      >
+        <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+      </button>
+    </>
+  );
+}
+
 /**
  * Where a right-click opens the menu. One from the keyboard (the menu key, or
  * Shift+F10) has no pointer position, so the menu opens under the element.
@@ -275,7 +316,7 @@ function CombatantRow({
       // their own, on the right.
       // No text selection or callout from a held finger; a value being
       // typed stays selectable.
-      className={`flex items-center gap-2 p-2 rounded-lg transition-colors pointer-coarse:flex-wrap select-none [-webkit-touch-callout:none] [&_input]:select-text ${
+      className={`group/combatant flex items-center gap-2 p-2 rounded-lg transition-colors pointer-coarse:flex-wrap select-none [-webkit-touch-callout:none] [&_input]:select-text ${
         isDragOver
           ? 'border-t-2 border-moss-green'
           : isActive
@@ -318,24 +359,44 @@ function CombatantRow({
       {isDM && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />}
 
       {/* Token image */}
-      {entry.imageUrl ? (
-        <img
-          src={entry.imageUrl}
-          alt={entry.name}
-          // A picture is a drag of its own to a browser: on a touch screen
-          // only the grip drags.
-          draggable={coarsePointer ? false : undefined}
-          className={`w-8 h-8 rounded-full object-cover shrink-0 border-2 ${
-            isActive ? 'border-warm-amber' : 'border-moss-green/20'
-          }`}
-        />
-      ) : (
-        <div className={`w-8 h-8 rounded-full bg-stone-gray/20 flex items-center justify-center shrink-0 border-2 ${
-          isActive ? 'border-warm-amber' : 'border-stone-gray/20'
-        }`}>
-          <User className="w-4 h-4 text-stone-gray" />
-        </div>
-      )}
+      <div className="relative shrink-0">
+        {entry.imageUrl ? (
+          <img
+            src={entry.imageUrl}
+            alt={entry.name}
+            // A picture is a drag of its own to a browser: on a touch screen
+            // only the grip drags.
+            draggable={coarsePointer ? false : undefined}
+            className={`w-8 h-8 rounded-full object-cover shrink-0 border-2 ${
+              isActive ? 'border-warm-amber' : 'border-moss-green/20'
+            }`}
+          />
+        ) : (
+          <div className={`w-8 h-8 rounded-full bg-stone-gray/20 flex items-center justify-center shrink-0 border-2 ${
+            isActive ? 'border-warm-amber' : 'border-stone-gray/20'
+          }`}>
+            <User className="w-4 h-4 text-stone-gray" />
+          </div>
+        )}
+        {/* With a mouse, the DM's Up and Down buttons cover the picture while
+            a button in the row has the keyboard's focus, so they take no room
+            and nothing moves when they show. A mouse click gives a button no
+            visible focus, so it brings no arrows; on a touch screen they sit
+            beside the die. They stay in the tab order while unseen, and show
+            as the Tab key reaches them. */}
+        {isDM && !coarsePointer && (
+          <div className="absolute inset-x-0 -inset-y-1 z-10 flex flex-col rounded-sm bg-soft-cream opacity-0 pointer-events-none group-has-[button:focus-visible]/combatant:opacity-100 group-has-[button:focus-visible]/combatant:pointer-events-auto">
+            <MoveButtons
+              tokenId={entry.tokenId}
+              name={name}
+              isFirst={isFirst}
+              isLast={isLast}
+              onMove={onMove}
+              className="flex-1 inline-flex items-center justify-center rounded-sm text-stone-gray hover:bg-moss-green/10 hover:text-brand-ink transition-colors disabled:opacity-40 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/50"
+            />
+          </div>
+        )}
+      </div>
 
       {/* Name + disposition. On a touch screen the name keeps 80 pixels
           before the die and bin go to a line of their own. */}
@@ -416,49 +477,35 @@ function CombatantRow({
           {/* The grip's Up and Down arrow keys, as buttons, where a finger is
               the pointer: a drag by touch may not work in every browser. */}
           {isDM && coarsePointer && (
-            <>
-              <button
-                type="button"
-                data-move-token={entry.tokenId}
-                data-move="up"
-                onClick={() => onMove(entry.tokenId, -1, 'up')}
-                disabled={isFirst}
-                aria-label={`Move ${name} up`}
-                title="Move up one place"
-                className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors disabled:opacity-40"
-              >
-                <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                data-move-token={entry.tokenId}
-                data-move="down"
-                onClick={() => onMove(entry.tokenId, 1, 'down')}
-                disabled={isLast}
-                aria-label={`Move ${name} down`}
-                title="Move down one place"
-                className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors disabled:opacity-40"
-              >
-                <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
-              </button>
-            </>
+            <MoveButtons
+              tokenId={entry.tokenId}
+              name={name}
+              isFirst={isFirst}
+              isLast={isLast}
+              onMove={onMove}
+              className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors disabled:opacity-40"
+            />
           )}
           {canRoll && (
             <button
+              type="button"
               onClick={() => onRoll(entry.tokenId)}
+              aria-label={`Roll initiative for ${name}`}
               title={isDM ? 'Roll initiative for this token' : 'Roll your initiative'}
               className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
             >
-              <Dices className="w-3.5 h-3.5" />
+              <Dices className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           )}
           {isDM && (
             <button
+              type="button"
               onClick={() => onRemove(entry.tokenId)}
+              aria-label={`Remove ${name} from initiative`}
               title="Remove from initiative"
               className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           )}
         </div>

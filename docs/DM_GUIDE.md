@@ -1177,8 +1177,11 @@ Combatants are sorted by initiative automatically. You can drag and drop to reor
 
 To reorder from the keyboard:
 
-1. Press **Tab** until the grip at the left of a combatant's row has the focus (a screen reader calls it **Move** and the combatant's name).
+1. Press **Tab** until the grip at the left of a combatant's row has the focus (a screen reader calls it **Move** and the combatant's name). While the keyboard is anywhere in that row, an up and a down arrow show over the combatant's picture. A click with the mouse does not show them.
 2. Press the **Up** or **Down** arrow key to move that combatant one place. The focus stays on the grip, so press again to move further; a screen reader says the new place, such as "Goblin moved to 3 of 5".
+3. Or press **Tab** once more for the up arrow, or twice for the down arrow, and press **Enter** or **Space**. The focus stays on that arrow, in the combatant's new place, or goes to the grip once the combatant reaches the top or the bottom. The first combatant's up arrow and the last one's down arrow are off, and **Tab** passes over them.
+
+A screen reader calls a row's dice button **Roll initiative for** and the combatant's name, and its bin **Remove** and the combatant's name **from initiative**.
 
 To change a value from the keyboard, Tab to the number, press **Enter**, type the new value and press **Enter** again (**Escape** leaves it as it was).
 

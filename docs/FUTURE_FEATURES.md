@@ -356,12 +356,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   **Enter** rolls, with its roll menu on the keyboard too, in every system's
   view.
 
-- **Reorder the initiative tracker with buttons a keyboard user can see.**
-  The DM's up and down arrows on a combatant's row show only where a finger is
-  the pointer. With a keyboard the grip's arrow keys move a combatant, but
-  nothing on screen says so. Showing the arrows with every pointer, or a hint
-  on the grip, would close that.
-
 ---
 
 ## Won't Do
