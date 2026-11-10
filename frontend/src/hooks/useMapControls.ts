@@ -148,13 +148,6 @@ export function useMapControls(config: MapControlsConfig) {
   );
 
   /**
-   * Reset zoom to 1x and center pan (legacy — prefer fitToScreen)
-   */
-  const resetView = useCallback(() => {
-    setView(1, { x: 0, y: 0 });
-  }, [setView]);
-
-  /**
    * Handle mouse wheel zoom
    * Zooms towards mouse cursor position
    */
@@ -316,7 +309,6 @@ export function useMapControls(config: MapControlsConfig) {
     zoomOut,
     setZoomLevel,
     fitToScreen,
-    resetView,
 
     // Pan controls
     panBy,
