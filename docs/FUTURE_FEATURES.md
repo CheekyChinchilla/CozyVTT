@@ -165,17 +165,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   **Do** if a large instance's backups grow slow; nothing is wrong at the
   sizes seen so far.
 
-- **Two backend suites still stub `file-type`.** The backend tests load the
-  real library (`backend/jest.config.js` compiles it to CommonJS), and
-  `backend/src/middleware/__tests__/fileTypeVerdicts.test.ts` checks its
-  verdict on a file of every format an upload accepts, so an upgrade that
-  changes one fails there. `campaignImportAllowlist.e2e.test.ts` and
-  `campaignArchiveAudio.test.ts` still stub it, because their fixtures are a
-  format's first bytes and not whole files; `uploadUnidentifiedBytes.e2e.test.ts`
-  stubs it on purpose, to reach the branch for a file it cannot identify.
-  **Do** when either of the first two is next changed: give it whole files and
-  drop its stub.
-
 - **Dice macros shared by the DM.** #47 asked for personal saved rolls and got
   them. A DM may well want a table-wide one, such as "Wild Magic Surge, d100",
   that everyone can click without each person saving it themselves. The storage would

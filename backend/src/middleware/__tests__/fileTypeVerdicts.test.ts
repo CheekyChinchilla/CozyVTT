@@ -11,10 +11,10 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import sharp from 'sharp';
 import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type';
 import type { AssetType } from '@prisma/client';
 import { isAllowedMimeType } from '../../utils/fileUtils';
+import { picture, oggVorbis, wav, mp3, pdf, linuxProgram, windowsProgram } from '../../__tests__/helpers/wholeFiles';
 
 let dir: string;
 
@@ -26,43 +26,6 @@ afterAll(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const picture = () => sharp({ create: { width: 8, height: 8, channels: 3, background: '#808080' } });
-
-/** One Ogg page carrying a Vorbis identification header, as an .ogg track starts. */
-function oggVorbis(): Buffer {
-  const packet = Buffer.concat([Buffer.from([1]), Buffer.from('vorbis', 'latin1'), Buffer.alloc(23)]);
-  const page = Buffer.alloc(28);
-  page.write('OggS', 0, 'latin1');
-  page[5] = 0x02;
-  page.writeUInt32LE(1, 14);
-  page[26] = 1;
-  page[27] = packet.length;
-  return Buffer.concat([page, packet]);
-}
-
-/** A WAV header for 100 bytes of 8-bit mono sound, and the sound. */
-function wav(): Buffer {
-  const b = Buffer.alloc(144);
-  b.write('RIFF', 0, 'latin1');
-  b.writeUInt32LE(136, 4);
-  b.write('WAVEfmt ', 8, 'latin1');
-  b.writeUInt32LE(16, 16);
-  b.writeUInt16LE(1, 20);
-  b.writeUInt16LE(1, 22);
-  b.writeUInt32LE(8000, 24);
-  b.writeUInt32LE(8000, 28);
-  b.writeUInt16LE(1, 32);
-  b.writeUInt16LE(8, 34);
-  b.write('data', 36, 'latin1');
-  b.writeUInt32LE(100, 40);
-  return b;
-}
-
-/** MPEG audio frames, with and without the ID3 tag most MP3 files start with. */
-const mpegFrame = Buffer.concat([Buffer.from([0xff, 0xfb, 0x90, 0x64]), Buffer.alloc(413)]);
-const mp3 = (tagged: boolean) =>
-  Buffer.concat([tagged ? Buffer.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0]) : Buffer.alloc(0), mpegFrame, mpegFrame, mpegFrame]);
-
 const ACCEPTED: Array<[string, () => Promise<Buffer> | Buffer, string, AssetType[]]> = [
   ['a PNG picture', () => picture().png().toBuffer(), 'image/png', ['MAP', 'TOKEN', 'AVATAR']],
   ['a JPEG picture', () => picture().jpeg().toBuffer(), 'image/jpeg', ['MAP', 'TOKEN', 'AVATAR']],
@@ -72,7 +35,7 @@ const ACCEPTED: Array<[string, () => Promise<Buffer> | Buffer, string, AssetType
   ['an MP3 track without one', () => mp3(false), 'audio/mpeg', ['AUDIO']],
   ['an Ogg Vorbis track', oggVorbis, 'audio/ogg', ['AUDIO']],
   ['a WAV track', wav, 'audio/wav', ['AUDIO']],
-  ['a PDF', () => Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n'), 'application/pdf', ['DOCUMENT']],
+  ['a PDF', pdf, 'application/pdf', ['DOCUMENT']],
 ];
 
 describe('a file of a format an upload accepts', () => {
@@ -101,8 +64,8 @@ describe('a file that must go to the per-format checks', () => {
 
 describe('a program', () => {
   it.each([
-    ['a Linux program', Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0]), Buffer.alloc(120)]), 'application/x-elf'],
-    ['a Windows program', Buffer.concat([Buffer.from('MZ', 'latin1'), Buffer.alloc(200)]), 'application/x-msdownload'],
+    ['a Linux program', linuxProgram(), 'application/x-elf'],
+    ['a Windows program', windowsProgram(), 'application/x-msdownload'],
   ])('is identified as one, and no kind of asset accepts it: %s', async (_label, bytes, mime) => {
     expect((await fileTypeFromBuffer(bytes))?.mime).toBe(mime);
     for (const type of ['MAP', 'TOKEN', 'AUDIO', 'AVATAR', 'DOCUMENT', 'OTHER'] as const) {
