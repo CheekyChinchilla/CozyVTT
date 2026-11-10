@@ -36,8 +36,13 @@
 // exists. A document stored before this was kept (Asset.picturesReadAt
 // null) is read by the requests that ask, DOCUMENTS_READ_PER_REQUEST at a
 // time, until none is left: a player's request, the documents of the
-// campaigns it asks about; a delete's check, any. A read that fails leaves
-// the document unread, to be read again DOCUMENT_READ_RETRY_MS later.
+// campaigns it asks about; the list of an asset's uses, any. A read that
+// fails leaves the document unread, to be read again DOCUMENT_READ_RETRY_MS
+// later. The check that keeps an uploader who does not run a campaign from
+// deleting a picture others there use cannot wait for that: it reads the
+// campaign's other members' unread documents at once, up to
+// MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL, and refuses while any is left
+// (readUnreadDocumentsBy, services/assetRemoval.ts).
 // ============================================
 
 import fs from 'fs/promises';
@@ -56,6 +61,8 @@ export const MAX_IDS_PER_DOCUMENT = 200;
 export const DOCUMENTS_READ_PER_REQUEST = 5;
 /** How long a document whose file could not be read waits before it is read again. */
 export const DOCUMENT_READ_RETRY_MS = 10 * 60 * 1000;
+/** The most documents not read yet that one delete's or move's check reads (readUnreadDocumentsBy); any left past it refuse the uploader. */
+export const MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL = 100;
 
 const ADDRESS = /\/api\/assets\/(?:maps|tokens|avatars|audio|documents)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?![0-9A-Za-z_-])/gi;
 const NAMED_REFERENCES: Record<string, string> = { sol: '/', hyphen: '-', dash: '-', period: '.', colon: ':', lowbar: '_' };
@@ -182,7 +189,8 @@ const MAX_WAITING_TO_READ_AGAIN = 1000;
  * uploaded, then those shared with `campaignIds` (written in one or linked
  * to one), and with `othersToo` any other after them. A request that reads
  * only those campaigns' documents (the handout grant) asks for theirs; the
- * delete's check asks for the caller's own first, then any. Each request
+ * list of an asset's uses (assetUsageFor) asks for the caller's own first,
+ * then any. Each request
  * that reads what documents name asks this first, so the documents from
  * before are read once each, by the requests that need them; once none is
  * left, it is a query or two that find none.
@@ -221,8 +229,17 @@ export async function readSomeUnreadDocuments(of: {
     }
   }
   if (of.othersToo) await more({});
-  for (const doc of picked) reading.add(doc.id);
-  await Promise.all(picked.map(async (doc) => {
+  await readDocuments(picked, now);
+}
+
+/**
+ * Read each of `docs` and keep what it names, all at once; one whose file
+ * could not be read waits DOCUMENT_READ_RETRY_MS before a request that
+ * reads a few picks it again.
+ */
+async function readDocuments(docs: ReadonlyArray<{ id: string; filePath: string }>, now: number): Promise<void> {
+  for (const doc of docs) reading.add(doc.id);
+  await Promise.all(docs.map(async (doc) => {
     try {
       const named = await assetIdsNamedInFile(doc.id, doc.filePath);
       if (named) await recordDocumentPictures(doc.id, named, { onlyIfUnread: true });
@@ -231,6 +248,39 @@ export async function readSomeUnreadDocuments(of: {
       reading.delete(doc.id);
     }
   }));
+}
+
+/**
+ * Read the documents `writerIds` uploaded that were stored before what
+ * documents name was kept, DOCUMENTS_READ_PER_REQUEST at a time and at most
+ * MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL in all, newest first, for a check
+ * that must decide now whether one of them shows an asset. One whose file
+ * could not be read before is tried again, in its turn by age, so when the
+ * newest cap's worth all have files that cannot be read, the older ones are
+ * never reached. Answers whether any of theirs is still not read afterwards: one past
+ * the cap, one another request in this process is reading, or one whose
+ * file could not be read. Once none is left, it is two queries that find
+ * none.
+ */
+export async function readUnreadDocumentsBy(writerIds: readonly string[], now = Date.now()): Promise<'all-read' | 'some-unread'> {
+  const writers = [...new Set(writerIds)];
+  if (writers.length === 0) return 'all-read';
+  const theirs: Prisma.AssetWhereInput = { type: 'DOCUMENT', picturesReadAt: null, uploadedById: { in: writers } };
+  const tried = new Set<string>();
+  while (tried.size < MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL) {
+    const skip = [...tried, ...reading];
+    const batch = await prisma.asset.findMany({
+      where: { AND: [theirs, skip.length > 0 ? { id: { notIn: skip } } : {}] },
+      select: { id: true, filePath: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      take: Math.min(DOCUMENTS_READ_PER_REQUEST, MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL - tried.size),
+    });
+    if (batch.length === 0) break;
+    for (const doc of batch) tried.add(doc.id);
+    await readDocuments(batch.filter((doc) => !reading.has(doc.id)), now);
+  }
+  const left = await prisma.asset.findFirst({ where: theirs, select: { id: true } });
+  return left ? 'some-unread' : 'all-read';
 }
 
 /** What the handout grant reads of a document. */

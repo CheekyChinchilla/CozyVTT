@@ -1,6 +1,6 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31. The sections on saving over a drawn picture, a campaign's map pictures, deleting an asset as its uploader and temporary hit points were added after that, and were read against the code on 2026-11-08, as was the section on what ends a live socket._
+_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way. The sections on drawing, whispers, leaving a campaign and the map's field lists were added since, and were read against the code again on 2026-10-31. The sections on saving over a drawn picture, a campaign's map pictures, deleting an asset as its uploader and temporary hit points were added after that, and were read against the code on 2026-11-08, as was the section on what ends a live socket. The paragraph on older documents in the section on deleting an asset as its uploader was added and read against the code on 2026-11-09._
 
 ## Middleware Cheat Sheet
 
@@ -461,6 +461,17 @@ makes it the campaign's DM's alone, so a DM who handed the seat over cannot,
 as a player, delete a picture the new DM's maps use, `force=true` or not. The
 campaign's DM and a platform admin are not narrowed, and editing a document's
 text stays with `mayChangeAsset`.
+
+A document counts by what was read from its text and kept. The documents
+stored before 1.6.0 are read a few at a time as the table plays, so for that
+uploader the check first reads the campaign's other members' unread documents
+(`readUnreadDocumentsBy` in `services/sharedDocumentPictures.ts`), at most
+`MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL` (100) a request, and refuses with 403
+while any is still unread: past the cap, being read by another request, or
+with a file that could not be read. Such a file is tried again by every
+request, so it keeps the asset the campaign's DM's until it can be read. Once
+none is left unread the uses are looked at again, since any request may have
+read one in the meantime.
 
 ## Reading an asset: access follows use
 

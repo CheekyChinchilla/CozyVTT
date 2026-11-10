@@ -29,7 +29,6 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 ### Maps
 
 - `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
-- `after the next release` Suspected: **just after the upgrade to 1.6.0, a former DM may delete, with force, a picture an older handout shows.** The plain text and Markdown documents stored before 1.6.0 are read for the pictures they show a few at a time as the table plays, and a delete counts only those read so far, so until all are read the uploader of a campaign picture who no longer runs the campaign is not stopped by an old handout that shows it (`services/assetRemoval.ts`).
 
 ---
 
