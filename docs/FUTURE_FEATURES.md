@@ -22,6 +22,10 @@ _Nothing in progress._
 
 Bugs confirmed in a released version and not fixed yet. Each entry starts with the release it is planned for, which can move as work is scheduled. Most are marked in the code with a `TODO(<area>)` comment at the spot. "Suspected" means read from the code and not yet reproduced. Delete an entry when its fix ships, as with the rest of this file.
 
+### Character sheets
+
+- `after the next release` **The D&D 5e editor gives no box to clear the old Exhausted condition.** A sheet saved before 1.3.0, when exhaustion had no levels, can still hold Exhausted among its conditions. The sheet shows it, and it cancels advantage on initiative, but the editor lists every condition but that one, since it tracks exhaustion by level. It needs the editor to read the old condition into the exhaustion level, at least 1, when the sheet opens, and drop it from the conditions (`DnD5eCharacterEditor.tsx`).
+
 ### Creatures
 
 - `after the next release` **A Call of Cthulhu creature has no SIZ or EDU.** It keeps its characteristics in the stat block's six score slots, POW in Wisdom's and APP in Charisma's, so SIZ and EDU have nowhere to go, and its percentile skills sit in the same list as D&D 5e's skill bonuses. It needs a Call of Cthulhu creature model, with its eight characteristics and percentile skills (`validators/statBlock.ts`).
@@ -29,6 +33,9 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 ### Maps
 
 - `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
+- `after the next release` **A token dropped past the edge of a map the DM has just made smaller stays where it was dropped on screen.** The server refuses the drop, but the mover's screen, and the screens that watched the drag, keep the token where it was carried until it moves again or the page is reloaded. Other refused drops are put back; this one should be too, judged from the map as the server read it (`handlers/tokens.ts`).
+- `after the next release` **A polygon being clicked out in Mapmaker, or a curve not yet bent, is lost on a reload or on leaving the map.** Nothing asks first, and the draft does not keep them. They should count as paint not saved, as a selection you moved does (`paint/usePaintSurface.ts`).
+- `after the next release` **A screen can show the walls from before a door was opened, or a wall added, at the moment Mapmaker's Save adds room walls.** The Save sends the map's whole list of walls to every page once it is stored, so a door opened or closed, or a wall added from another device, in between can reach a page first and then be undone there by the older list until the page is reloaded. The stored walls are right. It needs the list sent while the walls are still held for the Save, or a version a page can compare to refuse an older list (`routes/maps.ts`, the walls batch route).
 
 ---
 
