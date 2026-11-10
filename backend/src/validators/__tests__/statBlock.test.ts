@@ -4,6 +4,8 @@ import {
   createNpcStatBlockSchema,
 } from '../statBlock';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../creatures';
+import { issueMessages } from '../issueMessages';
+import { STAT_BLOCK_LIMITS } from '../statBlockLimits';
 
 /** A minimal valid stat block — the fields the schema actually requires. */
 const baseStatBlock = {
@@ -166,6 +168,77 @@ describe('NpcStatBlockSchema', () => {
     });
   });
 
+  // A Call of Cthulhu creature keeps its characteristics in the six score
+  // slots and its skills as percentages, so it gets wider bounds than D&D 5e's
+  // scores and the shared skill bound. Every other system keeps those.
+  describe('Call of Cthulhu bounds', () => {
+    const invented = {
+      ...baseStatBlock,
+      gameSystem: 'CALL_OF_CTHULHU_7E',
+      abilities: { str: 60, dex: 45, con: 70, int: 40, wis: 50, cha: 15 },
+      skills: { 'Lurk in Mud': 55 },
+    };
+    const messages = (block: unknown) => {
+      const result = NpcStatBlockSchema.safeParse(block);
+      return result.success ? '' : issueMessages(result.error);
+    };
+
+    it('accepts a characteristic over 30 and a skill over 50', () => {
+      expect(messages(invented)).toBe('');
+    });
+
+    it('still refuses a D&D 5e score over 30, with the same message', () => {
+      const dnd = { ...invented, gameSystem: 'DND_5E', skills: undefined, abilities: { ...baseStatBlock.abilities, str: 31 } };
+      expect(messages(dnd)).toBe('abilities.str: Too big: expected number to be <=30');
+    });
+
+    it('still refuses a skill over 50 in D&D 5e, in Pathfinder 2e and with no game system', () => {
+      for (const gameSystem of ['DND_5E', 'PATHFINDER_2E', undefined]) {
+        expect(messages({ ...baseStatBlock, gameSystem, skills: { Athletics: 51 } })).toBe(
+          'skills.Athletics: Too big: expected number to be <=50'
+        );
+      }
+    });
+
+    it('still refuses a score over 30 in Pathfinder 2e and with no game system', () => {
+      for (const gameSystem of ['PATHFINDER_2E', undefined]) {
+        const block = { ...baseStatBlock, gameSystem, abilities: { ...baseStatBlock.abilities, str: 60 } };
+        expect(NpcStatBlockSchema.safeParse(block).success).toBe(false);
+      }
+    });
+
+    it('refuses a characteristic or a skill past the Call of Cthulhu bound', () => {
+      const { maxCallOfCthulhuCharacteristic, maxCallOfCthulhuSkill } = STAT_BLOCK_LIMITS;
+      const atBound = {
+        ...invented,
+        abilities: { ...invented.abilities, str: maxCallOfCthulhuCharacteristic },
+        skills: { 'Lurk in Mud': maxCallOfCthulhuSkill },
+      };
+      expect(messages(atBound)).toBe('');
+      expect(messages({ ...atBound, abilities: { ...atBound.abilities, str: maxCallOfCthulhuCharacteristic + 1 } })).toBe(
+        `abilities.str: Too big: expected number to be <=${maxCallOfCthulhuCharacteristic}`
+      );
+      expect(messages({ ...atBound, skills: { 'Lurk in Mud': maxCallOfCthulhuSkill + 1 } })).toBe(
+        `skills.Lurk in Mud: Too big: expected number to be <=${maxCallOfCthulhuSkill}`
+      );
+    });
+
+    it('keeps a whole number, and the lowest score, in Call of Cthulhu', () => {
+      expect(NpcStatBlockSchema.safeParse({ ...invented, abilities: { ...invented.abilities, str: 60.5 } }).success).toBe(false);
+      expect(NpcStatBlockSchema.safeParse({ ...invented, abilities: { ...invented.abilities, str: -1 } }).success).toBe(false);
+      expect(NpcStatBlockSchema.safeParse({ ...invented, skills: { 'Lurk in Mud': 55.5 } }).success).toBe(false);
+    });
+
+    it('keeps the shared bound on saving throws in Call of Cthulhu', () => {
+      expect(NpcStatBlockSchema.safeParse({ ...invented, savingThrows: { wis: 60 } }).success).toBe(false);
+    });
+
+    it('trims a skill name as before', () => {
+      const result = NpcStatBlockSchema.safeParse({ ...invented, skills: { ' Lurk in Mud ': 55 } });
+      expect(result.success && result.data.skills).toEqual({ 'Lurk in Mud': 55 });
+    });
+  });
+
   describe('unknown keys', () => {
     // Preserved from both schemas this consolidated: stored stat blocks may
     // carry fields the current type does not know about, and stripping them
@@ -222,6 +295,11 @@ describe('CreateCreatureSchema', () => {
       statBlock: { ...baseStatBlock, savingThrows: { wis: 30000 } },
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts a Call of Cthulhu creature with STR 60 and a skill of 55', () => {
+    const statBlock = { ...baseStatBlock, gameSystem: 'CALL_OF_CTHULHU_7E', abilities: { ...baseStatBlock.abilities, str: 60 }, skills: { Burrow: 55 } };
+    expect(CreateCreatureSchema.safeParse({ ...valid, gameSystem: 'CALL_OF_CTHULHU_7E', statBlock }).success).toBe(true);
   });
 
   it('rejects an unknown disposition', () => {

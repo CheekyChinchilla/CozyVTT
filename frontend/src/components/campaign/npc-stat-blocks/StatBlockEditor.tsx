@@ -11,10 +11,10 @@ import { ABILITY_KEYS, CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
 import ProficiencyEditor from './ProficiencyEditor';
 import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
 import PrintedSkillsEditor from './PrintedSkillsEditor';
-import { creatureModel, scoreLabel } from './creatureModel';
+import { creatureModel, scoreLabel, withGameSystem } from './creatureModel';
 import { changeAbilitiesOrRating } from './statBlockProficiency';
 import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
-import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
+import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from '@/constants/statBlockLimits';
 
 interface StatBlockEditorProps {
   statBlock: NpcStatBlock;
@@ -25,7 +25,8 @@ interface StatBlockEditorProps {
    * Pathfinder 2e stores printed modifiers against a creature Level, and Call
    * of Cthulhu and Shadowrun 6e store their scores and skills as typed
    * (creatureModel). Defaults to 5e, which is the shape the stat block was
-   * designed around.
+   * designed around. Every change names the stat block for it, which sets the
+   * bounds the server keeps on its scores and skills.
    */
   gameSystem?: string | null;
 }
@@ -34,10 +35,15 @@ type ActionEntry = { name: string; description: string };
 
 export default function StatBlockEditor({
   statBlock,
-  onChange,
+  onChange: onChangeProp,
   gameSystem = 'DND_5E',
 }: StatBlockEditorProps) {
+  const onChange = useCallback(
+    (updated: NpcStatBlock) => onChangeProp(withGameSystem(updated, gameSystem)),
+    [onChangeProp, gameSystem]
+  );
   const model = creatureModel(gameSystem);
+  const { minScore, maxScore } = statBlockNumberBounds(gameSystem);
   const isPf2e = model === 'pf2e';
   const pf2eModifiers = readAttributeModifiers(statBlock);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['core', 'abilities']));
@@ -222,6 +228,8 @@ export default function StatBlockEditor({
               <input
                 type="number"
                 aria-label={scoreLabel(gameSystem, ab)}
+                min={minScore}
+                max={maxScore}
                 value={statBlock.abilities[ab]}
                 onChange={(e) => {
                   const value = parseInt(e.target.value, 10) || 10;
@@ -242,7 +250,7 @@ export default function StatBlockEditor({
         (model === 'pf2e' ? (
           <Pf2eProficiencyEditor statBlock={statBlock} onChange={onChange} />
         ) : model === 'printed' ? (
-          <PrintedSkillsEditor statBlock={statBlock} onChange={onChange} />
+          <PrintedSkillsEditor statBlock={statBlock} onChange={onChange} gameSystem={gameSystem} />
         ) : (
           <ProficiencyEditor statBlock={statBlock} onChange={onChange} />
         ))}

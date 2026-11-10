@@ -675,8 +675,9 @@ Challenge Rating or proficiency bonus. There's no Challenge Rating box, and a
 rating a creature was given before 1.6.0 is kept but no longer shown. The six
 score boxes are named as the stat block shows them (STR, DEX, CON, INT, POW and
 APP), and **Skills** takes each skill by name with the number the creature's
-stat block prints. For now a characteristic can be at most 30 and a skill at
-most 50, so a creature with higher numbers can't be entered in full yet.
+stat block prints. A characteristic can be up to 9,999 and a skill up to 999,
+enough for the largest creatures the rules describe. There's no box for SIZ or
+EDU yet.
 
 ### Editing Custom Creatures
 

@@ -15,15 +15,12 @@
  */
 
 import { z } from 'zod';
-import {
-  MAX_ABILITY_SCORE,
-  MAX_PROFICIENCY_BONUS,
-  MIN_ABILITY_SCORE,
-} from '../utils/rules/dnd5e';
-import { STAT_BLOCK_LIMITS } from './statBlockLimits';
+import { MAX_PROFICIENCY_BONUS } from '../utils/rules/dnd5e';
+import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from './statBlockLimits';
 
 /**
- * Storage bounds for any save or skill bonus, across every game system.
+ * Storage bounds for any save or skill bonus. A Call of Cthulhu creature's
+ * skills are percentages and have their own highest (statBlockNumberBounds).
  *
  * Deliberately wider than D&D 5e needs. 5e tops out around +28 (a CR 30
  * creature with a +10 ability and expertise on a +9 proficiency bonus), but
@@ -86,14 +83,43 @@ export interface StatBlockSchemaOptions {
  * and any custom skill all have to fit. Which keys are *offered* is the editor's
  * job; this layer's job is to make the stored numbers sane.
  */
-const bonusRecordSchema = z
-  .record(
-    z.string().trim().min(1).max(MAX_KEY_LENGTH),
-    z.number().int().min(MIN_STORED_BONUS).max(MAX_STORED_BONUS)
-  )
-  .refine((record) => Object.keys(record).length <= MAX_BONUS_ENTRIES, {
-    message: `At most ${MAX_BONUS_ENTRIES} entries are allowed`,
-  });
+const bonusRecordOf = (value: z.ZodNumber) =>
+  z
+    .record(z.string().trim().min(1).max(MAX_KEY_LENGTH), value)
+    .refine((record) => Object.keys(record).length <= MAX_BONUS_ENTRIES, {
+      message: `At most ${MAX_BONUS_ENTRIES} entries are allowed`,
+    });
+
+const bonusRecordSchema = bonusRecordOf(z.number().int().min(MIN_STORED_BONUS).max(MAX_STORED_BONUS));
+
+/**
+ * Skills, bounded by game system in the stat block's own check
+ * (statBlockNumberBounds): a Call of Cthulhu skill is a percentage.
+ */
+const skillRecordSchema = bonusRecordOf(z.number());
+
+/**
+ * The six scores, bounded by game system in the stat block's own check
+ * (statBlockNumberBounds): a Call of Cthulhu creature keeps its
+ * characteristics here, POW in Wisdom's slot and APP in Charisma's.
+ */
+const abilitiesSchema = z.object({
+  str: z.number(),
+  dex: z.number(),
+  con: z.number(),
+  int: z.number(),
+  wis: z.number(),
+  cha: z.number(),
+});
+type AbilityKey = keyof z.infer<typeof abilitiesSchema>;
+const ABILITY_KEYS = Object.keys(abilitiesSchema.shape) as AbilityKey[];
+
+/** Report a value's issues against `schema` at `path` in the stat block. */
+function checkNumber(ctx: z.RefinementCtx, schema: z.ZodNumber, value: number, path: (string | number)[]): void {
+  const result = schema.safeParse(value);
+  if (result.success) return;
+  for (const issue of result.error.issues) ctx.addIssue({ ...issue, path: [...path, ...issue.path] });
+}
 
 /**
  * How proficient a creature is in a save or skill.
@@ -146,18 +172,12 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     hpMax: z.number().int().min(1).max(99999).optional(),
     hitDice: z.string().max(STAT_BLOCK_LIMITS.maxHitDiceLength).optional(),
     speed: z.string().max(options.maxSpeedLength),
-    // TODO(creatures): D&D 5e's score bound, and every system's skill bound of
-    // 50, refuse a Call of Cthulhu creature's real numbers (STR 60, Dodge 55).
-    // A Call of Cthulhu creature model, with its eight characteristics and
-    // percentile skills, is the fix (docs/FUTURE_FEATURES.md, Known issues).
-    abilities: z.object({
-      str: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      dex: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      con: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      int: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      wis: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-      cha: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
-    }),
+    // TODO(creatures): a Call of Cthulhu creature has eight characteristics
+    // and this stat block six slots, so SIZ and EDU have nowhere to go; its
+    // skills are percentages kept in the bonus record. A Call of Cthulhu
+    // creature model with all eight is the fix (docs/FUTURE_FEATURES.md,
+    // Known issues).
+    abilities: abilitiesSchema,
     // Attribute modifiers, for systems that print modifiers rather than
     // scores. Pathfinder 2e stat blocks give "Str +4" with no underlying
     // score, so deriving one would be an invention.
@@ -175,7 +195,7 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     // challenge rating. PF2e runs -1 to 25.
     level: z.number().int().min(-1).max(30).optional(),
     savingThrows: bonusRecordSchema.optional(),
-    skills: bonusRecordSchema.optional(),
+    skills: skillRecordSchema.optional(),
     proficiencies: proficienciesSchema.optional(),
     damageVulnerabilities: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
     damageResistances: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
@@ -201,6 +221,13 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     .object(shape)
     .passthrough()
     .superRefine((block, ctx) => {
+      // Scores and skills, by the game system the stat block names.
+      const bounds = statBlockNumberBounds(block.gameSystem);
+      const score = z.number().int().min(bounds.minScore).max(bounds.maxScore);
+      const skill = z.number().int().min(bounds.minSkill).max(bounds.maxSkill);
+      for (const key of ABILITY_KEYS) checkNumber(ctx, score, block.abilities[key], ['abilities', key]);
+      for (const [key, value] of Object.entries(block.skills ?? {})) checkNumber(ctx, skill, value, ['skills', key]);
+
       const extra = Object.keys(block).filter((key) => !named.has(key));
       if (options.maxExtraKeys !== undefined && extra.length > options.maxExtraKeys) {
         ctx.addIssue({

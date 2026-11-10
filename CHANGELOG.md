@@ -30,6 +30,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A Pathfinder 2e sheet waits for you to choose its Class DC's Key Attribute.** New sheets started with Strength, and on a sheet with none the editor filled in Intelligence and showed a different Class DC from the sheet. Now both read 10 until you choose one. See [Pathfinder 2nd Edition](docs/USER_GUIDE.md#pathfinder-2nd-edition).
 
+- **A Call of Cthulhu creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them, though an ordinary person's characteristics run higher. A characteristic can now be up to 9,999 and a skill up to 999. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

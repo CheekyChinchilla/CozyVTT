@@ -127,7 +127,7 @@ where the rules genuinely diverge.
 | `level` | Creature level, for systems that rate by level instead |
 | `savingThrows`, `skills` | `Record<string, number>` of **final totals** — the value that gets rolled |
 | `proficiencies` | Optional metadata saying *why* each total is what it is |
-| `gameSystem` | Which system this block is written for |
+| `gameSystem` | Which system this block is written for; it sets the bounds on `abilities` and `skills` |
 
 **Totals are the storage format and are not changing.** They are what the roll
 picker, the viewer, campaign export and the SRD importer all read. Proficiency
@@ -170,8 +170,13 @@ question, and getting it wrong invents numbers the designers never intended.
   and skills as typed (`creatureModel` in `npc-stat-blocks/creatureModel.ts`).
   A rating stored before is kept and shown nowhere: the Creature Library's
   list and the generic stat block leave it out for these systems.
-  The stat block's bounds still fit D&D 5e's scores, so a Call of Cthulhu
-  creature's characteristics stop at 30 and its skills at 50 (a known issue).
+  A stat block whose `gameSystem` is `CALL_OF_CTHULHU_7E` takes
+  characteristics up to 9,999 and skills up to 999; every other one keeps
+  D&D 5e's scores of 0 to 30 and skills of -50 to 50, and saves stay at -50 to
+  50 in every system (`statBlockNumberBounds` in `validators/statBlockLimits.ts`,
+  the same file as `frontend/src/constants/statBlockLimits.ts`). The editors
+  name a stat block for the campaign's game system when they change it. SIZ
+  and EDU still have no slot (a known issue).
 
   **A derived base is not a derived value.** Call of Cthulhu's Dodge is listed
   as "Dodge (half DEX)": half DEX, rounded down, is its *base*, and occupation
