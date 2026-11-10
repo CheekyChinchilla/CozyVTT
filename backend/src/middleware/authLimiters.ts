@@ -90,6 +90,9 @@ export const mfaAccountLimiter = failureLimiter({
   max: 5,
   message: 'Too many MFA login attempts for this account, please try again later',
   key: (req) => (req.session?.mfaPendingUserId ? mfaAccountKey(req.session.mfaPendingUserId) : null),
+  // It runs after the per-address code limiter, whose headers describe the
+  // allowance of the address the request came from.
+  headers: false,
 });
 
 /**

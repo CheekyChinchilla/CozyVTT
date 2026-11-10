@@ -211,6 +211,58 @@ describe('running setup', () => {
   });
 });
 
+/**
+ * The administrator the wizard signs in has signed in: the Admin Panel shows
+ * when, and what is only for an account nobody has used (Resend Invite, the
+ * fresh 7 days an invitation link gives an administrator to set up two-factor
+ * authentication) is not offered to it.
+ */
+describe('the administrator the wizard makes', () => {
+  let admin: request.Agent;
+  let adminId: string;
+  let email: typeof import('../../services/email');
+
+  beforeAll(async () => {
+    await freshInstance();
+    email = require('../../services/email') as typeof import('../../services/email');
+    admin = request.agent(app);
+    const res = await init({ email: 'keeper@example.com', password: PASSWORD, displayName: 'Keeper' }, admin);
+    expect(res.status).toBe(201);
+    adminId = res.body.user.id;
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('is stamped as signed in', async () => {
+    expect((await db.user.findUniqueOrThrow({ where: { id: adminId } })).lastLoginAt).not.toBeNull();
+  });
+
+  it('is refused Resend Invite, and no link is sent', async () => {
+    jest.spyOn(email, 'isSmtpConfigured').mockReturnValue(true);
+    const send = jest.spyOn(email, 'sendInvitationEmail').mockResolvedValue(undefined);
+
+    const res = await admin.post(`/api/admin/users/${adminId}/resend-invite`);
+
+    expect(res.status).toBe(409);
+    expect(send).not.toHaveBeenCalled();
+    expect(await db.passwordResetToken.count({ where: { userId: adminId } })).toBe(0);
+  });
+
+  it('does not start its two-factor days again from an invitation link', async () => {
+    const { hashResetToken } = require('../../services/passwordResetTokens') as typeof import('../../services/passwordResetTokens');
+    const day = 24 * 60 * 60 * 1000;
+    const issued = new Date(Date.now() - day);
+    await db.passwordResetToken.create({
+      data: { userId: adminId, token: hashResetToken('wizard-invite'), createdAt: issued, expiresAt: new Date(issued.getTime() + 7 * day) },
+    });
+
+    const res = await request(app).post('/api/auth/reset-password').send({ token: 'wizard-invite', newPassword: 'Keeper-Str0ng-Passw0rd!' });
+
+    expect(res.status).toBe(200);
+    expect(await db.systemLog.count({ where: { message: { contains: 'accepted an invitation' } } })).toBe(0);
+  });
+});
+
 describe('two setups at once', () => {
   beforeAll(freshInstance);
 

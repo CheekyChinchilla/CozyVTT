@@ -40,13 +40,25 @@ const invalid = (res: Response, message: string) => res.status(400).json({ error
 
 /**
  * The bookkeeping every completed sign-in does, after the session has been
- * regenerated and the user set: stamp when it was made, so the guards can end
- * it after the remember-me window however active it stays, and remove the
- * account's oldest sessions beyond the cap. The cap is housekeeping and must
- * not stop a sign-in, so its failure is logged and the sign-in goes on.
+ * regenerated and the user set: a password sign-in, the code step of a
+ * two-factor one, a registration that signs the person in, and the setup
+ * wizard. Stamp the session with when it was made, so the guards can end it
+ * after the remember-me window however active it stays; stamp the account's
+ * `lastLoginAt`, which the Admin Panel shows and which decides whether an
+ * invitation is still for it (Resend Invite, an invited administrator's
+ * two-factor days); and remove the account's oldest sessions beyond the cap.
+ *
+ * Neither the account's stamp nor the cap may stop a sign-in that has already
+ * been made, so a failure of either is logged and the sign-in goes on. An
+ * account left unstamped is stamped by its next GET /api/auth/me.
  */
-function recordSignIn(req: Request, userId: string): void {
+export async function recordSignIn(req: Request, userId: string): Promise<void> {
   req.session.signedInAt = Date.now();
+  try {
+    await prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+  } catch (err) {
+    logger.error('Failed to stamp the account\'s last sign-in', { err, userId });
+  }
   inBackground('the oldest sign-ins past the cap removed', async () => {
     try {
       await capLoginSessions(userId, req.sessionID);
@@ -243,7 +255,7 @@ router.post('/register', hashingPerAddress, accountCreationLimiter, async (req: 
       await regenerateSession(req);
       req.session.userId = user.id;
       req.session.platformRole = user.platformRole;
-      recordSignIn(req, user.id);
+      await recordSignIn(req, user.id);
 
       return res.status(201).json({
         message: 'User registered successfully',
@@ -257,7 +269,7 @@ router.post('/register', hashingPerAddress, accountCreationLimiter, async (req: 
     await regenerateSession(req);
     req.session.userId = user.id;
     req.session.platformRole = user.platformRole;
-    recordSignIn(req, user.id);
+    await recordSignIn(req, user.id);
 
     return res.status(201).json({
       message: 'User registered successfully',
@@ -338,7 +350,7 @@ router.post('/login', hashingPerAddress, credentialLimiter, accountLoginLimiter,
     req.session.platformRole = user.platformRole;
     // Gates every other API call until the password is replaced
     req.session.mustChangePassword = user.mustChangePassword;
-    recordSignIn(req, user.id);
+    await recordSignIn(req, user.id);
 
     // Extend session if "Remember Me" is checked
     if (rememberMe && req.session.cookie) {
@@ -412,6 +424,22 @@ router.get('/me', async (req: Request, res: Response) => {
         error: 'Unauthorized',
         message: 'User not found',
       });
+    }
+
+    // An account signed in before every completed sign-in was stamped (the
+    // setup wizard's administrator, anyone who registered) has no stamp until
+    // its owner signs in again, which can be the whole remember-me window
+    // away. Every page reads this route at load, so a live session stamps it
+    // here, once: the write is conditional on the stamp still being empty, and
+    // an account with one costs nothing beyond this read.
+    if (user.lastLoginAt === null) {
+      const now = new Date();
+      try {
+        const stamped = await prisma.user.updateMany({ where: { id: user.id, lastLoginAt: null }, data: { lastLoginAt: now } });
+        if (stamped.count > 0) user.lastLoginAt = now;
+      } catch (err) {
+        logger.error('Failed to stamp the account\'s last sign-in', { err, userId: user.id });
+      }
     }
 
     return res.status(200).json({
@@ -1001,7 +1029,7 @@ router.post('/mfa/verify-login', hashingPerAddressWhen(sendsBackupCode), mfaLogi
     await regenerateSession(req);
     req.session.userId = user.id;
     req.session.platformRole = user.platformRole;
-    recordSignIn(req, user.id);
+    await recordSignIn(req, user.id);
     req.session.mfaPending = undefined;
     req.session.mfaPendingUserId = undefined;
     req.session.mfaRememberMe = undefined;
