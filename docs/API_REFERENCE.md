@@ -1553,9 +1553,10 @@ shared with `POST /api/auth/change-password` and `DELETE /api/auth/account`,
 then `429` "Too many wrong passwords, please try again later". An address
 another account has is refused with `400` "Email already in use".
 Changing your own address is also limited to 5 attempts an hour for the
-account, from every sign-in: every request that would change it counts, with
-the right password, a wrong one or none, and whether or not the address is
-taken. The next is refused with `429` "You have tried to change your email
+account, from every sign-in. A request counts once its display name and
+avatar pass their checks and its `email` is a valid address other than yours
+in any letter case: with the right password, a wrong one or none, and whether
+or not the address is taken. The next is refused with `429` "You have tried to change your email
 address 5 times in the last hour, the most this server allows. Please try
 again later." and `Retry-After`, before the password is checked; the refusal
 is not counted. Other profile changes do not count, and an admin changing
