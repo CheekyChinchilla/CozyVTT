@@ -10,6 +10,10 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ## [Unreleased]
 
+### Added
+
+- **The DM can make a member a spectator, or a player again.** On the **Members** tab of **Campaign Settings**, choose **Player** or **Spectator** beside them, and their open page follows at once. Every button on a member's row is now big enough for a finger on a phone or a tablet. See [Changing a member's role](docs/DM_GUIDE.md#changing-a-members-role).
+
 ### Changed
 
 - **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).

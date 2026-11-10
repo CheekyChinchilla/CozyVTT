@@ -23,6 +23,13 @@ export enum CampaignRole {
   SPECTATOR = 'SPECTATOR',
 }
 
+/**
+ * The roles the DM may give a member (PUT .../members/:userId/role). The
+ * route refuses to make anyone the DM while the campaign has one, which it
+ * always has when its DM asks; the seat moves only by hand-over (transferDM).
+ */
+export type AssignableCampaignRole = Exclude<CampaignRole, CampaignRole.DM>;
+
 export enum CampaignStatus {
   PREPARATION = 'PREPARATION',
   ACTIVE = 'ACTIVE',

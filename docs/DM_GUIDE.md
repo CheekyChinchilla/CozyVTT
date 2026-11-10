@@ -46,7 +46,7 @@ Once inside the campaign, click the **Campaign Settings** button (gear icon in t
 
 - **General** — the **Campaign Name** and **Description**, saved with **Save Changes**; **Players may draw**, on in every campaign until you turn it off and saved as soon as you switch it (see [Drawing on the map](#drawing-on-the-map)); and **Export Campaign** (see [Exporting a Campaign](#exporting-a-campaign))
 - **Chat** — **Enable message cooldown**, off by default, makes everyone in the chat, you included, wait between messages, for the **Cooldown duration** you set (1 to 300 seconds). While someone waits, a line under their chat box counts down, such as "Wait 5s before sending another message"
-- **Members** — everyone in the campaign, the players you have invited who have not answered yet (under **Invited**, each with the date it runs out and an **×** to withdraw it), with **Invite Player**, the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
+- **Members** — everyone in the campaign, the players you have invited who have not answered yet (under **Invited**, each with the date it runs out and an **×** to withdraw it), with **Invite Player**, the role picker that makes a member a **Player** or a **Spectator** (see [Changing a member's role](#changing-a-members-role)), the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
 - **Danger Zone** — **Delete Campaign**, shown only to the campaign's owner (whether or not they are still its DM) and to administrators, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
 
 *Screenshot pending — Campaign settings panel.*
@@ -74,7 +74,7 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 > **Note:** If registration is closed on your instance, the platform administrator will need to create accounts for your players before you can invite them.
 
-**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat and ping the map, and keeps private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or edit a character sheet at the table, not even through a token that still names them from when they were a player: such a token is treated as nobody's, so they see it as any other player would and it gives them no sight on a lit map. A character they brought while a player stays in the roster, but they cannot edit it while they are a spectator; you can. They can still add one of their own characters to the roster, take one out, or delete it. Edit Token and the Token Manager offer only players as a token's controller. A token still naming someone who has since become a spectator, or left the campaign, says so in both (*not a player* in the Token Manager's list, *no longer a player* in **Controlled By**), and they cannot move it; choose a player or **Nobody (DM controls)**. Everyone you invite joins as a player, and the app has no control yet for making someone a spectator; the role can only be set through the API (`PUT /api/campaigns/{campaignId}/members/{userId}/role`).
+**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat and ping the map, and keeps private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or edit a character sheet at the table, not even through a token that still names them from when they were a player: such a token is treated as nobody's, so they see it as any other player would and it gives them no sight on a lit map. A character they brought while a player stays in the roster, but they cannot edit it while they are a spectator; you can. They can still add one of their own characters to the roster, take one out, or delete it. Edit Token and the Token Manager offer only players as a token's controller. A token still naming someone who has since become a spectator, or left the campaign, says so in both (*not a player* in the Token Manager's list, *no longer a player* in **Controlled By**), and they cannot move it; choose a player or **Nobody (DM controls)**. Everyone you invite joins as a player; to make someone a spectator, or a spectator a player, see [Changing a member's role](#changing-a-members-role).
 
 ### The Campaign Roster
 
@@ -835,6 +835,17 @@ Templates are per game system, so a D&D 5e template is only useful to a D&D 5e c
 ### Viewing the Roster
 
 The Campaign Roster in the left sidebar gives you a real-time view of all players and their characters. During a session, you can see who's connected.
+
+### Changing a member's role
+
+1. Open **Campaign Settings** (the gear icon in the header) and its **Members** tab.
+2. Beside the member, choose **Player** or **Spectator** in the role picker.
+
+The change is saved as soon as you choose, and you are told so, as "Mara is now a spectator". If it is refused, for example because they have just left the campaign, the picker goes back to their role and the message says why.
+
+**It takes effect at once**, even if they are in the session: their page changes its controls without a reload, and the map, the initiative order and the drawings are sent to them again as their new role sees them. A spectator watches: they see the map as a player with no token does, chat, whisper and ping, but cannot roll dice or initiative, move or edit tokens, draw, or edit a character (see **Spectators** under [Inviting Players](#inviting-players)). Their characters stay in the roster, and a token that names them stays theirs: they cannot move it while they are a spectator, and can again once they are a player.
+
+The picker is beside everyone but you, the campaign's owner included. An owner you make a spectator keeps what owning the campaign gives them: **Owner Settings**, deleting the campaign and taking the DM seat back. The DM's own role does not change here: to step down, hand the seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)).
 
 ### Removing a Player
 

@@ -484,6 +484,22 @@ describe('the kinds of chat message', () => {
   });
 });
 
+// The Role picker under Members offers every role but the DM, read from the
+// frontend's enum; the role route takes the database's.
+describe('the roles in a campaign', () => {
+  it('are the same in the database schema and the frontend', () => {
+    const prismaBlock = /enum CampaignRole \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+    const frontendBlock = /export enum CampaignRole \{([^}]*)\}/.exec(read('frontend/src/types/index.ts'));
+    if (!prismaBlock || !frontendBlock) throw new Error('a CampaignRole enum moved; update this test');
+    const database = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
+      expect(m[1]).toBe(m[2]);
+      return m[2];
+    });
+    expect(frontend).toEqual(database);
+  });
+});
+
 describe('the map limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/mapLimits.ts')).toBe(read('backend/src/validators/mapLimits.ts'));

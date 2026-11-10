@@ -923,6 +923,10 @@ stays with whoever created it. The owner may always hand the DM seat on
 (`DELETE /api/campaigns/:campaignId/members/:userId` answers `400`) or leave
 it (`POST /api/campaigns/:campaignId/leave` answers `409`), since only the DM
 can add a membership and the owner could not get back in.
+The DM may still make the owner a spectator, or a player again
+(`PUT /api/campaigns/:campaignId/members/:userId/role`, which the role picker
+under Members offers beside every member but the DM): that changes what the
+owner may do at the table, and none of the three above.
 
 ### Transferring the DM role
 

@@ -22,7 +22,7 @@ import type { Campaign, CampaignMembership } from '@/types';
  * Each role in a campaign by the name the page gives it: on the dashboard's
  * campaign card (CampaignCard), beside a whisper's recipient whose name
  * another member shares (utils/chatWhisper.ts), and on the Members tab's
- * badges, Remove's question and its toast (CampaignSettingsModal).
+ * badges and Role pickers, Remove's question and its toast (CampaignSettingsModal).
  */
 export const CAMPAIGN_ROLE_LABEL: Record<CampaignRole, string> = {
   [CampaignRole.DM]: 'DM',

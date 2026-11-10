@@ -265,4 +265,21 @@ describe('PUT /api/campaigns/:campaignId/dm', () => {
       expect(Object.values(await rolesById()).filter((r) => r === 'DM')).toHaveLength(1);
     });
   });
+
+  // The DM's Role picker offers Spectator beside the owner too. Being one
+  // changes what they may do at the table, and nothing ownership gives them.
+  describe('an owner made a spectator', () => {
+    it('stays the owner and can still take the seat back', async () => {
+      const dm = await login(emails.dm);
+      const demoted = await dm.put(`/api/campaigns/${campaignId}/members/${ownerId}/role`).send({ role: 'SPECTATOR' });
+      expect(demoted.status).toBe(200);
+      expect(demoted.body.membership).toMatchObject({ userId: ownerId, role: 'SPECTATOR' });
+      expect((await prisma.campaign.findUnique({ where: { id: campaignId } }))?.ownerId).toBe(ownerId);
+
+      const owner = await login(emails.owner);
+      const back = await owner.put(`/api/campaigns/${campaignId}/dm`).send({ userId: ownerId });
+      expect(back.status).toBe(200);
+      expect((await rolesById())[ownerId]).toBe('DM');
+    });
+  });
 });

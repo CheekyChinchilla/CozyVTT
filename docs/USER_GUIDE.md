@@ -137,7 +137,7 @@ Within a campaign you have one of three roles. Whoever creates a campaign is its
 |------|-----------------|
 | **DM** | Everything: maps, tokens, fog and lighting, the initiative order, inviting and removing members |
 | **Player** | Move the tokens they control, roll dice, chat and whisper, draw on the map while the DM allows it, keep notes, and read and edit their own characters. They can leave the campaign with **Leave Campaign**, in the **Campaign Info** panel ([Leaving a campaign](PLAYER_GUIDE.md#leaving-a-campaign)) |
-| **Spectator** | Watch the map, follow and write in the chat, whispers included, and ping the map; they keep private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, draw on the map, or edit a character sheet, even their own, while they are a spectator. They can still add one of their characters to the campaign's roster, take one out of it, or delete one of their own characters, and leave the campaign as a player can. There is no control in the app for making someone a spectator yet; the role can only be set through the API |
+| **Spectator** | Watch the map, follow and write in the chat, whispers included, and ping the map; they keep private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, draw on the map, or edit a character sheet, even their own, while they are a spectator. They can still add one of their characters to the campaign's roster, take one out of it, or delete one of their own characters, and leave the campaign as a player can. The DM makes someone a spectator, or a player again, on the **Members** tab of **Campaign Settings** ([Changing a member's role](DM_GUIDE.md#changing-a-members-role)) |
 
 ---
 
