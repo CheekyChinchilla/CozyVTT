@@ -3,7 +3,7 @@ import { handleUnauthorized } from '@/services/unsavedWork';
 import { loadPage } from '@/services/pageLoad';
 import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
-import type { WallSegment } from '@/types/walls';
+import type { WallSegment, WallsAdded } from '@/types/walls';
 import type {
   User,
   AdminListedUser,
@@ -1070,9 +1070,13 @@ class ApiClient {
     return response.data;
   }
 
-  /** Add one wall segment to a map (DM only); the server gives it its id. */
-  async addWall(campaignId: string, mapId: string, segment: Omit<WallSegment, 'id'>): Promise<{ segment: WallSegment; total: number }> {
-    const response = await this.client.post(`/api/campaigns/${campaignId}/maps/${mapId}/walls`, segment);
+  /**
+   * Add many wall segments to a map in one request (DM only); the server
+   * gives each its id. Those the map refuses are skipped and listed, each
+   * with its place in the list and why.
+   */
+  async addWalls(campaignId: string, mapId: string, segments: Array<Omit<WallSegment, 'id'>>): Promise<WallsAdded> {
+    const response = await this.client.post<WallsAdded>(`/api/campaigns/${campaignId}/maps/${mapId}/walls/batch`, { segments });
     return response.data;
   }
 

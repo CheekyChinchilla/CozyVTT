@@ -77,7 +77,7 @@ const h = vi.hoisted(() => {
     campaign: { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, characters: [], status: 'ACTIVE', playersMayDraw: true, memberships: [], maps: [] as Array<{ id: string; name?: string; imageUrl?: string }> },
     updateMap: vi.fn(),
     getMap: vi.fn(),
-    addWall: vi.fn(),
+    addWalls: vi.fn(),
     /** The draft store Paint is given; a fresh one each test. */
     drafts: { store: null as unknown },
     /** This tab, as drafts tell tabs apart, and the other tabs open now (null: the browser cannot tell). */
@@ -161,7 +161,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/services/map.service', () => ({
-  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: h.getMap, addWall: h.addWall },
+  default: { updateMap: h.updateMap, getMaps: vi.fn().mockResolvedValue([]), getMap: h.getMap, addWalls: h.addWalls },
 }));
 
 vi.mock('@/services/api', () => {
@@ -179,6 +179,7 @@ vi.mock('@/services/api', () => {
 import MapCanvas from '../MapCanvas';
 import { useGameStore } from '@/stores/gameStore';
 import { DRAWN_MAP_TAG } from '@/constants/assetLimits';
+import { MAP_LIMITS, TOO_MANY_WALLS_MESSAGE } from '@/constants/mapLimits';
 
 const { recorded, take } = recordDrawing();
 
@@ -303,7 +304,8 @@ beforeEach(() => {
   });
   h.campaign.maps = [{ id: 'map-a' }, { id: 'map-b' }];
   h.getMap.mockReset().mockImplementation(() => Promise.resolve(h.state.currentMap));
-  h.addWall.mockReset().mockImplementation((_campaignId: string, _mapId: string, wall: object) => Promise.resolve({ id: 'wall', ...wall }));
+  h.addWalls.mockReset().mockImplementation((_campaignId: string, _mapId: string, walls: object[]) =>
+    Promise.resolve({ added: walls.map((wall, i) => ({ id: `wall-${i}`, ...wall })), skipped: [], total: walls.length }));
   h.updateMap.mockReset().mockImplementation((_campaignId: string, mapId: string, data: { imageUrl: string }) =>
     Promise.resolve({ ...(h.state.currentMap as object), id: mapId, imageUrl: storedAs(data.imageUrl) }));
   act(() => {
@@ -785,7 +787,8 @@ describe('lines, rectangles and ellipses', () => {
 describe('a room', () => {
   const callsOfPicture = (method: string) => callsOn(pictureCanvas()).filter((c) => c.method === method);
   const choose = (tool: string) => fireEvent.click(within(screen.getByRole('region', { name: 'Mapmaker' })).getByRole('button', { name: tool }));
-  const wallsAdded = () => h.addWall.mock.calls.map(([, , wall]) => wall as object);
+  /** The walls Save sent, every call's in order. */
+  const wallsAdded = () => h.addWalls.mock.calls.flatMap(([, , walls]) => walls as object[]);
   /** The four walls of the room 50,50 to 150,100, as Save adds them. */
   const fourWalls = [
     { x1: 50, y1: 50, x2: 150, y2: 50, type: 'wall' },
@@ -802,10 +805,11 @@ describe('a room', () => {
     expect(callsOfPicture('rect')[callsOfPicture('rect').length - 1]?.args).toEqual([50, 50, 100, 50]);
     expect(callsOfPicture('fill')).toHaveLength(1);
     expect(callsOfPicture('stroke')).toHaveLength(1);
-    expect(h.addWall).not.toHaveBeenCalled();
+    expect(h.addWalls).not.toHaveBeenCalled();
     await pressSave();
     await waitFor(() => expect(wallsAdded()).toEqual(fourWalls));
-    expect(h.addWall.mock.calls.every(([campaignId, mapId]) => campaignId === 'campaign-1' && mapId === 'map-a')).toBe(true);
+    expect(h.addWalls).toHaveBeenCalledTimes(1);
+    expect(h.addWalls).toHaveBeenCalledWith('campaign-1', 'map-a', fourWalls);
   });
 
   it('is chosen by M, and paints nothing with no width or no height', async () => {
@@ -826,7 +830,7 @@ describe('a room', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
     await pressSave();
     await waitFor(() => expect(h.updateMap).toHaveBeenCalled());
-    expect(h.addWall).not.toHaveBeenCalled();
+    expect(h.addWalls).not.toHaveBeenCalled();
 
     drag({ clientX: 52, clientY: 52 }, { clientX: 148, clientY: 98 });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
@@ -843,20 +847,52 @@ describe('a room', () => {
     drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
     drag({ clientX: 150, clientY: 50 }, { clientX: 250, clientY: 100 });
     await pressSave();
-    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
+    expect(wallsAdded()).toHaveLength(6);
     const keys = wallsAdded().map((w) => JSON.stringify(w));
     expect(new Set(keys).size).toBe(6);
     expect(keys).not.toContain(JSON.stringify(fourWalls[0]));
   });
 
-  it('says how many walls were not added when the map refuses one, the picture saved', async () => {
+  it('says how many walls the map skipped and why, the picture saved', async () => {
     await showMap();
     await paintOn();
     choose('Room');
     drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
-    h.addWall.mockResolvedValueOnce({}).mockRejectedValueOnce(Object.assign(new Error('400'), { response: { status: 400, data: { message: 'Maximum 5000 wall segments per map' } } }));
+    h.addWalls.mockResolvedValueOnce({
+      added: [{ id: 'wall-0', ...fourWalls[0] }],
+      skipped: [1, 2, 3].map((index) => ({ index, reason: TOO_MANY_WALLS_MESSAGE })),
+      total: MAP_LIMITS.maxWallSegments,
+    });
     await pressSave();
-    expect(await screen.findByText('The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: Maximum 5000 wall segments per map. Draw them with the wall tool.')).toBeInTheDocument();
+    expect(await screen.findByText(`The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: ${TOO_MANY_WALLS_MESSAGE}. Draw them with the wall tool.`)).toBeInTheDocument();
+    expect(h.addWalls).toHaveBeenCalledTimes(1);
+    expect(h.updateMap).toHaveBeenCalled();
+  });
+
+  it('gives each different reason once when walls are skipped for more than one', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    const outside = 'A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges.';
+    h.addWalls.mockResolvedValueOnce({
+      added: [],
+      skipped: [{ index: 0, reason: outside }, { index: 1, reason: outside }, { index: 2, reason: TOO_MANY_WALLS_MESSAGE }, { index: 3, reason: TOO_MANY_WALLS_MESSAGE }],
+      total: MAP_LIMITS.maxWallSegments,
+    });
+    await pressSave();
+    expect(await screen.findByText(`The picture was saved, but the 4 walls of your rooms were not added to the map: ${outside} ${TOO_MANY_WALLS_MESSAGE}. Draw them with the wall tool.`)).toBeInTheDocument();
+  });
+
+  it('says none of the walls were added when the request for them fails, the picture saved', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    h.addWalls.mockRejectedValueOnce(Object.assign(new Error('404'), { response: { status: 404, data: { message: 'Map not found' } } }));
+    await pressSave();
+    expect(await screen.findByText('The picture was saved, but the 4 walls of your rooms were not added to the map: Map not found. Draw them with the wall tool.')).toBeInTheDocument();
     expect(h.updateMap).toHaveBeenCalled();
   });
 
@@ -878,9 +914,9 @@ describe('a room', () => {
     choose('Room');
     drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
     let addFirst: () => void = () => undefined;
-    h.addWall.mockImplementationOnce(() => new Promise((resolve) => { addFirst = () => resolve({}); }));
+    h.addWalls.mockImplementationOnce((_c: string, _m: string, walls: object[]) => new Promise((resolve) => { addFirst = () => resolve({ added: walls, skipped: [], total: walls.length }); }));
     await pressSave();
-    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
     const reload = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(reload);
     expect(reload.defaultPrevented).toBe(true);
@@ -2039,10 +2075,10 @@ describe('drafts', () => {
       act(() => { vi.advanceTimersByTime(DRAFT_INTERVAL_MS); });
       await settle();
       let addFirst: () => void = () => undefined;
-      h.addWall.mockImplementationOnce(() => new Promise((resolve) => { addFirst = () => resolve({}); }));
+      h.addWalls.mockImplementationOnce((_c: string, _m: string, walls: object[]) => new Promise((resolve) => { addFirst = () => resolve({ added: walls, skipped: [], total: walls.length }); }));
       await pressSave();
-      for (let i = 0; i < 20 && h.addWall.mock.calls.length === 0; i += 1) await settle();
-      expect(h.addWall).toHaveBeenCalledTimes(1);
+      for (let i = 0; i < 20 && h.addWalls.mock.calls.length === 0; i += 1) await settle();
+      expect(h.addWalls).toHaveBeenCalledTimes(1);
       // The DM paints while the walls go in, and that painting is drafted.
       const writes = drafts().writes.length;
       fireEvent.click(panel().getByRole('button', { name: 'Brush' }));
@@ -2083,8 +2119,8 @@ describe('drafts', () => {
     await act(async () => { fireEvent.click(within(restoreQuestion()!).getByRole('button', { name: 'Restore my painting' })); });
     await waitFor(() => expect(screen.getByRole('button', { name: 'Mapmaker' })).toHaveAttribute('aria-pressed', 'true'));
     await pressSave();
-    await waitFor(() => expect(h.addWall).toHaveBeenCalledTimes(2));
-    expect(h.addWall.mock.calls.map(([, , wall]) => wall)).toEqual([
+    await waitFor(() => expect(h.addWalls).toHaveBeenCalledTimes(1));
+    expect(h.addWalls.mock.calls[0]?.[2]).toEqual([
       { x1: 0, y1: 0, x2: 100, y2: 0, type: 'wall' },
       { x1: 100, y1: 0, x2: 100, y2: 50, type: 'wall' },
     ]);

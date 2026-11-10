@@ -22,7 +22,7 @@ import { canReadAssetById, canReferenceAsset, isMapPicture, isTokenPicture, canC
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE, MAX_WALL_SEGMENTS, MAX_LIGHT_SOURCES, TOO_MANY_WALLS_MESSAGE, TOO_MANY_LIGHTS_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES, TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
-import type { WallSegment, FogState, LightSource } from '../types/walls';
+import type { WallSegment, FogState, LightSource, SkippedWall, WallsAdded } from '../types/walls';
 import { parseUVTT } from '../services/uvttParser';
 import { buildUVTT } from '../services/uvttExporter';
 import { fileTypeFromBuffer } from 'file-type';
@@ -2239,6 +2239,84 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
   } catch (error) {
     logger.error('Error adding wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to add wall segment' });
+  }
+});
+
+/**
+ * POST /api/campaigns/:campaignId/maps/:id/walls/batch
+ * Add many wall segments at once (DM only), as Mapmaker's Save adds the walls
+ * of the rooms painted. Body: { segments: WallSegment[] }, each id generated
+ * server-side if missing, at most MAX_WALL_SEGMENTS of them.
+ *
+ * Under one lock, each wall is judged in order as POST judges one, against
+ * the map as it is then with the walls added before it: one too far outside
+ * the map, past the map's cap, or with an id the map holds is skipped, and
+ * the rest are added. The answer is 200 with both lists even when nothing
+ * was added, since each refusal is about the map as it stands (which another
+ * device may have changed), not about the request. A body that is not a list
+ * of walls, or holds more than a map can, is refused whole.
+ */
+router.post('/:id/walls/batch', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, id } = req.params;
+    const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
+    if (!map) return;
+
+    const body: unknown = req.body.segments;
+    if (!Array.isArray(body)) {
+      return res.status(400).json({ error: 'Validation Error', message: 'segments must be a list of wall segments' });
+    }
+    const list: unknown[] = body;
+    if (list.length > MAX_WALL_SEGMENTS) {
+      return res.status(400).json({ error: 'Validation Error', message: TOO_MANY_WALLS_MESSAGE });
+    }
+    const segments: WallSegment[] = [];
+    for (const [index, item] of list.entries()) {
+      const withId: unknown = item !== null && typeof item === 'object' && !Array.isArray(item)
+        ? { ...item, id: ('id' in item && item.id) || randomUUID() }
+        : item;
+      const parsed = WallSegmentSchema.safeParse(withId);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Validation Error', message: `Wall ${index}: ${parsed.error.issues[0]?.message ?? 'Invalid segment'}` });
+      }
+      segments.push(parsed.data);
+    }
+
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<{ before: WallSegment[]; after: WallSegment[]; added: WallSegment[]; skipped: SkippedWall[] }>> => {
+      const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, wallSegments: true } });
+      if (!fresh) return MAP_GONE;
+      const before = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
+      const after = [...before];
+      const ids = new Set(before.map((w) => w.id));
+      const added: WallSegment[] = [];
+      const skipped: SkippedWall[] = [];
+      segments.forEach((segment, index) => {
+        // The order POST checks in, so a wall gets the answer it would alone.
+        if (wallOutsideMap([segment], fresh)) skipped.push({ index, reason: WALL_OUTSIDE_MAP_MESSAGE });
+        else if (after.length >= MAX_WALL_SEGMENTS) skipped.push({ index, reason: TOO_MANY_WALLS_MESSAGE });
+        else if (ids.has(segment.id)) skipped.push({ index, reason: DUPLICATE_WALL_ID_MESSAGE });
+        else {
+          after.push(segment);
+          ids.add(segment.id);
+          added.push(segment);
+        }
+      });
+      if (added.length > 0) await tx.map.update({ where: { id }, data: { wallSegments: toJson(after) } });
+      return { done: { before, after, added, skipped } };
+    });
+    if (!('done' in outcome)) return sendRefusal(res, outcome);
+
+    const { before, after, added, skipped } = outcome.done;
+    if (added.length > 0) {
+      // One event for the whole batch, the one a replaced list sends.
+      await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, before, after));
+      resendSightAfterChange(getSocketInstance(), campaignId, id);
+    }
+    const answer: WallsAdded = { added, skipped, total: after.length };
+    return res.status(200).json(answer);
+  } catch (error) {
+    logger.error('Error adding wall segments', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to add wall segments' });
   }
 });
 

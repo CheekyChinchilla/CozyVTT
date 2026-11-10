@@ -1271,6 +1271,16 @@
       ]
     },
     {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps/:id/walls/batch",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
       "method": "DELETE",
       "path": "/api/campaigns/:campaignId/maps/:id/walls/:sid",
       "handlers": [

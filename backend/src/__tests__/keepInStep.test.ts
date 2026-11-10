@@ -1176,7 +1176,7 @@ describe('the fields of a wall and a light', () => {
     expect(compared('sameLight').sort()).toEqual(Object.keys(LightSourceSchema.shape).sort());
   });
 
-  it.each(['WallSegment', 'FogState', 'LightSource'])('%s has the same fields in the browser and on the server', (name) => {
+  it.each(['WallSegment', 'SkippedWall', 'WallsAdded', 'FogState', 'LightSource'])('%s has the same fields in the browser and on the server', (name) => {
     expect(interfaceFields(read('frontend/src/types/walls.ts'), name)).toEqual(interfaceFields(read('backend/src/types/walls.ts'), name));
   });
 

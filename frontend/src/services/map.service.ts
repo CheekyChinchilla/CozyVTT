@@ -5,7 +5,7 @@
 
 import api from './api';
 import type { CampaignMap, CreateMapRequest, UpdateMapRequest, Token, CreateTokenRequest } from '@/types';
-import type { WallSegment } from '@/types/walls';
+import type { WallSegment, WallsAdded } from '@/types/walls';
 
 class MapService {
   /**
@@ -41,12 +41,12 @@ class MapService {
   }
 
   /**
-   * Add one wall to a map (DM only), as Paint's Room does when its painting
-   * is saved; the wall tool adds walls over the live connection.
+   * Add many walls to a map in one request (DM only), as Mapmaker's Room
+   * does when its painting is saved; the wall tool adds walls over the live
+   * connection. Walls the map refuses are skipped and listed.
    */
-  async addWall(campaignId: string, mapId: string, segment: Omit<WallSegment, 'id'>): Promise<WallSegment> {
-    const response = await api.addWall(campaignId, mapId, segment);
-    return response.segment;
+  async addWalls(campaignId: string, mapId: string, segments: Array<Omit<WallSegment, 'id'>>): Promise<WallsAdded> {
+    return api.addWalls(campaignId, mapId, segments);
   }
 
   /**

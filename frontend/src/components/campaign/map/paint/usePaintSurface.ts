@@ -234,10 +234,13 @@ interface PendingRoom {
 /** The walls of the rooms painted and not saved, undone ones left out. */
 const liveWalls = (rooms: readonly PendingRoom[]): WallLine[] => rooms.filter((room) => room.live).flatMap((room) => room.walls);
 
-/** Said when the picture saved but some of its rooms' walls were not added to the map. */
-export function roomWallsNotAdded(missed: number, of: number, reason: string): string {
+/**
+ * Said when the picture saved but some of its rooms' walls were not added to
+ * the map, with each different reason once, as sentences.
+ */
+export function roomWallsNotAdded(missed: number, of: number, reasons: readonly string[]): string {
   const which = missed === of ? (of === 1 ? 'the wall' : `the ${of} walls`) : `${missed} of the ${of} walls`;
-  const why = reason.trim().replace(/\.$/, '');
+  const why = [...new Set(reasons.map((reason) => reason.trim().replace(/\.$/, '')).filter(Boolean))].join('. ');
   return `The picture was saved, but ${which} of your rooms ${missed === 1 ? 'was' : 'were'} not added to the map${why ? `: ${why}` : ''}. Draw ${missed === 1 ? 'it' : 'them'} with the wall tool.`;
 }
 
@@ -1274,17 +1277,17 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // The rooms' walls, now that their floors are on the map's picture, and
       // before the save counts as done: until they are in, a reload asks and
       // the draft keeps them. A wall the map has already, or a side two rooms
-      // share, is added once.
+      // share, is added once. One request adds them all; the map skips any
+      // it refuses and says which and why.
       const walls = wallsToAdd(wallsOnMap(liveWalls(roomsSaved), ...xy(s)), latest.wallSegments ?? []);
-      let added = 0;
-      let wallRefused: unknown = null;
-      try {
-        for (const wall of walls) {
-          await mapService.addWall(campaignId, s.mapId, { ...wall, type: 'wall' });
-          added += 1;
+      let notAdded: { missed: number; reasons: string[] } | null = null;
+      if (walls.length > 0) {
+        try {
+          const { skipped } = await mapService.addWalls(campaignId, s.mapId, walls.map((wall) => ({ ...wall, type: 'wall' as const })));
+          if (skipped.length > 0) notAdded = { missed: skipped.length, reasons: skipped.map((skip) => skip.reason) };
+        } catch (err) {
+          notAdded = { missed: walls.length, reasons: [apiErrorMessage(err) ?? ''] };
         }
-      } catch (err) {
-        wallRefused = err;
       }
       s.roomsSaving = [];
 
@@ -1301,7 +1304,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       setAsking(false);
       onSaved(saved, asset);
       // After the word that it saved, so a wall refused is said last.
-      if (wallRefused !== null) refuse(roomWallsNotAdded(walls.length - added, walls.length, apiErrorMessage(wallRefused) ?? ''));
+      if (notAdded) refuse(roomWallsNotAdded(notAdded.missed, walls.length, notAdded.reasons));
       return true;
     } catch (err) {
       if (taken) {

@@ -66,6 +66,7 @@ const DM_ONLY = [
   'DELETE /api/campaigns/:campaignId/maps/:id/tokens/:tokenId',
   'PUT /api/campaigns/:campaignId/maps/:id/walls',
   'POST /api/campaigns/:campaignId/maps/:id/walls',
+  'POST /api/campaigns/:campaignId/maps/:id/walls/batch',
   'DELETE /api/campaigns/:campaignId/maps/:id/walls/:sid',
   'PATCH /api/campaigns/:campaignId/maps/:id/walls/:sid',
   'PUT /api/campaigns/:campaignId/maps/:id/lights',
