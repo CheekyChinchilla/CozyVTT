@@ -1552,6 +1552,14 @@ A wrong one counts against 10 wrong passwords per 15 minutes for the account,
 shared with `POST /api/auth/change-password` and `DELETE /api/auth/account`,
 then `429` "Too many wrong passwords, please try again later". An address
 another account has is refused with `400` "Email already in use".
+Changing your own address is also limited to 5 attempts an hour for the
+account, from every sign-in: every request that would change it counts, with
+the right password, a wrong one or none, and whether or not the address is
+taken. The next is refused with `429` "You have tried to change your email
+address 5 times in the last hour, the most this server allows. Please try
+again later." and `Retry-After`, before the password is checked; the refusal
+is not counted. Other profile changes do not count, and an admin changing
+someone else's address is not limited.
 When the address changes, any unused password-reset or invitation link for the
 account stops working, and the old address is emailed a notice if the instance
 has SMTP configured.
@@ -1864,6 +1872,7 @@ authentication is set up on the account, and then has to send a code at every si
 | Two-factor code at sign-in | 5 wrong codes per address, and 5 per account | 15 minutes | Wrong codes and backup codes only |
 | Checking the code when turning two-factor on | 5 failures | 15 minutes | Every answer that is not a success |
 | Change password, delete account, change own email (per account) | 10 wrong passwords | 15 minutes | Wrong current passwords only |
+| Change own email (per account) | 5 attempts | 1 hour | Every attempt to change your own address, whatever its answer; a refusal is not counted |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, a new typed document, Universal VTT map import (per user) | 30 requests | 1 minute | Every request |

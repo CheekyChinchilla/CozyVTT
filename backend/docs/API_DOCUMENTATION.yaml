@@ -119,6 +119,14 @@ info:
       passwords, please try again later`. A correct password never counts, and
       a request that sends no password (a profile edit) is neither held to it
       nor counted
+    - Changing your own email address (`PUT /api/users/{id}` with an `email`
+      that differs from the account's): 5 attempts per hour for the account,
+      from every sign-in and address, then 429 `You have tried to change your
+      email address 5 times in the last hour, the most this server allows.
+      Please try again later.` until the oldest counted attempt is an hour
+      old. Every attempt counts, whatever its answer; the refusal does not.
+      It sends no `RateLimit-*` headers of its own. An admin changing someone
+      else's address is not limited by it
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
       they succeed, since creating the account is what is being limited; then
       429 `Too many accounts created from this address, please try again later`
@@ -1843,7 +1851,7 @@ paths:
       description: |
         Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. An admin's change to another account is written to the admins' activity log with each changed field in the line's `changes`: `{ from, to }` for the email address, display name, avatar address and the two permission flags, and `{ changed: true }` for the bio, whose text is not stored (lines from earlier versions kept it). A role change is written to the admins' activity log as a WARNING, and a promotion to `ADMIN` gives the account 7 days to set up MFA (see the administrator two-factor policy in the introduction). The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
 
-        Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. A wrong password counts against the shared allowance of 10 wrong passwords per 15 minutes for the account (see `POST /api/auth/change-password`); past it a request carrying `currentPassword` answers 429, while one without a password is not held to it. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
+        Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. Changing your own email is also capped at 5 attempts an hour per account, from every sign-in and address: every request that would change your own address counts, with the right password or a wrong one, with none, to an address in use or a free one, and one that makes the change. A display name, avatar or bio change, or an email that matches the current one apart from letter case, does not count and is not held. Past the cap such a request answers 429 before the password is checked, and the refusal is not counted, so the cap opens an hour after the oldest counted attempt. An admin changing someone else's address is not capped. A wrong password counts against the shared allowance of 10 wrong passwords per 15 minutes for the account (see `POST /api/auth/change-password`); past it a request carrying `currentPassword` answers 429, while one without a password is not held to it. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
       operationId: updateUser
       security:
         - cookieAuth: []
@@ -1977,8 +1985,14 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: >-
-            Only for a request carrying `currentPassword` (or `password`) as
-            text: the account has had
+            For a request that would change your own email address, when the
+            account has made 5 such attempts in the last hour (`You have tried
+            to change your email address 5 times in the last hour, the most
+            this server allows. Please try again later.`, with `Retry-After`
+            in seconds until the oldest counted attempt is an hour old, and no
+            `RateLimit-*` headers of its own; checked before the password, and
+            not counted). Otherwise only for a request carrying
+            `currentPassword` (or `password`) as text: the account has had
             10 wrong passwords in 15 minutes, counted with
             `POST /api/auth/change-password` and `DELETE /api/auth/account`
             (`Too many wrong passwords, please try again later`, with
