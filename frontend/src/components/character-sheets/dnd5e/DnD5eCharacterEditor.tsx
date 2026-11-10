@@ -1849,6 +1849,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   // properly, in its six levels, just below. A tick box beside the level picker
   // would be the same fact recorded twice and free to disagree with itself. The
   // token editor keeps it in its list, since a token has no level to track.
+  //
+  // TODO(sheets): a sheet saved before exhaustion had levels (before 1.3.0) can
+  // still hold 'exhausted' in its conditions. The read-only sheet shows it and
+  // this list gives no box to clear it. Read it into exhaustionLevel (at least
+  // 1) when the sheet opens and drop it from the conditions.
   const conditions = DND5E_CONDITIONS.filter((c) => c !== 'Exhausted');
 
   // Render Combat tab
