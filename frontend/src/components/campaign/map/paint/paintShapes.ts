@@ -10,7 +10,7 @@
 import type { PaintBox } from './paintHistory';
 import { strokePaint, type PaintPoint } from './paintStroke';
 import type { SelectBox } from './paintSelection';
-import type { TextureKind } from './paintTextures';
+import { tilePattern, type ShadedTexture, type TextureKind } from './paintTextures';
 import { drawStamp, type StampPlace } from './paintStamps';
 
 export type PaintShapeKind = 'line' | 'rect' | 'ellipse' | 'polygon' | 'curve';
@@ -51,6 +51,14 @@ export function stepAngle(from: PaintPoint, to: PaintPoint, degrees = 15): Paint
 }
 
 const outlined = (shape: PaintShape) => shape.kind === 'line' || shape.kind === 'curve' || shape.style !== 'fill';
+const filled = (shape: PaintShape) => shape.kind !== 'line' && shape.kind !== 'curve' && shape.style !== 'outline';
+/** The colour a shape is filled with: the second colour inside an outline, else the colour. */
+const fillColour = (shape: PaintShape) => (shape.style === 'both' ? shape.second : shape.colour);
+
+/** The texture a shape's fill is painted in, and the colour it is shaded from; null for none, or for a shape with no fill. */
+export function shapeTexture(shape: PaintShape): ShadedTexture | null {
+  return shape.texture && filled(shape) ? { kind: shape.texture, colour: fillColour(shape) } : null;
+}
 
 /** The box a shape paints: its corners, half its outline around them, and a pixel for the soft edge. */
 export function shapeBox(shape: PaintShape): PaintBox {
@@ -111,8 +119,8 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: PaintShape, fill
       (shape.points ?? []).forEach(([px, py], i) => (i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
       ctx.closePath();
     } else ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-    if (shape.style !== 'outline') {
-      ctx.fillStyle = fill ?? (shape.style === 'both' ? shape.second : shape.colour);
+    if (filled(shape)) {
+      ctx.fillStyle = fill ?? fillColour(shape);
       ctx.fill();
     }
     if (shape.style !== 'fill') {
@@ -126,24 +134,35 @@ export function drawShape(ctx: CanvasRenderingContext2D, shape: PaintShape, fill
   }
 }
 
+/**
+ * A texture's tile as the overlay draws it, each tile pixel `scale` map
+ * pixels, repeating from the map's top-left corner as it does from the
+ * picture's: what is on its way shows the texture it will land in.
+ */
+export interface PreviewTile {
+  image: CanvasImageSource;
+  scale: number;
+}
+
 /** Something of Paint's on its way, as the overlay draws it: in map pixels, its width too. */
 export type PaintPreview =
-  | { kind: 'stroke'; points: readonly PaintPoint[]; width: number; colour: string }
-  | { kind: 'shape'; shape: PaintShape }
+  /** `tile`, its texture's, or null for the plain colour. */
+  | { kind: 'stroke'; points: readonly PaintPoint[]; width: number; colour: string; tile: PreviewTile | null }
+  /** `tile`, its fill's texture's (shapeTexture), or null for the plain colour. */
+  | { kind: 'shape'; shape: PaintShape; tile: PreviewTile | null }
   /** The stamp a click or a lift would paint, drawn see-through. */
   | { kind: 'stamp'; place: StampPlace }
   /**
    * The brush where the pointer is: a circle its width across, half filled
-   * with the colour or a texture's tile (drawn at `tileScale` map pixels to a
-   * tile pixel), outlined to show on any ground; the eraser's dashed.
+   * with the colour or its texture's tile, outlined to show on any ground;
+   * the eraser's dashed.
    */
   | {
     kind: 'brush';
     at: PaintPoint;
     radius: number;
     colour: string;
-    tile: CanvasImageSource | null;
-    tileScale: number;
+    tile: PreviewTile | null;
     eraser: boolean;
     /** Map pixels to a screen pixel, so the outline keeps its width at any zoom. */
     pixel: number;
@@ -198,9 +217,12 @@ function drawSelection(ctx: CanvasRenderingContext2D, preview: Extract<PaintPrev
 /** How strongly a stamp's preview, and a brush's, is drawn: see-through, so the ground under it shows. */
 const STAMP_PREVIEW_ALPHA = 0.5;
 
+/** A preview's texture as a pattern on the overlay, made once and kept (tilePattern); null for the plain colour. */
+const previewPattern = (ctx: CanvasRenderingContext2D, tile: PreviewTile | null) => (tile ? tilePattern(ctx, tile.image, tile.scale) : null);
+
 /** The brush under the pointer: its circle, filled and outlined in black under white. */
 function drawBrushPreview(ctx: CanvasRenderingContext2D, preview: Extract<PaintPreview, { kind: 'brush' }>): void {
-  const { at, colour, tile, tileScale, eraser, pixel } = preview;
+  const { at, colour, tile, eraser, pixel } = preview;
   // Never smaller than a few screen pixels, so a brush 1 pixel wide still shows.
   const radius = Math.max(preview.radius, 2 * pixel);
   ctx.save();
@@ -208,11 +230,7 @@ function drawBrushPreview(ctx: CanvasRenderingContext2D, preview: Extract<PaintP
     ctx.beginPath();
     ctx.arc(at[0], at[1], radius, 0, Math.PI * 2);
     ctx.globalAlpha = STAMP_PREVIEW_ALPHA;
-    const pattern = tile ? ctx.createPattern(tile, 'repeat') : null;
-    if (pattern && typeof pattern.setTransform === 'function' && typeof DOMMatrix !== 'undefined') {
-      pattern.setTransform(new DOMMatrix([tileScale, 0, 0, tileScale, 0, 0]));
-    }
-    ctx.fillStyle = pattern ?? colour;
+    ctx.fillStyle = previewPattern(ctx, tile) ?? colour;
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.setLineDash(eraser ? [4 * pixel, 3 * pixel] : []);
@@ -228,10 +246,10 @@ function drawBrushPreview(ctx: CanvasRenderingContext2D, preview: Extract<PaintP
   }
 }
 
-/** Draw a stroke, a shape, a stamp, the brush or a selection on its way. */
+/** Draw a stroke, a shape, a stamp, the brush or a selection on its way: a stroke or a shape as it will land, in its texture. */
 export function drawPaintPreview(ctx: CanvasRenderingContext2D, preview: PaintPreview): void {
-  if (preview.kind === 'stroke') strokePaint(ctx, preview.points, preview.width, preview.colour);
-  else if (preview.kind === 'shape') drawShape(ctx, preview.shape);
+  if (preview.kind === 'stroke') strokePaint(ctx, preview.points, preview.width, previewPattern(ctx, preview.tile) ?? preview.colour);
+  else if (preview.kind === 'shape') drawShape(ctx, preview.shape, previewPattern(ctx, preview.tile));
   else if (preview.kind === 'stamp') {
     ctx.save();
     try {

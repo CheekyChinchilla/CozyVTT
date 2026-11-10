@@ -28,6 +28,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Mapmaker adds the walls of the rooms you painted in one step when you save.** A save with many rooms can no longer be stopped part-way by the limit on requests everyone on one internet connection shares. The walls the map takes are added, and Mapmaker says how many were not added and why. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
+- **Mapmaker shows a texture while you drag.** A **Brush** stroke, a filled **Rectangle** or **Ellipse** and a **Room**'s floor showed in their plain colour until you let go. They now show in the **Texture** they are painted in. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
+
 ### Fixed
 
 - **A token moved just after you lost control of it goes back where it stands on your screen.** A move with the arrow keys, or a drag your screen still allowed, was refused but stayed where you put it on your screen until the token moved again or the page was reloaded.

@@ -12,8 +12,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import { useEffect } from 'react';
 import { usePaintSurface, roomWallsNotAdded, type PaintSurface } from '../usePaintSurface';
-import { recordingContext } from '@/test/recordingCanvas';
-import type { MapControls } from '../../tools/types';
+import { drawPaintPreview } from '../paintShapes';
+import { recordingContext, recordPaint } from '@/test/recordingCanvas';
+import type { MapControls, PointerAt } from '../../tools/types';
+import type { MapPointer } from '../../mapPointer';
 import type { CampaignMap } from '@/types';
 
 const makeCanvas = () => {
@@ -29,11 +31,11 @@ const map = { id: 'map-a', width: 20, height: 20, gridSize: 50, imageUrl: '' } a
 
 type Shown = { image: HTMLImageElement; url: string } | null;
 
-function Harness({ onPaint, seen, on = map, picture = null }: { onPaint: (p: PaintSurface) => void; seen: Array<number | null>; on?: CampaignMap; picture?: Shown }) {
+function Harness({ onPaint, seen, on = map, picture = null, make = makeCanvas }: { onPaint: (p: PaintSurface) => void; seen: Array<number | null>; on?: CampaignMap; picture?: Shown; make?: () => HTMLCanvasElement }) {
   const paint = usePaintSurface({
     map: on, campaignId: 'campaign-1', onSaved: () => undefined, onMapRead: () => undefined, picture,
     pictureKind: on.imageUrl ? 'drawn' : 'none', pictureFailed: false, isDM: true,
-    mapControls: controls, markDirty: () => undefined, refuse: () => undefined, make: makeCanvas,
+    mapControls: controls, markDirty: () => undefined, refuse: () => undefined, make,
   });
   onPaint(paint);
   // After the hook's own effects, in the same commit: the canvas the page draws with now.
@@ -117,4 +119,66 @@ describe('what Save says of room walls not added', () => {
     expect(roomWallsNotAdded(4, 6, ['Map full', 'Too far out.', 'Map full', 'Too far out']))
       .toBe('The picture was saved, but 4 of the 6 walls of your rooms were not added to the map: Map full. Too far out. Draw them with the wall tool.');
   });
+});
+
+describe('a stroke, a shape or a room while it is dragged', () => {
+  const pointer: MapPointer = {
+    pointerId: 1, kind: 'mouse', isPrimary: true, button: 0, buttons: 1, detail: 1, clientX: 0, clientY: 0,
+    shiftKey: false, ctrlKey: false, altKey: false, metaKey: false, preventDefault: () => undefined,
+  };
+  const at = (x: number, y: number): PointerAt => ({
+    e: pointer, via: 'mouse', screenX: x, screenY: y, mapPx: { x, y }, gridCoords: { x: Math.floor(x / 50), y: 19 - Math.floor(y / 50) },
+  });
+
+  /** Drag `tool` across the map in `texture`, and draw what is under way as the overlay does. */
+  async function drag(tool: 'brush' | 'rect' | 'room', texture: 'stone' | null) {
+    const painted = new Map<HTMLCanvasElement, ReturnType<typeof recordPaint>>();
+    const make = () => {
+      const canvas = makeCanvas();
+      const ctx = canvas.getContext('2d');
+      if (ctx) painted.set(canvas, recordPaint(ctx));
+      return canvas;
+    };
+    let paint: PaintSurface | null = null;
+    render(<Harness onPaint={(p) => { paint = p; }} seen={[]} make={make} />);
+    act(() => { paint!.open(); });
+    act(() => { paint!.setSettings((prev) => ({ ...prev, tool, texture, colour: '#777777', second: '#c0a080', style: 'both' })); });
+    act(() => {
+      paint!.tool.down?.(at(110, 120));
+      paint!.tool.move?.(at(260, 230));
+    });
+    const { ctx } = recordingContext(document.createElement('canvas'));
+    const shown = recordPaint(ctx);
+    for (const preview of paint!.inProgress()) {
+      if (preview.kind === 'stroke' || preview.kind === 'shape') drawPaintPreview(ctx, preview);
+    }
+    // A stroke lands at once with no undo under way, and says so after.
+    await act(async () => { paint!.tool.up?.(); });
+    const landed = painted.get(paint!.source!);
+    if (!landed) throw new Error('The picture was not made by the test\'s canvases');
+    return { shown, landed, style: (drawn: ReturnType<typeof recordPaint>) => (tool === 'brush' ? drawn.strokes[0] : drawn.fills[0]) };
+  }
+
+  it.each([['a brush stroke', 'brush'], ['a filled rectangle', 'rect'], ['a room\'s floor', 'room']] as const)(
+    'shows %s in its texture, in the pattern of the tile it lands in',
+    async (_name, tool) => {
+      const { shown, landed, style } = await drag(tool, 'stone');
+      expect(shown.patterns).toContain(style(shown));
+      expect(shown.patterns).toHaveLength(1);
+      // What lands is painted from the same tile.
+      expect(landed.patterns).toHaveLength(1);
+      expect(landed.patterns[0].image).toBe(shown.patterns[0].image);
+      expect(style(landed)).toBe(landed.patterns[0]);
+    },
+  );
+
+  it.each([['a brush stroke', 'brush', '#777777'], ['a filled rectangle', 'rect', '#c0a080'], ['a room\'s floor', 'room', '#c0a080']] as const)(
+    'shows %s with no texture in its plain colour, as it lands',
+    async (_name, tool, colour) => {
+      const { shown, landed, style } = await drag(tool, null);
+      expect(shown.patterns).toEqual([]);
+      expect(style(shown)).toBe(colour);
+      expect(style(landed)).toBe(colour);
+    },
+  );
 });
