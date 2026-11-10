@@ -14,6 +14,8 @@ import { LEFT_OUT_OF_BACKUP, NAME_LEFT_OUT_OF_BACKUP } from '../routes/admin';
 import { appLayers } from './helpers/routeInventory';
 import { BACKGROUND_WAIT_MS, backgroundLeftMessage } from '../utils/shutdown';
 import { MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL } from '../services/sharedDocumentPictures';
+import { EMAIL_CHANGES_PER_HOUR, EMAIL_CHANGE_WINDOW_MS, EMAIL_CHANGE_LIMIT_MESSAGE } from '../middleware/emailChangeLimiter';
+import { MAX_ARCHIVE_NAME_BYTES } from '../utils/archive';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -869,5 +871,54 @@ describe('how many older documents a delete by a campaign asset\'s uploader read
     const match = pattern.exec(read(rel).replace(/\s+/g, ' '));
     if (!match) throw new Error(`${rel} no longer states how many older documents the check reads`);
     expect(Number(match[1])).toBe(MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL);
+  });
+});
+
+describe('how many times an hour one account may try to change its own email address', () => {
+  // The cap and its refusal are constants in the code, and a number and a
+  // message in four documents.
+  const stated: Array<[string, RegExp]> = [
+    ['docs/USER_GUIDE.md', /can use up your (\w+) tries for an hour/],
+    ['SECURITY.md', /changing one's own email address is allowed (\d+) attempts an hour per account/],
+    ['SECURITY.md', /use up the owner's (\d+) email-change attempts for an hour/],
+    ['docs/API_REFERENCE.md', /also limited to (\d+) attempts an hour for the account/],
+    ['docs/api-changes/unreleased.md', /caps changing your own email address at (\d+) attempts an hour per account/],
+  ];
+  const words: Record<string, number> = { three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+
+  it('counts them over an hour', () => {
+    expect(EMAIL_CHANGE_WINDOW_MS).toBe(60 * 60 * 1000);
+  });
+
+  it.each(stated)('%s states the cap the code holds to', (rel, pattern) => {
+    const match = pattern.exec(read(rel).replace(/\s+/g, ' '));
+    if (!match) throw new Error(`${rel} no longer states how many email changes an hour are allowed, as ${pattern}`);
+    expect(words[match[1]] ?? Number(match[1])).toBe(EMAIL_CHANGES_PER_HOUR);
+  });
+
+  it.each(['docs/USER_GUIDE.md', 'docs/API_REFERENCE.md', 'docs/api-changes/unreleased.md'])('%s quotes the refusal as the server words it', (rel) => {
+    const quoted = /You have tried to change your email address .*? Please try again later\./.exec(read(rel).replace(/\s+/g, ' '))?.[0];
+    if (quoted === undefined) throw new Error(`${rel} no longer quotes the email-change refusal`);
+    expect(quoted).toBe(EMAIL_CHANGE_LIMIT_MESSAGE);
+  });
+});
+
+describe('the longest file name an archive may hold', () => {
+  // A backup or campaign archive with a longer entry name is refused; the
+  // limit is a constant in the code and a number in four documents.
+  const stated: Array<[string, RegExp]> = [
+    ['docs/DEPLOYMENT.md', /would be longer than ([\d,]+) bytes \(folders nested very deep\)/],
+    ['docs/DEPLOYMENT.md', /each with a name of at most ([\d,]+) bytes/],
+    ['docs/DM_GUIDE.md', /An archive with a file name longer than ([\d,]+) bytes is refused/],
+    ['docs/api-changes/unreleased.md', /An archive with an entry name longer than ([\d,]+) bytes/],
+    ['docs/api-changes/unreleased.md', /"The archive has a file name longer than ([\d,]+) bytes, which an archive from this server never has\."/],
+    ['docs/api-changes/unreleased.md', /would be longer than ([\d,]+) bytes, logging/],
+    ['backend/docs/API_DOCUMENTATION.yaml', /holds a NUL character, is longer than ([\d,]+) bytes/],
+  ];
+
+  it.each(stated)('%s states the limit the code refuses past', (rel, pattern) => {
+    const match = pattern.exec(read(rel).replace(/\s+/g, ' '));
+    if (!match) throw new Error(`${rel} no longer states the longest archive file name, as ${pattern}`);
+    expect(Number(match[1].replace(/,/g, ''))).toBe(MAX_ARCHIVE_NAME_BYTES);
   });
 });
