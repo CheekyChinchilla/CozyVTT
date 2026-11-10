@@ -66,9 +66,9 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **Mapmaker keeps a selection you moved or pasted in your draft when you switch to another tab or app.** It is put down then. A phone that closed the page in the background lost it, and kept no draft at all if it was your only change. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
-- **A damaged or hand-made backup no longer stops the server when you restore it.** A backup holding a file name the server cannot write, such as a file and a folder with the same name, ended the backend. The restore now refuses it with the reason and changes nothing. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
+- **A damaged or hand-made backup or campaign archive no longer stops the server.** A backup holding a file name the server cannot write, such as a file and a folder with the same name, ended the backend, and an archive the import refused could too. Both are now refused with the reason, and nothing changes. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
 
-- **A damaged campaign archive is refused with a plain message.** An archive whose directory placed a file far past its end was answered as a problem with the server, with the details in its log. The import window now says the file is not a ZIP archive, or is damaged.
+- **A damaged campaign archive is refused with a plain message.** An archive whose directory placed a file far past its end was answered as a problem with the server, with the details in its log. The import window now says "The file is not a ZIP archive, or it is damaged." See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
 
 ## [1.6.0] - 2026-11-09
 

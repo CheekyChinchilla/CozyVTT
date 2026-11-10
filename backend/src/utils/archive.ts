@@ -24,11 +24,12 @@ import { errorCode } from './errors';
 /**
  * The longest entry name, in bytes, an archive may have. The reader keeps
  * every name of a directory in memory, and a name can be 65,535 bytes, so
- * an import of 1,000 such names held about 131 MB. CozyVTT writes at most
- * about 320 bytes: a backup's uploads (`uploads/`, three folders and a
+ * an import of 1,000 such names held about 131 MB. This version writes at
+ * most about 320 bytes: a backup's uploads (`uploads/`, three folders and a
  * stored file's name, which the file system holds to 255 bytes) and an
  * export's assets (`assets/`, the asset's id and an extension of at most 20
- * characters). A backup leaves out a longer name, as it does any other this
+ * characters; an export from 1.6.0 or earlier took the extension at any
+ * length). A backup leaves out a longer name, as it does any other this
  * check refuses.
  */
 export const MAX_ARCHIVE_NAME_BYTES = 1024;
