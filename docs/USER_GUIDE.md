@@ -910,7 +910,7 @@ Your email address is how you sign in, and where a password reset link is sent.
 
 1. On your **Profile & Settings** page, click **Change Email** under your address in **Profile Information**.
 2. Type the new address in **New Email Address** and your password in **Current Password**.
-3. Click **Change Email**.
+3. Click **Change Email**. **Cancel**, or **Escape** while the form has the focus, closes it and changes nothing.
 
 If it worked, the page says "Email changed to" and the new address, and shows the new address in **Profile Information**. Sign in with the new address from now on.
 
@@ -928,7 +928,7 @@ If it is refused, the form says why and keeps what you typed:
 | "Current password is incorrect" | The password was wrong. It counts towards the ten wrong passwords in fifteen minutes described under [Logging In](#logging-in) |
 | "Too many wrong passwords, please try again later" | Ten wrong passwords in fifteen minutes, counted together with changing your password and deleting your account. Try again fifteen minutes after the first of the ten |
 | "Email already in use" | Another account on this instance has that address |
-| "You have tried to change your email address 5 times in the last hour, the most this server allows. Please try again later." | Every try the server checks counts, with the right password or a wrong one, and whether or not the address was taken; the two refusals at the top of this table are made by the page and do not count. You can try again an hour after the first of the five. The limit stops someone using your sign-in to find out which addresses have accounts |
+| "You have tried to change your email address 5 times in the last hour, the most this server allows. Please try again later." | Every try that reaches this check counts, with the right password or a wrong one, and whether or not the address was taken. The two refusals at the top of this table are made by the page, and a try refused with "Too many wrong passwords" is turned away before the check; none of those count. You can try again an hour after the first of the five. The limit stops someone using your sign-in to find out which addresses have accounts |
 | "The server is busy, try again in a moment." | Too many passwords were being checked on the server at once. Try again shortly; the try still counts towards the five |
 
 The count is kept in the backend's memory, so restarting it also clears it. Someone using your signed-in browser can use up your five tries for an hour even without your password, since a try with a wrong password counts; they cannot change the address without it.
@@ -1022,7 +1022,7 @@ If a character sheet window says **Error Loading Character Sheet**, that sheet h
 
 CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, the map the table moved to, the vibe, the weather and ambient track, the spirit layer, and a dice history the DM cleared are all brought up to date once you're back. A chat message you send while disconnected is marked **Not sent**; click **Retry** once you are back. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
 
-If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard. It says "You left this campaign." when you have left it, from this tab or another.
+If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard. It says "You left this campaign." when you have left it, from this tab or another. A page that reconnects more than a minute after you left or were removed says "You are not a member of this campaign." instead, and one that reconnects after the campaign was deleted says "This campaign does not exist. It may have been deleted." See [If you leave or are removed](PLAYER_GUIDE.md#if-you-leave-or-are-removed).
 
 ### Someone else is editing my character
 
