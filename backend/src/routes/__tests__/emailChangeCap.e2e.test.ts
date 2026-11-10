@@ -107,6 +107,17 @@ describe('changing your own address', () => {
     expect(bare.headers['retry-after']).toBeDefined();
   });
 
+  it('lets exactly five through when ten are sent at once', async () => {
+    const user = await account('burst');
+    const agent = await signIn(user.email);
+    const answers = await Promise.all(
+      Array.from({ length: 10 }, () => agent.put(`/api/users/${user.id}`).send({ email: fresh('burst') }))
+    );
+    const statuses = answers.map((res) => res.status);
+    expect(statuses.filter((status) => status !== 429)).toHaveLength(EMAIL_CHANGES_PER_HOUR);
+    expect(statuses.filter((status) => status === 429)).toHaveLength(10 - EMAIL_CHANGES_PER_HOUR);
+  });
+
   it('counts the account, from every sign-in, and leaves other accounts alone', async () => {
     const user = await account('per-account');
     const first = await signIn(user.email);
