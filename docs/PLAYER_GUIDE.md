@@ -441,10 +441,11 @@ If your DM uses **fog of war**, most of the map starts hidden. It's how your DM 
 
 Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing, which walls are in the way, and what is lit, so the view shifts as you move. Anything in bright light shows clearly. Dim light, and the dark within your character's darkvision, show half-dark. Beyond that is black, but the square you stand on is always visible, so you always know where you are. If your DM keeps **Remember Explored Areas** on for the map, places your character has already seen stay on your map, greyed and darkened, until you can see them again, so a corridor you have walked is not pitch black behind you. A light only shows you something you could actually see — a lamp burning inside a closed room tells you nothing from outside it, and whatever is in there stays hidden until you can see in.
 
-Two things worth knowing:
+Things worth knowing:
 
 - **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it, and neither is one on a map the DM hasn't switched to, or on the other plane when your DM uses the spirit realm.
 - **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
+- **With dynamic lighting on, you see through the tokens you control.** If you control none on the map, the whole map is black and a line at its foot says **You have no token on this map to see through. Ask your DM for one.** Your DM can give you control of a token, and the line goes. In the spirit realm only a token there counts, so the line says the same about the spirit realm.
 - **You open and close the doors you can see.** Click a door to open or close it, or right-click it for **Open Door** or **Close Door**. With dynamic lighting on, that means a door your character can see: one in the dark, or behind a wall, can't be clicked until you can see it. With fog of war on, it means a door beside a square the DM has revealed to you. A locked door looks like any closed door until you try it, and then you are told it is locked.
 
 ### Sound and weather on the map

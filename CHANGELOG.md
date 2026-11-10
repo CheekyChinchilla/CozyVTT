@@ -16,6 +16,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **You can change your email address from your Profile & Settings page.** **Change Email** asks for your current password, and the old address is sent a notice when your instance sends email. Five tries an hour are allowed. See [Changing Your Email Address](docs/USER_GUIDE.md#changing-your-email-address).
 
+- **A player who controls no token on a lit map is told why it is black.** A line at the foot of the map says they have no token to see through and to ask the DM for one, in the spirit realm too. **Preview Player View** shows it for that player. See [Why parts of the map are dark](docs/PLAYER_GUIDE.md#why-parts-of-the-map-are-dark).
+
 ### Changed
 
 - **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).

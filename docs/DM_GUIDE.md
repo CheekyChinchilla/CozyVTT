@@ -1509,6 +1509,8 @@ Dynamic lighting is off on a new map, unless the map was imported from a Univers
 
 Once enabled, players only see the areas their characters have line of sight to, and within that, only what is lit or within their darkvision. The rest of the map is black.
 
+A player sees through the tokens they control, and nothing else. A player who controls no token on the map sees all of it black, with **Global Illumination** on or off, and a line at the foot of their map tells them they have no token to see through and to ask you for one. Give them control of a token on the map and the line goes. **Preview Player View** shows you the same line while you preview that player.
+
 The same goes for a token while you carry it. A player sees it move only while it is somewhere they can see: carry it out of their sight and it leaves their map at that point, carry it into their sight and it appears there.
 
 Sight is worked out from the middle of each token. A Large or Huge token sees from the centre of the squares it covers, and another token counts as seen when the middle of its squares can be seen: a large creature whose middle is behind a wall stays off a player's map even if its edge reaches past the wall.
@@ -1639,7 +1641,7 @@ Players in the spirit realm see a pulsing **Spirit Realm** badge in the corner o
 
 ### The Spirit Layer and dynamic lighting
 
-On a map with **dynamic lighting** switched on, a player sees by their own token's line of sight. A player who is in the spirit realm but has no spirit-layer token has nothing to see with — so the map renders **completely black** for them.
+On a map with **dynamic lighting** switched on, a player sees by their own token's line of sight. A player who is in the spirit realm but has no spirit-layer token has nothing to see with, so the map is **completely black** for them. A line at the foot of their map says they have no token in the spirit realm to see through, and to ask you for one.
 
 If a player reports a black map, check whether the veil is open in the **Spirit Layer** panel. Either close it, or give that player a spirit-layer token to look through.
 

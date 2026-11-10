@@ -87,7 +87,7 @@ import { createClickSwallow } from './map/clickSwallow';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, resolvePreviewSelection, followStepTokens, type PreviewSelection,
-  previewTokens,
+  type PreviewPlane, previewTokens,
 } from './map/previewSelection';
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
@@ -181,6 +181,19 @@ const COMPACT_BAND = 'absolute top-2 left-[max(0.5rem,env(safe-area-inset-left))
 
 /** What the ruler says to a player with no token of theirs on the map. */
 const RULER_NEEDS_TOKEN = 'Place your character token on the map to use the ruler';
+
+/**
+ * What a lit map says to a player who controls no token on the plane they
+ * are looking at, and so sees nothing. Said from their side alone: nothing
+ * in it tells whether anyone else's tokens are there.
+ */
+const NO_TOKEN_TO_SEE_THROUGH = {
+  material: 'You have no token on this map to see through. Ask your DM for one.',
+  spirit: 'You have no token in the spirit realm to see through. Ask your DM for one.',
+} as const satisfies Record<PreviewPlane, string>;
+
+/** How a note at the foot of the map looks: the ruler's, and the one saying there is no token to see through. */
+const MAP_NOTE = 'bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center';
 
 /**
  * The compact layout's dock at the foot of the map: its floating rows keep
@@ -4207,6 +4220,20 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   };
   // A player with no token of theirs on the map measures from nothing.
   const rulerNeedsToken = showRuler && !isDM && !myToken;
+  // Whether the viewer looks at the spirit realm: a player, or the player
+  // the DM previews.
+  const viewerInSpiritRealm = previewing
+    ? previewedPlane === 'spirit'
+    : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible);
+  // Lighting draws a player's view from the tokens they control on the plane
+  // they look at and nothing else, so with none a lit map is black, Global
+  // Illumination or not (drawDynamicLighting). In a preview, viewerOwn keeps
+  // to the previewed player's plane and visible tokens, as the server sends them.
+  const noTokenNote = (currentMap?.lightingEnabled ?? false)
+    && (previewing ? previewViewer?.kind === 'player' : userRole === 'PLAYER')
+    && !tokens.some(viewerOwn)
+    ? NO_TOKEN_TO_SEE_THROUGH[viewerInSpiritRealm ? 'spirit' : 'material']
+    : null;
 
   // The square under the pointer, shown where the details card goes while
   // no card shows.
@@ -4566,9 +4593,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         )}
 
         {/* Spirit Realm indicator — shown to players when in spirit realm (global or personal) */}
-        {(previewing
-          ? previewedPlane === 'spirit'
-          : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
+        {viewerInSpiritRealm && (
           // An opaque backing under the tint, as the zoom panel has, so the
           // words read over any map.
           <div className="ml-auto mr-4 z-10 rounded-cozy bg-parchment animate-pulse-soft pointer-events-auto">
@@ -4856,10 +4881,13 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
         </div>
       )}
 
-      {/* Ruler hint for players with no token */}
-      {rulerNeedsToken && !compact && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full pointer-events-none">
-          {RULER_NEEDS_TOKEN}
+      {/* Why a lit map is dark for a player with no token on it, and the
+          ruler's hint for one with no token, stacked up from the foot. In
+          Player Preview they sit above Preview's controls (bottom-20). */}
+      {(noTokenNote || rulerNeedsToken) && !compact && (
+        <div className={`absolute ${previewing ? 'bottom-32' : 'bottom-16'} left-1/2 -translate-x-1/2 w-max max-w-[calc(100%-2rem)] flex flex-col items-center gap-2 pointer-events-none`}>
+          {noTokenNote && <div className={MAP_NOTE}>{noTokenNote}</div>}
+          {rulerNeedsToken && <div className={MAP_NOTE}>{RULER_NEEDS_TOKEN}</div>}
         </div>
       )}
 
@@ -4991,12 +5019,12 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
 
       {!compact && tokenDetails(false)}
 
-      {/* The compact layout's dock at the foot of the map, from the top: the
-          ruler's hint, a row of the square under the pointer at the left and
-          the DM's Player Preview controls at the right, and the token's
-          details. Laid out as a
-          column from the foot, so each stands clear of the one below it
-          whatever its height. It is the map's size, a size container, so the
+      {/* The compact layout's dock at the foot of the map, from the top: why
+          a lit map is dark for a player with no token, the ruler's hint, a
+          row of the square under the pointer at the left and the DM's
+          Player Preview controls at the right, and the token's details.
+          Laid out as a column from the foot, so each stands clear of the
+          one below it whatever its height. It is the map's size, a size container, so the
           Draw strip's height is a share of the map's (cqh). It lets presses
           through to the map, except on its controls. */}
       {compact && (
@@ -5004,11 +5032,8 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
           {/* What the dock holds, measured: the DM's stack stops above it. */}
           <div ref={dockContentRef} className="flex min-h-0 flex-col">
             <div className={`${DOCK_ROW} flex flex-col gap-2 pb-2`}>
-              {rulerNeedsToken && (
-                <div className="self-center bg-black/60 text-white text-xs px-3 py-1.5 rounded-full text-center">
-                  {RULER_NEEDS_TOKEN}
-                </div>
-              )}
+              {noTokenNote && <div className={`self-center ${MAP_NOTE}`}>{noTokenNote}</div>}
+              {rulerNeedsToken && <div className={`self-center ${MAP_NOTE}`}>{RULER_NEEDS_TOKEN}</div>}
               {/* The square under the pointer and the DM's Preview controls share
                   a row, the square at the left: stacked, the controls rose and
                   fell as the square came and went, out from under the pointer. */}
