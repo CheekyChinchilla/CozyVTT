@@ -45,7 +45,8 @@ const userIds: string[] = [];
 const campaignIds: string[] = [];
 let campaignId = '';
 let otherCampaignId = '';
-const id = { newDm: '', formerDm: '', player: '', spectator: '', stranger: '' };
+let newDmsOtherCampaignId = '';
+const id = { newDm: '', formerDm: '', player: '', spectator: '', stranger: '', leaver: '' };
 let adminUser: Agent;
 let newDm: Agent;
 let formerDm: Agent;
@@ -72,17 +73,25 @@ async function picture(): Promise<{ id: string; address: string }> {
 }
 
 /**
- * A Markdown handout the new DM keeps in the campaign, stored before what
- * documents show was kept: a row and a file, and nothing read from it.
- * `missingFile` leaves the file out, so it cannot be read.
+ * A Markdown document stored before what documents show was kept: a row and
+ * a file, and nothing read from it. By default a handout the new DM keeps in
+ * the campaign; `by` is another writer, `personal` puts it in their own
+ * library and `inCampaign` in another campaign. `missingFile` leaves the
+ * file out, so it cannot be read.
  */
-async function storedBefore(content: string, options: { missingFile?: boolean } = {}): Promise<{ id: string; filePath: string }> {
+async function storedBefore(
+  content: string,
+  options: { missingFile?: boolean; by?: string; personal?: boolean; inCampaign?: string } = {}
+): Promise<{ id: string; filePath: string }> {
   const filename = `before-${Date.now()}-${Math.random().toString(36).slice(2)}.md`;
   const filePath = path.join(DIR, filename);
   if (!options.missingFile) fs.writeFileSync(filePath, content);
   const doc = await prisma.asset.create({
     data: {
-      type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId, uploadedById: id.newDm, filename, originalName: filename,
+      type: 'DOCUMENT',
+      scope: options.personal ? 'USER' : 'CAMPAIGN',
+      campaignId: options.personal ? null : options.inCampaign ?? campaignId,
+      uploadedById: options.by ?? id.newDm, filename, originalName: filename,
       mimeType: 'text/markdown', fileSize: Buffer.byteLength(content), filePath, name: filename,
     },
   });
@@ -109,23 +118,27 @@ async function filesOpenedBy(files: string[], run: () => Promise<unknown>): Prom
   return opened;
 }
 
-/** Mark every unread document of the campaign's as read, so one test's handouts do not reach the next. */
+/** Mark every unread document of this file's users as read, so one test's documents do not reach the next. */
 async function settleUnread(): Promise<void> {
-  await prisma.asset.updateMany({ where: { campaignId, type: 'DOCUMENT', picturesReadAt: null }, data: { picturesReadAt: new Date() } });
+  await prisma.asset.updateMany({
+    where: { uploadedById: { in: userIds }, type: 'DOCUMENT', picturesReadAt: null },
+    data: { picturesReadAt: new Date() },
+  });
 }
 
 beforeAll(async () => {
   const stamp = Date.now();
   const make = (who: string, role?: 'ADMIN') => createTestUser({ email: `old-handout-${who}-${stamp}@test.invalid`, role });
-  const [admin, n, f, p, s, x] = await Promise.all([
-    make('admin', 'ADMIN'), make('newdm'), make('formerdm'), make('player'), make('spectator'), make('stranger'),
+  const [admin, n, f, p, s, x, l] = await Promise.all([
+    make('admin', 'ADMIN'), make('newdm'), make('formerdm'), make('player'), make('spectator'), make('stranger'), make('leaver'),
   ]);
-  [id.newDm, id.formerDm, id.player, id.spectator, id.stranger] = [n.id, f.id, p.id, s.id, x.id];
-  userIds.push(admin.id, n.id, f.id, p.id, s.id, x.id);
+  [id.newDm, id.formerDm, id.player, id.spectator, id.stranger, id.leaver] = [n.id, f.id, p.id, s.id, x.id, l.id];
+  userIds.push(admin.id, n.id, f.id, p.id, s.id, x.id, l.id);
 
   campaignId = (await createTestCampaign(id.newDm, { name: `Handed over ${stamp}` })).id;
   otherCampaignId = (await createTestCampaign(id.stranger, { name: `Next door ${stamp}` })).id;
-  campaignIds.push(campaignId, otherCampaignId);
+  newDmsOtherCampaignId = (await createTestCampaign(id.newDm, { name: `Their other table ${stamp}` })).id;
+  campaignIds.push(campaignId, otherCampaignId, newDmsOtherCampaignId);
   // The seat has been handed over: the former DM now sits as a player.
   await prisma.campaignMembership.createMany({
     data: [
@@ -134,6 +147,7 @@ beforeAll(async () => {
       { userId: id.player, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: id.spectator, campaignId, role: 'SPECTATOR', characterIds: [] },
       { userId: id.stranger, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: id.newDm, campaignId: newDmsOtherCampaignId, role: 'DM', characterIds: [] },
     ],
   });
 
@@ -151,7 +165,7 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { campaignId: { in: campaignIds } } });
+  await prisma.asset.deleteMany({ where: { OR: [{ campaignId: { in: campaignIds } }, { uploadedById: { in: userIds } }] } });
   await cleanupCampaigns(campaignIds);
   await cleanupUsers(userIds);
   await prisma.$disconnect();
@@ -213,12 +227,51 @@ describe('a former DM, with an older handout of the new DM\'s showing their pict
     const openedFirst = await filesOpenedBy(files, async () => { first = await formerDm.delete(`/api/assets/${art.id}?force=true`); });
     expect(first?.status).toBe(403);
     expect(first?.body.message).toBe(UNREAD_REFUSAL.delete);
-    expect(openedFirst).toBeLessThanOrEqual(MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL);
+    expect(openedFirst).toBe(MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL);
     expect(await stillThere(art.id)).not.toBeNull();
 
     // The next try reads what is left.
     expect((await formerDm.delete(`/api/assets/${art.id}?force=true`)).status).toBe(200);
     expect(await prisma.asset.count({ where: { id: { in: docs.map((doc) => doc.id) }, picturesReadAt: null } })).toBe(0);
+  });
+});
+
+describe('which older documents a former DM\'s delete reads', () => {
+  it('reads a co-member\'s document in their own library, and is refused when it shows the picture', async () => {
+    const art = await picture();
+    const doc = await storedBefore(`![Map](${art.address})`, { personal: true });
+
+    const res = await formerDm.delete(`/api/assets/${art.id}?force=true`);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe(USED_BY_OTHERS);
+    const read = await prisma.asset.findUniqueOrThrow({ where: { id: doc.id }, select: { picturesReadAt: true } });
+    expect(read.picturesReadAt).not.toBeNull();
+  });
+
+  it('reads a co-member\'s document in another campaign, and is refused when it shows the picture', async () => {
+    const art = await picture();
+    await storedBefore(`![Map](${art.address})`, { inCampaign: newDmsOtherCampaignId });
+
+    const res = await formerDm.delete(`/api/assets/${art.id}?force=true`);
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe(USED_BY_OTHERS);
+  });
+
+  it('leaves alone an unreadable document of their own, of a former member and of someone outside the campaign', async () => {
+    const art = await picture();
+    const docs = [
+      await storedBefore(`![Map](${art.address})`, { missingFile: true, by: id.formerDm, personal: true }),
+      await storedBefore(`![Map](${art.address})`, { missingFile: true, by: id.leaver, personal: true }),
+      await storedBefore(`![Map](${art.address})`, { missingFile: true, by: id.stranger, inCampaign: otherCampaignId }),
+    ];
+
+    let status = 0;
+    const opened = await filesOpenedBy(docs.map((doc) => doc.filePath), async () => {
+      status = (await formerDm.delete(`/api/assets/${art.id}?force=true`)).status;
+    });
+    expect(status).toBe(200);
+    expect(opened).toBe(0);
+    expect(await stillThere(art.id)).toBeNull();
   });
 });
 
@@ -232,6 +285,19 @@ describe('the campaign\'s DM and an admin, with an older handout showing the pic
     expect(status).toBe(200);
     expect(opened).toBe(0);
     expect(await stillThere(art.id)).toBeNull();
+  });
+
+  it('the DM moves it to another campaign they run as before, reading no document', async () => {
+    const art = await picture();
+    const doc = await storedBefore(`![Map](${art.address})`);
+
+    let status = 0;
+    const opened = await filesOpenedBy([doc.filePath], async () => {
+      status = (await newDm.patch(`/api/assets/${art.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: newDmsOtherCampaignId })).status;
+    });
+    expect(status).toBe(200);
+    expect(opened).toBe(0);
+    expect(await stillThere(art.id)).toEqual({ scope: 'CAMPAIGN', campaignId: newDmsOtherCampaignId });
   });
 
   it('an admin deletes it with force as before, reading no document', async () => {
