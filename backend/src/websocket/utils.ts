@@ -6,7 +6,7 @@ import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
 import { canReadMap } from '../services/permissions';
 import { characterForReader } from '../utils/keeperNotes';
-import type { AuthenticatedFields, CampaignRefusal } from './auth';
+import type { AuthenticatedFields } from './auth';
 import { emitNewestState } from './outgoingQueue';
 import { NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 
@@ -256,6 +256,9 @@ export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'sig
 /** Why a member's connections lost the campaign while the campaign stays: the DM removed them, or they left. */
 export type MemberLeftReason = Extract<AccessRevokedReason, 'removed' | 'left'>;
 
+/** Why someone is not a member of a campaign that exists: removed, left, or no record of which (memberDepartures.ts). */
+export type NotAMemberReason = Extract<AccessRevokedReason, MemberLeftReason | 'not-member'>;
+
 /** What `campaign.access.revoked` carries. */
 export interface AccessRevoked {
   /**
@@ -275,6 +278,12 @@ export const CAMPAIGN_DELETED_MESSAGE = 'This campaign was deleted.';
 export const NO_SUCH_CAMPAIGN_MESSAGE = 'This campaign does not exist. It may have been deleted.';
 export const NOT_MEMBER_MESSAGE = `${NOT_A_MEMBER_MESSAGE}.`;
 
+const NOT_A_MEMBER_MESSAGES: Record<NotAMemberReason, string> = {
+  removed: REMOVED_MESSAGE,
+  left: LEFT_MESSAGE,
+  'not-member': NOT_MEMBER_MESSAGE,
+};
+
 /**
  * campaign.access.revoked — the connection may no longer use its campaign,
  * and why: removed from it, left it, the campaign deleted, the sign-in ended,
@@ -287,15 +296,18 @@ function tellAccessRevoked(socket: TellableSocket, revoked: AccessRevoked): void
 }
 
 /**
- * Tell a socket its join was refused because the campaign is gone or the
- * user is not a member of it. Says nothing about the campaign that the
- * person did not send: someone who was never a member learns no more than
- * that.
+ * Tell a socket its join was refused because the campaign is gone
+ * (`campaign-deleted`) or the user is not a member of it (`removed` or
+ * `left` while that is recent, otherwise `not-member`). Says nothing about
+ * the campaign that the person did not send: someone who was never a member
+ * learns no more than that.
  */
-export function tellJoinRefused(socket: TellableSocket, campaignId: string, why: Extract<CampaignRefusal, 'no-campaign' | 'not-member'>): void {
-  tellAccessRevoked(socket, why === 'no-campaign'
-    ? { campaignId, reason: 'campaign-deleted', message: NO_SUCH_CAMPAIGN_MESSAGE }
-    : { campaignId, reason: 'not-member', message: NOT_MEMBER_MESSAGE });
+export function tellJoinRefused(socket: TellableSocket, campaignId: string, reason: 'campaign-deleted' | NotAMemberReason): void {
+  tellAccessRevoked(socket, {
+    campaignId,
+    reason,
+    message: reason === 'campaign-deleted' ? NO_SUCH_CAMPAIGN_MESSAGE : NOT_A_MEMBER_MESSAGES[reason],
+  });
 }
 
 /** A server-side socket, a live one or one `fetchSockets()` handed back. */
@@ -475,14 +487,15 @@ export async function applyRoleToLiveSockets(
  * playing elsewhere in another tab is left alone. A token they are holding
  * goes back where it stands on everyone else's screen, since their own
  * put-down would now be refused. `reason` is what each connection is told:
- * the DM removed them, or they left.
+ * the DM removed them, they left, or (a join that found the membership gone
+ * with no record of why) only that they are not a member.
  *
  * @returns number of connections closed off
  */
 export async function clearCampaignFromLiveSockets(
   userId: string,
   campaignId: string,
-  reason: MemberLeftReason = 'removed'
+  reason: NotAMemberReason = 'removed'
 ): Promise<number> {
   const io = getSocketInstance();
   const sockets = await io.in(userId).fetchSockets();
@@ -497,7 +510,7 @@ export async function clearCampaignFromLiveSockets(
         authed.campaignId = undefined;
         authed.role = undefined;
       }
-      tellAccessRevoked(socket, { campaignId, reason, message: reason === 'left' ? LEFT_MESSAGE : REMOVED_MESSAGE });
+      tellAccessRevoked(socket, { campaignId, reason, message: NOT_A_MEMBER_MESSAGES[reason] });
       cleared += 1;
     }
   }

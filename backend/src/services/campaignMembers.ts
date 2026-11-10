@@ -10,6 +10,7 @@
 
 import { inSerializableTransaction } from '../utils/serializable';
 import { clearCampaignFromLiveSockets, announceRosterChange, broadcastPresence, type MemberLeftReason } from '../websocket/utils';
+import { rememberDeparture } from '../websocket/memberDepartures';
 import logger from '../utils/logger';
 
 /** Why a member was not taken out: not a member, the DM, or the campaign's owner. */
@@ -68,11 +69,14 @@ export async function takeMemberOut(
 /**
  * Tell everyone a member taken out of the campaign is gone: their open
  * connections to it leave it, each told why (`reason`: the DM removed them,
- * or they left), the table is sent who is online now, and its pages refresh
+ * or they left, which a tab joining soon after is told too), the table is sent who is online now, and its pages refresh
  * their member lists (`roster.updated`, `member.left`). Never throws: the
  * membership is already gone.
  */
 export async function tellTableMemberLeft(userId: string, campaignId: string, reason: MemberLeftReason): Promise<void> {
+  // First, before anything is awaited: a tab of theirs joining now, or
+  // reconnecting within the minute, is told the same reason.
+  rememberDeparture(userId, campaignId, reason);
   // A socket caches the campaign from when it authenticated, so without this
   // the person carries on playing until they close the tab. Best-effort: a
   // socket layer that is not up must not fail the request.

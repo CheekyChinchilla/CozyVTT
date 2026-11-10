@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
 import { databaseBeingReplaced, RESTORING_MESSAGE } from '../services/restoreState';
 import { broadcastPresence, getOnlineUserIds, clearCampaignFromLiveSockets, applyRoleToLiveSockets, tellJoinRefused } from './utils';
+import { whyNotAMember } from './memberDepartures';
 import logger from '../utils/logger';
 import { holdsNulCharacter, NUL_REFUSAL } from '../validators/nulCharacter';
 import { ackFrom } from './ack';
@@ -152,13 +153,16 @@ export function registerEventHandlers(io: Server): void {
         const result = await authenticateCampaign(socket, data.campaignId);
 
         if (!result.success) {
-          if (result.refusal === 'no-campaign' || result.refusal === 'not-member') {
-            // A tab that reconnects after its member left or was removed, or
-            // after the campaign was deleted (a computer that slept through
-            // it), or an address the user was never in: out of every
-            // campaign room, and told so, as an open tab is.
+          // A tab that reconnects after its member left or was removed, or
+          // after the campaign was deleted (a computer that slept through
+          // it), or an address the user was never in: out of every campaign
+          // room, and told so, as an open tab is.
+          const reason = result.refusal === 'no-campaign'
+            ? 'campaign-deleted'
+            : result.refusal === 'not-member' && socket.userId ? whyNotAMember(socket.userId, data.campaignId) : null;
+          if (reason) {
             await leaveCampaignRooms([...socket.rooms].filter((room) => room !== socket.id && room !== socket.userId));
-            tellJoinRefused(socket, data.campaignId, result.refusal);
+            tellJoinRefused(socket, data.campaignId, reason);
           } else {
             socket.emit('error', { message: result.error });
           }
@@ -288,10 +292,8 @@ export function registerEventHandlers(io: Server): void {
       }
       if (socket.campaignId !== campaignId) return;
       if (!membership) {
-        // TODO(play): this says "removed" whatever took the member out, so a leaver's tab re-joining at the
-        // moment of the leave is told "You were removed from this campaign.". It should be told the reason
-        // the leave gave, `left`.
-        await clearCampaignFromLiveSockets(userId, campaignId);
+        // Told why, as the leave or removal told the tabs open at the time.
+        await clearCampaignFromLiveSockets(userId, campaignId, whyNotAMember(userId, campaignId));
         await broadcastPresence(campaignId);
       } else if (membership.role !== socket.role) {
         await applyRoleToLiveSockets(userId, campaignId, membership.role);

@@ -25,6 +25,7 @@ import { applyRoleToLiveSockets, broadcastToCampaign } from '../utils';
 import * as utils from '../utils';
 import * as auth from '../auth';
 import type { AuthenticatedSocket } from '../auth';
+import { tellTableMemberLeft } from '../../services/campaignMembers';
 import {
   createWsTestServer,
   expectNoEvent,
@@ -328,7 +329,7 @@ describe('a change while a connection switches campaigns', () => {
       // Removed after the read: the route's clear-out finds nothing to clear yet.
       if (id === campaignB) {
         await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } } });
-        await utils.clearCampaignFromLiveSockets(playerId, campaignB);
+        await tellTableMemberLeft(playerId, campaignB, 'removed');
       }
       return result;
     });
@@ -338,6 +339,43 @@ describe('a change while a connection switches campaigns', () => {
     expect(socket.rooms.has(campaignB)).toBe(false);
     expect(socket.campaignId).toBeUndefined();
     await expect(revoked).resolves.toMatchObject({ campaignId: campaignB, reason: 'removed' });
+    client.disconnect();
+  });
+  it('tells a leaver whose connection joins at the moment of the leave that they left', async () => {
+    const client = await server.connectAndAuth(playerCookie, campaignA);
+    const original = auth.authenticateCampaign;
+    jest.spyOn(auth, 'authenticateCampaign').mockImplementation(async (s, id) => {
+      const result = await original(s, id);
+      // Left after the read, as the leave route does it.
+      if (id === campaignB) {
+        await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } } });
+        await tellTableMemberLeft(playerId, campaignB, 'left');
+      }
+      return result;
+    });
+
+    const revoked = waitForEvent<{ campaignId: string; reason: string; message: string }>(client, 'campaign.access.revoked');
+    const socket = await switchToB(client);
+    expect(socket.rooms.has(campaignB)).toBe(false);
+    await expect(revoked).resolves.toEqual({ campaignId: campaignB, reason: 'left', message: 'You left this campaign.' });
+    client.disconnect();
+  });
+
+  it('says not-member for a membership gone with no record of why', async () => {
+    const client = await server.connectAndAuth(playerCookie, campaignA);
+    const original = auth.authenticateCampaign;
+    jest.spyOn(auth, 'authenticateCampaign').mockImplementation(async (s, id) => {
+      const result = await original(s, id);
+      if (id === campaignB) {
+        await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } } });
+      }
+      return result;
+    });
+
+    const revoked = waitForEvent<{ campaignId: string; reason: string; message: string }>(client, 'campaign.access.revoked');
+    const socket = await switchToB(client);
+    expect(socket.rooms.has(campaignB)).toBe(false);
+    await expect(revoked).resolves.toEqual({ campaignId: campaignB, reason: 'not-member', message: 'You are not a member of this campaign.' });
     client.disconnect();
   });
 });

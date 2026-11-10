@@ -22,10 +22,6 @@ _Nothing in progress._
 
 Bugs confirmed in a released version and not fixed yet. Each entry starts with the release it is planned for, which can move as work is scheduled. Most are marked in the code with a `TODO(<area>)` comment at the spot. "Suspected" means read from the code and not yet reproduced. Delete an entry when its fix ships, as with the rest of this file.
 
-### Play and connection
-
-- `after the next release` **A member who leaves a campaign while one of their tabs is joining it sees that tab told they were removed.** The join finds no membership and takes the tab out with the removal's sentence, "You were removed from this campaign.", where it should say "You left this campaign." (`websocket/events.ts`).
-
 ### Creatures
 
 - `after the next release` **A Call of Cthulhu creature's characteristics stop at 30 and its skills at 50.** The stat block keeps D&D 5e's ability score bound and one skill bound for every system, so a characteristic over 30 is refused when saved, and the skills box stops at 50. It needs a Call of Cthulhu creature model, with its eight characteristics and percentile skills (`validators/statBlock.ts`).

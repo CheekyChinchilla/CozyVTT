@@ -19,6 +19,8 @@ import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { clearCampaignFromLiveSockets } from '../utils';
 import type { AuthenticatedSocket } from '../auth';
+import { tellTableMemberLeft } from '../../services/campaignMembers';
+import { DEPARTURE_MEMORY_MS } from '../memberDepartures';
 import {
   createWsTestServer,
   waitForEvent,
@@ -243,5 +245,41 @@ describe('a refused join', () => {
       await prisma.campaignMembership.create({ data: { userId: playerId, campaignId: otherCampaignId, role: 'DM', characterIds: [] } });
       client.disconnect();
     }
+  });
+  // A computer that slept through the removal: its tab reconnects and asks
+  // to join again. Told the removal while it is recent, and after that only
+  // that the user is not a member.
+  describe('a connection coming back after its member was removed', () => {
+    beforeEach(async () => {
+      await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId } } });
+      await tellTableMemberLeft(playerId, campaignId, 'removed');
+    });
+
+    afterEach(async () => {
+      jest.restoreAllMocks();
+      await prisma.campaignMembership.create({ data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] } });
+    });
+
+    it('is told it was removed, within the minute', async () => {
+      const client = await server.connectClient(playerCookie);
+      const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+      client.emit('authenticate', { campaignId });
+
+      await expect(told).resolves.toEqual({ campaignId, reason: 'removed', message: 'You were removed from this campaign.' });
+      expect(campaignRooms(client, playerId)).toEqual([]);
+      client.disconnect();
+    });
+
+    it('is told it is not a member, once the minute has passed', async () => {
+      const later = Date.now() + DEPARTURE_MEMORY_MS;
+      jest.spyOn(Date, 'now').mockReturnValue(later);
+      const client = await server.connectClient(playerCookie);
+      const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+      client.emit('authenticate', { campaignId });
+
+      await expect(told).resolves.toEqual({ campaignId, reason: 'not-member', message: 'You are not a member of this campaign.' });
+      expect(campaignRooms(client, playerId)).toEqual([]);
+      client.disconnect();
+    });
   });
 });
