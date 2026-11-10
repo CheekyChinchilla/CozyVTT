@@ -118,8 +118,10 @@ class SocketClient {
   private signInRefused = false;
   /**
    * The server said this connection may no longer use its campaign
-   * (`campaign.access.revoked`): removed, the campaign deleted, or the
-   * sign-in ended. Nothing is reconnected after that; the page says why.
+   * (`campaign.access.revoked`): removed, left, the campaign deleted, the
+   * sign-in ended, or a join refused because the user is not a member
+   * (`not-member`) or the campaign is gone. Nothing is reconnected after
+   * that; the page says why.
    */
   private accessRevoked = false;
   /**
