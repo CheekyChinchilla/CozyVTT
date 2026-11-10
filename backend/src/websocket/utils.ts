@@ -6,8 +6,9 @@ import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
 import { canReadMap } from '../services/permissions';
 import { characterForReader } from '../utils/keeperNotes';
-import type { AuthenticatedFields } from './auth';
+import type { AuthenticatedFields, CampaignRefusal } from './auth';
 import { emitNewestState } from './outgoingQueue';
+import { NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
 
 /** The events that carry a map's whole list of walls, lights or drawings. */
 const WHOLE_LIST_EVENTS: ReadonlySet<string> = new Set(['walls:replaced', 'lights:replaced', 'drawings:state']);
@@ -250,14 +251,17 @@ export async function broadcastPresence(campaignId: string): Promise<void> {
 }
 
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
-export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
+export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out' | 'not-member';
 
 /** Why a member's connections lost the campaign while the campaign stays: the DM removed them, or they left. */
 export type MemberLeftReason = Extract<AccessRevokedReason, 'removed' | 'left'>;
 
 /** What `campaign.access.revoked` carries. */
 export interface AccessRevoked {
-  /** The campaign the connection was in, or null when it had not joined one. */
+  /**
+   * The campaign the notice is about: the one the connection was in, or the
+   * one it asked to join; null when it had not joined one.
+   */
   campaignId: string | null;
   reason: AccessRevokedReason;
   /** A sentence for the person, shown as it is. */
@@ -267,15 +271,31 @@ export interface AccessRevoked {
 export const REMOVED_MESSAGE = 'You were removed from this campaign.';
 export const LEFT_MESSAGE = 'You left this campaign.';
 export const CAMPAIGN_DELETED_MESSAGE = 'This campaign was deleted.';
+/** A join refused because no campaign has that id: deleted, or never there. */
+export const NO_SUCH_CAMPAIGN_MESSAGE = 'This campaign does not exist. It may have been deleted.';
+export const NOT_MEMBER_MESSAGE = `${NOT_A_MEMBER_MESSAGE}.`;
 
 /**
  * campaign.access.revoked — the connection may no longer use its campaign,
- * and why: removed from it, left it, the campaign deleted, or the sign-in ended. A
+ * and why: removed from it, left it, the campaign deleted, the sign-in ended,
+ * or a join refused because the campaign is gone or the user is not in it. A
  * typed event, so the page can tell the person and stop, where a plain
  * `error` was only logged.
  */
 function tellAccessRevoked(socket: TellableSocket, revoked: AccessRevoked): void {
   socket.emit('campaign.access.revoked', revoked);
+}
+
+/**
+ * Tell a socket its join was refused because the campaign is gone or the
+ * user is not a member of it. Says nothing about the campaign that the
+ * person did not send: someone who was never a member learns no more than
+ * that.
+ */
+export function tellJoinRefused(socket: TellableSocket, campaignId: string, why: Extract<CampaignRefusal, 'no-campaign' | 'not-member'>): void {
+  tellAccessRevoked(socket, why === 'no-campaign'
+    ? { campaignId, reason: 'campaign-deleted', message: NO_SUCH_CAMPAIGN_MESSAGE }
+    : { campaignId, reason: 'not-member', message: NOT_MEMBER_MESSAGE });
 }
 
 /** A server-side socket, a live one or one `fetchSockets()` handed back. */

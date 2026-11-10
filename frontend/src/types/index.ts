@@ -1593,7 +1593,7 @@ export interface CharacterHpUpdatedBroadcast {
 }
 
 /** Why a connection lost its campaign, as `campaign.access.revoked` says. */
-export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
+export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'signed-out' | 'not-member';
 
 /**
  * `campaign.access.revoked`: this connection may no longer use its campaign.
@@ -1601,7 +1601,10 @@ export type AccessRevokedReason = 'removed' | 'left' | 'campaign-deleted' | 'sig
  * fails if the two differ.
  */
 export interface AccessRevoked {
-  /** The campaign the connection was in, or null when it had not joined one. */
+  /**
+   * The campaign the notice is about: the one the connection was in, or the
+   * one it asked to join; null when it had not joined one.
+   */
   campaignId: string | null;
   reason: AccessRevokedReason;
   /** A sentence for the person, shown as it is. */

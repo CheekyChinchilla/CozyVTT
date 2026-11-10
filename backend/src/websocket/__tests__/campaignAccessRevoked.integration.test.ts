@@ -18,6 +18,7 @@ import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { clearCampaignFromLiveSockets } from '../utils';
+import type { AuthenticatedSocket } from '../auth';
 import {
   createWsTestServer,
   waitForEvent,
@@ -33,10 +34,12 @@ const email = (name: string) => `revoked-${name}-${runId}@test.cozyvtt.local`;
 let server: WsTestServer;
 let dmId: string;
 let playerId: string;
+let outsiderId: string;
 let campaignId: string;
 let otherCampaignId: string;
 let dmCookie: string;
 let playerCookie: string;
+let outsiderCookie: string;
 
 /** Try to speak in the campaign; resolve with what came back. */
 function attemptChat(client: ClientSocket, content: string): Promise<'sent' | 'refused'> {
@@ -57,8 +60,8 @@ function attemptChat(client: ClientSocket, content: string): Promise<'sent' | 'r
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
-    ['dm', 'player'].map((name) =>
+  const [dm, player, outsider] = await Promise.all(
+    ['dm', 'player', 'outsider'].map((name) =>
       prisma.user.create({
         data: {
           email: email(name),
@@ -70,6 +73,7 @@ beforeAll(async () => {
   );
   dmId = dm.id;
   playerId = player.id;
+  outsiderId = outsider.id;
 
   const [campaign, other] = await Promise.all([
     prisma.campaign.create({ data: { name: `Revoked Campaign ${runId}`, ownerId: dmId, vibeSettings: {} } }),
@@ -87,13 +91,13 @@ beforeAll(async () => {
   });
 
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [dmCookie, playerCookie, outsiderCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId), server.loginAs(outsiderId)]);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.campaign.deleteMany({ where: { id: { in: [campaignId, otherCampaignId] } } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, outsiderId] } } });
   await prisma.$disconnect();
 });
 
@@ -163,5 +167,81 @@ describe('clearCampaignFromLiveSockets', () => {
   it('is a quiet no-op when the user has no connection open', async () => {
     const neverConnected = randomUUID();
     expect(await clearCampaignFromLiveSockets(neverConnected, campaignId)).toBe(0);
+  });
+});
+
+/**
+ * A join the server refuses because the campaign is gone or the user is not
+ * in it: a tab that reconnects after its member was removed or left, or
+ * after the campaign was deleted (a computer that slept through it), or an
+ * address the user was never in. It used to get a plain `error`, and the
+ * page stayed on a table it could not use.
+ */
+describe('a refused join', () => {
+  type Revoked = { campaignId: string | null; reason: string; message: string };
+
+  /** The server's socket for a client. */
+  function serverSocket(client: ClientSocket): AuthenticatedSocket {
+    const found = server.io.of('/').sockets.get(client.id ?? '');
+    if (!found) throw new Error('no server socket for the client');
+    return found as AuthenticatedSocket;
+  }
+
+  /** Rooms other than the socket's own and its user's: the campaign rooms it is in. */
+  function campaignRooms(client: ClientSocket, userId: string): string[] {
+    const socket = serverSocket(client);
+    return [...socket.rooms].filter((room) => room !== socket.id && room !== userId);
+  }
+
+  it('tells someone who is not a member, with no plain error and nothing about the campaign', async () => {
+    const client = await server.connectClient(outsiderCookie);
+    const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+    const noError = expectNoEvent(client, 'error', 500);
+    client.emit('authenticate', { campaignId });
+
+    const revoked = await told;
+    expect(revoked).toEqual({ campaignId, reason: 'not-member', message: 'You are not a member of this campaign.' });
+    expect(JSON.stringify(revoked)).not.toContain('Revoked Campaign');
+    await expect(noError).resolves.toBeUndefined();
+    expect(campaignRooms(client, outsiderId)).toEqual([]);
+    expect(serverSocket(client).campaignId).toBeUndefined();
+    client.disconnect();
+  });
+
+  it('tells a connection asking for a campaign that does not exist', async () => {
+    const client = await server.connectClient(outsiderCookie);
+    const gone = randomUUID();
+    const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+    const noError = expectNoEvent(client, 'error', 500);
+    client.emit('authenticate', { campaignId: gone });
+
+    await expect(told).resolves.toEqual({
+      campaignId: gone,
+      reason: 'campaign-deleted',
+      message: 'This campaign does not exist. It may have been deleted.',
+    });
+    await expect(noError).resolves.toBeUndefined();
+    expect(campaignRooms(client, outsiderId)).toEqual([]);
+    client.disconnect();
+  });
+
+  // A membership gone with the socket still in the room: its live clear-out
+  // did not reach it. Joining again takes it out.
+  it('takes a connection out of the room of a campaign it is no longer in', async () => {
+    const client = await server.connectAndAuth(playerCookie, otherCampaignId);
+    await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: otherCampaignId } } });
+    try {
+      const told = waitForEvent<Revoked>(client, 'campaign.access.revoked');
+      client.emit('authenticate', { campaignId: otherCampaignId });
+
+      await expect(told).resolves.toMatchObject({ campaignId: otherCampaignId, reason: 'not-member' });
+      expect(campaignRooms(client, playerId)).toEqual([]);
+      expect(serverSocket(client).campaignId).toBeUndefined();
+      expect(serverSocket(client).role).toBeUndefined();
+      expect(await attemptChat(client, 'not in it any more')).toBe('refused');
+    } finally {
+      await prisma.campaignMembership.create({ data: { userId: playerId, campaignId: otherCampaignId, role: 'DM', characterIds: [] } });
+      client.disconnect();
+    }
   });
 });

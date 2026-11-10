@@ -197,9 +197,9 @@ describe('connection & authentication', () => {
 
   it('rejects campaign authentication for a non-member', async () => {
     const client = await server.connectClient(outsiderCookie);
-    const error = waitForEvent<{ message: string }>(client, 'error');
+    const revoked = waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked');
     client.emit('authenticate', { campaignId });
-    expect((await error).message).toBe('You are not a member of this campaign');
+    expect(await revoked).toMatchObject({ reason: 'not-member', message: 'You are not a member of this campaign.' });
     client.disconnect();
   });
 

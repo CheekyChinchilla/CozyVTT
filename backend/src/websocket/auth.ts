@@ -1,5 +1,6 @@
 import { Socket } from 'socket.io';
 import type { SessionData, Store } from 'express-session';
+import type { CampaignRole } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { sessionIsSignedIn, sessionHasAgedOut } from '../services/signedIn';
@@ -179,6 +180,18 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
 }
 
 /**
+ * Why `authenticateCampaign` turned a socket away: no such campaign, not a
+ * member of it, a socket that never signed in, or a failure inside the
+ * server. The `authenticate` handler tells a socket the first two with
+ * `campaign.access.revoked`, and the others with a plain `error`.
+ */
+export type CampaignRefusal = 'no-campaign' | 'not-member' | 'not-signed-in' | 'failed';
+
+export type CampaignCheck =
+  | { success: true; role: CampaignRole }
+  | { success: false; refusal: CampaignRefusal; error: string };
+
+/**
  * Check that the socket's user belongs to the campaign, and report their role.
  *
  * Reports only. The `authenticate` handler owns the socket's campaign and role
@@ -188,20 +201,20 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
 export async function authenticateCampaign(
   socket: AuthenticatedSocket,
   campaignId: string
-): Promise<{ success: boolean; role?: string; error?: string }> {
+): Promise<CampaignCheck> {
   try {
     if (!socket.userId) {
-      return { success: false, error: 'Socket not authenticated' };
+      return { success: false, refusal: 'not-signed-in', error: 'Socket not authenticated' };
     }
 
     // Verify campaign exists
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: { id: true, name: true, status: true },
+      select: { id: true },
     });
 
     if (!campaign) {
-      return { success: false, error: 'Campaign not found' };
+      return { success: false, refusal: 'no-campaign', error: 'Campaign not found' };
     }
 
     // Verify user is a member of the campaign
@@ -216,7 +229,7 @@ export async function authenticateCampaign(
     });
 
     if (!membership) {
-      return { success: false, error: NOT_A_MEMBER_MESSAGE };
+      return { success: false, refusal: 'not-member', error: NOT_A_MEMBER_MESSAGE };
     }
 
     return {
@@ -225,6 +238,6 @@ export async function authenticateCampaign(
     };
   } catch (error) {
     logger.error('WebSocket campaign authentication error', { err: error });
-    return { success: false, error: 'Internal server error' };
+    return { success: false, refusal: 'failed', error: 'Internal server error' };
   }
 }

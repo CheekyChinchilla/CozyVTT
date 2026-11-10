@@ -275,8 +275,10 @@ socket.on('error', (data) => {
      if not, the server answers `error` "Unauthorized" and closes the connection
    - The account is not an administrator past their 7 days without two-factor
      authentication; if it is, the same "Unauthorized" and close
-   - The campaign exists ("Campaign not found") and the user is a member of
-     it ("You are not a member of this campaign")
+   - The campaign exists and the user is a member of it. If not, the socket
+     is sent 'campaign.access.revoked' (reason 'campaign-deleted' or
+     'not-member'), leaves every campaign room it is in and gets no
+     'authenticated'
 3. In one step after that check, the socket leaves every other campaign room
    it is in, joins the campaign room and takes the campaignId and role
 4. Each campaign left gets 'user.left' and a fresh 'presence.state'. A
@@ -344,7 +346,7 @@ For every other event, see the [Event Inventory](#event-inventory).
   campaignId: string;  // UUID of campaign to join
 }
 ```
-**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, older than 30 days, or ended by a password change), or the account is an administrator past their 7 days without two-factor authentication, who must set it up first; sign in again. The other refusals leave the connection open: "Campaign ID required", "Campaign not found", "You are not a member of this campaign", and "Authentication failed" or "Internal server error" for a failure inside the server. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
+**Response:** `authenticated`, `campaign.access.revoked` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, older than 30 days, or ended by a password change), or the account is an administrator past their 7 days without two-factor authentication, who must set it up first; sign in again. A campaign that does not exist, or one the user is not a member of, is answered with [`campaign.access.revoked`](#campaignaccessrevoked) (reason `campaign-deleted` or `not-member`), and the connection leaves every campaign room it was in. The other refusals are an `error` and leave the connection open: "Campaign ID required", and "Authentication failed" or "Internal server error" for a failure inside the server. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
 
 #### `authenticated`
 **Direction:** Server → Client
@@ -361,12 +363,12 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `campaign.access.revoked`
 **Direction:** Server → Client
-**When:** This connection may no longer use its campaign: the DM removed the member, the member left the campaign (`POST /api/campaigns/:campaignId/leave`, every one of their connections to it, the one that asked included), the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that reaches its 30 days is told so within a minute ("Your sign-in has reached its 30-day limit. Sign in again.", or at once when a request of that sign-in is refused for it); one that expires, or is removed to keep the account at 20 sign-ins, within five minutes ("Your sign-in has ended. Sign in again."). Either way the server then closes the connection
+**When:** This connection may no longer use its campaign, or may not join the one it asked for: the DM removed the member, the member left the campaign (`POST /api/campaigns/:campaignId/leave`, every one of their connections to it, the one that asked included), the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup), or an `authenticate` named a campaign that does not exist or one the user is not a member of. A sign-in that reaches its 30 days is told so within a minute ("Your sign-in has reached its 30-day limit. Sign in again.", or at once when a request of that sign-in is refused for it); one that expires, or is removed to keep the account at 20 sign-ins, within five minutes ("Your sign-in has ended. Sign in again."). Either way the server then closes the connection
 **Payload:**
 ```typescript
 {
-  campaignId: string | null;  // the campaign the connection was in; null if it had not joined one
-  reason: 'removed' | 'left' | 'campaign-deleted' | 'signed-out';
+  campaignId: string | null;  // the campaign the connection was in, or the one it asked to join; null if it had not joined one
+  reason: 'removed' | 'left' | 'campaign-deleted' | 'signed-out' | 'not-member';
   message: string;            // a sentence for the person, e.g. "You were removed from this campaign."
 }
 ```
@@ -377,7 +379,8 @@ What follows depends on the reason:
 | --- | --- | --- |
 | `removed` | Stays open, but has left the campaign's room and is no longer authenticated to any campaign: it hears nothing from the table, and every campaign event it sends is refused | Stop, show `message`, leave the campaign |
 | `left` | The same as `removed`; `message` is "You left this campaign." The HTTP answer to the leave carries the same sentence, so the tab that asked may show whichever arrives first, once | The same |
-| `campaign-deleted` | The same, for every connection that was in the campaign | The same |
+| `campaign-deleted` | The same, for every connection that was in the campaign. A join of a campaign that does not exist is answered the same way, with "This campaign does not exist. It may have been deleted." | The same |
+| `not-member` | The same, for a join of a campaign the user is not a member of: one they were never in, or one they left or were removed from while this connection was away. `message` is "You are not a member of this campaign." and names no campaign | The same |
 | `signed-out` | The server closes it straight after (`disconnect` with reason `io server disconnect`) | Do not reconnect: a new connection would be refused. Sign in again |
 
 Before this event existed the server sent an `error` with the reason instead ("You are no longer a member of this campaign", "This campaign was deleted", or the sign-in's reason); it no longer does.
