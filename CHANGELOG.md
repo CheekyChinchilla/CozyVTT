@@ -50,7 +50,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A Call of Cthulhu creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them. A characteristic can now be up to 9,999 and a skill up to 999. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
 
-- **Mapmaker's notice of room walls not added after a save reads correctly.** When none of them were added it had a capital letter in the middle of its sentence, and a reason ending in a full stop was followed by a second one.
+- **Mapmaker's notice of room walls not added after a save reads correctly.** It had a capital letter mid-sentence when none were added, and a second full stop after some reasons. On a map that holds as many walls as it can, it now says to remove some before drawing the rest. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
 - **A turn the server refuses shows the token facing the way the server holds it, another member's turn included.** If someone else turned the token while your turn waited, the refusal showed the facing from before your turn until something on the map changed again. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
 

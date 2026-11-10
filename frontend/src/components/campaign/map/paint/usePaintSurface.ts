@@ -61,6 +61,7 @@ import { floodFillTiled } from './floodFill';
 import { drawShape, scaleShape, shapeBox, shapeTexture, stepAngle, type PaintPreview, type PaintShape, type PaintShapeKind, type PreviewTile, type ShapeStyle } from './paintShapes';
 import { labelFontSize, snapToGrid } from '../drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
+import { MAP_LIMITS } from '@/constants/mapLimits';
 import { usePaintStore } from '@/stores/paintStore';
 import type { Asset } from '@/types';
 import mapService from '@/services/map.service';
@@ -236,12 +237,15 @@ const liveWalls = (rooms: readonly PendingRoom[]): WallLine[] => rooms.filter((r
 
 /**
  * Said when the picture saved but some of its rooms' walls were not added to
- * the map, with each different reason once, as sentences.
+ * the map, with each different reason once, as sentences. `mapFull` is a map
+ * that now holds as many walls as it may: the wall tool refuses it more too,
+ * so it is told to make room first.
  */
-export function roomWallsNotAdded(missed: number, of: number, reasons: readonly string[]): string {
+export function roomWallsNotAdded(missed: number, of: number, reasons: readonly string[], mapFull = false): string {
   const which = missed === of ? (of === 1 ? 'the wall' : `the ${of} walls`) : `${missed} of the ${of} walls`;
   const why = [...new Set(reasons.map((reason) => reason.trim().replace(/\.$/, '')).filter(Boolean))].join('. ');
-  return `The picture was saved, but ${which} of your rooms ${missed === 1 ? 'was' : 'were'} not added to the map${why ? `: ${why}` : ''}. Draw ${missed === 1 ? 'it' : 'them'} with the wall tool.`;
+  const draw = `${mapFull ? 'Remove walls the map no longer needs, then draw' : 'Draw'} ${missed === 1 ? 'it' : 'them'} with the wall tool.`;
+  return `The picture was saved, but ${which} of your rooms ${missed === 1 ? 'was' : 'were'} not added to the map${why ? `: ${why}` : ''}. ${draw}`;
 }
 
 /** A pending room, with the note that takes its walls back on Undo and puts them back on Redo. */
@@ -1334,13 +1338,15 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       // before this page has heard.
       const onMap: [number, number] = [s.canvas.width / (saved.width * saved.gridSize), s.canvas.height / (saved.height * saved.gridSize)];
       const walls = wallsToAdd(wallsOnMap(liveWalls(roomsSaved), ...onMap), saved.wallSegments ?? latest.wallSegments ?? []);
-      let notAdded: { missed: number; reasons: string[] } | null = null;
+      let notAdded: { missed: number; reasons: string[]; mapFull: boolean } | null = null;
       if (walls.length > 0) {
         try {
-          const { skipped } = await mapService.addWalls(campaignId, s.mapId, walls.map((wall) => ({ ...wall, type: 'wall' as const })));
-          if (skipped.length > 0) notAdded = { missed: skipped.length, reasons: skipped.map((skip) => skip.reason) };
+          const { skipped, total } = await mapService.addWalls(campaignId, s.mapId, walls.map((wall) => ({ ...wall, type: 'wall' as const })));
+          if (skipped.length > 0) {
+            notAdded = { missed: skipped.length, reasons: skipped.map((skip) => skip.reason), mapFull: total >= MAP_LIMITS.maxWallSegments };
+          }
         } catch (err) {
-          notAdded = { missed: walls.length, reasons: [apiErrorMessage(err) ?? ''] };
+          notAdded = { missed: walls.length, reasons: [apiErrorMessage(err) ?? ''], mapFull: false };
         }
       }
       s.roomsSaving = [];
@@ -1358,7 +1364,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       setAsking(false);
       onSaved(saved, asset);
       // After the word that it saved, so a wall refused is said last.
-      if (notAdded) refuse(roomWallsNotAdded(notAdded.missed, walls.length, notAdded.reasons));
+      if (notAdded) refuse(roomWallsNotAdded(notAdded.missed, walls.length, notAdded.reasons, notAdded.mapFull));
       return true;
     } catch (err) {
       if (taken) {
