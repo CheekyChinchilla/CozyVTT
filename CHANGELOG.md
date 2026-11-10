@@ -80,6 +80,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A wall polygon's corners show as you tap them on a touch screen.** With **Polygon** under **Walls**, the corners and the edges between them stayed hidden until something else redrew the map, though the polygon closed where you tapped. See [Polygon Drawing Mode](docs/DM_GUIDE.md#polygon-drawing-mode).
 
+- **A creature's score boxes show the whole score.** In **Edit Token** a score of two or more digits could be cut off at the edge of its box. Scores of up to four digits now fit there and in the Creature Library's form. See [Editing Tokens During Play](docs/DM_GUIDE.md#editing-tokens-during-play).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

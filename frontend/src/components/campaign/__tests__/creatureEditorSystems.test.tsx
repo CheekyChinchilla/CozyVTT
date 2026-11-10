@@ -99,6 +99,28 @@ describe('the Creature Library\'s form', () => {
   });
 });
 
+// A Call of Cthulhu characteristic runs to four digits, and the boxes' padding
+// cut off a score of 60. Each box keeps a narrow padding and no spinner, so
+// four digits fit in a sixth of the narrowest editor.
+describe('the score boxes', () => {
+  const roomForFourDigits = (box: HTMLElement) => {
+    expect(box.className.split(' ')).toEqual(expect.arrayContaining(['px-1', 'input-cozy-number', 'tabular-nums']));
+  };
+  const scores = ['STR', 'DEX', 'CON', 'INT', 'POW', 'APP'];
+
+  it('leave room for four digits in the token editor', () => {
+    render(<StatBlockEditor statBlock={cultist} onChange={vi.fn()} gameSystem="CALL_OF_CTHULHU_7E" />);
+    for (const name of scores) roomForFourDigits(screen.getByRole('spinbutton', { name }));
+  });
+
+  it('leave room for four digits in the Creature Library\'s form', async () => {
+    campaign.gameSystem = 'CALL_OF_CTHULHU_7E';
+    render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await userEvent.click(await screen.findByRole('button', { name: /Create Custom/ }));
+    for (const name of scores) roomForFourDigits(screen.getByRole('spinbutton', { name }));
+  });
+});
+
 describe('the Creature Library\'s list', () => {
   const row = (id: string, name: string, gameSystem: string, challengeRating: string): CreatureTemplate => ({
     id, name, gameSystem: gameSystem as GameSystem, source: 'custom', challengeRating, creatureType: null, alignment: null, imageUrl: null,

@@ -41,6 +41,7 @@ import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks
 import PrintedSkillsEditor from './npc-stat-blocks/PrintedSkillsEditor';
 import { creatureModel, scoreLabel, withGameSystem } from './npc-stat-blocks/creatureModel';
 import NumberField from '@/components/ui/NumberField';
+import { SCORE_BOX_CLASS } from './npc-stat-blocks/scoreBox';
 import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
@@ -1319,7 +1320,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
                     const parsed = parseInt(e.target.value, 10);
                     setAttributeModifiers((prev) => ({ ...prev, [ability]: Number.isFinite(parsed) ? parsed : 0 }));
                   }}
-                  className="input-cozy w-full text-xs text-center"
+                  className={SCORE_BOX_CLASS}
                 />
               </div>
             ))}
@@ -1339,7 +1340,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
                   fallback={null}
                   value={workingStatBlock.abilities[ability]}
                   onChange={(value) => changeScore(ability, value)}
-                  className="input-cozy w-full text-xs text-center"
+                  className={SCORE_BOX_CLASS}
                 />
               </div>
             ))}

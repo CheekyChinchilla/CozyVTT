@@ -13,6 +13,7 @@ import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
 import PrintedSkillsEditor from './PrintedSkillsEditor';
 import { creatureModel, scoreLabel, withGameSystem } from './creatureModel';
 import NumberField from '@/components/ui/NumberField';
+import { SCORE_BOX_CLASS } from './scoreBox';
 import { changeAbilitiesOrRating } from './statBlockProficiency';
 import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
 import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from '@/constants/statBlockLimits';
@@ -215,7 +216,7 @@ export default function StatBlockEditor({
                   const parsed = parseInt(e.target.value, 10);
                   onChange(setAttributeModifier(statBlock, ab, Number.isFinite(parsed) ? parsed : 0));
                 }}
-                className="input-cozy input-cozy-number w-full text-xs text-center"
+                className={SCORE_BOX_CLASS}
               />
             </div>
           ))}
@@ -237,7 +238,7 @@ export default function StatBlockEditor({
                   if (model === 'derived') updateAbility(ab, value);
                   else update({ abilities: { ...statBlock.abilities, [ab]: value } });
                 }}
-                className="input-cozy input-cozy-number w-full text-xs text-center"
+                className={SCORE_BOX_CLASS}
               />
             </div>
           ))}
