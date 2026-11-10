@@ -22,6 +22,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A campaign page joining the table as you leave the campaign says you left.** It used to say you were removed.
 
+- **The administrator who ran the setup wizard, and people who registered, no longer show as Never signed in.** The **Users** tab of the Admin Panel shows when they last signed in, and no longer offers **Invite** for them. See [User Accounts](docs/USER_GUIDE.md#user-accounts).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4

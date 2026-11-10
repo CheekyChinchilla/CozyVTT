@@ -12618,6 +12618,15 @@ components:
           type: string
           format: date-time
           nullable: true
+          description: >-
+            When the account last completed a sign-in: `POST /api/auth/login`
+            without two-factor authentication, `POST /api/auth/mfa/verify-login`
+            with it, `POST /api/auth/register` when it signs the person in, or
+            `POST /api/setup/init`. Null for an account that never has. The
+            password step of a two-factor sign-in, and a sign-in refused
+            because the account awaits approval, leave it as it was. The
+            `user` a sign-in answers with was read before the stamp, so it
+            carries the one before.
         globalAssetManager:
           type: boolean
           description: May manage the instance-wide (GLOBAL) asset library.
