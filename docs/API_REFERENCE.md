@@ -1665,7 +1665,9 @@ Get platform statistics (user count, active campaigns, storage usage, etc.).
 Whether the database answers and the live-connection server is running, for the
 **Status** card on the Admin Panel's **Dashboard** tab: `{ status, services: { api, database, websocket }, connections }`,
 with `status` `healthy` only when every part is `ok`. Always `200`; the public
-`GET /health` is the one for uptime monitors.
+`GET /health` is the one for uptime monitors. The Status card no longer shows
+`services.websocket` as its **WS** part, which is `ok` whenever the backend
+runs: the browser checks live connections itself.
 
 ---
 
