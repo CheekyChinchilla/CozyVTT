@@ -2,12 +2,13 @@
  * Paint's lines, rectangles and ellipses: a line held to 15 degree steps,
  * the box a shape paints, a shape carried to the picture's pixels, and how
  * each is drawn, outlined in the colour, filled with it, or outlined in the
- * colour and filled with the second colour.
+ * colour and filled with the second colour. Also a textured stroke, shape or
+ * brush on its way, drawn in its texture's pattern as it will land.
  */
 
-import { describe, it, expect } from 'vitest';
-import { stepAngle, shapeBox, scaleShape, drawShape, type PaintShape } from '../paintShapes';
-import { recordingContext } from '@/test/recordingCanvas';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { stepAngle, shapeBox, scaleShape, drawShape, drawPaintPreview, shapeTexture, type PaintShape, type PaintPreview } from '../paintShapes';
+import { recordingContext, recordPaint } from '@/test/recordingCanvas';
 
 const shape = (extra: Partial<PaintShape> = {}): PaintShape => ({
   kind: 'rect', from: [10, 20], to: [110, 70], width: 4, colour: '#4a3423', second: '#e8dcc4', style: 'outline', ...extra,
@@ -114,5 +115,77 @@ describe('polygons and curves', () => {
     expect(calls.some((c) => c.method === 'fill')).toBe(false);
     expect(shapeBox(curve)).toEqual({ x0: 7, y0: 7, x1: 93, y1: 63 });
     expect(scaleShape(curve, 2, 3).control).toEqual([100, 180]);
+  });
+});
+
+/** A transform as a pattern is given it; jsdom has no DOMMatrix. */
+class FakeMatrix {
+  constructor(readonly init: number[]) {}
+}
+
+describe('a textured stroke, shape or brush on its way', () => {
+  const tile = document.createElement('canvas');
+  const overlay = () => {
+    const { ctx } = recordingContext(document.createElement('canvas'));
+    return { ctx, ...recordPaint(ctx) };
+  };
+  const stroke = (extra: Partial<Extract<PaintPreview, { kind: 'stroke' }>> = {}): PaintPreview => ({
+    kind: 'stroke', points: [[0, 0], [40, 30]], width: 6, colour: '#777777', tile: { image: tile, scale: 0.5 }, ...extra,
+  });
+  const floor = (extra: Partial<Extract<PaintPreview, { kind: 'shape' }>> = {}): PaintPreview => ({
+    kind: 'shape', shape: shape({ style: 'both' }), tile: { image: tile, scale: 0.5 }, ...extra,
+  });
+  const brush: PaintPreview = {
+    kind: 'brush', at: [20, 20], radius: 3, colour: '#777777', tile: { image: tile, scale: 0.5 }, eraser: false, pixel: 1,
+  };
+
+  beforeEach(() => { vi.stubGlobal('DOMMatrix', FakeMatrix); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('draws a stroke in its texture\'s pattern, each tile pixel the scale given in map pixels', () => {
+    const drawn = overlay();
+    drawPaintPreview(drawn.ctx, stroke());
+    expect(drawn.patterns).toHaveLength(1);
+    expect(drawn.patterns[0].image).toBe(tile);
+    expect(drawn.patterns[0].transforms).toEqual([new FakeMatrix([0.5, 0, 0, 0.5, 0, 0])]);
+    expect(drawn.strokes).toEqual([drawn.patterns[0]]);
+  });
+
+  it('fills a shape, as a room\'s floor, in its texture\'s pattern, its outline staying the colour', () => {
+    const drawn = overlay();
+    drawPaintPreview(drawn.ctx, floor());
+    expect(drawn.patterns.map((p) => p.image)).toEqual([tile]);
+    expect(drawn.fills).toEqual([drawn.patterns[0]]);
+    expect(drawn.strokes).toEqual(['#4a3423']);
+  });
+
+  it('takes a shape\'s texture for its fill alone, shaded from the colour it fills with', () => {
+    expect(shapeTexture(shape({ texture: 'stone', style: 'both' }))).toEqual({ kind: 'stone', colour: '#e8dcc4' });
+    expect(shapeTexture(shape({ texture: 'stone', style: 'fill' }))).toEqual({ kind: 'stone', colour: '#4a3423' });
+    expect(shapeTexture(shape({ texture: 'stone', style: 'outline' }))).toBeNull();
+    expect(shapeTexture(shape({ kind: 'curve', texture: 'stone', style: 'fill' }))).toBeNull();
+    expect(shapeTexture(shape({ style: 'fill' }))).toBeNull();
+  });
+
+  it('draws a stroke and a shape with no texture in their plain colours, as before', () => {
+    const drawn = overlay();
+    drawPaintPreview(drawn.ctx, stroke({ tile: null }));
+    drawPaintPreview(drawn.ctx, floor({ tile: null }));
+    expect(drawn.patterns).toEqual([]);
+    expect(drawn.strokes).toEqual(['#777777', '#4a3423']);
+    expect(drawn.fills).toEqual(['#e8dcc4']);
+  });
+
+  it('makes a texture\'s pattern once, however many times the overlay is drawn, and again for a new scale', () => {
+    const drawn = overlay();
+    for (let frame = 0; frame < 3; frame += 1) {
+      drawPaintPreview(drawn.ctx, stroke());
+      drawPaintPreview(drawn.ctx, floor());
+      drawPaintPreview(drawn.ctx, brush);
+    }
+    expect(drawn.patterns).toHaveLength(1);
+    drawPaintPreview(drawn.ctx, stroke({ tile: { image: tile, scale: 0.25 } }));
+    expect(drawn.patterns).toHaveLength(2);
+    expect(drawn.patterns[1].transforms).toEqual([new FakeMatrix([0.25, 0, 0, 0.25, 0, 0])]);
   });
 });

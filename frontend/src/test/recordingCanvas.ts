@@ -43,6 +43,34 @@ export function recordingContext(canvas: HTMLCanvasElement): { ctx: CanvasRender
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
 }
 
+/** A pattern made by a context `recordPaint` watches: the picture it repeats, and each transform it was given. */
+export interface RecordedPattern extends CanvasPattern {
+  image: CanvasImageSource;
+  transforms: unknown[];
+}
+
+type PaintStyle = CanvasRenderingContext2D['fillStyle'];
+
+/**
+ * `ctx` making a pattern of its own at each createPattern, and keeping the
+ * style each fill and each stroke was drawn in, in order. Its fills and
+ * strokes are kept here, no longer in its list of calls.
+ */
+export function recordPaint(ctx: CanvasRenderingContext2D): { patterns: RecordedPattern[]; fills: PaintStyle[]; strokes: PaintStyle[] } {
+  const patterns: RecordedPattern[] = [];
+  const fills: PaintStyle[] = [];
+  const strokes: PaintStyle[] = [];
+  ctx.createPattern = (image: CanvasImageSource) => {
+    const transforms: unknown[] = [];
+    const pattern: RecordedPattern = { image, transforms, setTransform: (m?: DOMMatrix2DInit) => { transforms.push(m); } };
+    patterns.push(pattern);
+    return pattern;
+  };
+  ctx.fill = () => { fills.push(ctx.fillStyle); };
+  ctx.stroke = () => { strokes.push(ctx.strokeStyle); };
+  return { patterns, fills, strokes };
+}
+
 /** Every picture the map asked for, to load by hand: jsdom loads none. */
 export const pictures: FakeImage[] = [];
 export class FakeImage {

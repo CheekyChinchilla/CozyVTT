@@ -48,7 +48,7 @@ import { mapKeyAction } from '../keyboard';
 import { isArrowKey } from '../selection';
 import { createPaintHistory, PAINT_TILE, type PaintBox, type PaintHistory, type PaintHistoryCounts, type PaintStep, type PaintStepNote, type TileRect } from './paintHistory';
 import { gridCorner, roomBox, roomWalls, scaleWalls, wallsOnMap, wallsToAdd, type WallLine } from './paintRoom';
-import { drawTextureTile, textureSize, type TextureKind } from './paintTextures';
+import { drawTextureTile, textureSize, tilePattern, type ShadedTexture, type TextureKind } from './paintTextures';
 import { drawStamp, stampCentre, stampReach, type StampKind, type StampTurn } from './paintStamps';
 import { handleAt, isInside, movedBox, pastedBox, resizedBox, selectedBox, type SelectBox, type SelectHandle } from './paintSelection';
 import { createCanvasTileStore, type CanvasTileStore, type KeptTile } from './canvasTileStore';
@@ -58,7 +58,7 @@ import { DRAWN_MAP_BACKGROUND, MOST_DRAWN_SQUARES, drawnPictureSize } from './dr
 import { nextWidth, strokeBox, strokePaint, toPicture, type PaintPoint } from './paintStroke';
 import { hexToRgba, readColour } from './pixelColour';
 import { floodFillTiled } from './floodFill';
-import { drawShape, scaleShape, shapeBox, stepAngle, type PaintPreview, type PaintShape, type PaintShapeKind, type ShapeStyle } from './paintShapes';
+import { drawShape, scaleShape, shapeBox, shapeTexture, stepAngle, type PaintPreview, type PaintShape, type PaintShapeKind, type PreviewTile, type ShapeStyle } from './paintShapes';
 import { labelFontSize, snapToGrid } from '../drawingGeometry';
 import { DRAWING_LIMITS } from '@/constants/drawingLimits';
 import { usePaintStore } from '@/stores/paintStore';
@@ -390,6 +390,9 @@ export interface PaintSurfaceOptions {
 
 const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] === b[0] && a[1] === b[1];
 
+/** The texture a stroke is painted in, and the colour it is shaded from; null for none. */
+const strokeTexture = (stroke: Stroke): ShadedTexture | null => (stroke.texture ? { kind: stroke.texture, colour: stroke.colour } : null);
+
 export function usePaintSurface(options: PaintSurfaceOptions) {
   const { map, picture, pictureKind, pictureFailed, campaignId, onSaved, onMapRead, mapsSharing, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
   // What Paint opens on: the picture at the map's own address, once it has
@@ -480,10 +483,23 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     return tile;
   }, [make, xy]);
   /** A texture as a pattern on the picture, repeating from its top-left corner, so it lines up with the grid. */
-  const texturePattern = useCallback((s: Surface, kind: TextureKind, colour: string): CanvasPattern | null => {
-    const tile = textureTile(s, kind, colour);
-    return tile ? s.ctx.createPattern(tile, 'repeat') : null;
+  const texturePattern = useCallback((s: Surface, texture: ShadedTexture): CanvasPattern | null => {
+    const tile = textureTile(s, texture.kind, texture.colour);
+    return tile ? tilePattern(s.ctx, tile, 1) : null;
   }, [textureTile]);
+  /** A texture's tile as the overlay draws it, in map pixels, so it lines up with texturePattern's on the picture; null for none. */
+  const previewTile = useCallback((s: Surface, texture: ShadedTexture | null): PreviewTile | null => {
+    const tile = texture ? textureTile(s, texture.kind, texture.colour) : null;
+    return tile ? { image: tile, scale: 1 / xy(s)[0] } : null;
+  }, [textureTile, xy]);
+  /** A stroke on its way, as the overlay draws it until it lands: in map pixels, in its texture. */
+  const strokePreview = useCallback((s: Surface, stroke: Stroke): PaintPreview => ({
+    kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour, tile: previewTile(s, strokeTexture(stroke)),
+  }), [xy, previewTile]);
+  /** A shape on its way, in map pixels, as the overlay draws it until it lands: its fill in its texture. */
+  const shapePreview = useCallback((s: Surface, shape: PaintShape): PaintPreview => ({
+    kind: 'shape', shape, tile: previewTile(s, shapeTexture(shape)),
+  }), [previewTile]);
   /** Bumped when the history changes, so the panel's Undo and Redo follow. */
   const [, setVersion] = useState(0);
   const bump = useCallback(() => setVersion((v) => v + 1), []);
@@ -1102,11 +1118,12 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       return;
     }
     const points = toPicture(stroke.points, ...xy(s));
-    const pattern = stroke.texture ? texturePattern(s, stroke.texture, stroke.colour) : null;
-    land(stroke.step, { kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour }, () => {
+    const texture = strokeTexture(stroke);
+    const pattern = texture ? texturePattern(s, texture) : null;
+    land(stroke.step, strokePreview(s, stroke), () => {
       strokePaint(s.ctx, points, stroke.width, pattern ?? stroke.colour);
     });
-  }, [land, xy, texturePattern]);
+  }, [land, xy, texturePattern, strokePreview]);
 
   /**
    * Fill the area at map pixel `point` with the colour, tile by tile
@@ -1445,9 +1462,10 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         note = pending.note;
       }
     }
-    const fill = shape.texture && shape.style !== 'outline' ? texturePattern(s, shape.texture, shape.style === 'both' ? shape.second : shape.colour) : null;
-    land(under.step, { kind: 'shape', shape: under.shape }, () => drawShape(s.ctx, shape, fill), note);
-  }, [land, xy, texturePattern]);
+    const texture = shapeTexture(shape);
+    const fill = texture ? texturePattern(s, texture) : null;
+    land(under.step, shapePreview(s, under.shape), () => drawShape(s.ctx, shape, fill), note);
+  }, [land, xy, texturePattern, shapePreview]);
 
   /** Paint a shape finished in map pixels as one change, its tiles kept as they are now. */
   const paintShape = useCallback((mapId: string, shape: PaintShape) => {
@@ -2062,16 +2080,16 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     if (!s) return [];
     const shown: PaintPreview[] = [...waitingRef.current];
     const stroke = strokeRef.current;
-    if (stroke) shown.push({ kind: 'stroke', points: stroke.points, width: stroke.width / xy(s)[0], colour: stroke.colour });
-    if (shapeRef.current) shown.push({ kind: 'shape', shape: shapeRef.current.shape });
+    if (stroke) shown.push(strokePreview(s, stroke));
+    if (shapeRef.current) shown.push(shapePreview(s, shapeRef.current.shape));
     const polygon = polygonRef.current;
     if (polygon && polygon.mapId === s.mapId) {
       const look = settingsRef.current;
       const points = polygon.cursor ? [...polygon.points, polygon.cursor] : polygon.points;
       const shape: PaintShape = { kind: 'polygon', from: points[0], to: points[points.length - 1], points, width: look.width / xy(s)[0], colour: look.colour, second: look.second, style: 'outline' };
-      shown.push({ kind: 'shape', shape });
+      shown.push(shapePreview(s, shape));
     }
-    if (curveRef.current && curveRef.current.mapId === s.mapId) shown.push({ kind: 'shape', shape: curveRef.current.shape });
+    if (curveRef.current && curveRef.current.mapId === s.mapId) shown.push(shapePreview(s, curveRef.current.shape));
     const stampAtPointer = stampPressRef.current ?? hoverRef.current;
     const m = mapRef.current;
     if (stampAtPointer && stampAtPointer.mapId === s.mapId && m && settingsRef.current.tool === 'stamp') {
@@ -2096,8 +2114,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
         at: brushAt,
         radius: look.width / sx / 2,
         colour: eraser ? s.background : look.colour,
-        tile: texture ? textureTile(s, texture, look.colour) : null,
-        tileScale: 1 / sx,
+        tile: previewTile(s, texture ? { kind: texture, colour: look.colour } : null),
         eraser,
         pixel: 1 / mapControls.zoom,
       });
@@ -2113,7 +2130,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       });
     }
     return shown;
-  }, [xy, mapControls.zoom, textureTile]);
+  }, [xy, mapControls.zoom, previewTile, strokePreview, shapePreview]);
 
   const source = surface && map && surface.mapId === map.id && !stale ? surface.canvas : null;
 

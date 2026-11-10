@@ -12,6 +12,12 @@ import { hexToRgba, type Rgba } from './pixelColour';
 
 export type TextureKind = 'stone' | 'wood' | 'grass' | 'water' | 'sand' | 'bricks' | 'cobbles' | 'tiles';
 
+/** A texture, and the colour whose shades it is drawn in. */
+export interface ShadedTexture {
+  kind: TextureKind;
+  colour: string;
+}
+
 /** The textures Paint offers, in the order its picker shows them. */
 export const PAINT_TEXTURES: ReadonlyArray<{ kind: TextureKind; label: string }> = [
   { kind: 'stone', label: 'Stone' },
@@ -196,4 +202,31 @@ export function drawTextureTile(kind: TextureKind, base: string, n: number, make
   ctx.fillRect(0, 0, n, n);
   MARKS[kind](ctx, n, base, seeded(SEEDS[kind]));
   return canvas;
+}
+
+/** Each context's pattern of each tile, at the scale it was made for: a preview is drawn again at every move of the pointer. */
+const patterns = new WeakMap<CanvasRenderingContext2D, WeakMap<CanvasImageSource, { scale: number; pattern: CanvasPattern }>>();
+
+/**
+ * `tile` as a pattern for `ctx`, repeating from the top-left corner of the
+ * space it draws in, each tile pixel `scale` of that space's pixels: 1 on the
+ * picture, and a picture pixel's width in map pixels on the overlay, so what
+ * is on its way lines up with where it lands. Made once for each context,
+ * tile and scale; null when the tile cannot be repeated.
+ */
+export function tilePattern(ctx: CanvasRenderingContext2D, tile: CanvasImageSource, scale: number): CanvasPattern | null {
+  let kept = patterns.get(ctx);
+  if (!kept) {
+    kept = new WeakMap();
+    patterns.set(ctx, kept);
+  }
+  const made = kept.get(tile);
+  if (made && made.scale === scale) return made.pattern;
+  const pattern = ctx.createPattern(tile, 'repeat');
+  if (!pattern) return null;
+  if (typeof pattern.setTransform === 'function' && typeof DOMMatrix !== 'undefined') {
+    pattern.setTransform(new DOMMatrix([scale, 0, 0, scale, 0, 0]));
+  }
+  kept.set(tile, { scale, pattern });
+  return pattern;
 }
