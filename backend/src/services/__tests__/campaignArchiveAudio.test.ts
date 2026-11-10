@@ -19,26 +19,13 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-archive-audio-'))
 const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// The tracks here are an Ogg signature and no more, which the real file-type
-// takes for an Ogg file that is not sound. This answers as it does for a
-// whole Ogg track.
-jest.mock('file-type', () => {
-  const sniff = (head: Buffer) => (head.subarray(0, 4).toString('latin1') === 'OggS' ? { ext: 'ogg', mime: 'audio/ogg' } : undefined);
-  return {
-    fileTypeFromBuffer: async (buf: Buffer) => sniff(buf),
-    fileTypeFromFile: async (file: string) => {
-      const { readFileSync } = jest.requireActual<typeof import('fs')>('fs');
-      return sniff(readFileSync(file).subarray(0, 16));
-    },
-  };
-});
-
 import unzipper from 'unzipper';
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport } from '../campaignExporter';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
+import { oggVorbis } from '../../__tests__/helpers/wholeFiles';
 
-const OGG = Buffer.concat([Buffer.from('OggS', 'latin1'), Buffer.alloc(256, 1)]);
+const OGG = oggVorbis();
 
 interface Period { name: string; audio: string | null }
 interface Vibe { periods: Period[]; atmosphereAudio?: { assetId: string; volume: number; loop: boolean } | null }
