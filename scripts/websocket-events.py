@@ -124,7 +124,48 @@ def statement_end(code, i):
 
 
 FUNCTION_START = re.compile(r'\s*(?:throttle\(\s*)?(?:async\b\s*)?')
-ARROW = re.compile(r'\s*(?::[^;{}]*?)?=>\s*')
+ARROW = re.compile(r'\s*=>\s*')
+SPACE = re.compile(r'\s*')
+
+
+def after_return_type(code, i, stop):
+    """
+    Where a function's signature ends, scanning a return type annotation that
+    starts at code[i] (just after the parameter list's `)`): the index of the
+    body's `{` when `stop` is `{`, or of the `=>` when it is `=>`, or -1. An
+    object type literal (`{ ok: boolean }`, also inside `Promise<...>` or a
+    union) is stepped over; a `{` opens the body only once a complete type
+    precedes it.
+    """
+    j = SPACE.match(code, i).end()
+    if code.startswith(stop, j):
+        return j
+    if not code.startswith(':', j):
+        return -1
+    j += 1
+    paren = angle = 0
+    while j < len(code):
+        ch = code[j]
+        before = code[:j].rstrip()
+        if ch in '([':
+            paren += 1
+        elif ch in ')]':
+            paren -= 1
+        elif ch == '<':
+            angle += 1
+        elif ch == '>' and not before.endswith('='):
+            angle -= 1
+        elif stop == '=>' and code.startswith('=>', j) and paren == 0 and angle == 0:
+            return j
+        elif ch == '{':
+            starts_type = before[-1:] in (':', '|', '&', ',', '(', '<') or before.endswith('=>')
+            if stop == '{' and paren == 0 and angle == 0 and not starts_type:
+                return j
+            j = closing(code, j)
+        elif ch == ';':
+            return -1
+        j += 1
+    return -1
 
 
 def function_body(code, i):
@@ -136,12 +177,9 @@ def function_body(code, i):
     i = FUNCTION_START.match(code, i).end()
     if re.compile(r'function\b').match(code, i):
         params = code.find('(', i)
-        # TODO(docs): the body is taken to start at the first `{` after the
-        # parameters, which for `function f(): Promise<{ ok: boolean }> {` is
-        # the return type's, so the gates in the real body go unseen and the
-        # handler that calls f reads "Any member". Right: step over a return
-        # type annotation before looking for the body's brace.
-        start = code.find('{', closing(code, params)) if params != -1 else -1
+        # A return type can hold braces of its own (`Promise<{ ok: boolean }>`),
+        # so the body's brace is looked for after the whole annotation.
+        start = after_return_type(code, closing(code, params) + 1, '{') if params != -1 else -1
         return (start, closing(code, start) + 1, True) if start != -1 else None
     if code.startswith('(', i):
         after = closing(code, i) + 1
@@ -150,10 +188,10 @@ def function_body(code, i):
         if not param:
             return None
         after = param.end()
-    arrow = ARROW.match(code, after)
-    if not arrow:
+    arrow = after_return_type(code, after, '=>')
+    if arrow == -1:
         return None
-    start = arrow.end()
+    start = ARROW.match(code, arrow).end()
     if code.startswith('{', start):
         return start, closing(code, start) + 1, True
     return start, statement_end(code, start), False
