@@ -24,6 +24,7 @@ import request from 'supertest';
 import { generateSecret, generateSync } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { prisma as appPrisma } from '../../config/database';
 import * as systemSettings from '../../services/systemSettings';
 import { hashResetToken } from '../../services/passwordResetTokens';
 import { sendInvitationEmail } from '../../services/email';
@@ -198,5 +199,34 @@ describe('an account already in use with no stamp', () => {
 
     expect((await admin.post(`/api/admin/users/${user.id}/resend-invite`)).status).toBe(409);
     expect(sendInvitationEmail).not.toHaveBeenCalled();
+  });
+
+  it('still gets its user when the stamp cannot be written, and is stamped by a later read', async () => {
+    const { user, agent } = await inUseUnstamped('Stamp in use failing');
+    jest.spyOn(appPrisma.user, 'updateMany').mockRejectedValueOnce(new Error('the database stopped answering'));
+
+    const res = await agent.get('/api/auth/me');
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.id).toBe(user.id);
+    expect(await stampOf(user.id)).toBeNull();
+    expect((await agent.get('/api/auth/me')).status).toBe(200);
+    expect(await stampOf(user.id)).not.toBeNull();
+  });
+});
+
+describe('a stamp that cannot be written at sign-in', () => {
+  it('does not stop the sign-in, and the next GET /api/auth/me stamps the account', async () => {
+    const user = await createTestUser({ displayName: 'Stamp failing' });
+    created.push(user.id);
+    const write = jest.spyOn(appPrisma.user, 'update').mockRejectedValueOnce(new Error('the database stopped answering'));
+    const agent = request.agent(app);
+
+    expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+    expect(write).toHaveBeenCalledWith(expect.objectContaining({ where: { id: user.id }, data: { lastLoginAt: expect.any(Date) } }));
+    expect(await stampOf(user.id)).toBeNull();
+
+    expect((await agent.get('/api/auth/me')).status).toBe(200);
+    expect(await stampOf(user.id)).not.toBeNull();
   });
 });
