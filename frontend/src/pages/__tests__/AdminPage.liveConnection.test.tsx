@@ -9,7 +9,7 @@
  * a campaign page does, and says Working, Polling only or Down.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import AdminPage from '../AdminPage';
@@ -262,5 +262,40 @@ describe('the WS light on the status card', () => {
     expect(part('WS')).toBe('Checking…');
     act(() => live.sockets[1].fire('connect_error', new Error('websocket error')));
     await waitFor(() => expect(part('WS')).toBe('Down'));
+  });
+
+  // The row went from Checking… to its answer with nothing to tell a screen
+  // reader. The answer is said politely, once: a check that ends as the last
+  // one did changes nothing it reads out, and API and DB are not read out.
+  it('says the answer to a screen reader once, and not each check that ends the same', async () => {
+    renderPage();
+    const first = await opened();
+    const card = screen.getByText('WS').closest('.glass-panel');
+    if (!(card instanceof HTMLElement)) throw new Error('The status card is not on the page');
+    const said = within(card).getByRole('status');
+    expect(said).toHaveTextContent(/^$/);
+
+    act(() => first.connectOver('websocket'));
+    await waitFor(() => expect(said).toHaveTextContent('WS: Working'));
+    for (const label of ['API', 'DB', 'WS']) {
+      expect(screen.getByText(label).closest('[aria-live], [role="status"], [role="alert"], [role="log"]')).toBeNull();
+    }
+
+    const changes: MutationRecord[] = [];
+    const watcher = new MutationObserver((records) => changes.push(...records));
+    watcher.observe(said, { childList: true, subtree: true, characterData: true });
+
+    await userEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    await waitFor(() => expect(live.sockets).toHaveLength(2));
+    expect(part('WS')).toBe('Checking…');
+    act(() => live.sockets[1].connectOver('websocket'));
+    await waitFor(() => expect(part('WS')).toBe('Working'));
+    expect(changes.concat(watcher.takeRecords())).toEqual([]);
+
+    await userEvent.click(screen.getByRole('button', { name: /Refresh/ }));
+    await waitFor(() => expect(live.sockets).toHaveLength(3));
+    act(() => live.sockets[2].fire('connect_error', new Error('websocket error')));
+    await waitFor(() => expect(said).toHaveTextContent('WS: Down'));
+    watcher.disconnect();
   });
 });

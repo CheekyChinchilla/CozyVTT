@@ -235,4 +235,33 @@ describe('Change Email on the Profile page', () => {
     expect(screen.getByRole('button', { name: 'Change Email' })).toHaveFocus();
     expect(sent).toEqual([]);
   });
+
+  it('closes on Escape as Cancel does', async () => {
+    serve(() => ({}));
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Change Email' }));
+    const form = emailForm();
+    await userEvent.type(within(form).getByLabelText('New Email Address'), NEW);
+    await userEvent.click(within(form).getByLabelText('Current Password'));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByLabelText('New Email Address')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change Email' })).toHaveFocus();
+    expect(sent).toEqual([]);
+
+    // Opened again, it starts empty, as after Cancel.
+    await userEvent.click(screen.getByRole('button', { name: 'Change Email' }));
+    expect(screen.getByLabelText('New Email Address')).toHaveValue('');
+  });
+
+  it('stays open on Escape while the change is being sent, as Cancel is disabled then', async () => {
+    // The server never answers.
+    client.defaults.adapter = (config: InternalAxiosRequestConfig) =>
+      config.method === 'put' ? new Promise(() => undefined) : Promise.resolve({ data: { preferences: {} }, status: 200, statusText: 'OK', headers: {}, config });
+    renderPage();
+    await fillAndSubmit(NEW, 'My-current-password1!');
+    await userEvent.click(screen.getByLabelText('Current Password'));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByLabelText('New Email Address')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
 });

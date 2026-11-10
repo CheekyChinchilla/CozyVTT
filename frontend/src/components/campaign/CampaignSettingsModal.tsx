@@ -4,7 +4,7 @@
 // General info, member management, danger zone
 // ============================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
   Settings,
@@ -104,6 +104,11 @@ export default function CampaignSettingsModal({
   // ── Members ──────────────────────────────────
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<CampaignMembership | null>(null);
+  // The member just removed and where their row stood, so the focus can stay
+  // in the list once the removal has finished.
+  const removedMember = useRef<{ userId: string; index: number } | null>(null);
+  const memberListRef = useRef<HTMLDivElement>(null);
+  const inviteButtonRef = useRef<HTMLButtonElement>(null);
   // What Remove's question calls the member asked about.
   const removingRole = memberToRemove ? CAMPAIGN_ROLE_LABEL[memberToRemove.role] : CAMPAIGN_ROLE_LABEL[CampaignRole.PLAYER];
   const [memberToPromote, setMemberToPromote] = useState<CampaignMembership | null>(null);
@@ -154,6 +159,36 @@ export default function CampaignSettingsModal({
   useEffect(() => {
     if (isOpen && isDmViewer && activeTab === 'members') void loadInvitations();
   }, [isOpen, isDmViewer, activeTab, loadInvitations]);
+
+  // Remove is disabled while the member is removed, so the confirmation
+  // cannot hand the focus back to it. Once the removal has finished the focus
+  // goes to Remove again if the row is still there, or else to the first
+  // control of the next row that has one, the one before when there is none
+  // after, or Invite Player.
+  useEffect(() => {
+    const removed = removedMember.current;
+    const list = memberListRef.current;
+    if (removingMemberId !== null || !removed || !list) return;
+    removedMember.current = null;
+    const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-member-row]'));
+    const firstControl = (row: HTMLElement) =>
+      row.querySelector<HTMLElement>('select:not([disabled]), button:not([disabled])');
+    const stayed = rows.find((row) => row.dataset.memberRow === removed.userId);
+    if (stayed) {
+      (stayed.querySelector<HTMLElement>('[data-remove-member]') ?? firstControl(stayed))?.focus();
+      return;
+    }
+    const after = rows.slice(Math.max(removed.index, 0));
+    const before = rows.slice(0, Math.max(removed.index, 0)).reverse();
+    for (const row of [...after, ...before]) {
+      const control = firstControl(row);
+      if (control) {
+        control.focus();
+        return;
+      }
+    }
+    inviteButtonRef.current?.focus();
+  }, [removingMemberId]);
 
   if (!campaign) return null;
 
@@ -232,6 +267,10 @@ export default function CampaignSettingsModal({
 
   const handleConfirmRemoveMember = async () => {
     if (!memberToRemove) return;
+    removedMember.current = {
+      userId: memberToRemove.userId,
+      index: memberships.findIndex((m) => m.userId === memberToRemove.userId),
+    };
     setRemovingMemberId(memberToRemove.userId);
     setMemberToRemove(null);
     try {
@@ -638,6 +677,7 @@ export default function CampaignSettingsModal({
                 </div>
                 {isDmViewer && (
                 <Button
+                  ref={inviteButtonRef}
                   type="button"
                   onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
                   variant="secondary" className="flex items-center gap-2 text-sm"
@@ -649,7 +689,7 @@ export default function CampaignSettingsModal({
               </div>
 
               {/* Member list */}
-              <div className="space-y-2">
+              <div ref={memberListRef} className="space-y-2">
                 {memberships.map((membership) => {
                   const isSelf = membership.userId === user?.id;
                   const isDm = membership.role === 'DM';
@@ -661,6 +701,7 @@ export default function CampaignSettingsModal({
                   return (
                     <div
                       key={membership.userId}
+                      data-member-row={membership.userId}
                       className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 p-3 rounded-lg bg-parchment/50 border border-moss-green/10"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1 basis-40">
@@ -684,15 +725,22 @@ export default function CampaignSettingsModal({
                             themselves, the campaign's owner included; a
                             badge otherwise */}
                         {isDmViewer && !isDm ? (
+                          // Left enabled while busy: a browser moves the
+                          // focus off a control disabled under it, and a
+                          // change from the keyboard is sent at once. A
+                          // change made meanwhile is ignored, and the
+                          // controlled value puts the choice back.
                           <select
                             aria-label={`Role of ${memberName}`}
                             value={pendingRole ?? membership.role}
-                            disabled={pendingRole !== undefined || isRemoving}
+                            aria-busy={pendingRole !== undefined || undefined}
+                            aria-disabled={pendingRole !== undefined || isRemoving || undefined}
                             onChange={(e) => {
+                              if (pendingRole !== undefined || isRemoving) return;
                               const role = roleChoice(e.target.value);
                               if (role) void handleChangeRole(membership, role);
                             }}
-                            className="touch-target rounded-cozy border border-ink-muted/30 bg-paper/80 px-2 py-1 text-xs font-medium text-ink focus:outline-hidden focus:ring-2 focus:ring-brand disabled:opacity-60"
+                            className="touch-target rounded-cozy border border-ink-muted/30 bg-paper/80 px-2 py-1 text-xs font-medium text-ink focus:outline-hidden focus:ring-2 focus:ring-brand aria-disabled:opacity-60"
                           >
                             {ROLE_CHOICES.map((role) => (
                               <option key={role} value={role}>{CAMPAIGN_ROLE_LABEL[role]}</option>
@@ -744,6 +792,7 @@ export default function CampaignSettingsModal({
                             type="button"
                             onClick={() => handleRemoveMemberClick(membership)}
                             disabled={isRemoving}
+                            data-remove-member
                             className="touch-target inline-flex items-center justify-center p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
                             aria-label={`Remove ${membership.user?.displayName} from campaign`}
                           >

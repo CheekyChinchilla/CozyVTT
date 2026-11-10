@@ -100,8 +100,16 @@ export default function ChangeEmailForm({ userId, currentEmail, sendsEmail, onCh
     }
   };
 
+  // Escape cancels as Cancel does, and like Cancel not while the change is
+  // being sent.
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key !== 'Escape' || e.nativeEvent.isComposing || saving) return;
+    e.preventDefault();
+    close();
+  };
+
   const formElement = (
-    <form onSubmit={handleSubmit} className="mt-2 space-y-3 max-w-sm" noValidate>
+    <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="mt-2 space-y-3 max-w-sm" noValidate>
       {error && (
         <div role="alert" className="p-3 rounded-lg bg-danger/10 border border-danger/30 text-sm text-danger-ink">{error}</div>
       )}

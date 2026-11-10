@@ -389,11 +389,11 @@ describe('the Role picker under Members', () => {
 
     expect(invitationsApi.changeCampaignMemberRole).toHaveBeenCalledWith('c1', 'pia', CampaignRole.SPECTATOR);
     expect(picker('Pia').value).toBe(CampaignRole.SPECTATOR);
-    expect(picker('Pia')).toBeDisabled();
+    expect(picker('Pia')).toHaveAttribute('aria-busy', 'true');
 
     answer({ message: 'Member role updated successfully' });
 
-    await waitFor(() => expect(picker('Pia')).not.toBeDisabled());
+    await waitFor(() => expect(picker('Pia')).not.toHaveAttribute('aria-busy'));
     expect(refreshCampaign).toHaveBeenCalledTimes(1);
     expect(picker('Pia').value).toBe(CampaignRole.SPECTATOR);
     expect(showToast).toHaveBeenCalledWith('Pia is now a spectator', 'success');
@@ -411,6 +411,114 @@ describe('the Role picker under Members', () => {
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('User is not a member of this campaign', 'error'));
     expect(picker('Pia').value).toBe(CampaignRole.PLAYER);
     expect(picker('Pia')).not.toBeDisabled();
+  });
+
+  // A change made from the keyboard is sent at once. The picker was disabled
+  // while it was asked, and a browser moves the focus off a control that is
+  // disabled under it, so the DM lost their place in the list. jsdom does not
+  // move the focus, so the picker must never be disabled while it holds it.
+  it('keeps the focus on the picker while its change is asked, and sends no second change meanwhile', async () => {
+    current = table();
+    let answer: (value: { message: string }) => void = () => undefined;
+    invitationsApi.changeCampaignMemberRole.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    openMembers();
+    // The panel puts the focus on its first control a frame after it opens.
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+    const pia = picker('Pia');
+    pia.focus();
+
+    fireEvent.change(pia, { target: { value: CampaignRole.SPECTATOR } });
+
+    expect(pia).not.toBeDisabled();
+    expect(pia).toHaveAttribute('aria-busy', 'true');
+    expect(pia).toHaveFocus();
+
+    fireEvent.change(pia, { target: { value: CampaignRole.PLAYER } });
+
+    expect(invitationsApi.changeCampaignMemberRole).toHaveBeenCalledTimes(1);
+    expect(pia.value).toBe(CampaignRole.SPECTATOR);
+
+    answer({ message: 'Member role updated successfully' });
+
+    await waitFor(() => expect(pia).not.toHaveAttribute('aria-busy'));
+    expect(pia).not.toBeDisabled();
+    expect(pia).toHaveFocus();
+  });
+
+  it('takes no change of role while the member is being removed, and stays enabled', async () => {
+    current = table();
+    invitationsApi.removeCampaignMember.mockImplementation(() => new Promise(() => undefined));
+    openMembers();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Pia from campaign' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Remove Player' })).getByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(invitationsApi.removeCampaignMember).toHaveBeenCalled());
+
+    const pia = picker('Pia');
+    expect(pia).not.toBeDisabled();
+    expect(pia).toHaveAttribute('aria-disabled', 'true');
+
+    fireEvent.change(pia, { target: { value: CampaignRole.SPECTATOR } });
+
+    expect(invitationsApi.changeCampaignMemberRole).not.toHaveBeenCalled();
+    expect(pia.value).toBe(CampaignRole.PLAYER);
+  });
+
+  // The confirmation handed the focus back to Remove, which was disabled
+  // while the member was removed, so the focus fell to the page and stayed
+  // there once the row went.
+  describe('the focus after a confirmed Remove', () => {
+    function goesOnRemoval(userId: string) {
+      refreshCampaign.mockImplementation(async () => {
+        current = { ...current, memberships: current.memberships?.filter((m) => m.userId !== userId) };
+      });
+    }
+    async function removeMember(name: string, title = 'Remove Player') {
+      fireEvent.click(screen.getByRole('button', { name: `Remove ${name} from campaign` }));
+      fireEvent.click(within(await screen.findByRole('dialog', { name: title })).getByRole('button', { name: 'Remove' }));
+      await waitFor(() => expect(showToast).toHaveBeenCalled());
+    }
+
+    it("goes to the next member's first control", async () => {
+      current = table();
+      goesOnRemoval('pia');
+      openMembers();
+      await removeMember('Pia');
+
+      await waitFor(() => expect(picker('Sam')).toHaveFocus());
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it('goes to the member before when the last one is removed', async () => {
+      current = table();
+      goesOnRemoval('sam');
+      openMembers();
+      await removeMember('Sam', 'Remove Spectator');
+
+      await waitFor(() => expect(picker('Pia')).toHaveFocus());
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it('goes to Invite Player when no other member has a control', async () => {
+      current = { ...campaign(), memberships: [
+        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
+      ] } as unknown as Campaign;
+      goesOnRemoval('pia');
+      openMembers();
+      await removeMember('Pia');
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Invite Player/ })).toHaveFocus());
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it('goes back to Remove when the server refuses', async () => {
+      current = table();
+      invitationsApi.removeCampaignMember.mockRejectedValueOnce(new Error('Request failed'));
+      openMembers();
+      await removeMember('Pia');
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Remove Pia from campaign' })).toHaveFocus());
+    });
   });
 
   // The crown and the remove button were about 28 pixels square.
