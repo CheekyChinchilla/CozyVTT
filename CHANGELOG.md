@@ -50,7 +50,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A Call of Cthulhu creature can have characteristics over 30 and skills over 50.** The Creature Library and the token editor would not save them. A characteristic can now be up to 9,999 and a skill up to 999. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
 
-- **Mapmaker's notice of room walls not added after a save reads correctly.** When none of them were added it had a capital letter in the middle of its sentence, and a reason ending in a full stop was followed by a second one.
+- **Mapmaker's notice of room walls not added after a save reads correctly.** It had a capital letter mid-sentence when none were added, and a second full stop after some reasons. On a map that holds as many walls as it can, it now says to remove some before drawing the rest. See [Drawing a map](docs/DM_GUIDE.md#drawing-a-map).
 
 - **A turn the server refuses shows the token facing the way the server holds it, another member's turn included.** If someone else turned the token while your turn waited, the refusal showed the facing from before your turn until something on the map changed again. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
 
@@ -77,6 +77,10 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 - **A creature's ability score of 0 stays 0 in the Creature Library and the token editor.** Typing 0, or emptying the box, changed it to 10. An emptied box now keeps its score, and one past the highest allowed drops to it when you leave the box. See [Saving Throws and Skills](docs/DM_GUIDE.md#saving-throws-and-skills).
 
 - **Campaign Info names your role as Player or Spectator.** **Your role** showed it in capitals, as PLAYER or SPECTATOR.
+
+- **What you draw with the wall tool on a touch screen shows at once.** A **Polygon**'s corners and edges stayed hidden, and walls kept their old colour after you picked a **Wall color**, until something else redrew the map. See [The Wall Drawing Tool](docs/DM_GUIDE.md#the-wall-drawing-tool).
+
+- **A creature's score boxes show the whole score.** In **Edit Token** a score of two or more digits could be cut off at the edge of its box. Scores of up to four digits now fit there and in the Creature Library's form. See [Editing Tokens During Play](docs/DM_GUIDE.md#editing-tokens-during-play).
 
 ## [1.6.0] - 2026-11-09
 

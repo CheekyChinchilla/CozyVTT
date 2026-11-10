@@ -865,7 +865,7 @@ describe('a room', () => {
       total: MAP_LIMITS.maxWallSegments,
     });
     await pressSave();
-    expect(await screen.findByText(`The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: ${TOO_MANY_WALLS_MESSAGE}. Draw them with the wall tool.`)).toBeInTheDocument();
+    expect(await screen.findByText(`The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: ${TOO_MANY_WALLS_MESSAGE}. Remove walls the map no longer needs, then draw them with the wall tool.`)).toBeInTheDocument();
     expect(h.addWalls).toHaveBeenCalledTimes(1);
     expect(h.updateMap).toHaveBeenCalled();
   });
@@ -882,7 +882,24 @@ describe('a room', () => {
       total: MAP_LIMITS.maxWallSegments,
     });
     await pressSave();
-    expect(await screen.findByText(`The picture was saved, but the 4 walls of your rooms were not added to the map: ${outside} ${TOO_MANY_WALLS_MESSAGE}. Draw them with the wall tool.`)).toBeInTheDocument();
+    expect(await screen.findByText(`The picture was saved, but the 4 walls of your rooms were not added to the map: ${outside} ${TOO_MANY_WALLS_MESSAGE}. Remove walls the map no longer needs, then draw them with the wall tool.`)).toBeInTheDocument();
+  });
+
+  // The wall tool refuses a full map's walls too, so only a map with room
+  // left is told to draw them.
+  it('tells a map with room left to draw the skipped walls with the wall tool', async () => {
+    await showMap();
+    await paintOn();
+    choose('Room');
+    drag({ clientX: 50, clientY: 50 }, { clientX: 150, clientY: 100 });
+    const outside = 'A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges.';
+    h.addWalls.mockResolvedValueOnce({
+      added: [{ id: 'wall-0', ...fourWalls[0] }, { id: 'wall-1', ...fourWalls[1] }],
+      skipped: [{ index: 2, reason: outside }, { index: 3, reason: outside }],
+      total: 2,
+    });
+    await pressSave();
+    expect(await screen.findByText(`The picture was saved, but 2 of the 4 walls of your rooms were not added to the map: ${outside} Draw them with the wall tool.`)).toBeInTheDocument();
   });
 
   it('says none of the walls were added when the request for them fails, the picture saved', async () => {

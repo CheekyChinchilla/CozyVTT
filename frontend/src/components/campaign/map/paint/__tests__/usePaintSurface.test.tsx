@@ -115,6 +115,13 @@ describe('what Save says of room walls not added', () => {
       .toBe('The picture was saved, but the 2 walls of your rooms were not added to the map: A wall reaches too far outside the map. Walls can extend up to 500 squares past its edges. Draw them with the wall tool.');
   });
 
+  it('tells a full map to make room before the wall tool draws them', () => {
+    expect(roomWallsNotAdded(3, 4, ['Maximum 5000 wall segments per map'], true))
+      .toBe('The picture was saved, but 3 of the 4 walls of your rooms were not added to the map: Maximum 5000 wall segments per map. Remove walls the map no longer needs, then draw them with the wall tool.');
+    expect(roomWallsNotAdded(1, 1, ['Maximum 5000 wall segments per map'], true))
+      .toBe('The picture was saved, but the wall of your rooms was not added to the map: Maximum 5000 wall segments per map. Remove walls the map no longer needs, then draw it with the wall tool.');
+  });
+
   it('gives each different reason once, in the order they came', () => {
     expect(roomWallsNotAdded(4, 6, ['Map full', 'Too far out.', 'Map full', 'Too far out']))
       .toBe('The picture was saved, but 4 of the 6 walls of your rooms were not added to the map: Map full. Too far out. Draw them with the wall tool.');

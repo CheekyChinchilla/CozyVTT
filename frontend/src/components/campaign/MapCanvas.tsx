@@ -2322,7 +2322,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
+  }, [markDirty, wallSegments, wallColor, wallMode, wallInProgress, polygonPoints, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
 
   // ============================================
   // Token Hit Testing
