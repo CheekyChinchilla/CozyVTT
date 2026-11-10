@@ -850,7 +850,7 @@ The picker is beside everyone but you, the campaign's owner included. An owner y
 
 ### Removing a Player
 
-To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**. For a spectator the question is **Remove Spectator** and the message "Spectator removed from campaign".
+To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**. For a spectator the question is **Remove Spectator** and the message "Spectator removed from campaign". The keyboard focus then moves to the next member in the list, or to **Invite Player** when no other member can be changed.
 
 **It takes effect at once**, even if they are in the session at that moment.
 They stop being able to chat, roll or move anything, and stop seeing what the

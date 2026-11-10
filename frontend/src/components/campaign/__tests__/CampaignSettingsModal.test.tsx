@@ -463,6 +463,64 @@ describe('the Role picker under Members', () => {
     expect(pia.value).toBe(CampaignRole.PLAYER);
   });
 
+  // The confirmation handed the focus back to Remove, which was disabled
+  // while the member was removed, so the focus fell to the page and stayed
+  // there once the row went.
+  describe('the focus after a confirmed Remove', () => {
+    function goesOnRemoval(userId: string) {
+      refreshCampaign.mockImplementation(async () => {
+        current = { ...current, memberships: current.memberships?.filter((m) => m.userId !== userId) };
+      });
+    }
+    async function removeMember(name: string, title = 'Remove Player') {
+      fireEvent.click(screen.getByRole('button', { name: `Remove ${name} from campaign` }));
+      fireEvent.click(within(await screen.findByRole('dialog', { name: title })).getByRole('button', { name: 'Remove' }));
+      await waitFor(() => expect(showToast).toHaveBeenCalled());
+    }
+
+    it("goes to the next member's first control", async () => {
+      current = table();
+      goesOnRemoval('pia');
+      openMembers();
+      await removeMember('Pia');
+
+      await waitFor(() => expect(picker('Sam')).toHaveFocus());
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it('goes to the member before when the last one is removed', async () => {
+      current = table();
+      goesOnRemoval('sam');
+      openMembers();
+      await removeMember('Sam', 'Remove Spectator');
+
+      await waitFor(() => expect(picker('Pia')).toHaveFocus());
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it('goes to Invite Player when no other member has a control', async () => {
+      current = { ...campaign(), memberships: [
+        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
+      ] } as unknown as Campaign;
+      goesOnRemoval('pia');
+      openMembers();
+      await removeMember('Pia');
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Invite Player/ })).toHaveFocus());
+      expect(document.activeElement).not.toBe(document.body);
+    });
+
+    it('goes back to Remove when the server refuses', async () => {
+      current = table();
+      invitationsApi.removeCampaignMember.mockRejectedValueOnce(new Error('Request failed'));
+      openMembers();
+      await removeMember('Pia');
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Remove Pia from campaign' })).toHaveFocus());
+    });
+  });
+
   // The crown and the remove button were about 28 pixels square.
   it("gives every control on a member's row a finger's size on a touch screen", async () => {
     invitationsApi.listCampaignInvitations.mockResolvedValue({

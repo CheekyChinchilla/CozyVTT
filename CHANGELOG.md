@@ -72,6 +72,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A campaign holding a picture or sound uploaded with a very long file name in an old version now exports and imports with it.** A file name over 500 characters, which versions before 1.5.2 kept, left that file out of the import. The archive now carries the name shortened to 255 characters. See [Campaign Export & Import](docs/DM_GUIDE.md#campaign-export--import).
 
+- **After you remove a member, the keyboard focus stays in the Members list.** It fell to the page, so you had to tab from the top again. It now moves to the next member. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4
