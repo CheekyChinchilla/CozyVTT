@@ -3063,9 +3063,14 @@ function HealthCard({ health, failed, answers }: { health: AdminHealth | null; f
       ? 'Degraded'
       : live === 'checking' ? 'Checking…' : 'Healthy';
   const tone = status === 'Healthy' ? 'text-success-ink' : status === 'Degraded' ? 'text-danger-ink' : 'text-warm-gray';
+  // The last answer of the WS check, kept while the next one runs, so a
+  // screen reader hears it once and not again when a check ends the same.
+  const [heard, setHeard] = useState<PartState | null>(null);
+  if (live !== 'checking' && live !== heard) setHeard(live);
 
   return (
     <div className="glass-panel p-5 flex flex-col items-center text-center">
+      <p role="status" className="sr-only">{heard ? `WS: ${PART_TEXT[heard]}` : ''}</p>
       <Shield className={`w-7 h-7 mb-2 ${tone}`} aria-hidden="true" />
       <p className={`text-sm font-bold ${tone}`}>{status}</p>
       <p className="text-xs text-warm-gray mt-1">Status</p>
