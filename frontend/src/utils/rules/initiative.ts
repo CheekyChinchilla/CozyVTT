@@ -110,8 +110,8 @@ function parseDicePool(value: unknown): string | null {
  * The total initiative modifier for a 5e character: Dexterity modifier plus
  * whatever `initiativeBonus` holds.
  *
- * The second half exists because Dexterity is not the whole story. The Alert
- * feat adds a flat +5; Jack of All Trades and Remarkable Athlete add part of the
+ * The second half exists because Dexterity is not the whole story. A feat can
+ * add a flat +5; Jack of All Trades and Remarkable Athlete add part of the
  * proficiency bonus; some subclasses add Wisdom or Intelligence instead. Those
  * are too varied to derive from a sheet, so they live in one manual box and are
  * added here.
@@ -173,7 +173,7 @@ function dnd5eEffectiveInitiativeBonus(data: unknown): number {
  * existed, so their total does not change under them.
  *
  * Initiative used to be a single hand-typed number that nothing derived. A
- * player with the Alert feat and Dexterity 14 typed `7`. Now that the total is
+ * player with a feat worth +5 and Dexterity 14 typed `7`. Now that the total is
  * derived, that same character has to come out at +7 rather than +2, so the
  * stored total is read back as "Dexterity plus five" — which is what it always
  * meant.

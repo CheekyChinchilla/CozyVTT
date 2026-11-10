@@ -110,14 +110,14 @@ describe('D&D 5e passive Perception in the character view', () => {
   });
 
   // Deriving the score from the skill alone would drop everything that raises a
-  // passive score without touching the skill — the Observant feat most of all.
+  // passive score without touching the skill, a feat's +5 most of all.
   it('adds the other-bonus field on top of the skill', () => {
     render(
       <DnD5eCharacterView
         character={characterWith({ proficient: true, expertise: false, bonus: 3 }, 13, 5)}
       />
     );
-    expect(renderedPassivePerception()).toBe(18);   // 10 + 3 + 5 (Observant)
+    expect(renderedPassivePerception()).toBe(18);   // 10 + 3 + 5 (a feat)
   });
 
   it('handles a negative other bonus', () => {

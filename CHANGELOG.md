@@ -2177,7 +2177,7 @@ As with any release that migrates, take a database dump first, since migrations 
 
 - **Initiative rolls now follow each game system's rules.** D&D 5e adds Dexterity and an **Initiative other bonus**, Pathfinder 2e the stat its **Uses:** names, and Call of Cthulhu sets DEX order with no roll. D&D 5e characters made before keep the total they had.
 
-- **Passive Perception is right on a D&D 5e sheet, expertise included.** ([#26](https://github.com/CheekyChinchilla/CozyVTT/issues/26)) An **Other bonus** box takes the Observant feat and the like.
+- **Passive Perception is right on a D&D 5e sheet, expertise included.** ([#26](https://github.com/CheekyChinchilla/CozyVTT/issues/26)) An **Other bonus** box takes a feat's bonus and the like.
 
 - **Renaming a character updates it everywhere.**
 

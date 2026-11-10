@@ -81,7 +81,7 @@ describe('D&D 5e initiative', () => {
   });
 
   it('adds the manual bonus for feats and class features', () => {
-    // Alert: a flat +5 on top of Dexterity.
+    // A feat's flat +5 on top of Dexterity.
     expect(dnd5eInitiativeModifier(dnd5e(14, 5))).toBe(7);
     expect(resolveCharacterInitiative('DND_5E', dnd5e(14, 5))).toMatchObject({ expression: '1d20+7' });
   });
@@ -106,7 +106,7 @@ describe('D&D 5e migration of hand-typed initiative', () => {
   // The case that protects existing characters: initiative used to be one
   // hand-typed number. Deriving it must not quietly change anyone's total.
   it('reads a stored total as Dexterity plus a manual bonus', () => {
-    // Alert character, Dexterity 14, typed 7 by hand.
+    // A character with a feat's +5, Dexterity 14, typed 7 by hand.
     const legacy = dnd5e(14, undefined, { initiative: 7 });
     expect(dnd5eBackfilledInitiativeBonus(legacy)).toBe(5);
 
