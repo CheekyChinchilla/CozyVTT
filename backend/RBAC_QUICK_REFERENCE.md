@@ -879,9 +879,13 @@ have it. The email check runs before the new address is looked up, so a
 session without the password cannot use it to learn which addresses have
 accounts. A user changing their own address is also held to 5 attempts an
 hour for the account (`takeEmailChangeTurn`, `middleware/emailChangeLimiter.ts`),
-every attempt counting whatever its answer, so someone who knows the password
-cannot test address after address either; an admin changing someone else's is
-not. A new address also voids the account's unused reset and invitation
+so someone who knows the password cannot test address after address either.
+A request counts once its display name and avatar pass their checks and its
+email is a valid address other than the current one in any letter case,
+whatever its answer after that: right password, wrong or none, taken address
+or free. One refused before that check, including by the wrong-password limit
+or the limit on password checks at once from one address, is not counted.
+An admin changing someone else's address is not held to it. A new address also voids the account's unused reset and invitation
 links (`voidOutstandingResetLinks`), and the old address is sent a notice when
 SMTP is configured.
 
