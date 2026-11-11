@@ -334,6 +334,21 @@ describe('the containers', () => {
       for (const folder of ['/app/uploads', '/app/logs', '/app/backups']) expect(rootPhase).toContain(folder);
     });
 
+    it('stops when Docker stops it while it is still starting, once the step it is on is done', () => {
+      // Until it hands over to node, the script is the container's first
+      // process, and that process ignores a signal it has no handler for: a
+      // stop while it waited for the database or ran the migrations waited
+      // out docker-compose.yml's ten and a half minutes. The handlers come
+      // before the first step; the root phase starts the script again as
+      // appuser, which sets them again.
+      const firstStep = script.indexOf('if [ "$(id -u)" = "0" ]');
+      const term = script.search(/^trap '[^']*\b143\b[^']*' TERM$/m);
+      const int = script.search(/^trap '[^']*\b130\b[^']*' INT$/m);
+      expect(term).toBeGreaterThan(-1);
+      expect(int).toBeGreaterThan(-1);
+      expect(Math.max(term, int)).toBeLessThan(firstStep);
+    });
+
     it('removes, as root, the compile cache an older image left on the backend_tmp volume', () => {
       expect(rootPhase).toMatch(/^ {2}rm -rf \/tmp\/node-compile-cache 2>\/dev\/null \|\| true$/m);
       expect(rootPhase.indexOf('rm -rf /tmp/node-compile-cache')).toBeLessThan(rootPhase.indexOf('exec su-exec'));
