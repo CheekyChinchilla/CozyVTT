@@ -84,6 +84,8 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 - **A creature's score boxes show the whole score.** In **Edit Token** a score of two or more digits could be cut off at the edge of its box. Scores of up to four digits now fit there and in the Creature Library's form. See [Editing Tokens During Play](docs/DM_GUIDE.md#editing-tokens-during-play).
 
+- **A backend stopped while it is still starting no longer takes ten and a half minutes to stop.** Stopped, restarted or upgraded while it waited for the database or ran its migrations, it ran until Docker ended it at that limit. It now stops once that step is done. See [Stopping and Starting](docs/DEPLOYMENT.md#stopping-and-starting).
+
 ## [1.6.0] - 2026-11-09
 
 ### Upgrading from 1.5.4
