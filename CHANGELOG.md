@@ -8,7 +8,28 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ---
 
-## [Unreleased]
+## [1.6.1] - 2026-11-10
+
+### Upgrading from 1.6.0
+
+The upgrade is the usual one. Back up first, as always (see [Database Backups](docs/DEPLOYMENT.md#database-backups)), then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+There is no database change, no new or removed setting, and no manual step. The backend and frontend containers are rebuilt with the new code. `nginx/nginx.conf` and `docker-compose.yml` do not change, so `git pull` does not stop at your own edits to them.
+
+#### What you will notice
+
+- **People who registered, and the administrator the setup wizard made, show when they last signed in.** In the Admin Panel's **Users** tab, an account that still shows **Never signed in** gets its date the next time its owner opens CozyVTT.
+
+- **Someone who uploaded a campaign picture but does not run the campaign may be asked to try again later before deleting or moving it.** That happens while handouts from before 1.6.0 are still being checked for the pictures they show.
+
+#### What to do afterwards, if it applies to you
+
+- **If you copied files into `backend/uploads/` by hand, in very deeply nested folders,** a restore now refuses a backup made before the upgrade that holds a name over 1,024 bytes. Make a new backup with **Create Backup** after the upgrade; this version leaves such a file out and logs its name. See [Database Backups](docs/DEPLOYMENT.md#database-backups).
 
 ### Added
 
@@ -22,7 +43,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ### Changed
 
-- **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).
+- **Changes for scripts and integrations.** See [API changes in 1.6.1](docs/api-changes/1.6.1.md).
 
 - **The initiative tracker shows you its up and down arrows while you move through a combatant's row with the keyboard.** They show over the combatant's picture. A screen reader now names the combatant on each row's dice button and bin. See [Managing Turn Order](docs/DM_GUIDE.md#managing-turn-order).
 
