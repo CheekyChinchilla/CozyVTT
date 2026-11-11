@@ -22,7 +22,7 @@ The notes for 1.5.4 and earlier were shortened in 1.6.0. The full notes of each 
 
 ### Changed
 
-- **Changes for scripts and integrations.** See [API changes in Unreleased](docs/api-changes/unreleased.md).
+- **Changes for scripts and integrations.** See [API changes in 1.6.1](docs/api-changes/1.6.1.md).
 
 - **The initiative tracker shows you its up and down arrows while you move through a combatant's row with the keyboard.** They show over the combatant's picture. A screen reader now names the combatant on each row's dice button and bin. See [Managing Turn Order](docs/DM_GUIDE.md#managing-turn-order).
 
