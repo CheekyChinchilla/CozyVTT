@@ -47,7 +47,7 @@ BEGIN = '<!-- BEGIN GENERATED EVENTS -->'
 END = '<!-- END GENERATED EVENTS -->'
 
 # The "who may send it" column is read off the shared predicates in
-# services/permissions.ts and a refusal of every non-DM. A handler that gates
+# services/permissions.ts and a refusal of every non-GM. A handler that gates
 # inline some other way is listed as "Any member": the handler is
 # authoritative, and the line above the table says so.
 CAVEAT = ('_Who may send it is read from the shared permission predicates each '
@@ -90,7 +90,9 @@ def sources():
             if '__tests__' in normalised or normalised in seen:
                 continue
             seen.add(normalised)
-            yield path, io.open(path, encoding='utf-8').read()
+            with io.open(path, encoding='utf-8') as f:
+                text = f.read()
+            yield path, text
 
 
 def describe(text, index):
@@ -215,7 +217,7 @@ def handler_body(code, m):
     The handler registered at `m`, plus any same-file function it calls
     outright (the throttled per-frame move hands off to one). Returns the spans
     the permission predicates are looked for in, each function taken only to
-    the end of its own body, and the block bodies a DM-only refusal is looked
+    the end of its own body, and the block bodies a GM-only refusal is looked
     for in. Only a bare call counts, not a method call: `.map(` must not pull
     in a `const map` from elsewhere in the file.
     """
@@ -237,7 +239,7 @@ def handler_body(code, m):
 IF = re.compile(r'if\s*\(')
 RETURN = re.compile(r'return\b')
 BARE_RETURN = re.compile(r'return\s*(?:;|(?=\}))')
-DM_TERM = re.compile(r"""socket\.role\s*!==?\s*(['"])DM\1""")
+GM_TERM = re.compile(r"""socket\.role\s*!==?\s*(['"])GM\1""")
 
 
 def ends_in_return(code, start, end):
@@ -254,12 +256,12 @@ def ends_in_return(code, start, end):
             and not code[statement_end(code, last) + 1:end].strip())
 
 
-def refuses_every_non_dm(code, plain, i):
+def refuses_every_non_gm(code, plain, i):
     """
-    Whether the `if` at code[i] returns for every non-DM: its branch ends in
-    `return;`, and its condition is `socket.role !== 'DM'` alone or as one side
-    of an `||`, or its branch says "Only the DM". `socket.role !== 'DM' && ...`
-    refuses only some non-DMs (the character owner test, a spectator refusal),
+    Whether the `if` at code[i] returns for every non-GM: its branch ends in
+    `return;`, and its condition is `socket.role !== 'GM'` alone or as one side
+    of an `||`, or its branch says "Only the GM". `socket.role !== 'GM' && ...`
+    refuses only some non-GMs (the character owner test, a spectator refusal),
     so it is not one. Nor is a branch that returns a value: that is a helper
     answering its caller, which then decides.
     """
@@ -288,14 +290,14 @@ def refuses_every_non_dm(code, plain, i):
         term = term.strip()
         while term.startswith('(') and closing(term, 0) == len(term) - 1:
             term = term[1:-1].strip()
-        if DM_TERM.fullmatch(term):
+        if GM_TERM.fullmatch(term):
             return True
-    return 'Only the DM' in plain[branch:branch_end]
+    return 'Only the GM' in plain[branch:branch_end]
 
 
-def dm_only(code, plain, start, end):
+def gm_only(code, plain, start, end):
     """
-    Whether the block body code[start:end] turns every non-DM away: an `if`
+    Whether the block body code[start:end] turns every non-GM away: an `if`
     among its own statements that does, one inside a `try` included. One in a
     nested block, an `else` or a callback is conditional, and does not count,
     nor does a branch that carries on (a player's door toggle, a player's
@@ -312,7 +314,7 @@ def dm_only(code, plain, start, end):
                 stack.pop()
         elif (ch == 'i' and all(s == 'try' for s in stack) and IF.match(code, i)
               and not re.search(r'(?:[\w$.]|\belse\s*)$', code[max(0, i - 40):i])
-              and refuses_every_non_dm(code, plain, i)):
+              and refuses_every_non_gm(code, plain, i)):
             return True
     return False
 
@@ -332,7 +334,7 @@ def collect():
             # Comments blanked, so a gate that is commented out is not counted.
             body = ''.join(plain[start:end] for start, end in spans)
             inbound.setdefault(name, {
-                'dm': any(dm_only(code, plain, start, end) for start, end in blocks),
+                'gm': any(gm_only(code, plain, start, end) for start, end in blocks),
                 # The shared predicates in services/permissions.ts, which is
                 # where a handler refuses spectators or other players' tokens.
                 'controls': 'canControlToken(' in body,
@@ -383,7 +385,7 @@ def collect():
 
 
 # Who an event sent through each broadcast helper reaches. A map's readers
-# are every member while it is the map on screen, and the DM's sockets for
+# are every member while it is the map on screen, and the GM's sockets for
 # any other (MAP_READERS, below the table).
 HELPER_RECIPIENTS = {
     'broadcastToCampaign': 'the campaign',
@@ -395,7 +397,7 @@ HELPER_RECIPIENTS = {
     'tellMapReadersAs': 'map readers, as their role sees it',
 }
 MAP_READERS = ('_Sent to: map readers are every member while the map is the one the campaign '
-               "is showing, and only the DM's sockets for any other map. Members the handler "
+               "is showing, and only the GM's sockets for any other map. Members the handler "
                'picks are chosen one by one, by what each may be sent. The sender is the socket '
                'whose event is being answered, or the one that has just connected; one socket is '
                'a single connection a helper is handed, such as one being signed out._')
@@ -479,30 +481,30 @@ def unreadable():
 
 
 def who_may_send(info):
-    if info['dm']:
-        return 'DM only'
+    if info['gm']:
+        return 'GM only'
     if info['doors']:
         seen = [where for flag, where in (
             ('door_sight', "on a lit map, one their tokens see"),
             ('door_fog', 'under manual fog, one beside a square revealed to them'),
         ) if info[flag]]
-        return 'DM; a player may toggle an unlocked door' + (f" ({'; '.join(seen)})" if seen else '')
+        return 'GM; a player may toggle an unlocked door' + (f" ({'; '.join(seen)})" if seen else '')
     if info['controls']:
-        base = "DM, or the token's player while the session is live" if info['paused'] else "DM, or the token's player"
+        base = "GM, or the token's player while the session is live" if info['paused'] else "GM, or the token's player"
         terms = [term for flag, term in (
-            ('in_order', 'once the DM has put it in the order'),
+            ('in_order', 'once the GM has put it in the order'),
             ('before_fight', 'before the fight starts'),
             ('once', 'once each time it joins the order'),
         ) if info[flag]]
         return base + (f": {', '.join(terms)}" if terms else '')
     if info['draw']:
-        return 'DM, or a player while **Players may draw** is on and the session is live'
+        return 'GM, or a player while **Players may draw** is on and the session is live'
     if info['erase']:
-        return "DM, or the drawing's player"
+        return "GM, or the drawing's player"
     if info['owner']:
-        return "DM, or the character's owner, never a spectator" if info['spectator'] else "DM, or the character's owner"
+        return "GM, or the character's owner, never a spectator" if info['spectator'] else "GM, or the character's owner"
     if info['players']:
-        return 'DM and players'
+        return 'GM and players'
     return 'Any member'
 
 
@@ -546,7 +548,8 @@ def main():
     rendered = table(inbound, outbound)
 
     if args.check or args.write:
-        doc = io.open(DOC, encoding='utf-8').read()
+        with io.open(DOC, encoding='utf-8') as f:
+            doc = f.read()
         if BEGIN not in doc or END not in doc:
             print(f'{DOC} has no generated block; add {BEGIN} / {END}')
             return 1
@@ -568,7 +571,8 @@ def main():
 
         updated = (doc[:doc.index(BEGIN) + len(BEGIN)] + '\n\n' + rendered + '\n\n'
                    + doc[doc.index(END):])
-        io.open(DOC, 'w', encoding='utf-8', newline='\n').write(updated)
+        with io.open(DOC, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(updated)
         print(f'Wrote {len(inbound)} inbound and {len(outbound)} outbound events into {DOC}')
         return 0
 

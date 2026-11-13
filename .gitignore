@@ -148,7 +148,7 @@ playwright-report/
 *.tsbuildinfo
 
 # ---- Game system rulebooks ---------------------------------------------------
-# Publisher PDFs and OCR text kept locally for rules reference while developing.
-# These are copyrighted material and must never be committed — CozyVTT ships
-# rules-reference scaffolding only (see the legal note in docs/GAME_SYSTEMS.md).
+# Rules documents and their text copies, kept locally for reference while
+# developing. Never committed: see "Game content sources" in
+# docs/GAME_SYSTEMS.md.
 system-docs/

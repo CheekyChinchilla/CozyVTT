@@ -55,7 +55,12 @@ SPEC = os.path.join(ROOT, 'backend', 'docs', 'API_DOCUMENTATION.yaml')
 GUIDE = os.path.join(ROOT, 'docs', 'API_REFERENCE.md')
 CLIENT = os.path.join(ROOT, 'frontend', 'src', 'services', 'api.ts')
 
-read = lambda p: io.open(p, encoding='utf-8').read()
+
+def read(path):
+    with io.open(path, encoding='utf-8') as f:
+        return f.read()
+
+
 # Both `:id` and `{id}` collapse to the same thing, and a trailing slash is noise.
 norm = lambda e: re.sub(r'\{[^}]+\}', ':x', re.sub(r':\w+', ':x', e)).rstrip('/')
 
