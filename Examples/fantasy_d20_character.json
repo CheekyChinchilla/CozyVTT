@@ -3,7 +3,7 @@
   "exportedAt": "2026-03-15T00:00:00.000Z",
   "character": {
     "name": "Seraphina the Wizard",
-    "gameSystem": "PATHFINDER_2E",
+    "gameSystem": "FANTASY_D20",
     "data": {
       "characterName": "Seraphina Ashveil",
       "playerName": "Jane Doe",
@@ -12,8 +12,6 @@
       "ancestry": "Elf",
       "heritage": "Whisper Elf",
       "background": "Scholar",
-      "alignment": "Neutral Good",
-      "deity": "Nethys",
       "experiencePoints": 4500,
       "heroPoints": 1,
       "attributes": {
@@ -49,22 +47,22 @@
           "bonus": 8
         },
         "reflex": {
-          "proficiencyRank": "trained",
+          "proficiencyRank": "expert",
           "itemBonus": 0,
-          "bonus": 9
+          "bonus": 11
         },
         "will": {
           "proficiencyRank": "expert",
           "itemBonus": 0,
-          "bonus": 12
+          "bonus": 10
         }
       },
       "perception": {
         "proficiencyRank": "trained",
         "itemBonus": 0,
-        "bonus": 10,
+        "bonus": 8,
         "senses": [
-          "low-light vision"
+          "Low-Light Vision"
         ]
       },
       "skills": {
@@ -80,7 +78,7 @@
           "proficiencyRank": "expert",
           "armorPenalty": 0,
           "itemBonus": 0,
-          "bonus": 14
+          "bonus": 13
         },
         "athletics": {
           "attribute": "strength",
@@ -94,7 +92,7 @@
           "proficiencyRank": "trained",
           "armorPenalty": 0,
           "itemBonus": 0,
-          "bonus": 12
+          "bonus": 11
         },
         "deception": {
           "attribute": "charisma",
@@ -126,17 +124,17 @@
         },
         "nature": {
           "attribute": "wisdom",
-          "proficiencyRank": "untrained",
+          "proficiencyRank": "trained",
           "armorPenalty": 0,
           "itemBonus": 0,
-          "bonus": 1
+          "bonus": 8
         },
         "occultism": {
           "attribute": "intelligence",
           "proficiencyRank": "trained",
           "armorPenalty": 0,
           "itemBonus": 0,
-          "bonus": 12
+          "bonus": 11
         },
         "performance": {
           "attribute": "charisma",
@@ -150,21 +148,21 @@
           "proficiencyRank": "trained",
           "armorPenalty": 0,
           "itemBonus": 0,
-          "bonus": 9
+          "bonus": 8
         },
         "society": {
           "attribute": "intelligence",
           "proficiencyRank": "trained",
           "armorPenalty": 0,
           "itemBonus": 0,
-          "bonus": 12
+          "bonus": 11
         },
         "stealth": {
           "attribute": "dexterity",
           "proficiencyRank": "trained",
           "armorPenalty": 0,
           "itemBonus": 0,
-          "bonus": 10
+          "bonus": 9
         },
         "survival": {
           "attribute": "wisdom",
@@ -187,21 +185,21 @@
           "attribute": "intelligence",
           "proficiencyRank": "trained",
           "itemBonus": 0,
-          "bonus": 12
+          "bonus": 11
         },
         {
-          "name": "Scribing Lore",
+          "name": "Elf Lore",
           "attribute": "intelligence",
           "proficiencyRank": "trained",
           "itemBonus": 0,
-          "bonus": 12
+          "bonus": 11
         }
       ],
       "armorClass": {
-        "total": 17,
+        "total": 19,
         "proficiencyRank": "trained",
         "capDex": null,
-        "itemBonus": 1,
+        "itemBonus": 0,
         "armorPenalty": 0
       },
       "classDC": {
@@ -211,17 +209,17 @@
       },
       "initiative": {
         "usedStat": "perception",
-        "bonus": 10
+        "bonus": 8
       },
       "speed": {
         "land": 30,
         "other": []
       },
       "hp": {
-        "maximum": 52,
+        "maximum": 46,
         "ancestryHp": 6,
         "classHpPerLevel": 6,
-        "current": 52,
+        "current": 46,
         "temporary": 0,
         "resistances": [],
         "immunities": [],
@@ -285,22 +283,23 @@
           "notes": ""
         },
         {
-          "name": "Electric Arc (Cantrip)",
+          "name": "Electric Arc",
           "type": "ranged",
           "attackBonus": null,
-          "damageRoll": "2d4",
+          "damageRoll": "4d4",
           "damageType": "electricity",
           "attributeModifier": "intelligence",
           "proficiencyRank": "trained",
           "itemBonus": 0,
           "traits": [
             "cantrip",
+            "concentrate",
             "electricity",
-            "arcane"
+            "manipulate"
           ],
           "range": 30,
           "savingThrow": "reflex",
-          "notes": "Targets up to 2 creatures; basic Reflex save"
+          "notes": "One or two targets; basic Reflex save"
         }
       ],
       "currency": {
@@ -320,19 +319,19 @@
           "attuned": false,
           "invested": false,
           "value": 10,
-          "notes": "Contains all known spells"
+          "notes": "Holds every spell she can prepare"
         },
         {
-          "name": "Arcane Focus (Wand)",
+          "name": "Writing Set",
           "quantity": 1,
           "bulk": "L",
-          "equippable": true,
-          "equipped": true,
+          "equippable": false,
+          "equipped": false,
           "requiresAttunement": false,
           "attuned": false,
           "invested": false,
-          "value": 5,
-          "notes": "Used for spellcasting"
+          "value": 1,
+          "notes": "Ink, quills and spare pages"
         },
         {
           "name": "Explorer's Clothing",
@@ -392,71 +391,71 @@
         "Common",
         "Elven",
         "Draconic",
-        "Sylvan"
+        "Fey"
       ],
       "feats": {
         "ancestryAndHeritage": [
           {
             "level": 1,
             "name": "Elven Lore",
-            "notes": "Trained in Arcana and Society; gain a Lore skill."
+            "notes": "Trained in Arcana, Nature and Elf Lore."
           },
           {
             "level": 5,
-            "name": "Elven Weapon Elegance",
-            "notes": "Apply weapon specialization effects with elven weapons."
+            "name": "Ageless Patience",
+            "notes": "Taking twice as long over a Perception or skill check gives +2, and a natural 1 does not make the result worse."
           }
         ],
         "class": [
           {
             "level": 1,
-            "name": "Eschew Materials",
-            "notes": "Cast spells without mundane material components."
+            "name": "Reach Spell",
+            "notes": "The next spell reaches 30 feet further, or 30 feet away if it needs a touch."
           },
           {
             "level": 2,
             "name": "Cantrip Expansion",
-            "notes": "Prepare 2 additional cantrips per day."
+            "notes": "Two more cantrips prepared each day."
           },
           {
             "level": 4,
-            "name": "Bespell Weapon",
-            "notes": "After casting a non-cantrip, empower a held weapon."
+            "name": "Bespell Strikes",
+            "notes": "Right after a spell that is not a cantrip, a held weapon deals 1d6 extra damage until the turn ends."
           }
         ],
         "skill": [
           {
             "level": 1,
-            "name": "Multilingual",
-            "notes": "Learn 2 additional languages."
+            "name": "Assurance",
+            "notes": "In Arcana: take 10 + her proficiency bonus in place of a roll."
           },
           {
             "level": 2,
             "name": "Arcane Sense",
-            "notes": "Cast 1st-rank detect magic as an innate arcane spell at will."
+            "notes": "Detect magic as an arcane innate spell, as often as she likes."
           },
           {
             "level": 4,
             "name": "Recognize Spell",
-            "notes": "Identify a spell being cast with a skill check reaction."
+            "notes": "Her reaction to name a spell she sees being cast."
           }
         ],
         "general": [
           {
             "level": 3,
             "name": "Toughness",
-            "notes": "+ancestry HP; reduce dying recovery DC by 1."
+            "notes": "Her level added to her maximum Hit Points, and recovery checks 1 easier."
           }
         ],
         "bonus": []
       },
       "classFeatures": [
         {
-          "name": "Arcane Spellcasting",
+          "name": "Wizard Spellcasting",
           "description": ""
         },
         {
-          "name": "Arcane School (Universalist)",
+          "name": "Arcane School (School of Battle Magic)",
           "description": ""
         },
         {
@@ -468,7 +467,7 @@
           "description": ""
         },
         {
-          "name": "Lightning Reflexes (Level 5)",
+          "name": "Reflex Expertise",
           "description": ""
         }
       ],
@@ -479,12 +478,12 @@
         "spellAttackBonus": {
           "proficiencyRank": "trained",
           "itemBonus": 0,
-          "bonus": 12
+          "bonus": 11
         },
         "spellDC": {
           "proficiencyRank": "trained",
           "itemBonus": 0,
-          "dc": 22
+          "dc": 21
         },
         "cantrips": [
           {
@@ -494,7 +493,7 @@
           },
           {
             "rank": 3,
-            "name": "Mage Hand",
+            "name": "Telekinetic Hand",
             "prepared": true
           },
           {
@@ -558,14 +557,14 @@
         "spells": [
           {
             "rank": 1,
-            "name": "Magic Missile",
+            "name": "Force Barrage",
             "prepared": true,
             "ritual": false,
             "heightened": false
           },
           {
             "rank": 1,
-            "name": "Mage Armor",
+            "name": "Mystic Armor",
             "prepared": true,
             "ritual": false,
             "heightened": true
@@ -586,14 +585,14 @@
           },
           {
             "rank": 2,
-            "name": "Mirror Image",
+            "name": "Resist Energy",
             "prepared": true,
             "ritual": false,
             "heightened": false
           },
           {
             "rank": 2,
-            "name": "Web",
+            "name": "Blur",
             "prepared": false,
             "ritual": false,
             "heightened": false
@@ -615,10 +614,18 @@
         ],
         "focusSpells": {
           "focusPoints": {
-            "total": 0,
-            "current": 0
+            "total": 1,
+            "current": 1
           },
-          "spells": []
+          "spells": [
+            {
+              "rank": 3,
+              "name": "Force Bolt",
+              "prepared": true,
+              "ritual": false,
+              "heightened": true
+            }
+          ]
         },
         "innateSpells": [
           {
@@ -626,10 +633,15 @@
             "name": "Detect Magic",
             "tradition": "arcane",
             "frequency": "at-will",
-            "notes": "From Arcane Sense skill feat"
+            "notes": "From the Arcane Sense skill feat"
           }
         ],
-        "rituals": []
+        "rituals": [
+          {
+            "name": "Consecrate",
+            "rank": 2
+          }
+        ]
       },
       "appearance": {
         "age": 110,
@@ -641,27 +653,17 @@
       },
       "personality": {
         "traits": "Methodical and precise; always takes notes.",
-        "ideals": "Knowledge must be shared, not hoarded.",
-        "bonds": "My spellbook was a gift from my mentor; losing it would break me.",
-        "flaws": "I trust logic over instinct, even when instinct is right."
+        "ideals": "Knowledge is for sharing.",
+        "bonds": "My spellbook was a gift from my teacher, and I would go back into a fire for it.",
+        "flaws": "Trusts a neat argument over a bad feeling, even when the feeling is right."
       },
-      "backstory": "Seraphina studied at the Magaambya before being drawn away by rumors of a lost arcane library somewhere in the Mwangi Expanse.",
+      "backstory": "Seraphina studied at a college of mages on a cold northern lake until rumours of a library buried under a southern desert drew her away.",
       "alliesAndOrganizations": {
-        "name": "The Magaambya",
-        "description": "A prestigious magical academy in the Mwangi Expanse dedicated to preserving arcane knowledge."
+        "name": "The Lakeside College",
+        "description": "The college of mages where she learned her craft. Its tutors still trade letters with her."
       },
-      "notes": "Seraphina carries a silver pendant engraved with the symbol of Nethys. She rarely speaks unless spoken to in social situations.",
-      "treasure": "An encrypted research journal, a strange glowing shard of unknown origin.",
-      "rituals": [
-        {
-          "name": "Consecrate",
-          "rank": 2
-        },
-        {
-          "name": "Planar Binding",
-          "rank": 6
-        }
-      ]
+      "notes": "Seraphina wears a silver pendant shaped like an open book. She rarely speaks first in company.",
+      "treasure": "An encrypted research journal, a strange glowing shard of unknown origin."
     }
   }
 }

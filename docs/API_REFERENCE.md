@@ -58,7 +58,7 @@ A sign-in that is still waiting for its two-factor code gets the same body with 
   "message": "You are not a member of this campaign"
 }
 ```
-HTTP status: `403 Forbidden`. `message` says what was missing, for example `This action requires Dungeon Master (DM) role`.
+HTTP status: `403 Forbidden`. `message` says what was missing, for example `This action requires the GM role`.
 
 ---
 
@@ -96,6 +96,8 @@ All endpoints are prefixed with `/api`. Requests and responses use JSON (`Conten
 
 A request holding U+0000, the null character, anywhere in its body, a key included, as `%00` in its path or query string, or in an upload's form field or file name, answers `400` with `{ "error": "Validation Error", "message": "Text cannot contain the null character (U+0000)." }` and changes nothing, whichever endpoint it is for: the database cannot store the character. A password is the exception, and is taken as it is sent: `password`, `newPassword` and `currentPassword` on the sign-in, registration, setup, password, account deletion and two-factor routes, and `currentPassword` on `PUT /api/users/:id`, each only at the top of its own route's body. The live table refuses an event holding one with the same message.
 
+Version 1.7.0 renamed the game systems to `FIFTH_EDITION`, `FANTASY_D20` and `HORROR_D100`, and the game master's role, chat message type and drawing audience to `GM`. Every request, socket event, campaign archive and character file may still give the value an older version used, and it is read as the new one; answers carry the new values. The GM's hand-over still answers at its old path, `PUT /api/campaigns/:campaignId/dm`, beside `.../gm`. For this release its event also goes out under its old name, `campaign.dm.transferred` beside `campaign.gm.transferred`, each with `previousGmId` and `newGmId` beside `previousDmId` and `newDmId`, and a pending invitation names its GM as `dm` beside `gm`.
+
 ### Base URL
 
 | Environment | URL |
@@ -127,7 +129,7 @@ Authenticate a user and create a session.
   "user": {
     "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
     "email": "user@example.com",
-    "displayName": "Merric Thorngage",
+    "displayName": "Ada Example",
     "platformRole": "USER",
     "mfaEnabled": false,
     "mustChangePassword": false
@@ -181,7 +183,7 @@ Create a new user account. Only available when `allowRegistration` is enabled in
 {
   "email": "newuser@example.com",
   "password": "SecurePass123!",
-  "displayName": "Gandalf the Gray"
+  "displayName": "Ada Example"
 }
 ```
 
@@ -221,7 +223,7 @@ and ended, as on every route that needs a sign-in.
   "user": {
     "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
     "email": "user@example.com",
-    "displayName": "Merric Thorngage",
+    "displayName": "Ada Example",
     "platformRole": "USER",
     "bio": "Professional dungeon delver.",
     "mfaEnabled": true,
@@ -273,8 +275,8 @@ campaign's.
 Every sign-in of the account ends, on every device, and any open game connection
 of the account is dropped. The instance's only admin is
 refused with `409` until another user has been promoted to admin, and so is
-anyone who sits as DM of a campaign, whether or not they own it, or owns one
-with nobody in the DM seat, until they hand the seat on or delete it.
+anyone who sits as GM of a campaign, whether or not they own it, or owns one
+with nobody in the GM seat, until they hand the seat on or delete it.
 
 **Request:**
 ```json
@@ -312,7 +314,7 @@ List all campaigns the authenticated user is a member of.
 
 **Response:** an object with a `campaigns` list. Each campaign carries its own
 fields, its `owner` and every member in `memberships`, and two fields about the
-caller: `userRole` (`DM`, `PLAYER` or `SPECTATOR`; there is no `role` here) and
+caller: `userRole` (`GM`, `PLAYER` or `SPECTATOR`; there is no `role` here) and
 `characterIds`, the characters they bring to it. Emails are never included. The
 example is shortened; the OpenAPI file has the full shapes.
 
@@ -321,22 +323,22 @@ example is shortened; the OpenAPI file has the full shapes.
   "campaigns": [
     {
       "id": "8d3f6b2a-1c4e-4f7a-b9d2-3e5a7c9f1b04",
-      "name": "The Lost Mines",
-      "description": "A classic starter adventure.",
-      "gameSystem": "DND_5E",
+      "name": "The Hollow Crown",
+      "description": "A ghost story in a mountain valley.",
+      "gameSystem": "FIFTH_EDITION",
       "status": "ACTIVE",
       "ownerId": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
-      "owner": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage", "avatarUrl": null },
+      "owner": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Ada Example", "avatarUrl": null },
       "memberships": [
         {
           "userId": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
-          "role": "DM",
+          "role": "GM",
           "characterIds": [],
           "joinedAt": "2025-02-01T10:00:00.000Z",
-          "user": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage", "avatarUrl": null }
+          "user": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Ada Example", "avatarUrl": null }
         }
       ],
-      "userRole": "DM",
+      "userRole": "GM",
       "characterIds": [],
       "createdAt": "2025-02-01T10:00:00.000Z"
     }
@@ -348,14 +350,14 @@ example is shortened; the OpenAPI file has the full shapes.
 
 ### `POST /api/campaigns`
 
-Create a new campaign. The authenticated user becomes the DM.
+Create a new campaign. The authenticated user becomes the GM.
 
 **Request:**
 ```json
 {
-  "name": "Curse of Strahd",
-  "description": "Gothic horror in Barovia.",
-  "gameSystem": "DND_5E"
+  "name": "The Hollow Crown",
+  "description": "A ghost story in a mountain valley.",
+  "gameSystem": "FIFTH_EDITION"
 }
 ```
 
@@ -369,7 +371,7 @@ Get a single campaign's details. The embedded `maps` and `characters` arrays con
 
 ### `PUT /api/campaigns/:id`
 
-Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status` (`PREPARATION`, `COMPLETED` or `ARCHIVED`, and only while no session is running or paused; starting, pausing and ending a session set the others), `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300), `playersMayDraw` (whether players may draw on the map; the DM always may). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
+Update campaign properties (GM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status` (`PREPARATION`, `COMPLETED` or `ARCHIVED`, and only while no session is running or paused; starting, pausing and ending a session set the others), `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300), `playersMayDraw` (whether players may draw on the map; the GM always may). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
 
 **Request:** Partial campaign fields.
 
@@ -397,7 +399,7 @@ points to read.
           "id": "c4a1e8f2-7b3d-4e9a-8c6f-1d2b5a7e9f30",
           "name": "Elara Moonwhisper",
           "tokenImageUrl": null,
-          "gameSystem": "DND_5E",
+          "gameSystem": "FIFTH_EDITION",
           "userId": "2b7e9c41-6d8a-4f3e-a5c1-9f0d2e4b6a87",
           "hp": { "current": 24, "max": 31, "temp": 0 }
         }
@@ -430,7 +432,7 @@ secret-roll rules.
 A whisper (`type: "WHISPER"`) is returned only to the two people it is
 between: its sender (`userId`) and its recipient (`recipientId`, with
 `recipientName` and `recipient`). Whispers between other people are left out
-of every page, the DM's included. Every other message has `recipientId`,
+of every page, the GM's included. Every other message has `recipientId`,
 `recipientName` and `recipient` set to `null`. A whisper whose recipient's
 account was deleted has `recipientId: null` and is returned to its sender
 alone.
@@ -446,7 +448,7 @@ one. `POST` takes `{ name, expression }`, and may add `characterName` and
 `null` when left out, empty or `null`. The character name names no character
 record.
 
-**They are private to whoever saved them, the DM included.** Every query is
+**They are private to whoever saved them, the GM included.** Every query is
 scoped by the session's own user id; a macro belonging to someone else answers
 `404` rather than `403`, so the reply cannot be used to confirm an id exists.
 
@@ -487,10 +489,10 @@ deletes the notes and macros.
 ### `GET|POST /api/campaigns/:campaignId/documents`
 
 The rulebooks and handouts a campaign's members can read. **`GET` requires
-campaign membership; `POST` requires the DM role.**
+campaign membership; `POST` requires the GM role.**
 
 `GET` returns every document the campaign can see: those uploaded or written
-with `CAMPAIGN` scope inside it, and those a DM has shared from elsewhere. Each
+with `CAMPAIGN` scope inside it, and those a GM has shared from elsewhere. Each
 item carries the asset fields plus `linkedAt`, `linkedBy` and a `shared`
 boolean, which is what tells the two apart, so the client knows whether
 "unshare" is a thing it can offer. A `canEdit` boolean says whether the
@@ -500,17 +502,17 @@ then. That route edits only plain text and Markdown, so a PDF cannot be edited
 whatever `canEdit` says.
 
 `POST` takes `{ assetId }` and shares an existing document. Two checks, in
-order. The asset must be of type `DOCUMENT` **and readable by the DM making the
+order. The asset must be of type `DOCUMENT` **and readable by the GM making the
 request**, or the answer is `404`; that stops sharing from becoming a way to
 hand a campaign somebody else's private file by guessing an id. Then it must be
-**the DM's own upload, or `GLOBAL`**, or the answer is `403` with a message
+**the GM's own upload, or `GLOBAL`**, or the answer is `403` with a message
 saying so; that stops a document shared into one campaign from being passed on
 by a member of it who runs another. An admin may share anything. Sharing the
 same document twice is a no-op, not an error.
 
 ### `DELETE /api/campaigns/:campaignId/documents/:assetId`
 
-Stop sharing a document with the campaign. **Requires DM role.** The document
+Stop sharing a document with the campaign. **Requires GM role.** The document
 itself is untouched; the campaign's members simply stop being able to read it.
 Answers `200` with a message, or `404` if that document was not shared with
 this campaign. A document that is `CAMPAIGN`-scoped inside the campaign has no
@@ -518,7 +520,7 @@ link to remove; delete the asset instead.
 
 ### `POST /api/campaigns/:campaignId/invite`
 
-Invite a user to the campaign. **Requires DM role.**
+Invite a user to the campaign. **Requires GM role.**
 
 **Body:**
 - `userId` *(required)* — the user to invite. They must already have an account, approved by an administrator if the instance asks for approval; an unknown or unapproved account answers `404` "User not found"
@@ -529,46 +531,47 @@ Invite a user to the campaign. **Requires DM role.**
 
 The invitation is created whether or not an email goes out — it is what the invitee accepts from, on their dashboard. `emailSent` reports what actually happened: it is `false` when the caller did not ask, when the instance has no SMTP configured, and when the send failed. A failed send is logged and does not fail the request, because the invitation already exists by that point. This is deliberately unlike `POST /api/admin/users/invite`, which refuses outright without SMTP because there an email is the only way in.
 
-On an instance with SMTP configured, each DM may make 20 invitations an hour that ask for an email, counted whether or not the email then goes out. A request with `sendEmail: true` past that answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, every request on an instance without SMTP, and requests answered with an error (`400`, `404` or `500`) are not counted.
+On an instance with SMTP configured, each GM may make 20 invitations an hour that ask for an email, counted whether or not the email then goes out. A request with `sendEmail: true` past that answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, every request on an instance without SMTP, and requests answered with an error (`400`, `404` or `500`) are not counted.
 
-### `PUT /api/campaigns/:campaignId/dm`
+### `PUT /api/campaigns/:campaignId/gm`
 
-Hand the Dungeon Master role to another member of the campaign. **Requires the
-sitting DM, the campaign owner, or a platform admin.**
+Hand the GM role to another member of the campaign. **Requires the
+sitting GM, the campaign owner, or a platform admin.** Also answered at
+`PUT /api/campaigns/:campaignId/dm`, the path versions before 1.7.0 gave it.
 
 **Body:**
-- `userId` *(required)* — the member who should become DM. They must already be in the campaign; any role qualifies, including a spectator
+- `userId` *(required)* — the member who should become GM. They must already be in the campaign; any role qualifies, including a spectator
 
 **Response `200`:** `{ message, memberships }` — the full membership list, so a client can re-derive everyone's role in one step
 
-The named member becomes `DM` and the sitting DM becomes `PLAYER`, in a single
-transaction: a campaign is never observable with two DMs or none. A campaign
-still has exactly one DM — the seat moves rather than being shared. Of two
+The named member becomes `GM` and the sitting GM becomes `PLAYER`, in a single
+transaction: a campaign is never observable with two GMs or none. A campaign
+still has exactly one GM — the seat moves rather than being shared. Of two
 hand-overs at the same moment, the second sees the first, and a role change or
-removal of a member who has just been handed the seat is refused as for any DM.
+removal of a member who has just been handed the seat is refused as for any GM.
 
-**The campaign's owner does not change.** Ownership and the DM role are separate
-facts, which is what allows an owner to hand the game to a co-DM or to an
+**The campaign's owner does not change.** Ownership and the GM role are separate
+facts, which is what allows an owner to hand the game to a co-GM or to an
 automated account and remain at the table as an ordinary player. Deleting the
-campaign stays with the owner, and so does handing the DM seat on, so an owner
+campaign stays with the owner, and so does handing the GM seat on, so an owner
 sitting as a player can take the seat back; the owner also cannot be removed
-from the campaign, or leave it. Everything else a DM does follows the role.
+from the campaign, or leave it. Everything else a GM does follows the role.
 
 Rejected with `400` if `userId` is text that is not a user id ("A campaign
 member must be named by their user id"; a missing `userId`, or one that is not
 text, gets a generic message such as "Invalid input: expected string, received
-undefined") or names the sitting DM ("That member is already the
-Dungeon Master"), `404` if the campaign does not exist ("Campaign not found",
+undefined") or names the sitting GM ("That member is already the
+GM"), `404` if the campaign does not exist ("Campaign not found",
 checked before the caller is) or the named user is not a member ("That user is
 not a member of this campaign"), and `403` if the caller is none of the three
-above ("Only the DM, the campaign owner, or an admin can transfer the DM role").
-Note the generic role endpoint still refuses to change a DM's role or create a
+above ("Only the GM, the campaign owner, or an admin can transfer the GM role").
+Note the generic role endpoint still refuses to change a GM's role or create a
 second one — this is the only supported way to move the seat, so that there is
 one atomic path rather than two.
 
 ### `POST /api/campaigns/:campaignId/leave`
 
-Leave the campaign as a player or a spectator: what the DM's removal of a
+Leave the campaign as a player or a spectator: what the GM's removal of a
 member does, asked by the member. **Requires membership of the campaign, any
 role.** No body.
 
@@ -580,24 +583,24 @@ and saved rolls stay with the campaign, and the notes and saved rolls are
 listed under `GET /api/campaigns/left`. Each of the caller's live connections
 to the campaign is sent `campaign.access.revoked` with reason `left` and the
 same message, and leaves it; the campaign is sent `presence.state` and
-`roster.updated` (`member.left`). Only the DM can invite them back.
+`roster.updated` (`member.left`). Only the GM can invite them back.
 
 Rejected with `409` for the campaign's owner, whatever their role ("You own
 this campaign, so you cannot leave it. If you no longer want it, delete it in
-the campaign's settings."), and for the DM ("You run this campaign. Hand the DM
+the campaign's settings."), and for the GM ("You run this campaign. Hand the GM
 seat to someone else in the campaign's settings, then leave it."); `403` for
 anyone who is not a member ("You are not a member of this campaign"), also when
-the DM removed them a moment before; `401` when not signed in. The role is read
+the GM removed them a moment before; `401` when not signed in. The role is read
 in the same transaction as the change, so a hand-over of the seat to the caller
-at the same moment is refused as for any DM.
+at the same moment is refused as for any GM.
 
 ### `DELETE /api/campaigns/:campaignId/messages/join-leave`
 
-Remove the legacy "X has joined / has left the campaign" system messages from a campaign's chat. **Requires DM role.**
+Remove the legacy "X has joined / has left the campaign" system messages from a campaign's chat. **Requires GM role.**
 
 **Response `200`:** `{ message, deleted }` — `deleted` is the row count, `0` when there was nothing to clear.
 
-These messages are no longer written: they fired on every socket authentication and every disconnect, so a page load, a refresh or a brief network drop each added a permanent row, and presence in the roster now conveys the same thing. Rows already in the database are deliberately **not** removed on upgrade — a chat log is a record of a session — so this is how a DM clears the backlog deliberately.
+These messages are no longer written: they fired on every socket authentication and every disconnect, so a page load, a refresh or a brief network drop each added a permanent row, and presence in the roster now conveys the same thing. Rows already in the database are deliberately **not** removed on upgrade — a chat log is a record of a session — so this is how a GM clears the backlog deliberately.
 
 Matching is on `metadata.action` (`user.joined` / `user.left`), **not** on the message text: the wording is display copy that could change or be translated, while the action tag is what the writer meant. Other system messages and the conversation itself are untouched.
 
@@ -611,17 +614,17 @@ Roll history for a campaign, newest first; rolls with the same timestamp are ord
 
 **Response `200`:** `{ rolls, pagination }`, each roll `{ id, userId, userName, characterName, expression, result, breakdown, purpose, secret, timestamp }`.
 
-**Visibility is enforced here, not in the client.** A DM receives every roll in the campaign. Anyone else receives public rolls plus their *own* secret rolls, and never another user's — matching what the live `dice.rolled` socket event delivers. Filtering client-side would still have put the rolls on the wire, so the rule lives in the query.
+**Visibility is enforced here, not in the client.** A GM receives every roll in the campaign. Anyone else receives public rolls plus their *own* secret rolls, and never another user's — matching what the live `dice.rolled` socket event delivers. Filtering client-side would still have put the rolls on the wire, so the rule lives in the query.
 
-Rolls made before the DM last cleared the history are excluded (see `Campaign.rollHistoryClearedAt`). They remain in the table: clearing hides rolls from this endpoint rather than deleting them, so the secret-roll audit trail survives an accidental Clear.
+Rolls made before the GM last cleared the history are excluded (see `Campaign.rollHistoryClearedAt`). They remain in the table: clearing hides rolls from this endpoint rather than deleting them, so the secret-roll audit trail survives an accidental Clear.
 
-In the web client, a player's rolls while the session is **paused** are made in their own browser and never sent, so they never appear here. The DM's rolls are sent as usual, and the server takes a `dice.roll` whatever the session's state, so a script's rolls while paused are kept and listed.
+In the web client, a player's rolls while the session is **paused** are made in their own browser and never sent, so they never appear here. The GM's rolls are sent as usual, and the server takes a `dice.roll` whatever the session's state, so a script's rolls while paused are kept and listed.
 
 ---
 
 ## Token Template Endpoints
 
-All token template endpoints are scoped under a campaign and require DM role.
+All token template endpoints are scoped under a campaign and require GM role.
 
 An `imageUrl` naming an existing asset must name one uploaded as a token picture (type `TOKEN`), or the request answers `400` with `The token image must be a token picture from the asset library.` An update accepts the address already stored, sent back unchanged; a copy to another campaign is held to the rule.
 
@@ -688,7 +691,7 @@ Save a token from the map as a new template. Accepts the same body as create, bu
 
 ### `POST /api/campaigns/:campaignId/token-templates/:id/copy-to/:targetCampaignId`
 
-Copy a token template to another campaign. Requires DM role in both the source and target campaigns.
+Copy a token template to another campaign. Requires GM role in both the source and target campaigns.
 
 **Response:** `201` with the new token template itself, in the target campaign and created by you, in the same shape as `GET /api/campaigns/:campaignId/token-templates/:id`.
 
@@ -698,7 +701,7 @@ Copy a token template to another campaign. Requires DM role in both the source a
 
 ### `GET /api/campaigns/:campaignId/export`
 
-Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may export 20 campaigns an hour, and run one archive operation (export, import or preview) at a time; a request past either answers `429` with a `message` saying so.
+Export a campaign as a `.cozyvtt` ZIP archive. Requires GM role. Each user may export 20 campaigns an hour, and run one archive operation (export, import or preview) at a time; a request past either answers `429` with a `message` saying so.
 
 **Query params:**
 - `includeAudio` — `true` to include audio assets (default: `false`): the tracks of the campaign's atmosphere periods and its ambient track. An import plays the imported copies.
@@ -720,9 +723,9 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
   "preview": {
     "formatVersion": 1,
     "exportedAt": "2026-04-18T12:00:00.000Z",
-    "exportedFrom": "CozyVTT v1.6.1",
-    "campaignName": "The Lost Mines",
-    "gameSystem": "DND_5E",
+    "exportedFrom": "CozyVTT v1.7.0",
+    "campaignName": "The Hollow Crown",
+    "gameSystem": "FIFTH_EDITION",
     "mapCount": 5,
     "tokenCount": 42,
     "creatureCount": 12,
@@ -738,7 +741,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
 
 ### `POST /api/campaigns/import`
 
-Import a `.cozyvtt` archive and create a new campaign. Requires authentication; any signed-in user may import, and becomes the new campaign's DM. Each user may import 20 campaigns an hour, one archive operation at a time; past either answers `429`.
+Import a `.cozyvtt` archive and create a new campaign. Requires authentication; any signed-in user may import, and becomes the new campaign's GM. Each user may import 20 campaigns an hour, one archive operation at a time; past either answers `429`.
 
 **Request:** `multipart/form-data` with fields:
 - `file` — the `.cozyvtt` archive (required)
@@ -750,7 +753,7 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
 {
   "message": "Campaign imported successfully",
   "campaignId": "uuid",
-  "campaignName": "The Lost Mines",
+  "campaignName": "The Hollow Crown",
   "mapCount": 4,
   "tokenCount": 42,
   "creatureCount": 12,
@@ -783,8 +786,8 @@ the most one account can. Delete one you no longer need to make room."
 **Request:**
 ```json
 {
-  "name": "Thorin Ironforge",
-  "gameSystem": "DND_5E",
+  "name": "Hale Stonefield",
+  "gameSystem": "FIFTH_EDITION",
   "data": {
     "class": "Fighter",
     "level": 1,
@@ -802,7 +805,7 @@ the most one account can. Delete one you no longer need to make room."
 }
 ```
 
-For a character with a game system, `name` is written into the sheet's `characterName` (`investigatorName` in Call of Cthulhu), and your display name into `playerName`, before the sheet is checked; a Flexible sheet (no game system) gets neither. A D&D 5e sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
+For a character with a game system, `name` is written into the sheet's `characterName`, and your display name into `playerName`, before the sheet is checked; a Flexible sheet (no game system) gets neither. A 5E sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
 
 A `tokenImageUrl` naming an existing asset must name one uploaded as a token picture (type `TOKEN`), whatever folder the address gives, or the request answers `400` with `The token image must be a token picture from the asset library.` `PUT` checks a new one the same way, and accepts the address already stored, sent back unchanged.
 
@@ -810,13 +813,15 @@ A `tokenImageUrl` naming an existing asset must name one uploaded as a token pic
 
 ### `GET /api/characters/:id`
 
-Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `404`, as for an id that names nothing. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
+Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `404`, as for an id that names nothing. On a Horror d100 sheet the GM's Notes (`notes`) are sent only to the GM of the character's campaign, and are left out for everyone else, its owner included.
 
 ---
 
 ### `PUT /api/characters/:id`
 
-Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped. A Flexible character's sheet (no game system) must be an object whose `sections` are laid out as the Flexible sheet's are; keys beside `sections` are kept. Either way a sheet that does not pass answers `400` with `validationErrors`, each giving the `path` of a field and what is wrong with it, and nothing is saved. On a Call of Cthulhu sheet, a save by anyone but the DM of the character's campaign keeps the stored `notes` (Keeper's Notes), whatever it sends for them.
+Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped. A Flexible character's sheet (no game system) must be an object whose `sections` are laid out as the Flexible sheet's are; keys beside `sections` are kept. Either way a sheet that does not pass answers `400` with `validationErrors`, each giving the `path` of a field and what is wrong with it, and nothing is saved. On a Horror d100 sheet, a save by anyone but the GM of the character's campaign keeps the stored `notes` (GM's Notes), whatever it sends for them.
+
+A character that had the value of an unreleased game system before 1.7.0 now has no game system, so it saves as a Flexible sheet like any other with none.
 
 Send `updatedAt` exactly as `GET /api/characters/:id` gave it, and the save is refused with **409 Conflict** if the character has changed since (another save, or hit points changed at the table). Nothing is written; load the character again and make the change on the new version. Leave `updatedAt` out and the save is made whatever changed in between. A successful save returns the character with its new `updatedAt`.
 
@@ -824,14 +829,14 @@ Send `updatedAt` exactly as `GET /api/characters/:id` gave it, and the save is r
 ```json
 {
   "data": {
-    "characterName": "Thorin Ironforge",
+    "characterName": "Hale Stonefield",
     "hp": { "current": 10, "maximum": 12, "temporary": 0 }
   },
   "updatedAt": "2026-09-28T08:15:02.117Z"
 }
 ```
 
-(The `data` above is cut short; a real D&D 5e sheet also needs `class`, `level`, `race`, `proficiencyBonus` and `stats`.)
+(The `data` above is cut short; a real 5E sheet also needs `class`, `level`, `race`, `proficiencyBonus` and `stats`.)
 
 ---
 
@@ -856,13 +861,13 @@ Assign a character to a campaign.
 
 ### `GET /api/campaigns/:id/maps`
 
-List the campaign's maps. The DM gets every map. Anyone else gets only the map the campaign is currently showing, or an empty list when it is showing none: a map the DM has prepared stays theirs until they switch the table to it.
+List the campaign's maps. The GM gets every map. Anyone else gets only the map the campaign is currently showing, or an empty list when it is showing none: a map the GM has prepared stays theirs until they switch the table to it.
 
 ---
 
 ### `POST /api/campaigns/:id/maps`
 
-Create a new map (DM only).
+Create a new map (GM only).
 
 **Request:**
 ```json
@@ -907,8 +912,10 @@ revoking it takes effect immediately.
 
 ### `GET /api/character-templates`
 
-Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
-`GameSystem` value, or `flexible` for system-agnostic templates), `mine`
+Query parameters: `search` (name contains, case-insensitive), `gameSystem`
+(`FIFTH_EDITION`, `FANTASY_D20` or `HORROR_D100`, each also by the value an
+older version used, or `flexible` for system-agnostic templates; anything
+else answers `400`), `mine`
 (`true` to return only your own), `limit` (max 100, default 50), `offset`.
 
 **Response:** `{ templates, total, limit, offset }`. Each template includes
@@ -926,13 +933,13 @@ into a character or editing it.
 {
   "name": "Novice Fighter",
   "description": "A straightforward melee character",
-  "gameSystem": "DND_5E",
+  "gameSystem": "FIFTH_EDITION",
   "tokenImageUrl": "/api/assets/tokens/uuid",
   "data": { }
 }
 ```
 
-(`data` stands for a whole sheet here. It is checked as sent: the template's `name` is not copied into it, so a D&D 5e template's `data` needs `characterName`, `class`, `level`, `race`, `proficiencyBonus` and `stats`, and `{}` answers `400`.)
+(`data` stands for a whole sheet here. It is checked as sent: the template's `name` is not copied into it, so a 5E template's `data` needs `characterName`, `class`, `level`, `race`, `proficiencyBonus` and `stats`, and `{}` answers `400`.)
 
 - `name` is required; `gameSystem` may be null for a flexible template.
 - `data` is validated against the game system's schema exactly as a character's
@@ -941,8 +948,8 @@ into a character or editing it.
   sheet reads them first, as they are for a character. A flexible template's
   `data` must be an object laid out as a Flexible sheet, as a Flexible
   character's must; anything else answers `400` with `validationErrors`.
-- A template is stored without the sheet's `playerName`, and a Call of
-  Cthulhu one without its `notes` (Keeper's Notes), here and on `PUT`.
+- A template is stored without the sheet's `playerName`, and a Horror d100
+  one without its `notes` (GM's Notes), here and on `PUT`.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.
@@ -956,7 +963,9 @@ into a character or editing it.
 
 Accepts `name`, `description`, `tokenImageUrl`, `data`. An empty body returns
 `400`. `gameSystem` is fixed at creation, as it is for a character — the sheet
-data is only meaningful against the system it was built for.
+data is only meaningful against the system it was built for. A template that
+had the value of an unreleased game system before 1.7.0 now has no game system;
+its `data` is checked against the Flexible sheet layout.
 
 Send `updatedAt` exactly as `GET /api/character-templates/:id` gave it, and the
 save is refused with **409 Conflict** (`code` `TEMPLATE_CHANGED`) if the
@@ -983,7 +992,7 @@ All creature endpoints are mounted under `/api/campaigns/:campaignId/creatures`.
 
 **`imageUrl` on create and update** accepts a bare asset id, stored as `/api/assets/tokens/:id`, or
 an asset's own `/api/assets/<kind>/:id` address, stored as sent. Anything else, an address on another
-site included, answers `403`, as does an asset the DM may not read unless this campaign already uses
+site included, answers `403`, as does an asset the GM may not read unless this campaign already uses
 that exact address. An existing asset that is not a token picture (type `TOKEN`) answers `400` with
 `The token image must be a token picture from the asset library.` Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
 as the full path, and refuses with the same `400` a creature stored before this rule whose picture is
@@ -992,7 +1001,7 @@ tolerate both when reading.
 
 ### `GET /api/campaigns/:id/creatures`
 
-List creature templates available in this campaign (SRD + campaign-specific custom creatures). DM only: a template carries the DM's notes, stat block and hit points.
+List creature templates available in this campaign (SRD + campaign-specific custom creatures). GM only: a template carries the GM's notes, stat block and hit points.
 
 **Query params:**
 - `search` — Filter by name (case-insensitive partial match)
@@ -1016,13 +1025,13 @@ List creature templates available in this campaign (SRD + campaign-specific cust
 
 ### `GET /api/campaigns/:id/creatures/:creatureId`
 
-Get a single creature template. DM only.
+Get a single creature template. GM only.
 
 ---
 
 ### `POST /api/campaigns/:id/creatures`
 
-Create a new custom creature template (DM only).
+Create a new custom creature template (GM only).
 
 **Request:**
 ```json
@@ -1041,7 +1050,7 @@ Create a new custom creature template (DM only).
 
 ### `PUT /api/campaigns/:id/creatures/:creatureId`
 
-Update a custom creature template (DM only). Cannot edit SRD creatures — returns `403`.
+Update a custom creature template (GM only). Cannot edit SRD creatures — returns `403`.
 
 Accepts any subset of the create fields; an empty body returns `400`.
 
@@ -1057,19 +1066,19 @@ every write — see [Stat block validation](#stat-block-validation).
 |---|---|---|
 | `ac` | number | Required. 0–99 |
 | `speed` | string | Required |
-| `abilities` | object | Required. `str`/`dex`/`con`/`int`/`wis`/`cha`, each 0–30, or 0–9,999 when `gameSystem` is `CALL_OF_CTHULHU_7E`. Ability **scores** (D&D 5e's model; a Call of Cthulhu creature keeps its characteristics here) |
+| `abilities` | object | Required. `str`/`dex`/`con`/`int`/`wis`/`cha`, each 0–30, or 0–999 when `gameSystem` is `HORROR_D100`. Ability **scores** (5E's model; a Horror d100 creature keeps its characteristics here) |
 | `hpMax`, `hitDice` | number, string | Optional |
-| `attributeModifiers` | object | Optional. Same six keys, each −10 to +20. Ability **modifiers**, for systems that print modifiers instead of scores (Pathfinder 2e) |
-| `challengeRating` | string | Optional, at most 10 characters; the server checks only the length. D&D 5e's are `"0"`, `"1/8"`, `"1/4"`, `"1/2"` and `"1"` to `"30"`, and there this determines the proficiency bonus |
+| `attributeModifiers` | object | Optional. Same six keys, each −10 to +20. Ability **modifiers**, for systems that print modifiers instead of scores (Fantasy d20) |
+| `challengeRating` | string | Optional, at most 10 characters; the server checks only the length. 5E's are `"0"`, `"1/8"`, `"1/4"`, `"1/2"` and `"1"` to `"30"`, and there this determines the proficiency bonus |
 | `level` | number | Optional, −1 to 30. Creature level, for systems that rate by level rather than CR |
 | `savingThrows` | object | Optional. Keys to **final totals**, each −50 to +50 |
-| `skills` | object | Optional. Same shape as `savingThrows`, but up to 999 when `gameSystem` is `CALL_OF_CTHULHU_7E` (its skills are percentages) |
+| `skills` | object | Optional. Same shape as `savingThrows`, but up to 999 when `gameSystem` is `HORROR_D100` (its skills are percentages) |
 | `proficiencies` | object | Optional. Why each total is what it is — see below |
 | `gameSystem` | string | Optional. The system the stat block was written for; it sets the bounds on `abilities` and `skills` |
 
 `savingThrows` and `skills` keys are **not enumerated**, because the stat block is
-shared across systems: D&D 5e uses the six ability keys (`str`…`cha`), Pathfinder
-2e uses `fortitude`/`reflex`/`will`, and skills may be canonical camelCase
+shared across systems: 5E uses the six ability keys (`str`…`cha`), Fantasy
+d20 uses `fortitude`/`reflex`/`will`, and skills may be canonical camelCase
 (`sleightOfHand`) or a custom name. Which keys are *offered* is a client concern.
 
 **`proficiencies`** — all optional:
@@ -1100,11 +1109,11 @@ Enforced on every creature, token, token-template and campaign-import write:
 
 - Save and skill bonuses: integers, −50 to +50, at most 60 entries per record.
   The range is a cross-system backstop against absurd data, not a rules check —
-  Pathfinder 2e modifiers legitimately exceed +30 at high level, so a bound
-  fitted to D&D 5e would reject real creatures.
+  Fantasy d20 modifiers legitimately exceed +30 at high level, so a bound
+  fitted to 5E would reject real creatures.
 - Ability scores: integers 0–30. Attribute modifiers: −10 to +20.
-- A stat block whose own `gameSystem` is `CALL_OF_CTHULHU_7E` takes scores
-  from 0 to 9,999 and skills from −50 to 999; its saves keep −50 to +50.
+- A stat block whose own `gameSystem` is `HORROR_D100` takes scores
+  from 0 to 999 and skills from −50 to 999; its saves keep −50 to +50.
 - Up to 20 unknown top-level keys are preserved, so older stat blocks survive a
   round trip; more than 20 answers `400`.
 - The whole stat block, as stored, may be at most 64 KB (65,536 characters of
@@ -1123,13 +1132,15 @@ in its `warnings` and `skipped`.
 
 ### `DELETE /api/campaigns/:id/creatures/:creatureId`
 
-Delete a custom creature template (DM only). Cannot delete SRD creatures — returns `403`.
+Delete a custom creature template (GM only). Cannot delete SRD creatures — returns `403`.
 
 ---
 
 ### `POST /api/campaigns/:id/creatures/:creatureId/duplicate`
 
-Duplicate a creature of this campaign, or an SRD creature, as a new custom creature in this campaign (DM only); a creature of another campaign answers `404`. The duplicate gets `source: 'custom'` and ` (Custom)` appended to the name.
+Duplicate a creature of this campaign, or an SRD creature, as a new custom creature in this campaign (GM only); a creature of another campaign answers `404`. The duplicate gets `source: 'custom'` and ` (Custom)` appended to the name.
+
+A creature that had the value of an unreleased game system before 1.7.0 now has no game system and is copied like any other.
 
 **Response:** `201` with the new creature template.
 
@@ -1137,7 +1148,7 @@ Duplicate a creature of this campaign, or an SRD creature, as a new custom creat
 
 ### `GET /api/campaigns/:id/creatures/favorites/list`
 
-List the current user's favorited creatures in this campaign. DM only, like the library it points into.
+List the current user's favorited creatures in this campaign. GM only, like the library it points into.
 
 **Response:**
 ```json
@@ -1151,7 +1162,7 @@ List the current user's favorited creatures in this campaign. DM only, like the 
 
 ### `POST /api/campaigns/:id/creatures/:creatureId/favorite`
 
-Toggle favorite for the current user in this campaign (DM only). If already favorited, removes the favorite; otherwise, adds it.
+Toggle favorite for the current user in this campaign (GM only). If already favorited, removes the favorite; otherwise, adds it.
 
 **Response:**
 ```json
@@ -1180,7 +1191,7 @@ Check whether SRD creatures have been seeded, and whether you may run the import
 
 ### `POST /api/campaigns/:id/creatures/seed`
 
-Seed SRD creatures from Open5e. Administrators only: anyone else, a campaign's DM included, gets `403` with "Only an administrator can import the SRD creatures, because every campaign on this server shares them. Ask an administrator to import them." The campaign in the address plays no part, and the creatures appear in every campaign's library. Safe to call multiple times; existing SRD creatures are not duplicated. Returns `409` if seeding is already in progress, and `502`, having written nothing, when Open5e cannot be read, does not answer a page within 15 seconds, or answers something the import will not follow; the `message` says which. A creature whose stat block the Creature Library would refuse is left out and counted in `rejected`.
+Seed SRD creatures from Open5e. Administrators only: anyone else, a campaign's GM included, gets `403` with "Only an administrator can import the SRD creatures, because every campaign on this server shares them. Ask an administrator to import them." The campaign in the address plays no part, and the creatures appear in every campaign's library. Safe to call multiple times; existing SRD creatures are not duplicated. Returns `409` if seeding is already in progress, and `502`, having written nothing, when Open5e cannot be read, does not answer a page within 15 seconds, or answers something the import will not follow; the `message` says which. A creature whose stat block the Creature Library would refuse is left out and counted in `rejected`.
 
 SRD creatures stored before hit points were tracked are updated in place with `hpMax` and `hitDice`; only those missing keys are added, and custom creatures are never modified.
 
@@ -1203,7 +1214,7 @@ SRD creatures stored before hit points were tracked are updated in place with `h
 
 ### `GET /api/assets`
 
-List assets accessible to the authenticated user (Global + their own User scope + Campaign scope for their campaigns). In a campaign where you are a player or a spectator, its map pictures are left out except those you uploaded, those embedded in a plain text or Markdown handout the campaign's DM wrote or uploaded and shared with the campaign, and those the current map of a table you sit at shows you: this campaign's, or another of your campaigns' while the picture's uploader is a member of it too. The same pictures answer `404` when read.
+List assets accessible to the authenticated user (Global + their own User scope + Campaign scope for their campaigns). In a campaign where you are a player or a spectator, its map pictures are left out except those you uploaded, those embedded in a plain text or Markdown handout the campaign's GM wrote or uploaded and shared with the campaign, and those the current map of a table you sit at shows you: this campaign's, or another of your campaigns' while the picture's uploader is a member of it too. The same pictures answer `404` when read.
 
 **Query params:**
 - `type` — filter by `MAP`, `TOKEN`, `AUDIO`, `AVATAR`, `DOCUMENT`. With no `type`, documents are left out: they have their own page in the app, and a rulebook does not belong among map thumbnails
@@ -1243,7 +1254,7 @@ controls only then.
       "description": null,
       "tags": [],
       "createdAt": "2025-02-01T10:00:00.000Z",
-      "uploadedBy": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage" },
+      "uploadedBy": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Ada Example" },
       "campaign": null,
       "canChange": true
     }
@@ -1287,7 +1298,7 @@ Read access is the shared `canReadAsset` rule: `GLOBAL` for anyone signed in,
 `CAMPAIGN` for that campaign's members, `USER` for its uploader, **plus anyone
 in a campaign that is currently playing this track** as its atmosphere, while
 its uploader is a member of that campaign too. That
-last clause is what lets a DM play a track from their personal library, since
+last clause is what lets a GM play a track from their personal library, since
 the sound is fetched by each player's browser rather than relayed by the server.
 It covers that one track and lasts only while it is set. Anyone else gets `404`,
 not `403`.
@@ -1352,7 +1363,7 @@ Write a text or Markdown document without uploading a file.
 - `description` *(optional)*
 
 Scope is decided by the same rule as an upload: `GLOBAL` needs a platform
-admin or `globalAssetManager`, `CAMPAIGN` needs that campaign's DM. The result
+admin or `globalAssetManager`, `CAMPAIGN` needs that campaign's GM. The result
 is an ordinary asset of type `DOCUMENT`, and it counts against the upload
 rate limit, since it creates a file on disk exactly as an upload does.
 
@@ -1362,7 +1373,7 @@ rate limit, since it creates a file on disk exactly as an upload does.
 
 Replace the text of a `.txt` or `.md` document. **Whoever may delete it**:
 for a campaign's own document, its uploader while still a member, the
-campaign's DM, or a platform admin; for a global document, a platform admin or
+campaign's GM, or a platform admin; for a global document, a platform admin or
 its uploader while they still manage global assets; for a personal document,
 its uploader or a platform admin. Anyone else gets `404`. A PDF answers `400`: only text and
 Markdown can be edited in place. Takes `{ content }` under the same limits as
@@ -1376,7 +1387,7 @@ live refresh.
 Write a new picture over a picture drawn in CozyVTT, as **Save** in Mapmaker
 does: a campaign map picture tagged `cozyvtt-drawn-map`. The asset keeps its
 id, so every address naming it shows the new picture; no earlier version is
-kept. **Only the DM of the asset's campaign**, a platform admin included in
+kept. **Only the GM of the asset's campaign**, a platform admin included in
 the refusal (`403`). An asset the caller may not read answers `404`; any other
 picture answers `400` with `Only a picture drawn in CozyVTT can be saved over.
 Upload a new picture instead.` The multipart body carries one `file`, checked
@@ -1399,7 +1410,7 @@ Who may delete depends on the asset's scope:
 |---|---|
 | `GLOBAL` | A platform admin, or the uploader if they hold `globalAssetManager`. The permission covers your own global uploads — it does not let you remove another manager's |
 | `USER` | The owner, or a platform admin |
-| `CAMPAIGN` | Its DM, a platform admin, or the uploader while still a member of that campaign and while nothing but their own characters, the tokens they control and the documents they wrote uses it (otherwise 403, "Others in the campaign use this asset, so only the campaign's DM can delete it", or "A character template uses this asset, so only the campaign's DM can delete it" when a character template, which everyone on the instance is offered, is the only other use) |
+| `CAMPAIGN` | Its GM, a platform admin, or the uploader while still a member of that campaign and while nothing but their own characters, the tokens they control and the documents they wrote uses it (otherwise 403, "Others in the campaign use this asset, so only the campaign's GM can delete it", or "A character template uses this asset, so only the campaign's GM can delete it" when a character template, which everyone on the instance is offered, is the only other use) |
 
 `globalAssetManager` is read from the database on each request rather than the
 session, so revoking it takes effect immediately.
@@ -1412,7 +1423,7 @@ can read the asset now, the route
 answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
 nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
 what the caller may see: an admin sees everything, anyone else sees only the
-campaigns they are the DM of, their own characters and shared character
+campaigns they are the GM of, their own characters and shared character
 templates, and documents of their own, global ones and those of campaigns they
 run, and the rest is counted without names.
 
@@ -1591,14 +1602,14 @@ change their own password with `POST /api/auth/change-password`, which asks for 
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, drawings on maps, other uploads, published character templates, token templates and creatures stay with no owner, and whispers sent to them stay with their senders. A personal upload that only one campaign uses or shares, a campaign they were in, becomes that campaign's. A campaign they own passes to its sitting DM.
+Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, drawings on maps, other uploads, published character templates, token templates and creatures stay with no owner, and whispers sent to them stay with their senders. A personal upload that only one campaign uses or shares, a campaign they were in, becomes that campaign's. A campaign they own passes to its sitting GM.
 
-**409** while they sit in the DM seat of any campaign, whether or not they own it, or own a campaign whose DM seat is empty. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
+**409** while they sit in the GM seat of any campaign, whether or not they own it, or own a campaign whose GM seat is empty. The body lists each such campaign and its other members, so the admin can hand the GM seat over (`PUT /api/campaigns/:id/gm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
 
 ```json
 {
   "error": "Conflict",
-  "message": "This user runs \"Friday Game\". Hand each one's DM seat to another member, or delete it, then delete the user.",
+  "message": "This user runs \"Friday Game\". Hand each one's GM seat to another member, or delete it, then delete the user.",
   "campaigns": [
     { "id": "…", "name": "Friday Game", "members": [{ "userId": "…", "displayName": "Bob", "role": "PLAYER" }] }
   ]
@@ -1759,7 +1770,7 @@ Public. Returns the upload limits the server enforces, derived from the `MAX_<TY
 
 Sizes are in bytes. `maxUploadBytes` is the largest configured limit — the cap applied while parsing an upload, before the asset type is known. See [Upload Size Limits](DEPLOYMENT.md#upload-size-limits) for the environment variables and the matching reverse-proxy setting.
 
-`smtp.configured` is a bare boolean and deliberately nothing more — the host, port, username and TLS mode stay on the admin-only `GET /api/admin/config`. It exists so the campaign invite dialog can disable its "also email them" option on an instance with no mail server, which a campaign DM could not otherwise discover, since a DM is not necessarily a platform admin.
+`smtp.configured` is a bare boolean and deliberately nothing more — the host, port, username and TLS mode stay on the admin-only `GET /api/admin/config`. It exists so the campaign invite dialog can disable its "also email them" option on an instance with no mail server, which a campaign GM could not otherwise discover, since a GM is not necessarily a platform admin.
 
 ---
 
@@ -1882,7 +1893,7 @@ authentication is set up on the account, and then has to send a code at every si
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, a new typed document, Universal VTT map import (per user) | 30 requests | 1 minute | Every request |
 | Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request but one refused for overlapping another; also one of the three at a time per user |
-| Invitation emails (per DM) | 20 invitations that ask for an email | 1 hour | Invitations created with `sendEmail: true` on an instance with SMTP, whether or not the email goes out; a refused invitation is not counted |
+| Invitation emails (per GM) | 20 invitations that ask for an email | 1 hour | Invitations created with `sendEmail: true` on an instance with SMTP, whether or not the email goes out; a refused invitation is not counted |
 | All the notes of a campaign you have left (per user) | 60 requests | 1 hour | Every request |
 | General API | 300 requests | 1 minute | Every request |
 | Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
@@ -1905,7 +1916,7 @@ too counts only wrong codes. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 
-On top of the chat limit, a DM can switch on a cooldown of between 1 and 300
+On top of the chat limit, a GM can switch on a cooldown of between 1 and 300
 seconds between messages for their campaign; it is **off by default**. The
 WebSocket limits are counted per user, across every connection they have open,
 and are set well above what a busy table sends. The other live table events have

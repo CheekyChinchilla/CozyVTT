@@ -34,7 +34,7 @@ This guide covers deploying CozyVTT to a **production server** using Docker Comp
 - A domain name pointing to your server's IP (optional for LAN-only use)
 - At least 1 GB RAM; 2 GB recommended for comfortable operation
 
-Once it is built, CozyVTT needs no internet access to run, and visitors' browsers contact no site but yours: the pages, pictures and fonts all come from your own server. Building the images downloads software, and the Creature Library's **Import D&D 5e SRD** button fetches the creatures from Open5e (api.open5e.com) when an administrator presses it; email is sent only through the SMTP server you configure.
+Once it is built, CozyVTT needs no internet access to run, and visitors' browsers contact no site but yours: the pages, pictures and fonts all come from your own server. Building the images downloads software, and the Creature Library's **Import 5E SRD** button fetches the creatures from Open5e (api.open5e.com) when an administrator presses it; email is sent only through the SMTP server you configure.
 
 ---
 
@@ -1061,9 +1061,9 @@ Test it after deploying with **Send Test Email** on the **Settings** tab of the 
 | **Adding a user** | **Invite User** — they get an email with a link and choose their own password. Nobody else ever sees it. | **Create User** — a temporary password is generated and shown to you once, to hand over yourself |
 | Password resets (self-service) | User clicks **Forgot password?** on the sign-in page and gets a reset link | Unavailable — the user has to ask an admin |
 | Password resets (admin) | Email the user a reset link, or generate a temporary password | Generate a temporary password from the Users tab |
-| Campaign invitations | Appear on the player's dashboard. The DM may *optionally* tick a box to email them as well | Appear on the player's dashboard; the email option is disabled and says why |
+| Campaign invitations | Appear on the player's dashboard. The game master (GM) may *optionally* tick a box to email them as well | Appear on the player's dashboard; the email option is disabled and says why |
 
-**Campaign invitations do not depend on SMTP.** A DM invites someone who already has an account, and the invitation shows up on that player's dashboard for them to accept — no link is involved and nothing needs to be shared by hand. As of 1.2.2 the accompanying email is opt-in per invitation and off by default, so a campaign runs perfectly well on an instance with no mail server. This is the opposite of the *account* invitations in the row above, which are an email or nothing.
+**Campaign invitations do not depend on SMTP.** A GM invites someone who already has an account, and the invitation shows up on that player's dashboard for them to accept — no link is involved and nothing needs to be shared by hand. As of 1.2.2 the accompanying email is opt-in per invitation and off by default, so a campaign runs perfectly well on an instance with no mail server. This is the opposite of the *account* invitations in the row above, which are an email or nothing.
 
 Either way, an account created by an admin **must set its own password on first sign-in** — the
 temporary password works for nothing else, so an admin never keeps usable access to someone's
@@ -1090,7 +1090,7 @@ Whatever these say, a map, token or avatar picture can be at most 16,384 pixels 
 
 `MAX_DOCUMENT_SIZE_MB` covers the PDF, text and Markdown files in the document library. Core rulebooks often run past 50 MB; if your group's do, raise this one and `NGINX_MAX_BODY_SIZE` together.
 
-**Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself. CozyVTT accepts a `.uvtt` file of up to the map limit times 4/3, plus 8 MB for the walls and lights (about 75 MB with the default `MAX_MAP_SIZE_MB=50`), and answers a larger one with a message saying so. With the default `NGINX_MAX_BODY_SIZE=55M`, the proxy refuses any `.uvtt` file over 55 MB with a 413, which means a picture larger than about 40 MB, although a plain map upload of up to 50 MB works. To let through every file CozyVTT accepts, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 10: that covers the 8 MB for walls and lights and leaves a little over for the way the browser wraps the upload. With the default map limit, set `NGINX_MAX_BODY_SIZE=76M`. Whatever the limit, each import waits at most 20 seconds for its turn behind other DMs' imports and has 30 seconds to finish once it starts, so that one slow import cannot hold up every other DM's. Past either limit nothing is saved, and the DM's Map Library shows "Another map import is running on the server. Try again in a minute." or "This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute." That answer comes at most 50 seconds after the upload has reached the backend, within the 60 seconds the bundled nginx waits for it. A proxy of your own must wait at least that long, or the DM sees only "Failed to import UVTT file."
+**Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself. CozyVTT accepts a `.uvtt` file of up to the map limit times 4/3, plus 8 MB for the walls and lights (about 75 MB with the default `MAX_MAP_SIZE_MB=50`), and answers a larger one with a message saying so. With the default `NGINX_MAX_BODY_SIZE=55M`, the proxy refuses any `.uvtt` file over 55 MB with a 413, which means a picture larger than about 40 MB, although a plain map upload of up to 50 MB works. To let through every file CozyVTT accepts, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 10: that covers the 8 MB for walls and lights and leaves a little over for the way the browser wraps the upload. With the default map limit, set `NGINX_MAX_BODY_SIZE=76M`. Whatever the limit, each import waits at most 20 seconds for its turn behind other GMs' imports and has 30 seconds to finish once it starts, so that one slow import cannot hold up every other GM's. Past either limit nothing is saved, and the GM's Map Library shows "Another map import is running on the server. Try again in a minute." or "This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute." That answer comes at most 50 seconds after the upload has reached the backend, within the 60 seconds the bundled nginx waits for it. A proxy of your own must wait at least that long, or the GM sees only "Failed to import UVTT file."
 
 **If you raise a limit, raise the proxy limit too.** A file larger than the proxy's body cap is rejected with an HTTP 413 before it ever reaches CozyVTT:
 
@@ -1312,7 +1312,7 @@ sudo sh -c 'mv backend/backups/*.zip /srv/cozyvtt-backups/'
 
 **Do not pick a folder inside `backend/uploads/`.** A backup holds every credential on the instance, and `uploads/` is the folder you may sync or copy anywhere. Under Docker nothing stops you: the backend sees only its own `/app/backups` and cannot tell where that is on the host. `BACKUP_DIR` applies only to an install without Docker, and there a folder inside the uploads directory is refused.
 
-**Admin Panel → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own.
+**Admin Panel → Backups → Restore** replaces the database with the backup's, copies the backup's uploaded files over the existing ones (a file the backup does not have is left where it is), then runs this version's migrations and converts a backup's Horror d100 characters and templates from before 1.7.0 to the rebuilt sheet, so a backup from an older CozyVTT can be restored into a newer one and is brought up to date on its own, with no restart. A backup made by any version from 1.5.0 to 1.6.0 restores into 1.7.0 this way, and ends up as an instance upgraded to 1.7.0 does: the game systems and the GM's role under their new names, and every Horror d100 sheet converted with its original values kept. If either step fails, or some sheets could not be converted, the restore says the backup was restored but is not complete (with how many sheets, which the backend log names), and asks you to restart the backend, which runs both again. A sheet that could not be converted is still shown in the rebuilt shape meanwhile.
 
 Before anything is touched, the file is checked: its name must end in `.zip`, it must be a ZIP archive of at most 4 GB that unpacks to at most 10 GiB in at most 100,000 files, each with a name of at most 1,024 bytes that the server can write (a damaged backup can hold a file and a folder of the same name), and its database must be a complete `pg_dump` of a CozyVTT database, holding nothing but SQL. A file that fails any of these is refused with the reason on screen, and nothing has changed. Only one restore runs at a time: while one is running, a second restore, and **Create Backup**, are refused until it has finished. A backup of the database as it is at that moment is then written to the backup list (database only, named like any other backup), so restoring the wrong file can be undone by restoring that one; the restore names it when it finishes. The database is loaded in a single step that is undone as a whole if any part of it fails, so a backup that cannot be applied leaves your existing data untouched, and the reason is in the backend log:
 
@@ -1329,7 +1329,7 @@ docker compose logs backend | grep -i restore
 ./backend/scripts/restore.sh restore-me.sql.gz
 ```
 
-Then put the backup's uploaded files back over the existing ones, restart the backend (which also brings an older backup up to this version), and delete the working copy, which holds every credential:
+Then put the backup's uploaded files back over the existing ones, restart the backend straight away (the restart brings an older backup up to this version and converts its Horror d100 sheets; until then the running backend cannot read a backup from before 1.7.0 properly), and delete the working copy, which holds every credential:
 
 ```bash
 sudo unzip -o backend/backups/backup-2026-01-01T03-00-00.zip 'uploads/*' -d backend/
@@ -1337,7 +1337,7 @@ docker compose restart backend
 rm restore-me.sql.gz
 ```
 
-A database-only backup (the kind a restore makes first) has no uploaded files, and the `unzip` for the uploaded files then says nothing matched; that is expected. If `unzip` is missing, install it (`sudo apt install unzip` on Debian or Ubuntu). Without Docker, run `restore.sh` with `DATABASE_URL` set, as in [Via the included scripts](#via-the-included-scripts), unpack the uploaded files into your uploads folder, run `cd backend && npx prisma migrate deploy` to bring an older backup up to this version (without Docker the backend does not do this when it starts), and restart the backend the way you run it.
+A database-only backup (the kind a restore makes first) has no uploaded files, and the `unzip` for the uploaded files then says nothing matched; that is expected. If `unzip` is missing, install it (`sudo apt install unzip` on Debian or Ubuntu). Without Docker, run `restore.sh` with `DATABASE_URL` set, as in [Via the included scripts](#via-the-included-scripts), unpack the uploaded files into your uploads folder, run `cd backend && npx prisma migrate deploy` to bring an older backup up to this version (without Docker the backend does not do this when it starts), and restart the backend the way you run it, which converts its Horror d100 sheets.
 
 **A restore signs everyone out.** Backups made from now on leave the login sessions out, and a restore empties whatever sessions an older backup carried, so a sign-in that was ended after the backup was made (a password change, a removed account) cannot come back with it. Every open game connection is dropped just before the database is replaced, and until the restore has finished nobody can reconnect and every page's requests are answered "The instance is being restored from a backup. Try again in a minute": a change someone made during the load would otherwise be written over the restored data. Everyone signs in again afterwards. Stopping play before you restore spares your players the interruption.
 
@@ -1392,14 +1392,17 @@ every sign-in has ended and everyone signs in again. The script cannot reach
 the running backend, though: a game table that is already open keeps its live
 connection, with the identity and campaign role it had before the restore,
 until the backend restarts. The restart also brings a backup from an older
-CozyVTT up to this version. The script prints the command when it finishes:
+CozyVTT up to this version and converts its Horror d100 sheets to the rebuilt
+sheet. A backup from before 1.7.0 names the game systems and the GM's role as
+older versions did, which the running backend cannot read, so most pages fail
+until it restarts. The script prints the command when it finishes:
 
 ```bash
 docker compose restart backend
 ```
 
 Without Docker, run `cd backend && npx prisma migrate deploy`, then restart the
-backend the way you normally start it.
+backend the way you normally start it; the restart converts the sheets.
 
 The script unpacks the whole backup into a working file before it loads
 anything, in `/tmp` unless `TMPDIR` says otherwise, so that folder needs room
@@ -1661,6 +1664,36 @@ docker compose logs backend | grep FATAL
 
 Use `docker compose up -d`, which reads `.env` again; `docker compose restart` keeps the old value. Once the backend starts, `docker compose ps` shows it as `healthy` within a minute.
 
+### The backend keeps restarting, and its log says `Migration failed`
+
+`docker compose ps` shows the backend as `Restarting` after an upgrade, and nobody can open CozyVTT. A database migration did not finish: the server was stopped or lost power part-way through it, or the database refused a step. (On a brand-new install the same line usually means a character in `DATABASE_PASSWORD` broke the database's address; see [Configure environment](#2-configure-environment).) Look for what the database said. The log gives it once, at the first failure; from the second restart on it only repeats `migrate found failed migrations`, so search the whole log:
+
+```bash
+docker compose logs backend | grep -B2 -A8 "Database error"
+```
+
+You should see the migration's name, a line starting `Database error code:` and, under `Database error:`, the database's own message, such as `could not extend file` or `No space left on device` for a full disk. If the command prints nothing, either the migration was cut short by a stop or a power cut and there is no cause to remove, or the backend has restarted so often that the first failure is no longer in the log.
+
+Each migration runs as a single step that is undone as a whole when any part of it fails, so your data is as it was before the upgrade. The database keeps a note of the migration that did not finish, though, and while the note is there every start stops at it with `Migration failed`. Do not reset or delete anything. If the message names a cause, remove it first (free disk space, for example), or the migration fails the same way again. Then clear the note, naming the migration the log names, and start again, which runs the migration from its beginning:
+
+```bash
+docker compose run --rm -u appuser --entrypoint ./node_modules/.bin/prisma backend migrate resolve --rolled-back 20261112013825_name_systems_and_gm_role
+docker compose up -d
+```
+
+The name above is 1.7.0's migration, which renames the stored game systems and the GM's role; put the name from your log in its place if it differs. `docker compose run` starts a container of its own for the one command, because `docker compose exec` needs a backend that is running. The first command should say the migration is marked as rolled back, and within a minute or two `docker compose ps` should show the backend as `healthy`. Check the log as in [Updating CozyVTT](#updating-cozyvtt).
+
+Without Docker, the same two steps from the `backend` folder are:
+
+```bash
+npx prisma migrate resolve --rolled-back 20261112013825_name_systems_and_gm_role
+npx prisma migrate deploy
+```
+
+Then restart the backend the way you run it.
+
+If the migration fails again, take the last lines of the log and open an issue with them. To have a working instance meanwhile, go back to the version you came from, as [Going back to the version you came from](#going-back-to-the-version-you-came-from) describes.
+
 ### A container stops with "Permission denied", "Operation not permitted" or "Read-only file system"
 
 Each container gets only the Linux capabilities its start-up needs, and some have read-only files (see [Build and start the stack](#3-build-and-start-the-stack)). Something that needs one of the other capabilities, or writes where nothing may be written, fails, and the container's log says so. Find the line:
@@ -1752,15 +1785,47 @@ docker compose up -d --build
 docker compose logs backend | grep -i migrat
 ```
 
-Database migrations run automatically via `prisma migrate deploy` on every startup. Downtime is typically under 30 seconds while containers restart.
+Database migrations run automatically via `prisma migrate deploy` on every startup. Downtime is typically under 30 seconds while containers restart; a release that changes many rows, as 1.7.0 does, takes longer on a large instance. If the log says `Migration failed`, see [The backend keeps restarting, and its log says `Migration failed`](#the-backend-keeps-restarting-and-its-log-says-migration-failed).
 
 > **Back up before you upgrade.** See [Database Backups](#database-backups): one command, `./backend/scripts/backup.sh`, and back up `backend/uploads/` alongside it.
 
+### Going back to the version you came from
+
+A release's **Upgrading** notes say how to go back from it. Where the release changed the database, the older version cannot read it, and going back means restoring the backup you took before the upgrade. That is so for 1.7.0: 1.6.0 and older know neither the new names of the game systems and the GM's role nor the rebuilt Horror d100 sheet. Everything done since the upgrade goes with the restore.
+
+From the CozyVTT folder, with your own backup's name in the second line and the version you came from in the third:
+
+```bash
+docker compose stop backend
+./backend/scripts/restore.sh ./backups/cozyvtt_20260101_030000.sql.gz
+git checkout v1.6.0
+docker compose up -d --build
+```
+
+1. The first line stops the backend, so the newer version cannot bring the restored database up to date again. The database keeps running, which the restore needs.
+2. The restore asks you to type `yes` and prints `Restore complete`. Leave out the restart it suggests: the last line starts the backend. The restore ends every sign-in, so everyone signs in again afterwards.
+3. `git checkout v1.6.0` puts the older version's files in place, and the last line builds and starts it. `docker compose ps` should show the backend as `healthy` within a minute or two.
+
+A backup from the Admin Panel is a `.zip` holding the database and the uploaded files. Take the database out of it for the restore script, put the uploaded files back, and delete the working copy, which holds every credential. These lines go in place of the second line above:
+
+```bash
+(umask 077; sudo unzip -p backend/backups/backup-2026-01-01T03-00-00.zip database.sql | gzip > restore-me.sql.gz)
+./backend/scripts/restore.sh restore-me.sql.gz
+sudo unzip -o backend/backups/backup-2026-01-01T03-00-00.zip 'uploads/*' -d backend/
+rm restore-me.sql.gz
+```
+
+Without Docker, the order is the same: stop the backend the way you run it (`pm2 stop cozyvtt-backend`), restore the backup with `DATABASE_URL` set, as [Via the included scripts](#via-the-included-scripts) shows, run `git checkout v1.6.0`, then run the commands under [Without Docker](#without-docker) from `cd backend` on, which install, build and start the older version.
+
+Afterwards, have everyone reload their CozyVTT tabs: a page still open from the newer version sends requests the older one refuses. To upgrade again later, run `git checkout main` before `git pull origin main`.
+
+Campaign archives and character files go forward only, too. A file exported by an older version imports into a newer one. One exported by 1.7.0 names the game systems by their new names, so 1.6.0 and older refuse such a character file, and import such a campaign archive with no game system and without its drawings for the GM alone.
+
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**None of 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.5.3, 1.5.4, 1.6.0 and 1.6.1 needs a manual step here**: their database migrations run automatically, and 1.5.1, 1.5.2, 1.5.4 and 1.6.1 have none. Only one of them changes existing data: 1.5.3 clears the author of any custom creature whose account had already been deleted, and keeps the creature. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
+**None of 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.5.3, 1.5.4, 1.6.0 and 1.7.0 needs a manual step here**: their database migrations run automatically, and 1.5.1, 1.5.2 and 1.5.4 have none. Two of them change existing data: 1.5.3 clears the author of any custom creature whose account had already been deleted, and keeps the creature; 1.7.0 gives the stored game systems and the GM's role their new names, and on its first start converts every Horror d100 character and character template to the sheet rebuilt on the open rules, keeping the old values in each sheet, before it lets anyone in. The backend log says how many it converted, and names any sheet that kept values it could not place or could not be converted (`docker compose logs backend | grep -i "Horror d100"`); a sheet it could not convert is still shown converted, and the next start tries it again. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
 
-Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
+Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Fantasy d20 character's strikes and class features, and a 5E character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place. Until a character is saved or moved, though, a Fantasy d20 sheet shows no strikes or class features. Run this once to move every character at once:
 
 ```bash
 # See what would change, without writing anything
@@ -1776,7 +1841,7 @@ What to expect:
 
 - The dry run prints how many characters it looked at, then each character it would change, with its name, game system and id, and a line for each change, for example `moved 2 attack(s) to strikes`.
 - Nothing is deleted that has not been moved. Where a character already has its own text, the older text is added after it, and where there is no room for it, for example a second player name, the old field is left as it is and the character is listed under "keep something in an older field" so you can look at it.
-- You do not need to stop the stack. A player who saves, or a DM who changes hit points, while it runs keeps that change.
+- You do not need to stop the stack. A player who saves, or a GM who changes hit points, while it runs keeps that change.
 - If it prints an error, or says a character changed while being written, it ends with an error status; run it again. Running it twice is harmless.
 
 Details in
@@ -1850,6 +1915,7 @@ Before going live:
 - [ ] **Visitor addresses** — CozyVTT sees each visitor's own address, not your tunnel's or proxy's. Check it as described in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)
 - [ ] **Stable update plan** — You watch the [CozyVTT repo](https://github.com/CheekyChinchilla/CozyVTT) for releases and apply security patches promptly (no auto-update is bundled — that's your choice)
 - [ ] **Vulnerability reporting path** — You've read [SECURITY.md](../SECURITY.md) and know how to report issues responsibly
+- [ ] **Credits reachable**: if other people use your instance, **About CozyVTT** still opens from the sign-in page, the dashboard, the profile page and a campaign's **Campaign Info** panel. The licences of the game rules CozyVTT uses ask for their credits wherever the rules are used, and that window is where CozyVTT shows them. If you change the app, keep the window and its credits as they are (see [Credits](USER_GUIDE.md#credits))
 - [ ] **Origin hidden (optional but recommended)** — Instance is fronted by a Cloudflare Tunnel, Tailscale Funnel, or equivalent so the server's real IP is never exposed (see below)
 
 ---
@@ -1950,7 +2016,7 @@ There is no need to serve it from your instance. The bundled nginx only sees its
 The routes are the same whether the file is published or not, since the web client's own code shows them to anyone who loads the page. What protects an instance is:
 
 - every request is checked on the server: that the caller is signed in, their role in the campaign, and that they may touch what they ask for (`backend/src/middleware/` and `backend/src/services/permissions.ts`)
-- rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 300 requests a minute from one address, 30 uploads a minute per user, 20 campaign imports, 20 import previews and 20 campaign exports an hour per user, one at a time, 20 campaign invitation emails an hour per DM, and a limit per account on every kind of event sent to the live table (chat, dice, token moves, the DM's controls), set far above what a game sends
+- rate limits: 5 failed sign-ins per 15 minutes and 10 new accounts per hour from one address, 5 changes of one's own email address an hour per account, 300 requests a minute from one address, 30 uploads a minute per user, 20 campaign imports, 20 import previews and 20 campaign exports an hour per user, one at a time, 20 campaign invitation emails an hour per GM, and a limit per account on every kind of event sent to the live table (chat, dice, token moves, the GM's controls), set far above what a game sends
 - uploads checked by what the file contains, not by its name or the type it claims
 - Argon2id password hashing and a strong `SESSION_SECRET`
 - security headers on every response: from helmet on the API, and from the frontend container on the app page (the manual install's Nginx example sets them itself)

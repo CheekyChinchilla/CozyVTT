@@ -1,3 +1,6 @@
+<!-- This file holds material under the ORC License, beside CozyVTT's own text under the AGPL-3.0. -->
+<!-- See GAME_CONTENT_NOTICES.md for the notice and credits. -->
+
 # CozyVTT Player Guide
 
 Welcome, adventurer! This guide will get you from "I got an invitation link" to "I'm rolling dice with my friends" as quickly and painlessly as possible.
@@ -33,7 +36,7 @@ No technical knowledge required. Let's go.
 
 ## Getting Your Account
 
-Your platform administrator (or your DM, if they're also the admin) sets up your account. Depending on how their instance is configured, you'll get one of two things by email.
+Your platform administrator sets up your account, or your game master (GM) if they're also the admin. Depending on how their instance is configured, you'll get one of two things by email.
 
 **If you receive an invitation link** (most common):
 
@@ -53,19 +56,19 @@ Either way you end up with a password only you know. Pick something you'll actua
 
 *Screenshot pending — Login page.*
 
-> **Tip:** Head to your [Profile](#your-profile) right away to upload a photo and set your display name. Your DM and fellow players will see it everywhere.
+> **Tip:** Head to your [Profile](#your-profile) right away to upload a photo and set your display name. Your GM and fellow players will see it everywhere.
 
 ---
 
 ## Accepting a Campaign Invitation
 
-Your DM invites you by typing part of your display name into a search and picking your account from the people who match. Two people can have the same display name, and your profile picture is how your DM tells you apart. Here's what happens next:
+Your GM invites you by typing part of your display name into a search and picking your account from the people who match. Two people can have the same display name, and your profile picture is how your GM tells you apart. Here's what happens next:
 
 1. **Log in** to CozyVTT
 2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards. An invitation sent while the dashboard is open shows up when you come back to the tab, or within a minute
-3. Each invitation shows the campaign name and, after **DM:**, who runs the campaign
-4. Click **View Invitation →** to open it. Tick the characters you want to bring, if you have any created already, then click **Accept Invitation**. Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
-5. Or click **Decline** if it's not for you. An invitation runs out after 14 days, and the DM can withdraw it before you answer; either way it leaves your dashboard
+3. Each invitation shows the campaign name and, after **GM:**, who runs the campaign
+4. Click **View Invitation →** to open it. Tick the characters you want to bring, if you have any created already, then click **Accept Invitation**. Only characters of the campaign's game system are offered, and only ones not already in a campaign: a 5E campaign takes 5E characters, and a campaign set to Flexible takes Flexible characters
+5. Or click **Decline** if it's not for you. An invitation runs out after 14 days, and the GM can withdraw it before you answer; either way it leaves your dashboard
 
 *Screenshot pending — Pending invitations section.*
 
@@ -85,13 +88,13 @@ Before you can fully participate in a campaign, you'll want a character. On your
 
 Click **Create Character**. A dialog pops up asking you to choose a **Game System** — this determines which character sheet you'll fill out.
 
-Ask your DM which system you're playing:
+Ask your GM which system you're playing:
 
 | System | What it's for |
 |--------|--------------|
-| D&D 5e | Dungeons & Dragons 5th Edition |
-| Pathfinder 2e | Pathfinder 2nd Edition |
-| Call of Cthulhu 7e | Horror and investigation (Lovecraftian) |
+| 5E (SRD 5.1) | Heroic fantasy with classes, levels and a d20 |
+| Fantasy d20 (ORC) | Tactical fantasy with three actions a turn, proficiency ranks and four degrees of success |
+| Horror d100 | Investigative horror on percentile dice, with Sanity and rolls from your characteristics |
 | Flexible | Homebrew or rules-light systems |
 
 *Screenshot pending — New character dialog with game system options.*
@@ -100,7 +103,7 @@ Ask your DM which system you're playing:
 
 Give your character a name and click **Create Character**. The dialog closes, **Character created successfully!** appears, and the new character is on your Characters page. Choose **Edit Character** from its card's menu (**⋮**) to open the **Character Editor**. This is your character sheet — fill it out just like you would on paper.
 
-*Screenshot pending — Character editor (D&D 5e example).*
+*Screenshot pending — Character editor (5E example).*
 
 The sheet is split into sections depending on the system. Take your time — you can save partial work and come back. The header shows the last time you saved.
 
@@ -111,11 +114,11 @@ The sheet is split into sections depending on the system. Take your time — you
 
 ### Step 3: Add a Profile Image (Optional)
 
-Want your token on the map to look like your character? The sheet editor has a token image: pick a picture, and it is uploaded when you save and becomes your token's art when your DM places you on the map.
+Want your token on the map to look like your character? The sheet editor has a token image: pick a picture, and it is uploaded when you save and becomes your token's art when your GM places you on the map.
 
 ### Step 4: Assign to Your Campaign
 
-Once your character is created, you'll need to assign them to your campaign so the DM can see them in the roster and place their token on the map.
+Once your character is created, you'll need to assign them to your campaign so the GM can see them in the roster and place their token on the map.
 
 From the **Characters** page:
 1. Find your character card
@@ -124,7 +127,7 @@ From the **Characters** page:
 
 *GIF pending — Assigning a character to a campaign.*
 
-Your DM will see the character in the campaign roster and can place your token on the map.
+Your GM will see the character in the campaign roster and can place your token on the map.
 
 ---
 
@@ -140,13 +143,13 @@ On a computer, or a tablet held sideways, the page has three main areas, describ
 - Campaign name and description at the top
 - The **Campaign Roster** showing all players and their characters
 - A small dot beside each person shows whether they're **in session** right now — green if they're connected, grey if not. Handy for telling "thinking" apart from "their internet fell over"
-- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character. The minus buttons are damage, so in D&D 5e and Pathfinder 2e your temporary hit points go first
+- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your GM has them on every character. The minus buttons are damage, so in 5E and Fantasy d20 your temporary hit points go first, and your hit points stop at 0. A Horror d100 character's hit points go below 0 when the damage is more than is left, since its rules keep track of the number
 - Click a character to read its sheet. Right-click one for a menu (on a touch screen, press and hold it): **View Character Sheet** for anyone's character, and for your own **Roll...**, **Temporary HP...** (see [Temporary hit points](#temporary-hit-points)), **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
 - If you're curious about your fellow adventurers, it's all here
-- **Your role** at the bottom of the **Campaign Info** panel, and under it **Leave Campaign**, which takes you out of the campaign after asking (see [Leaving a campaign](#leaving-a-campaign))
+- **Your role** at the bottom of the **Campaign Info** panel, and under it **Leave Campaign**, which takes you out of the campaign after asking (see [Leaving a campaign](#leaving-a-campaign)), and **About CozyVTT**, which shows the credits for the game rules the sheets use (see [Credits](USER_GUIDE.md#credits))
 
 ### Center — The Map
-This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet or a phone, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)). The map may be a picture your DM uploaded or one they drew in CozyVTT; it works the same either way. When the DM saves a change to the map you are on, its picture changes where you are: your view, and a token you are holding, stay as they were.
+This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). On a tablet or a phone, see [On a touch screen](#on-a-touch-screen). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)). The map may be a picture your GM uploaded or one they drew in CozyVTT; it works the same either way. When the GM saves a change to the map you are on, its picture changes where you are: your view, and a token you are holding, stay as they were.
 
 ### Right Sidebar — Your Tools
 A tabbed panel — click a tab to switch between:
@@ -162,7 +165,7 @@ You can also drag the divider to resize the sidebar, or collapse it to give the 
 The top bar shows:
 - Campaign name, a **Live**, **Paused** or **Inactive** badge, and the current vibe
 - Connection indicator: a dot that goes green when you're connected
-- A **book icon**, **Campaign documents**: the rulebooks and handouts your DM has shared with this campaign
+- A **book icon**, **Campaign documents**: the rulebooks and handouts your GM has shared with this campaign
 - A **keyboard icon**, **Keyboard shortcuts**: every key the map takes (see [Keyboard Shortcuts](#keyboard-shortcuts))
 - **Hide party panel** and **Hide session panel**, which fold the side columns away, and **Show party panel** and **Show session panel**, which bring them back
 - Navigation controls
@@ -179,8 +182,8 @@ On a phone, on most tablets held upright and in a browser window narrower than 1
 | **Chat** | The chat. A number on the button counts the messages that came in while it was closed |
 | **Dice** | The dice roller |
 | **Initiative** | The turn order |
-| **Party** | The campaign's info, the roster with your character's hit point buttons, and **Leave Campaign** |
-| **More** | **Notes**, **Session** (the vibe and past sessions), **Documents** (your DM's rulebooks and handouts) and **Shortcuts** |
+| **Party** | The campaign's info, the roster with your character's hit point buttons, **Leave Campaign** and **About CozyVTT** |
+| **More** | **Notes**, **Session** (the vibe and past sessions), **Documents** (your GM's rulebooks and handouts) and **Shortcuts** |
 
 Each opens as a sheet over the map. Chat, Dice, Initiative and Party open at half the screen's height, so you can watch the map, and pinch, pan or tap it, while you chat or roll. Tap the bar at the top of the sheet, or drag it up, for the full height. Close it with its **✕**, its button or **Map**, a drag down, or your phone's **Back**. **Back** also closes a window opened over the map, such as a character sheet; its editor asks **Discard Changes?** first if you have changed something.
 
@@ -192,11 +195,11 @@ To open CozyVTT from your phone's home screen like an app, full screen, see [Add
 
 ### Rulebooks and Handouts
 
-Press the **book icon** in the header to see what your DM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play. Only Firefox on a computer shows a PDF inside the reader. In Chrome, Edge, Safari and on a phone the reader offers **Open this PDF in a new tab** instead, as the arrow does.
+Press the **book icon** in the header to see what your GM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play. Only Firefox on a computer shows a PDF inside the reader. In Chrome, Edge, Safari and on a phone the reader offers **Open this PDF in a new tab** instead, as the arrow does.
 
-You can read everything on that list and nothing that is not on it. Sharing is the DM's to do, so if a rulebook you expected is missing, ask them. If your DM edits a shared document, you see the new text the next time you open it.
+You can read everything on that list and nothing that is not on it. Sharing is the GM's to do, so if a rulebook you expected is missing, ask them. If your GM edits a shared document, you see the new text the next time you open it.
 
-You can keep documents of your own too, from **Documents** on your dashboard: upload a PDF, or write text or Markdown notes and edit them later. Those are yours alone unless a DM shares one with a campaign.
+You can keep documents of your own too, from **Documents** on your dashboard: upload a PDF, or write text or Markdown notes and edit them later. Those are yours alone unless a GM shares one with a campaign.
 
 ### Connection Status
 
@@ -204,28 +207,28 @@ When you first load the campaign page, CozyVTT connects to the live session. Loo
 
 If you lose connection (WiFi hiccup, a server restart), CozyVTT keeps trying to reconnect by itself for as long as it takes: every few seconds at first, then every 30 seconds, and at once when you come back to the tab. The indicator shows **Connecting...** while it tries. When it shows **Disconnected** or **Connection Error** in red, the **Retry** button beside it tries straight away.
 
-### If your DM hands you the game
+### If your GM hands you the game
 
-A campaign has one DM, but that can be passed on — when a DM steps back, hands
-over to a co-DM, or wants someone else to run a session. If it is passed to you,
+A campaign has one GM, but that can be passed on — when a GM steps back, hands
+over to a co-GM, or wants someone else to run a session. If it is passed to you,
 your screen changes on the spot: you do not need to reload, and nothing about
 your character changes. You keep it, and you can still play it.
 
-What you gain is the DM's side of the campaign — the map, token, creature and
+What you gain is the GM's side of the campaign — the map, token, creature and
 settings controls appear in the top bar, and the campaign's roster shows you as
-the Dungeon Master. The person who handed it over becomes an ordinary player.
+the GM. The person who handed it over becomes an ordinary player.
 
 **Handing it back** is the same action in reverse: **Campaign Settings →
 Members**, then the crown beside their name. If the campaign was originally
 theirs they can also take it back themselves, so nobody is ever stranded.
 
-If this happens unexpectedly, it is worth asking your DM — it is a deliberate
+If this happens unexpectedly, it is worth asking your GM — it is a deliberate
 action somebody took, not something that happens on its own.
 
 ### Leaving a campaign
 
 If you no longer want to play or watch, you can leave a campaign yourself; you
-do not need to ask the DM.
+do not need to ask the GM.
 
 1. Open the campaign and find **Your role** at the bottom of the **Campaign
    Info** panel, in the left sidebar.
@@ -238,20 +241,20 @@ do not need to ask the DM.
 |---|---|
 | The campaign | You stop seeing it and playing in it straight away, in every tab you have it open in |
 | Your characters in it | On **My Characters**, yours as before, in no campaign |
-| Your tokens on its maps | They stay where they are; only the DM can move or remove them |
-| Your place in the initiative order | It stays until the DM removes it |
+| Your tokens on its maps | They stay where they are; only the GM can move or remove them |
+| Your place in the initiative order | It stays until the GM removes it |
 | Your notes and saved rolls | Kept, and readable from your dashboard under **Notes From Campaigns You Have Left** (see [If you leave or are removed](#if-you-leave-or-are-removed)) |
 
-To come back, ask the DM to invite you again. Your notes and saved rolls are
+To come back, ask the GM to invite you again. Your notes and saved rolls are
 then in the campaign again; your characters you assign again yourself.
 
-**If you see no Leave Campaign button,** the panel says why. The DM cannot
-leave until they hand the DM seat to another member (**Campaign Settings →
-Members**, then the crown beside that person, see [If your DM hands you the
-game](#if-your-dm-hands-you-the-game)). Whoever owns the campaign cannot leave
-it at all, since only the DM could let them back in; they can delete it
+**If you see no Leave Campaign button,** the panel says why. The GM cannot
+leave until they hand the GM seat to another member (**Campaign Settings →
+Members**, then the crown beside that person, see [If your GM hands you the
+game](#if-your-gm-hands-you-the-game)). Whoever owns the campaign cannot leave
+it at all, since only the GM could let them back in; they can delete it
 instead, on the **Danger Zone** tab of **Owner Settings** (of **Campaign
-Settings** while they are the DM).
+Settings** while they are the GM).
 
 ---
 
@@ -265,12 +268,12 @@ Chat and dice are your two most-used tools. They each have their own tab in the 
 
 Type your message in the input box at the bottom and press **Enter** to send; **Shift+Enter** starts a new line. The box grows as you type, up to six lines on a computer and four on a phone. Your display name appears next to your messages.
 
-Chat is for everything: in-character dialogue, out-of-character coordination, questions for the DM, celebrations when you roll a nat 20.
+Chat is for everything: in-character dialogue, out-of-character coordination, questions for the GM, celebrations when you roll a nat 20.
 
 **Chat tips:**
 - **System notices**, a small grey line centred in the chat, announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
-- **Whispers** reach one person only: choose them in the **To** list above the box, or start a message with `/w` or `/whisper` and their name (`/w Mara Meet me by the well`). The line under the box names who it will reach before you send it. Only the two of you see it, marked with a lock; the DM does not see whispers between players. See [Whispering to one person](USER_GUIDE.md#whispering-to-one-person)
+- **Whispers** reach one person only: choose them in the **To** list above the box, or start a message with `/w` or `/whisper` and their name (`/w Mara Meet me by the well`). The line under the box names who it will reach before you send it. Only the two of you see it, marked with a lock; the GM does not see whispers between players. See [Whispering to one person](USER_GUIDE.md#whispering-to-one-person)
 - Scroll up to read the history, and press **Load More** at the top for older messages. The chat holds the newest 400 at a time, and the whole log stays on the server
 - A message that doesn't get through, because the connection dropped or the chat cooldown is still running, is marked **Not sent**. **Retry** sends it again, and a message that did get through after all is not posted twice if you retry within ten minutes; **Discard** removes it
 
@@ -323,7 +326,7 @@ button (**Edit**) beside it.
 If you have just typed something into the expression box, opening **Saved**
 carries it across, so naming it is the only thing left to do.
 
-Your list of saved rolls is **yours alone** — not even your DM can see it, only
+Your list of saved rolls is **yours alone** — not even your GM can see it, only
 the roll you make with one, with its character and its purpose or name — and saved rolls stay
 with the campaign you made them in, so one table's homebrew doesn't clutter
 another game. You can rename, edit or delete them from the same **Saved** button,
@@ -331,19 +334,19 @@ and you can keep up to 50 per campaign. If an expression can't be rolled, CozyVT
 says so when you save it rather than letting you find out later with a button
 that never works.
 
-**Why everyone saw my roll:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your DM rolls secretly, nothing reaches you at all, not even a notice that they rolled.
+**Why everyone saw my roll:** Dice results are public by default — everyone sees what you rolled unless you tick **Secret Roll** first (see *Secret rolls* below). When your GM rolls secretly, nothing reaches you at all, not even a notice that they rolled.
 
-**Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
+**Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the GM can clear it.
 
-**Secret rolls.** Tick **Secret Roll** (on a phone, under **More**) and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel (on a phone, the eye under **More**), which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
+**Secret rolls.** Tick **Secret Roll** (on a phone, under **More**) and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your GM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel (on a phone, the eye under **More**), which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
-One thing to know: if the DM has **paused** the session, your rolls from the **Dice** tab are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh. A roll from your sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
+One thing to know: if the GM has **paused** the session, your rolls from the **Dice** tab are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh. A roll from your sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
 ### Rolling from your sheet
 
-Your character's sheet rolls at the table when you open it on the campaign page, from the **Campaign Roster** for instance. Click an ability, a saving throw, a skill or an attack to roll it, or a weapon's damage to roll that. Damage the dice can't roll, such as `1d8 slashing`, stays on the sheet as text: pointing at it or clicking it says why, and nothing is rolled. On a D&D 5e or Pathfinder 2e sheet, put just the dice in the damage roll box (**Damage Roll** in D&D 5e), such as `1d8+3`, and the type in the damage type box. The roll lands in the **Dice** panel named for what it was, such as "Dexterity Save". A small dice icon beside a stat says it rolls. A sheet opened from the **Characters** page doesn't roll, since there's no table there.
+Your character's sheet rolls at the table when you open it on the campaign page, from the **Campaign Roster** for instance. Click an ability, a saving throw, a skill or an attack to roll it, or a weapon's damage to roll that. Damage the dice can't roll, such as `1d8 slashing`, stays on the sheet as text: pointing at it or clicking it says why, and nothing is rolled. On a 5E or Fantasy d20 sheet, put just the dice in the damage roll box (**Damage Roll** in 5E), such as `1d8+3`, and the type in the damage type box. The roll lands in the **Dice** panel named for what it was, such as "Dexterity Save". A small dice icon beside a stat says it rolls. A sheet opened from the **Characters** page doesn't roll, since there's no table there.
 
 **Knowing it rolled.** The stat you click or tap gives a short pulse as its roll goes (with reduced motion turned on in your system, a brief highlight), and a phone that allows it, such as one with Chrome on Android, gives a short buzz; an iPhone lets no website vibrate. While the **Dice** panel is not on your screen, as on a phone where the sheet covers it, or on a computer while the session panel shows another tab or is hidden, a message at the top of the page gives the roll's result for a few seconds, such as "Longsword Attack: 17", with "(secret)" after a secret roll.
 
@@ -355,15 +358,15 @@ Your character's sheet rolls at the table when you open it on the campaign page,
 | **Advantage** | Two d20s, keeping the higher (`2d20kh1`) | Dexterity Save (Advantage) |
 | **Disadvantage** | Two d20s, keeping the lower (`2d20kl1`) | Dexterity Save (Disadvantage) |
 
-On a Pathfinder 2e sheet the menu reads **Normal**, **Fortune** and **Misfortune**, which roll the same way. Click or tap anywhere else, or press **Esc**, to close the menu; the sheet stays open. Damage and hit dice have no menu, since the rules give advantage to ability checks, saving throws and attack rolls only. A Call of Cthulhu sheet rolls `1d100` and has no menu: its bonus and penalty dice aren't offered yet.
+On a Fantasy d20 sheet the menu reads **Normal**, **Fortune** and **Misfortune**, which roll the same way. Click or tap anywhere else, or press **Esc**, to close the menu; the sheet stays open. Damage and hit dice have no menu, since the rules give advantage to ability checks, saving throws and attack rolls only. A Horror d100 sheet rolls `1d100` and has no menu. Its characteristics roll at five times their value, each under its roll's name (Effort for STR, Luck for POW and so on), and the **Dice** panel shows the chance to roll under.
 
-**Roll mode, for a run of rolls.** When several rolls in a row have advantage, set **Roll mode** in the sheet's header to **Advantage** (or **Disadvantage**). Every ability, saving throw, skill and attack you click or tap after that rolls that way, and the **Dice** panel says so on each one. It stays set until you change it back to **Normal** or close the sheet, starts at **Normal** each time you open the sheet, and is highlighted while it's set to anything else, so you can see it's on. Damage and hit dice still roll as written, and a choice in the menu goes for that one roll whatever **Roll mode** says. On a Pathfinder 2e sheet it reads **Normal**, **Fortune** and **Misfortune**. A Call of Cthulhu sheet has no **Roll mode**, and neither has a sheet you can't roll from, such as another player's character or a sheet opened from the **Characters** page.
+**Roll mode, for a run of rolls.** When several rolls in a row have advantage, set **Roll mode** in the sheet's header to **Advantage** (or **Disadvantage**). Every ability, saving throw, skill and attack you click or tap after that rolls that way, and the **Dice** panel says so on each one. It stays set until you change it back to **Normal** or close the sheet, starts at **Normal** each time you open the sheet, and is highlighted while it's set to anything else, so you can see it's on. Damage and hit dice still roll as written, and a choice in the menu goes for that one roll whatever **Roll mode** says. On a Fantasy d20 sheet it reads **Normal**, **Fortune** and **Misfortune**. A Horror d100 sheet has no **Roll mode**, and neither has a sheet you can't roll from, such as another player's character or a sheet opened from the **Characters** page.
 
 ---
 
 ## Moving Your Token
 
-When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
+When the GM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
 
 **How far it has come.** While you hold your token, the bottom left of the map shows how far it is from the square you picked it up from to the square it would land on, such as "Carried 15 ft (3 sq)". It is measured as the **Ruler** measures (see [Measuring and Spell Areas](#measuring-and-spell-areas)), by the map's grid scale and its rule for diagonals, and the squares count a diagonal as one. It sits beside the square under your pointer, or just above the token card when one shows there; on a phone it is at the foot of the map. It goes when you put the token down or back.
 
@@ -377,17 +380,17 @@ A token you carry with a mouse past the edge of the map is drawn at the edge, wh
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
-**Turning your token.** To show which way you're facing, right-click your token (on a touch screen, press and hold it) and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control whenever you can move it: like moving, turning waits while the session is paused or has ended.
+**Turning your token.** To show which way you're facing, right-click your token (on a touch screen, press and hold it) and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the GM has made yours to control whenever you can move it: like moving, turning waits while the session is paused or has ended.
 
 **When you can't move your token:**
-- If the session is **Paused**, moving and turning your token are disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
-- If your token hasn't been placed by the DM yet, it won't appear on the map
-- If the DM has handed control of your character's token to someone else, or to nobody, it is not yours to move until they set you as its controller in **Edit Token**
-- If the DM has ended the session (status shows "Inactive"), movement is disabled until the next one starts
+- If the session is **Paused**, moving and turning your token are disabled until the GM resumes. If the GM pauses while you are holding your token, it goes back to where it was
+- If your token hasn't been placed by the GM yet, it won't appear on the map
+- If the GM has handed control of your character's token to someone else, or to nobody, it is not yours to move until they set you as its controller in **Edit Token**
+- If the GM has ended the session (status shows "Inactive"), movement is disabled until the next one starts
 
 *Screenshot pending — Paused session banner blocking movement.*
 
-If your token is missing or in the wrong place, just let your DM know in chat — they can adjust it.
+If your token is missing or in the wrong place, just let your GM know in chat — they can adjust it.
 
 ### On a touch screen
 
@@ -402,7 +405,7 @@ On a tablet or a phone your finger does what the mouse does, and a little more:
 | Read a token's details | Tap it. It is selected, and its card shows at the bottom left of the map (on a phone, across its foot), as hovering it with a mouse would (see [Pointing at a token](#pointing-at-a-token)). The card lets taps through to the map under it, except on its **✕**, which closes it until you next tap a token, the same one included. |
 | Open a token's menu | Press and hold the token for half a second: the menu a right-click opens there opens, with the same items, and the token is selected. Lift your finger and tap an item. |
 | Open a character's or a combatant's menu | Press and hold its row in the **Campaign Roster** or the initiative tracker for half a second: the menu a right-click opens there opens. A tap on a character still opens its sheet, and sliding your finger scrolls the panel. |
-| Roll from your sheet with advantage | Tap a stat to roll it. Press and hold it for half a second for **Normal**, **Advantage** and **Disadvantage** (**Fortune** and **Misfortune** in Pathfinder 2e), or set **Roll mode** in the sheet's header for a run of rolls. See [Rolling from your sheet](#rolling-from-your-sheet). |
+| Roll from your sheet with advantage | Tap a stat to roll it. Press and hold it for half a second for **Normal**, **Advantage** and **Disadvantage** (**Fortune** and **Misfortune** in Fantasy d20), or set **Roll mode** in the sheet's header for a run of rolls. See [Rolling from your sheet](#rolling-from-your-sheet). |
 | Open or close a door | Tap it, as you would click it. Press and hold it for its menu. |
 | Measure a distance | With the **Ruler** up, tap the square, or slide one finger to it; the line stays after you lift (see [Measuring and Spell Areas](#measuring-and-spell-areas)). |
 | Aim a spell area | With **AoE Shape** up, slide your finger from the square it comes from towards the target (see [Measuring and Spell Areas](#measuring-and-spell-areas)). Untick **Snap to grid** to place it off the grid, as **Alt** does with a mouse. |
@@ -417,15 +420,15 @@ On a phone or a tablet some controls are bigger than on a computer, at least 44 
 
 Try to finish a move on a square somebody is already standing in and the move is refused, with a note saying who is in the way, or "Someone" for a creature hidden from you under fog. That matches the rules: you can move *past* another creature, but you can't end your move on top of one.
 
-A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight. That only works when you can see its hit points: another player's character, or a creature whose HP bar the DM has turned on. A creature whose hit points the DM keeps hidden looks standing to you until the DM removes it.
+A creature at **zero hit points** is the exception. It's drawn faded to show it's down, and you can move onto its square — the body stays there marking where it fell without getting in the way of the fight. That only works when you can see its hit points: another player's character, or a creature whose HP bar the GM has turned on. A creature whose hit points the GM keeps hidden looks standing to you until the GM removes it.
 
-If your token ends up underneath another one anyway — your DM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
+If your token ends up underneath another one anyway — your GM can place tokens wherever they like — clicking the square still picks up **your** token, not the one drawn over it. You can always get your own token back.
 
 ### Pointing at a token
 
 Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are holding a token: the card follows the square under your cursor, so you can see who is already standing where you are about to land. On a touch screen, which has no hover, tap a token instead: the card shows the token you selected, and taps on the map under it still reach the map. Close it with **✕**; it shows again the next time you tap a token.
 
-You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. A grey token with a question mark is something you can see but cannot make out: the DM has obscured it, and your browser is not sent its name, picture, conditions, hit points or who controls it until they reveal it. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
+You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the GM's to reveal, and appear only once they turn its HP bar on. A grey token with a question mark is something you can see but cannot make out: the GM has obscured it, and your browser is not sent its name, picture, conditions, hit points or who controls it until they reveal it. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
 
 ### Temporary hit points
 
@@ -433,24 +436,24 @@ When a spell or a feature gives your character temporary hit points, right-click
 
 Temporary hit points don't add together. If your character already has some, the window asks which to keep: **Keep 10** leaves the ones you have, **Take 12** swaps them for the new ones. Damage takes them first, healing never brings them back, and everyone at the table sees them on your roster card and your token's bar.
 
-It's offered in D&D 5e and Pathfinder 2e, on your own character, while your sheet has hit points. A Call of Cthulhu sheet keeps no temporary hit points (its rules give one only while First Aid keeps a dying investigator stable), so it isn't there. You can't give them to another player's character, or to a creature you control; ask your DM.
+It's offered in 5E and Fantasy d20, on your own character, while your sheet has hit points. A Horror d100 sheet keeps no temporary hit points (its rules give a character none), so it isn't there. You can't give them to another player's character, or to a creature you control; ask your GM.
 
 ### Why parts of the map are dark
 
-If your DM uses **fog of war**, most of the map starts hidden. It's how your DM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
+If your GM uses **fog of war**, most of the map starts hidden. It's how your GM keeps a dungeon from being a spoiler — you see a room when you get there, not before.
 
-Areas open up as you explore. If your DM is using **dynamic lighting** as well, what you can see also depends on where your character is standing, which walls are in the way, and what is lit, so the view shifts as you move. Anything in bright light shows clearly. Dim light, and the dark within your character's darkvision, show half-dark. Beyond that is black, but the square you stand on is always visible, so you always know where you are. If your DM keeps **Remember Explored Areas** on for the map, places your character has already seen stay on your map, greyed and darkened, until you can see them again, so a corridor you have walked is not pitch black behind you. A light only shows you something you could actually see — a lamp burning inside a closed room tells you nothing from outside it, and whatever is in there stays hidden until you can see in.
+Areas open up as you explore. If your GM is using **dynamic lighting** as well, what you can see also depends on where your character is standing, which walls are in the way, and what is lit, so the view shifts as you move. Anything in bright light shows clearly. Dim light, and the dark within your character's darkvision, show half-dark. Beyond that is black, but the square you stand on is always visible, so you always know where you are. If your GM keeps **Remember Explored Areas** on for the map, places your character has already seen stay on your map, greyed and darkened, until you can see them again, so a corridor you have walked is not pitch black behind you. A light only shows you something you could actually see — a lamp burning inside a closed room tells you nothing from outside it, and whatever is in there stays hidden until you can see in.
 
 Things worth knowing:
 
-- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it, and neither is one on a map the DM hasn't switched to, or on the other plane when your DM uses the spirit realm.
-- **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
-- **With dynamic lighting on, you see through the tokens you control.** If you control none on the map, the whole map is black and a line at its foot says **You have no token on this map to see through. Ask your DM for one.** Your DM can give you control of a token, and the line goes. In the spirit realm only a token there counts, so the line says the same about the spirit realm.
-- **You open and close the doors you can see.** Click a door to open or close it, or right-click it for **Open Door** or **Close Door**. With dynamic lighting on, that means a door your character can see: one in the dark, or behind a wall, can't be clicked until you can see it. With fog of war on, it means a door beside a square the DM has revealed to you. A locked door looks like any closed door until you try it, and then you are told it is locked.
+- **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the GM has hidden is not listed at all until they reveal it, and neither is one on a map the GM hasn't switched to, or on the other plane when your GM uses the spirit realm.
+- **You can't reveal fog yourself.** Only the GM can, so there's nothing you can accidentally break by moving around.
+- **With dynamic lighting on, you see through the tokens you control.** If you control none on the map, the whole map is black and a line at its foot says **You have no token on this map to see through. Ask your GM for one.** Your GM can give you control of a token, and the line goes. In the spirit realm only a token there counts, so the line says the same about the spirit realm.
+- **You open and close the doors you can see.** Click a door to open or close it, or right-click it for **Open Door** or **Close Door**. With dynamic lighting on, that means a door your character can see: one in the dark, or behind a wall, can't be clicked until you can see it. With fog of war on, it means a door beside a square the GM has revealed to you. A locked door looks like any closed door until you try it, and then you are told it is locked.
 
 ### Sound and weather on the map
 
-Your DM can start an ambient track and lay weather over the map: rain, mist, drifting leaves, sparkles, snow or wind. Both arrive on their own when your DM sets them, and stop when your DM stops them; there is nothing for you to turn on. The time of day can carry its own music too, which changes when the DM changes the vibe.
+Your GM can start an ambient track and lay weather over the map: rain, mist, drifting leaves, sparkles, snow or wind. Both arrive on their own when your GM sets them, and stop when your GM stops them; there is nothing for you to turn on. The time of day can carry its own music too, which changes when the GM changes the vibe.
 
 If you hear nothing, check your browser has not blocked sound for the tab. Most browsers refuse to play audio until you have clicked something on the page, so clicking anywhere in the campaign usually starts it.
 
@@ -460,7 +463,7 @@ If you hear nothing, check your browser has not blocked sound for the tab. Most 
 
 The **Notes** tab is yours alone. Keep up to 200 notes for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
 
-**Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
+**Nobody else can read them.** Not the other players, and not your GM. That's enforced by the server, not just hidden from view.
 
 **Write in Markdown.** A `#` makes a heading, `**bold**` makes bold, a `-` starts a list, and `[text](https://…)` makes a link. The eye button switches to a preview so you can see it laid out; the pencil switches back to editing.
 
@@ -474,9 +477,9 @@ A single note can hold about fifty pages of text, so a long campaign journal is 
 
 ### Catching up on last time
 
-The **Session** tab has a **Past Sessions** list. When your DM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
+The **Session** tab has a **Past Sessions** list. When your GM ends a session they can write a few lines about what happened, and those notes appear here — newest first, with the date and how long you played. It's the place to look when you've forgotten whose idea the rope was.
 
-If a session shows no notes, your DM simply didn't write any that night.
+If a session shows no notes, your GM simply didn't write any that night.
 
 ---
 
@@ -484,11 +487,11 @@ If a session shows no notes, your DM simply didn't write any that night.
 
 Two tools in the toolbar above the map answer "can I actually reach that?" before you commit to a turn. Both are private — they draw on your screen only, so nobody sees you working out whether the fireball catches your own party.
 
-**Ruler** (the ruler icon) — measures from **your own token**, so there's nothing to click: turn it on and move the cursor, and the distance in feet follows, using the map's scale and its diagonal rule. If your DM hasn't placed your token on the map yet, the ruler has nothing to measure from and won't draw.
+**Ruler** (the ruler icon) — measures from **your own token**, so there's nothing to click: turn it on and move the cursor, and the distance in feet follows, using the map's scale and its diagonal rule. If your GM hasn't placed your token on the map yet, the ruler has nothing to measure from and won't draw.
 
 On a touch screen, which has no cursor, tap the square you want to measure to, or slide one finger to it: the line stays when you lift, and the next tap moves its end. While the ruler is up, one finger measures and two fingers move and zoom the map. A tap on your own token still picks it up and puts the ruler away, and while you hold it a tap puts it down, as it would with the ruler away. A stylus taps the same way.
 
-**AoE Shape** (the lightning icon) — draws a spell area. Pick **Circle**, **Cone**, **Line** or **Cube**, set the size in feet or use one of the presets, and move the cursor to position it. A cone has your game's shape: in D&D 5e as wide at its far end as it is long, in Pathfinder 2e a quarter circle.
+**AoE Shape** (the lightning icon) — draws a spell area. Pick **Circle**, **Cone**, **Line** or **Cube**, set the size in feet or use one of the presets, and move the cursor to position it. A cone has your game's shape: in 5E as wide at its far end as it is long, in Fantasy d20 a quarter circle.
 
 For a cone or a line, **click your own token first**. That square becomes the pivot, and moving the cursor swings the shape around it — the point it comes out of slides around the square's edge to follow your aim, so it always leaves on the side you're pointing and never cuts back across you. Keep turning until you can see what the attack catches.
 
@@ -498,7 +501,7 @@ On a touch screen, which has no cursor to aim with, put your finger on the squar
 
 Press **Esc** to drop the placement, and again to put the tool away.
 
-Shapes cover whole squares wherever the grid allows it. A cone's spreading edges are at an angle so they'll still clip across squares — that's the shape, not a bug. Judge the edge cases the way you would at the table, and if it matters, ask your DM.
+Shapes cover whole squares wherever the grid allows it. A cone's spreading edges are at an angle so they'll still clip across squares — that's the shape, not a bug. Judge the edge cases the way you would at the table, and if it matters, ask your GM.
 
 ### Pointing at the Map
 
@@ -509,7 +512,7 @@ A few things worth knowing:
 - **Your mouse has to be over the map's picture.** Tab does nothing if the cursor is over the chat panel, the sidebar or the empty space around the map.
 - **Click the map first.** Tab pings only while the map has the keyboard, which a click on it gives. Typing in chat, or on a button or a panel divider, Tab moves between controls as usual.
 - **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
-- **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
+- **Anyone can ping**, players and GM alike. Your colour is assigned automatically and stays the same every session.
 - Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
 
 If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
@@ -532,11 +535,11 @@ If you ping repeatedly in quick succession, some will be quietly ignored — tha
 | **Eraser** | Click or tap one of your own drawings to erase it. |
 | **Laser pointer** | Drag to point at something. Everyone sees the trail, which fades within 3 seconds; nothing is kept. With reduced motion turned on in your system the trail does not fade: it shows whole for 3 seconds, then goes. |
 
-Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the DM can erase anyone's.
+Pick a colour, a width, and for shapes **Fill shapes** and **Snap to grid**. **Clear mine** erases every drawing of yours on the map. You can erase only your own drawings; the GM can erase anyone's.
 
 While the tools are up, a click draws, so it does not pick up your token. Put them away to move it. With a mouse the right button moves the map; on a touch screen, two fingers do.
 
-You can draw while your DM lets players draw (**Players may draw**, on unless they turn it off), except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
+You can draw while your GM lets players draw (**Players may draw**, on unless they turn it off), except while the session is paused or has ended. Then, while the map holds drawings of yours, **Draw** offers only the eraser and **Clear mine**, so you can still tidy up; with none, it is gone from the toolbar. A spectator has no **Draw**. A ping is different: anyone can ping, a spectator too, at any time.
 
 Drawings are the topmost layer of the map: they show over the tokens, the fog and the dark, so you can plan over ground you have not seen yet ("we'll head this way"). The laser pointer shows over everything too, as a ping does.
 
@@ -544,18 +547,18 @@ Drawings are the topmost layer of the map: they show over the tokens, the fog an
 
 ## The Initiative Tracker
 
-The **Initiative** tab in the right sidebar shows the turn order. As the DM adds combatants they appear there, and when the DM clicks **Start Combat** the first one's turn begins.
+The **Initiative** tab in the right sidebar shows the turn order. As the GM adds combatants they appear there, and when the GM clicks **Start Combat** the first one's turn begins.
 
 *Screenshot pending — Initiative tracker during combat.*
 
 You'll see:
-- **The combatants in the fight**, in order, highest initiative first. A creature isn't listed while the DM has it hidden, while it stands on a map the DM hasn't switched to, or while it is on the other plane when your DM uses the spirit realm; one that is merely out of your sight, in the dark or under fog, is listed
+- **The combatants in the fight**, in order, highest initiative first. A creature isn't listed while the GM has it hidden, while it stands on a map the GM hasn't switched to, or while it is on the other plane when your GM uses the spirit realm; one that is merely out of your sight, in the dark or under fog, is listed
 - **Current turn** highlighted
-- **HP** for a creature once the DM has turned its HP bar on, and for any creature token you control; it follows the token as the DM changes it. Your own character's hit points are on your sheet and roster card, not in the tracker
+- **HP** for a creature once the GM has turned its HP bar on, and for any creature token you control; it follows the token as the GM changes it. Your own character's hit points are on your sheet and roster card, not in the tracker
 
 When it's your turn, your name is highlighted. Describe your actions in chat and move your token on the map.
 
-The DM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
+The GM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
 
 *Screenshot pending — Your name highlighted in the initiative order.*
 
@@ -566,52 +569,52 @@ The DM controls when initiative advances — after your turn, they'll click **Ne
 
 **Sheets and rolls from the tracker.** Click or tap a character's name in the tracker, or right-click it, and choose **View Character Sheet** to read their sheet, or, on your own character, **Roll...** for the same rolls as right-clicking your token on the map. Double-clicking a character's name opens their sheet straight away. From the keyboard, press **Tab** until the name has the focus and press **Enter** for the menu. Creatures have nothing to open here, and neither does a character whose token you can't see on the map, in the dark for instance: the tracker still lists them, but it offers their sheet only once their token is in your sight.
 
-**Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the DM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
+**Watch the map, too.** Whoever's turn it is gets a pulsing gold ring around their token. That's the fastest way to tell which creature is acting when the GM has several of the same monster on the board — three identical wolves look alike in the list, but only one is ringed on the map.
 
-If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the DM has hidden isn't in your tracker at all, and neither is one on a map the DM hasn't switched to or on the other plane.
+If a creature is somewhere you haven't explored, you won't see a ring for it — the tracker will show its turn passing, but its position stays a mystery. A creature the GM has hidden isn't in your tracker at all, and neither is one on a map the GM hasn't switched to or on the other plane.
 
 **Not sure which wolf is which?** Hover a name in the tracker and that creature's token lights up on the map with a thin white outline. It works the other way too — hover a token on the map and its row in the turn order tints. Hovering only points; it never selects or moves anything.
 
-**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. In D&D 5e the DM can mark effects the same way, with codes of their own, such as **BS** for Blessed, **CO** for Concentrating and **HM** for Hunter's Mark. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
+**Reading conditions on the map.** A creature under a condition carries small amber badges above its token, each a two-letter code — **PA** for Paralyzed, **PO** for Poisoned, **PR** for Prone, and so on. In 5E the GM can mark effects the same way, with codes of their own, such as **BS** for Blessed, **CO** for Concentrating and **HM** for Hunter's Mark. If it has more than four, the extras collapse into a grey **+N** badge. Hover the token, or tap it on a touch screen, and the card in the bottom-left (on a phone, across the foot of the map) names every condition in full, so you can tell a Paralyzed enemy from a merely Poisoned one before deciding what to do about it.
 
 ### Rolling Your Own Initiative
 
-Once the DM has added your token to the tracker, you roll for yourself — you don't have to wait for the DM to do it for you. There are two ways, and they do the same thing:
+Once the GM has added your token to the tracker, you roll for yourself — you don't have to wait for the GM to do it for you. There are two ways, and they do the same thing:
 
-- **In the tracker** — a dice icon 🎲 appears beside your own name. You'll only ever see it on your own row; you can't roll for other players or for the DM's monsters. Clicking your name there and choosing **Roll...** offers **Roll Initiative** too
+- **In the tracker** — a dice icon 🎲 appears beside your own name. You'll only ever see it on your own row; you can't roll for other players or for the GM's monsters. Clicking your name there and choosing **Roll...** offers **Roll Initiative** too
 - **On the map** — right-click your token, choose **Roll...**, and pick **Roll Initiative** at the top of the menu
 
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
-Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload. If your token's identity is obscured, the roll comes in under your token's name for you and as *Unknown creature* for everyone else; the history keeps it as *Unknown creature*, so that is how it reads after a reload.
+Roll once, before the GM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your GM. Your roll stays in the **Dice** panel after a reload. If your token's identity is obscured, the roll comes in under your token's name for you and as *Unknown creature* for everyone else; the history keeps it as *Unknown creature*, so that is how it reads after a reload.
 
-**The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your DM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
+**The option only appears once you're in the tracker.** If your token isn't in the turn order yet, there's nothing to roll for — ask your GM to add you. Rolling is how you take part in a fight you're already in; it isn't a way to add yourself to one.
 
-Your DM can still roll for you (and re-roll, or type a value in by hand) — handy if you're away from the keyboard when combat kicks off.
+Your GM can still roll for you (and re-roll, or type a value in by hand) — handy if you're away from the keyboard when combat kicks off.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 
 | System | Initiative |
 |---|---|
-| **D&D 5e** | `d20 +` your Dexterity modifier, plus the **other bonus** box on your sheet; two d20s keeping the higher with **Advantage on initiative** ticked |
-| **Pathfinder 2e** | `d20 +` whichever stat the **Uses:** dropdown names — Perception unless your GM asks for something else |
-| **Call of Cthulhu 7e** | Nothing is rolled. Investigators act in DEX order, so the button reads **Set Initiative** and takes your DEX |
+| **5E** | `d20 +` your Dexterity modifier, plus the **other bonus** box on your sheet; two d20s keeping the higher with **Advantage on initiative** ticked |
+| **Fantasy d20** | `d20 +` whichever stat the **Uses:** dropdown names — Perception unless your GM asks for something else |
+| **Horror d100** | Nothing is rolled. Characters act in DEX order, so the button reads **Set Initiative** and takes your DEX |
 
-**D&D 5e players — the "other bonus" box.** Your Dexterity is added automatically, but plenty of things add to initiative beyond it: a feat that adds a flat +5, a Bard's Jack of All Trades or a Champion's Remarkable Athlete, subclasses that let you use a different ability. Put the total of those in **Initiative — other bonus** on the Combat tab and it's included every time; the box takes anything from -30 to +30. The Initiative number itself is worked out for you now, so there's nothing to keep in step by hand.
+**5E players — the "other bonus" box.** Your Dexterity is added automatically, but plenty of things add to initiative beyond it: a feat that adds a flat +5, a Bard's Jack of All Trades or a Champion's Remarkable Athlete, subclasses that let you use a different ability. Put the total of those in **Initiative — other bonus** on the Combat tab and it's included every time; the box takes anything from -30 to +30. The Initiative number itself is worked out for you now, so there's nothing to keep in step by hand.
 
-**D&D 5e players: advantage on initiative.** If something gives your character advantage on initiative, tick **Advantage on initiative** beside the other bonus box on the Combat tab. Initiative then rolls two d20s and keeps the higher, **Roll Initiative** shows it as `2d20kh1` plus your modifier, and the sheet says **With advantage** under Initiative.
+**5E players: advantage on initiative.** If something gives your character advantage on initiative, tick **Advantage on initiative** beside the other bonus box on the Combat tab. Initiative then rolls two d20s and keeps the higher, **Roll Initiative** shows it as `2d20kh1` plus your modifier, and the sheet says **With advantage** under Initiative.
 
-Advantage and disadvantage cancel out, as the rules say, and one d20 is rolled. The sheet does this for you when it shows a level of exhaustion or the **Poisoned** condition, which both give disadvantage on the roll, and says **Advantage cancelled** under Initiative. A sheet saved before exhaustion had levels may show exhaustion as the **Exhausted** condition instead, and that cancels it too. Only what your sheet records counts: a condition the DM marks on your token doesn't. Frightened gives disadvantage only while you can see what frightens you, which the sheet can't tell, so ask your DM to set your initiative by hand then. Neither **Roll mode**, in the roll menu or in the sheet's header, changes initiative.
+Advantage and disadvantage cancel out, as the rules say, and one d20 is rolled. The sheet does this for you when it shows a level of exhaustion or the **Poisoned** condition, which both give disadvantage on the roll, and says **Advantage cancelled** under Initiative. A sheet saved before exhaustion had levels may show exhaustion as the **Exhausted** condition instead, and that cancels it too. Only what your sheet records counts: a condition the GM marks on your token doesn't. Frightened gives disadvantage only while you can see what frightens you, which the sheet can't tell, so ask your GM to set your initiative by hand then. Neither **Roll mode**, in the roll menu or in the sheet's header, changes initiative.
 
 ---
 
 ## The Vibe Tracker
 
-The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your DM edits or removes the current period, your view follows at once.
+The **Vibe Tracker**, in the **Session** tab, shows the time of day your GM has set for the scene: dawn, day, dusk and night unless your GM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your GM edits or removes the current period, your view follows at once.
 
 *Screenshot pending — Vibe tracker showing the current period.*
 
-You don't control this — only the DM does. Just let it color your roleplaying.
+You don't control this — only the GM does. Just let it color your roleplaying.
 
 ---
 
@@ -643,23 +646,23 @@ Clicking a character card opens its sheet to read; click **Edit** on the sheet t
 
 If you leave the editor with changes you haven't saved, you'll be asked to confirm before they're discarded — whether you use the back arrow or close the tab. Once you've saved, backing out is silent; there's nothing left to lose. If you typed something while the save was still going through, the editor stays open with it instead of closing, and you save again. Simply opening a sheet and reading it never counts as a change.
 
-Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your DM's roster all follow.
+Renaming a character on its sheet renames it everywhere: the card in your library, the editor's title bar, and your GM's roster all follow.
 
-**If your character changes while you're editing it**, say your DM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. You don't lose what you typed. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the new version, which keeps the hit points your DM set. Press **Save my changes** to save them, or **Keep editing** to carry on without saving. If you both changed the same thing, the box shows your value and the newer one, and you pick which to keep before saving. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
+**If your character changes while you're editing it**, say your GM takes hit points with the **−** on your roster card, your save is refused so it can't put the old numbers back. You don't lose what you typed. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the new version, which keeps the hit points your GM set. Press **Save my changes** to save them, or **Keep editing** to carry on without saving. If you both changed the same thing, the box shows your value and the newer one, and you pick which to keep before saving. A sheet you only have open to read on the campaign page follows changes by itself. One opened from the Characters page, or the Character Editor, does not update while it is open.
 
-> **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your DM will thank you.
+> **Tip:** Update your character after each session — update HP, spell slots, inventory, and anything that changed. Your GM will thank you.
 
-### Levelling up (D&D 5e)
+### Levelling up (5E)
 
 Change **Level** at the top of the editor and **Proficiency Bonus** moves with it: +2 at levels 1 to 4, +3 at 5 to 8, +4 at 9 to 12, +5 at 13 to 16 and +6 at 17 to 20. Every save, skill and spell number worked out from it follows. If your table uses a different bonus, type it in the box and it stays as you set it; the sheet shows what your level gives under the box, with a button to switch back to it.
 
-### Bonuses the sheet can't work out (D&D 5e)
+### Bonuses the sheet can't work out (5E)
 
 Every skill and saving throw is worked out for you from your ability scores, your proficiency bonus and the Prof and Exp boxes, so it keeps up as your character grows. Some things add to them that the sheet can't know about: a Bard's **Jack of All Trades**, a Paladin's **Aura of Protection**, a **Ring of Protection**, a feat. In **Edit**, under **Stats & Skills**, each skill and saving throw has a small box beside its total. Type the extra there, `1` for +1 or `-1` for a penalty, and the total, the sheet and the dice all include it.
 
 A character from an earlier version may have totals that already include something like this. The first time you open such a character in the editor, the difference is put in the box for you, so every total stays exactly as it was. If one of those boxes holds a number you don't recognise, the total was out of step with your ability scores; change the box to `0` to use the worked-out total.
 
-### Skills the sheet doesn't have (D&D 5e)
+### Skills the sheet doesn't have (5E)
 
 Thieves' tools, a musical instrument, a vehicle, or whatever your table invented — none of these are among the eighteen printed skills, but they roll the same way. Under **Stats & Skills** there's a **Your Own Skills** section: **+ Add Skill**, type the name, choose the ability it uses, and tick **Prof** (or **Exp** for expertise).
 
@@ -667,7 +670,7 @@ The bonus is worked out for you from that ability and your proficiency bonus, so
 
 Your own skills show up with the rest on your sheet and in the right-click roll menu, so rolling them is one click.
 
-### Spending a hit die on a short rest (D&D 5e)
+### Spending a hit die on a short rest (5E)
 
 At the end of a short rest you can spend hit dice to get hit points back. Your pool is on the **Combat** tab — `3/5 d10` means you have five d10 hit dice and three of them are unspent.
 
@@ -681,7 +684,7 @@ It rolls **one** die, not the whole pool — spending is one die at a time, and 
 
 **Add the hit points yourself.** CozyVTT rolls the die and keeps count of what you have left, but it doesn't change your HP for you — use the **+** button on your roster card for the amount you rolled. (If your Constitution modifier is negative and the total comes out below zero, you regain nothing rather than losing hit points.)
 
-Once the pool is empty the number stops being clickable. Your DM can also spend one on your behalf if you're not at the table, and it comes off your sheet the same way.
+Once the pool is empty the number stops being clickable. Your GM can also spend one on your behalf if you're not at the table, and it comes off your sheet the same way.
 
 **Getting them back.** A short rest is when you *spend* hit dice — it doesn't give any back. A **long rest** does: you regain all your lost hit points, plus spent hit dice up to **half your total, rounded down, and always at least one**. So a level 5 fighter with `5d10` gets two back, not five, and a level 1 character gets their single die back.
 
@@ -702,6 +705,8 @@ If you already wrote a second damage die into a weapon's notes, it stays exactly
 **Export:** Choose **Export as JSON** in a character card's menu, or **Export** in the Character Editor's header, to download a `.json` file. This is a complete backup of your character data.
 
 **Import:** Click **Import** on the Characters page and upload a previously exported JSON file. The character appears in your library.
+
+A file exported by an older version of CozyVTT imports into a newer one, and a Horror d100 character from before version 1.7.0 is converted to the rebuilt sheet as it comes in, with its **Original values** kept. It does not work the other way: a file exported by 1.7.0 or later names its game system in a way 1.6.0 and older do not know, and they refuse it.
 
 > **Tip:** Export your character after every few sessions as a backup. It takes five seconds and could save you hours of re-entry if something goes wrong.
 
@@ -753,8 +758,8 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 | d20 with +5 bonus | `1d20+5` |
 | 4d6 drop lowest (ability scores) | `4d6kh3` |
 | Percentile | `d100` |
-| Advantage (D&D) | `2d20kh1` (the **Adv** button) |
-| Disadvantage (D&D) | `2d20kl1` (the **Dis** button) |
+| Advantage (5E) | `2d20kh1` (the **Adv** button) |
+| Disadvantage (5E) | `2d20kl1` (the **Dis** button) |
 
 ### Session Status Indicators
 
@@ -762,14 +767,14 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 |--------|--------------|
 | Preparation | No session has been run yet — you can move your token |
 | 🟢 Live | Session is active — you can move your token |
-| 🟡 Paused | DM paused — moving and turning tokens disabled, and your rolls from the Dice tab stay in your own browser: the DM and other players don't see them. Rolls from your sheet or a **Roll...** menu still reach the table |
+| 🟡 Paused | GM paused — moving and turning tokens disabled, and your rolls from the Dice tab stay in your own browser: the GM and other players don't see them. Rolls from your sheet or a **Roll...** menu still reach the table |
 | ⚫ Inactive | The last session has ended — token movement disabled |
 
 The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 ### Keyboard Shortcuts
 
-On the map, once you've clicked it. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see this list on screen. It shows the keys that do something for you; the DM's also has the wall, undo and Mapmaker keys.
+On the map, once you've clicked it. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see this list on screen. It shows the keys that do something for you; the GM's also has the wall, undo and Mapmaker keys.
 
 | Action | Shortcut |
 |--------|---------|
@@ -795,19 +800,19 @@ In the chat box:
 
 ### Common Questions
 
-**My token isn't on the map.** Ask your DM to place it. They drag your character onto the map from the Campaign Roster.
+**My token isn't on the map.** Ask your GM to place it. They drag your character onto the map from the Campaign Roster.
 
-**I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your DM sets that in **Edit Token**).
+**I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your GM sets that in **Edit Token**).
 
 **CozyVTT won't open on my tablet or old computer.** It needs Chrome or Edge 111, Firefox 128 or Safari 16.4 (iPadOS 16.4 on an iPad), or newer: Chrome, Edge and Safari from 2023, Firefox from 2024. An older browser may not load the app, or may draw parts of it wrongly, so update the browser or use another device.
 
 **I lost connection.** CozyVTT reconnects by itself; **Retry** beside the connection indicator in the header tries at once. Your session state is saved on the server.
 
-**Someone edited my character.** Only you and your campaign's DM can edit your characters. If you have concerns, speak with your platform administrator.
+**Someone edited my character.** Only you and your campaign's GM can edit your characters. If you have concerns, speak with your platform administrator.
 
 **I want to stop playing in a campaign.** Click **Leave Campaign** in the **Campaign Info** panel: see [Leaving a campaign](#leaving-a-campaign).
 
-**I need to switch characters.** From the Characters page, unassign your current character from the campaign and assign the new one. Let your DM know so they can update the token.
+**I need to switch characters.** From the Characters page, unassign your current character from the campaign and assign the new one. Let your GM know so they can update the token.
 
 **I forgot my password.** Use the **Forgot password?** link on the sign-in page if your instance sends email. Otherwise contact your platform administrator — they can reset it and give you a temporary login.
 
@@ -815,4 +820,4 @@ In the chat box:
 
 *For a complete feature walkthrough including asset management, see the [User Guide](USER_GUIDE.md).*
 
-*Running your own campaign? Check out the [DM Guide](DM_GUIDE.md).*
+*Running your own campaign? Check out the [GM Guide](GM_GUIDE.md).*

@@ -560,8 +560,29 @@ Some of those deserve a note:
 
 - **No other company's product names a feature of ours.** Describe a tool in
   CozyVTT's own words: `scripts/tests/test_product_names.py` fails on a tracked
-  file that names the commercial drawing program Mapmaker resembles, and keep
-  such names out of commit messages too.
+  file that names another company's drawing program, an animation studio or
+  another tabletop program, and keep such names out of commit messages too.
+- **The campaign's game master is the GM.** `scripts/tests/test_gm_wording.py`
+  reads the prose of every tracked Markdown file and fails on `DM` for
+  the role. The stored role is `GM` too; where a
+  page must name the value older versions stored, it goes in a code span,
+  and code spans and fenced blocks are not read.
+- **A game system goes by its CozyVTT name.** `scripts/tests/test_system_names.py`
+  fails on a tracked line or path that names a game, its publisher or its
+  setting, outside the licence attribution lines, and on a game system value
+  older versions stored anywhere but where old values are read, or quoted in
+  a code span of the changelog. Both checks read the whole changelog.
+- **CozyVTT is a self-hosted project.** `scripts/tests/test_self_hosted_wording.py`
+  holds the tracked text to that.
+- **A renamed heading or a moved file takes its links with it.**
+  `scripts/tests/test_doc_anchors.py` reads every link in tracked Markdown
+  files: inline links and pictures, such as `[Credits](USER_GUIDE.md#credits)`,
+  with a title in any quotes or in brackets or the path in angle brackets,
+  references (`[ref]: SECURITY.md`), and HTML `<a href>` and `<img src>`. It
+  fails on one whose file or folder git does not track, or whose anchor is
+  not a heading, an `id` or an `<a name>` in that file, so update every link
+  in the same change that renames a heading or moves a file. Links in code,
+  links to other sites and footnotes are not read.
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
 - **The production build leaves out `console.log`, `info`, `debug` and
@@ -886,10 +907,10 @@ tagged, rehearse exactly that:
    `docker compose up -d --build`, as a self-hoster would.
 5. Check that the migrations applied (`docker compose logs backend`), the
    fingerprints are unchanged, `/health` answers through the bundled nginx,
-   the old passwords still sign in, the player is sent nothing the DM hid,
+   the old passwords still sign in, the player is sent nothing the GM hid,
    a backup from the previous release's Admin Panel restores on the new code, a new
    backup downloads and restores, and `backup.sh` then `restore.sh` work.
-6. Open the campaign in a browser as the DM and as the player.
+6. Open the campaign in a browser as the GM and as the player.
 
 Take the rehearsal down afterwards with `docker compose down -v` in that
 checkout, which deletes its database, and `git worktree remove`.

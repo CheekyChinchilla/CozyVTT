@@ -34,11 +34,19 @@ The SIL Open Font License (OFL) allows fonts to be used, studied, modified, and 
 
 ## Game Content
 
-CozyVTT ships no game content. An administrator can import creature data from the [Open5e](https://open5e.com/) SRD API into an instance's own database; it comes from the System Reference Document 5.1, published by Wizards of the Coast under the Creative Commons Attribution 4.0 International License (CC BY 4.0). See [SRD_ATTRIBUTION.md](SRD_ATTRIBUTION.md).
+CozyVTT contains game content: the sheets of its three game systems, the arithmetic they work out, and their example characters. An administrator can also import creature data from the [Open5e](https://open5e.com/) SRD API into an instance's own database. The 5E content comes from the System Reference Document 5.1, under the Creative Commons Attribution 4.0 International License (CC BY 4.0), and the Fantasy d20 content from rules released under the ORC License. The Horror d100 sheet follows rules released under the ORC License too: its characteristics and their rolls, its derived attributes, its skills, its weapons table and most of its conditions are theirs, in CozyVTT's own words, as are the professions, weapons, wealth levels and equipment names its example characters use; its arrangement, its story notes and the boxes themselves are not from those rules. The licensed material is not offered under CozyVTT's AGPL-3.0 licence. [GAME_CONTENT_NOTICES.md](GAME_CONTENT_NOTICES.md) has each licence's notice and the credits it asks for, and the app shows them in **About CozyVTT**.
 
 ## Icons
 
 UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC License (Copyright (c) Lucide Icons and Contributors). The icons Lucide derives from [Feather](https://github.com/feathericons/feather) are under the MIT License (Copyright (c) 2013-present Cole Bemis).
+
+## Pictures
+
+The pictures in the repository are CozyVTT's own artwork: its logo, its mascot and the app's icons. None came from a game publisher.
+
+- `assets/default-logo.png` and `frontend/public/default-logo.png`: the logo
+- `frontend/public/default-mascot.png`: the mascot
+- `frontend/public/favicon-32.png`, `frontend/public/favicon-192.png`, `frontend/public/icon-512.png` and `frontend/public/apple-touch-icon.png`: the app's icons, which a browser shows in a tab or on a home screen
 
 ## Campaign Export/Import Libraries
 

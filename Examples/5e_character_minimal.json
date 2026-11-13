@@ -3,7 +3,7 @@
   "exportedAt": "2026-03-15T00:00:00.000Z",
   "character": {
     "name": "Minimal Fighter",
-    "gameSystem": "DND_5E",
+    "gameSystem": "FIFTH_EDITION",
     "data": {
       "characterName": "Grunk the Fighter",
       "class": "Fighter",

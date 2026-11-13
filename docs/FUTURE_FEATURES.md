@@ -24,16 +24,18 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ### Character sheets
 
-- `after the next release` **The D&D 5e editor gives no box to clear the old Exhausted condition.** A sheet saved before 1.3.0, when exhaustion had no levels, can still hold Exhausted among its conditions. The sheet shows it, and it cancels advantage on initiative, but the editor lists every condition but that one, since it tracks exhaustion by level. It needs the editor to read the old condition into the exhaustion level, at least 1, when the sheet opens, and drop it from the conditions (`DnD5eCharacterEditor.tsx`).
+- `after the next release` **The 5E editor gives no box to clear the old Exhausted condition.** A sheet saved before 1.3.0, when exhaustion had no levels, can still hold Exhausted among its conditions. The sheet shows it, and it cancels advantage on initiative, but the editor lists every condition but that one, since it tracks exhaustion by level. It needs the editor to read the old condition into the exhaustion level, at least 1, when the sheet opens, and drop it from the conditions (`FifthEditionCharacterEditor.tsx`).
+
+- `after the next release` **The Horror d100 Skills tab is long to edit on a phone.** Each skill takes two lines there (its name, then its base, value, notes and remove buttons), so a character with a few specialties scrolls through about eight screens, under a header and tab strip that fill the first. It needs a denser phone layout: one line a skill, or categories that fold (`horror-d100/components/SkillsList.tsx`).
 
 ### Creatures
 
-- `after the next release` **A Call of Cthulhu creature has no SIZ or EDU.** It keeps its characteristics in the stat block's six score slots, POW in Wisdom's and APP in Charisma's, so SIZ and EDU have nowhere to go, and its percentile skills sit in the same list as D&D 5e's skill bonuses. It needs a Call of Cthulhu creature model, with its eight characteristics and percentile skills (`validators/statBlock.ts`).
+- `after the next release` **A Horror d100 creature has no SIZ or EDU.** It keeps its characteristics in the stat block's six score slots, POW in Wisdom's and CHA in Charisma's, so SIZ and EDU have nowhere to go, and its percentile skills sit in the same list as 5E's skill bonuses. It needs a Horror d100 creature model, with its eight characteristics, its damage modifier and percentile skills (`validators/statBlock.ts`).
 
 ### Maps
 
-- `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
-- `after the next release` **A token dropped past the edge of a map the DM has just made smaller stays where it was dropped on screen.** The server refuses the drop, but the mover's screen, and the screens that watched the drag, keep the token where it was carried until it moves again or the page is reloaded. Other refused drops are put back; this one should be too, judged from the map as the server read it (`handlers/tokens.ts`).
+- `after the next release` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The GM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
+- `after the next release` **A token dropped past the edge of a map the GM has just made smaller stays where it was dropped on screen.** The server refuses the drop, but the mover's screen, and the screens that watched the drag, keep the token where it was carried until it moves again or the page is reloaded. Other refused drops are put back; this one should be too, judged from the map as the server read it (`handlers/tokens.ts`).
 - `after the next release` **A polygon being clicked out in Mapmaker, or a curve not yet bent, is lost on a reload or on leaving the map.** Nothing asks first, and the draft does not keep them. They should count as paint not saved, as a selection you moved does (`paint/usePaintSurface.ts`).
 - `after the next release` **A screen can show the walls from before a door was opened, or a wall added, at the moment Mapmaker's Save adds room walls.** The Save sends the map's whole list of walls to every page once it is stored, so a door opened or closed, or a wall added from another device, in between can reach a page first and then be undone there by the older list until the page is reloaded. The stored walls are right. It needs the list sent while the walls are still held for the Save, or a version a page can compare to refuse an older list (`routes/maps.ts`, the walls batch route).
 
@@ -50,39 +52,48 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 - **Chat and dice in one view, as a per-user choice.** Chat and the dice log are separate tabs, each with its own history, and that stays the default. Some players, on a phone especially but on a computer too, would rather see both at once: the two side by side or stacked in one split panel, or one merged timeline. Needs: a per-user setting (on the profile page, or a toggle in the panel), a split or merged view in `SessionPanels` that works on the desktop and in the phone layout's sheet, and a decision on how the chat's unread count and secret rolls show when the two share a view. Both histories stay stored and loaded as they are.
 - **Bulk character export as a ZIP.** The app exports one character at a time, with **Export as JSON** on the Characters page. A bulk export needs a way to pick several characters, a fetch of each one's sheet (the Characters page loads only summaries), and a ZIP library such as JSZip, which is a new dependency.
 - **Merge the hardcoded starter templates into the character template library.** `backend/src/utils/character-templates/` holds two presets per system, a blank sheet and one example character, as source constants served by `GET /api/characters/templates/:gameSystem/:templateName`, and the New Character dialog lists them a second time (`NewCharacterModal.tsx`), while user-published templates live in the database. Two systems for one idea. Folding the presets in as seeded, admin-owned rows would leave one browsable list and one endpoint. `getBlankTemplate` in that directory is called only through `getBlankCharacterTemplate` in `validators/game-systems/index.ts`, which only tests call.
-- **Shadowrun 6E character sheet.** The backend (types, validation, templates) is complete, but the frontend sheet is still a placeholder and the system is hidden from the creation dropdown until it's finished. See `docs/GAME_SYSTEMS.md`.
 - **NPC chatbot / asset generation (AI).** No code yet. The `@anthropic-ai/sdk` dependency was removed before v1.0.0 launch (it was installed but unused, and shipping it left an open `npm audit` finding). When this feature work begins, re-add the current major of the SDK and introduce `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` env vars at the same time so they enter the codebase together and never sit around as dead config.
 - **Show PDFs inside CozyVTT in every browser.** The document reader shows a PDF in the browser's own viewer, in a frame sandboxed without `allow-same-origin`, which keeps the session cookie away from anything the viewer runs. Only Firefox on a computer shows a PDF there. Chrome and Edge block their viewer in such a frame, Safari leaves it blank, and phones do not show a PDF inside a page at all, so since 1.5.4 the reader offers those browsers **Open this PDF in a new tab** in place of the frame (`pdfShowsInFrame` in `DocumentReader.tsx`). Needs: a viewer that renders pages itself inside the sandbox, such as PDF.js (a new dependency), measured against the Content-Security-Policy and checked in each browser, before the frame is relaxed in any way.
 - **EPUB and other document formats in the library.** #39 asked for "PDF and standard e-reader formats"; the library shipped with PDF, plain text and Markdown, which a browser can show on its own. EPUB cannot: it is a zip of XHTML that needs a reader library (`epub.js` or similar), and every one of them renders the book's own HTML inside an iframe through `blob:` URLs, which means loosening the Content-Security-Policy the whole instance runs under, and trusting a third party to sanitise a file an anonymous user uploaded. That is the one genuinely risky part of the original request, and it is separable, so it waits. **Revisit if** people ask for it with real books in hand; the answer will hinge on finding a reader that renders into a sandboxed frame without `allow-same-origin`, and on measuring what the CSP change exposes.
 - **Admin upload UI for instance branding (logo / favicon / mascot).** The backend already accepts `customLogoUrl` / `customFaviconUrl` / `customMascotUrl` on `SystemSettings`, as paths this instance serves, and `ThemeContext` reads them and dynamically swaps the favicon when set. What's missing is a file-upload form on the Admin → Appearance tab so an instance operator can swap branding at runtime without redeploy. Until then, operators replace the defaults at `frontend/public/default-logo.png` and `frontend/public/default-mascot.png` and rebuild.
 - **A per-user storage quota, as an admin setting.** Nothing limits how much one account uploads in total; the upload rate limit slows a script, and the Admin Panel's System Overview warns once the disk holding the uploads is over 80% full. A quota would sum each user's `Asset.fileSize` before accepting an upload, with a limit set in **Admin → Settings**, off by default so no upgrade starts refusing uploads. It needs a column in `SystemSettings` (a migration), the check in the upload, typed-document and UVTT routes and in campaign import, and a clear refusal saying how much space the user has left.
-- `after the next release` **Disable an account.** An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as DM; and a line in **Admin → Activity**.
+- `after the next release` **Disable an account.** An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as GM; and a line in **Admin → Activity**.
 - `after the next release` **A history of character saves.** ([#41](https://github.com/CheekyChinchilla/CozyVTT/issues/41)) A save replaces the sheet, so an edit made by mistake, or a save from a page left open, cannot be taken back. Keeping earlier versions needs a table of its own (a migration), a decision on how many to keep and for how long, and a way to look at one and restore it.
 - **Item and spell lists shared across a campaign or the instance.** ([#56](https://github.com/CheekyChinchilla/CozyVTT/issues/56)) Each sheet holds its own items and spells, typed in by hand.
 - **The app in other languages.** ([#30](https://github.com/CheekyChinchilla/CozyVTT/issues/30)) Every word the app shows is written into its code in English. Translating it means gathering them into per-language files and choosing a library to read them. Not planned yet.
-- **Bonus and penalty dice from a Call of Cthulhu sheet.** A Call of Cthulhu sheet has no **Roll mode**, and its stats have no menu of bonus and penalty dice: a roll is a single d100. The rules roll an extra tens die and keep the better or the worse. It needs the dice to roll and show that die, and a check against the rulebook for how bonus and penalty dice cancel.
+- **Each start looks through every Horror d100 sheet for one an older version stored.** The database does the looking and no sheet is loaded, so it cannot stop a start, but it took about 7 seconds over 512 MB of sheets. A stored mark that the instance has none left would skip it.
+- **Maximum hit points, power points and Sanity a GM can type on a Horror d100 sheet.** The sheet works the three out (from CON and SIZ, from POW, and from Knowledge (Blasphemous Lore)) and shows them without a box, though the sheet stores them so that a GM may change them. A group using the open d100 rules' Total Hit Points option, CON plus SIZ undivided, cannot hold that maximum through the editor, and neither can a GM who rules a character's maximum up or down. It needs a box for each, a way to say the number is the GM's and no longer follows its characteristic, and the roster's hit point bar reading the same number.
+- **Easy and Difficult rolls on a Horror d100 sheet.** A Horror d100 sheet has no **Roll mode**: a roll is a single d100 against the full chance. The open d100 rules double the chance of an Easy roll and halve a Difficult one, and give a special and a critical success at a fifth and a twentieth of the chance. A menu on each stat could offer the two, and the dice could say which level a roll reached. This replaces the entry for an extra tens die.
 
-### DM tools
+### GM tools
 
-- **Let the DM read whispers, as a campaign setting.** A whisper is for its two people alone, and the DM sees one only when they are one of them. Some tables may want the DM copied on whispers between players, to keep the game's secrets in one place or to watch for harassment. A **DM can read whispers** setting in **Campaign Settings**, off by default, would make the DM one more reader, on the live message (`handlers/chat.ts`) and in the chat history (`GET /api/campaigns/:campaignId/messages`), and the **To** list would then say "Only you, Mara and the DM can see this". It needs a column on `Campaign` (a migration). Build it if tables ask.
+- **Let the GM read whispers, as a campaign setting.** A whisper is for its two people alone, and the GM sees one only when they are one of them. Some tables may want the GM copied on whispers between players, to keep the game's secrets in one place or to watch for harassment. A **GM can read whispers** setting in **Campaign Settings**, off by default, would make the GM one more reader, on the live message (`handlers/chat.ts`) and in the chat history (`GET /api/campaigns/:campaignId/messages`), and the **To** list would then say "Only you, Mara and the GM can see this". It needs a column on `Campaign` (a migration). Build it if tables ask.
 - `after the next release` **A light a token carries.** A torch, a lantern or a *Light* cantrip moves with whoever holds it, but every light today is placed on the map at a fixed point (`LightSource`, in map pixels), and a token has only its own darkvision (`sightRadius`). A token would carry a light of its own, with bright and dim radius, colour and on/off as a map light has, drawn at its centre and following it as it moves, kept with the token when it is saved as a template or creature. The server decides what players see by the lights (`filterTokensByLighting` in `backend/src/utils/spirit-layer.ts`, and the line-of-sight cache for lights), so a carried light has to count there too, and to move with the token when it is put down; while it is carried, the light stays where the token stands, as sight does.
 
 - **Keep a creature's token picture from players until it is on the table.** A map's picture stays out of a player's Asset Library until the table is on a map using it (`mapPictureHidden` in `backend/src/services/permissions.ts`), but token pictures are listed to every member at once, so the picture of a creature uploaded into the campaign's library for a later scene shows there before the creature appears. Token pictures would need a rule of their own: listed for a player while a token on the current map, a character or a template in the campaign uses it, or while they uploaded it.
 - **Show that a hidden-HP creature is down.** Players are sent a creature's hit points only when its HP bar is on, so a creature at 0 HP with its bar off still looks standing to them and blocks its square. A separate "down" flag the server could send without the numbers would let the body fade and be stood on.
-- **DM soundboard (layered audio).** One track plays at a time today: a one-shot from the Atmosphere panel replaces the vibe's music until it ends or is stopped, and then the music returns. True layering, the vibe's bed plus one-shot effects over it, needs a second audio channel end to end: stored state, its own broadcast, a second player element with volume and fade, and the asset read rule widened to every asset in the playing set. That is the foundation of a DM soundboard and belongs with it.
+- **GM soundboard (layered audio).** One track plays at a time today: a one-shot from the Atmosphere panel replaces the vibe's music until it ends or is stopped, and then the music returns. True layering, the vibe's bed plus one-shot effects over it, needs a second audio channel end to end: stored state, its own broadcast, a second player element with volume and fade, and the asset read rule widened to every asset in the playing set. That is the foundation of a GM soundboard and belongs with it.
 - **Reveal an obscured token to one player.** Obscure Identity is all-or-nothing today. A Perception roll that lets one player make the creature out, while the others still see a shape, needs a per-player reveal kept on the server, the way explored memory is kept per user.
-- **A per-token "vision on/off" switch.** A token with its vision turned off contributes nothing to what its player sees, useful when a player controls several tokens (a familiar, a mount, an unconscious character) and one of them should not see. A boolean on the token JSON, DM-only like `sightRadius`, applied where the viewer set is built (`filterTokensByLighting` on the server, the `viewerOwn` filter in `MapCanvas`) so the shared visibility rule stays untouched; it needs carrying through every place a token is created or copied, the import schemas, and the shared vision fixture. The projected-screen case it was first asked for (#67) is covered by previewing from a token instead.
-- **Optionally reveal along a carried token's path.** Sight and explored memory follow a token only where it is put down, for every drag. A DM could choose instead that a player's explored areas fill in along the path as the DM drags their token, to walk a party through a map ahead of play. A per-map flag beside **Remember Explored Areas** could offer that, off by default. The drag frames already carry `dragging: true`, so the switch would be one decision in the store's `receiveTokenMove`: apply a frame as a move when the map allows it. It needs a column with a default (an additive migration), the map settings route and broadcast, the Edit Map checkbox and the DM guide. Not planned for any release yet.
+- **A per-token "vision on/off" switch.** A token with its vision turned off contributes nothing to what its player sees, useful when a player controls several tokens (a familiar, a mount, an unconscious character) and one of them should not see. A boolean on the token JSON, GM-only like `sightRadius`, applied where the viewer set is built (`filterTokensByLighting` on the server, the `viewerOwn` filter in `MapCanvas`) so the shared visibility rule stays untouched; it needs carrying through every place a token is created or copied, the import schemas, and the shared vision fixture. The projected-screen case it was first asked for (#67) is covered by previewing from a token instead.
+- **Optionally reveal along a carried token's path.** Sight and explored memory follow a token only where it is put down, for every drag. A GM could choose instead that a player's explored areas fill in along the path as the GM drags their token, to walk a party through a map ahead of play. A per-map flag beside **Remember Explored Areas** could offer that, off by default. The drag frames already carry `dragging: true`, so the switch would be one decision in the store's `receiveTokenMove`: apply a frame as a move when the map allows it. It needs a column with a default (an additive migration), the map settings route and broadcast, the Edit Map checkbox and the GM guide. Not planned for any release yet.
 - **Wall collision (`wallsBlockMovement`).** Previously implemented and removed due to bugs. If reattempted, start fresh without reviving the old code.
 - **Auto-detection of walls from map images.** LLM, contour, and trace approaches all failed previously. Treat any future attempt as new R&D, not a continuation.
 - **Paint over an uploaded picture.** Mapmaker is meant only for a map drawn in CozyVTT, whose picture is tagged `cozyvtt-drawn-map`, and for a map with no picture. Adding a door or a passage to an uploaded map picture would need the picture copied into the campaign's library first, so the uploaded file is never changed, and a limit on how large a picture opens to paint on a phone.
-- `after the next release` **Layers for Mapmaker.** A floor and a detail layer, flattened on save, so a floor's texture can be changed under what is drawn over it; only if DMs ask for it after using Mapmaker.
-- `after the next release` **A room's walls move with it under Select.** Select moves a picture's pixels only, so a room drawn and not yet saved leaves its walls where it was drawn (the DM guide says so). The walls waiting for Save that lie inside a lifted box could move and resize with it, and go back with it on Undo.
+- `after the next release` **Layers for Mapmaker.** A floor and a detail layer, flattened on save, so a floor's texture can be changed under what is drawn over it; only if GMs ask for it after using Mapmaker.
+- `after the next release` **A room's walls move with it under Select.** Select moves a picture's pixels only, so a room drawn and not yet saved leaves its walls where it was drawn (the GM guide says so). The walls waiting for Save that lie inside a lifted box could move and resize with it, and go back with it on Undo.
 - **Add room to a drawn map without stretching it.** Edit Map's **Width** and **Height** stretch a map's picture, a drawn one's too, and move its walls and lights with it. Growing a drawn map by squares, with the new ground blank and everything already on it left in place, needs the picture made larger in the browser and the fog of war kept for the squares that were there.
 - **A token template that keeps its facing.** A token placed from a template always faces the default way, because `TokenTemplate` has no rotation column. It needs one (a migration), the template editor and the placement.
 - **Hex and gridless maps.** ([#104](https://github.com/CheekyChinchilla/CozyVTT/issues/104)) Every map is a square grid, and a token always lands on its squares. Each person can hide the grid lines with **Toggle Grid**, which helps on a picture printed with hexes or with no grid, but tokens still snap. The smallest step, a switch on a map to place its tokens anywhere, needs a setting stored on the map (a migration) and more besides: the server checks a token's position as whole squares, and what a token covers, the fog of war, moving a token with the keyboard and measuring all count in squares. A hex grid needs its own coordinates, drawing, distances and spell areas.
 
 ### Polish / tech debt
+
+- **Stop sending the GM's hand-over under its old name.** 1.7.0 sends
+  `campaign.gm.transferred` and, for that release only, the same payload as
+  `campaign.dm.transferred`, both with `previousDmId` and `newDmId` beside
+  `previousGmId` and `newGmId`; `GET /api/invitations` names the GM as `dm`
+  beside `gm` the same way. The release after drops the old event, the two
+  old fields and `dm`, with an API note. Old values sent to the server stay
+  accepted for good, the `PUT /api/campaigns/:campaignId/dm` path among them.
 
 - **Player fog as a cached raster.** A player's fog is drawn on the overlay
   layer (so walls, doors and glows sit under it), one filled rectangle per
@@ -112,7 +123,8 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 - **Move the remaining libraries to their current major versions.** Every
   other library is on its current major version; the changelog of each
-  release says which moved. Dependabot opens a pull request for each new
+  release says which moved. **Done** in 1.7.0 for reading archives: yauzl in
+  place of unzipper. Dependabot opens a pull request for each new
   major version, apart from those `.github/dependabot.yml` holds back.
   **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
   candidate, so wait until it is stable with a patch release or two, and move
@@ -126,7 +138,11 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   a change to the database too small to be a release's only migration. The
   next release that changes the database anyway, the move to a current
   PostgreSQL major at the latest, should take them, each in a reviewed,
-  data-preserving migration:
+  data-preserving migration. 1.7.0's migration took the renames this list
+  also held (the game systems' and the GM's stored values, the retired
+  system's value, the Horror d100 sheet's stored keys and the schema's
+  comments; see its changelog) and left these, to keep that migration to
+  what the renames needed:
   - Indexes for foreign keys that no index starts with:
     `Message(userId)`, `DiceRoll(userId)`, `MapExploration(userId)`,
     `CreatureFavorite(creatureId)`, `PersonalNote(campaignId)`,
@@ -158,54 +174,46 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   **Do** if a large instance's backups grow slow; nothing is wrong at the
   sizes seen so far.
 
-- **Dice macros shared by the DM.** #47 asked for personal saved rolls and got
-  them. A DM may well want a table-wide one, such as "Wild Magic Surge, d100",
+- **Dice macros shared by the GM.** #47 asked for personal saved rolls and got
+  them. A GM may well want a table-wide one, such as "Random weather, d100",
   that everyone can click without each person saving it themselves. The storage would
   take it: a nullable `userId` for campaign-wide, or an explicit `shared` flag on
   `DiceMacro`. What it really adds is a visibility axis and the permission
   question that comes with it, plus deciding what happens to a shared macro when
-  the DM seat moves. **Revisit if** people ask; the personal version covers the
+  the GM seat moves. **Revisit if** people ask; the personal version covers the
   cases in the original request.
 
-- **Two or more DMs in one campaign at the same time.** Raised alongside #33,
-  which asked to *move* the DM seat and got that; sharing it is a different and
-  much larger job. The schema has no rule against it: one DM is kept by route
+- **Two or more GMs in one campaign at the same time.** Raised alongside #33,
+  which asked to *move* the GM seat and got that; sharing it is a different and
+  much larger job. The schema has no rule against it: one GM is kept by route
   code, which since 1.5.2 reads and changes the seat in one serializable
-  transaction (`backend/src/utils/serializable.ts`). Promoting a second DM is
-  refused, a hand-over steps down every DM, and a DM cannot be demoted,
+  transaction (`backend/src/utils/serializable.ts`). Promoting a second GM is
+  refused, a hand-over steps down every GM, and a GM cannot be demoted,
   removed or have their account deleted. Relaxing those checks is the cheap
-  part. The expensive part is the code that treats the DM as one person. The
-  live table compares the DM role on dozens of lines and the frontend on over
-  a hundred, and most of those are checks any DM would pass, but some are not: who
-  controls initiative, who the fog is drawn for, which single person a "DM
-  rolled" attribution names, and `campaignDmMembership` in
-  `frontend/src/utils/campaignRoles.ts`, which returns one DM. Ownership would
+  part. The expensive part is the code that treats the GM as one person. The
+  live table compares the GM role on dozens of lines and the frontend on over
+  a hundred, and most of those are checks any GM would pass, but some are not: who
+  controls initiative, who the fog is drawn for, which single person a "GM
+  rolled" attribution names, and `campaignGmMembership` in
+  `frontend/src/utils/campaignRoles.ts`, which returns one GM. Ownership would
   need rethinking too, since a hand-over leaves `Campaign.ownerId` as it was.
   **Revisit if** people actually ask to co-run games. The hand-over added for
-  #33 covers the cases reported so far (handing off, stepping back, an agent DM
+  #33 covers the cases reported so far (handing off, stepping back, an agent GM
   narrating while the owner plays).
 
-- **Shadowrun 6e initiative base is taken as stored.** The resolver in
-  `utils/rules/initiative.ts` reads `derivedStats.initiative.meatspace.base`
-  and does not work it out from Reaction + Intuition. Nothing shows or edits
-  that value today, since the Shadowrun 6e sheet is a placeholder and the
-  system cannot be chosen yet. When the sheet is built, it should work the base
-  out the way the D&D 5e and Pathfinder 2e sheets work out initiative.
-
-- **Call of Cthulhu 7e and Shadowrun 6e creature stat blocks.** Creature rolls are
+- **Horror d100 creature stat blocks.** Creature rolls are
   dispatched per game system (`buildNpcRolls` in `frontend/src/utils/npcRolls.ts`),
-  and these two offer no rolls at all, since a d100 game and a dice-pool game
-  have no d20 rolls, ability modifiers or proficiency bonus to compute from.
-  Their NPC tokens fall back to the free-form custom roll input, which works but
-  leaves the DM doing the arithmetic. Doing this properly means a per-system
-  creature shape: characteristics and percentile skill values for CoC, attribute
-  + skill dice pools and limits for Shadowrun, plus their own stat block editors
-  and viewers. Neither has SRD seed data to test against. See the "Creature and
+  and this one offers no rolls at all, since a d100 game has no d20 rolls,
+  ability modifiers or proficiency bonus to compute from.
+  Its NPC tokens fall back to the free-form custom roll input, which works but
+  leaves the GM doing the arithmetic. Doing this properly means a creature
+  shape of its own, with characteristics and percentile skill values, plus its
+  own stat block editor and viewer. It has no SRD seed data to test against. See the "Creature and
   NPC stat blocks" section of `docs/GAME_SYSTEMS.md` for where the branch points
   are.
 
-- **A shared character-sheet header / action bar.** Each system editor (D&D 5e,
-  Pathfinder 2e, Call of Cthulhu) draws its own header: the Save and Cancel
+- **A shared character-sheet header / action bar.** Each system editor (5E,
+  Fantasy d20, Horror d100) draws its own header: the Save and Cancel
   cluster, the palette button, the colour presets and the name and token
   picture fields, with no shared component between them. The Flexible editor
   repeats Save, Cancel and the token picture. (The colour presets are shared:
@@ -226,25 +234,18 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
   available"; it was removed in 1.3.0 so that it no longer advertised a control
   that did not exist. There is no endpoint behind it either:
   `POST /api/characters/:id/assign` moves a character between *campaigns*, not
-  between owners. Building it means a new route (DM only, target must be a
+  between owners. Building it means a new route (GM only, target must be a
   member of the same campaign), moving the character between both memberships'
   `characterIds` as well as changing `userId`, and a player picker in the menu.
 
-- **Call of Cthulhu `pulpTalents` has no UI.** Declared in the type and the
-  backend schema, shown and editable nowhere. It belongs to Pulp Cthulhu, a
-  supplement the app does not otherwise support, so it was left alone when the
-  rest of the CoC sheet was completed in 1.3.0. Since 1.5.2 the server holds it
-  to 500 entries, like every other list on the sheet. Either build it with the
-  rest of Pulp, or drop the field.
-
-- **Pathfinder 2e strikes worked out from their parts.** A strike stores its
+- **Fantasy d20 strikes worked out from their parts.** A strike stores its
   attack bonus as typed, beside a proficiency rank, an attribute and an item
   bonus that the editor shows only as a hint ("Rank, attribute and item give
   +7"). Deriving the bonus, as AC and skills are, needs boxes for the
   attribute and item bonus, which the editor does not edit, and would change
   every stored strike's bonus, so it waits for its own change.
 
-- **`docs/API_REFERENCE.md` covers 86 of the 170 routes.** Deliberate: it is a
+- **`docs/API_REFERENCE.md` covers 86 of the 171 routes.** Deliberate: it is a
   hand-written guide to the endpoints people ask about, and
   `backend/docs/API_DOCUMENTATION.yaml` is the complete list.
   `scripts/spec-coverage.py` enforces the split and prints the current counts:
@@ -335,5 +336,5 @@ Bugs confirmed in a released version and not fixed yet. Each entry starts with t
 
 ## Won't Do
 
-- **Player Preview offering only the players' token menus.** A right-click in Player Preview on a creature hidden from the previewed player opens the DM's menu for it. The DM is still the DM while previewing and should be able to do DM things from there.
-- **Obscuring tokens automatically by light.** Dim light is lightly obscured in the rules (disadvantage on Perception) and darkness is heavily obscured (effectively blinded); there is no half-seen state in between for an automatic blur to stand for. It would also fight the DM's manual switch, flicker as tokens move, and do nothing on any map that already exists, since those have Global Illumination on.
+- **Player Preview offering only the players' token menus.** A right-click in Player Preview on a creature hidden from the previewed player opens the GM's menu for it. The GM is still the GM while previewing and should be able to do GM things from there.
+- **Obscuring tokens automatically by light.** Dim light is lightly obscured in the rules (disadvantage on Perception) and darkness is heavily obscured (effectively blinded); there is no half-seen state in between for an automatic blur to stand for. It would also fight the GM's manual switch, flicker as tokens move, and do nothing on any map that already exists, since those have Global Illumination on.

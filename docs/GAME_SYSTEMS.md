@@ -1,8 +1,11 @@
+<!-- This file holds material under the ORC License, beside CozyVTT's own text under the AGPL-3.0. -->
+<!-- See GAME_CONTENT_NOTICES.md for the notice and credits. -->
+
 # CozyVTT — Adding a Game System
 
 This guide explains how to add a new tabletop game system to CozyVTT end to end. It names the files, the functions you extend and the reference systems to copy from, as the code ships them.
 
-CozyVTT currently ships three systems you can choose: **D&D 5e**, **Pathfinder 2e** and **Call of Cthulhu 7e**. A fourth, **Shadowrun 6e**, is in the code as groundwork: its schema and templates are complete and its sheet is a placeholder, so it is left out of the lists a game system is chosen from (see [Reference systems](#reference-systems)). Adding another system means touching a fixed set of registration points, all listed in the [Full checklist](#full-checklist). There is no plugin loader and no config file. Most of those points are `switch` statements with a `default` branch, so neither the compiler nor the tests point you at them: work through the checklist.
+CozyVTT currently ships three systems you can choose: **5E**, **Fantasy d20** and **Horror d100**. Adding another system means touching a fixed set of registration points, all listed in the [Full checklist](#full-checklist). There is no plugin loader and no config file. Most of those points are `switch` statements with a `default` branch, so neither the compiler nor the tests point you at them: work through the checklist.
 
 ---
 
@@ -14,7 +17,7 @@ CozyVTT currently ships three systems you can choose: **D&D 5e**, **Pathfinder 2
 4. [Naming conventions](#naming-conventions)
 5. [Step 1: Prisma enum and migration](#step-1-prisma-enum-and-migration)
 6. [Step 2: Backend character type (from the schema)](#step-2-backend-character-type-from-the-schema)
-7. [Step 3: Backend enum (nothing to edit)](#step-3-backend-enum-nothing-to-edit)
+7. [Step 3: Backend list of supported systems](#step-3-backend-list-of-supported-systems)
 8. [Step 4: Zod schema](#step-4-zod-schema)
 9. [Step 5: Validator index](#step-5-validator-index)
 10. [Step 6: Character templates](#step-6-character-templates)
@@ -27,7 +30,8 @@ CozyVTT currently ships three systems you can choose: **D&D 5e**, **Pathfinder 2
 17. [Step 13: Documentation](#step-13-documentation)
 18. [Testing](#testing)
 19. [Full checklist](#full-checklist)
-20. [Legal / content note](#legal--content-note)
+20. [Game content sources](#game-content-sources)
+21. [Files that hold ORC material](#files-that-hold-orc-material)
 
 ---
 
@@ -47,7 +51,7 @@ So a "game system" in CozyVTT is really seven coordinated pieces:
 | 6 | **Display metadata + registration** (labels, the creation dropdown, the places a sheet opens) | `frontend/src/constants/game-systems.ts`, `CharacterSheetRouter.tsx` and the two sheet windows in `frontend/src/components/character/` |
 | 7 | **Table rules** (rolls, initiative, hit points) | `frontend/src/utils/characterRolls.ts`, and `utils/characterHp.ts` and `utils/rules/` in both projects |
 
-Pieces 3 and 4 each have a per-system file **and** an `index.ts` with a `switch` you extend. Those switches, like most of the places a system is named, have a `default` branch, so the compiler does not notice a missing case. Adding the enum value breaks the build only where a map is typed `Record<GameSystem, …>`: `SHEET_NAME_FIELD` in `validators/game-systems/index.ts` and the test helper `__tests__/helpers/builtInTemplates.ts` in the backend, and the four maps in `constants/game-systems.ts` (three labels and the badge tints) in the frontend. Every other place falls back without an error; the [Full checklist](#full-checklist) lists them all.
+Pieces 3 and 4 each have a per-system file **and** an `index.ts` with a `switch` you extend. Those switches, like most of the places a system is named, have a `default` branch, so the compiler does not notice a missing case. Adding the enum value breaks the build only where a map is typed `Record<GameSystem, …>`: `SHEET_NAME_FIELD` in `validators/game-systems/index.ts`, the test helpers `__tests__/helpers/builtInTemplates.ts` and `__tests__/helpers/openContentNames.ts`, and `RULES_ELEMENTS` in `exampleContent.test.ts` in the backend, and the four maps in `constants/game-systems.ts` (three labels and the badge tints) in the frontend. Every other place falls back without an error; the [Full checklist](#full-checklist) lists them all.
 
 ### Design principle: almost everything is optional
 
@@ -62,27 +66,30 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 | The character's own name on the sheet: at most 200 characters, the `name` column's limit, since a save copies it there | `SHEET_NAME_MAX` | `sheetCharacterNameSchema` in `sheetText.ts`, used by every system's name field; the editors' name boxes stop there |
 | Any other one-line text: at most 1,000 characters | `SHEET_SHORT_TEXT_MAX` | `sheetShortTextSchema` in `sheetText.ts` |
 | Text that holds paragraphs (notes, descriptions, backstory, personality, a feature, which an older sheet may hold as one long line): at most 100,000 characters | `SHEET_LONG_TEXT_MAX` | `sheetLongTextSchema` in `sheetText.ts` |
-| The name in Allies & Organizations (D&D 5e and Pathfinder 2e): the paragraph limit, since a sheet written before 1.3.0 had its whole allies paragraph moved into it | `SHEET_LONG_TEXT_MAX` | `alliesAndOrganizations.schema.ts`, imported by both schemas |
-| A list on a D&D 5e, Pathfinder 2e, Call of Cthulhu or Shadowrun 6e sheet (inventory or possessions, attacks, strikes or weapons, spells, cantrips, conditions, hit dice, features, feats, languages, contacts and the rest): at most 500 entries, five times what the longest real list holds | `SHEET_LIST_MAX` | `sheetList` in `sheetLists.ts`; `listLimits.test.ts` walks every system's schema and fails on a list without a maximum. The editor turns each add button off at the limit and says why (`ListLimitNote`); a comma-separated box (`ListField`, the cantrips box) turns away the entry that would pass it |
-| Entries in a list inside one row (the traits of one Pathfinder 2e strike, the firing modes of one Shadowrun weapon): at most 50, because it multiplies by the rows around it | `SHEET_ROW_TAGS_MAX` | `pathfinder2e.schema.ts` and `shadowrun6e.schema.ts`; the strike's traits box turns away the 51st |
-| D&D 5e: skills of the player's own, at most 30; further damage lines on one attack, at most 10 | `DND5E_CUSTOM_SKILLS_MAX`, `DND5E_ATTACK_DAMAGE_ROLLS_MAX` | `dnd5e.schema.ts`; the editor's **+ Add Skill** and **+ Add Damage Roll** stop there, as above |
-| D&D 5e short fields: a proficiency box 2,000 characters; a skill's own name, a further damage line's label and its dice, and an attack's property 60; a hit die 50; a damage type 40 | `DND5E_PROFICIENCY_BOX_MAX`, `DND5E_CUSTOM_SKILL_NAME_MAX`, `DND5E_DAMAGE_ROLL_TEXT_MAX`, `DND5E_WEAPON_PROPERTY_LENGTH_MAX`, `DND5E_HIT_DIE_MAX`, `DND5E_DAMAGE_TYPE_MAX` | `dnd5e.schema.ts`; the editor's boxes stop there |
-| Pathfinder 2e item bonus (saving throws, Perception, skills, lore skills, armor class, strikes, spell attack and spell DC): -30 to +30. The Core Rulebook's run from +4 down to -2 | `PF2E_ITEM_BONUS_MIN`, `PF2E_ITEM_BONUS_MAX` | `itemBonusSchema` in `pathfinder2e.schema.ts`; the editor's boxes clamp to the range when left |
-| D&D 5e and Pathfinder 2e spell slots of one rank or level: 0 to 20 for the total and for the used count, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts` and `pathfinder2e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Pathfinder editor's boxes stop at 20, and it brings the used count within the total when a sheet opens and when the total is lowered |
-| D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
+| The name in Allies & Organizations (5E and Fantasy d20): the paragraph limit, since a sheet written before 1.3.0 had its whole allies paragraph moved into it | `SHEET_LONG_TEXT_MAX` | `alliesAndOrganizations.schema.ts`, imported by both schemas |
+| A list on a 5E, Fantasy d20 or Horror d100 sheet (inventory or possessions, attacks, strikes or weapons, spells, cantrips, conditions, hit dice, features, feats, languages, contacts and the rest): at most 500 entries, five times what the longest real list holds | `SHEET_LIST_MAX` | `sheetList` in `sheetLists.ts`; `listLimits.test.ts` walks every system's schema and fails on a list without a maximum. The editor turns each add button off at the limit and says why (`ListLimitNote`); a comma-separated box (`ListField`, the cantrips box) turns away the entry that would pass it |
+| Entries in a list inside one row (the traits of one Fantasy d20 strike): at most 50, because it multiplies by the rows around it | `SHEET_ROW_TAGS_MAX` | `fantasyD20.schema.ts`; the strike's traits box turns away the 51st |
+| 5E: skills of the player's own, at most 30; further damage lines on one attack, at most 10 | `FIFTH_EDITION_CUSTOM_SKILLS_MAX`, `FIFTH_EDITION_ATTACK_DAMAGE_ROLLS_MAX` | `fifthEdition.schema.ts`; the editor's **+ Add Skill** and **+ Add Damage Roll** stop there, as above |
+| 5E short fields: a proficiency box 2,000 characters; a skill's own name, a further damage line's label and its dice, and an attack's property 60; a hit die 50; a damage type 40 | `FIFTH_EDITION_PROFICIENCY_BOX_MAX`, `FIFTH_EDITION_CUSTOM_SKILL_NAME_MAX`, `FIFTH_EDITION_DAMAGE_ROLL_TEXT_MAX`, `FIFTH_EDITION_WEAPON_PROPERTY_LENGTH_MAX`, `FIFTH_EDITION_HIT_DIE_MAX`, `FIFTH_EDITION_DAMAGE_TYPE_MAX` | `fifthEdition.schema.ts`; the editor's boxes stop there |
+| Fantasy d20 item bonus (saving throws, Perception, skills, lore skills, armor class, strikes, spell attack and spell DC): -30 to +30. In the rules they run from +4 down to -2 | `FANTASY_D20_ITEM_BONUS_MIN`, `FANTASY_D20_ITEM_BONUS_MAX` | `itemBonusSchema` in `fantasyD20.schema.ts`; the editor's boxes clamp to the range when left |
+| 5E and Fantasy d20 spell slots of one rank or level: 0 to 20 for the total and for the used count, and no more used than the total | `SPELL_SLOTS_MAX` | `fifthEdition.schema.ts` and `fantasyD20.schema.ts`; the 5E editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Fantasy d20 editor's boxes stop at 20, and it brings the used count within the total when a sheet opens and when the total is lowered |
+| 5E manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/fifthEdition.ts` | `fifthEdition.schema.ts`; the 5E editor stops its boxes there and brings a stored or read-back value within the range when it opens |
+| Horror d100 ratings (each characteristic, each skill's rating, MOV, an armour value, a weapon's skill rating): whole numbers from 0 to 999. A rating is whatever the player writes, below a skill's base chance too | `HORROR_D100_VALUE_MAX` | `horrorD100Sheet.schema.ts` |
+| Horror d100 Firearm and own skills lists: 503 and 504 entries. A sheet converted from the shape before 1.7.0 can hold up to 500 firearms of the player's own beside the three firearms the sheet before 1.7.0 listed, and up to 500 skills of the player's own beside the four the conversion moves to own skills, and must still save | `HORROR_D100_FIREARM_LIST_MAX`, `HORROR_D100_OWN_SKILL_LIST_MAX` | `horrorD100Sheet.schema.ts` |
+| Horror d100 conversion record (`converted`): no limit but the body's. A conversion of a sheet from the shape before 1.7.0 writes it, and a request may carry one only when it creates a character (a character file exported from 1.7.0); every save keeps the stored one, and a template takes none from a request, while one an older version stored keeps the record of its own conversion (`backend/src/legacy/sheetConversion.ts`), so the length and count walks leave it out | none | `horrorD100Sheet.schema.ts` |
 
 A sheet stored before a limit existed still loads, with every entry; its next save is refused, with the path of each field over a limit in `validationErrors`, until the list is shortened. The two sheet editors, the Character Editor page and the editor that opens over a sheet at the table or on the Characters page, turn that into one message through `refusedSaveMessage` in `frontend/src/utils/sheetSaveRefusal.ts`: "Not saved." and the first five paths with their reasons, then a count of the rest.
 
-### A field only the DM sees: Keeper's Notes
+### A field only the GM sees: GM's Notes
 
-A sheet is read by the whole table, its player included, so a field meant for the DM alone has to be withheld by the server, never just hidden on the page. Call of Cthulhu has one: the top-level `notes`, shown as **Keeper's Notes**. `backend/src/utils/keeperNotes.ts` lists it in `KEEPER_ONLY_FIELD` and applies these rules:
+A sheet is read by the whole table, its player included, so a field meant for the GM alone has to be withheld by the server, never just hidden on the page. Horror d100 has one: the top-level `notes`, shown as **GM's Notes**. `backend/src/utils/gmNotes.ts` lists it in `GM_ONLY_FIELD` and applies these rules:
 
-- **Reading.** Only the DM of the character's campaign (the Keeper) is sent it, on `GET /api/characters/:id`, every save's reply and every `character.updated` event (the character list, `GET /api/characters`, carries no sheets). The Keeper is always sent it, as an empty string when nothing is written, and the editor offers the box exactly when the field arrives; anyone else, the character's owner included, never gets the key.
-- **Writing.** Only the Keeper can change it. A save by anyone else (the owner, a script) keeps the stored value, whatever it sent for the field. A character created by anyone but the DM of the campaign it is created in is stored without it.
-- **Moving.** A character entering a campaign it was not in (assigned to another campaign, or brought in when its owner accepts an invitation) loses it, and so does a copy. The notes were the last campaign's Keeper's, and a player who moved their investigator into a campaign they run would otherwise be its Keeper and read them.
-- **Templates.** A template is read by every user, so publishing or saving one stores it without the field, whoever saves it, the Keeper and a template editor included. A template also never keeps the sheet's `playerName`: a character made from it is given its own owner's.
+- **Reading.** Only the GM of the character's campaign is sent it, on `GET /api/characters/:id`, every save's reply and every `character.updated` event (the character list, `GET /api/characters`, carries no sheets). The GM is always sent it, as an empty string when nothing is written, and the editor offers the box exactly when the field arrives; anyone else, the character's owner included, never gets the key.
+- **Writing.** Only the GM can change it. A save by anyone else (the owner, a script) keeps the stored value, whatever it sent for the field. A character created by anyone but the GM of the campaign it is created in is stored without it.
+- **Moving.** A character entering a campaign it was not in (assigned to another campaign, or brought in when its owner accepts an invitation) loses it, and so does a copy. The notes were the last campaign's GM's, and a player who moved their character into a campaign they run would otherwise be its GM and read them.
+- **Templates.** A template is read by every user, so publishing or saving one stores it without the field, whoever saves it, the GM and a template editor included. A template also never keeps the sheet's `playerName`: a character made from it is given its own owner's.
 
-The notes stay inside the stored sheet, so an instance backup keeps them. A campaign export carries no character sheets at all, and a character's JSON export, made from `GET /api/characters/:id`, holds the notes only when the person exporting is the character's Keeper. To give another system such a field, add it to `KEEPER_ONLY_FIELD`; every route already goes through the helpers.
+The notes stay inside the stored sheet, so an instance backup keeps them. A campaign export carries no character sheets at all, and a character's JSON export, made from `GET /api/characters/:id`, holds the notes only when the person exporting is the character's GM. To give another system such a field, add it to `GM_ONLY_FIELD`; every route already goes through the helpers.
 
 ### Flexible sheets
 
@@ -121,9 +128,9 @@ where the rules genuinely diverge.
 | Field | Meaning |
 |---|---|
 | `ac`, `hpMax`, `speed`, `senses`, `languages` | Shared by every system |
-| `abilities` | Ability **scores** (D&D 5e's model) |
+| `abilities` | Ability **scores** (5E's model) |
 | `attributeModifiers` | Ability **modifiers**, for systems that print modifiers instead |
-| `challengeRating` | D&D 5e's creature rating |
+| `challengeRating` | 5E's creature rating |
 | `level` | Creature level, for systems that rate by level instead |
 | `savingThrows`, `skills` | `Record<string, number>` of **final totals** — the value that gets rolled |
 | `proficiencies` | Optional metadata saying *why* each total is what it is |
@@ -139,63 +146,81 @@ works: absent metadata means "take the totals as given".
 Whether a creature's save and skill numbers can be *computed* is a per-system
 question, and getting it wrong invents numbers the designers never intended.
 
-- **D&D 5e derives.** A monster's proficiency bonus comes from its Challenge
+- **5E derives.** A monster's proficiency bonus comes from its Challenge
   Rating on the same curve a character's comes from level, and a save or skill is
   ability modifier + proficiency (doubled for expertise). The maths lives in
-  `frontend/src/utils/rules/dnd5e.ts` (duplicated at
-  `backend/src/utils/rules/dnd5e.ts`; a parity test fails on drift). The editor
+  `frontend/src/utils/rules/fifthEdition.ts` (duplicated at
+  `backend/src/utils/rules/fifthEdition.ts`; a parity test fails on drift). The editor
   is `npc-stat-blocks/ProficiencyEditor.tsx`.
-- **Pathfinder 2e does not derive *creature* stat blocks.** PF2e stat blocks print final modifiers
-  because Paizo builds creatures from level benchmark tables, not from
-  "level + proficiency rank + attribute". The printed number *is* the rule.
-  `npc-stat-blocks/Pf2eProficiencyEditor.tsx` therefore stores what the DM types
-  and computes nothing; `pf2eStatBlock.ts` adds only a loose plausibility warning
+- **Fantasy d20 does not derive *creature* stat blocks.** Its stat blocks print final modifiers
+  because the game's creature guidance builds creatures from benchmarks by
+  level, not from level, proficiency rank and attribute. The printed number
+  *is* the rule.
+  `npc-stat-blocks/FantasyD20ProficiencyEditor.tsx` therefore stores what the GM types
+  and computes nothing; `fantasyD20StatBlock.ts` adds only a loose plausibility warning
   to catch typos, explicitly not a rules check.
 
-  **Player characters are different.** A PF2e character sheet records the parts
+  **Player characters are different.** A Fantasy d20 character sheet records the parts
   — proficiency rank, item bonus, Dex cap, key attribute — so Armor Class, Class
   DC, saving throws, Perception, skills (a check penalty always a penalty),
   initiative, spell attack and spell DC *are* derivable (one spellcasting rank
-  for both, each its own item bonus), and `rules/pathfinder2e.ts` derives them
+  for both, each its own item bonus), and `rules/fantasyD20.ts` derives them
   for the editor, the read-only sheet, the roll menu and the server's
   initiative roll alike,
   with the Bulk an inventory and purse carry (ten light items or a thousand
   coins to 1 Bulk, the rest rounded down) and its limits.
-  The distinction is where the number comes from: a creature's is printed by
-  Paizo, a character's is built from their own sheet.
-- **Call of Cthulhu 7e and Shadowrun 6e have no equivalent.** Percentile and
-  dice-pool systems have neither ability modifiers nor a proficiency bonus, so
-  there is nothing to derive and nothing sensible to offer from this data.
-  The creature editors give their creatures no rating and store their scores
+  The distinction is where the number comes from: a creature's is printed in
+  its stat block, a character's is built from their own sheet.
+- **Horror d100 has no equivalent.** A percentile system has neither ability
+  modifiers nor a proficiency bonus, so there is nothing to derive and nothing
+  sensible to offer from this data.
+  The creature editors give its creatures no rating and store their scores
   and skills as typed (`creatureModel` in `npc-stat-blocks/creatureModel.ts`).
   A rating stored before is kept and shown nowhere: the Creature Library's
-  list and the generic stat block leave it out for these systems.
-  A stat block whose `gameSystem` is `CALL_OF_CTHULHU_7E` takes
-  characteristics up to 9,999 and skills up to 999; every other one keeps
-  D&D 5e's scores of 0 to 30 and skills of -50 to 50, and saves stay at -50 to
+  list and the system's own stat block leave it out.
+  A stat block whose `gameSystem` is `HORROR_D100` takes
+  characteristics up to 999 and skills up to 999; every other one keeps
+  5E's scores of 0 to 30 and skills of -50 to 50, and saves stay at -50 to
   50 in every system (`statBlockNumberBounds` in `validators/statBlockLimits.ts`,
   the same file as `frontend/src/constants/statBlockLimits.ts`). The editors
   name a stat block for the campaign's game system when they change it. SIZ
   and EDU still have no slot (a known issue).
 
-  **A derived base is not a derived value.** Call of Cthulhu's Dodge is listed
-  as "Dodge (half DEX)": half DEX, rounded down, is its *base*, and occupation
-  points, personal-interest points and improvement checks raise it like any
-  other skill. The editor therefore derives only `skills.dodge.baseValue`. The
-  value, `skills.dodge.currentValue`, is the player's, editable with the base
-  as its floor, and when DEX changes in the editor the points above the old
-  base stay above the new one. `derivedStats.dodge.value` is a copy kept for
-  older readers and follows the skill on save; the sheet shows and rolls the
-  skill. Language (Own) works the same way with EDU as its base ("automatically
-  starts as equal to the investigator's EDU"). The base is `cocDodgeBase` in `rules/callOfCthulhu7e.ts`, with the
-  sheet's other derived attributes (hit points, magic points, maximum Sanity,
-  half and fifth, damage bonus and build, move rate) and the skill bases
-  (`COC_SKILL_BASES`, `cocBlankSkills`, from which both the blank template and
-  the editor fill a sheet), mirrored in both projects like the other rules
-  modules; keeping the points above the base is `settleSkillBase` in
-  `components/character-sheets/call-of-cthulhu-7e/dodge.ts`.
+  **A derived base is not a derived value.** On a Horror d100 sheet, twice
+  DEX is Dodge's *base chance*, and skill points and experience raise the
+  skill like any other. The sheet stores only the rating, `skills.dodge.value`,
+  which is the player's: it can be set anywhere from 0 up, below the base
+  chance too, and opening a sheet never changes it. The Skills tab works the
+  base chance out to show beside it. When DEX changes in the editor, Dodge
+  moves by as much as its base chance moved, so the points put into it stay;
+  Gaming (INT plus POW) and Language (Own) (five times INT, or EDU if higher)
+  do the same. What the open d100 rules work out and the player does not type
+  follows its source as that is edited: maximum hit points and power points,
+  keeping the damage taken and the points spent, and maximum Sanity, from
+  Knowledge (Blasphemous Lore). A stored skill moves with its base chance
+  only where the sheet already had the characteristic that base comes from. The damage modifier, the major wound level and
+  the experience bonus are not stored at all, and are worked out wherever they
+  are shown. The rules are in `rules/horrorD100.ts` (the characteristic rolls,
+  the derived attributes, and every skill with its base chance in
+  `HORROR_D100_FIXED_SKILLS` and `HORROR_D100_SPECIALISED_SKILLS`;
+  `horrorD100NewSkills` fills both the blank template and a sheet stored
+  without skills), mirrored in both projects like the other rules modules.
+  What the editor does as a sheet opens and as a characteristic or a skill
+  changes is in `components/character-sheets/horror-d100/sheetForm.ts`. The
+  read-only sheet shows a sheet as it is stored, as the roster card, the
+  token's bar and the roll menu read it. A sheet stored without hit points or
+  skills shows none: one a program made through the API, a character file
+  imported as it is, or the minimal example file
+  (`Examples/horror_d100_character_minimal.json`), which holds only the four
+  required fields. **Edit** and **Save** fills them in from the
+  characteristics. The editor invents nothing on the way: it holds the sheet
+  as stored, shows each missing block worked out (`withHorrorD100MissingBlocks`)
+  only once the characteristics that block needs are there, and stores it
+  with the save. A characteristic the sheet lacks (the conversion of an older
+  sheet that held none stores none) is an empty box, never 0, and Save names
+  the missing ones and sends nothing until they are typed.
 
-**Where a number is derived, give it a manual bonus alongside.** The 5e sheet
+**Where a number is derived, give it a manual bonus alongside.** The 5E sheet
 derives initiative, passive Perception, spell save DC and spell attack, and each
 carries an "other bonus" box. Deriving without one is a trap: a feat or an item
 adjusts the total without changing either input, and the player is then left with
@@ -208,28 +233,28 @@ stores its total as `bonus` and an optional `otherBonus` for what the maths
 cannot know: Jack of All Trades, Aura of Protection, a Ring of Protection. The
 editor keeps `bonus` equal to ability modifier, plus proficiency (doubled for a
 skill with expertise, never for a save), plus `otherBonus`. The view and the
-roll picker work the total out the same way, through `dnd5eSkillBonus` and
-`dnd5eSaveBonus` in `rules/dnd5e.ts`.
+roll picker work the total out the same way, through `fifthEditionSkillBonus` and
+`fifthEditionSaveBonus` in `rules/fifthEdition.ts`.
 
 **Adding a derived field to existing sheets: read the old total back once.** A
 sheet saved before `otherBonus` existed holds only a total, and that total is
 what it has always rolled. Deriving over it would silently take away whatever it
 included. So the editor, once as it opens and on the sheet as stored, records
 `stored − derived` as the other bonus wherever the two differ
-(`dnd5eBackfilledSkillOtherBonus`, `dnd5eBackfilledSaveOtherBonus`), and until
+(`fifthEditionBackfilledSkillOtherBonus`, `fifthEditionBackfilledSaveOtherBonus`), and until
 then the view and the dice use the stored total. Doing it once matters: reading
 back a total the editor had itself just worked out from a changed score would
 turn the change into a bonus. The initiative bonus was converted the same way.
 
 **Do not let the templates seed a derived number.** They shipped spell save DC 8
 and attack +0 — the base with nothing added, which no character can legitimately
-have. The formulas live in `rules/dnd5e.ts` alongside the rest of the 5e maths.
+have. The formulas live in `rules/fifthEdition.ts` alongside the rest of the 5E maths.
 
-**The same pattern extends to skills a player invents.** A 5e sheet can carry
+**The same pattern extends to skills a player invents.** A 5E sheet can carry
 skills of its own beyond the standard eighteen — a tool proficiency, a homebrew
 skill — and each records the ability it uses plus proficiency or expertise
 rather than a typed total, so the bonus follows the character as their scores
-and level change. `dnd5eCustomSkillBonus` in `rules/dnd5e.ts` computes it and it
+and level change. `fifthEditionCustomSkillBonus` in `rules/fifthEdition.ts` computes it and it
 carries an "other bonus" box for the same reason the others do. If you are
 adding a system where players routinely track something the sheet does not
 enumerate, this is the shape to copy: store the inputs, derive the total, and
@@ -241,46 +266,45 @@ The same per-system care applies to initiative, and it is the clearest example o
 why forcing one shape onto every system produces wrong numbers. The maths lives
 in `frontend/src/utils/rules/initiative.ts` (duplicated at
 `backend/src/utils/rules/initiative.ts`; the parity test in
-`backend/src/utils/rules/__tests__/dnd5e.test.ts` fails on drift).
+`backend/src/utils/rules/__tests__/fifthEdition.test.ts` fails on drift).
 
 | System | Rule | Shape |
 |---|---|---|
-| **D&D 5e** | `d20 +` Dexterity modifier `+ initiativeBonus`; `2d20kh1` in place of the d20 when `initiativeAdvantage` is true, unless the sheet records disadvantage (below) | `roll` |
-| **Pathfinder 2e** | `d20 +` the stat named by `initiative.usedStat` — Perception by default, or a skill the GM calls for | `roll` |
-| **Call of Cthulhu 7e** | **No roll.** Combatants are ranked in DEX order, highest first | `fixed` |
-| **Shadowrun 6e** | `derivedStats.initiative.meatspace`: its dice pool plus its base | `roll` |
+| **5E** | `d20 +` Dexterity modifier `+ initiativeBonus`; `2d20kh1` in place of the d20 when `initiativeAdvantage` is true, unless the sheet records disadvantage (below) | `roll` |
+| **Fantasy d20** | `d20 +` the stat named by `initiative.usedStat` — Perception by default, or a skill the GM calls for | `roll` |
+| **Horror d100** | **No roll.** Combatants are ranked in DEX order, highest first | `fixed` |
 | Flexible / unknown | Nothing to derive | `null` — caller falls back to `1d20` |
 
 Two consequences worth understanding before changing this code:
 
 - **The return type admits a non-roll** (`{ kind: 'fixed', value }`) precisely
-  because Call of Cthulhu has no initiative die. An earlier version returned only
-  a dice expression, which forced someone to invent a `1d10 + DEX/5` roll for CoC
+  because Horror d100 has no initiative die. An earlier version returned only
+  a dice expression, which forced someone to invent a `1d10 + DEX/5` roll for Horror d100
   that appears nowhere in the rulebook. If a system does not roll, say so in the
   type rather than fabricating dice.
 - **The server resolves it, not the client** — see
   `backend/src/websocket/handlers/initiative.ts`. It is the only side holding the
   character sheet, and a `fixed` result cannot be expressed as a dice expression
-  a client could send. For a combatant nothing can be derived for, the DM's
+  a client could send. For a combatant nothing can be derived for, the GM's
   client may send an `expression`; a player's is ignored and `1d20` is rolled.
   The frontend uses the same module purely to *display* what will happen.
 
-D&D 5e's `initiativeBonus` is a single manual field covering everything that is
+5E's `initiativeBonus` is a single manual field covering everything that is
 not Dexterity — a feat's flat +5, Jack of All Trades, Remarkable Athlete,
 subclasses that swap the ability. Those are too open-ended to enumerate, and
-inventing a toggle per feature would be the same mistake as inventing CoC's dice.
+inventing a toggle per feature would be the same mistake as inventing Horror d100's dice.
 
 Advantage is one box, `initiativeAdvantage`: whatever grants it, the roll is the
-same, two d20s keeping the higher. `dnd5eInitiativeAdvantage` reads it. Advantage and disadvantage together cancel to one d20, so the box gives
+same, two d20s keeping the higher. `fifthEditionInitiativeAdvantage` reads it. Advantage and disadvantage together cancel to one d20, so the box gives
 way when the sheet records something that always gives disadvantage on an ability
 check, as initiative is a Dexterity check: an `exhaustionLevel` of 1 or more, or a
-condition in `DND5E_CHECK_DISADVANTAGE_CONDITIONS` (`poisoned`, and `exhausted`,
+condition in `FIFTH_EDITION_CHECK_DISADVANTAGE_CONDITIONS` (`poisoned`, and `exhausted`,
 which a sheet saved before exhaustion had levels can still hold), matched in any
 letter case. Frightened is not
 in that list, since it applies only while the source of the fear is in sight. These
 give no disadvantage of their own: no roll from a sheet applies them, so they only
 cancel a box the player ticked. `keepInStep.test.ts` checks that the condition
-names are in the shared D&D 5e condition list (`DND5E_CONDITIONS`).
+names are in the shared 5E condition list (`FIFTH_EDITION_CONDITIONS`).
 
 ### Hit points: damage, healing and temporary hit points
 
@@ -289,15 +313,14 @@ The rules live in `frontend/src/utils/rules/hitPoints.ts` (duplicated at
 `backend/src/utils/rules/__tests__/hitPoints.test.ts` fails on drift). The
 server applies them to a character's sheet (the roster's damage buttons,
 `character.hp.temporary`) and the token editor and the token menu to a
-creature's token. Checked against the D&D 5e Basic Rules and the Pathfinder 2e
-Core Rulebook.
+creature's token. Checked against the SRD 5.1 and the Fantasy d20 rules.
 
 | System | Damage | Healing | Temporary hit points granted to a creature that has some |
 |---|---|---|---|
-| **D&D 5e** | Off temporary hit points first, the rest off current | Current only, up to the maximum | Never added together: the creature keeps the ones it has or takes the new ones (`grantTemporaryHitPoints`), so **Temporary HP...** offers **Keep N** and **Take M** |
-| **Pathfinder 2e** | As D&D 5e | As D&D 5e | As D&D 5e: temporary hit points come from one source at a time |
-| **Call of Cthulhu 7e** | Off current | Current only | None to grant: the rules give a temporary hit point only to a dying investigator stabilised with First Aid, which the sheet does not track, so the sheet keeps no pool and **Temporary HP...** is not offered |
-| Flexible / unknown | As D&D 5e on a token | As D&D 5e on a token | No rule to follow: **Temporary HP...** is not offered |
+| **5E** | Off temporary hit points first, the rest off current | Current only, up to the maximum | Never added together: the creature keeps the ones it has or takes the new ones (`grantTemporaryHitPoints`), so **Temporary HP...** offers **Keep N** and **Take M** |
+| **Fantasy d20** | As 5E | As 5E | As 5E: temporary hit points come from one source at a time |
+| **Horror d100** | Off current | Current only | None to grant: the open d100 rules give a character no temporary hit points, so the sheet keeps no pool and **Temporary HP...** is not offered. Damage takes current hit points below 0, which the rules keep track of; healing stops at the maximum |
+| Flexible / unknown | As 5E on a token | As 5E on a token | No rule to follow: **Temporary HP...** is not offered |
 
 A grant gives 1 to 99,999 (`MAX_TEMPORARY_HIT_POINTS`, which also bounds a
 token's temporary hit points). Keeping the ones a creature has changes nothing,
@@ -309,25 +332,25 @@ Eight places, all plain conditionals with a fallback:
 
 | Location | What it decides |
 |---|---|
-| `npc-stat-blocks/StatBlockEditor.tsx` | CR vs Level, scores vs modifiers, which saves and skills editor, by `creatureModel` (`npc-stat-blocks/creatureModel.ts`): D&D 5e's derived one, Pathfinder 2e's printed one, or skills typed and no rating for Call of Cthulhu and Shadowrun 6e. A system with no case gets D&D 5e's |
+| `npc-stat-blocks/StatBlockEditor.tsx` | CR vs Level, scores vs modifiers, which saves and skills editor, by `creatureModel` (`npc-stat-blocks/creatureModel.ts`): 5E's derived one, Fantasy d20's printed one, or skills typed and no rating for Horror d100. A system with no case gets 5E's |
 | `CreatureLibrary.tsx` (`CreatureForm`) | The Creature Library's own creature form: the same choices as `StatBlockEditor` |
 | `npc-stat-blocks/StatBlockViewer.tsx` | Which read-only stat block renderer |
-| `utils/npcRolls.ts` (`buildNpcRolls`) | What can be rolled. A system with no case is treated as D&D 5e and offered d20 rolls; `CALL_OF_CTHULHU_7E` and `SHADOWRUN_6E` return nothing |
+| `utils/npcRolls.ts` (`buildNpcRolls`) | What can be rolled. A system with no case is treated as 5E and offered d20 rolls; `HORROR_D100` returns nothing |
 | `utils/rollModes.ts` | Advantage-equivalent labels, and whether the system has one (the roll pickers and a character sheet's **Roll mode** and roll menu) |
-| `utils/rules/initiative.ts` (`resolveStatBlockInitiative`) | A creature's initiative: D&D 5e's from its Dexterity, a flat d20 in any other system or for a stat block labelled with a system other than the campaign's |
-| `utils/conditions.ts` (`conditionsOffered`, `effectsOffered`) | The conditions the token editor lists; none for a system with no case, where the DM types their own |
-| `MapCanvas.tsx` (`coneRule`) | A cone template's shape: Pathfinder 2e's quarter circle, D&D 5e's in every other system |
+| `utils/rules/initiative.ts` (`resolveStatBlockInitiative`) | A creature's initiative: 5E's from its Dexterity, a flat d20 in any other system or for a stat block labelled with a system other than the campaign's |
+| `utils/conditions.ts` (`conditionsOffered`, `effectsOffered`) | The conditions the token editor lists; none for a system with no case, where the GM types their own |
+| `MapCanvas.tsx` (`coneRule`) | A cone template's shape: Fantasy d20's quarter circle, 5E's in every other system |
 
 ### Adding creature support for a new system
 
 Optional: a system works without it, but its creatures are then handled as
-D&D 5e's, d20 rolls included. See
+5E's, d20 rolls included. See
 [Step 12](#step-12-creature-support-optional).
 
 > **Returning no roll options is a valid, correct outcome.** Offering a d20 roll
 > for a d100 game is worse than offering nothing: the caller already falls back
 > to a custom roll input that works for any system. Since `buildNpcRolls` falls
-> back to D&D 5e, a system that is not d20-based says so with a case of its own.
+> back to 5E, a system that is not d20-based says so with a case of its own.
 
 ---
 
@@ -335,28 +358,26 @@ D&D 5e's, d20 rolls included. See
 
 Copy from a system that's shaped like the one you're adding:
 
-- **Backend (steps 4 to 6): copy Shadowrun 6e.** It shows the schema, the validator index and the templates from start to finish. Files: `validators/game-systems/shadowrun6e.schema.ts`, `utils/character-templates/shadowrun6e-templates.ts`, plus its entries in both backend `index.ts` files. It keeps no hit points and offers no rolls from its sheet, so for [Step 11](#step-11-rolls-initiative-and-hit-points) copy D&D 5e or Call of Cthulhu 7e.
-- **Frontend sheet (step 9): copy D&D 5e, Pathfinder 2e or Call of Cthulhu 7e.** These are the complete sheets, each split into `…CharacterSheet.tsx` (mode switcher) + `…CharacterView.tsx` + `…CharacterEditor.tsx` + a `components/` folder. Shadowrun 6e's sheet is a single "not yet implemented" placeholder, so don't copy it for the UI; it shows the smallest sheet the router accepts.
-
-> **Note on Shadowrun 6e:** it is **not listed in the dropdowns a game system is chosen from**: its entry in `GAME_SYSTEM_OPTIONS` (`frontend/src/constants/game-systems.ts`) is commented out because its sheet isn't finished. That commented block illustrates [Step 8](#step-8-frontend-labels-and-colours): a system is only selectable once it's in `GAME_SYSTEM_OPTIONS`.
+- **Backend (steps 4 to 6): copy Horror d100.** It shows the schema, the validator index and the templates from start to finish. Files: `validators/game-systems/horrorD100Sheet.schema.ts`, `utils/character-templates/horrorD100-templates.ts`, plus its entries in both backend `index.ts` files. It keeps hit points and ranks initiative without a roll, so for [Step 11](#step-11-rolls-initiative-and-hit-points) copy 5E instead if your system rolls a d20.
+- **Frontend sheet (step 9): copy 5E, Fantasy d20 or Horror d100.** These are the complete sheets, each split into `…CharacterSheet.tsx` (mode switcher) + `…CharacterView.tsx` + `…CharacterEditor.tsx` + a `components/` folder.
 
 ---
 
 ## Naming conventions
 
-The codebase uses a compact per-system id. Pick one and use it **consistently**:
+Each system has one name, written in the form the table gives for each kind of file and identifier. Pick one and use it **consistently**:
 
 | Thing | Convention | Examples |
 |-------|-----------|----------|
-| Prisma / TS enum value | `SCREAMING_SNAKE` | `DND_5E`, `SHADOWRUN_6E` |
-| Backend file stem | camelCase | `dnd5e.ts`, `shadowrun6e.ts`, `callOfCthulhu7e.ts` |
-| Character-data type | `PascalCase…CharacterData` | `DnD5eCharacterData`, `SR6CharacterData` |
-| Zod schema const | `camelCase…CharacterDataSchema` | `shadowrun6eCharacterDataSchema` |
-| Frontend sheet folder | matches the file stem | `dnd5e/`, `shadowrun6e/`, `call-of-cthulhu-7e/` |
+| Prisma / TS enum value | `SCREAMING_SNAKE` | `FIFTH_EDITION`, `HORROR_D100`: the values the database stores |
+| Backend file stem | camelCase | `fifthEdition.ts`, `fantasyD20.ts`, `horrorD100.ts` |
+| Character-data type | `PascalCase…CharacterData` | `FifthEditionCharacterData`, `FantasyD20CharacterData` |
+| Zod schema const | `camelCase…CharacterDataSchema` | `fantasyD20CharacterDataSchema` |
+| Frontend sheet folder | the file stem in kebab-case | `fifth-edition/`, `fantasy-d20/`, `horror-d100/` |
 
-> Folder naming is slightly inconsistent today (`call-of-cthulhu-7e` is kebab-case while the others are run-together). Don't sweat matching that historical quirk — just keep your own system's id consistent across every file, and make the frontend folder name match the path you import in the router.
+> Keep your system's name the same in every file, and make the frontend folder name match the path you import in the router.
 
-This guide uses a running example system with id **`mySystem`** and enum value **`MY_SYSTEM`**.
+This guide uses a running example system with id **`mySystem`**, folder **`my-system/`** and enum value **`MY_SYSTEM`**.
 
 ---
 
@@ -368,13 +389,14 @@ Add the value to `backend/prisma/schema.prisma`:
 
 ```prisma
 enum GameSystem {
-  DND_5E
-  PATHFINDER_2E
-  SHADOWRUN_6E
-  CALL_OF_CTHULHU_7E
+  FIFTH_EDITION
+  FANTASY_D20
+  HORROR_D100
   MY_SYSTEM          // ← add
 }
 ```
+
+Until 1.7.0 the systems had other values; its migration renamed them, and `backend/src/legacy/gameSystemAliases.ts` reads the old ones wherever a request, archive or file still sends them. A new system needs no entry there.
 
 Then create the migration as [Running Migrations](DEVELOPMENT.md#running-migrations) describes. On a database the backend has never started against, in a terminal that can answer questions:
 
@@ -413,9 +435,9 @@ There is no separate backend type to write. The Zod schema you write in Step 4 d
 
 ---
 
-## Step 3: Backend enum (nothing to edit)
+## Step 3: Backend list of supported systems
 
-`backend/src/game-systems/index.ts` re-exports Prisma's `GameSystem`, so the value you added in Step 1 reaches every backend file through `prisma generate`. `backend/src/__tests__/keepInStep.test.ts` checks that the frontend enum (Step 7) names the same values, in the same order.
+`backend/src/game-systems/index.ts` re-exports Prisma's `GameSystem`, so the value you added in Step 1 reaches every backend file through `prisma generate`. Add it to `SUPPORTED_GAME_SYSTEMS` in the same file: the request schemas take only those values, and code that reads a stored row asks `isSupportedGameSystem` before using its system. `backend/src/__tests__/keepInStep.test.ts` checks that the frontend enum (Step 7) names the values of `SUPPORTED_GAME_SYSTEMS`, in the same order, and that the database enum holds exactly one value more.
 
 ---
 
@@ -467,7 +489,7 @@ export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>;
 >
 > Every system's schema starts with `themeColor: themeColorSchema` from `sheetChrome.ts`. The header colour the editor saves is not a game-system field, and the routes store the parsed sheet, so a key no schema declares does not survive a save.
 >
-> Match the permissiveness of the existing schemas. Look at `shadowrun6e.schema.ts` before finalizing: the shipped schemas are lenient on purpose, so partial and in-progress sheets save cleanly.
+> Match the permissiveness of the existing schemas: they are lenient on purpose, so partial and in-progress sheets save cleanly.
 >
 > Keep the schema's top-level keys indented two spaces, and close the object with `});` on a line of its own: `templateSchemaParity.test.ts` (Step 6) reads the keys from the source.
 
@@ -480,7 +502,7 @@ Four edits in `backend/src/validators/game-systems/index.ts`:
 1. Import the schema and its type, and re-export both alongside the others.
 2. Add a case to `validateCharacterData()`. It has a `default` branch, so the compiler does not notice a missing case: every save of the system is then refused as `Unknown game system`.
 3. Add `MySystemCharacterData` to the union in the return type of `validateCharacterData`, and to the one `getBlankCharacterTemplate` returns. The case does not compile until the first is there.
-4. Add your system to `SHEET_NAME_FIELD`, naming the sheet field that holds the character's name (`characterName` here, `investigatorName` in Call of Cthulhu). Creating a character writes its name into that field, and saving the sheet copies the field back to the character's name. The build fails until it is there.
+4. Add your system to `SHEET_NAME_FIELD`, naming the sheet field that holds the character's name (`characterName` in every system so far). Creating a character writes its name into that field, and saving the sheet copies the field back to the character's name. The build fails until it is there.
 
 ```typescript
 import { mySystemCharacterDataSchema, type MySystemCharacterData } from './mySystem.schema';
@@ -521,7 +543,7 @@ case GameSystem.MY_SYSTEM: {
 
 > **A template may only write fields the schema declares.** Every one of the
 > original four had drifted: they seeded fields no reader knew about, so the
-> data was stored and never shown. A D&D 5e Fighter's Features tab was blank
+> data was stored and never shown. A 5E Fighter's Features tab was blank
 > while "Second Wind" sat in the character's own row. The routes now store the
 > schema's parsed sheet, and Zod drops a key the schema does not declare
 > without complaint, so such a field is lost on the first save, silently. That
@@ -536,13 +558,13 @@ case GameSystem.MY_SYSTEM: {
 
 > **Spell a value the way the editor offers it.** A schema that takes any
 > string accepts "str" as readily as "strength", but the editor compares with
-> the values its own dropdowns hold. The Pathfinder 2e templates abbreviated
+> the values its own dropdowns hold. The Fantasy d20 templates abbreviated
 > every attribute, so the editor found no modifier for them and the Level 1
 > Fighter's Athletics was saved as +3 where the sheet said +6. The same test
-> file now checks that each Pathfinder 2e template names attributes,
+> file now checks that each Fantasy d20 template names attributes,
 > traditions and casting types as the editor does, and that its stored skill
 > totals are the ones its own components give. The editor also accepts the
-> short forms on load, through `pf2eAttributeName` in `rules/pathfinder2e.ts`,
+> short forms on load, through `fantasyD20AttributeName` in `rules/fantasyD20.ts`,
 > so sheets made before the templates were corrected recover.
 
 The template layer powers the "start from a preset" picker and the template API. Create `backend/src/utils/character-templates/mySystem-templates.ts` exporting **named `CharacterTemplate`s** plus two getter functions:
@@ -581,7 +603,8 @@ export function getMySystemTemplate(templateName?: string): CharacterTemplate {
 
 1. Import `getMySystemTemplate` into `backend/src/utils/character-templates/index.ts` and add a `case GameSystem.MY_SYSTEM:` to **`getCharacterTemplate`**. Its `default` throws, so the compiler does not remind you: without the case `GET /api/characters/templates/MY_SYSTEM/blank` answers 500, and neither a character nor a template of the system can be created.
 2. Add `getMySystemTemplates` to the map in `backend/src/__tests__/helpers/builtInTemplates.ts`, which the template tests check every template from. The type check fails until it is there.
-3. List the presets in New Character: add an entry to `TEMPLATE_OPTIONS_BY_SYSTEM` in `frontend/src/components/character/NewCharacterModal.tsx`, one `{ value, label, description }` per template, each `value` a name `getMySystemTemplate` matches (`blank`, `example`). Without it the dialog offers no presets and always starts from the blank sheet.
+3. Write the example in your own words. Name only rules elements (classes, ancestries, backgrounds, feats, features, spells, items, skills and their specialisations, professions, proficiencies, languages, conditions, and weapon properties or traits) that the system's open rules have, and invent every deity, place and person. Record each name in `backend/src/__tests__/helpers/openContentNames.ts` with where the open rules have it, and add your system to `RULES_ELEMENTS` in `utils/character-templates/__tests__/exampleContent.test.ts`, which says where your sheet stores those names. That test fails for a name not recorded, and holds the files in `Examples/` to the same list; the type check fails until both maps have your system.
+4. List the presets in New Character: add an entry to `TEMPLATE_OPTIONS_BY_SYSTEM` in `frontend/src/components/character/NewCharacterModal.tsx`, one `{ value, label, description }` per template, each `value` a name `getMySystemTemplate` matches (`blank`, `example`). Without it the dialog offers no presets and always starts from the blank sheet.
 
 ---
 
@@ -589,14 +612,13 @@ export function getMySystemTemplate(templateName?: string): CharacterTemplate {
 
 The frontend keeps its own copy of the types: its image is built from `frontend/` alone, so it cannot import the backend's. Tests keep the copies in step.
 
-1. **Enum.** Add your value to the `GameSystem` enum in `frontend/src/types/gameSystem.ts`, the frontend's one copy (`types/index.ts` and `types/game-systems/index.ts` re-export it). It must name exactly the values in `schema.prisma`, in the same order; `keepInStep.test.ts` fails otherwise:
+1. **Enum.** Add your value to the `GameSystem` enum in `frontend/src/types/gameSystem.ts`, the frontend's one copy (`types/index.ts` and `types/game-systems/index.ts` re-export it). It must name exactly the values in `SUPPORTED_GAME_SYSTEMS` (Step 3), in the same order; `keepInStep.test.ts` fails otherwise:
 
    ```typescript
    export enum GameSystem {
-     DND_5E = 'DND_5E',
-     PATHFINDER_2E = 'PATHFINDER_2E',
-     SHADOWRUN_6E = 'SHADOWRUN_6E',
-     CALL_OF_CTHULHU_7E = 'CALL_OF_CTHULHU_7E',
+     FIFTH_EDITION = 'FIFTH_EDITION',
+     FANTASY_D20 = 'FANTASY_D20',
+     HORROR_D100 = 'HORROR_D100',
      MY_SYSTEM = 'MY_SYSTEM',        // ← add
    }
    ```
@@ -645,9 +667,9 @@ export const GAME_SYSTEM_OPTIONS: GameSystemOption[] = [
 ];
 ```
 
-> The four `Record<GameSystem, …>` maps are exhaustive, so TypeScript forces you to add them. `GAME_SYSTEM_OPTIONS` is a plain array: nothing forces you to add it, so **this is the step that's easy to forget.** If your system doesn't appear in the dropdown, this is why (see the commented-out Shadowrun 6e entry).
+> The four `Record<GameSystem, …>` maps are exhaustive, so TypeScript forces you to add them. `GAME_SYSTEM_OPTIONS` is a plain array: nothing forces you to add it, so **this is the step that's easy to forget.** If your system doesn't appear in the dropdown, this is why.
 
-The game system badge (`components/common/GameSystemBadge.tsx`) and the roster read the short label and the tint from here. Give the system a tint no other system uses: the four so far use `danger`, `info`, `spirit` and `success`.
+The game system badge (`components/common/GameSystemBadge.tsx`) and the roster read the short label and the tint from here. Give the system a tint no other system uses: the three so far use `danger`, `info` and `success`.
 
 ---
 
@@ -668,19 +690,19 @@ export interface CharacterSheetProps {
 }
 ```
 
-**Minimal (single file).** The smallest valid sheet is one component implementing `CharacterSheetProps` (this is the Shadowrun 6e shape). Fine for a placeholder.
+**Minimal (single file).** The smallest valid sheet is one component implementing `CharacterSheetProps`. Fine for a placeholder.
 
-**Recommended (the D&D 5e, Pathfinder 2e and Call of Cthulhu 7e pattern).** Split responsibilities so view and edit stay manageable:
+**Recommended (the 5E, Fantasy d20 and Horror d100 pattern).** Split responsibilities so view and edit stay manageable:
 
 ```
-frontend/src/components/character-sheets/mySystem/
+frontend/src/components/character-sheets/my-system/
   MySystemCharacterSheet.tsx    ← the file the router imports; switches on mode
   MySystemCharacterView.tsx     ← read-only display; props: { character, onEdit, onRoll, rollMode }
   MySystemCharacterEditor.tsx   ← the form; props: { character, onSave, onCancel, onDirtyChange, onDone, allowTokenPicture }
   components/                   ← reusable sub-sections (stat block, skills, etc.)
 ```
 
-The `…CharacterSheet.tsx` mode switcher looks like this (taken from D&D 5e's):
+The `…CharacterSheet.tsx` mode switcher looks like this (taken from 5E's):
 
 ```tsx
 // MySystemCharacterSheet.tsx
@@ -724,7 +746,7 @@ export default MySystemCharacterSheet;
 
 Import `CharacterData` from the app's types, as here. Without the import the name is the browser's own `CharacterData` interface, and the build fails where it meets `onSave`.
 
-**Rolling from the view.** The sheet window passes the view an `onRoll` (a `SheetRollHandler`, from `components/character-sheets/useSheetRolls.tsx`) when the person looking may roll, and a `rollMode` when the system has one (Step 11). With them, `useSheetRolls(onRoll, character.gameSystem, rollMode)` gives `rollTest` for d20 tests, `roll` for anything rolled as written, `rootProps` to spread on the sheet's root and a `menu` to render. Spread `rollTarget(expression, purpose, gameSystem)` on each element that rolls a d20 test, which gives it the right-click and press-and-hold roll menu, and `sheetRoll` on anything else that rolls (a damage roll, a percentile skill), so the roll's feedback pulses what was pressed. Call of Cthulhu's view, which has no roll menu, calls `onRoll` directly and marks each roll with `sheetRoll`.
+**Rolling from the view.** The sheet window passes the view an `onRoll` (a `SheetRollHandler`, from `components/character-sheets/useSheetRolls.tsx`) when the person looking may roll, and a `rollMode` when the system has one (Step 11). With them, `useSheetRolls(onRoll, character.gameSystem, rollMode)` gives `rollTest` for d20 tests, `roll` for anything rolled as written, `rootProps` to spread on the sheet's root and a `menu` to render. Spread `rollTarget(expression, purpose, gameSystem)` on each element that rolls a d20 test, which gives it the right-click and press-and-hold roll menu, and `sheetRoll` on anything else that rolls (a damage roll, a percentile skill), so the roll's feedback pulses what was pressed. Horror d100's view, which has no roll menu, calls `onRoll` directly and marks each roll with `sheetRoll`.
 
 **No `any`.** `@typescript-eslint/no-explicit-any` is an error in both projects
 and there are none left in application code. Type the sheet's form state with
@@ -734,10 +756,10 @@ narrowing check — never `any`.
 
 **The editor and the view must agree on what exists.** Every field the editor
 lets someone fill in has to appear when the sheet is read back, and vice versa.
-This is the single most common defect in the existing sheets: Pathfinder 2e was
+This is the single most common defect in the existing sheets: Fantasy d20 was
 missing six sections from its view — rituals, proficiencies, conditions,
-treasure, deity and alignment — and Call of Cthulhu displayed conditions,
-appearance and Keeper's notes that the editor gave no way to set. Both went
+treasure, deity and alignment — and Horror d100 displayed conditions,
+appearance and GM's notes that the editor gave no way to set. Both went
 unnoticed for releases.
 
 Check it mechanically rather than by eye: list the fields the editor writes,
@@ -749,7 +771,7 @@ cannot record something the server will happily store.
 declares.** The server stores the schema's parsed sheet, so a key the editor
 writes and the schema does not declare is dropped on save with no error, and an
 entry missing a field the schema requires makes every save fail. Both have
-happened: Pathfinder 2e feat descriptions were dropped, and adding a cantrip
+happened: Fantasy d20 feat descriptions were dropped, and adding a cantrip
 blocked saving. Type each entry an editor creates with the sheet's interface
 from `frontend/src/types/game-systems/`, which follows the schema, so a missing
 field fails to compile, and give a field the editor writes a declaration in the
@@ -759,14 +781,14 @@ schemas, parses a sheet holding everything each editor writes and fails when
 the schema refuses or drops any of it; add to it when an editor gains a
 field.
 
-**Derive what the sheet can work out; store what it cannot.** The 5e sheet's own
+**Derive what the sheet can work out; store what it cannot.** The 5E sheet's own
 skills (`customSkills`) record a name, an ability and a proficiency level, and
-nothing else — the bonus comes from `dnd5eCustomSkillBonus`, so it follows the
+nothing else — the bonus comes from `fifthEditionCustomSkillBonus`, so it follows the
 character's ability scores and level instead of going stale the way a stored
 `passivePerception` did. The `otherBonus` field is the escape hatch for what the
 rules cannot derive, matching initiative and passive Perception. Storing a total
 here would have reintroduced exactly the drift those two were fixed for.
-A number nobody adjusts need not be stored at all: the 5e view works carrying
+A number nobody adjusts need not be stored at all: the 5E view works carrying
 capacity out from Strength (`carryingCapacity`: the score times 15, and twice
 that to push, drag or lift) each time it draws. The proficiency bonus stays a
 stored box, since a table may use another, and the editor moves it with
@@ -774,7 +796,7 @@ stored box, since a table may use another, and the editor moves it with
 set otherwise.
 
 **They must also agree on what a stored value *means*.** Agreeing a field exists
-is not enough if each end interprets it differently. The 5e sheet's four
+is not enough if each end interprets it differently. The 5E sheet's four
 proficiency boxes were flattened into one list for storage, and the read-only
 view guessed the categories back from a hardcoded list of language names — a
 list the editor also had, with different words in it. A player who wrote
@@ -789,26 +811,26 @@ one shared function rather than one per component.
 - Numbers: `<NumberField>`, so a box can be cleared and retyped. Lists typed as text ("Common, Elven", or one per line): `<ListField>`, which keeps the text as typed while the box is in use. Splitting and joining the text on every keystroke throws away the comma, space or new line typed after a word.
 - Buttons: the `<Button>` component (`frontend/src/components/ui/Button.tsx`).
 - Tabs: `<SheetTabs>` (`frontend/src/components/character-sheets/SheetTabs.tsx`), given an `id` from `useId()`, the tabs, the open one and the header colour for its underline; spread `sheetTabPanel(id, activeTab)` on the sheet's body, which is the tabs' panel. It is a `tablist` the arrows, Home and End move through (`utils/tabKeys.ts`, shared with the session rail and the Admin Panel). It wraps onto more rows where the tabs do not fit, so every tab stays in reach on a phone and on a tablet held upright; do not write a tab bar of your own, which `sheetTabs.test.tsx` refuses.
-- Text/surfaces: theme tokens — `text-ink`, `text-ink-secondary`, `text-ink-muted`, the card `bg-paper`, inset panels a wash of ink (`bg-ink/5`, `bg-ink/10`: darker on a light paper, lighter on a dark one; the `surface` tokens invert on dark themes, so keep them off the card), borders `border-ink/10` and `border-ink/20`, focus rings `ring-brand`. **Do not** hardcode `gray-`/`slate-`/`stone-`/`sepia-` colors or a fixed hex — those break the non-default themes. This holds for every sheet, Call of Cthulhu's included, and `themeTokens.test.ts` checks it.
+- Text/surfaces: theme tokens — `text-ink`, `text-ink-secondary`, `text-ink-muted`, the card `bg-paper`, inset panels a wash of ink (`bg-ink/5`, `bg-ink/10`: darker on a light paper, lighter on a dark one; the `surface` tokens invert on dark themes, so keep them off the card), borders `border-ink/10` and `border-ink/20`, focus rings `ring-brand`. **Do not** hardcode `gray-`/`slate-`/`stone-`/`sepia-` colors or a fixed hex — those break the non-default themes. This holds for every sheet, Horror d100's included, and `themeTokens.test.ts` checks it.
 - Colour that means something takes its token: `danger` (hit points, damage, errors, remove), `spirit` (sanity, magic), `info`, `success`, `warning`. Text on the page uses the `-ink` variant (`text-danger-ink`), never the fill token. A panel or chip with text in it is a tint, `bg-danger/10 text-danger-ink`, with `border border-danger/30` where it needs an edge: white text fails on most of the state fills in some theme. A solid token fill is for things with no text on them, such as a bar; the one solid fill that carries text is the accent with its own label colour, `bg-accent text-accent-text`. A checkbox takes its colour from `accent-danger` and the like, not from a text colour.
-- A system's own colour (D&D's red, Pathfinder's blue) is not a meaning: its buttons are `<Button>`, a selected toggle `bg-accent text-accent-text`.
+- A system's own colour (5E's red, Fantasy d20's blue) is not a meaning: its buttons are `<Button>`, a selected toggle `bg-accent text-accent-text`.
 - The header is the one exception: its colour is the player's (`colorPresets.ts`, or a custom hex), so its classes and the text on it do not follow the theme. Write every preset class out in full; Tailwind generates only class names it finds whole, and the test refuses one joined at runtime.
 - On a phone the sheet is drawn across the whole screen, about 330 px wide on a 360 px phone, and the sheet's own layout decides whether it fits. Write the narrow layout first and the desktop's behind `sm:`, so a computer sees exactly what it did:
   - A button in the header's corner (the read-only sheet's **Edit**) is in the flow below `sm` (`ml-auto mb-3 w-fit sm:absolute sm:top-4 sm:right-4`), and the row it would cover pads clear of it from `sm` only (`sm:pr-24`).
   - A block beside the name (experience, hero points, the player) goes under it: `flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0`. An editor's portrait goes above the name too, at 96 px (`w-24 h-24 sm:w-40 sm:h-40`, on a holder of the same width), with its caption in the flow under it (`mt-1 sm:absolute sm:top-full sm:whitespace-nowrap`).
   - A line of details wraps: `flex flex-wrap gap-x-4`. Do not space a row that may wrap with `space-x-*`, which leaves wrapped rows with no gap between them.
   - The header and the body pad `p-3 sm:p-6`, and anything between them or under the body lines up with it (`mx-3 sm:mx-6`). Give the header `data-sheet-header` and the body `data-sheet-body`, which the tests find them by.
-  - What follows changes only what a phone sees. A row that wraps on a phone keeps to one line from `sm` up, as it did before (`flex flex-wrap … sm:flex-nowrap`); only a row that ran out of its column at every width wraps everywhere, such as a level's spell slot marks on the D&D 5e sheet.
+  - What follows changes only what a phone sees. A row that wraps on a phone keeps to one line from `sm` up, as it did before (`flex flex-wrap … sm:flex-nowrap`); only a row that ran out of its column at every width wraps everywhere, such as a level's spell slot marks on the 5E sheet.
   - A grid of three or more columns gets fewer on a phone, behind the desktop's count: `grid-cols-1 sm:grid-cols-3` where a cell holds text or a label and its box, `grid-cols-2 sm:grid-cols-3` or `grid-cols-3 sm:grid-cols-5` where it holds a number. So does a grid of two whose cells hold a label beside a box (the saving throws, `grid-cols-1 sm:grid-cols-2`). A grid of three short numbers that fits (hit points' **Maximum**, **Current** and **Temporary**) stays as it is.
   - A grid with a column template of its own (`grid-cols-[…]`) has a phone template too, and a cell that does not fit goes onto a line of its own (`col-span-5 sm:col-span-1`). Write the class list once, in a constant, when a row of labels sits over the rows, so the two line up at every width.
   - A box with `flex-1` in a row takes `min-w-0`, so it shrinks beside the row's buttons and leaves them in reach. A row of more boxes than fit wraps (`flex flex-wrap gap-2 sm:flex-nowrap`), with the box that names the row on a line of its own (`basis-full sm:basis-0`) or filling the first line beside a small box (`basis-[calc(100%-4.25rem)] sm:basis-0`), and a box that matters less moved after the rest onto a line of its own (`order-last w-full sm:order-none sm:w-40`). A heading with an **Add** button beside it wraps too (`flex flex-wrap items-center justify-between gap-2`).
   - A box keeps its own width from `sm` up: add the phone's classes in front of it and leave its own where they are (`min-w-0 flex-1 sm:flex-initial w-28`). A label beside a box takes only its own width below `sm` (`sm:w-24`), so the box keeps the rest.
-  - A row that needs two lines on a phone with its name and total on the first can be a grid below `sm` and its old row from `sm` up: `grid grid-cols-[minmax(0,1fr)_auto] sm:flex sm:justify-between`, the box around the middle parts `contents sm:flex`, and the total `col-start-2 row-start-1 justify-self-end` (the Pathfinder 2e saves).
+  - A row that needs two lines on a phone with its name and total on the first can be a grid below `sm` and its old row from `sm` up: `grid grid-cols-[minmax(0,1fr)_auto] sm:flex sm:justify-between`, the box around the middle parts `contents sm:flex`, and the total `col-start-2 row-start-1 justify-self-end` (the Fantasy d20 saves).
   - A button that removes a row (**×**) takes `touch-target inline-flex items-center justify-center`, 44 by 44 px where the pointer is coarse, and the row or the grid column it sits in leaves room for it there.
   - The sheet has no scroller of its own below `sm`: the shell scrolls the sheet, and a box sized from the screen's height (`max-h-[calc(100vh-200px)] overflow-y-auto`) inside it is a second scroller, sized from a `100vh` taller than what a phone's browser shows. Put it behind `sm:` (`sm:max-h-[…] sm:overflow-y-auto`).
   - A control or a mark that shows only while the pointer is over its row (`opacity-0 group-hover:opacity-100`, or `group-hover:opacity-60` for the dice icon beside a stat that rolls) shows where nothing can hover too (`[@media(hover:none)]:opacity-100`, `…:opacity-60`): a finger never brings it up. `rollIconsByTouch.test.tsx` refuses one without it, except the editors' portrait upload hint, which would hide the picture.
   - An entry the player drags into a new place is a `DragEntry` (`frontend/src/components/character-sheets/flexible/components/DragEntry.tsx`), which a finger drags by its grip and a mouse from anywhere but a text box. A `Reorder.Item` on its own drags from anywhere, by touch too, so a swipe that starts on it moves it and the page does not scroll.
-  - `smallScreenClasses.test.ts` (in `frontend/src/components/character-sheets/__tests__/`) reads every sheet file and the two shells, and refuses two of the layouts above: a grid of four or more columns on a phone, counting a column template's tracks, whatever its `sm:` form says (a layout that keeps four or more there on purpose, such as the D&D 5e hit dice rows, is listed by name in the test with the reason it fits); and a height taken from the screen (`vh`, `h-screen`) without `sm:` or a wider prefix. Grids of two and three columns are left to the screenshots, since some fit a phone as they are.
+  - `smallScreenClasses.test.ts` (in `frontend/src/components/character-sheets/__tests__/`) reads every sheet file and the two shells, and refuses two of the layouts above: a grid of four or more columns on a phone, counting a column template's tracks, whatever its `sm:` form says (a layout that keeps four or more there on purpose, such as the 5E hit dice rows, is listed by name in the test with the reason it fits); and a height taken from the screen (`vh`, `h-screen`) without `sm:` or a wider prefix. Grids of two and three columns are left to the screenshots, since some fit a phone as they are.
 
 The editor calls `onSave(data, showToast?, tokenImageUrl?)`, and the host saves: the Character Editor page, the editor window opened over a sheet at the table or on the Characters page, or the template editor. Register the editor with all of them in Step 10; nothing else needs wiring.
 
@@ -820,12 +842,12 @@ The editor calls `onSave(data, showToast?, tokenImageUrl?)`, and the host saves:
 
 ## Step 10: Register the sheet
 
-A sheet is opened in three places, and each names every system. None fails to compile without yours: each falls back to the Flexible sheet.
+A sheet is opened in three places, and each names every system. None fails to compile without yours: the two windows fall back to the Flexible sheet, and the router to the read-only sheet described below.
 
 1. **The router**, `frontend/src/components/character-sheets/CharacterSheetRouter.tsx`, used by the Character Editor page and the template editor. Add a lazy import and a `case`:
 
    ```tsx
-   const MySystemSheet = lazy(() => import('./mySystem/MySystemCharacterSheet'));
+   const MySystemSheet = lazy(() => import('./my-system/MySystemCharacterSheet'));
 
    // inside the switch on character.gameSystem:
    case GameSystem.MY_SYSTEM:
@@ -835,7 +857,7 @@ A sheet is opened in three places, and each names every system. None fails to co
 2. **The sheet window**, `frontend/src/components/character/CharacterSheetViewerModal.tsx`, which opens a sheet from the roster, the initiative tracker, the map and the Characters page. Import `MySystemCharacterView` and add a case to `renderCharacterSheet`, passing `character`, `onEdit={canEdit ? handleEdit : undefined}` and `onRoll={rollHandler}`, and `rollMode={rollMode}` if your system has a roll mode (Step 11).
 3. **The editor window**, `frontend/src/components/character/CharacterSheetEditorModal.tsx`, which **Edit** in the sheet window opens. Import `MySystemCharacterEditor` and add a case to `renderCharacterEditor`, passing `character`, `onSave={handleSave}`, `onCancel={handleCancel}`, `onDirtyChange={setHasUnsavedChanges}` and `onDone={onClose}`.
 
-The `default`, `null` and `undefined` cases fall through to the Flexible sheet, the section-based one, so a character with no matching case still opens, as an empty Flexible sheet. Add all three cases so yours renders.
+A character with no game system opens the Flexible sheet, the section-based one. A code this build does not know opens its data in that sheet read-only, under a line saying the system is no longer supported (`UnsupportedSystemSheet`); so does a system with no case in the router. Add all three cases so yours renders.
 
 ---
 
@@ -843,23 +865,23 @@ The `default`, `null` and `undefined` cases fall through to the Flexible sheet, 
 
 A system without these still works: the character roll picker lists nothing for its characters, they roll a flat `1d20` for initiative, and they show no hit points. Each is one more `case`, in a file that falls back without an error.
 
-**Rules both projects need go in a module of their own.** A derived total or an initiative bonus that the server and the page both work out goes in `utils/rules/mySystem.ts`, written once and copied byte for byte to both `backend/src/utils/rules/` and `frontend/src/utils/rules/`: the two projects share no package. Add a parity test for it beside the others in `backend/src/utils/rules/__tests__/dnd5e.test.ts`, which reads both files and fails on any difference. The files below marked "two copies" follow the same rule: edit both the same way.
+**Rules both projects need go in a module of their own.** A derived total or an initiative bonus that the server and the page both work out goes in `utils/rules/mySystem.ts`, written once and copied byte for byte to both `backend/src/utils/rules/` and `frontend/src/utils/rules/`: the two projects share no package. Add a parity test for it beside the others in `backend/src/utils/rules/__tests__/fifthEdition.test.ts`, which reads both files and fails on any difference. The files below marked "two copies" follow the same rule: edit both the same way.
 
 - **Rolls from the character.** Add a case to `getCharacterRolls` in `frontend/src/utils/characterRolls.ts`, returning what the character can roll. It fills the character roll picker, opened from the character's token, roster entry or initiative entry; without a case the picker lists nothing.
-- **Roll mode.** If the system rolls a d20 twice for advantage, add it to `systemSupportsAdvantage` in `frontend/src/utils/rollModes.ts`, and to `MODE_LABELS` if it names the modes differently (Pathfinder 2e's **Fortune** and **Misfortune**). These decide whether a sheet shows **Roll mode** and a roll menu, and what the roll pickers offer, for characters and creatures alike.
+- **Roll mode.** If the system rolls a d20 twice for advantage, add it to `systemSupportsAdvantage` in `frontend/src/utils/rollModes.ts`, and to `MODE_LABELS` if it names the modes differently (Fantasy d20's **Fortune** and **Misfortune**). These decide whether a sheet shows **Roll mode** and a roll menu, and what the roll pickers offer, for characters and creatures alike.
 - **Initiative.** Add a case to `resolveCharacterInitiative` in `utils/rules/initiative.ts` (two copies), returning `{ kind: 'roll', expression, label }` or `{ kind: 'fixed', value, label }` worked out from the sheet ([Initiative](#initiative--not-every-system-rolls) explains when a system does not roll). The server rolls what it returns; without a case the system's characters roll `1d20`.
 - **Hit points.** If the sheet keeps hit points:
   - Add a case to `extractCharacterHp` in `utils/characterHp.ts` (two copies, in `backend/src/utils/` and `frontend/src/utils/`, compared by `backend/src/utils/__tests__/characterHp.test.ts`), naming where the sheet keeps its maximum, current and temporary hit points. It feeds the roster cards, the HP bars on tokens and the `character.hp.updated` event.
   - Add a case to `applyHpDelta` in `backend/src/websocket/handlers/characters.ts`, which applies the roster's damage and healing. Its `default` refuses them.
-  - If the rules give temporary hit points, add the system to `SYSTEMS_WITH_TEMPORARY_HIT_POINTS` in `utils/rules/hitPoints.ts` (two copies), and check that `takeTemporaryHp`, beside `applyHpDelta`, reads them where your sheet keeps them: it reads `hp.temporary`, D&D 5e's place. Without the entry **Temporary HP...** is not offered and the server refuses it.
+  - If the rules give temporary hit points, add the system to `SYSTEMS_WITH_TEMPORARY_HIT_POINTS` in `utils/rules/hitPoints.ts` (two copies), and check that `takeTemporaryHp`, beside `applyHpDelta`, reads them where your sheet keeps them: it reads `hp.temporary`, 5E's place. Without the entry **Temporary HP...** is not offered and the server refuses it.
 
-  A sheet that keeps `hp` as D&D 5e does (`{ current, maximum, temporary }`, as in the Step 4 example) can share D&D 5e's case in each of these.
+  A sheet that keeps `hp` as 5E does (`{ current, maximum, temporary }`, as in the Step 4 example) can share 5E's case in each of these.
 
 ---
 
 ## Step 12: Creature support (optional)
 
-Skip this and your system's creatures are handled as D&D 5e's: the generic stat block viewer, but D&D 5e's editor (Challenge Rating, ability scores, and saves and skills worked out from them) in the token editor and the Creature Library, D&D 5e rolls in the NPC roll picker, a flat d20 for initiative and D&D 5e's cone. For a system that is not d20-based, do at least item 1, so the picker offers its custom roll input in place of d20 rolls. Add the rest when your system's creatures need a shape the shared `NpcStatBlock` does not already express, or when their rolls can be modelled.
+Skip this and your system's creatures are handled as 5E's: the generic stat block viewer, but 5E's editor (Challenge Rating, ability scores, and saves and skills worked out from them) in the token editor and the Creature Library, 5E rolls in the NPC roll picker, a flat d20 for initiative and 5E's cone. For a system that is not d20-based, do at least item 1, so the picker offers its custom roll input in place of d20 rolls. Add the rest when your system's creatures need a shape the shared `NpcStatBlock` does not already express, or when their rolls can be modelled.
 
 First decide the question from
 [Creature and NPC stat blocks](#creature-and-npc-stat-blocks): **are your
@@ -867,19 +889,19 @@ system's creature numbers derived from something, or printed as final values?**
 Answer that from the rulebook before writing code: deriving values a system
 does not derive fabricates numbers that look authoritative.
 
-1. **Roll building.** Add a `case` to `buildNpcRolls` (`frontend/src/utils/npcRolls.ts`). Its `default` is D&D 5e, so a system without a d20-equivalent structure needs a case of its own returning `EMPTY_ROLLS`, as Call of Cthulhu has; the picker then falls through to a custom roll. `systemSupportsNpcRolls` beside it is read only by its test: keep it in step.
-2. **Stat block renderer.** Add a `case` to `StatBlockViewer.tsx` pointing at a component beside `Dnd5eStatBlock.tsx`. `GenericStatBlock.tsx` is the fallback and is often good enough.
-3. **Editor branches.** The token editor's form (`StatBlockEditor.tsx`) and the Creature Library's (`CreatureForm` in `CreatureLibrary.tsx`) both branch on `creatureModel` in `npc-stat-blocks/creatureModel.ts`, whose default is D&D 5e's. A system that prints its numbers and has no rating can join `printed`: no rating, the scores stored as typed under the names `scoreLabel` gives them, and skills typed in `PrintedSkillsEditor.tsx`. A system that needs other fields (a Level in place of a Challenge Rating, modifiers in place of scores) needs a model of its own and a branch in both forms. Add new fields to `NpcStatBlock` as **optional**, and to `backend/src/validators/statBlock.ts`; never repurpose an existing field, since a campaign can switch systems and the data has to survive.
-4. **Proficiency editor.** If saves and skills are derived, model it on `ProficiencyEditor.tsx`. If they are printed, model it on `Pf2eProficiencyEditor.tsx`, which computes nothing on purpose.
+1. **Roll building.** Add a `case` to `buildNpcRolls` (`frontend/src/utils/npcRolls.ts`). Its `default` is 5E, so a system without a d20-equivalent structure needs a case of its own returning `EMPTY_ROLLS`, as Horror d100 has; the picker then falls through to a custom roll. `systemSupportsNpcRolls` beside it is read only by its test: keep it in step.
+2. **Stat block renderer.** Add a `case` to `StatBlockViewer.tsx` pointing at a component beside `FifthEditionStatBlock.tsx`. `GenericStatBlock.tsx` is the fallback and is often good enough.
+3. **Editor branches.** The token editor's form (`StatBlockEditor.tsx`) and the Creature Library's (`CreatureForm` in `CreatureLibrary.tsx`) both branch on `creatureModel` in `npc-stat-blocks/creatureModel.ts`, whose default is 5E's. A system that prints its numbers and has no rating can join `printed`: no rating, the scores stored as typed under the names `scoreLabel` gives them, and skills typed in `PrintedSkillsEditor.tsx`. A system that needs other fields (a Level in place of a Challenge Rating, modifiers in place of scores) needs a model of its own and a branch in both forms. Add new fields to `NpcStatBlock` as **optional**, and to `backend/src/validators/statBlock.ts`; never repurpose an existing field, since a campaign can switch systems and the data has to survive.
+4. **Proficiency editor.** If saves and skills are derived, model it on `ProficiencyEditor.tsx`. If they are printed, model it on `FantasyD20ProficiencyEditor.tsx`, which computes nothing on purpose.
 5. **Roll mode labels.** The entries in `utils/rollModes.ts` from [Step 11](#step-11-rolls-initiative-and-hit-points) serve the creature pickers too.
-6. **Initiative.** `resolveStatBlockInitiative` in `utils/rules/initiative.ts` (two copies) derives a creature's initiative for D&D 5e only; any other creature rolls a flat d20, as does a stat block whose own `gameSystem` names a system other than the campaign's. Extend it if your stat blocks hold what initiative is worked out from.
-7. **Conditions.** To list the system's conditions in the token editor, add a case to `conditionsOffered` (and to `effectsOffered`, if the system has effects) in `frontend/src/utils/conditions.ts`, with a two-letter code for each in `CONDITION_ABBREVIATIONS`, and add the list to the names `utils/__tests__/conditions.test.ts` checks the codes against. Without it the DM types each condition by hand.
-8. **Area templates.** A cone is drawn Pathfinder 2e's way in a Pathfinder campaign and D&D 5e's in every other (`coneRule` in `MapCanvas.tsx`). Add your system there if its cones differ.
+6. **Initiative.** `resolveStatBlockInitiative` in `utils/rules/initiative.ts` (two copies) derives a creature's initiative for 5E only; any other creature rolls a flat d20, as does a stat block whose own `gameSystem` names a system other than the campaign's. Extend it if your stat blocks hold what initiative is worked out from.
+7. **Conditions.** To list the system's conditions in the token editor, add a case to `conditionsOffered` (and to `effectsOffered`, if the system has effects) in `frontend/src/utils/conditions.ts`, with a two-letter code for each in `CONDITION_ABBREVIATIONS`, and add the list to the names `utils/__tests__/conditions.test.ts` checks the codes against. Without it the GM types each condition by hand.
+8. **Area templates.** A cone is drawn Fantasy d20's way in a Fantasy d20 campaign and 5E's in every other (`coneRule` in `MapCanvas.tsx`). Add your system there if its cones differ.
 
 Bounds live in `backend/src/validators/statBlock.ts`, the save and skill ones in
 `STAT_BLOCK_LIMITS` (`statBlockLimits.ts`, with a frontend copy kept identical).
 `minBonus` / `maxBonus` are deliberately wide (±50) because they cover every system
-at once — PF2e modifiers pass +33 at high level, so a bound fitted to D&D 5e
+at once — Fantasy d20 modifiers pass +33 at high level, so a bound fitted to 5E
 would reject legitimate creatures. It is a backstop against absurd data, not a
 rules check; per-system sanity belongs in the editor.
 
@@ -892,11 +914,11 @@ A system is a feature self-hosters choose by name, so these change with it, in t
 - **This guide:** the count of systems in the first paragraph, and the system in the per-system tables (initiative, hit points). `backend/src/__tests__/documentedFacts.test.ts` fails until the count matches `GAME_SYSTEM_OPTIONS`.
 - **`README.md`:** the **Character Sheets** list and the **Game Systems** table.
 - **`docs/USER_GUIDE.md`:** a section under **Character Sheets by Game System**. **`docs/PLAYER_GUIDE.md`:** the systems table under **Step 1: Start a New Character**, and the table under **Rolling Your Own Initiative**.
-- **`CHANGELOG.md`:** an **Added** entry, and the database change under **Upgrading** (Step 1). **`docs/api-changes/unreleased.md`:** the new value, which a script can now send and receive as a `gameSystem`.
-- **`backend/docs/API_DOCUMENTATION.yaml`:** every place it lists the game systems (search it for `CALL_OF_CTHULHU_7E`), the starter template names, and the per-system sheet limits and name field. `spec-coverage.py` checks routes, not these values, so nothing catches a missed one.
+- **`CHANGELOG.md`:** an **Added** entry, and the database change under **Upgrading** (Step 1). **`docs/api-changes/unreleased.md`** (in this cycle `docs/api-changes/1.7.0.md`, named for the release ahead of it): the new value, which a script can now send and receive as a `gameSystem`.
+- **`backend/docs/API_DOCUMENTATION.yaml`:** every place it lists the game systems (search it for `HORROR_D100`), the starter template names, and the per-system sheet limits and name field. `spec-coverage.py` checks routes, not these values, so nothing catches a missed one.
 - **`backend/DATABASE_MIGRATIONS.md` and `backend/prisma/README.md`** (Step 1).
 - **`backend/src/scripts/validate-characters.ts`:** its help text names the systems `--system` takes.
-- Any legal attribution (see [Legal / content note](#legal--content-note)).
+- The licence's notice (see [Game content sources](#game-content-sources)).
 
 ---
 
@@ -909,6 +931,7 @@ Most backend checks hold a list of the systems they cover, and a system missing 
 - `validators/game-systems/__tests__/sheetTextLimits.test.ts` and `listLimits.test.ts`: your schema in the `it.each` list of each (Step 4).
 - `utils/character-templates/__tests__/templateSchemaParity.test.ts`: your system in `SYSTEMS` (Step 6).
 - `utils/character-templates/__tests__/templates.test.ts`: a `describe` for your templates, like each system's there, and your templates in the list under `All Templates Cross-Check`.
+- `utils/character-templates/__tests__/exampleContent.test.ts`: your system in `RULES_ELEMENTS`, and the names your templates use in `__tests__/helpers/openContentNames.ts` (Step 6).
 - `validators/game-systems/__tests__/editorShapes.test.ts`: a `describe` for your editor, holding everything it writes (Step 9).
 - `__tests__/keepInStep.test.ts`: your schema and type in the sheet check (Step 7).
 - A parity test for each rules module of your own (Step 11).
@@ -959,32 +982,43 @@ Only the maps typed `Record<GameSystem, …>` fail to compile when a system is m
 ## Full checklist
 
 **Agreed first**
+- [ ] **Game content settled first**, each condition in [Game content sources](#game-content-sources):
+  - [ ] The rules are published under an open licence (condition 1)
+  - [ ] A CozyVTT name for the label, the enum value and the stored keys (condition 2)
+  - [ ] Content only from the open document, in our own sentences (condition 3)
+  - [ ] The notice in both places (condition 4)
+  - [ ] The system's names added to the names check (condition 5)
+  - [ ] A changed CC BY work says so beside its credit (condition 6)
+  - [ ] Every feature that expresses ORC rules offered under the ORC License (condition 7)
+  - [ ] The numbers and the sheet's structure from the open document too (condition 8)
+  - [ ] The licence of every source the content passes through checked (condition 9)
 - [ ] The schema change agreed with the maintainer in an issue, and any new npm package
 
 **Backend**
 - [ ] `prisma/schema.prisma`: the `GameSystem` value; a migration of one `ALTER TYPE … ADD VALUE`; `prisma generate`; `migrate diff --exit-code` clean
+- [ ] `game-systems/index.ts`: the value in `SUPPORTED_GAME_SYSTEMS`
 - [ ] `validators/game-systems/mySystem.schema.ts`: the Zod schema, every text field limited and every list a `sheetList`, and the inferred type
 - [ ] `validators/game-systems/index.ts`: import and re-export, a case in `validateCharacterData`, the two return-type unions, `SHEET_NAME_FIELD`
 - [ ] `utils/character-templates/mySystem-templates.ts`: the templates, `getMySystemTemplates` and `getMySystemTemplate`
 - [ ] `utils/character-templates/index.ts`: a case in `getCharacterTemplate`
 - [ ] `websocket/handlers/characters.ts`: a case in `applyHpDelta`, and `takeTemporaryHp` reading your sheet's temporary hit points, if it keeps hit points
 - [ ] Two copies each, kept identical: `utils/characterHp.ts` (`extractCharacterHp`), `utils/rules/initiative.ts` (`resolveCharacterInitiative`), `utils/rules/hitPoints.ts` (`SYSTEMS_WITH_TEMPORARY_HIT_POINTS`), and any rules module of your own with its parity test
-- [ ] Tests: the lists in `sheetTextLimits.test.ts` and `listLimits.test.ts`, `SYSTEMS` in `templateSchemaParity.test.ts`, `templates.test.ts`, `editorShapes.test.ts`, the sheet check in `keepInStep.test.ts`, `__tests__/helpers/builtInTemplates.ts`
+- [ ] Tests: the lists in `sheetTextLimits.test.ts` and `listLimits.test.ts`, `SYSTEMS` in `templateSchemaParity.test.ts`, `templates.test.ts`, `editorShapes.test.ts`, the sheet check in `keepInStep.test.ts`, `__tests__/helpers/builtInTemplates.ts`, `RULES_ELEMENTS` in `exampleContent.test.ts` and `__tests__/helpers/openContentNames.ts`
 
 **Frontend**
-- [ ] `types/gameSystem.ts`: the `GameSystem` value, in the order of `schema.prisma`
+- [ ] `types/gameSystem.ts`: the `GameSystem` value, in the order of `SUPPORTED_GAME_SYSTEMS`
 - [ ] `types/game-systems/mySystem.ts`: the sheet type, extending `SheetChrome`
 - [ ] `types/game-systems/index.ts`: `export *`, `CharacterDataBySystem`, `GameSystemCharacterData`; `types/index.ts`: the `CharacterData` union
 - [ ] `constants/game-systems.ts`: `GAME_SYSTEM_LABELS`, `GAME_SYSTEM_SHORT_LABELS`, `GAME_SYSTEM_TINTS`, `GAME_SYSTEM_DESCRIPTIONS`, **and `GAME_SYSTEM_OPTIONS`**
 - [ ] `components/character/NewCharacterModal.tsx`: `TEMPLATE_OPTIONS_BY_SYSTEM`
-- [ ] `components/character-sheets/mySystem/`: the sheet, view, editor and components; the editor takes `allowTokenPicture`; the view takes `onRoll` and marks what rolls
+- [ ] `components/character-sheets/my-system/`: the sheet, view, editor and components; the editor takes `allowTokenPicture`; the view takes `onRoll` and marks what rolls
 - [ ] `CharacterSheetRouter.tsx`, `CharacterSheetViewerModal.tsx` and `CharacterSheetEditorModal.tsx`: a case each
 - [ ] `utils/characterRolls.ts`: a case in `getCharacterRolls`; `utils/rollModes.ts`: `systemSupportsAdvantage` and `MODE_LABELS`, if the system has advantage
 - [ ] Tests: your sheet in the sheet tests that list theirs (see Testing)
 
 **Creatures (optional, see [Step 12](#step-12-creature-support-optional))**
 - [ ] Decided from the rulebook whether creature values are **derived** or **printed**
-- [ ] `utils/npcRolls.ts`: a `case` in `buildNpcRolls` (its default is D&D 5e; `EMPTY_ROLLS` for a system that is not d20-based)
+- [ ] `utils/npcRolls.ts`: a `case` in `buildNpcRolls` (its default is 5E; `EMPTY_ROLLS` for a system that is not d20-based)
 - [ ] `StatBlockViewer.tsx`: a `case`, or left on `GenericStatBlock`
 - [ ] `npc-stat-blocks/creatureModel.ts`: your system's model, and branches in `StatBlockEditor.tsx` and `CreatureLibrary.tsx` for a model of its own
 - [ ] New `NpcStatBlock` fields added as **optional**, mirrored in `validators/statBlock.ts`
@@ -996,21 +1030,78 @@ Only the maps typed `Record<GameSystem, …>` fail to compile when a system is m
 - [ ] The count in this guide's first paragraph, and its per-system tables
 - [ ] `README.md`: the Character Sheets list and the Game Systems table
 - [ ] `docs/USER_GUIDE.md` and `docs/PLAYER_GUIDE.md`
-- [ ] `CHANGELOG.md`, with the database change under Upgrading; `docs/api-changes/unreleased.md`
+- [ ] `CHANGELOG.md`, with the database change under Upgrading; `docs/api-changes/unreleased.md` (in this cycle `docs/api-changes/1.7.0.md`)
 - [ ] `backend/docs/API_DOCUMENTATION.yaml`
 - [ ] `backend/DATABASE_MIGRATIONS.md` and `backend/prisma/README.md`
 - [ ] The help text in `validate-characters.ts`
-- [ ] Any legal attribution added (see below)
+- [ ] The notice in both places (condition 4), with a header in each file that holds ORC material ([Files that hold ORC material](#files-that-hold-orc-material))
 
 **Gates**
 - [ ] Every gate in DEVELOPMENT.md passes, and the manual pass is done
 
-Nothing to do in these: `utils/sheetFieldMigrations.ts` moves the fields of sheets written before 1.3.0 and leaves any other system's sheet as it is, and `KEEPER_ONLY_FIELD` in `utils/keeperNotes.ts` needs your system only if it has a field for the DM alone ([Keeper's Notes](#a-field-only-the-dm-sees-keepers-notes)).
+Nothing to do in these: `utils/sheetFieldMigrations.ts` moves the fields of sheets written before 1.3.0 and leaves any other system's sheet as it is, and `GM_ONLY_FIELD` in `utils/gmNotes.ts` needs your system only if it has a field for the GM alone ([GM's Notes](#a-field-only-the-gm-sees-gms-notes)).
 
 ---
 
-## Legal / content note
+## Game content sources
 
-CozyVTT ships **rules-reference scaffolding** (attribute names, skill lists, sheet structure), not publisher rulebooks. When you add a system, keep it that way: include the mechanical framework a player needs to fill in their own character, not copyrighted prose, adventures, stat blocks, or artwork.
+CozyVTT's sheets hold the structure of a game's rules (attribute names, skill lists, formulas, what a sheet records) in CozyVTT's own sentences. They hold no rulebook text, adventures, stat blocks or artwork. Every game system in CozyVTT uses rules published under an open licence, under a CozyVTT name, and shows that licence's notice.
 
-If the system you're adding is published under an open license (OGL, ORC, Creative Commons, a fan-content policy, etc.), add the required attribution to `SRD_ATTRIBUTION.md` (or a sibling attribution file) and note the source in your PR. If it isn't openly licensed, restrict your contribution to the generic sheet structure and user-entered data. When in doubt, open an issue before writing code — it's easier to sort licensing up front than to unwind it later.
+**Settle these nine things before you write any code for a new system.** If one cannot be met, open an issue and stop.
+
+1. **An open licence.** The system's rules are published under an open licence: one whose own text lets anyone use the rules in any software, with nothing further to ask for. Name the licence and link it in the issue and in the pull request.
+2. **A CozyVTT name.** The system gets a label of CozyVTT's own, made of the rules' licence and the kind of game. Its enum value and stored keys use that name too. Add it to `frontend/src/constants/game-systems.ts`.
+3. **Our own sentences.** Content comes only from the open document, and every sentence is written in CozyVTT's own words. Take the mechanics (numbers, lists of skills, formulas) and write the prose yourself. Anything the licence marks as closed or reserved stays out.
+4. **Its notice is shown.** Add the licence's required notice to [`GAME_CONTENT_NOTICES.md`](../GAME_CONTENT_NOTICES.md), which links every licence in use, and to `frontend/src/constants/gameContentNotices.ts`, which the **About CozyVTT** window shows. A test checks the two against each other. For rules under the ORC License, list each file that holds them in [Files that hold ORC material](#files-that-hold-orc-material) and give it the header shown there.
+5. **The names check knows it.** Tracked files call a system by its CozyVTT name, and `scripts/tests/test_system_names.py` fails on a line or a path that names a game, its publisher or its setting, outside the licence attribution lines. Add the new system's names of that kind to it as a new encoded group in `GROUPS`, with samples of each name form in the test (the file stores them hex-encoded, so the list itself does not name them). Join the words of a name with `[\s_-]+`, so a file name's hyphens and underscores count, and match a name no ordinary word shares in any letter case, outside identifiers, paths and web addresses, as the existing groups do.
+6. **Say what you changed.** CC BY 4.0 asks a work to say whether it changed the material. Beside the credit, on a line of its own and apart from any sentence the licensor asks for word for word, say that CozyVTT changed it, as the 5E notice's "reformatted and, in places, reworded" line does.
+7. **Rules features stay open.** A feature that expresses rules under the ORC License offers those rules under the ORC License as well, as its share-alike terms ask, so it goes in the file table below like any other.
+8. **The numbers and the structure too.** The numbers, formulas, skill lists, base values and the sheet's structure come from the open document too. Credit a licence only for what comes from its document.
+9. **Every source checked.** Check the licence of any source the content passes through on its way to CozyVTT, such as a site or an API that serves an open document in another form, as well as the document's own.
+
+Tracked files never write a game's, a publisher's or a setting's name, in code, comments, tests, docs, the changelog or a commit message; say "the system's publisher".
+
+**The Horror d100 skill labels.** `frontend/src/constants/horrorD100SkillNames.ts` lists the skills for the sheet and its roll menu: the open d100 rules' six categories, each skill in its place, the name a specialty is shown under (**Knowledge (Occult)**, **Language (Latin)**, or the skill's own name while the specialty has none), and which skills take an experience check. The names and base chances themselves are in `utils/rules/horrorD100.ts`, by the key the sheet stores each skill under (`fineManipulation`, `languageOwn`, the `knowledge` list). A weapon's `skill` is free text, so `horrorD100WeaponSkillRating` there reads the names the sheet lists (**Brawl**, **Firearm (Handgun)**, **Melee Weapon (Sword)**), a specialty alone (**Sword**), an own skill's name, and the forms the sheet printed before it was rebuilt (its two groups of combat skills under their former names with the weapon in brackets, or a firearm's kind alone), so a weapon typed on an older sheet still rolls at its skill.
+
+---
+
+## Files that hold ORC material
+
+These files hold material under the ORC License, beside CozyVTT's own code under the AGPL-3.0. [GAME_CONTENT_NOTICES.md](../GAME_CONTENT_NOTICES.md) has the notices, and says that CozyVTT offers the rules these files express under the ORC License. Each file starts with this header, and a backend test (`documentedFacts.test.ts`) checks that every file named here has it:
+
+```ts
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+```
+
+A guide starts with the same two lines as HTML comments, saying *text* where these say *code*, and a JSON file, which can hold no comment, is covered by this list alone. When you add rules from an ORC document to a file, add the file here and give it the header; when a file no longer holds any, take it out of both.
+
+The Horror d100 sheet follows the open d100 rules: its characteristics and their rolls, its derived attributes, its skills with their categories and base chances, its weapons table and damage notation, three of its four conditions (Dying is CozyVTT's name for the state at 0 hit points) and its terms are that document's, written in CozyVTT's own sentences, as are the professions, weapons, wealth levels and equipment names in the example characters. The rows below list every file outside the tests that holds them; test files and their fixtures repeat the same names and numbers. The sheet's arrangement, its header colours and its titled notes are not from that document.
+
+| System | Files | What they hold |
+|---|---|---|
+| Fantasy d20 | `frontend/src/components/character-sheets/fantasy-d20/FantasyD20CharacterEditor.tsx`, `frontend/src/components/character-sheets/fantasy-d20/FantasyD20CharacterView.tsx`, `frontend/src/components/character-sheets/fantasy-d20/attributeNames.ts`, `frontend/src/components/character-sheets/fantasy-d20/spellcastingEntries.ts`, `frontend/src/components/character-sheets/fantasy-d20/components/BulkTracker.tsx`, `frontend/src/components/character-sheets/fantasy-d20/components/FeatsList.tsx`, `frontend/src/components/character-sheets/fantasy-d20/components/ProficiencyIndicator.tsx`, `frontend/src/components/character-sheets/fantasy-d20/components/StrikesList.tsx` | The sheet's editor and view, and the parts they share: proficiency ranks, Bulk, feats, Strikes and spellcasting |
+| Fantasy d20 | `frontend/src/types/game-systems/fantasyD20.ts`, `backend/src/validators/game-systems/fantasyD20.schema.ts` | What the sheet records |
+| Fantasy d20 | `frontend/src/utils/rules/fantasyD20.ts`, `backend/src/utils/rules/fantasyD20.ts` | The sheet's arithmetic |
+| Fantasy d20 | `frontend/src/components/campaign/npc-stat-blocks/fantasyD20StatBlock.ts`, `frontend/src/components/campaign/npc-stat-blocks/FantasyD20ProficiencyEditor.tsx` | Creature stat blocks: level, printed modifiers, the three saves |
+| Fantasy d20 | `frontend/src/utils/rollModes.ts` | Fortune and Misfortune on a d20 roll |
+| Fantasy d20 | `frontend/src/components/campaign/map/aoeGeometry.ts` | A cone as a quarter circle |
+| Fantasy d20 | `frontend/src/utils/geometry.ts` | Diagonal movement where every second diagonal costs double |
+| Both | `frontend/src/utils/rules/hitPoints.ts`, `backend/src/utils/rules/hitPoints.ts`, `backend/src/websocket/handlers/characters.ts` | Fantasy d20: temporary hit points and damage. Horror d100: hit points that go below 0, and no temporary ones |
+| Fantasy d20 | `frontend/src/utils/npcRolls.ts`, `frontend/src/utils/rollPurposes.ts` | The rolls a creature offers, its saves among them, and the names rolls carry, such as a Strike |
+| Fantasy d20 | `frontend/src/constants/statBlockLimits.ts`, `backend/src/validators/statBlockLimits.ts`, `backend/src/validators/statBlock.ts` | A creature's highest values, some set from the creature-building numbers |
+| Fantasy d20 | `frontend/src/constants/sheetLimits.ts`, `backend/src/validators/game-systems/sheetLimits.ts` | A sheet's highest values, some set from the rules' numbers |
+| Fantasy d20 | `backend/src/utils/character-templates/fantasyD20-templates.ts`, `Examples/fantasy_d20_character.json`, `Examples/fantasy_d20_character_minimal.json` | The example characters |
+| Horror d100 | `frontend/src/components/character-sheets/horror-d100/HorrorD100CharacterEditor.tsx`, `frontend/src/components/character-sheets/horror-d100/HorrorD100CharacterView.tsx`, `frontend/src/components/character-sheets/horror-d100/sheetForm.ts` | The sheet: its sections and labels in the open d100 rules' terms, such as **Profession**, **Power Points**, **Damage Modifier** and **Major Wound**, and what follows a characteristic or Knowledge (Blasphemous Lore) as it changes |
+| Horror d100 | `frontend/src/components/character-sheets/horror-d100/components/CharacteristicBlock.tsx`, `frontend/src/components/character-sheets/horror-d100/components/SanityTracker.tsx`, `frontend/src/components/character-sheets/horror-d100/components/SkillsList.tsx`, `frontend/src/components/character-sheets/horror-d100/components/WeaponsList.tsx`, `frontend/src/components/character-sheets/horror-d100/components/ArmorList.tsx`, `frontend/src/components/character-sheets/horror-d100/components/OriginalValues.tsx` | The characteristic rolls, Sanity and its maximum, the skill list with its base chances and experience checks, a weapon's damage with the damage modifier, armor values, and the rules' names for the values a converted character held before |
+| Horror d100 | `frontend/src/components/character-sheets/horror-d100/specialisations.ts` | The Firearm, Knowledge, Melee Weapon and Science specialties offered, with their base chances |
+| Horror d100 | `frontend/src/constants/horrorD100SkillNames.ts` | The skill categories, the name each skill and specialty is listed under, such as **Drive (Automobile)**, **Research** and **Status**, and which skills take an experience check |
+| Horror d100 | `backend/src/utils/rules/horrorD100.ts`, `frontend/src/utils/rules/horrorD100.ts` | The sheet's rules: the characteristic rolls, hit points, the major wound level, power points, the damage modifier table, the experience bonus, MOV, maximum Sanity, every skill with its base chance, and the weapon skill names its reader accepts, such as **Firearm (Rifle)** |
+| Horror d100 | `frontend/src/types/game-systems/horrorD100Sheet.ts`, `backend/src/validators/game-systems/horrorD100Sheet.schema.ts` | What the sheet records: the characteristics and the skill list |
+| Horror d100 | `backend/src/legacy/horrorD100Sheet.ts` | The conversion of a sheet from before 1.7.0, which places each old value under the open d100 rules' characteristic or skill |
+| Horror d100 | `frontend/src/utils/conditions.ts` | The four conditions a character can be under |
+| Horror d100 | `backend/src/utils/character-templates/horrorD100-templates.ts`, `Examples/horror_d100_character.json`, `Examples/horror_d100_character_minimal.json` | The example characters' professions, specialties, weapons, wealth levels and equipment names |
+| Both | `frontend/src/utils/rules/initiative.ts`, `backend/src/utils/rules/initiative.ts`, `backend/src/websocket/handlers/initiative.ts` | Initiative: Fantasy d20 from Perception or a skill, Horror d100 in Dexterity order |
+| Both | `frontend/src/utils/characterRolls.ts` | The rolls a sheet offers: Fantasy d20 saves and skills, Horror d100 characteristic rolls and skill rolls |
+| Both | `frontend/src/components/campaign/npc-stat-blocks/creatureModel.ts`, `frontend/src/components/campaign/npc-stat-blocks/StatBlockEditor.tsx`, `frontend/src/components/campaign/npc-stat-blocks/StatBlockViewer.tsx`, `frontend/src/components/campaign/CreatureLibrary.tsx`, `frontend/src/types/index.ts` | How each system's creature is recorded, edited and shown |
+| Both | `docs/USER_GUIDE.md`, `docs/PLAYER_GUIDE.md`, `docs/GM_GUIDE.md`, `docs/GAME_SYSTEMS.md` | The guides' descriptions of the two sheets and the open rules' terms they use |
