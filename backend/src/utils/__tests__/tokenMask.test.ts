@@ -95,7 +95,7 @@ describe('tokenSentTo', () => {
 
   it('carries the creature template link to the controller only', () => {
     // The link resolves to the library entry, whose stat block and true name
-    // the DM may have renamed the token to hide.
+    // the GM may have renamed the token to hide.
     const placed = { ...token, creatureTemplateId: 'tmpl-1' };
     expect(tokenSentTo(placed, true).creatureTemplateId).toBe('tmpl-1');
     expect(tokenSentTo(placed, false)).not.toHaveProperty('creatureTemplateId');
@@ -109,13 +109,13 @@ describe('tokenSentTo', () => {
   });
 
   // Built from a list of what a player may have, like the mask: a field the
-  // DM keeps on tokens, added later, is then not sent until someone decides
+  // GM keeps on tokens, added later, is then not sent until someone decides
   // it may be.
   it('is built from a list of what may be sent, so a field added later is left out by default', () => {
     const everything = {
       ...token, characterId: 'char-1', type: 'npc' as const, disposition: 'hostile' as const, initiative: 12,
       displayMode: 'pog' as const, creatureTemplateId: 'tmpl-1', showHpBar: true,
-      // A field tokens do not have today, standing in for a DM-only one added later.
+      // A field tokens do not have today, standing in for a GM-only one added later.
       trapTrigger: 'the third flagstone',
     };
     for (const own of [true, false]) {

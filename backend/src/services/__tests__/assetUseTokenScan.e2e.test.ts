@@ -14,20 +14,20 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 import { prisma as appPrisma } from '../../config/database';
 import { canReadAsset } from '../permissions';
 
-let dmId: string;
+let gmId: string;
 let ownerId: string;
 let campaignId: string;
 let usedId: string;
 let unusedId: string;
 
 beforeAll(async () => {
-  const [dm, owner] = await Promise.all([createTestUser({ displayName: 'Scan DM' }), createTestUser({ displayName: 'Scan Owner' })]);
-  dmId = dm.id;
+  const [gm, owner] = await Promise.all([createTestUser({ displayName: 'Scan GM' }), createTestUser({ displayName: 'Scan Owner' })]);
+  gmId = gm.id;
   ownerId = owner.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Token scan' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Token scan' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: ownerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -58,19 +58,19 @@ afterEach(() => {
 afterAll(async () => {
   await prisma.asset.deleteMany({ where: { uploadedById: ownerId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, ownerId]);
+  await cleanupUsers([gmId, ownerId]);
   await prisma.$disconnect();
 });
 
 const facts = (id: string) => ({ id, type: 'TOKEN' as const, scope: 'USER' as const, uploadedById: ownerId, campaignId: null });
 
-it('grants the DM a picture a token on one of their maps uses', async () => {
-  expect(await canReadAsset(facts(usedId), dmId, false)).toBe(true);
+it('grants the GM a picture a token on one of their maps uses', async () => {
+  expect(await canReadAsset(facts(usedId), gmId, false)).toBe(true);
 });
 
 it('refuses one no token uses, without loading every map\'s tokens', async () => {
   const findMany = jest.spyOn(appPrisma.map, 'findMany');
-  expect(await canReadAsset(facts(unusedId), dmId, false)).toBe(false);
+  expect(await canReadAsset(facts(unusedId), gmId, false)).toBe(false);
   const tokenLoads = findMany.mock.calls.filter(([args]) => (args as { select?: { tokens?: boolean } } | undefined)?.select?.tokens);
   expect(tokenLoads).toEqual([]);
 });

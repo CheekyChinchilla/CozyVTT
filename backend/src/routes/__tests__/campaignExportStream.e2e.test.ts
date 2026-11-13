@@ -33,7 +33,7 @@ const MB = 1024 * 1024;
 const app = createTestApp();
 const PNG_SIGNATURE = Buffer.from('89504e470d0a1a0a', 'hex');
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let cookie: string;
 let agent: ReturnType<typeof request.agent>;
@@ -53,7 +53,7 @@ async function mapWithPicture(name: string, bytes: number, recordedBytes = bytes
   await new Promise<void>((resolve) => out.end(() => resolve()));
   const asset = await prisma.asset.create({
     data: {
-      type, scope: 'CAMPAIGN', campaignId, uploadedById: dmId, filename: `${name}.png`, originalName: `${name}.png`,
+      type, scope: 'CAMPAIGN', campaignId, uploadedById: gmId, filename: `${name}.png`, originalName: `${name}.png`,
       mimeType: 'image/png', fileSize: recordedBytes, filePath: file, name,
     },
   });
@@ -64,12 +64,12 @@ async function mapWithPicture(name: string, bytes: number, recordedBytes = bytes
 }
 
 beforeAll(async () => {
-  const dm = await createTestUser({ displayName: 'Export Stream DM' });
-  dmId = dm.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Big Maps' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  const gm = await createTestUser({ displayName: 'Export Stream GM' });
+  gmId = gm.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Big Maps' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   agent = request.agent(app);
-  const login = await agent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD });
+  const login = await agent.post('/api/auth/login').send({ email: gm.email, password: TEST_PASSWORD });
   expect(login.status).toBe(200);
   cookie = (login.headers['set-cookie'] as unknown as string[])[0].split(';')[0];
   server = app.listen(0, '127.0.0.1');
@@ -86,8 +86,8 @@ afterEach(async () => {
 afterAll(async () => {
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
-  await prisma.campaign.deleteMany({ where: { ownerId: dmId } });
-  await cleanupUsers([dmId]);
+  await prisma.campaign.deleteMany({ where: { ownerId: gmId } });
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });

@@ -19,9 +19,9 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 import { readTokens, toJson } from '../../utils/prisma-json';
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const token = (over: Record<string, unknown>) => ({
   id: randomUUID(), name: 'Ogre', imageUrl: '', position: { x: 1, y: 1 }, size: { width: 2, height: 2 },
@@ -44,16 +44,16 @@ const tokens = (mapId: string) => `/api/campaigns/${campaignId}/maps/${mapId}/to
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `footprint-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Footprint ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Footprint ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -61,7 +61,7 @@ describe('POST /tokens', () => {
   it('refuses a position between squares', async () => {
     const mapId = await newMap();
 
-    const res = await dm.post(tokens(mapId)).send({ name: 'Ogre', position: { x: 5.5, y: 3 } });
+    const res = await gm.post(tokens(mapId)).send({ name: 'Ogre', position: { x: 5.5, y: 3 } });
 
     expect(res.status).toBe(400);
     expect(await storedTokens(mapId)).toEqual([]);
@@ -70,7 +70,7 @@ describe('POST /tokens', () => {
   it('pulls a footprint that would hang off the far edge back onto the map', async () => {
     const mapId = await newMap();
 
-    const res = await dm.post(tokens(mapId)).send({ name: 'Giant', position: { x: 8, y: 9 }, size: { width: 4, height: 4 } });
+    const res = await gm.post(tokens(mapId)).send({ name: 'Giant', position: { x: 8, y: 9 }, size: { width: 4, height: 4 } });
 
     expect(res.status).toBe(201);
     expect(res.body.token.position).toEqual({ x: 6, y: 6 });
@@ -80,7 +80,7 @@ describe('POST /tokens', () => {
   it('puts a token larger than the map at its corner', async () => {
     const mapId = await newMap();
 
-    const res = await dm.post(tokens(mapId)).send({ name: 'Colossus', position: { x: 5, y: 5 }, size: { width: 10, height: 10 } });
+    const res = await gm.post(tokens(mapId)).send({ name: 'Colossus', position: { x: 5, y: 5 }, size: { width: 10, height: 10 } });
 
     expect(res.body.token.position).toEqual({ x: 0, y: 0 });
   });
@@ -88,7 +88,7 @@ describe('POST /tokens', () => {
   it('still refuses a corner off the map', async () => {
     const mapId = await newMap();
 
-    expect((await dm.post(tokens(mapId)).send({ name: 'Ogre', position: { x: 10, y: 0 } })).status).toBe(400);
+    expect((await gm.post(tokens(mapId)).send({ name: 'Ogre', position: { x: 10, y: 0 } })).status).toBe(400);
   });
 });
 
@@ -97,7 +97,7 @@ describe('PUT /tokens/:tokenId', () => {
     const ogre = token({});
     const mapId = await newMap([ogre]);
 
-    const res = await dm.put(`${tokens(mapId)}/${ogre.id}`).send({ position: { x: 2.5, y: 1 } });
+    const res = await gm.put(`${tokens(mapId)}/${ogre.id}`).send({ position: { x: 2.5, y: 1 } });
 
     expect(res.status).toBe(400);
     expect((await storedTokens(mapId))[0].position).toEqual({ x: 1, y: 1 });
@@ -107,7 +107,7 @@ describe('PUT /tokens/:tokenId', () => {
     const ogre = token({});
     const mapId = await newMap([ogre]);
 
-    const res = await dm.put(`${tokens(mapId)}/${ogre.id}`).send({ position: { x: 9, y: 0 } });
+    const res = await gm.put(`${tokens(mapId)}/${ogre.id}`).send({ position: { x: 9, y: 0 } });
 
     expect(res.status).toBe(200);
     expect((await storedTokens(mapId))[0].position).toEqual({ x: 8, y: 0 });
@@ -117,7 +117,7 @@ describe('PUT /tokens/:tokenId', () => {
     const ogre = token({});
     const mapId = await newMap([ogre]);
 
-    await dm.put(`${tokens(mapId)}/${ogre.id}`).send({ position: { x: 8, y: 8 }, size: { width: 3, height: 3 } });
+    await gm.put(`${tokens(mapId)}/${ogre.id}`).send({ position: { x: 8, y: 8 }, size: { width: 3, height: 3 } });
 
     expect((await storedTokens(mapId))[0].position).toEqual({ x: 7, y: 7 });
   });

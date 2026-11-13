@@ -32,7 +32,7 @@
  * compared here, comments aside.
  *
  * The map limits. The server enforces them and the map dialogs offer what
- * they allow; a dialog offering more than the server takes is a map the DM
+ * they allow; a dialog offering more than the server takes is a map the GM
  * fills in and cannot save. The file is kept identical in both packages.
  *
  * The socket flood ceilings, applied by the server and listed in the
@@ -45,7 +45,7 @@
  *
  * The Invite Player search limits: the shortest search that matches part of
  * a name and the most matches one search returns. The server applies them and
- * the Invite Player dialog tells the DM what they are. The file is kept
+ * the Invite Player dialog tells the GM what they are. The file is kept
  * identical in both packages.
  *
  * The character sheet limits. The server refuses a sheet over them and the
@@ -61,7 +61,7 @@
  * both packages.
  *
  * The conditions that cancel advantage on initiative. The initiative rules read
- * them from a D&D 5e sheet by the name its condition boxes write, in lower case,
+ * them from a 5E sheet by the name its condition boxes write, in lower case,
  * and the boxes come from the list of conditions the browser keeps. A name the
  * rules read that no box writes would never cancel anything.
  *
@@ -91,7 +91,7 @@
  * same list, and refused Ogg, WAV and Markdown files the server takes while
  * its own list differed. The file is kept identical in both packages.
  *
- * The Campaign Settings the server sends every member's page when the DM
+ * The Campaign Settings the server sends every member's page when the GM
  * saves them, `campaign.settings.updated`: Players may draw was added to
  * the route, and the payload is declared on each side.
  *
@@ -117,7 +117,7 @@
  * The kinds of thing that can use an asset. The server lists them when it
  * refuses to delete one, the client describes each kind and drops a kind it
  * does not know, and the API document lists them; a kind added on the server
- * alone shows the DM a shorter list than the server sent.
+ * alone shows the GM a shorter list than the server sent.
  *
  * The themes and fonts. The server accepts a theme or font only from its
  * list, for a user's preferences and the instance's default theme alike; a
@@ -159,7 +159,10 @@
  * what is stored, and the frontend type every sheet component trusts. The
  * frontend cannot import the schema, so the TypeScript compiler compares the
  * two here, field by field: names, whether a field can be absent or null,
- * arrays and the values a field takes (helpers/sheetTypeParity.ts).
+ * arrays and the values a field takes (helpers/sheetTypeParity.ts). The
+ * rebuilt Horror d100 sheet's skills block is written out in its schema and
+ * listed in the rules (utils/rules/horrorD100.ts) with each skill's base
+ * chance; the two name the same skills.
  *
  * The Basic Flexible sheet. The server offers it as a starter sheet, and its
  * four sections are the Flexible editor's Attributes, Skills, Inventory and
@@ -172,7 +175,11 @@
  *
  * The game systems. The database decides them (the GameSystem enum in
  * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
- * declares its own enum, which has to name the same values.
+ * declares its own enum, which has to name the systems the backend supports
+ * (SUPPORTED_GAME_SYSTEMS in game-systems/index.ts). Since 1.7.0's migration
+ * the database enum holds exactly those. The values older versions used are
+ * read through an alias table, held once in each package
+ * (legacy/gameSystemAliases.ts), and the two copies are the same file.
  *
  * The columns of a map. What a member is sent of a map is built from three
  * lists in utils/spirit-layer.ts: the columns sent to everyone as stored, the
@@ -183,7 +190,7 @@
  * document's map list and campaign fetch what the first list selects.
  *
  * The Universal VTT import's longest wait. An import waits for its turn and
- * then runs, each up to a limit (services/uvttImportQueue.ts), so the DM is
+ * then runs, each up to a limit (services/uvttImportQueue.ts), so the GM is
  * told why it failed before the bundled nginx gives up on the request and
  * shows a proxy error instead. Both limits together, and five seconds more,
  * stay within the proxy_read_timeout of the location in nginx/locations.conf
@@ -211,7 +218,7 @@ import ts from 'typescript';
 import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
-import { ChatMessageSchema } from '../validators/chat';
+import { CHAT_TYPES, ChatMessageSchema } from '../validators/chat';
 import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS } from '../validators/drawingLimits';
 import {
   NewDrawingSchema, DrawingPreviewSchema, DrawingAddEventSchema, DrawingRemoveEventSchema, DrawingClearMineEventSchema,
@@ -219,12 +226,15 @@ import {
 } from '../validators/drawings';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { Prisma, type MapDrawing } from '@prisma/client';
+import { SUPPORTED_GAME_SYSTEMS, isSupportedGameSystem } from '../game-systems';
 import { drawingForArchive } from '../services/mapDrawings';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
 import { PASSWORD_FIELDS } from '../middleware/nulCharacter';
 import { PICTURE_LIMITS } from '../utils/pictureLimits';
 import { PICTURE_SIZE_LIMITS } from '../validators/pictureSizeLimits';
-import { DND5E_CHECK_DISADVANTAGE_CONDITIONS } from '../utils/rules/initiative';
+import { FIFTH_EDITION_CHECK_DISADVANTAGE_CONDITIONS } from '../utils/rules/initiative';
+import { HORROR_D100_FIXED_SKILLS, HORROR_D100_SPECIALISED_SKILLS } from '../utils/rules/horrorD100';
+import { HorrorD100SheetSchema } from '../validators/game-systems/horrorD100Sheet.schema';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -472,7 +482,7 @@ describe('chat.message, which the client sends and the server checks', () => {
 
   it('asks for the types the schema takes', () => {
     const line = fields.find((l) => l.startsWith('type:')) ?? '';
-    expect([...line.matchAll(/MessageType\.(\w+)/g)].map((m) => m[1]).sort()).toEqual([...ChatMessageSchema.shape.type.unwrap().options].sort());
+    expect([...line.matchAll(/MessageType\.(\w+)/g)].map((m) => m[1]).sort()).toEqual([...CHAT_TYPES].sort());
   });
 });
 
@@ -490,7 +500,7 @@ describe('the kinds of chat message', () => {
   });
 });
 
-// The Role picker under Members offers every role but the DM, read from the
+// The Role picker under Members offers every role but the GM, read from the
 // frontend's enum; the role route takes the database's.
 describe('the roles in a campaign', () => {
   it('are the same in the database schema and the frontend', () => {
@@ -736,21 +746,21 @@ describe('the limits on a token\'s conditions', () => {
   });
 });
 
-// Poisoned is one of the D&D 5e sheet's condition boxes. Exhausted is not any
+// Poisoned is one of the 5E sheet's condition boxes. Exhausted is not any
 // more, since the sheet records exhaustion as a level, but a sheet saved before
 // 1.3.0 can hold it; it is still a name in the shared list the token editor
 // offers.
 describe('the conditions that cancel advantage on initiative', () => {
-  it('are names in the shared D&D 5e condition list', () => {
-    const list = /export const DND5E_CONDITIONS[^=]*=\s*\[([^\]]*)\]/.exec(read('frontend/src/utils/conditions.ts'));
-    if (!list) throw new Error('frontend/src/utils/conditions.ts no longer declares DND5E_CONDITIONS as a list');
+  it('are names in the shared 5E condition list', () => {
+    const list = /export const FIFTH_EDITION_CONDITIONS[^=]*=\s*\[([^\]]*)\]/.exec(read('frontend/src/utils/conditions.ts'));
+    if (!list) throw new Error('frontend/src/utils/conditions.ts no longer declares FIFTH_EDITION_CONDITIONS as a list');
     const written = [...list[1].matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
-    expect(DND5E_CHECK_DISADVANTAGE_CONDITIONS.length).toBeGreaterThan(0);
-    expect(DND5E_CHECK_DISADVANTAGE_CONDITIONS.filter((name) => !written.includes(name))).toEqual([]);
+    expect(FIFTH_EDITION_CHECK_DISADVANTAGE_CONDITIONS.length).toBeGreaterThan(0);
+    expect(FIFTH_EDITION_CHECK_DISADVANTAGE_CONDITIONS.filter((name) => !written.includes(name))).toEqual([]);
   });
 
   it('are written in lower case by the sheet', () => {
-    const editor = read('frontend/src/components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx');
+    const editor = read('frontend/src/components/character-sheets/fifth-edition/FifthEditionCharacterEditor.tsx');
     expect(editor).toContain("updateField('conditions', [...currentConditions, condition.toLowerCase()]);");
   });
 });
@@ -1118,20 +1128,26 @@ describe('the character sheets, as the schemas take them and the frontend types 
   const schemas = 'backend/src/validators/game-systems';
   const types = 'frontend/src/types';
   const mismatches = sheetTypeMismatches([
-    { label: 'D&D 5e', schemaModule: `${schemas}/dnd5e.schema`, schemaExport: 'dnd5eCharacterDataSchema',
-      typeModule: `${types}/game-systems/dnd5e`, typeExport: 'DnD5eCharacterData' },
-    { label: 'Pathfinder 2e', schemaModule: `${schemas}/pathfinder2e.schema`, schemaExport: 'pathfinder2eCharacterDataSchema',
-      typeModule: `${types}/game-systems/pathfinder2e`, typeExport: 'PF2eCharacterData' },
-    { label: 'Call of Cthulhu 7e', schemaModule: `${schemas}/callOfCthulhu7e.schema`, schemaExport: 'callOfCthulhu7eCharacterDataSchema',
-      typeModule: `${types}/game-systems/callOfCthulhu7e`, typeExport: 'CoC7eCharacterData' },
-    { label: 'Shadowrun 6e', schemaModule: `${schemas}/shadowrun6e.schema`, schemaExport: 'shadowrun6eCharacterDataSchema',
-      typeModule: `${types}/game-systems/shadowrun6e`, typeExport: 'SR6CharacterData' },
+    { label: '5E', schemaModule: `${schemas}/fifthEdition.schema`, schemaExport: 'fifthEditionCharacterDataSchema',
+      typeModule: `${types}/game-systems/fifthEdition`, typeExport: 'FifthEditionCharacterData' },
+    { label: 'Fantasy d20', schemaModule: `${schemas}/fantasyD20.schema`, schemaExport: 'fantasyD20CharacterDataSchema',
+      typeModule: `${types}/game-systems/fantasyD20`, typeExport: 'FantasyD20CharacterData' },
+    { label: 'Horror d100', schemaModule: `${schemas}/horrorD100Sheet.schema`, schemaExport: 'HorrorD100SheetSchema',
+      typeModule: `${types}/game-systems/horrorD100Sheet`, typeExport: 'HorrorD100Sheet' },
     { label: 'Flexible', schemaModule: `${schemas}/flexible.schema`, schemaExport: 'flexibleCharacterDataSchema',
       typeModule: `${types}/flexible-character-sheet`, typeExport: 'FlexibleCharacterData' },
   ]);
 
   it.each(Object.keys(mismatches))('%s: the frontend type matches what the schema takes', (label) => {
     expect(mismatches[label]).toEqual([]);
+  });
+});
+
+describe('the rebuilt Horror d100 sheet\'s skills, as the schema takes them and the rules list them', () => {
+  it('are every skill of the rules\' list, the own language and the character\'s own skills, and no others', () => {
+    expect(Object.keys(HorrorD100SheetSchema.shape.skills.unwrap().shape).sort()).toEqual(
+      [...Object.keys(HORROR_D100_FIXED_SKILLS), ...Object.keys(HORROR_D100_SPECIALISED_SKILLS), 'languageOwn', 'own'].sort()
+    );
   });
 });
 
@@ -1213,16 +1229,30 @@ describe('the fields of a wall and a light', () => {
 });
 
 describe('the game systems', () => {
-  it('are the same in the database schema and the frontend', () => {
-    const prismaBlock = /enum GameSystem \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
-    const frontendBlock = /export enum GameSystem \{([^}]*)\}/.exec(read('frontend/src/types/gameSystem.ts'));
-    if (!prismaBlock || !frontendBlock) throw new Error('a GameSystem enum moved; update this test');
-    const prisma = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+  const prismaBlock = /enum GameSystem \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+  const frontendBlock = /export enum GameSystem \{([^}]*)\}/.exec(read('frontend/src/types/gameSystem.ts'));
+  if (!prismaBlock || !frontendBlock) throw new Error('a GameSystem enum moved; update this test');
+  const prisma = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+
+  it('are the supported ones in the frontend', () => {
     const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
       expect(m[1]).toBe(m[2]);
       return m[2];
     });
-    expect(frontend).toEqual(prisma);
+    expect(frontend).toEqual([...SUPPORTED_GAME_SYSTEMS]);
+  });
+
+  it('are the ones the database schema holds, and no more', () => {
+    expect(prisma).toEqual([...SUPPORTED_GAME_SYSTEMS]);
+    expect(prisma.every((value) => isSupportedGameSystem(value))).toBe(true);
+  });
+
+  it('are read from the values older versions used by the same alias table in the browser and on the server', () => {
+    expect(read('frontend/src/legacy/gameSystemAliases.ts')).toBe(read('backend/src/legacy/gameSystemAliases.ts'));
+  });
+
+  it('name the value of the unreleased system older files can carry in one file, the same in the browser and on the server', () => {
+    expect(read('frontend/src/legacy/retiredGameSystem.ts')).toBe(read('backend/src/legacy/retiredGameSystem.ts'));
   });
 });
 

@@ -13,6 +13,7 @@
  * can change a licence, asks for a look.
  */
 
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -205,6 +206,25 @@ describe('THIRD_PARTY_LICENSES.md', () => {
       return [];
     });
     expect(wrong).toEqual([]);
+  });
+
+  // Each picture and font file the repository holds is a bundled font of a
+  // family the Fonts table names, or a picture the Pictures section names,
+  // so a file that came from anywhere else asks for a line here first.
+  it('accounts for every picture and font file the repository holds', () => {
+    const tracked = execFileSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
+    const media = tracked.filter((rel) => /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg|woff2?|ttf|otf|eot|mp3|ogg|wav|flac|mp4|webm)$/i.test(rel));
+    const fonts = doc.slice(doc.indexOf('## Fonts'), doc.indexOf('### SIL Open Font License'));
+    const families = [...fonts.matchAll(/^\| \[([^\]]+)\]/gm)].map((m) => m[1].toLowerCase().replace(/ /g, '-'));
+    const start = doc.indexOf('## Pictures');
+    const pictures = start === -1 ? '' : doc.slice(start, doc.indexOf('\n## ', start + 1));
+    const unaccounted = media.filter((rel) =>
+      rel.startsWith('frontend/src/assets/fonts/files/')
+        ? !families.some((family) => path.basename(rel).startsWith(`${family}-`))
+        : !pictures.includes(`\`${rel}\``));
+    expect(families.length).toBeGreaterThan(10);
+    expect(media.length).toBeGreaterThan(100);
+    expect(unaccounted).toEqual([]);
   });
 
   it('names the icons\' licence as the icon package records it', () => {

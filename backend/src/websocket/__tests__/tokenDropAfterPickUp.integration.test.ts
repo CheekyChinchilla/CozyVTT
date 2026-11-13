@@ -25,12 +25,12 @@ jest.setTimeout(20000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let moverId: string;
 let otherId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let moverCookie: string;
 
 type Client = Awaited<ReturnType<WsTestServer['connectAndAuth']>>;
@@ -89,15 +89,15 @@ function holdTheNextPickUp() {
 }
 
 beforeAll(async () => {
-  const [dm, mover, other] = await Promise.all(['dm', 'mover', 'other'].map((name) =>
+  const [gm, mover, other] = await Promise.all(['dm', 'mover', 'other'].map((name) =>
     prisma.user.create({ data: { email: `droppickup-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Drop ${name}` } })));
-  dmId = dm.id;
+  gmId = gm.id;
   moverId = mover.id;
   otherId = other.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Drop after pick-up ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Drop after pick-up ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: moverId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: otherId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
@@ -110,7 +110,7 @@ beforeAll(async () => {
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, moverCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(moverId)]);
+  [gmCookie, moverCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(moverId)]);
 });
 
 afterAll(async () => {
@@ -118,7 +118,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, moverId, otherId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, moverId, otherId] } } });
   await prisma.$disconnect();
 });
 
@@ -146,15 +146,15 @@ describe('a drop sent right behind its pick-up', () => {
 
   it('is judged after the pick-up, so a refused drop is put back wherever the pick-up went', async () => {
     await placeTokens(moverId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const mover = await server.connectAndAuth(moverCookie, campaignId);
-    const dmHeard = listen(dm);
+    const gmHeard = listen(gm);
     const moverHeard = listen(mover);
     const slow = holdTheNextPickUp();
     try {
       mover.emit('token.move.start', { tokenId: LANTERN, mapId });
       await slow.reached;
-      // The DM hands the token to someone else while the pick-up is under way.
+      // The GM hands the token to someone else while the pick-up is under way.
       await placeTokens(otherId);
       mover.emit('token.move.end', { tokenId: LANTERN, mapId, x: 5, y: 1 });
       await pause(300);
@@ -164,7 +164,7 @@ describe('a drop sent right behind its pick-up', () => {
       slow.restore();
     }
 
-    expect(dmHeard).toEqual([
+    expect(gmHeard).toEqual([
       { event: 'token.move.start', tokenId: LANTERN, movedBy: moverId },
       { event: 'token.moved', tokenId: LANTERN, x: 1, y: 1, movedBy: null },
     ]);
@@ -173,15 +173,15 @@ describe('a drop sent right behind its pick-up', () => {
       { event: 'token.moved', tokenId: LANTERN, x: 1, y: 1, movedBy: null },
     ]);
     expect(await storedAt(LANTERN)).toEqual({ x: 1, y: 1 });
-    dm.disconnect();
+    gm.disconnect();
     mover.disconnect();
   });
 
   it('that is allowed leaves no drag behind for the mover\'s leaving to undo', async () => {
     await placeTokens(moverId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const mover = await server.connectAndAuth(moverCookie, campaignId);
-    const dmHeard = listen(dm);
+    const gmHeard = listen(gm);
     const slow = holdTheNextPickUp();
     try {
       mover.emit('token.move.start', { tokenId: LANTERN, mapId });
@@ -194,14 +194,14 @@ describe('a drop sent right behind its pick-up', () => {
       slow.restore();
     }
 
-    expect(dmHeard).toEqual([
+    expect(gmHeard).toEqual([
       { event: 'token.move.start', tokenId: LANTERN, movedBy: moverId },
       { event: 'token.moved', tokenId: LANTERN, x: 5, y: 1, movedBy: moverId },
     ]);
-    const nothingMore = expectNoEvent(dm, 'token.moved', 500);
+    const nothingMore = expectNoEvent(gm, 'token.moved', 500);
     mover.disconnect();
     await expect(nothingMore).resolves.toBeUndefined();
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 

@@ -1,12 +1,12 @@
 /**
  * What revealing or hiding a token from the Spirit Layer panel tells a player.
  *
- * The toggle handler sent every player the whole token, DM notes included,
+ * The toggle handler sent every player the whole token, GM notes included,
  * filtered by plane only: a player was handed the position and notes of a
  * token the map fetch would never have sent them, and their client did not
  * even use it (it only flips a flag on a token it already holds). The
  * handler now re-sends each member the map as they may see it, the same
- * path a map switch and a lighting change use; only the DM still gets the
+ * path a map switch and a lighting change use; only the GM still gets the
  * toggle event with the token.
  *
  * What it re-sends is the map as its locked write left it. It used to be the
@@ -33,11 +33,11 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `toggleleak-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 const OWN = 'token-own';
@@ -65,7 +65,7 @@ function token(id: string, x: number, controlledBy: string | null, visible: bool
   };
 }
 
-/** The player's token at x=5 and a hidden one beside it at x=6, with DM notes. */
+/** The player's token at x=5 and a hidden one beside it at x=6, with GM notes. */
 async function resetMap(lightingEnabled: boolean) {
   await prisma.map.update({
     where: { id: mapId },
@@ -79,18 +79,18 @@ async function resetMap(lightingEnabled: boolean) {
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Toggle ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Toggle Leak ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Toggle Leak ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -103,7 +103,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
@@ -111,60 +111,60 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 describe('spirit_layer.token.toggle', () => {
   it('revealing a token the player cannot see sends them nothing of it', async () => {
     await resetMap(true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const quiet = expectNoEvent(player, 'spirit_layer.token.toggled', 600);
     const resync = waitForEvent<MapChanged>(player, 'map.changed');
-    dm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
+    gm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
     await quiet;
     // In the dark one square away with no light and no darkvision: not sent.
     expect((await resync).mapData.tokens.map((t) => t.id)).toEqual([OWN]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
-  it('revealing a token the player can see sends it without the DM\'s notes', async () => {
+  it('revealing a token the player can see sends it without the GM\'s notes', async () => {
     await resetMap(false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const resync = waitForEvent<MapChanged>(player, 'map.changed');
-    dm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
+    gm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
     const tokens = (await resync).mapData.tokens;
     const target = tokens.find((t) => t.id === TARGET);
     expect(target).toBeDefined();
     expect(target).not.toHaveProperty('notes');
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('hiding a token the player had takes it away from them', async () => {
     await resetMap(false);
     await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, 5, playerId, true), token(TARGET, 6, null, true, 'dm eyes only')] } });
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const resync = waitForEvent<MapChanged>(player, 'map.changed');
-    dm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: false });
+    gm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: false });
     expect((await resync).mapData.tokens.map((t) => t.id)).toEqual([OWN]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('sends players the map as it is under the lock, with a lighting change made meanwhile', async () => {
     await resetMap(false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     let release!: () => void;
@@ -179,34 +179,34 @@ describe('spirit_layer.token.toggle', () => {
     await holding;
 
     const resync = waitForEvent<MapChanged>(player, 'map.changed', 5000);
-    dm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
+    gm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
     await toggleWaitingForLock();
     release();
     await holder;
     // Lit by then: in the dark one square away, the revealed token is not sent.
     expect((await resync).mapData.tokens.map((t) => t.id)).toEqual([OWN]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
-  it('the DM still gets the toggle event with the token', async () => {
+  it('the GM still gets the toggle event with the token', async () => {
     await resetMap(true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const seen = waitForEvent<{ tokenId: string; visible: boolean; token: { id: string; notes?: string } }>(dm, 'spirit_layer.token.toggled');
-    dm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
+    const seen = waitForEvent<{ tokenId: string; visible: boolean; token: { id: string; notes?: string } }>(gm, 'spirit_layer.token.toggled');
+    gm.emit('spirit_layer.token.toggle', { mapId, tokenId: TARGET, visible: true });
     const payload = await seen;
     expect(payload.tokenId).toBe(TARGET);
     expect(payload.visible).toBe(true);
     expect(payload.token.notes).toBe('dm eyes only');
 
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
 describe('spirit_layer.token.toggle on a map the table is not on', () => {
-  it('sends the player nothing, and the DM the toggle', async () => {
+  it('sends the player nothing, and the GM the toggle', async () => {
     const prepared = await prisma.map.create({
       data: {
         campaignId, name: 'Prepared Toggle Map', imageUrl: '/api/assets/maps/none', baseLayerUrl: '/api/assets/maps/none',
@@ -214,20 +214,20 @@ describe('spirit_layer.token.toggle on a map the table is not on', () => {
         tokens: [token(OWN, 5, playerId, true), token(TARGET, 6, null, false, 'dm eyes only')],
       },
     });
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const quiet = Promise.all([
       expectNoEvent(player, 'spirit_layer.token.toggled', 800),
       expectNoEvent(player, 'map.changed', 800),
-      expectNoEvent(dm, 'map.changed', 800),
+      expectNoEvent(gm, 'map.changed', 800),
     ]);
-    const toDm = waitForEvent<{ tokenId: string }>(dm, 'spirit_layer.token.toggled');
-    dm.emit('spirit_layer.token.toggle', { mapId: prepared.id, tokenId: TARGET, visible: true });
-    expect((await toDm).tokenId).toBe(TARGET);
+    const toGm = waitForEvent<{ tokenId: string }>(gm, 'spirit_layer.token.toggled');
+    gm.emit('spirit_layer.token.toggle', { mapId: prepared.id, tokenId: TARGET, visible: true });
+    expect((await toGm).tokenId).toBe(TARGET);
     await quiet;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });

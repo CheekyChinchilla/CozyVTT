@@ -70,7 +70,7 @@ async function importOne(type: 'MAP' | 'TOKEN', originalName: string, mimeType: 
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-10-20T00:00:00.000Z', exportedFrom: 'CozyVTT test', campaignName: 'Picture limits',
-        gameSystem: 'DND_5E', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+        gameSystem: 'FIFTH_EDITION', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
         includesAudio: false, totalSizeBytes: bytes.length,
       }),
     },

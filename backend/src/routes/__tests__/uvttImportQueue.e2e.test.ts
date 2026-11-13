@@ -80,19 +80,19 @@ const UVTT = Buffer.from(
 const users: string[] = [];
 const campaigns: string[] = [];
 
-async function dmWithCampaign(): Promise<{ agent: request.Agent; campaignId: string }> {
-  const user = await createTestUser({ displayName: 'UVTT queue DM' });
+async function gmWithCampaign(): Promise<{ agent: request.Agent; campaignId: string }> {
+  const user = await createTestUser({ displayName: 'UVTT queue GM' });
   users.push(user.id);
   const campaignId = (await createTestCampaign(user.id)).id;
   campaigns.push(campaignId);
-  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'GM', characterIds: [] } });
   const agent = request.agent(app);
   expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   return { agent, campaignId };
 }
 
-const importUvtt = (dm: { agent: request.Agent; campaignId: string }, file = UVTT) =>
-  dm.agent.post(`/api/campaigns/${dm.campaignId}/maps/import-uvtt`).field('name', 'Queued Map').attach('file', file, 'queued.uvtt');
+const importUvtt = (gm: { agent: request.Agent; campaignId: string }, file = UVTT) =>
+  gm.agent.post(`/api/campaigns/${gm.campaignId}/maps/import-uvtt`).field('name', 'Queued Map').attach('file', file, 'queued.uvtt');
 
 /** Every file under `dir`, or none when it does not exist. */
 function filesUnder(dir: string): string[] {
@@ -135,27 +135,27 @@ afterAll(async () => {
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
 
-describe('POST /api/campaigns/:campaignId/maps/import-uvtt from several DMs at once', () => {
+describe('POST /api/campaigns/:campaignId/maps/import-uvtt from several GMs at once', () => {
   it('imports every file, one at a time', async () => {
-    const dms = [await dmWithCampaign(), await dmWithCampaign(), await dmWithCampaign()];
+    const gms = [await gmWithCampaign(), await gmWithCampaign(), await gmWithCampaign()];
     thumbs.most = 0;
 
-    const results = await Promise.all(dms.map((dm) => importUvtt(dm)));
+    const results = await Promise.all(gms.map((gm) => importUvtt(gm)));
 
     expect(results.map((r) => r.status)).toEqual([201, 201, 201]);
     expect(thumbs.most).toBe(1);
   });
 
   it('leaves no upload behind in the temporary folder, whether the import works or not', async () => {
-    const dm = await dmWithCampaign();
-    expect((await importUvtt(dm)).status).toBe(201);
-    expect((await importUvtt(dm, Buffer.from('not json at all'))).status).toBe(400);
+    const gm = await gmWithCampaign();
+    expect((await importUvtt(gm)).status).toBe(201);
+    expect((await importUvtt(gm, Buffer.from('not json at all'))).status).toBe(400);
 
     expect(leftInTemp()).toEqual([]);
   });
 
   it('answers 503 to an import that cannot start soon enough, saying another import is running', async () => {
-    const [running, waiting] = [await dmWithCampaign(), await dmWithCampaign()];
+    const [running, waiting] = [await gmWithCampaign(), await gmWithCampaign()];
     const gate = held();
     thumbs.hold = gate.promise;
     const first = importUvtt(running).then((res) => res);
@@ -173,7 +173,7 @@ describe('POST /api/campaigns/:campaignId/maps/import-uvtt from several DMs at o
   });
 
   it('stops an import that runs past its time limit, keeps nothing of it, and starts the next', async () => {
-    const [hung, next] = [await dmWithCampaign(), await dmWithCampaign()];
+    const [hung, next] = [await gmWithCampaign(), await gmWithCampaign()];
     const gate = held();
     thumbs.hold = gate.promise;
 
@@ -194,7 +194,7 @@ describe('POST /api/campaigns/:campaignId/maps/import-uvtt from several DMs at o
   });
 
   it('drops a waiting import whose client has gone, without reading it', async () => {
-    const [running, gone] = [await dmWithCampaign(), await dmWithCampaign()];
+    const [running, gone] = [await gmWithCampaign(), await gmWithCampaign()];
     const gate = held();
     thumbs.hold = gate.promise;
     const first = importUvtt(running).then((res) => res);

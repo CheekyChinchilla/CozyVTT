@@ -1,0 +1,132 @@
+{
+  "investigatorName": "Dr. Ilse Varga",
+  "playerName": "Jane Doe",
+  "occupation": "Professor",
+  "era": "1920s",
+  "age": 38,
+  "sex": "Female",
+  "residence": "A university town",
+  "birthplace": "A river city",
+  "characteristics": {
+    "STR": { "regular": 45, "half": 22, "fifth": 9 },
+    "CON": { "regular": 55, "half": 27, "fifth": 11 },
+    "SIZ": { "regular": 50, "half": 25, "fifth": 10 },
+    "DEX": { "regular": 50, "half": 25, "fifth": 10 },
+    "APP": { "regular": 65, "half": 32, "fifth": 13 },
+    "INT": { "regular": 80, "half": 40, "fifth": 16 },
+    "POW": { "regular": 60, "half": 30, "fifth": 12 },
+    "EDU": { "regular": 85, "half": 42, "fifth": 17 }
+  },
+  "derivedStats": {
+    "hp": { "maximum": 10, "current": 10, "formula": "(CON + SIZ) / 10, rounded down", "majorWoundThreshold": 5 },
+    "sanity": { "starting": 60, "maximum": 96, "current": 58, "formula": "Starts at POW" },
+    "magicPoints": { "maximum": 12, "current": 12, "formula": "POW / 5" },
+    "luck": { "score": 55, "notes": "Rolled at the start" },
+    "damageBonus": "+0",
+    "build": 0,
+    "moveRate": 8,
+    "dodge": { "value": 25, "formula": "DEX / 2", "improvementChecked": false }
+  },
+  "skills": {
+    "accounting": { "baseValue": 5, "currentValue": 35, "improvementChecked": false },
+    "anthropology": { "baseValue": 1, "currentValue": 55, "improvementChecked": false },
+    "appraise": { "baseValue": 5, "currentValue": 30, "improvementChecked": true },
+    "archaeology": { "baseValue": 1, "currentValue": 60, "improvementChecked": false },
+    "artCraft": { "baseValue": 5, "currentValue": 5, "improvementChecked": false, "specialization": null },
+    "charm": { "baseValue": 15, "currentValue": 40, "improvementChecked": false },
+    "climb": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "creditRating": { "baseValue": 0, "currentValue": 45, "improvementChecked": false, "notes": "Sets how she lives" },
+    "cthulhuMythos": { "baseValue": 0, "currentValue": 3, "improvementChecked": false },
+    "disguise": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "dodge": { "baseValue": 25, "currentValue": 25, "improvementChecked": false, "notes": "Half her DEX" },
+    "driveAuto": { "baseValue": 20, "currentValue": 40, "improvementChecked": false },
+    "electricalRepair": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "fastTalk": { "baseValue": 5, "currentValue": 20, "improvementChecked": false },
+    "fighting": {
+      "brawl": { "baseValue": 25, "currentValue": 30, "improvementChecked": false },
+      "custom": []
+    },
+    "firearms": {
+      "handgun": { "baseValue": 20, "currentValue": 35, "improvementChecked": true },
+      "rifle": { "baseValue": 25, "currentValue": 25, "improvementChecked": false },
+      "shotgun": { "baseValue": 25, "currentValue": 25, "improvementChecked": false },
+      "custom": []
+    },
+    "firstAid": { "baseValue": 30, "currentValue": 30, "improvementChecked": false },
+    "history": { "baseValue": 5, "currentValue": 70, "improvementChecked": true },
+    "intimidate": { "baseValue": 15, "currentValue": 15, "improvementChecked": false },
+    "jump": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "languageOwn": { "baseValue": 85, "currentValue": 85, "improvementChecked": false, "language": "English", "notes": "Her first language" },
+    "languageOther": [
+      { "language": "Latin", "baseValue": 1, "currentValue": 50, "improvementChecked": false },
+      { "language": "French", "baseValue": 1, "currentValue": 35, "improvementChecked": false }
+    ],
+    "law": { "baseValue": 5, "currentValue": 20, "improvementChecked": false },
+    "libraryUse": { "baseValue": 20, "currentValue": 75, "improvementChecked": true },
+    "listen": { "baseValue": 20, "currentValue": 45, "improvementChecked": false },
+    "locksmith": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "mechanicalRepair": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "medicine": { "baseValue": 1, "currentValue": 30, "improvementChecked": false },
+    "naturalWorld": { "baseValue": 10, "currentValue": 40, "improvementChecked": false },
+    "navigate": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "occult": { "baseValue": 5, "currentValue": 50, "improvementChecked": true },
+    "operateHeavyMachinery": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "persuade": { "baseValue": 10, "currentValue": 55, "improvementChecked": false },
+    "pilot": { "baseValue": 1, "currentValue": 1, "improvementChecked": false, "specialization": null },
+    "psychoanalysis": { "baseValue": 1, "currentValue": 1, "improvementChecked": false },
+    "psychology": { "baseValue": 10, "currentValue": 50, "improvementChecked": false },
+    "ride": { "baseValue": 5, "currentValue": 5, "improvementChecked": false },
+    "science": [
+      { "specialization": "Biology", "baseValue": 1, "currentValue": 40, "improvementChecked": false },
+      { "specialization": "Geology", "baseValue": 1, "currentValue": 20, "improvementChecked": false }
+    ],
+    "sleightOfHand": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "spotHidden": { "baseValue": 25, "currentValue": 55, "improvementChecked": true },
+    "stealth": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "survival": { "baseValue": 10, "currentValue": 10, "improvementChecked": false, "specialization": null },
+    "swim": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "throw": { "baseValue": 20, "currentValue": 20, "improvementChecked": false },
+    "track": { "baseValue": 10, "currentValue": 10, "improvementChecked": false },
+    "customSkills": []
+  },
+  "combat": {
+    "weapons": [
+      { "name": "Fist", "skill": "Fighting (Brawl)", "skillValue": 30, "damage": "1d3 + damageBonus", "range": "Touch", "attacks": 1, "ammo": null, "malfunction": null, "notes": "" },
+      { "name": "Pocket revolver", "skill": "Firearms (Handgun)", "skillValue": 35, "damage": "1d10", "range": "15 yards", "attacks": 1, "ammo": 18, "malfunction": 100, "notes": "Kept in her bag" }
+    ]
+  },
+  "conditions": {
+    "unconscious": false,
+    "dying": false,
+    "majorWound": false,
+    "temporaryInsanity": false,
+    "indefiniteInsanity": false
+  },
+  "pulpTalents": [],
+  "spellsAndMythos": { "cthulhuMythos": 3, "spells": [] },
+  "possessions": [
+    { "name": "Leather satchel", "notes": "Always with her" },
+    { "name": "Notebook and pencils", "notes": "Field notes" },
+    { "name": "Electric torch", "notes": "Spare batteries" }
+  ],
+  "wealth": { "spendingLevel": "Average", "cash": 45, "assets": "A salary and a small inheritance", "notes": "Lives modestly" },
+  "backstory": {
+    "description": "A professor of ancient history who has led three digs abroad.",
+    "personalDescription": "Sharp-eyed, ink on her fingers.",
+    "ideology": "Knowledge is its own reason.",
+    "significantPeople": "Her late mentor.",
+    "meaningfulLocations": "The university's rare books room.",
+    "treasuredPossessions": "An amulet of uncertain origin.",
+    "traits": "Methodical, slow to trust.",
+    "injuriesAndScars": "A faint scar across one palm.",
+    "phobiasAndManias": "A dread of deep water.",
+    "arcaneTomesAndSpells": "Has read part of a book she wishes she had not.",
+    "encountersWithStrangeEntities": "Saw an outline that should not have been there."
+  },
+  "contacts": [
+    { "name": "Mr. Hale", "role": "Head librarian", "notes": "Sets restricted books aside for her." },
+    { "name": "Frank Dalton", "role": "Detective", "notes": "Pragmatic." }
+  ],
+  "appearance": { "age": 38, "height": "5'6\"", "weight": "128 lbs", "eyes": "Grey", "hair": "Dark brown", "skin": "Fair" },
+  "notes": "She dreams of a black coastline every night and has told no one."
+}

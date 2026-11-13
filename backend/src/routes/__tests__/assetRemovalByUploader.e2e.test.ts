@@ -3,12 +3,12 @@
  * who does not run the campaign — End-to-End Tests
  *
  * Whoever uploaded a campaign asset could delete it, or move it to their own
- * library, for as long as they were a member. A DM who handed the seat over
- * could, as a player, delete with force=true a picture the new DM's maps use,
+ * library, for as long as they were a member. A GM who handed the seat over
+ * could, as a player, delete with force=true a picture the new GM's maps use,
  * and every map using it lost its picture. Now an uploader who does not run
  * the campaign may delete or move one only while nothing but their own things
  * use it: their characters, the tokens they control and the documents they
- * wrote. Anything else using it makes it the campaign's DM's alone. Editing
+ * wrote. Anything else using it makes it the campaign's GM's alone. Editing
  * the text of a document they wrote stays with the uploader.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -85,39 +85,39 @@ async function documentOf(agent: ReturnType<typeof request.agent>, name: string,
 const stillThere = async (id: string) => prisma.asset.findUnique({ where: { id }, select: { scope: true, campaignId: true } });
 
 let campaignId: string;
-let newDmId: string;
-let formerDmId: string;
+let newGmId: string;
+let formerGmId: string;
 let playerId: string;
 let adminUser: ReturnType<typeof request.agent>;
-let newDm: ReturnType<typeof request.agent>;
-let formerDm: ReturnType<typeof request.agent>;
+let newGm: ReturnType<typeof request.agent>;
+let formerGm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
   const stamp = Date.now();
   const admin = await createTestUser({ email: `remove-admin-${stamp}@test.invalid`, role: 'ADMIN' });
-  const newDmUser = await createTestUser({ email: `remove-newdm-${stamp}@test.invalid` });
-  const formerDmUser = await createTestUser({ email: `remove-olddm-${stamp}@test.invalid` });
+  const newGmUser = await createTestUser({ email: `remove-newdm-${stamp}@test.invalid` });
+  const formerGmUser = await createTestUser({ email: `remove-olddm-${stamp}@test.invalid` });
   const playerUser = await createTestUser({ email: `remove-player-${stamp}@test.invalid` });
-  newDmId = newDmUser.id;
-  formerDmId = formerDmUser.id;
+  newGmId = newGmUser.id;
+  formerGmId = formerGmUser.id;
   playerId = playerUser.id;
-  userIds.push(admin.id, newDmId, formerDmId, playerId);
+  userIds.push(admin.id, newGmId, formerGmId, playerId);
 
-  campaignId = (await createTestCampaign(newDmId, { name: 'Handed Over' })).id;
+  campaignId = (await createTestCampaign(newGmId, { name: 'Handed Over' })).id;
   campaignIds.push(campaignId);
-  // The seat has been handed over: the former DM now sits as a player.
+  // The seat has been handed over: the former GM now sits as a player.
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: newDmId, campaignId, role: 'DM', characterIds: [] },
-      { userId: formerDmId, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: newGmId, campaignId, role: 'GM', characterIds: [] },
+      { userId: formerGmId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
 
   adminUser = await login(admin.email);
-  newDm = await login(newDmUser.email);
-  formerDm = await login(formerDmUser.email);
+  newGm = await login(newGmUser.email);
+  formerGm = await login(formerGmUser.email);
   player = await login(playerUser.email);
 });
 
@@ -131,48 +131,48 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe('a former DM', () => {
+describe('a former GM', () => {
   it('may not delete a picture a map of the campaign uses, forced or not', async () => {
-    const picture = await makeAsset(formerDmId, 'MAP');
+    const picture = await makeAsset(formerGmId, 'MAP');
     await makeMap('Crypt', { imageUrl: picture.address });
 
     for (const query of ['', '?force=true']) {
-      const res = await formerDm.delete(`/api/assets/${picture.id}${query}`);
+      const res = await formerGm.delete(`/api/assets/${picture.id}${query}`);
       expect(res.status).toBe(403);
-      expect(res.body.message).toBe("Others in the campaign use this asset, so only the campaign's DM can delete it");
+      expect(res.body.message).toBe("Others in the campaign use this asset, so only the campaign's GM can delete it");
     }
     expect(await stillThere(picture.id)).not.toBeNull();
   });
 
   it('may not move it out of the campaign', async () => {
-    const picture = await makeAsset(formerDmId, 'MAP');
+    const picture = await makeAsset(formerGmId, 'MAP');
     await makeMap('Vault', { imageUrl: picture.address });
 
-    const res = await formerDm.patch(`/api/assets/${picture.id}/scope`).send({ scope: 'USER' });
+    const res = await formerGm.patch(`/api/assets/${picture.id}/scope`).send({ scope: 'USER' });
 
     expect(res.status).toBe(403);
-    expect(res.body.message).toBe("Others in the campaign use this asset, so only the campaign's DM can move it out of the campaign");
+    expect(res.body.message).toBe("Others in the campaign use this asset, so only the campaign's GM can move it out of the campaign");
     expect(await stillThere(picture.id)).toEqual({ scope: 'CAMPAIGN', campaignId });
   });
 
   it('may delete a picture nothing uses', async () => {
-    const picture = await makeAsset(formerDmId, 'MAP');
+    const picture = await makeAsset(formerGmId, 'MAP');
 
-    expect((await formerDm.delete(`/api/assets/${picture.id}`)).status).toBe(200);
+    expect((await formerGm.delete(`/api/assets/${picture.id}`)).status).toBe(200);
     expect(await stillThere(picture.id)).toBeNull();
   });
 });
 
-describe('the current DM and an admin', () => {
+describe('the current GM and an admin', () => {
   it('may delete a picture someone else uploaded that the campaign uses', async () => {
-    const forDm = await makeAsset(formerDmId, 'MAP');
-    const forAdmin = await makeAsset(formerDmId, 'MAP');
-    await makeMap('Bridge', { imageUrl: forDm.address });
+    const forGm = await makeAsset(formerGmId, 'MAP');
+    const forAdmin = await makeAsset(formerGmId, 'MAP');
+    await makeMap('Bridge', { imageUrl: forGm.address });
     await makeMap('Tower', { imageUrl: forAdmin.address });
 
-    expect((await newDm.delete(`/api/assets/${forDm.id}?force=true`)).status).toBe(200);
+    expect((await newGm.delete(`/api/assets/${forGm.id}?force=true`)).status).toBe(200);
     expect((await adminUser.delete(`/api/assets/${forAdmin.id}?force=true`)).status).toBe(200);
-    expect(await stillThere(forDm.id)).toBeNull();
+    expect(await stillThere(forGm.id)).toBeNull();
     expect(await stillThere(forAdmin.id)).toBeNull();
   });
 });
@@ -197,9 +197,9 @@ describe('a player who uploaded token art', () => {
     expect(await stillThere(art.id)).not.toBeNull();
   });
 
-  it('may not delete it once the DM\'s handout shows it', async () => {
+  it('may not delete it once the GM\'s handout shows it', async () => {
     const art = await makeAsset(playerId, 'TOKEN');
-    await documentOf(newDm, 'Wanted poster', `![Wanted](${art.address})`, { campaignId });
+    await documentOf(newGm, 'Wanted poster', `![Wanted](${art.address})`, { campaignId });
 
     expect((await player.delete(`/api/assets/${art.id}?force=true`)).status).toBe(403);
     expect(await stillThere(art.id)).not.toBeNull();
@@ -207,7 +207,7 @@ describe('a player who uploaded token art', () => {
 
   it('may not delete it once another member\'s character uses it', async () => {
     const art = await makeAsset(playerId, 'TOKEN');
-    await prisma.character.create({ data: { userId: formerDmId, campaignId, name: 'Borrowed', tokenImageUrl: art.address, data: {} } });
+    await prisma.character.create({ data: { userId: formerGmId, campaignId, name: 'Borrowed', tokenImageUrl: art.address, data: {} } });
 
     expect((await player.delete(`/api/assets/${art.id}?force=true`)).status).toBe(403);
     expect(await stillThere(art.id)).not.toBeNull();
@@ -221,20 +221,20 @@ describe('a player who uploaded token art', () => {
 
     const deleted = await player.delete(`/api/assets/${art.id}?force=true`);
     expect(deleted.status).toBe(403);
-    expect(deleted.body.message).toBe("A character template uses this asset, so only the campaign's DM can delete it");
+    expect(deleted.body.message).toBe("A character template uses this asset, so only the campaign's GM can delete it");
     const moved = await player.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
     expect(moved.status).toBe(403);
-    expect(moved.body.message).toBe("A character template uses this asset, so only the campaign's DM can move it out of the campaign");
+    expect(moved.body.message).toBe("A character template uses this asset, so only the campaign's GM can move it out of the campaign");
     expect(await stillThere(art.id)).toEqual({ scope: 'CAMPAIGN', campaignId });
   });
 
   it('is told others in the campaign use it when a template and another member\'s character both do', async () => {
     const art = await makeAsset(playerId, 'TOKEN');
     await prisma.characterTemplate.create({ data: { name: 'Pip again', tokenImageUrl: art.address, data: {}, createdById: playerId } });
-    await prisma.character.create({ data: { userId: formerDmId, campaignId, name: 'Borrowed too', tokenImageUrl: art.address, data: {} } });
+    await prisma.character.create({ data: { userId: formerGmId, campaignId, name: 'Borrowed too', tokenImageUrl: art.address, data: {} } });
 
     const deleted = await player.delete(`/api/assets/${art.id}?force=true`);
     expect(deleted.status).toBe(403);
-    expect(deleted.body.message).toBe("Others in the campaign use this asset, so only the campaign's DM can delete it");
+    expect(deleted.body.message).toBe("Others in the campaign use this asset, so only the campaign's GM can delete it");
   });
 });

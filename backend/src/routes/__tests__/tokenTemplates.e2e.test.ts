@@ -1,11 +1,11 @@
 /**
- * The token template library is the DM's.
+ * The token template library is the GM's.
  *
- * A template carries what a placed token keeps from players: DM notes, a
+ * A template carries what a placed token keeps from players: GM notes, a
  * stat block, hit points, darkvision. The list and detail routes were open to
  * every member, so a player or spectator could read all of it with their
  * session cookie, while the map filtered the same fields off every token it
- * sent them. Reads are DM-only now, like the writes always were.
+ * sent them. Reads are GM-only now, like the writes always were.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -23,17 +23,17 @@ import {
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let spectatorId: string;
 let campaignId: string;
 let theirCampaignId: string;
 let templateId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 let spectator: ReturnType<typeof request.agent>;
 
-/** A token as it stands on a map: a townsperson the DM has written up. */
+/** A token as it stands on a map: a townsperson the GM has written up. */
 const TOKEN = {
   imageUrl: '',
   type: 'npc',
@@ -72,16 +72,16 @@ async function login(email: string) {
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const dmUser = await createTestUser({ email: `tt-dm-${stamp}@test.cozyvtt.local`, displayName: 'Template DM' });
+  const gmUser = await createTestUser({ email: `tt-dm-${stamp}@test.cozyvtt.local`, displayName: 'Template GM' });
   const playerUser = await createTestUser({ email: `tt-player-${stamp}@test.cozyvtt.local`, displayName: 'Template Player' });
   const spectatorUser = await createTestUser({ email: `tt-spec-${stamp}@test.cozyvtt.local`, displayName: 'Template Spectator' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
   spectatorId = spectatorUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Templates ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Templates ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
@@ -90,19 +90,19 @@ beforeAll(async () => {
   theirCampaignId = (await createTestCampaign(playerId, { name: `Their Templates ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: playerId, campaignId: theirCampaignId, role: 'DM', characterIds: [] },
-      { userId: spectatorId, campaignId: theirCampaignId, role: 'DM', characterIds: [] },
+      { userId: playerId, campaignId: theirCampaignId, role: 'GM', characterIds: [] },
+      { userId: spectatorId, campaignId: theirCampaignId, role: 'GM', characterIds: [] },
     ],
   });
   // One at a time: one address may have only two sign-ins checked at once.
-  dm = await login(dmUser.email);
+  gm = await login(gmUser.email);
   player = await login(playerUser.email);
   spectator = await login(spectatorUser.email);
 
-  const created = await dm.post(`/api/campaigns/${campaignId}/token-templates`).send({
+  const created = await gm.post(`/api/campaigns/${campaignId}/token-templates`).send({
     name: 'Traitor Innkeeper',
     type: 'npc',
-    notes: 'DM ONLY: secretly the cult leader',
+    notes: 'GM ONLY: secretly the cult leader',
     hp: { current: 5, max: 5, temp: 0 },
   });
   expect(created.status).toBe(201);
@@ -112,18 +112,18 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.tokenTemplate.deleteMany({ where: { campaignId: { in: [campaignId, theirCampaignId] } } });
   await cleanupCampaigns([campaignId, theirCampaignId]);
-  await cleanupUsers([dmId, playerId, spectatorId]);
+  await cleanupUsers([gmId, playerId, spectatorId]);
   await prisma.$disconnect();
 });
 
 describe('reading token templates', () => {
-  it('is open to the DM', async () => {
-    const list = await dm.get(`/api/campaigns/${campaignId}/token-templates`);
+  it('is open to the GM', async () => {
+    const list = await gm.get(`/api/campaigns/${campaignId}/token-templates`);
     expect(list.status).toBe(200);
     expect(list.body.templates.map((t: { name: string }) => t.name)).toContain('Traitor Innkeeper');
-    const one = await dm.get(`/api/campaigns/${campaignId}/token-templates/${templateId}`);
+    const one = await gm.get(`/api/campaigns/${campaignId}/token-templates/${templateId}`);
     expect(one.status).toBe(200);
-    expect(one.body.notes).toBe('DM ONLY: secretly the cult leader');
+    expect(one.body.notes).toBe('GM ONLY: secretly the cult leader');
   });
 
   it.each([
@@ -139,7 +139,7 @@ describe('reading token templates', () => {
   });
 });
 
-// The writes were always the DM's; nothing checked that a player or a
+// The writes were always the GM's; nothing checked that a player or a
 // spectator of the same campaign is turned away from them.
 describe.each([
   ['a player', () => player],
@@ -150,7 +150,7 @@ describe.each([
     expect(res.status).toBe(403);
     const stored = await prisma.tokenTemplate.findUnique({ where: { id: templateId } });
     expect(stored?.name).toBe('Traitor Innkeeper');
-    expect(stored?.notes).toBe('DM ONLY: secretly the cult leader');
+    expect(stored?.notes).toBe('GM ONLY: secretly the cult leader');
   });
 
   it('refuses a delete, and the template is still there', async () => {
@@ -171,7 +171,7 @@ describe.each([
     expect(await prisma.tokenTemplate.count({ where: { name: `Made by ${who}` } })).toBe(0);
   });
 
-  // They are the DM of the campaign copied to, so only their place in this
+  // They are the GM of the campaign copied to, so only their place in this
   // one turns them away.
   it('refuses copying a template to a campaign they run, and none is copied', async () => {
     const res = await agent().post(`/api/campaigns/${campaignId}/token-templates/${templateId}/copy-to/${theirCampaignId}`);
@@ -180,23 +180,23 @@ describe.each([
   });
 });
 
-// The bodies above are ones the DM's own requests succeed with, so a refusal
+// The bodies above are ones the GM's own requests succeed with, so a refusal
 // is the role's doing and not the body's.
-describe('the DM, with the same requests', () => {
+describe('the GM, with the same requests', () => {
   it('saves a token as a template', async () => {
-    const res = await dm.post(`/api/campaigns/${campaignId}/token-templates/from-token`).send(fromToken('Saved by the DM'));
+    const res = await gm.post(`/api/campaigns/${campaignId}/token-templates/from-token`).send(fromToken('Saved by the GM'));
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ name: 'Saved by the DM', notes: 'Waits by the well', hp: { current: 9, max: 11, temp: 0 } });
+    expect(res.body).toMatchObject({ name: 'Saved by the GM', notes: 'Waits by the well', hp: { current: 9, max: 11, temp: 0 } });
   });
 
   it('makes a template', async () => {
-    const res = await dm.post(`/api/campaigns/${campaignId}/token-templates`).send(fromToken('Made by the DM'));
+    const res = await gm.post(`/api/campaigns/${campaignId}/token-templates`).send(fromToken('Made by the GM'));
     expect(res.status).toBe(201);
   });
 
   it('copies one to a campaign they also run', async () => {
-    await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: theirCampaignId, role: 'DM', characterIds: [] } });
-    const res = await dm.post(`/api/campaigns/${campaignId}/token-templates/${templateId}/copy-to/${theirCampaignId}`);
+    await prisma.campaignMembership.create({ data: { userId: gmId, campaignId: theirCampaignId, role: 'GM', characterIds: [] } });
+    const res = await gm.post(`/api/campaigns/${campaignId}/token-templates/${templateId}/copy-to/${theirCampaignId}`);
     expect(res.status).toBe(201);
     expect(await prisma.tokenTemplate.count({ where: { campaignId: theirCampaignId } })).toBe(1);
   });

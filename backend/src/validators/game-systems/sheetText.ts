@@ -7,9 +7,8 @@ import { z } from 'zod';
 import { SHEET_LONG_TEXT_MAX, SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from './sheetLimits';
 
 /**
- * The character's own name on the sheet (`characterName`, or
- * `investigatorName` in Call of Cthulhu). Saving a sheet copies it into the
- * character's name column, so it has that column's limit.
+ * The character's own name on the sheet (`characterName`). Saving a sheet
+ * copies it into the character's name column, so it has that column's limit.
  */
 export const sheetCharacterNameSchema = z
   .string()

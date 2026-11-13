@@ -96,13 +96,13 @@ describe('backfillStatBlockHp', () => {
       ac: 15,
       speed: '30 ft.',
       actions: [{ name: 'Scimitar', description: 'Melee attack' }],
-      notes: 'DM-curated text',
+      notes: 'GM-curated text',
     };
 
     const result = backfillStatBlockHp(existing, 7, '2d6');
 
     expect(result!.actions).toEqual(existing.actions);
-    expect(result!.notes).toBe('DM-curated text');
+    expect(result!.notes).toBe('GM-curated text');
   });
 
   it('returns null when the stat block already has hit points', () => {

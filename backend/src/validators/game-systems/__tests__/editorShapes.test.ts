@@ -4,7 +4,7 @@
  * The routes store the schema's parsed sheet. A key the editor writes and the
  * schema does not declare is dropped without an error, and a value the editor
  * can produce but the schema refuses makes every save fail. Both have shipped:
- * Pathfinder 2e feat descriptions were dropped, a cleared Background box made
+ * Fantasy d20 feat descriptions were dropped, a cleared Background box made
  * a sheet impossible to save.
  *
  * Each sheet below holds every field its editor lets a player fill in, each
@@ -13,7 +13,7 @@
  */
 
 import { validateCharacterData } from '../index';
-import { GameSystem } from '../../../game-systems';
+import { GameSystem, type SupportedGameSystem } from '../../../game-systems';
 import { getBlankTemplate } from '../../../utils/character-templates';
 
 type Sheet = Record<string, unknown>;
@@ -32,7 +32,7 @@ function droppedKeys(input: unknown, output: unknown, path = ''): string[] {
   return [];
 }
 
-function expectKeptWhole(system: GameSystem, sheet: Sheet): void {
+function expectKeptWhole(system: SupportedGameSystem, sheet: Sheet): void {
   const result = validateCharacterData(system, sheet);
   if (!result.success) {
     throw new Error(`refused: ${JSON.stringify(result.errors.issues.map((i) => [i.path.join('.'), i.message]))}`);
@@ -40,16 +40,16 @@ function expectKeptWhole(system: GameSystem, sheet: Sheet): void {
   expect(droppedKeys(sheet, result.data)).toEqual([]);
 }
 
-const blank = (system: GameSystem): Sheet => getBlankTemplate(system).data as Sheet;
+const blank = (system: SupportedGameSystem): Sheet => getBlankTemplate(system).data as Sheet;
 const slots = (ranks: number) =>
   Object.fromEntries(Array.from({ length: ranks }, (_, i) => [String(i + 1), { total: 1, expended: 1 }]));
 
-describe('what the D&D 5e editor writes', () => {
+describe('what the 5E editor writes', () => {
   it('is kept whole', () => {
-    const sheet = blank(GameSystem.DND_5E);
+    const sheet = blank(GameSystem.FIFTH_EDITION);
     const skills = sheet.skills as Record<string, Sheet>;
     const saves = sheet.savingThrows as Record<string, Sheet>;
-    expectKeptWhole(GameSystem.DND_5E, {
+    expectKeptWhole(GameSystem.FIFTH_EDITION, {
       ...sheet,
       // An other bonus beside the derived one: Jack of All Trades, Aura of
       // Protection, a Ring of Protection.
@@ -102,11 +102,11 @@ describe('what the D&D 5e editor writes', () => {
   });
 });
 
-describe('what the Pathfinder 2e editor writes', () => {
+describe('what the Fantasy d20 editor writes', () => {
   it('is kept whole', () => {
     const newSpell = { name: 'New Spell', rank: 1, prepared: false, ritual: false, heightened: false };
-    expectKeptWhole(GameSystem.PATHFINDER_2E, {
-      ...blank(GameSystem.PATHFINDER_2E),
+    expectKeptWhole(GameSystem.FANTASY_D20, {
+      ...blank(GameSystem.FANTASY_D20),
       themeColor: 'Golden',
       background: '',
       alignment: '',
@@ -162,69 +162,68 @@ describe('what the Pathfinder 2e editor writes', () => {
   });
 });
 
-describe('what the Call of Cthulhu 7e editor writes', () => {
+// Every field of the Horror d100 sheet, as the editor writes each: the rows
+// its add buttons add, and the boxes it fills or clears.
+describe('what the Horror d100 editor writes', () => {
   it('is kept whole', () => {
-    const sheet = blank(GameSystem.CALL_OF_CTHULHU_7E);
-    const skill = { baseValue: 1, currentValue: 10, improvementChecked: true };
-    expectKeptWhole(GameSystem.CALL_OF_CTHULHU_7E, {
+    const sheet = blank(GameSystem.HORROR_D100);
+    const rating = { value: 10, experienceCheck: true, notes: 'Learned at sea' };
+    expectKeptWhole(GameSystem.HORROR_D100, {
       ...sheet,
       themeColor: '#14532d',
+      playerName: 'Robin',
       age: '30',
       sex: '',
       residence: '',
       birthplace: '',
-      conditions: { majorWound: true, dying: false, unconscious: false, temporaryInsanity: false, indefiniteInsanity: false },
+      conditions: { majorWound: true, dying: false, unconscious: false, temporaryInsanity: false },
       skills: {
         ...(sheet.skills as Sheet),
-        languageOther: [{ language: 'Latin', ...skill }],
-        science: [{ specialization: 'Chemistry', ...skill }],
-        customSkills: [{ name: 'Cryptography', ...skill }],
-        // A Fighting or Firearms specialisation carries its name.
-        fighting: { brawl: { baseValue: 25, currentValue: 40, improvementChecked: false }, custom: [{ specialization: 'Sword', ...skill }] },
-        firearms: {
-          handgun: { baseValue: 20, currentValue: 20, improvementChecked: false },
-          rifle: { baseValue: 25, currentValue: 25, improvementChecked: false },
-          shotgun: { baseValue: 25, currentValue: 25, improvementChecked: false },
-          custom: [{ specialization: 'Bow', ...skill }],
-        },
-        artCraft: { baseValue: 5, currentValue: 25, improvementChecked: false, specialization: 'Photography' },
+        languageOther: [{ specialty: 'Latin', ...rating }],
+        science: [{ specialty: 'Chemistry', ...rating }],
+        meleeWeapon: [{ specialty: 'Sword', ...rating }],
+        // A specialty as its add button adds it: at its base, with no notes.
+        firearm: [{ specialty: 'Shotgun', value: 30, experienceCheck: false }],
+        missileWeapon: [{ specialty: '', value: 0, experienceCheck: false }],
+        own: [{ name: 'New skill', value: 0, experienceCheck: false }, { name: 'Cryptography', ...rating }],
       },
-      contacts: [{ name: 'Professor Armitage', role: 'Librarian', notes: 'Miskatonic University' }],
-      combat: {
-        weapons: [{
-          name: 'New Weapon', skill: '', skillValue: 25, damage: '1d3', range: 'Touch',
-          attacks: 1, ammo: null, malfunction: null, notes: '',
-        }],
-      },
+      // A weapon and a piece of armor as their add buttons add them.
+      weapons: [{
+        name: 'New Weapon', skill: 'Brawl', skillValue: 25, damage: '1D3+dm', range: 'Short',
+        attacks: 1, ammo: null, malfunction: null, notes: '',
+      }],
+      armor: [{ name: 'New Armor', armorValue: 0, notes: '' }, { name: 'Leather jacket', armorValue: 1, notes: 'Heavy' }],
+      hitPoints: { maximum: 10, current: -3 },
+      move: 12,
+      distinctiveFeatures: ['A crooked smile'],
+      spells: ['Ward of Ash'],
+      contacts: [{ name: 'Dr Edith Vane', role: 'Librarian', notes: 'Halloway College' }],
       possessions: [{ name: 'Knife', notes: 'sharp - old' }],
-      wealth: { spendingLevel: '', cash: 0, assets: '', notes: 'A trust fund' },
-      backstory: {
-        description: '', personalDescription: '', ideology: '', significantPeople: '', meaningfulLocations: '',
-        treasuredPossessions: '', traits: '', injuriesAndScars: '', phobiasAndManias: '',
-        arcaneTomesAndSpells: '', encountersWithStrangeEntities: '',
-      },
+      wealth: { level: '', cash: 0, assets: '', notes: 'A trust fund' },
+      // A note as its add button adds it, and one whose title was cleared.
+      story: [{ title: 'New note', text: '' }, { title: '', text: 'Grew up by the sea.' }],
       appearance: { age: '', height: '', weight: '', eyes: '', hair: '', skin: '' },
-      spellsAndMythos: { cthulhuMythos: 0, spells: ['Elder Sign'] },
       notes: '',
     });
   });
 });
 
-// The Call of Cthulhu editor's name boxes can be cleared to retype, and a
-// save then must not be refused for the empty name: the sheet shows "Other"
-// for a skill.
-describe('a Call of Cthulhu name box left empty', () => {
+// The Horror d100 editor's name boxes can be cleared to retype, and a
+// save then must not be refused for the empty name: the sheet lists a
+// specialty with no name under its skill's own.
+describe('a Horror d100 name box left empty', () => {
   it('is kept', () => {
-    const sheet = blank(GameSystem.CALL_OF_CTHULHU_7E);
-    const skill = { baseValue: 1, currentValue: 10, improvementChecked: false };
+    const sheet = blank(GameSystem.HORROR_D100);
+    const rating = { value: 10, experienceCheck: false };
     const skills = sheet.skills as Sheet;
-    expectKeptWhole(GameSystem.CALL_OF_CTHULHU_7E, {
+    expectKeptWhole(GameSystem.HORROR_D100, {
       ...sheet,
       skills: {
         ...skills,
         languageOwn: { ...(skills.languageOwn as Sheet), language: '' },
-        languageOther: [{ language: '', ...skill }],
-        science: [{ specialization: '', ...skill }],
+        languageOther: [{ specialty: '', ...rating }],
+        science: [{ specialty: '', ...rating }],
+        own: [{ name: '', ...rating }],
       },
       // A contact as the editor adds one, and one whose name was cleared.
       contacts: [{ name: 'New contact', role: '', notes: '' }, { name: '', role: '', notes: '' }],

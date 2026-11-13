@@ -39,33 +39,33 @@ const UVTT = Buffer.from(
   })
 );
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let imageUrl: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const user = await createTestUser({ email: `drawn-colour-${stamp}@test.local`, displayName: 'Colour DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Drawn colour ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
-  const imported = await dm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', UVTT, 'colour.uvtt');
+  const user = await createTestUser({ email: `drawn-colour-${stamp}@test.local`, displayName: 'Colour GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Drawn colour ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  const imported = await gm.post(`/api/campaigns/${campaignId}/maps/import-uvtt`).attach('file', UVTT, 'colour.uvtt');
   expect(imported.status).toBe(201);
   imageUrl = imported.body.map.imageUrl;
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
 const create = (body: Record<string, unknown>) =>
-  dm.post(`/api/campaigns/${campaignId}/maps`).send({ name: 'Drawn', imageUrl, width: 10, height: 10, ...body });
+  gm.post(`/api/campaigns/${campaignId}/maps`).send({ name: 'Drawn', imageUrl, width: 10, height: 10, ...body });
 
 describe('POST /api/campaigns/:campaignId/maps drawnBackground', () => {
   it('keeps the colour the map was made in, and gives it back with the map', async () => {
@@ -73,7 +73,7 @@ describe('POST /api/campaigns/:campaignId/maps drawnBackground', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.map.drawnBackground).toBe('#2b3a4c');
-    const read = await dm.get(`/api/campaigns/${campaignId}/maps/${res.body.map.id}`);
+    const read = await gm.get(`/api/campaigns/${campaignId}/maps/${res.body.map.id}`);
     expect(read.body.map.drawnBackground).toBe('#2b3a4c');
   });
 

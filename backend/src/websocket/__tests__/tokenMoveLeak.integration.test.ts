@@ -2,9 +2,9 @@
  * What a token move tells each player.
  *
  * The move fan-out on a lit map filtered by line of sight alone. It never
- * applied the role filter that the map fetch applies, so a DM-hidden token
+ * applied the role filter that the map fetch applies, so a GM-hidden token
  * standing in a player's line of sight was sent to them, complete with the
- * DM's notes, the moment the DM moved it; and a player in the spirit realm
+ * GM's notes, the moment the GM moved it; and a player in the spirit realm
  * was sent material-plane tokens. On an unlit map a hidden token's every
  * move was broadcast to the whole room. The map fetch was right; the move
  * paths now apply the same rules before line of sight.
@@ -27,11 +27,11 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `tokenleak-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 const OWN = 'token-own';
@@ -59,18 +59,18 @@ async function resetMap(lightingEnabled: boolean) {
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Leak ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Token Leak ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Token Leak ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -83,7 +83,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
@@ -91,30 +91,30 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 describe('on a lit map, in the player\'s line of sight', () => {
   beforeEach(() => resetMap(true));
 
-  it('a hidden token the DM moves is not sent to the player', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('a hidden token the GM moves is not sent to the player', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const noAppear = expectNoEvent(player, 'token:appeared', 500);
     const noMove = expectNoEvent(player, 'token.moved', 500);
-    // Not even its id: a hidden token is the DM's secret, name included.
+    // Not even its id: a hidden token is the GM's secret, name included.
     const noVanish = expectNoEvent(player, 'token:disappeared', 500);
-    dm.emit('token.move.end', { tokenId: HIDDEN, mapId, x: 8, y: 5 });
+    gm.emit('token.move.end', { tokenId: HIDDEN, mapId, x: 8, y: 5 });
     await Promise.all([noAppear, noMove, noVanish]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('a player moving their own token is not told the ids of tokens they may not see', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     // The re-sync after an own move names only tokens the player may have.
@@ -122,35 +122,35 @@ describe('on a lit map, in the player\'s line of sight', () => {
     player.emit('token.move.end', { tokenId: OWN, mapId, x: 4, y: 5 });
     await noVanish;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
-  it('a visible token the DM moves arrives without the DM\'s notes', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('a visible token the GM moves arrives without the GM\'s notes', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const appeared = waitForEvent<{ token: { id: string; notes?: string; position: { x: number } } }>(player, 'token:appeared');
-    dm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 8, y: 5 });
+    gm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 8, y: 5 });
     const payload = await appeared;
     expect(payload.token.id).toBe(SHOWN);
     expect(payload.token.position.x).toBe(8);
     expect(payload.token).not.toHaveProperty('notes');
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('a player in the spirit realm is not sent material-plane tokens', async () => {
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const nothing = expectNoEvent(player, 'token:appeared', 500);
-    dm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 8, y: 5 });
+    gm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 8, y: 5 });
     await nothing;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -168,10 +168,10 @@ describe('an obscured token', () => {
   });
 
   it('arrives in a player\'s sight as a shape with no identity', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const appeared = waitForEvent<{ token: Record<string, unknown> }>(player, 'token:appeared');
-    dm.emit('token.move.end', { tokenId: VEILED, mapId, x: 8, y: 5 });
+    gm.emit('token.move.end', { tokenId: VEILED, mapId, x: 8, y: 5 });
     const { token: sent } = await appeared;
     expect(sent.id).toBe(VEILED);
     expect(sent.obscured).toBe(true);
@@ -181,7 +181,7 @@ describe('an obscured token', () => {
     expect(sent.conditions).toEqual([]);
     expect(sent).not.toHaveProperty('notes');
     expect(sent.position).toEqual({ x: 8, y: 5 });
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -190,38 +190,38 @@ describe('on an unlit map', () => {
   beforeEach(() => resetMap(false));
 
   it('a hidden token\'s final position is not broadcast to players', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const nothing = expectNoEvent(player, 'token.moved', 500);
-    dm.emit('token.move.end', { tokenId: HIDDEN, mapId, x: 8, y: 5 });
+    gm.emit('token.move.end', { tokenId: HIDDEN, mapId, x: 8, y: 5 });
     await nothing;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('a hidden token\'s drag frames are not broadcast to players', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const nothing = expectNoEvent(player, 'token.moved', 500);
-    dm.emit('token.move', { tokenId: HIDDEN, mapId, x: 8, y: 5 });
+    gm.emit('token.move', { tokenId: HIDDEN, mapId, x: 8, y: 5 });
     await nothing;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('a visible token\'s move still reaches players', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const moved = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
-    dm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 8, y: 5 });
+    gm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 8, y: 5 });
     expect((await moved).tokenId).toBe(SHOWN);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -262,36 +262,36 @@ describe('spirit-plane and hidden tokens on the move', () => {
     ['token.move.start', 'token.move.start', {}],
     ['token.move', 'token.moved', { x: 7, y: 5 }],
     ['token.move.end', 'token.moved', { x: 8, y: 5 }],
-  ])('a hidden spirit token the DM moves with %s reaches no player, even one who can see the spirit plane', async (sent, received, coords) => {
+  ])('a hidden spirit token the GM moves with %s reaches no player, even one who can see the spirit plane', async (sent, received, coords) => {
     await spiritMap(false, true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const silence = expectNoEvent(player, received, 500);
     const noAppear = expectNoEvent(player, 'token:appeared', 500);
-    dm.emit(sent, { tokenId: WRAITH, mapId, ...coords });
+    gm.emit(sent, { tokenId: WRAITH, mapId, ...coords });
     await Promise.all([silence, noAppear]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('a material token moved on an unlit map is not sent to a player in the spirit realm', async () => {
     await spiritMap(false, true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     // The map fetch gives a player in the spirit realm only spirit tokens.
     const silence = expectNoEvent(player, 'token.moved', 500);
-    dm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 9, y: 5 });
+    gm.emit('token.move.end', { tokenId: SHOWN, mapId, x: 9, y: 5 });
     await silence;
 
     // While a spirit token's move does reach them there.
     const heard = waitForEvent<{ tokenId: string }>(player, 'token.moved');
-    dm.emit('token.move.end', { tokenId: GHOST, mapId, x: 17, y: 5 });
+    gm.emit('token.move.end', { tokenId: GHOST, mapId, x: 17, y: 5 });
     expect((await heard).tokenId).toBe(GHOST);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -299,15 +299,15 @@ describe('spirit-plane and hidden tokens on the move', () => {
     // Lighting on, no global illumination, and the player's token sees only
     // its own square: a spirit token thirteen squares away is in the dark.
     await spiritMap(true, true, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const silence = expectNoEvent(player, 'token.moved', 500);
     const noAppear = expectNoEvent(player, 'token:appeared', 500);
-    dm.emit('token.move.end', { tokenId: GHOST, mapId, x: 17, y: 5 });
+    gm.emit('token.move.end', { tokenId: GHOST, mapId, x: 17, y: 5 });
     await Promise.all([silence, noAppear]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });

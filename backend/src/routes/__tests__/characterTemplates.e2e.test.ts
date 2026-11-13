@@ -25,14 +25,14 @@ import {
 const app = createTestApp();
 
 /**
- * A valid D&D 5e sheet.
+ * A valid 5E sheet.
  *
  * Built from the canonical blank the validators already ship rather than
  * hand-written, so this fixture cannot drift out of step with the schema it is
  * checked against — which it did on the first attempt.
  */
-const dnd5eSheet = {
-  ...(getBlankCharacterTemplate(AppGameSystem.DND_5E) as Record<string, unknown>),
+const fifthEditionSheet = {
+  ...(getBlankCharacterTemplate(AppGameSystem.FIFTH_EDITION) as Record<string, unknown>),
   characterName: 'Template Hero',
 };
 
@@ -64,8 +64,8 @@ describe('Character template routes', () => {
     const res = await agent.post('/api/character-templates').send({
       name: 'Novice Fighter',
       description: 'A starting point',
-      gameSystem: GameSystem.DND_5E,
-      data: dnd5eSheet,
+      gameSystem: GameSystem.FIFTH_EDITION,
+      data: fifthEditionSheet,
       ...overrides,
     });
     return res;
@@ -183,7 +183,7 @@ describe('Character template routes', () => {
   // character is: a key the sheet does not declare is dropped on the way in.
   describe('what is stored', () => {
     it('drops a key the schema does not declare when a template is published', async () => {
-      const res = await createTemplate(authorAgent, { data: { ...dnd5eSheet, injected: 'nope' } });
+      const res = await createTemplate(authorAgent, { data: { ...fifthEditionSheet, injected: 'nope' } });
       expect(res.status).toBe(201);
       expect(res.body.data).not.toHaveProperty('injected');
 
@@ -198,7 +198,7 @@ describe('Character template routes', () => {
 
       const res = await authorAgent
         .put(`/api/character-templates/${created.body.id}`)
-        .send({ data: { ...dnd5eSheet, injected: 'nope', nested: { deeper: 1 } } });
+        .send({ data: { ...fifthEditionSheet, injected: 'nope', nested: { deeper: 1 } } });
       expect(res.status).toBe(200);
 
       const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
@@ -209,28 +209,28 @@ describe('Character template routes', () => {
   });
 
   describe('what a template never carries', () => {
-    // Every system's sheet with a player's name, and Call of Cthulhu's with
-    // the Keeper's Notes, as Save as Template sends a character's.
-    const sheets = [AppGameSystem.DND_5E, AppGameSystem.PATHFINDER_2E, AppGameSystem.CALL_OF_CTHULHU_7E].map(
+    // Every system's sheet with a player's name, and Horror d100's with
+    // the GM's Notes, as Save as Template sends a character's.
+    const sheets = [AppGameSystem.FIFTH_EDITION, AppGameSystem.FANTASY_D20, AppGameSystem.HORROR_D100].map(
       (gameSystem) => ({
         gameSystem,
         data: {
           ...(getBlankCharacterTemplate(gameSystem) as Record<string, unknown>),
           playerName: 'Their Player',
-          ...(gameSystem === AppGameSystem.CALL_OF_CTHULHU_7E && { notes: 'The Keeper alone knows this' }),
+          ...(gameSystem === AppGameSystem.HORROR_D100 && { notes: 'The GM alone knows this' }),
         },
       })
     );
 
-    it('leaves out the player name and the Keeper\'s Notes when a template is published', async () => {
+    it('leaves out the player name and the GM\'s Notes when a template is published', async () => {
       for (const { gameSystem, data } of sheets) {
         const res = await createTemplate(otherAgent, { gameSystem, data });
         expect(res.status).toBe(201);
         expect(res.body.data).not.toHaveProperty('playerName');
-        expect(res.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        expect(res.body.data).not.toHaveProperty('notes', 'The GM alone knows this');
         const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: res.body.id } });
         expect(stored.data).not.toHaveProperty('playerName');
-        expect(stored.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        expect(stored.data).not.toHaveProperty('notes', 'The GM alone knows this');
       }
     });
 
@@ -243,7 +243,7 @@ describe('Character template routes', () => {
         expect(res.status).toBe(200);
         const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
         expect(stored.data).not.toHaveProperty('playerName');
-        expect(stored.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        expect(stored.data).not.toHaveProperty('notes', 'The GM alone knows this');
       }
     });
 
@@ -256,18 +256,18 @@ describe('Character template routes', () => {
         const read = await otherAgent.get(`/api/character-templates/${created.body.id}`);
         expect(read.status).toBe(200);
         expect(read.body.data).not.toHaveProperty('playerName');
-        expect(read.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        expect(read.body.data).not.toHaveProperty('notes', 'The GM alone knows this');
         const renamed = await authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name: 'Renamed' });
         expect(renamed.status).toBe(200);
         expect(renamed.body.data).not.toHaveProperty('playerName');
-        expect(renamed.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        expect(renamed.body.data).not.toHaveProperty('notes', 'The GM alone knows this');
       }
     });
 
-    it('keeps a Pathfinder 2e sheet\'s own notes, which are not the Keeper\'s', async () => {
+    it('keeps a Fantasy d20 sheet\'s own notes, which are not the GM\'s', async () => {
       const res = await createTemplate(authorAgent, {
-        gameSystem: GameSystem.PATHFINDER_2E,
-        data: { ...(getBlankCharacterTemplate(AppGameSystem.PATHFINDER_2E) as Record<string, unknown>), notes: 'Keep the shield polished' },
+        gameSystem: GameSystem.FANTASY_D20,
+        data: { ...(getBlankCharacterTemplate(AppGameSystem.FANTASY_D20) as Record<string, unknown>), notes: 'Keep the shield polished' },
       });
       expect(res.status).toBe(201);
       expect(res.body.data.notes).toBe('Keep the shield polished');
@@ -353,8 +353,8 @@ describe('Character template routes', () => {
       await createTemplate(authorAgent, { name: 'Fivee' });
       await createTemplate(authorAgent, { name: 'Freeform', gameSystem: null, data: {} });
 
-      const dnd = await otherAgent.get('/api/character-templates?gameSystem=DND_5E&limit=100');
-      const names = dnd.body.templates.map((t: { name: string }) => t.name);
+      const fifthEdition = await otherAgent.get('/api/character-templates?gameSystem=FIFTH_EDITION&limit=100');
+      const names = fifthEdition.body.templates.map((t: { name: string }) => t.name);
 
       expect(names).toContain('Fivee');
       expect(names).not.toContain('Freeform');
@@ -396,7 +396,7 @@ describe('Character template routes', () => {
       expect(list.body.templates[0]).toMatchObject({
         id: created.body.id,
         name: 'Summary Only',
-        gameSystem: GameSystem.DND_5E,
+        gameSystem: GameSystem.FIFTH_EDITION,
         createdBy: { id: authorId },
       });
 
@@ -538,7 +538,7 @@ describe('Character template routes', () => {
 
       const late = await authorAgent
         .put(`/api/character-templates/${created.body.id}`)
-        .send({ name: 'Saved Late', data: { ...dnd5eSheet, characterName: 'Late Hero' }, updatedAt: loadedAt });
+        .send({ name: 'Saved Late', data: { ...fifthEditionSheet, characterName: 'Late Hero' }, updatedAt: loadedAt });
       expect(late.status).toBe(409);
       expect(late.body).toEqual(CHANGED);
 

@@ -8,7 +8,7 @@ import { Router, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { AuthenticatedRequest } from '../middleware/rbac';
-import { campaignDM } from '../middleware/compose';
+import { campaignGM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import {
   CreateTokenTemplateSchema,
@@ -28,11 +28,11 @@ const router = Router({ mergeParams: true });
 // ============================================
 // LIST — GET /
 // Returns token templates for this campaign with search/pagination.
-// DM only, like every other route here: a template carries the notes, stat
+// GM only, like every other route here: a template carries the notes, stat
 // block and hit points the map keeps from players.
 // ============================================
 
-router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const { search, type, limit = '50', offset = '0' } = req.query;
@@ -71,7 +71,7 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
 // GET ONE — GET /:id
 // ============================================
 
-router.get('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
 
@@ -91,10 +91,10 @@ router.get('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
 // ============================================
 // CREATE — POST /
-// DM only.
+// GM only.
 // ============================================
 
-router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const userId = req.session.userId!;
@@ -111,7 +111,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     // An asset's address, as the creature and character routes make it, so an
     // outside address is refused here and a bare id stored in full.
     const imageUrl = data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
-    // A picture the DM may read: a template's picture counts as the campaign using it.
+    // A picture the GM may read: a template's picture counts as the campaign using it.
     if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
@@ -147,10 +147,10 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
 
 // ============================================
 // UPDATE — PUT /:id
-// DM only.
+// GM only.
 // ============================================
 
-router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
 
@@ -170,7 +170,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     const data = parsed.data;
     // As on create; empty or null clears the picture.
     const nextImageUrl = data.imageUrl === undefined ? undefined : data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
-    // A new picture the DM may read; the one already stored may stay.
+    // A new picture the GM may read; the one already stored may stay.
     if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
@@ -203,10 +203,10 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
 
 // ============================================
 // DELETE — DELETE /:id
-// DM only.
+// GM only.
 // ============================================
 
-router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id } = req.params;
 
@@ -225,10 +225,10 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
 
 // ============================================
 // SAVE TOKEN AS TEMPLATE — POST /from-token
-// DM only. Saves an existing map token's configuration as a reusable template.
+// GM only. Saves an existing map token's configuration as a reusable template.
 // ============================================
 
-router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/from-token', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const userId = req.session.userId!;
@@ -245,7 +245,7 @@ router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Re
     // An asset's address, as the creature and character routes make it, so an
     // outside address is refused here and a bare id stored in full.
     const imageUrl = data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
-    // A picture the DM may read: a template's picture counts as the campaign using it.
+    // A picture the GM may read: a template's picture counts as the campaign using it.
     if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
@@ -281,11 +281,11 @@ router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Re
 
 // ============================================
 // COPY TO CAMPAIGN — POST /:id/copy-to/:targetCampaignId
-// DM only (must be DM in BOTH source and target campaigns).
+// GM only (must be GM in BOTH source and target campaigns).
 // Duplicates template into another campaign as an independent copy.
 // ============================================
 
-router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/copy-to/:targetCampaignId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, id, targetCampaignId } = req.params;
     const userId = req.session.userId!;
@@ -298,14 +298,14 @@ router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: Authentica
       });
     }
 
-    // Verify user is DM of target campaign
+    // Verify user is GM of target campaign
     const targetMembership = await prisma.campaignMembership.findUnique({
       where: { userId_campaignId: { userId, campaignId: targetCampaignId } },
     });
-    if (!targetMembership || targetMembership.role !== 'DM') {
+    if (!targetMembership || targetMembership.role !== 'GM') {
       return res.status(403).json({
         error: 'Forbidden',
-        message: 'You must be a DM in the target campaign to copy templates there',
+        message: 'You must be a GM in the target campaign to copy templates there',
       });
     }
 

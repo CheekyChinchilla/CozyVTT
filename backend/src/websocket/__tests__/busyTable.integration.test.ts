@@ -18,12 +18,12 @@
  * - chat is one message per send, two a second at most;
  * - each open tab reports explored cells at most every 300 ms, and a player
  *   may have the map open on two devices;
- * - the DM's controls are a click apiece: ten map updates in a second while
+ * - the GM's controls are a click apiece: ten map updates in a second while
  *   clicking through token edits;
  * - drawing, a quick stroke takes a quarter of a second, with twenty preview
  *   frames a second while it is drawn, so a player sketching a plan adds
  *   four drawings a second at most; the eraser is a tap apiece, four a
- *   second at most; Clear mine and the DM's Clear drawings are a click and a
+ *   second at most; Clear mine and the GM's Clear drawings are a click and a
  *   confirmation;
  * - a player who opens the campaign on four devices, each of which then drops
  *   and reconnects, joins eight times and holds eight sockets until the
@@ -35,11 +35,11 @@
  * and paces dice at one roll per 2.1 seconds. Its busiest moment is a model
  * turn of parallel tool calls; this plays turns of ten (ten combatants added
  * to initiative, eight hit point changes, three narration messages, a map
- * switch), on the DM's account, which is how it is run.
+ * switch), on the GM's account, which is how it is run.
  *
  * Windows of a minute cannot be played in a test, so the busiest real minute
  * is stated: a chatty player and the bridge's narration on one account, 60
- * messages; a DM clicking through a mob's attacks and damage, 40 rolls; a
+ * messages; a GM clicking through a mob's attacks and damage, 40 rolls; a
  * player sketching a plan for a minute, one stroke a second, 60 drawings.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -73,12 +73,12 @@ let mapId: string;
 const userIds: string[] = [];
 
 type Player = { id: string; cookie: string; characterId: string; tokenId: string };
-let dm: { id: string; cookie: string };
+let gm: { id: string; cookie: string };
 const players: Player[] = [];
 
 /**
  * Everything sent, by whom and when. The bridge's sends are labelled apart
- * from the DM's own clicks on the same account: the measure is the busier of
+ * from the GM's own clicks on the same account: the measure is the busier of
  * the two, since a table run by the bridge is not also clicked through by
  * hand at full speed.
  */
@@ -220,7 +220,7 @@ beforeAll(async () => {
     created.slice(1).map((user, i) =>
       prisma.character.create({
         data: {
-          userId: user.id, campaignId, name: `Hero ${i}`, gameSystem: 'DND_5E',
+          userId: user.id, campaignId, name: `Hero ${i}`, gameSystem: 'FIFTH_EDITION',
           data: toJson({ hp: { current: 500, maximum: 1000, temporary: 0 }, hitDice: [] }),
         },
       })
@@ -229,7 +229,7 @@ beforeAll(async () => {
   created.slice(1).forEach((user, i) => tokens.push(token(`hero-${i}`, user.id)));
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: created[0].id, campaignId, role: 'DM', characterIds: [] },
+      { userId: created[0].id, campaignId, role: 'GM', characterIds: [] },
       ...created.slice(1).map((user, i) => ({ userId: user.id, campaignId, role: 'PLAYER' as const, characterIds: [characters[i].id] })),
     ],
   });
@@ -242,7 +242,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  dm = { id: created[0].id, cookie: await server.loginAs(created[0].id) };
+  gm = { id: created[0].id, cookie: await server.loginAs(created[0].id) };
   for (let i = 1; i < created.length; i += 1) {
     players.push({ id: created[i].id, cookie: await server.loginAs(created[i].id), characterId: characters[i - 1].id, tokenId: `hero-${i - 1}` });
   }
@@ -265,19 +265,19 @@ afterAll(async () => {
 
 describe('a fast combat', () => {
   it('reaches no ceiling, loses nothing, and stays five times under every one', async () => {
-    // Every player on two devices; the DM on a laptop and a screen for the
-    // table; the bridge on the DM's account.
+    // Every player on two devices; the GM on a laptop and a screen for the
+    // table; the bridge on the GM's account.
     const tabs = new Map<string, ClientSocket[]>();
     for (const player of players) tabs.set(player.id, [await join(player.id, player.cookie), await join(player.id, player.cookie)]);
-    const dmTabs = [await join(dm.id, dm.cookie), await join(dm.id, dm.cookie)];
-    const asBridge = `${dm.id}:bridge`;
-    const bridge = await join(dm.id, dm.cookie, asBridge);
+    const gmTabs = [await join(gm.id, gm.cookie), await join(gm.id, gm.cookie)];
+    const asBridge = `${gm.id}:bridge`;
+    const bridge = await join(gm.id, gm.cookie, asBridge);
 
     const p1 = players[0];
     const play: Array<Promise<void>> = [];
 
-    // The DM clears the last session's markup before anyone draws.
-    await sendWithAck(dm.id, dmTabs[0], 'drawing:clear', { mapId, layer: 'MARKUP' });
+    // The GM clears the last session's markup before anyone draws.
+    await sendWithAck(gm.id, gmTabs[0], 'drawing:clear', { mapId, layer: 'MARKUP' });
 
     // One player opens the campaign on two more devices; then all four of
     // theirs drop and reconnect, the dropped ones lingering.
@@ -302,18 +302,18 @@ describe('a fast combat', () => {
       }
     }
 
-    // The DM, clicking.
-    const [dmLaptop] = dmTabs;
-    play.push(repeat(10, 100, () => send(dm.id, dmLaptop, 'map.change', { mapId })));
-    play.push(repeat(10, 100, (i) => send(dm.id, dmLaptop, 'character.hp.update', { characterId: players[i % 4].characterId, delta: -1 })));
-    play.push(repeat(3, 1000, (i) => send(dm.id, dmLaptop, 'dice.roll', { expression: '1d20+4', purpose: `Goblin ${i} Scimitar Attack` })));
-    play.push(repeat(4, 500, (i) => send(dm.id, dmLaptop, 'chat.message', { content: `The goblins shriek ${i}` })));
-    play.push(repeat(2, 1000, (i) => send(dm.id, dmLaptop, 'atmosphere.effect.set', { effect: i % 2 ? 'mist' : 'rain' })));
-    // The DM marks up the map, a shape a second, half of them for the DM alone.
+    // The GM, clicking.
+    const [gmLaptop] = gmTabs;
+    play.push(repeat(10, 100, () => send(gm.id, gmLaptop, 'map.change', { mapId })));
+    play.push(repeat(10, 100, (i) => send(gm.id, gmLaptop, 'character.hp.update', { characterId: players[i % 4].characterId, delta: -1 })));
+    play.push(repeat(3, 1000, (i) => send(gm.id, gmLaptop, 'dice.roll', { expression: '1d20+4', purpose: `Goblin ${i} Scimitar Attack` })));
+    play.push(repeat(4, 500, (i) => send(gm.id, gmLaptop, 'chat.message', { content: `The goblins shriek ${i}` })));
+    play.push(repeat(2, 1000, (i) => send(gm.id, gmLaptop, 'atmosphere.effect.set', { effect: i % 2 ? 'mist' : 'rain' })));
+    // The GM marks up the map, a shape a second, half of them for the GM alone.
     play.push((async () => {
       for (let i = 0; i < 4; i += 1) {
-        await sendWithAck(dm.id, dmLaptop, 'drawing:add', {
-          mapId, drawing: { kind: 'rect', color: '#d94f3d', width: 2, points: [[0, 0], [100 + i, 100]], audience: i % 2 ? 'DM' : 'ALL' },
+        await sendWithAck(gm.id, gmLaptop, 'drawing:add', {
+          mapId, drawing: { kind: 'rect', color: '#d94f3d', width: 2, points: [[0, 0], [100 + i, 100]], audience: i % 2 ? 'GM' : 'ALL' },
         });
         await sleep(1000);
       }
@@ -345,11 +345,11 @@ describe('a fast combat', () => {
     const count = (event: string, user?: string) => sent.filter((e) => e.event === event && (!user || e.user === user)).length;
     expect(await prisma.message.count({ where: { campaignId } })).toBe(count('chat.message'));
     expect(await prisma.diceRoll.count({ where: { campaignId } })).toBe(count('dice.roll'));
-    // Each player erased half their strokes and cleared the rest; the DM's four stay.
-    expect(await prisma.mapDrawing.count({ where: { mapId, authorId: dm.id } })).toBe(4);
+    // Each player erased half their strokes and cleared the rest; the GM's four stay.
+    expect(await prisma.mapDrawing.count({ where: { mapId, authorId: gm.id } })).toBe(4);
     expect(await prisma.mapDrawing.count({ where: { mapId } })).toBe(4);
     for (const player of players) {
-      // Each player's own clicks cancel out; the DM took ten, a quarter each
+      // Each player's own clicks cancel out; the GM took ten, a quarter each
       // way round the table, and the bridge's two turns cancel out.
       const sheet = (await prisma.character.findUniqueOrThrow({ where: { id: player.characterId } })).data as { hp: { current: number } };
       expect(sheet.hp.current).toBe(500 - (players.indexOf(player) < 2 ? 3 : 2));

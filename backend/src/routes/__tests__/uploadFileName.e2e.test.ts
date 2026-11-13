@@ -4,7 +4,7 @@
  * Browsers cannot write a double quote or a line break inside the quoted
  * filename of a multipart part, so they write `%22`, `%0D` and `%0A` instead.
  * The upload parser used to hand those back untouched, so a file called
- * `Dragon "Smaug".png` appeared in the library as `Dragon %22Smaug%22.png`.
+ * `Dragon "Ember".png` appeared in the library as `Dragon %22Ember%22.png`.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -68,12 +68,12 @@ describe('the name an uploaded file is recorded under', () => {
   }
 
   it('keeps a double quote written as %22', async () => {
-    const res = await uploadAs('Dragon %22Smaug%22.png');
+    const res = await uploadAs('Dragon %22Ember%22.png');
     expect(res.status).toBe(201);
 
     const asset = await prisma.asset.findUniqueOrThrow({ where: { id: res.body.asset.id } });
-    expect(asset.originalName).toBe('Dragon "Smaug".png');
-    expect(asset.name).toBe('Dragon "Smaug".png');
+    expect(asset.originalName).toBe('Dragon "Ember".png');
+    expect(asset.name).toBe('Dragon "Ember".png');
   });
 
   it('leaves a percent sign that is not an escape alone', async () => {

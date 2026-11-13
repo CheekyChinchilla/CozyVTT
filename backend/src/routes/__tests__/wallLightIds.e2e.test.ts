@@ -20,9 +20,9 @@ import { createWsTestServer, WsTestServer } from '../../__tests__/helpers/websoc
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const wall = (id = randomUUID(), x = 100) => ({ id, x1: x, y1: 100, x2: x + 100, y2: 100, type: 'wall' });
 const light = (id = randomUUID(), x = 500) => ({ id, x, y: 500, brightRadius: 2, dimRadius: 4, color: '#ffcc66', enabled: true });
@@ -43,18 +43,18 @@ const stored = (mapId: string) => prisma.map.findUniqueOrThrow({ where: { id: ma
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `wallids-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Wall ids ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Wall ids ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 afterAll(async () => {
   await server.close();
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -62,7 +62,7 @@ it('PUT /walls refuses a list that repeats an id, and stores nothing', async () 
   const mapId = await newMap();
   const id = randomUUID();
 
-  const res = await dm.put(`${base(mapId)}/walls`).send({ segments: [wall(id), wall(id, 400)] });
+  const res = await gm.put(`${base(mapId)}/walls`).send({ segments: [wall(id), wall(id, 400)] });
 
   expect(res.status).toBe(400);
   expect(res.body.message).toMatch(/same id/);
@@ -73,7 +73,7 @@ it('POST /walls refuses an id already on the map', async () => {
   const existing = wall();
   const mapId = await newMap({ wallSegments: [existing] });
 
-  const res = await dm.post(`${base(mapId)}/walls`).send(wall(existing.id, 400));
+  const res = await gm.post(`${base(mapId)}/walls`).send(wall(existing.id, 400));
 
   expect(res.status).toBe(400);
   expect((await stored(mapId)).wallSegments).toEqual([existing]);
@@ -83,7 +83,7 @@ it('PUT /lights refuses a list that repeats an id', async () => {
   const mapId = await newMap();
   const id = randomUUID();
 
-  const res = await dm.put(`${base(mapId)}/lights`).send({ lights: [light(id), light(id, 700)] });
+  const res = await gm.put(`${base(mapId)}/lights`).send({ lights: [light(id), light(id, 700)] });
 
   expect(res.status).toBe(400);
   expect(res.body.message).toMatch(/same id/);
@@ -93,7 +93,7 @@ it('POST /lights refuses an id already on the map', async () => {
   const existing = light();
   const mapId = await newMap({ lights: [existing] });
 
-  expect((await dm.post(`${base(mapId)}/lights`).send(light(existing.id, 700))).status).toBe(400);
+  expect((await gm.post(`${base(mapId)}/lights`).send(light(existing.id, 700))).status).toBe(400);
   expect((await stored(mapId)).lights).toEqual([existing]);
 });
 
@@ -102,6 +102,6 @@ it('POST still gives a wall or light sent without an id a fresh one', async () =
   const { id: _w, ...newWall } = wall();
   const { id: _l, ...newLight } = light();
 
-  expect((await dm.post(`${base(mapId)}/walls`).send(newWall)).status).toBe(201);
-  expect((await dm.post(`${base(mapId)}/lights`).send(newLight)).status).toBe(201);
+  expect((await gm.post(`${base(mapId)}/walls`).send(newWall)).status).toBe(201);
+  expect((await gm.post(`${base(mapId)}/lights`).send(newLight)).status).toBe(201);
 });

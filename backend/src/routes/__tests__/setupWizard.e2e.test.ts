@@ -226,7 +226,7 @@ describe('the administrator the wizard makes', () => {
     await freshInstance();
     email = require('../../services/email') as typeof import('../../services/email');
     admin = request.agent(app);
-    const res = await init({ email: 'keeper@example.com', password: PASSWORD, displayName: 'Keeper' }, admin);
+    const res = await init({ email: 'steward@example.com', password: PASSWORD, displayName: 'Steward' }, admin);
     expect(res.status).toBe(201);
     adminId = res.body.user.id;
   });
@@ -256,7 +256,7 @@ describe('the administrator the wizard makes', () => {
       data: { userId: adminId, token: hashResetToken('wizard-invite'), createdAt: issued, expiresAt: new Date(issued.getTime() + 7 * day) },
     });
 
-    const res = await request(app).post('/api/auth/reset-password').send({ token: 'wizard-invite', newPassword: 'Keeper-Str0ng-Passw0rd!' });
+    const res = await request(app).post('/api/auth/reset-password').send({ token: 'wizard-invite', newPassword: 'Steward-Str0ng-Passw0rd!' });
 
     expect(res.status).toBe(200);
     expect(await db.systemLog.count({ where: { message: { contains: 'accepted an invitation' } } })).toBe(0);

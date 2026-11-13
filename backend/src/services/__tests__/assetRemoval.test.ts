@@ -21,20 +21,20 @@ const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-asset-removal-'));
 const userIds: string[] = [];
 const campaignIds: string[] = [];
 let campaignId = '';
-let dmId = '';
-let formerDmId = '';
+let gmId = '';
+let formerGmId = '';
 
 beforeAll(async () => {
   const stamp = Date.now();
-  dmId = (await createTestUser({ email: `removal-dm-${stamp}@test.invalid` })).id;
-  formerDmId = (await createTestUser({ email: `removal-former-${stamp}@test.invalid` })).id;
-  userIds.push(dmId, formerDmId);
-  campaignId = (await createTestCampaign(dmId, { name: `Removal ${stamp}` })).id;
+  gmId = (await createTestUser({ email: `removal-dm-${stamp}@test.invalid` })).id;
+  formerGmId = (await createTestUser({ email: `removal-former-${stamp}@test.invalid` })).id;
+  userIds.push(gmId, formerGmId);
+  campaignId = (await createTestCampaign(gmId, { name: `Removal ${stamp}` })).id;
   campaignIds.push(campaignId);
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
-      { userId: formerDmId, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
+      { userId: formerGmId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
 });
@@ -52,26 +52,26 @@ afterAll(async () => {
   fs.rmSync(DIR, { recursive: true, force: true });
 });
 
-/** A map picture the former DM uploaded into the campaign. */
+/** A map picture the former GM uploaded into the campaign. */
 async function picture() {
   const filename = `p-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
   return prisma.asset.create({
     data: {
-      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: formerDmId, filename, originalName: filename,
+      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: formerGmId, filename, originalName: filename,
       mimeType: 'image/png', fileSize: 1, filePath: path.join(DIR, filename), name: 'p',
     },
     select: { id: true, scope: true, uploadedById: true, campaignId: true },
   });
 }
 
-/** A handout of the DM's in the campaign stored before what documents show was kept. */
+/** A handout of the GM's in the campaign stored before what documents show was kept. */
 async function storedBefore(content: string): Promise<string> {
   const filename = `d-${Date.now()}-${Math.random().toString(36).slice(2)}.md`;
   const filePath = path.join(DIR, filename);
   fs.writeFileSync(filePath, content);
   await prisma.asset.create({
     data: {
-      type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId, uploadedById: dmId, filename, originalName: filename,
+      type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId, uploadedById: gmId, filename, originalName: filename,
       mimeType: 'text/markdown', fileSize: Buffer.byteLength(content), filePath, name: filename,
     },
   });
@@ -94,7 +94,7 @@ it('refuses when another request reads the handout between the first look at the
     return verdict;
   });
 
-  expect(await mayRemoveAsset(art, formerDmId, false)).toEqual({ allowed: false, reason: 'used-by-others' });
+  expect(await mayRemoveAsset(art, formerGmId, false)).toEqual({ allowed: false, reason: 'used-by-others' });
 });
 
 it('refuses while another request is reading the handout', async () => {
@@ -118,11 +118,11 @@ it('refuses while another request is reading the handout', async () => {
   await isOpen;
 
   try {
-    expect(await mayRemoveAsset(art, formerDmId, false)).toEqual({ allowed: false, reason: 'documents-unread' });
+    expect(await mayRemoveAsset(art, formerGmId, false)).toEqual({ allowed: false, reason: 'documents-unread' });
   } finally {
     release();
     await other;
   }
   // Once it is read, the handout itself refuses.
-  expect(await mayRemoveAsset(art, formerDmId, false)).toEqual({ allowed: false, reason: 'used-by-others' });
+  expect(await mayRemoveAsset(art, formerGmId, false)).toEqual({ allowed: false, reason: 'used-by-others' });
 });

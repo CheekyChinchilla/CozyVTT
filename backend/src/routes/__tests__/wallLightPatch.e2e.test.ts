@@ -5,7 +5,7 @@
  * A light PATCH checked each radius on its own, so a patch could store a dim
  * radius smaller than the bright one, which then made the next save of the
  * whole light list fail. A wall PATCH refused the locked-door type, which
- * creating walls, saving the list and the DM's live wall edit all accept.
+ * creating walls, saving the list and the GM's live wall edit all accept.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -19,9 +19,9 @@ import { createWsTestServer, WsTestServer } from '../../__tests__/helpers/websoc
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const torch = { id: randomUUID(), x: 500, y: 500, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
 const door = { id: randomUUID(), x1: 100, y1: 100, x2: 150, y2: 100, type: 'door-closed' };
@@ -42,18 +42,18 @@ const stored = (mapId: string) => prisma.map.findUniqueOrThrow({ where: { id: ma
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `patch-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Patch ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Patch ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 afterAll(async () => {
   await server.close();
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -61,7 +61,7 @@ describe('PATCH /lights/:lightId', () => {
   it.each([[{ dimRadius: 2 }], [{ brightRadius: 10 }]])('refuses %j, which would leave dim smaller than bright', async (patch) => {
     const mapId = await newMap();
 
-    const res = await dm.patch(`${base(mapId)}/lights/${torch.id}`).send(patch);
+    const res = await gm.patch(`${base(mapId)}/lights/${torch.id}`).send(patch);
 
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/dimRadius must be >= brightRadius/);
@@ -71,7 +71,7 @@ describe('PATCH /lights/:lightId', () => {
   it('takes both radii changed together when the result is sound', async () => {
     const mapId = await newMap();
 
-    const res = await dm.patch(`${base(mapId)}/lights/${torch.id}`).send({ brightRadius: 10, dimRadius: 12 });
+    const res = await gm.patch(`${base(mapId)}/lights/${torch.id}`).send({ brightRadius: 10, dimRadius: 12 });
 
     expect(res.status).toBe(200);
     expect(res.body.light).toMatchObject({ brightRadius: 10, dimRadius: 12 });
@@ -79,10 +79,10 @@ describe('PATCH /lights/:lightId', () => {
 
   it('leaves the whole list saveable afterwards', async () => {
     const mapId = await newMap();
-    await dm.patch(`${base(mapId)}/lights/${torch.id}`).send({ dimRadius: 2 });
+    await gm.patch(`${base(mapId)}/lights/${torch.id}`).send({ dimRadius: 2 });
 
     const { lights } = await stored(mapId);
-    expect((await dm.put(`${base(mapId)}/lights`).send({ lights })).status).toBe(200);
+    expect((await gm.put(`${base(mapId)}/lights`).send({ lights })).status).toBe(200);
   });
 });
 
@@ -90,7 +90,7 @@ describe('PATCH /walls/:sid', () => {
   it('locks a door', async () => {
     const mapId = await newMap();
 
-    const res = await dm.patch(`${base(mapId)}/walls/${door.id}`).send({ type: 'door-locked' });
+    const res = await gm.patch(`${base(mapId)}/walls/${door.id}`).send({ type: 'door-locked' });
 
     expect(res.status).toBe(200);
     expect(res.body.segment.type).toBe('door-locked');
@@ -99,6 +99,6 @@ describe('PATCH /walls/:sid', () => {
   it('still refuses a type no wall can have', async () => {
     const mapId = await newMap();
 
-    expect((await dm.patch(`${base(mapId)}/walls/${door.id}`).send({ type: 'portcullis' })).status).toBe(400);
+    expect((await gm.patch(`${base(mapId)}/walls/${door.id}`).send({ type: 'portcullis' })).status).toBe(400);
   });
 });

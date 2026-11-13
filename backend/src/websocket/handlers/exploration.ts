@@ -140,7 +140,7 @@ async function writeQueuedReveal(io: Server, key: string, queued: QueuedReveal):
   }
 }
 
-/** Drop what is waiting to be written for a map, when the DM forgets its memory. */
+/** Drop what is waiting to be written for a map, when the GM forgets its memory. */
 function forgetQueuedReveals(mapId: string): void {
   for (const [key, queued] of queuedReveals) {
     if (queued.mapId !== mapId) continue;
@@ -153,13 +153,13 @@ function forgetQueuedReveals(mapId: string): void {
 
 export function registerExplorationHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * exploration:reveal — a player's vision covered these cells; remember them (a DM names a player with userId to record theirs).
-   * Any member; the DM only for a player. Throttled to REVEALS_PER_SECOND per user; over-limit reveals are dropped.
+   * exploration:reveal — a player's vision covered these cells; remember them (a GM names a player with userId to record theirs).
+   * Any member; the GM only for a player. Throttled to REVEALS_PER_SECOND per user; over-limit reveals are dropped.
    * Written at most once a second per map and user (queueReveal).
-   * A DM may name another member and write that player's memory: Player
-   * Preview records what the previewed token has seen, so a table the DM
+   * A GM may name another member and write that player's memory: Player
+   * Preview records what the previewed token has seen, so a table the GM
    * drives alone still accrues it. The user's whole memory is then sent to
-   * their own sockets and to the DM sockets previewing them, so a preview
+   * their own sockets and to the GM sockets previewing them, so a preview
    * follows it live (broadcastExplorationState).
    */
   socket.on('exploration:reveal', async (data: unknown) => {
@@ -173,14 +173,14 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         return;
       }
       const { mapId, cells, userId: named } = parsed.data;
-      const isDM = socket.role === 'DM';
-      // The page reports as the DM only for the player Player Preview shows,
-      // so a report of the DM's own memory comes from no page; each would
+      const isGM = socket.role === 'GM';
+      // The page reports as the GM only for the player Player Preview shows,
+      // so a report of the GM's own memory comes from no page; each would
       // write, and send back, the whole map's memory. Dropped without an
       // answer, before anything is read.
-      if (isDM && (named === undefined || named === socket.userId)) return;
+      if (isGM && (named === undefined || named === socket.userId)) return;
 
-      // A prepared map is the DM's until they switch to it, for writes as
+      // A prepared map is the GM's until they switch to it, for writes as
       // for reads (canReadMap). A report is sent by the page on its own and
       // can cross a map switch, or memory being turned off, in flight, so
       // one that no longer applies is dropped without an error: the page
@@ -195,7 +195,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
 
       let userId = socket.userId;
       if (named !== undefined && named !== socket.userId) {
-        if (!isDM) {
+        if (!isGM) {
           socket.emit('error', { message: 'You can only record your own explored memory' });
           return;
         }
@@ -221,25 +221,25 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   });
 
   /**
-   * exploration:request — what this user has explored on a map. A DM may name
+   * exploration:request — what this user has explored on a map. A GM may name
    * another user, for Player Preview; anyone else gets their own.
    */
   socket.on('exploration:request', async (data: { mapId?: unknown; userId?: unknown }) => {
     try {
       if (!socket.campaignId || !socket.userId) return;
-      const userId = socket.role === 'DM' && typeof data?.userId === 'string' ? data.userId : socket.userId;
-      // A DM naming a player is previewing them: that player's memory is
+      const userId = socket.role === 'GM' && typeof data?.userId === 'string' ? data.userId : socket.userId;
+      // A GM naming a player is previewing them: that player's memory is
       // the one this socket follows from now on (broadcastExplorationState).
       // Before the limit, so a preview switched faster than it allows still
       // follows the player now shown; it reads nothing.
-      if (socket.role === 'DM') socket.previewingMemoryOf = userId === socket.userId ? undefined : userId;
+      if (socket.role === 'GM') socket.previewingMemoryOf = userId === socket.userId ? undefined : userId;
       if (!stateRequestAllowed(socket, 'exploration:request')) return;
       const mapId = typeof data?.mapId === 'string' ? data.mapId : null;
       if (!mapId) return;
 
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: MAP_SELECT });
       if (!map || map.campaignId !== socket.campaignId) return;
-      // A prepared map is the DM's alone; a player is answered only about
+      // A prepared map is the GM's alone; a player is answered only about
       // the map the campaign is showing.
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
       if (!map.explorationEnabled) return;
@@ -260,14 +260,14 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
   });
 
   /**
-   * exploration:reset — DM forgets every player's explored areas on a map.
+   * exploration:reset — GM forgets every player's explored areas on a map.
    */
   socket.on('exploration:reset', async (data: { mapId?: unknown }) => {
     try {
       if (!socket.campaignId) return;
       if (!withinCeiling(socket, 'exploration:reset')) return;
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can reset explored areas' });
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only GMs can reset explored areas' });
         return;
       }
       const mapId = typeof data?.mapId === 'string' ? data.mapId : null;
@@ -283,7 +283,7 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
       forgetQueuedReveals(mapId);
       // Each player's memory under that player's lock, the one a write of it
       // holds: a write that had read the old row before the delete wrote it
-      // back after, and the player kept what the DM cleared. In a fixed
+      // back after, and the player kept what the GM cleared. In a fixed
       // order, so two resets cannot wait on each other.
       await prisma.$transaction(async (tx) => {
         const rows = await tx.mapExploration.findMany({ where: { mapId }, select: { userId: true }, orderBy: { userId: 'asc' } });

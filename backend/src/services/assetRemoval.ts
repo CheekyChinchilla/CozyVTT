@@ -4,12 +4,12 @@
 //
 // Whoever may change an asset (mayChangeAsset) may delete it or move it,
 // with one narrowing for a campaign asset. Its uploader keeps the right
-// while a member, so a DM who handed the seat over could, as a player,
-// delete with force=true a picture the new DM's maps use, and every map
+// while a member, so a GM who handed the seat over could, as a player,
+// delete with force=true a picture the new GM's maps use, and every map
 // using it lost its picture. So an uploader who does not run the campaign
 // may delete or move one only while nothing but their own things use it
-// (usedByOthersThan); otherwise it is the campaign's DM's alone. An admin
-// and the campaign's DM are not narrowed. Editing the text of a document
+// (usedByOthersThan); otherwise it is the campaign's GM's alone. An admin
+// and the campaign's GM are not narrowed. Editing the text of a document
 // stays with mayChangeAsset.
 //
 // A document shows a picture by what was read from its text and kept. The
@@ -18,7 +18,7 @@
 // first (readUnreadDocumentsBy, at most MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL
 // of them), and refuses while any stays unread: past the cap, being read by
 // another request, or with a file that could not be read, which keeps it
-// the DM's until the file can be read. Once none is left the uses are
+// the GM's until the file can be read. Once none is left the uses are
 // looked at again, since any request may have read one meanwhile.
 
 import type { AssetScope } from '@prisma/client';
@@ -48,7 +48,7 @@ export async function mayRemoveAsset(
     where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
     select: { role: true },
   });
-  if (membership?.role === 'DM') return { allowed: true };
+  if (membership?.role === 'GM') return { allowed: true };
   // The uploader, a member who does not run the campaign.
   let using = await usedByOthersThan(asset.id, userId);
   if (using === 'others') return { allowed: false, reason: 'used-by-others' };

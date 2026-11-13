@@ -18,23 +18,23 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'Map Delete DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Map delete race' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
+  const user = await createTestUser({ displayName: 'Map Delete GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Map delete race' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
 });
 
 afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -56,7 +56,7 @@ it('refuses to delete a map that became current while the delete was on its way'
   await prisma.$transaction(async (tx) => {
     // The switch to Next, not yet committed, as the delete arrives.
     await tx.campaign.update({ where: { id: campaignId }, data: { currentMapId: next } });
-    deleting = dm.delete(`/api/campaigns/${campaignId}/maps/${next}`).then((r) => r);
+    deleting = gm.delete(`/api/campaigns/${campaignId}/maps/${next}`).then((r) => r);
     for (let i = 0; i < 50 && !(await someoneWaits()); i += 1) await new Promise((r) => setTimeout(r, 20));
   }, { timeout: 10_000 });
 
@@ -76,7 +76,7 @@ it('answers 404 for making current a map deleted while the switch was on its way
   await prisma.$transaction(async (tx) => {
     // The campaign is held (as a delete holds it) while the map goes.
     await tx.$queryRaw`SELECT id FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
-    switching = dm.put(`/api/campaigns/${campaignId}/maps/${doomed}/set-current`).then((r) => r);
+    switching = gm.put(`/api/campaigns/${campaignId}/maps/${doomed}/set-current`).then((r) => r);
     for (let i = 0; i < 50 && !(await someoneWaits()); i += 1) await new Promise((r) => setTimeout(r, 20));
     await tx.map.delete({ where: { id: doomed } });
   }, { timeout: 10_000 });

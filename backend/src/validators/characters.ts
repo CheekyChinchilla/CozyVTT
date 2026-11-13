@@ -7,7 +7,7 @@
 // ============================================
 
 import { z } from 'zod';
-import { GameSystem } from '../game-systems';
+import { GameSystemSchema } from './gameSystem';
 import { MAX_TEMPORARY_HIT_POINTS } from '../utils/rules/hitPoints';
 
 /** POST /api/characters */
@@ -15,7 +15,7 @@ export const CreateCharacterSchema = z.object({
   name: z.string().trim().min(1, 'Character name is required').max(200, 'Character name must be 200 characters or fewer'),
   data: z.any().optional(),
   tokenImageUrl: z.string().nullish(),
-  gameSystem: z.nativeEnum(GameSystem).nullish(),
+  gameSystem: GameSystemSchema.nullish(),
   campaignId: z.string().nullish(),
 });
 
@@ -24,7 +24,7 @@ export const UpdateCharacterSchema = z.object({
   name: z.string().trim().min(1, 'Character name is required').max(200, 'Character name must be 200 characters or fewer').optional(),
   data: z.any().optional(),
   tokenImageUrl: z.string().nullish(),
-  gameSystem: z.nativeEnum(GameSystem).nullish(),
+  gameSystem: GameSystemSchema.nullish(),
   // The character's `updatedAt` as the caller loaded it. When sent, the save
   // is refused with 409 if the character has changed since; left out, the
   // save goes ahead whatever happened in between.

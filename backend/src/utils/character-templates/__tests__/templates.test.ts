@@ -8,16 +8,15 @@ import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 
 // Import templates
-import { getDnD5eTemplates } from '../dnd5e-templates';
-import { getCoC7eTemplates } from '../callOfCthulhu7e-templates';
-import { getPF2eTemplates } from '../pathfinder2e-templates';
-import { getSR6Templates } from '../shadowrun6e-templates';
+import { getFifthEditionTemplates } from '../fifthEdition-templates';
+import { getHorrorD100Templates } from '../horrorD100-templates';
+import { getFantasyD20Templates } from '../fantasyD20-templates';
 
 /**
  * A template's sheet, viewed as nested objects.
  *
  * `CharacterTemplate.data` is a `Record<string, unknown>` — the sheet's shape
- * depends on its game system, and no single type covers all four. Every
+ * depends on its game system, and no single type covers all three. Every
  * assertion below checks *structure* (`toHaveProperty`), never a leaf value,
  * so describing the nesting is all that is needed.
  */
@@ -30,19 +29,19 @@ function sheet(template: { data: Record<string, unknown> } | undefined): SheetSh
 
 
 describe('Character Templates Validation', () => {
-  describe('D&D 5e Templates', () => {
-    const templates = getDnD5eTemplates();
+  describe('5E Templates', () => {
+    const templates = getFifthEditionTemplates();
 
     it('should have blank and fighter templates', () => {
       expect(templates.length).toBeGreaterThanOrEqual(2);
       const names = templates.map(t => t.name);
-      expect(names).toContain('Blank D&D 5e Character');
+      expect(names).toContain('Blank 5E Character');
       expect(names).toContain('Level 1 Fighter');
     });
 
     templates.forEach((template) => {
-      it(`should validate ${template.name} against D&D 5e schema`, () => {
-        const result = validateCharacterData(GameSystem.DND_5E, template.data);
+      it(`should validate ${template.name} against 5E schema`, () => {
+        const result = validateCharacterData(GameSystem.FIFTH_EDITION, template.data);
 
         if (!result.success) {
           console.error(`Validation errors for ${template.name}:`, JSON.stringify(result.errors, null, 2));
@@ -53,7 +52,7 @@ describe('Character Templates Validation', () => {
     });
 
     it('blank template should have characterName field', () => {
-      const blank = templates.find(t => t.name === 'Blank D&D 5e Character');
+      const blank = templates.find(t => t.name === 'Blank 5E Character');
       expect(blank).toBeDefined();
       expect(blank?.data).toHaveProperty('characterName');
     });
@@ -66,7 +65,7 @@ describe('Character Templates Validation', () => {
     });
 
     it('spellcasting should have correct structure', () => {
-      const blank = templates.find(t => t.name === 'Blank D&D 5e Character');
+      const blank = templates.find(t => t.name === 'Blank 5E Character');
       expect(sheet(blank)?.spellcasting).toHaveProperty('class');
       expect(sheet(blank)?.spellcasting).toHaveProperty('ability');
       expect(sheet(blank)?.spellcasting).toHaveProperty('cantrips');
@@ -77,10 +76,10 @@ describe('Character Templates Validation', () => {
     });
   });
 
-  // Basic Rules, Fighter: "Hit Dice: 1d10 per fighter level", "Hit Points at
+  // SRD 5.1, "Fighter": "Hit Dice: 1d10 per fighter level", "Hit Points at
   // 1st Level: 10 + your Constitution modifier", "Saving Throws: Strength,
   // Constitution". The blank starter is a Fighter, and had a d8 and 8 HP.
-  describe('D&D 5e level 1 Fighters', () => {
+  describe('5E level 1 Fighters', () => {
     interface FighterSheet {
       class: string;
       level: number;
@@ -90,13 +89,13 @@ describe('Character Templates Validation', () => {
       hp: { maximum: number; current: number };
       hitDice: { class: string; die: string; maximum: number; remaining: number }[];
     }
-    const fighters = getDnD5eTemplates()
+    const fighters = getFifthEditionTemplates()
       .map((t) => ({ name: t.name, data: t.data as unknown as FighterSheet }))
       .filter((t) => t.data.class === 'Fighter' && t.data.level === 1);
     const conModifier = (s: FighterSheet) => Math.floor((s.stats.constitution.score - 10) / 2);
 
     it('include the blank starter', () => {
-      expect(fighters.map((t) => t.name)).toContain('Blank D&D 5e Character');
+      expect(fighters.map((t) => t.name)).toContain('Blank 5E Character');
     });
 
     it.each(fighters.map((t) => [t.name, t.data] as const))('%s has one d10 hit die', (_name, s) => {
@@ -114,10 +113,11 @@ describe('Character Templates Validation', () => {
       }
     });
 
-    // SRD 5.1: chain mail is AC 16 (no Dexterity), a shield adds 2, and the
-    // Defense fighting style adds 1 while wearing armor. The Fighter shipped 18.
+    // SRD 5.1, "Armor" and "Fighting Style": chain mail is AC 16 (no
+    // Dexterity), a shield adds 2, and the Defense fighting style adds 1 while
+    // wearing armor. The Fighter shipped 18.
     it('gives the Level 1 Fighter in chain mail with a shield and Defense AC 19', () => {
-      const fighter = getDnD5eTemplates().find((t) => t.name === 'Level 1 Fighter');
+      const fighter = getFifthEditionTemplates().find((t) => t.name === 'Level 1 Fighter');
       const data = fighter?.data as { armorClass: number; featuresAndTraits?: unknown; inventory: { name: string }[] };
       expect(data.inventory.map((item) => item.name)).toEqual(expect.arrayContaining(['Chain Mail', 'Shield']));
       expect(JSON.stringify(data)).toContain('Fighting Style: Defense');
@@ -125,70 +125,19 @@ describe('Character Templates Validation', () => {
     });
   });
 
-  describe('Call of Cthulhu 7e Templates', () => {
-    const templates = getCoC7eTemplates();
+  describe('Horror d100 Templates', () => {
+    const templates = getHorrorD100Templates();
 
-    it('should have blank and private investigator templates', () => {
+    it('should have the blank and example templates', () => {
       expect(templates.length).toBeGreaterThanOrEqual(2);
       const names = templates.map(t => t.name);
-      expect(names).toContain('Blank Call of Cthulhu 7e Character');
-      expect(names).toContain('Private Investigator');
+      expect(names).toContain('Blank Horror d100 Character');
+      expect(names).toContain('Private Detective');
     });
 
     templates.forEach((template) => {
-      it(`should validate ${template.name} against CoC 7e schema`, () => {
-        const result = validateCharacterData(GameSystem.CALL_OF_CTHULHU_7E, template.data);
-
-        if (!result.success) {
-          console.error(`Validation errors for ${template.name}:`, JSON.stringify(result.errors, null, 2));
-        }
-
-        expect(result.success).toBe(true);
-      });
-    });
-
-    it('blank template should have investigatorName field', () => {
-      const blank = templates.find(t => t.name === 'Blank Call of Cthulhu 7e Character');
-      expect(blank).toBeDefined();
-      expect(blank?.data).toHaveProperty('investigatorName');
-      expect(sheet(blank)?.investigatorName).toBe('Blank Investigator');
-    });
-
-    it('blank template should have era field', () => {
-      const blank = templates.find(t => t.name === 'Blank Call of Cthulhu 7e Character');
-      expect(blank?.data).toHaveProperty('era');
-      expect(sheet(blank)?.era).toBe('Modern');
-    });
-
-    it('derivedStats should have correct structure', () => {
-      const blank = templates.find(t => t.name === 'Blank Call of Cthulhu 7e Character');
-      expect(sheet(blank)?.derivedStats).toHaveProperty('hp');
-      expect(sheet(blank)?.derivedStats.hp).toHaveProperty('formula');
-      expect(sheet(blank)?.derivedStats.hp).toHaveProperty('majorWoundThreshold');
-      expect(sheet(blank)?.derivedStats).toHaveProperty('luck');
-      expect(sheet(blank)?.derivedStats.luck).toHaveProperty('score');
-      expect(sheet(blank)?.derivedStats.luck).toHaveProperty('notes');
-      expect(sheet(blank)?.derivedStats).toHaveProperty('moveRate');
-      expect(sheet(blank)?.derivedStats).toHaveProperty('dodge');
-      expect(sheet(blank)?.derivedStats.dodge).toHaveProperty('value');
-      expect(sheet(blank)?.derivedStats.dodge).toHaveProperty('formula');
-      expect(sheet(blank)?.derivedStats.dodge).toHaveProperty('improvementChecked');
-    });
-  });
-
-  describe('Pathfinder 2e Templates', () => {
-    const templates = getPF2eTemplates();
-
-    it('should have blank and fighter templates', () => {
-      expect(templates.length).toBeGreaterThanOrEqual(2);
-      const names = templates.map(t => t.name);
-      expect(names).toContain('Blank Pathfinder 2e Character');
-      expect(names).toContain('Level 1 Fighter');
-    });
-
-    templates.forEach((template) => {
-      it(`should validate ${template.name} against PF2e schema`, () => {
-        const result = validateCharacterData(GameSystem.PATHFINDER_2E, template.data);
+      it(`should validate ${template.name} against Horror d100 schema`, () => {
+        const result = validateCharacterData(GameSystem.HORROR_D100, template.data);
 
         if (!result.success) {
           console.error(`Validation errors for ${template.name}:`, JSON.stringify(result.errors, null, 2));
@@ -199,26 +148,98 @@ describe('Character Templates Validation', () => {
     });
 
     it('blank template should have characterName field', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Horror d100 Character');
       expect(blank).toBeDefined();
       expect(blank?.data).toHaveProperty('characterName');
+      expect(sheet(blank)?.characterName).toBe('New Character');
+    });
+
+    it('describes the blank template by the system\'s name', () => {
+      const blank = templates.find(t => t.name === 'Blank Horror d100 Character');
+      expect(blank?.description).toBe('A blank character sheet for Horror d100');
+    });
+
+    it('blank template should have era field', () => {
+      const blank = templates.find(t => t.name === 'Blank Horror d100 Character');
+      expect(blank?.data).toHaveProperty('era');
+      expect(sheet(blank)?.era).toBe('Modern');
+    });
+
+    it('derived attributes should have correct structure', () => {
+      const blank = templates.find(t => t.name === 'Blank Horror d100 Character');
+      expect(sheet(blank)?.hitPoints).toHaveProperty('maximum');
+      expect(sheet(blank)?.hitPoints).toHaveProperty('current');
+      expect(sheet(blank)?.powerPoints).toHaveProperty('maximum');
+      expect(sheet(blank)?.sanity).toHaveProperty('starting');
+      expect(sheet(blank)?.sanity).toHaveProperty('maximum');
+      expect(sheet(blank)).toHaveProperty('move');
+      expect(sheet(blank)?.skills).toHaveProperty('dodge');
+      expect(sheet(blank)?.skills.dodge).toHaveProperty('value');
+      expect(sheet(blank)?.skills.dodge).toHaveProperty('experienceCheck');
+    });
+
+    it('carries no conversion record, which only the server writes', () => {
+      for (const template of templates) expect(template.data).not.toHaveProperty('converted');
+    });
+  });
+
+  describe('Fantasy d20 Templates', () => {
+    const templates = getFantasyD20Templates();
+
+    it('should have blank and fighter templates', () => {
+      expect(templates.length).toBeGreaterThanOrEqual(2);
+      const names = templates.map(t => t.name);
+      expect(names).toContain('Blank Fantasy d20 Character');
+      expect(names).toContain('Level 1 Fighter');
+    });
+
+    templates.forEach((template) => {
+      it(`should validate ${template.name} against Fantasy d20 schema`, () => {
+        const result = validateCharacterData(GameSystem.FANTASY_D20, template.data);
+
+        if (!result.success) {
+          console.error(`Validation errors for ${template.name}:`, JSON.stringify(result.errors, null, 2));
+        }
+
+        expect(result.success).toBe(true);
+      });
+    });
+
+    it('blank template should have characterName field', () => {
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
+      expect(blank).toBeDefined();
+      expect(blank?.data).toHaveProperty('characterName');
+    });
+
+    it('describes the blank template by the system\'s name', () => {
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
+      expect(blank?.description).toBe('A blank character sheet for Fantasy d20');
+    });
+
+    // The sheet keeps its Alignment and Deity boxes for the characters that
+    // hold them; a character started blank stores neither.
+    it('stores no alignment or deity in the blank template', () => {
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
+      expect(blank).toBeDefined();
+      expect(blank?.data).not.toHaveProperty('alignment');
+      expect(blank?.data).not.toHaveProperty('deity');
     });
 
     it('fighter template should have characterName field', () => {
       const fighter = templates.find(t => t.name === 'Level 1 Fighter');
       expect(fighter).toBeDefined();
       expect(fighter?.data).toHaveProperty('characterName');
-      expect(sheet(fighter)?.characterName).toBe('Dwarven Defender');
+      expect(sheet(fighter)?.characterName).toBe('Stout Defender');
     });
 
     it('should use attributes instead of abilityScores', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(blank?.data).toHaveProperty('attributes');
       expect(blank?.data).not.toHaveProperty('abilityScores');
     });
 
     it('skills should have correct structure', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(sheet(blank)?.skills.acrobatics).toHaveProperty('attribute');
       expect(sheet(blank)?.skills.acrobatics).toHaveProperty('proficiencyRank');
       expect(sheet(blank)?.skills.acrobatics).toHaveProperty('armorPenalty');
@@ -227,7 +248,7 @@ describe('Character Templates Validation', () => {
     });
 
     it('armorClass should be an object', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(typeof sheet(blank)?.armorClass).toBe('object');
       expect(sheet(blank)?.armorClass).toHaveProperty('total');
       expect(sheet(blank)?.armorClass).toHaveProperty('proficiencyRank');
@@ -239,20 +260,20 @@ describe('Character Templates Validation', () => {
     // The key attribute is the class's, which a blank sheet does not know yet:
     // the player chooses it in the editor, and the Class DC is stored then.
     it('stores no Class DC', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(sheet(blank)).toBeDefined();
       expect(sheet(blank)).not.toHaveProperty('classDC');
     });
 
     it('speed should be an object', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(typeof sheet(blank)?.speed).toBe('object');
       expect(sheet(blank)?.speed).toHaveProperty('land');
       expect(sheet(blank)?.speed).toHaveProperty('other');
     });
 
     it('hp should have ancestry and class fields', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(sheet(blank)?.hp).toHaveProperty('ancestryHp');
       expect(sheet(blank)?.hp).toHaveProperty('classHpPerLevel');
       expect(sheet(blank)?.hp).toHaveProperty('resistances');
@@ -272,7 +293,7 @@ describe('Character Templates Validation', () => {
     });
 
     it('feats should be an object with categories', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(typeof sheet(blank)?.feats).toBe('object');
       expect(sheet(blank)?.feats).toHaveProperty('ancestryAndHeritage');
       expect(sheet(blank)?.feats).toHaveProperty('class');
@@ -282,7 +303,7 @@ describe('Character Templates Validation', () => {
     });
 
     it('spellcasting should have correct structure', () => {
-      const blank = templates.find(t => t.name === 'Blank Pathfinder 2e Character');
+      const blank = templates.find(t => t.name === 'Blank Fantasy d20 Character');
       expect(sheet(blank)?.spellcasting).toHaveProperty('type');
       expect(sheet(blank)?.spellcasting).toHaveProperty('keyAttribute');
       expect(sheet(blank)?.spellcasting).toHaveProperty('spellAttackBonus');
@@ -303,62 +324,12 @@ describe('Character Templates Validation', () => {
     });
   });
 
-  describe('Shadowrun 6e Templates', () => {
-    const templates = getSR6Templates();
-
-    it('should have blank and street samurai templates', () => {
-      expect(templates.length).toBeGreaterThanOrEqual(2);
-      const names = templates.map(t => t.name);
-      expect(names).toContain('Blank Shadowrun 6e Character');
-      expect(names).toContain('Street Samurai');
-    });
-
-    templates.forEach((template) => {
-      it(`should validate ${template.name} against SR6 schema`, () => {
-        const result = validateCharacterData(GameSystem.SHADOWRUN_6E, template.data);
-
-        if (!result.success) {
-          console.error(`Validation errors for ${template.name}:`, JSON.stringify(result.errors, null, 2));
-        }
-
-        expect(result.success).toBe(true);
-      });
-    });
-
-    it('blank template should have characterName field', () => {
-      const blank = templates.find(t => t.name === 'Blank Shadowrun 6e Character');
-      expect(blank).toBeDefined();
-      expect(blank?.data).toHaveProperty('characterName');
-    });
-
-    it('street samurai template should have characterName field', () => {
-      const samurai = templates.find(t => t.name === 'Street Samurai');
-      expect(samurai).toBeDefined();
-      expect(samurai?.data).toHaveProperty('characterName');
-      expect(sheet(samurai)?.characterName).toBe('Chrome Warrior');
-    });
-
-    it('attributes should have correct nested structure', () => {
-      const blank = templates.find(t => t.name === 'Blank Shadowrun 6e Character');
-      expect(sheet(blank)?.attributes).toHaveProperty('physical');
-      expect(sheet(blank)?.attributes).toHaveProperty('mental');
-      expect(sheet(blank)?.attributes).toHaveProperty('special');
-      expect(sheet(blank)?.attributes.physical).toHaveProperty('body');
-      expect(sheet(blank)?.attributes.physical.body).toHaveProperty('base');
-      expect(sheet(blank)?.attributes.physical.body).toHaveProperty('augmented');
-      expect(sheet(blank)?.attributes.special).toHaveProperty('essence');
-      expect(sheet(blank)?.attributes.special.essence).toHaveProperty('current');
-      expect(sheet(blank)?.attributes.special.essence).toHaveProperty('maximum');
-    });
-  });
-
   describe('All Templates Cross-Check', () => {
     it('all templates should validate against their respective schemas', () => {
       const allTemplates = [
-        ...getDnD5eTemplates().map(t => ({ ...t, system: GameSystem.DND_5E })),
-        ...getCoC7eTemplates().map(t => ({ ...t, system: GameSystem.CALL_OF_CTHULHU_7E })),
-        ...getPF2eTemplates().map(t => ({ ...t, system: GameSystem.PATHFINDER_2E })),
-        ...getSR6Templates().map(t => ({ ...t, system: GameSystem.SHADOWRUN_6E })),
+        ...getFifthEditionTemplates().map(t => ({ ...t, system: GameSystem.FIFTH_EDITION })),
+        ...getHorrorD100Templates().map(t => ({ ...t, system: GameSystem.HORROR_D100 })),
+        ...getFantasyD20Templates().map(t => ({ ...t, system: GameSystem.FANTASY_D20 })),
       ];
 
       let totalValidated = 0;

@@ -21,7 +21,7 @@ import ts from 'typescript';
 const ROOT = path.resolve(__dirname, '../../../..');
 
 export interface SheetPair {
-  /** A short name for messages, such as "D&D 5e". */
+  /** A short name for messages, such as "5E". */
   label: string;
   /** The schema module, relative to the repository root, without extension. */
   schemaModule: string;
@@ -100,7 +100,7 @@ const has = (t: ts.Type, flag: ts.TypeFlags) => parts(t).some((p) => (p.flags & 
 
 function isPlainObject(checker: ts.TypeChecker, t: ts.Type): boolean {
   if (t.isUnion() || checker.isArrayType(t) || checker.isTupleType(t)) return false;
-  // `CoC7eSkill & { language: string }` is an object too.
+  // `HorrorD100Skill & { language: string }` is an object too.
   if (t.isIntersection()) return t.types.every((p) => isPlainObject(checker, p));
   if (!(t.flags & ts.TypeFlags.Object)) return false;
   return checker.getPropertiesOfType(t).length > 0 || checker.getIndexInfosOfType(t).length > 0;

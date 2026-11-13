@@ -36,8 +36,8 @@ const IMG = '<img src=x onerror=alert(1)>';
 const SCRIPT = '<script>alert(1)</script>';
 
 describe('email HTML escaping', () => {
-  it('campaign invitation: name, DM, campaign and description are escaped', async () => {
-    await sendCampaignInvitationEmail('p@x.test', IMG, '<i>Tilted</i> "Campaign"', `Bob & <DM>`, SCRIPT);
+  it('campaign invitation: name, GM, campaign and description are escaped', async () => {
+    await sendCampaignInvitationEmail('p@x.test', IMG, '<i>Tilted</i> "Campaign"', `Bob & <GM>`, SCRIPT);
     const { html } = sent();
     expect(html).not.toContain(IMG);
     expect(html).not.toContain(SCRIPT);
@@ -45,10 +45,10 @@ describe('email HTML escaping', () => {
     expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).toContain('&lt;i&gt;Tilted&lt;/i&gt; &quot;Campaign&quot;');
-    expect(html).toContain('Bob &amp; &lt;DM&gt;');
+    expect(html).toContain('Bob &amp; &lt;GM&gt;');
   });
 
-  it('campaign invitation: the subject and inbox preview carry no text the DM chose', async () => {
+  it('campaign invitation: the subject and inbox preview carry no text the GM chose', async () => {
     await sendCampaignInvitationEmail('p@x.test', 'Player', 'Verify your account at evil.example', 'Support Team', null);
     const { html, subject } = sent();
     expect(subject).not.toMatch(/evil\.example|Support Team/);
@@ -56,6 +56,27 @@ describe('email HTML escaping', () => {
     // The hidden preview line is what an inbox shows beside the subject.
     const preview = /<div style="display:none[^>]*>([^<]*)</.exec(html)?.[1] ?? '';
     expect(preview).not.toMatch(/evil\.example|Support Team/);
+  });
+
+  // The role is named in words a newcomer knows.
+  it('campaign invitation: names the sender as the game master', async () => {
+    await sendCampaignInvitationEmail('p@x.test', 'Player', 'The Lantern Road', 'Ada', null);
+    const { html, subject } = sent();
+    expect(html).toContain('Game master: Ada');
+    expect(html).toContain('A game master on ');
+    expect(`${subject}\n${html}`).not.toMatch(/\bDMs?\b/);
+    expect(html).not.toMatch(/dungeon\s+master/i);
+  });
+
+  // The inviter's name comes from their account as the invitation is made.
+  // Should it not be found, the email says nothing in their place.
+  it("campaign invitation: leaves out who sent it when the sender's name cannot be read", async () => {
+    await sendCampaignInvitationEmail('p@x.test', 'Player', 'The Lantern Road', null, null);
+    const { html } = sent();
+    expect(html).not.toContain('Game master:');
+    expect(html).not.toContain('Your game master');
+    expect(html).toContain('You have been invited to join a campaign on ');
+    expect(html).toContain('The Lantern Road');
   });
 
   it('account invitation: the inviter and the recipient names are escaped', async () => {

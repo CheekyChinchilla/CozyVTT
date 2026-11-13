@@ -4,7 +4,7 @@
  *
  * An archive's list of assets gave each one's file name, format, kind, size
  * and tags and nothing else, so an imported campaign's Asset Library named
- * every asset after its file and showed no description, whatever the DM had
+ * every asset after its file and showed no description, whatever the GM had
  * called it.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -68,9 +68,9 @@ async function imported(campaignId: string): Promise<Record<string, [string, str
 describe('a campaign exported and imported again', () => {
   it('keeps the name and description of its pictures', async () => {
     const source = await createTestCampaign(userId, { name: 'Named' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     const crypt = await picture(source.id, 'MAP', 'IMG_2041', 'The Undercroft', 'Lower level, flooded in the second act');
-    const goblin = await picture(source.id, 'TOKEN', 'goblin-final-v3', 'Goblin Boss', null);
+    const goblin = await picture(source.id, 'TOKEN', 'goblin-final-v3', 'Hobgoblin', null);
     await prisma.map.create({
       data: {
         campaignId: source.id, name: 'Crypt', imageUrl: `/api/assets/maps/${crypt.id}`, baseLayerUrl: `/api/assets/maps/${crypt.id}`,
@@ -86,20 +86,20 @@ describe('a campaign exported and imported again', () => {
     const manifestEntry = (await readZip(file)).find((f) => f.path === 'assets/asset-manifest.json');
     const manifest = JSON.parse(manifestEntry!.data.toString()) as Record<string, { name?: unknown; description?: unknown }>;
     expect(manifest[crypt.id]).toMatchObject({ name: 'The Undercroft', description: 'Lower level, flooded in the second act' });
-    expect(manifest[goblin.id]).toMatchObject({ name: 'Goblin Boss', description: null });
+    expect(manifest[goblin.id]).toMatchObject({ name: 'Hobgoblin', description: null });
 
     const result = await importCampaign(file, userId);
 
     expect(result).toMatchObject({ skipped: [], warnings: [] });
     expect(await imported(result.campaignId)).toEqual({
       'IMG_2041.png': ['The Undercroft', 'Lower level, flooded in the second act'],
-      'goblin-final-v3.png': ['Goblin Boss', null],
+      'goblin-final-v3.png': ['Hobgoblin', null],
     });
   });
 });
 
 describe("a picture of someone's own library the campaign uses", () => {
-  // The DM may read it, but an archive goes off the server: only the
+  // The GM may read it, but an archive goes off the server: only the
   // campaign's own assets carry what their uploader wrote about them.
   it('goes into the archive as its file, with no name, description or tags', async () => {
     const source = await createTestCampaign(userId, { name: 'Borrowing' });
@@ -107,7 +107,7 @@ describe("a picture of someone's own library the campaign uses", () => {
     try {
       await prisma.campaignMembership.createMany({
         data: [
-          { userId, campaignId: source.id, role: 'DM', characterIds: [] },
+          { userId, campaignId: source.id, role: 'GM', characterIds: [] },
           { userId: player.id, campaignId: source.id, role: 'PLAYER', characterIds: [] },
         ],
       });
@@ -118,7 +118,7 @@ describe("a picture of someone's own library the campaign uses", () => {
         data: {
           type: 'TOKEN', scope: 'USER', campaignId: null, uploadedById: player.id, filename: path.basename(filePath),
           originalName: 'my-elf.png', mimeType: 'image/png', fileSize: PNG.length, filePath,
-          name: 'Elowen, before the curse', description: 'Do not show the DM', tags: ['secret-plot'],
+          name: 'Elowen, before the curse', description: 'Do not show the GM', tags: ['secret-plot'],
         },
       });
       const kept = await picture(source.id, 'TOKEN', 'goblin', 'Goblin', 'A goblin');
@@ -140,10 +140,10 @@ describe("a picture of someone's own library the campaign uses", () => {
   });
 });
 
-describe("a picture of the exporting DM's own library the campaign uses", () => {
+describe("a picture of the exporting GM's own library the campaign uses", () => {
   it('goes with its name, description and tags', async () => {
     const source = await createTestCampaign(userId, { name: 'Own art' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     const filePath = path.join(UPLOAD_DIR, `${randomUUID()}.png`);
     fs.writeFileSync(filePath, PNG);
@@ -175,11 +175,11 @@ async function archiveOf(entries: Array<[file: string, fields: Record<string, un
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-11-01T12:00:00.000Z', exportedFrom: 'CozyVTT v1.5.4', campaignName: 'Hand-made',
-        gameSystem: 'DND_5E', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
+        gameSystem: 'FIFTH_EDITION', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
         assetCount: entries.length, includesAudio: false, totalSizeBytes: PNG.length * entries.length,
       }),
     },
-    { name: 'campaign.json', data: JSON.stringify({ name: 'Hand-made', gameSystem: 'DND_5E' }) },
+    { name: 'campaign.json', data: JSON.stringify({ name: 'Hand-made', gameSystem: 'FIFTH_EDITION' }) },
     {
       name: 'assets/asset-manifest.json',
       data: JSON.stringify(Object.fromEntries(entries.map(([name, fields], i) => [
@@ -206,7 +206,7 @@ describe('the name an asset has in the archive', () => {
 
   it('takes the format for its extension when the original name ends in a long one, and imports', async () => {
     const source = await createTestCampaign(userId, { name: 'Long Names' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     // Older versions stored an upload's own name at any length; this is the
     // longest an archive's list of assets takes, all after one dot.
     const longName = `map.${'地'.repeat(496)}`;
@@ -234,7 +234,7 @@ describe('the name an asset has in the archive', () => {
 
   it('goes into the list of assets shortened when the original name is over what an import takes, and imports with its picture', async () => {
     const source = await createTestCampaign(userId, { name: 'Very Long Name' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     // Older versions stored an upload's own name at any length.
     const longName = `${'b'.repeat(596)}.png`;
     const shortened = `${'b'.repeat(MAX_ORIGINAL_NAME_LENGTH - 4)}.png`;
@@ -274,12 +274,12 @@ describe('an archive made by hand', () => {
 
   it('trims the name and description, and takes one left empty as none', async () => {
     const result = await importCampaign(
-      await archiveOf([['spaced', { name: '  Goblin Boss  ', description: '  Leader of the cave  ' }], ['blank', { name: '   ', description: '   ' }]]),
+      await archiveOf([['spaced', { name: '  Goblin  ', description: '  Leader of the cave  ' }], ['blank', { name: '   ', description: '   ' }]]),
       userId
     );
 
     expect(result).toMatchObject({ skipped: [], warnings: [] });
-    expect(await imported(result.campaignId)).toEqual({ 'spaced.png': ['Goblin Boss', 'Leader of the cave'], 'blank.png': ['blank', null] });
+    expect(await imported(result.campaignId)).toEqual({ 'spaced.png': ['Goblin', 'Leader of the cave'], 'blank.png': ['blank', null] });
   });
 
   it('takes a name or description that is not text as none', async () => {

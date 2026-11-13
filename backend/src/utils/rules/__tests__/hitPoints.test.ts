@@ -6,6 +6,7 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { applyHitPointChange, grantTemporaryHitPoints } from '../hitPoints';
+import { RETIRED_GAME_SYSTEM } from '../../../__tests__/helpers/retiredGameSystem';
 
 describe('applyHitPointChange', () => {
   it('takes damage off temporary hit points first', () => {
@@ -31,26 +32,27 @@ describe('applyHitPointChange', () => {
 });
 
 describe('grantTemporaryHitPoints', () => {
-  // Checked against the D&D 5e Basic Rules and the Pathfinder 2e Core
-  // Rulebook: temporary hit points never add together, and a creature that
-  // already has some keeps them or takes the new ones.
-  it.each(['DND_5E', 'PATHFINDER_2E'])('in %s offers keeping what a creature has or taking the new ones, never both added', (system) => {
+  // Checked against the SRD 5.1 and the Fantasy d20 rules: temporary hit
+  // points never add together, and a creature that already has some keeps
+  // them or takes the new ones.
+  it.each(['FIFTH_EDITION', 'FANTASY_D20'])('in %s offers keeping what a creature has or taking the new ones, never both added', (system) => {
     expect(grantTemporaryHitPoints(10, 12, system)).toEqual({ keep: 10, take: 12 });
     expect(grantTemporaryHitPoints(10, 4, system)).toEqual({ keep: 10, take: 4 });
   });
 
   it('offers no choice to a creature with none, or with as many as it is granted', () => {
-    expect(grantTemporaryHitPoints(0, 12, 'DND_5E')).toEqual({ keep: null, take: 12 });
-    expect(grantTemporaryHitPoints(12, 12, 'PATHFINDER_2E')).toEqual({ keep: null, take: 12 });
+    expect(grantTemporaryHitPoints(0, 12, 'FIFTH_EDITION')).toEqual({ keep: null, take: 12 });
+    expect(grantTemporaryHitPoints(12, 12, 'FANTASY_D20')).toEqual({ keep: null, take: 12 });
   });
 
   it('reads negative temporary hit points as none', () => {
-    expect(grantTemporaryHitPoints(-3, 5, 'DND_5E')).toEqual({ keep: null, take: 5 });
+    expect(grantTemporaryHitPoints(-3, 5, 'FIFTH_EDITION')).toEqual({ keep: null, take: 5 });
   });
 
-  // A Call of Cthulhu sheet keeps no temporary hit points a grant could add
-  // to, and a campaign with no game system has no rule to follow.
-  it.each(['CALL_OF_CTHULHU_7E', 'SHADOWRUN_6E', null, undefined])('is null in %s, whose sheet keeps none', (system) => {
+  // A Horror d100 sheet keeps no temporary hit points a grant could add
+  // to, and a campaign with no game system, or one CozyVTT no longer
+  // supports, has no rule to follow.
+  it.each(['HORROR_D100', RETIRED_GAME_SYSTEM, null, undefined])('is null in %s, whose sheet keeps none', (system) => {
     expect(grantTemporaryHitPoints(0, 5, system)).toBeNull();
   });
 });

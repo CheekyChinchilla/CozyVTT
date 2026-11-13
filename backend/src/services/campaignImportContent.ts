@@ -30,6 +30,7 @@ import { WallSegmentSchema, LightSourceSchema, MAX_WALL_SEGMENTS, MAX_LIGHT_SOUR
 import { NewDrawingSchema, drawingOutsideMap, markupLimitReached, archiveShare, DRAWING_LIMITS, MARKUP_SHARES, type MarkupShare } from '../validators/drawings';
 import { clampTokenPosition } from '../utils/mapTokens';
 import { cutText } from '../utils/cutText';
+import { RETIRED_GAME_SYSTEM } from '../legacy/retiredGameSystem';
 
 // ── The report ──────────────────────────────────────────────────────────────
 
@@ -372,21 +373,21 @@ function prepareWalls(raw: unknown, map: MapGeometry, say: (what: string) => voi
 
 /**
  * A drawing ready to be written, without its map, id, author and time, and
- * the share of the markup layer it goes back to: the DM's is written as the
- * importing DM's, the players' with no author.
+ * the share of the markup layer it goes back to: the GM's is written as the
+ * importing GM's, the players' with no author.
  */
 export type PreparedDrawing = Omit<Prisma.MapDrawingCreateManyInput, 'id' | 'mapId' | 'authorId' | 'createdAt' | 'pattern' | 'stamp'> & {
   share: MarkupShare;
 };
 
 /** A share by the name an import's warnings give it. */
-const SHARE_NAMES: Record<MarkupShare, string> = { DM: "the DM's share", PLAYERS: "the players' share" };
+const SHARE_NAMES: Record<MarkupShare, string> = { GM: "the GM's share", PLAYERS: "the players' share" };
 
 /**
  * A map's drawings, from its file's `drawings`, where an export writes
  * them, and its `annotations`, which an export writes empty: releases up
  * to 1.5.4 store an archive's annotations and send them to every member,
- * so a drawing for the DM alone must never be there. Each entry of either
+ * so a drawing for the GM alone must never be there. Each entry of either
  * is held to what `drawing:add` stores and to the region the map's walls
  * may reach, and goes back to the share of the markup layer it names
  * (archiveShare), each share held to its room (markupLimitReached).
@@ -404,7 +405,7 @@ function prepareDrawings(sources: Array<[unknown, string]>, map: MapGeometry, sa
   const drawings: PreparedDrawing[] = [];
   const left = { invalid: 0, outside: 0 };
   const shares = {
-    DM: { drawings: 0, points: 0, overCount: 0, overPoints: 0 },
+    GM: { drawings: 0, points: 0, overCount: 0, overPoints: 0 },
     PLAYERS: { drawings: 0, points: 0, overCount: 0, overPoints: 0 },
   };
   for (const entry of entries) {
@@ -470,12 +471,25 @@ function prepareLights(raw: unknown, map: MapGeometry, say: (what: string) => vo
 
 /**
  * The game system an archive names, or null with a word in the report when
- * it is not one this server has. `whose` begins the report's sentence: "The
- * campaign's", or `Creature "Wolf": its`.
+ * it is not one this server supports. `whose` begins the report's sentence:
+ * "The campaign's", or `Creature "Wolf": its`. A system's value from an
+ * older version is read as its new one. The value of the unreleased system
+ * the database enum held until 1.7.0, which an archive made from a row
+ * stored with it names, is reported with `noLongerSupported` instead, which
+ * does not repeat it.
  */
-export function importedGameSystem(value: unknown, whose: string, report: ImportReport): z.infer<typeof ImportGameSystemSchema> | null {
+export function importedGameSystem(
+  value: unknown,
+  whose: string,
+  noLongerSupported: string,
+  report: ImportReport,
+): z.infer<typeof ImportGameSystemSchema> | null {
   const parsed = ImportGameSystemSchema.safeParse(value);
   if (parsed.success) return parsed.data ?? null;
+  if (value === RETIRED_GAME_SYSTEM) {
+    report.warn(noLongerSupported);
+    return null;
+  }
   const named = typeof value === 'string' ? ` "${label(value, '')}"` : '';
   report.warn(`${whose} game system${named} is not one this server knows, so it was imported with none.`);
   return null;
@@ -540,7 +554,12 @@ export function prepareCreature(raw: unknown, ctx: LibraryContext): CreatureRow 
   sayCut(fitted.cut, (what) => ctx.report.warn(`${whose}: ${what}`));
   return {
     name: c.name,
-    gameSystem: importedGameSystem(c.gameSystem, `${whose}: its`, ctx.report),
+    gameSystem: importedGameSystem(
+      c.gameSystem,
+      `${whose}: its`,
+      `${whose}: its game system is no longer supported, so it was imported with none.`,
+      ctx.report,
+    ),
     source: 'custom',
     challengeRating: c.challengeRating || null,
     creatureType: c.creatureType || null,

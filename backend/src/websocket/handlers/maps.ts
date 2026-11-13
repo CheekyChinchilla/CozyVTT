@@ -12,7 +12,7 @@ import { resendInitiativeState } from './initiative';
 
 export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * MAP.CHANGE - DM switches to a different map.
+   * MAP.CHANGE - GM switches to a different map.
    * Broadcasts role-filtered map data to all campaign members.
    */
   socket.on('map.change', async (data: { mapId: string }) => {
@@ -20,9 +20,9 @@ export function registerMapHandlers(io: Server, socket: AuthenticatedSocket): vo
       if (!socket.campaignId) return;
       if (!withinCeiling(socket, 'map.change')) return;
 
-      // DM only
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only DMs can change the map' });
+      // GM only
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only GMs can change the map' });
         return;
       }
 

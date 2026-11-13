@@ -1,7 +1,7 @@
 /**
  * The migrate:sheet-fields script against a real database.
  *
- * It is run on a live instance, so a player can save, or a DM change hit
+ * It is run on a live instance, so a player can save, or a GM change hit
  * points, between the moment it reads a sheet and the moment it writes the
  * migrated copy back. Written from the first read, that copy put the old
  * values back over the change.
@@ -9,9 +9,12 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
+import fs from 'fs';
+import path from 'path';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
 import { migrateSheetFields } from '../migrate-sheet-fields';
+import { convertHorrorD100Sheet, isOldHorrorD100Sheet } from '../../legacy/horrorD100Sheet';
 
 let userId: string;
 
@@ -26,7 +29,7 @@ afterAll(async () => {
 
 type Sheet = Record<string, unknown>;
 
-async function character(gameSystem: 'DND_5E' | 'PATHFINDER_2E' | 'CALL_OF_CTHULHU_7E', data: Sheet) {
+async function character(gameSystem: 'FIFTH_EDITION' | 'FANTASY_D20' | 'HORROR_D100', data: Sheet) {
   return prisma.character.create({
     data: { userId, name: `Legacy ${gameSystem}`, gameSystem, data: data as Prisma.InputJsonValue },
   });
@@ -66,7 +69,7 @@ function withSaveDuringRun(client: PrismaClient, save: () => Promise<unknown>): 
 describe('migrate:sheet-fields', () => {
   it('keeps a save that lands between its read and its write', async () => {
     const legacy = { characterName: 'Aldra', hp: { maximum: 12, current: 12, temporary: 0 }, personalityTraits: 'Brave.' };
-    const { id } = await character('DND_5E', legacy);
+    const { id } = await character('FIFTH_EDITION', legacy);
 
     const racing = withSaveDuringRun(prisma, () =>
       prisma.character.update({ where: { id }, data: { data: { ...legacy, hp: { maximum: 12, current: 3, temporary: 0 } } } })
@@ -80,40 +83,60 @@ describe('migrate:sheet-fields', () => {
   });
 
   it('adds what only the older field holds, for each system', async () => {
-    const dnd = await character('DND_5E', {
+    const fifthEdition = await character('FIFTH_EDITION', {
       personality: { traits: 'Mine.' },
       personalityTraits: 'From the template.',
     });
-    const pf2e = await character('PATHFINDER_2E', {
+    const fantasyD20 = await character('FANTASY_D20', {
       strikes: [{ name: 'Longsword', type: 'melee' }],
       attacks: [{ name: 'Warhammer', range: 'melee' }, { name: 'Crossbow', range: 'ranged' }],
     });
 
     const report = await migrateSheetFields(prisma, { dryRun: false, where: mine });
 
-    expect((await stored(dnd.id)).personality).toEqual({ traits: 'Mine.\n\nFrom the template.' });
-    expect((await stored(pf2e.id)).strikes).toEqual([
+    expect((await stored(fifthEdition.id)).personality).toEqual({ traits: 'Mine.\n\nFrom the template.' });
+    expect((await stored(fantasyD20.id)).strikes).toEqual([
       { name: 'Longsword', type: 'melee' },
       { name: 'Warhammer', type: 'melee' },
       { name: 'Crossbow', type: 'ranged' },
     ]);
-    expect(report.changed.map((c) => c.id).sort()).toEqual([dnd.id, pf2e.id].sort());
-    expect(report.changed.find((c) => c.id === pf2e.id)?.notes).toContain('moved 2 attack(s) to strikes');
+    expect(report.changed.map((c) => c.id).sort()).toEqual([fifthEdition.id, fantasyD20.id].sort());
+    expect(report.changed.find((c) => c.id === fantasyD20.id)?.notes).toContain('moved 2 attack(s) to strikes');
   });
 
   it('keeps and lists an older field it cannot move', async () => {
-    const coc = await character('CALL_OF_CTHULHU_7E', { playerName: 'Current', player: 'Old' });
+    const horrorD100 = await character('HORROR_D100', { playerName: 'Current', player: 'Old' });
 
     const report = await migrateSheetFields(prisma, { dryRun: false, where: mine });
 
-    expect(await stored(coc.id)).toEqual({ playerName: 'Current', player: 'Old' });
-    expect(report.kept.map((k) => k.id)).toEqual([coc.id]);
+    expect(await stored(horrorD100.id)).toEqual({ playerName: 'Current', player: 'Old' });
+    expect(report.kept.map((k) => k.id)).toEqual([horrorD100.id]);
     expect(report.kept[0].notes.join(' ')).toMatch(/kept 'player'/);
+  });
+
+  // The server converts these sheets itself before it listens; the script,
+  // run on an instance that has not restarted, moves them the same way.
+  it('converts a Horror d100 sheet in the shape before 1.7.0 to the rebuilt sheet, listing what it kept', async () => {
+    const parsed: unknown = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../legacy/__fixtures__/horror-d100-sheets/malformed.json'), 'utf8'));
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('malformed.json holds no sheet');
+    const old: Sheet = { ...parsed };
+    const horrorD100 = await character('HORROR_D100', old);
+
+    const report = await migrateSheetFields(prisma, { dryRun: false, where: mine });
+
+    const sheet = await stored(horrorD100.id);
+    expect(isOldHorrorD100Sheet(sheet)).toBe(false);
+    expect(sheet.converted).toMatchObject({ from: 1 });
+    const change = report.changed.find((c) => c.id === horrorD100.id);
+    expect(change?.notes[0]).toBe('converted to the rebuilt Horror d100 sheet');
+    expect(change?.notes.slice(1)).toEqual(convertHorrorD100Sheet(old, new Date()).kept.map((item) => `kept ${item}`));
+
+    expect((await migrateSheetFields(prisma, { dryRun: false, where: mine })).changed).toEqual([]);
   });
 
   it('changes nothing in a dry run', async () => {
     const legacy = { personalityTraits: 'Brave.' };
-    const { id } = await character('DND_5E', legacy);
+    const { id } = await character('FIFTH_EDITION', legacy);
 
     const report = await migrateSheetFields(prisma, { dryRun: true, where: mine });
 

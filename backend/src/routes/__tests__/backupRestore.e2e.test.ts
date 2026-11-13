@@ -16,8 +16,17 @@ jest.mock('child_process', () => ({
   ...jest.requireActual('child_process'),
   execFile: jest.fn(),
 }));
+// The conversion of the stored Horror d100 sheets runs on the shared test
+// database here, where other files keep old sheets on purpose; it is checked
+// against a restored database of its own in
+// legacy/__tests__/restoreConvertsHorrorD100.e2e.test.ts.
+jest.mock('../../legacy/storedHorrorD100Sheets', () => ({
+  ...jest.requireActual('../../legacy/storedHorrorD100Sheets'),
+  convertStoredHorrorD100Sheets: jest.fn(),
+}));
 
 import { execFile } from 'child_process';
+import { convertStoredHorrorD100Sheets } from '../../legacy/storedHorrorD100Sheets';
 import crypto from 'crypto';
 import fsSync from 'fs';
 import fs, { type FileHandle } from 'fs/promises';
@@ -64,6 +73,7 @@ const MIGRATE = 'node_modules/.bin/prisma';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
+const convertSheets = jest.mocked(convertStoredHorrorD100Sheets);
 const errorSpy = jest.spyOn(logger, 'error');
 
 interface ToolCall {
@@ -257,6 +267,8 @@ afterAll(async () => {
 beforeEach(() => {
   execFileMock.mockReset();
   errorSpy.mockClear();
+  convertSheets.mockReset();
+  convertSheets.mockResolvedValue({ converted: 0, kept: [], failed: [] });
 });
 
 const restore = (agent: ReturnType<typeof request.agent>, zip: Buffer) =>
@@ -575,6 +587,76 @@ describe('POST /api/admin/backups/restore', () => {
     });
     expect(logged).toHaveLength(1);
     expect(logged[0]).toMatchObject({ level: 'WARNING', context: expect.objectContaining({ migrationsFailed: true }) });
+  });
+
+  it('converts the stored Horror d100 sheets once the migrations have run, before it answers', async () => {
+    const order: string[] = [];
+    const calls = stubTools();
+    const stub = execFileMock.getMockImplementation();
+    execFileMock.mockImplementation((cmd: string, ...rest: unknown[]) => {
+      order.push(cmd);
+      return stub?.(cmd, ...rest);
+    });
+    convertSheets.mockImplementation(async () => {
+      order.push('convert');
+      return { converted: 2, kept: [], failed: [] };
+    });
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(200);
+    expect(order).toEqual(['pg_dump', 'psql', MIGRATE, 'convert']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
+  });
+
+  it('answers Restore Incomplete, as a failed migration run does, when the conversion of the sheets fails, and logs the restore', async () => {
+    stubTools();
+    convertSheets.mockRejectedValue(new Error('could not lock'));
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const startedAt = new Date();
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Restore Incomplete');
+    expect(res.body.message).toMatch(/Horror d100/);
+    expect(res.body.message).toMatch(/restart the backend/i);
+    expect(res.body.message).toMatch(/saved as backup-/);
+    const logged = await prisma.systemLog.findMany({
+      where: { userId: adminId, message: 'Restored instance from backup', createdAt: { gte: startedAt } },
+    });
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ level: 'WARNING', context: expect.objectContaining({ sheetConversionFailed: true }) });
+  });
+
+  it('answers Restore Incomplete with the count when some sheets could not be converted, logs it, and lets requests in again', async () => {
+    stubTools();
+    convertSheets.mockResolvedValue({ converted: 3, kept: [], failed: [{ id: 'a', error: 'x' }, { id: 'b', error: 'y' }] });
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const startedAt = new Date();
+
+    const res = await restore(admin, zip);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Restore Incomplete');
+    expect(res.body.message).toMatch(/^The backup was restored and brought up to this version, but 2 of its Horror d100 character sheets could not be converted/);
+    expect(res.body.message).toMatch(/server log/);
+    expect(res.body.message).toMatch(/saved as backup-/);
+    const logged = await prisma.systemLog.findMany({
+      where: { userId: adminId, message: 'Restored instance from backup', createdAt: { gte: startedAt } },
+    });
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ level: 'WARNING', context: expect.objectContaining({ sheetsNotConverted: 2 }) });
+    // The restore has ended: requests are answered again, not 503.
+    expect((await admin.get('/api/admin/backups')).status).toBe(200);
+  });
+
+  it('converts no sheet when the migration run fails', async () => {
+    stubTools({ cmd: MIGRATE, stderr: 'Error: P1001' });
+    const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }));
+    expect(res.status).toBe(500);
+    expect(convertSheets).not.toHaveBeenCalled();
   });
 
   it('ends every live connection when the database is replaced', async () => {

@@ -1,0 +1,42 @@
+{
+  "investigatorName": "Nell Ashby",
+  "player": "  Sam Okafor ",
+  "occupation": "Nurse",
+  "era": "1920s",
+  "characteristics": {
+    "STR": { "regular": 40, "half": 20, "fifth": 8 },
+    "CON": { "regular": 70, "half": 35, "fifth": 14 },
+    "SIZ": { "regular": 45, "half": 22, "fifth": 9 },
+    "DEX": { "regular": 62, "half": 31, "fifth": 12 },
+    "APP": { "regular": 63, "half": 31, "fifth": 12 },
+    "INT": { "regular": 75, "half": 37, "fifth": 15 },
+    "POW": { "regular": 55, "half": 27, "fifth": 11 },
+    "EDU": { "regular": 68, "half": 34, "fifth": 13 }
+  },
+  "derivedStats": {
+    "hp": { "maximum": 11, "current": 11, "formula": "(CON+SIZ)/10", "majorWoundThreshold": 1 },
+    "magicPoints": { "maximum": 11, "current": 11, "formula": "POW/5" },
+    "sanity": { "starting": 55, "current": 55, "maximum": 99, "formula": "POW" },
+    "luck": { "score": 60, "notes": "" },
+    "moveRate": 8,
+    "build": -1,
+    "damageBonus": "-1",
+    "dodge": { "value": 31, "formula": "DEX/2", "improvementChecked": false }
+  },
+  "combat": { "weapons": [] },
+  "wealth": { "spendingLevel": "Poor", "cash": 3, "assets": "", "notes": "" },
+  "possessions": [{ "name": "Medical bag", "notes": "" }],
+  "backstory": {
+    "description": "Nursed soldiers in the war, and saw things in the wards at night.",
+    "personalDescription": "",
+    "ideology": "",
+    "significantPeople": "",
+    "meaningfulLocations": "",
+    "treasuredPossessions": "",
+    "traits": "",
+    "injuriesAndScars": "",
+    "phobiasAndManias": "",
+    "arcaneTomesAndSpells": "",
+    "encountersWithStrangeEntities": ""
+  }
+}

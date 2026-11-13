@@ -24,7 +24,7 @@ afterAll(async () => {
 });
 
 async function campaignOfMyOwn() {
-  const owner = await createTestUser({ displayName: 'Saved roll DM' });
+  const owner = await createTestUser({ displayName: 'Saved roll GM' });
   userIds.push(owner.id);
   const campaign = await createTestCampaign(owner.id, { name: 'Saved roll table' });
   return { owner, campaign };
@@ -44,11 +44,11 @@ describe('a saved roll\'s character and purpose', () => {
     const macro = await prisma.diceMacro.create({
       data: {
         userId: owner.id, campaignId: campaign.id, name: 'Goblin', expression: '1d20+4',
-        characterName: 'Goblin boss', purpose: 'Scimitar attack',
+        characterName: 'Hobgoblin', purpose: 'Longsword attack',
       },
     });
     expect(await prisma.diceMacro.findUniqueOrThrow({ where: { id: macro.id } })).toMatchObject({
-      characterName: 'Goblin boss', purpose: 'Scimitar attack',
+      characterName: 'Hobgoblin', purpose: 'Longsword attack',
     });
   });
 });

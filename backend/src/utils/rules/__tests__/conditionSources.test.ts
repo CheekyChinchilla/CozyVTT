@@ -1,8 +1,8 @@
 /**
- * One list of D&D 5e conditions, not several.
+ * One list of 5E conditions, not several.
  *
  * The set was written down twice: the character sheet offered all fifteen, the
- * token editor a hand-picked twelve. They drifted, and a DM could not mark an
+ * token editor a hand-picked twelve. They drifted, and a GM could not mark an
  * NPC Deafened, Grappled or Petrified even though a player character could be.
  * The test that was meant to catch this compared each list against the
  * abbreviation table separately — and twelve of fifteen is still "every offered
@@ -22,17 +22,17 @@ const FRONTEND = path.resolve(__dirname, '../../../../../frontend/src');
 /** Files that render a condition picker and must import the shared list. */
 const CONDITION_CONSUMERS = [
   'components/campaign/NpcQuickEditor.tsx',
-  'components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx',
+  'components/character-sheets/fifth-edition/FifthEditionCharacterEditor.tsx',
 ];
 
 /**
- * What each takes from utils/conditions: the D&D 5e sheet the list itself,
+ * What each takes from utils/conditions: the 5E sheet the list itself,
  * the token editor the list for the campaign's system (conditionsOffered,
- * which hands it the same list in D&D 5e).
+ * which hands it the same list in 5E).
  */
 const SHARED_IMPORT: Record<string, string> = {
   'components/campaign/NpcQuickEditor.tsx': 'conditionsOffered',
-  'components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx': 'DND5E_CONDITIONS',
+  'components/character-sheets/fifth-edition/FifthEditionCharacterEditor.tsx': 'FIFTH_EDITION_CONDITIONS',
 };
 
 /**
@@ -50,7 +50,7 @@ function declaresOwnConditionList(source: string): boolean {
   });
 }
 
-describe('D&D 5e conditions have a single source', () => {
+describe('5E conditions have a single source', () => {
   it.each(CONDITION_CONSUMERS)('%s does not declare its own list', (file) => {
     const source = readFileSync(path.join(FRONTEND, file), 'utf8');
     expect(declaresOwnConditionList(source)).toBe(false);
@@ -61,14 +61,14 @@ describe('D&D 5e conditions have a single source', () => {
     expect(source).toMatch(new RegExp(`import \\{[^}]*\\b${SHARED_IMPORT[file]}\\b[^}]*\\} from '@/utils/conditions'`));
   });
 
-  it('gives the token editor the D&D 5e list in a D&D 5e campaign', () => {
+  it('gives the token editor the 5E list in a 5E campaign', () => {
     const source = readFileSync(path.join(FRONTEND, 'utils/conditions.ts'), 'utf8');
-    expect(source).toMatch(/case GameSystem\.DND_5E:\s*return DND5E_CONDITIONS;/);
+    expect(source).toMatch(/case GameSystem\.FIFTH_EDITION:\s*return FIFTH_EDITION_CONDITIONS;/);
   });
 
   it('the shared list holds all fifteen conditions', () => {
     const source = readFileSync(path.join(FRONTEND, 'utils/conditions.ts'), 'utf8');
-    const block = source.slice(source.indexOf('DND5E_CONDITIONS'));
+    const block = source.slice(source.indexOf('FIFTH_EDITION_CONDITIONS'));
     const listed = (block.slice(0, block.indexOf('];')).match(/'([A-Z][a-z]+)'/g) ?? [])
       .map((s) => s.replace(/'/g, ''));
     expect(listed.sort()).toEqual([

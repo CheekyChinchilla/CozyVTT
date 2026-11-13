@@ -3,7 +3,7 @@
  * stores one: the live table's `drawing:add` and a campaign archive's import.
  *
  * A drawing is one of the kinds in ./drawingLimits.ts, on the markup layer,
- * for everyone or for the DM alone, with whole-pixel points in the map's
+ * for everyone or for the GM alone, with whole-pixel points in the map's
  * coordinates (from its top-left corner, as walls and lights are). Each kind
  * has its own number of points. A text label's control characters are
  * removed before its length is counted: the canvas draws them as boxes, and
@@ -16,6 +16,7 @@
 import { z } from 'zod';
 import { geometryRegion, GEOMETRY_MARGIN_SQUARES, MAX_COORDINATE, type MapExtent } from './maps';
 import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LIMITS, MARKUP_SHARES, type DrawingKind, type MarkupShare } from './drawingLimits';
+import { normaliseDrawingAudience, normaliseDrawingShare } from '../legacy/gameSystemAliases';
 
 export { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS, DRAWING_LIMITS, MARKUP_SHARES } from './drawingLimits';
 export type { DrawingAudience, DrawingKind, DrawingLayer, MarkupShare } from './drawingLimits';
@@ -26,7 +27,10 @@ const KIND_NAMES: Record<DrawingKind, string> = {
 
 export const DRAWING_KIND_REFUSAL = `A drawing must be one of: ${DRAWING_KINDS.join(', ')}`;
 export const DRAWING_LAYER_REFUSAL = 'Drawings can only be made on the MARKUP layer';
-export const DRAWING_AUDIENCE_REFUSAL = 'A drawing is for ALL or for the DM alone';
+export const DRAWING_AUDIENCE_REFUSAL = "A drawing's audience must be ALL or GM";
+
+/** A drawing's audience, the GM's value from an older version read as GM. */
+const AudienceSchema = z.preprocess(normaliseDrawingAudience, z.enum(DRAWING_AUDIENCES, { error: DRAWING_AUDIENCE_REFUSAL }));
 export const DRAWING_COLOR_REFUSAL = 'A drawing colour must be written #rrggbb';
 export const DRAWING_WIDTH_REFUSAL =
   `A drawing's width must be a whole number of map pixels from ${DRAWING_LIMITS.minWidth} to ${DRAWING_LIMITS.maxWidth}`;
@@ -105,7 +109,7 @@ export const NewDrawingSchema = z
     {
       kind: z.enum(DRAWING_KINDS, { error: DRAWING_KIND_REFUSAL }),
       layer: z.enum(['MARKUP'], { error: DRAWING_LAYER_REFUSAL }).default('MARKUP'),
-      audience: z.enum(DRAWING_AUDIENCES, { error: DRAWING_AUDIENCE_REFUSAL }).default('ALL'),
+      audience: AudienceSchema.default('ALL'),
       color: ColorSchema,
       fillColor: ColorSchema.nullish().transform((fill) => fill ?? null),
       width: z
@@ -189,7 +193,7 @@ export const DrawingPreviewSchema = z.object(
       .int({ error: DRAWING_WIDTH_REFUSAL })
       .min(DRAWING_LIMITS.minWidth, { error: DRAWING_WIDTH_REFUSAL })
       .max(DRAWING_LIMITS.maxWidth, { error: DRAWING_WIDTH_REFUSAL }),
-    audience: z.enum(DRAWING_AUDIENCES, { error: DRAWING_AUDIENCE_REFUSAL }).default('ALL'),
+    audience: AudienceSchema.default('ALL'),
     laser: z.boolean({ error: 'laser must be true or false' }).default(false),
     points: z
       .array(DrawingPointSchema, { error: DRAWING_PREVIEW_POINTS_REFUSAL })
@@ -206,25 +210,25 @@ export type DrawingPreview = z.infer<typeof DrawingPreviewSchema>;
 
 /**
  * The share of a map's markup layer a drawing counts to. Every drawing for
- * the DM alone is the DM's, whoever wrote it, so the players' share holds
- * only drawings a player is sent. One for everyone is the DM's when its
- * author is the campaign's DM (`dmId`) as an add is counted, and the
- * players' otherwise: a former DM's, a removed member's and one whose
+ * the GM alone is the GM's, whoever wrote it, so the players' share holds
+ * only drawings a player is sent. One for everyone is the GM's when its
+ * author is the campaign's GM (`gmId`) as an add is counted, and the
+ * players' otherwise: a former GM's, a removed member's and one whose
  * author's account is gone are the players'.
  */
-export function drawingShare(drawing: { authorId: string | null; audience: 'ALL' | 'DM' }, dmId: string | null): MarkupShare {
-  if (drawing.audience === 'DM') return 'DM';
-  return drawing.authorId !== null && drawing.authorId === dmId ? 'DM' : 'PLAYERS';
+export function drawingShare(drawing: { authorId: string | null; audience: 'ALL' | 'GM' }, gmId: string | null): MarkupShare {
+  if (drawing.audience === 'GM') return 'GM';
+  return drawing.authorId !== null && drawing.authorId === gmId ? 'GM' : 'PLAYERS';
 }
 
 /**
  * What an add answers when its share of the map's markup layer holds as
  * many drawings, or as many points, as it may (DRAWING_LIMITS.markupShares).
  * Neither names a count, and a player's names only the players' share, so
- * it tells them nothing of what the DM holds.
+ * it tells them nothing of what the GM holds.
  */
 export const MARKUP_SHARE_FULL: Record<MarkupShare, string> = {
-  DM: "Your share of this map's drawing is full. Erase some first.",
+  GM: "Your share of this map's drawing is full. Erase some first.",
   PLAYERS: "The players' share of this map's drawing is full. Erase some first.",
 };
 
@@ -264,16 +268,19 @@ export function pointsCanMatter(share: MarkupShare, drawings: number, adding: nu
   return drawings * DRAWING_LIMITS.maxPoints + adding > room.points;
 }
 
-/** A share an archive names for a drawing; anything else is decided by the drawing (archiveShare). */
-const ShareSchema = z.enum(MARKUP_SHARES);
+/**
+ * A share an archive names for a drawing, the GM's value from an older
+ * version read as GM; anything else is decided by the drawing (archiveShare).
+ */
+const ShareSchema = z.preprocess(normaliseDrawingShare, z.enum(MARKUP_SHARES));
 
 /**
- * The share an archive's drawing goes back to: the DM's for a drawing for
- * the DM alone, whatever the archive names, as drawingShare has it; for one
+ * The share an archive's drawing goes back to: the GM's for a drawing for
+ * the GM alone, whatever the archive names, as drawingShare has it; for one
  * for everyone, the share it names, or the players' when it names none.
  */
-export function archiveShare(entry: unknown, audience: 'ALL' | 'DM'): MarkupShare {
-  if (audience === 'DM') return 'DM';
+export function archiveShare(entry: unknown, audience: 'ALL' | 'GM'): MarkupShare {
+  if (audience === 'GM') return 'GM';
   const named = ShareSchema.safeParse(typeof entry === 'object' && entry !== null ? (entry as { share?: unknown }).share : undefined);
   return named.success ? named.data : 'PLAYERS';
 }
@@ -306,7 +313,7 @@ export const CLEAR_MEMBER_REFUSAL = 'authorId must be a member\'s id';
 /**
  * `drawing:clear`: every drawing on one layer of a map, MARKUP so far, or
  * with `authorId` one member's: their drawings for everyone, and every one
- * of the DM's own when it names the DM, as their Clear mine would.
+ * of the GM's own when it names the GM, as their Clear mine would.
  */
 export const DrawingClearEventSchema = z.object(
   {

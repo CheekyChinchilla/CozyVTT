@@ -264,10 +264,18 @@ describe('the containers', () => {
     }
   );
 
-  it('name the backend user in the command start.sh suggests when a migration fails', () => {
-    const hint = read('backend/scripts/start.sh').split('\n').filter((line) => /migrate status/.test(line));
+  // The hint is printed while the container restarts, when `docker compose
+  // exec` cannot reach it: it names a command that starts a container of its
+  // own, as the backend's user, and the section that explains the recovery.
+  it('suggest, when a migration fails, a command start.sh can be followed with while the backend restarts', () => {
+    const script = read('backend/scripts/start.sh');
+    const hint = script.split('\n').filter((line) => /migrate status/.test(line));
     expect(hint).toHaveLength(1);
-    expect(hint[0]).toMatch(/docker compose exec -u appuser backend /);
+    expect(hint[0]).toContain('docker compose run --rm -u appuser --entrypoint ./node_modules/.bin/prisma backend migrate status');
+    expect(script).not.toMatch(/docker compose exec/);
+    const heading = 'The backend keeps restarting, and its log says `Migration failed`';
+    expect(read('docs/DEPLOYMENT.md')).toContain(`### ${heading}`);
+    expect(script).toContain(`docs/DEPLOYMENT.md, '${heading.replace(/`/g, '')}'`);
   });
 
   it('give the frontend a read-only filesystem, with room for the files nginx writes as it runs', () => {

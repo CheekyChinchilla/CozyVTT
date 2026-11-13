@@ -64,7 +64,7 @@ async function readManifest(file: string): Promise<{ includesAudio: boolean; ass
 beforeAll(async () => {
   userId = (await createTestUser({ displayName: 'Archive Audio' })).id;
   sourceId = (await createTestCampaign(userId, { name: 'Sounds' })).id;
-  await prisma.campaignMembership.create({ data: { userId, campaignId: sourceId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId, campaignId: sourceId, role: 'GM', characterIds: [] } });
   nightTrackId = await track('crickets');
   ambientTrackId = await track('rain');
   await prisma.campaign.update({

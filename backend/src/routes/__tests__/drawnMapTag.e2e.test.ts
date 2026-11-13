@@ -1,12 +1,12 @@
 /**
  * The tag that marks a picture drawn in CozyVTT.
  *
- * Paint takes a campaign map picture carrying the tag as one it made: the DM
+ * Paint takes a campaign map picture carrying the tag as one it made: the GM
  * is offered Paint on it, and a later Save writes over it. Any uploader could
- * set the tag, and it was a word a DM might type themselves, so an uploaded
+ * set the tag, and it was a word a GM might type themselves, so an uploaded
  * picture could be taken for a drawn one and painted over. The tag is
  * now one no upload of 1.5.4 carries, and only the upload Paint makes may
- * set it: a campaign map picture, which only the campaign's DM may upload.
+ * set it: a campaign map picture, which only the campaign's GM may upload.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -33,9 +33,9 @@ const PNG = Buffer.from(
 );
 
 type Agent = ReturnType<typeof request.agent>;
-const users = { dm: '', player: '', manager: '' };
+const users = { gm: '', player: '', manager: '' };
 let campaignId = '';
-let dm: Agent;
+let gm: Agent;
 let player: Agent;
 let manager: Agent;
 
@@ -55,19 +55,19 @@ const REFUSAL = `The tag ${DRAWN_MAP_TAG} is kept for maps drawn in CozyVTT.`;
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const made = await Promise.all((['dm', 'player', 'manager'] as const).map((who) =>
+  const made = await Promise.all((['gm', 'player', 'manager'] as const).map((who) =>
     createTestUser({ email: `drawn-tag-${who}-${stamp}@test.cozyvtt.local`, displayName: `Drawn tag ${who}` })));
-  [users.dm, users.player, users.manager] = made.map((u) => u.id);
+  [users.gm, users.player, users.manager] = made.map((u) => u.id);
   await prisma.user.update({ where: { id: users.manager }, data: { globalAssetManager: true } });
-  campaignId = (await createTestCampaign(users.dm, { name: `Drawn tag ${stamp}` })).id;
+  campaignId = (await createTestCampaign(users.gm, { name: `Drawn tag ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: users.dm, campaignId, role: 'DM', characterIds: [] },
+      { userId: users.gm, campaignId, role: 'GM', characterIds: [] },
       { userId: users.player, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   // One at a time: the server hashes one password per address at once.
-  dm = await login(made[0].email);
+  gm = await login(made[0].email);
   player = await login(made[1].email);
   manager = await login(made[2].email);
 });
@@ -81,14 +81,14 @@ afterAll(async () => {
 });
 
 describe(`the ${DRAWN_MAP_TAG} tag on an upload`, () => {
-  it("is kept on a map picture the DM uploads into the campaign's library", async () => {
-    const res = await upload(dm, { type: 'MAP', scope: 'CAMPAIGN', campaignId, tags: DRAWN_MAP_TAG });
+  it("is kept on a map picture the GM uploads into the campaign's library", async () => {
+    const res = await upload(gm, { type: 'MAP', scope: 'CAMPAIGN', campaignId, tags: DRAWN_MAP_TAG });
     expect(res.status).toBe(201);
     expect(res.body.asset.tags).toEqual([DRAWN_MAP_TAG]);
   });
 
   it.each([
-    ['a personal map picture', () => upload(dm, { type: 'MAP', scope: 'USER', tags: `dungeon,${DRAWN_MAP_TAG}` })],
+    ['a personal map picture', () => upload(gm, { type: 'MAP', scope: 'USER', tags: `dungeon,${DRAWN_MAP_TAG}` })],
     ['a campaign token picture', () => upload(player, { type: 'TOKEN', scope: 'CAMPAIGN', campaignId, tags: DRAWN_MAP_TAG })],
     ['a global map picture', () => upload(manager, { type: 'MAP', scope: 'GLOBAL', tags: DRAWN_MAP_TAG })],
     ['a personal one in another case', () => upload(player, { type: 'MAP', scope: 'USER', tags: DRAWN_MAP_TAG.toUpperCase() })],

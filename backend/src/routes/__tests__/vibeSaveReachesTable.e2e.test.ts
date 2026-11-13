@@ -11,7 +11,7 @@
  * The save now sends every member `vibe.settings.updated` with the periods as
  * saved and the vibe they leave: the period in force, under its new spelling,
  * or none when it was renamed or deleted. The vibe owns the soundtrack, so its
- * track follows, unless the DM has another track playing over it.
+ * track follows, unless the GM has another track playing over it.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -33,12 +33,12 @@ type AudioUpdated = { assetId: string | null; volume: number };
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let dawnTrack: string;
 let battleTrack: string;
-let dmRest: ReturnType<typeof request.agent>;
+let gmRest: ReturnType<typeof request.agent>;
 let player: ClientSocket;
 
 const dawn = (over: Partial<Period> = {}): Period => ({ name: 'Dawn', hue: '#FFB347', filter: 'none', audio: dawnTrack, ...over });
@@ -47,7 +47,7 @@ const dusk: Period = { name: 'Dusk', hue: '#8E7CC3', filter: 'none', audio: null
 async function track(name: string) {
   return (await prisma.asset.create({
     data: {
-      type: 'AUDIO', scope: 'CAMPAIGN', uploadedById: dmId, campaignId, filename: `${name}.ogg`, originalName: `${name}.ogg`,
+      type: 'AUDIO', scope: 'CAMPAIGN', uploadedById: gmId, campaignId, filename: `${name}.ogg`, originalName: `${name}.ogg`,
       mimeType: 'audio/ogg', fileSize: 1, filePath: `/nonexistent/${name}.ogg`, name,
     },
   })).id;
@@ -64,7 +64,7 @@ async function start(playing: string | null, periods: Period[] = [dawn(), dusk])
   });
 }
 
-const save = (periods: Period[]) => dmRest.put(`/api/campaigns/${campaignId}/vibe`).send({ vibeSettings: { enabled: true, periods } });
+const save = (periods: Period[]) => gmRest.put(`/api/campaigns/${campaignId}/vibe`).send({ vibeSettings: { enabled: true, periods } });
 const stored = async () => {
   const campaign = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { currentVibe: true, vibeSettings: true } });
   return { currentVibe: campaign.currentVibe, atmosphereAudio: readJsonObject(campaign.vibeSettings)?.atmosphereAudio ?? null };
@@ -72,21 +72,21 @@ const stored = async () => {
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `vibesave-table-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `vibesave-table-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `vibesave-table-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Vibe save reaches the table ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Vibe save reaches the table ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   dawnTrack = await track('birdsong');
   battleTrack = await track('war-drums');
-  dmRest = request.agent(app);
-  expect((await dmRest.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmRest = request.agent(app);
+  expect((await gmRest.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -102,7 +102,7 @@ afterAll(async () => {
   await server.close();
   await prisma.asset.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -140,7 +140,7 @@ it('ends the vibe, and its track, when the period in force is renamed', async ()
   expect(await stored()).toEqual({ currentVibe: null, atmosphereAudio: null });
 });
 
-it('leaves a track the DM put on over the vibe when the period in force is deleted', async () => {
+it('leaves a track the GM put on over the vibe when the period in force is deleted', async () => {
   await start(battleTrack);
   const saved = waitForEvent<SettingsSaved>(player, 'vibe.settings.updated');
   const noTrackChange = expectNoEvent(player, 'atmosphere.audio.updated', 500);
@@ -194,12 +194,12 @@ it('leaves a switch that landed while the save was on its way', async () => {
 });
 
 // PUT /api/campaigns/:campaignId took vibe settings too, checked by rules of
-// its own: no check that a period's track was one the DM may play to the
+// its own: no check that a period's track was one the GM may play to the
 // table, the vibe left naming a period it had renamed, and nothing sent to
 // the table. Both routes now save the periods the same way.
 describe('vibe settings saved through PUT /api/campaigns/:campaignId', () => {
   const saveThroughSettings = (periods: unknown[]) =>
-    dmRest.put(`/api/campaigns/${campaignId}`).send({ vibeSettings: { enabled: true, periods } });
+    gmRest.put(`/api/campaigns/${campaignId}`).send({ vibeSettings: { enabled: true, periods } });
 
   it('ends the vibe, and tells the table, when the period in force is renamed', async () => {
     await start(dawnTrack);
@@ -209,7 +209,7 @@ describe('vibe settings saved through PUT /api/campaigns/:campaignId', () => {
     expect((await stored()).currentVibe).toBeNull();
   });
 
-  it('refuses a period whose track the DM may not play to the table', async () => {
+  it('refuses a period whose track the GM may not play to the table', async () => {
     await start(null);
     const res = await saveThroughSettings([dawn({ audio: '00000000-0000-4000-8000-000000000000' }), dusk]);
     expect(res.status).toBe(400);
@@ -226,7 +226,7 @@ describe('vibe settings saved through PUT /api/campaigns/:campaignId', () => {
 // PUT /vibe refused a period with no `audio` key, which the other route took.
 it('saves a period sent with no audio as one without a track', async () => {
   await start(null);
-  const res = await dmRest.put(`/api/campaigns/${campaignId}/vibe`).send({ vibeSettings: { enabled: true, periods: [{ name: 'Dawn', hue: '#FFB347', filter: 'none' }] } });
+  const res = await gmRest.put(`/api/campaigns/${campaignId}/vibe`).send({ vibeSettings: { enabled: true, periods: [{ name: 'Dawn', hue: '#FFB347', filter: 'none' }] } });
   expect(res.status).toBe(200);
   expect(res.body.vibeSettings.periods[0].audio).toBeNull();
 });

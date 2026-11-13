@@ -1,22 +1,22 @@
 // ============================================
 // The pictures a campaign's shared documents show
 //
-// A DM writes a handout in Markdown and embeds a picture by its address
+// A GM writes a handout in Markdown and embeds a picture by its address
 // (`![The letter](/api/assets/maps/<id>)`), as the user guide shows. Sharing
-// the handout with the campaign is the DM's choice to show that picture to
+// the handout with the campaign is the GM's choice to show that picture to
 // its members, so the map-picture rule lets such a picture through for them
 // (mapPictureHidden). This says which pictures the shared documents name.
 //
 // "Shared with the campaign" is what the campaign's document list shows and
 // its members may read: a document linked to it (CampaignDocument), and one
 // written or uploaded in it (a CAMPAIGN document of that campaign). Of those,
-// only the ones whose text the campaign's DM controls now count, since
-// showing the picture is the DM's choice: a document the DM uploaded or
+// only the ones whose text the campaign's GM controls now count, since
+// showing the picture is the GM's choice: a document the GM uploaded or
 // wrote, written in the campaign or linked to it from their own library or
-// the global one. A document a former DM wrote while they held the seat
+// the global one. A document a former GM wrote while they held the seat
 // (which they can still rewrite as a member), one any other member got
-// there, a global one someone else uploaded and the DM linked, and a
-// document of another campaign linked to it (whose DM, later someone else,
+// there, a global one someone else uploaded and the GM linked, and a
+// document of another campaign linked to it (whose GM, later someone else,
 // could rewrite it), count for nothing. The members of the campaign are exactly
 // those the document is shared with.
 //
@@ -292,14 +292,14 @@ interface SharedDocument {
 }
 
 /**
- * Whether a document counts for `campaignId` while `dms` hold its DM seat:
+ * Whether a document counts for `campaignId` while `gms` hold its GM seat:
  * theirs, and written or uploaded in the campaign, or `linked` to it from
  * their own library or the global one. A document of another campaign
- * linked to it does not count, even one the DM wrote: that campaign's
- * later DM could rewrite it.
+ * linked to it does not count, even one the GM wrote: that campaign's
+ * later GM could rewrite it.
  */
-function countsFor(doc: SharedDocument, campaignId: string, dms: ReadonlySet<string>, linked: boolean): boolean {
-  if (!doc.uploadedById || !dms.has(doc.uploadedById)) return false;
+function countsFor(doc: SharedDocument, campaignId: string, gms: ReadonlySet<string>, linked: boolean): boolean {
+  if (!doc.uploadedById || !gms.has(doc.uploadedById)) return false;
   if (doc.scope === 'CAMPAIGN' && doc.campaignId === campaignId) return true;
   return linked && !(doc.scope === 'CAMPAIGN' && doc.campaignId !== null);
 }
@@ -326,42 +326,42 @@ export async function picturesInSharedDocuments(
   const ids = [...new Set(campaignIds)];
   await readSomeUnreadDocuments({ campaignIds: ids });
   const seats = await prisma.campaignMembership.findMany({
-    where: { campaignId: { in: ids }, role: 'DM' },
+    where: { campaignId: { in: ids }, role: 'GM' },
     select: { campaignId: true, userId: true },
   });
-  const dmsOf = new Map<string, Set<string>>();
-  for (const seat of seats) dmsOf.set(seat.campaignId, (dmsOf.get(seat.campaignId) ?? new Set<string>()).add(seat.userId));
-  if (dmsOf.size === 0) return result;
-  const dmIds = [...new Set(seats.map((seat) => seat.userId))];
+  const gmsOf = new Map<string, Set<string>>();
+  for (const seat of seats) gmsOf.set(seat.campaignId, (gmsOf.get(seat.campaignId) ?? new Set<string>()).add(seat.userId));
+  if (gmsOf.size === 0) return result;
+  const gmIds = [...new Set(seats.map((seat) => seat.userId))];
   const select = { id: true, scope: true, campaignId: true, uploadedById: true } as const;
 
   // The documents that count for each campaign, by document.
   const [written, links] = await Promise.all([
     prisma.asset.findMany({
-      where: { type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId: { in: [...dmsOf.keys()] }, uploadedById: { in: dmIds } },
+      where: { type: 'DOCUMENT', scope: 'CAMPAIGN', campaignId: { in: [...gmsOf.keys()] }, uploadedById: { in: gmIds } },
       select,
     }),
-    prisma.campaignDocument.findMany({ where: { campaignId: { in: [...dmsOf.keys()] } }, select: { campaignId: true, assetId: true } }),
+    prisma.campaignDocument.findMany({ where: { campaignId: { in: [...gmsOf.keys()] } }, select: { campaignId: true, assetId: true } }),
   ]);
   const linkedDocs = links.length === 0 ? [] : await prisma.asset.findMany({
-    where: { id: { in: [...new Set(links.map((link) => link.assetId))] }, type: 'DOCUMENT', uploadedById: { in: dmIds } },
+    where: { id: { in: [...new Set(links.map((link) => link.assetId))] }, type: 'DOCUMENT', uploadedById: { in: gmIds } },
     select,
   });
   const counts = new Map<string, Set<string>>();
   const count = (docId: string, campaignId: string) => counts.set(docId, (counts.get(docId) ?? new Set<string>()).add(campaignId));
   for (const doc of written) {
-    if (doc.campaignId && countsFor(doc, doc.campaignId, dmsOf.get(doc.campaignId) ?? new Set(), false)) count(doc.id, doc.campaignId);
+    if (doc.campaignId && countsFor(doc, doc.campaignId, gmsOf.get(doc.campaignId) ?? new Set(), false)) count(doc.id, doc.campaignId);
   }
   const byId = new Map(linkedDocs.map((doc) => [doc.id, doc]));
   for (const link of links) {
     const doc = byId.get(link.assetId);
-    if (doc && countsFor(doc, link.campaignId, dmsOf.get(link.campaignId) ?? new Set(), true)) count(doc.id, link.campaignId);
+    if (doc && countsFor(doc, link.campaignId, gmsOf.get(link.campaignId) ?? new Set(), true)) count(doc.id, link.campaignId);
   }
   if (counts.size === 0) return result;
 
   // Which campaign each candidate is of, and which of them those documents name.
   const pictures = await prisma.asset.findMany({
-    where: { id: { in: [...candidates] }, campaignId: { in: [...dmsOf.keys()] } },
+    where: { id: { in: [...candidates] }, campaignId: { in: [...gmsOf.keys()] } },
     select: { id: true, campaignId: true },
   });
   if (pictures.length === 0) return result;

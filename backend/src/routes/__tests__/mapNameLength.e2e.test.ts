@@ -18,27 +18,27 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'Map Name DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Map names' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  const user = await createTestUser({ displayName: 'Map Name GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Map names' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
 const create = (name: string) =>
-  dm.post(`/api/campaigns/${campaignId}/maps`).send({ name, imageUrl: randomUUID(), width: 10, height: 10 });
+  gm.post(`/api/campaigns/${campaignId}/maps`).send({ name, imageUrl: randomUUID(), width: 10, height: 10 });
 
 async function storedMap(name: string) {
   return prisma.map.create({
@@ -68,7 +68,7 @@ describe('PUT /maps/:id', () => {
   it('refuses a new name over 200 characters, and keeps the old one', async () => {
     const map = await storedMap('Cellar');
 
-    const res = await dm.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ name: 'n'.repeat(201) });
+    const res = await gm.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ name: 'n'.repeat(201) });
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('A map name can be at most 200 characters.');
@@ -80,7 +80,7 @@ describe('PUT /maps/:id', () => {
     const long = 'n'.repeat(300);
     const map = await storedMap(long);
 
-    const res = await dm.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ name: long, gridSize: 60 });
+    const res = await gm.put(`/api/campaigns/${campaignId}/maps/${map.id}`).send({ name: long, gridSize: 60 });
 
     expect(res.status).toBe(200);
     expect(res.body.map).toMatchObject({ name: long, gridSize: 60 });

@@ -105,7 +105,7 @@ export interface UVTTParseResult {
    * exporters crop the image to part of the map and write out the geometry for
    * all of it, which imports as a map with bare areas and walls that cannot do
    * anything, since sight is clipped to the map's own edges. Counting it lets
-   * the import say so before the DM is left wondering.
+   * the import say so before the GM is left wondering.
    *
    * A wall counts only when both of its ends are outside; one end over the line
    * is how a building meets the edge of its own picture.
@@ -149,7 +149,7 @@ function normalizeColor(raw: unknown, fallback: string): string {
 export interface UVTTParseOptions {
   /**
    * Bring in the walls belonging to objects. Off by default: they block sight
-   * like any other wall, but whether a table or a crate should is the DM's
+   * like any other wall, but whether a table or a crate should is the GM's
    * call, so the import asks rather than deciding.
    */
   includeObjectWalls?: boolean;
@@ -530,7 +530,7 @@ export function parseUVTT(
       if (typeof light?.range !== 'number' || light.range <= 0) continue;
 
       // UVTT files provide a single range — treat as dim (total) radius,
-      // bright is half that (matching D&D 5e torch pattern: 20ft bright / 40ft dim).
+      // bright is half that (matching 5E torch pattern: 20ft bright / 40ft dim).
       const dimR = light.range;
       // CozyVTT's own export carries the real bright radius and whether the
       // light was on. Files from other tools have neither.

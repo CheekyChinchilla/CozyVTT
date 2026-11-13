@@ -33,7 +33,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const statBlock = {
   ac: 15, hpMax: 7, speed: '30 ft.', abilities: { str: 8, dex: 14, con: 10, int: 10, wis: 8, cha: 8 },
-  actions: [{ name: 'Scimitar', description: 'Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) slashing damage.' }],
+  actions: [{ name: 'Handaxe', description: 'Melee Weapon Attack: +3 to hit, reach 5 ft., one target. Hit: 4 (1d6 + 1) slashing damage.' }],
   challengeRating: '1/4',
 };
 
@@ -66,14 +66,14 @@ async function archive(version: '1.4.0' | '1.5.0', map: Record<string, unknown>,
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-09-14T12:00:00.000Z', exportedFrom: `CozyVTT v${version}`, campaignName: 'The Sunken Crown',
-        gameSystem: 'DND_5E', mapCount: 1, tokenCount: (map.tokens as unknown[]).length, creatureCount: 1, tokenTemplateCount: 1,
+        gameSystem: 'FIFTH_EDITION', mapCount: 1, tokenCount: (map.tokens as unknown[]).length, creatureCount: 1, tokenTemplateCount: 1,
         assetCount: 2, includesAudio: version === '1.5.0', totalSizeBytes: PNG.length * 2,
       }, null, 2),
     },
     {
       name: 'campaign.json',
       data: JSON.stringify({
-        name: 'The Sunken Crown', description: 'A drowned crown.', gameSystem: 'DND_5E', vibeSettings, currentVibe: null,
+        name: 'The Sunken Crown', description: 'A drowned crown.', gameSystem: 'FIFTH_EDITION', vibeSettings, currentVibe: null,
         spiritLayerEnabled: true, spiritLayerStyle: 'wispy',
       }, null, 2),
     },
@@ -81,7 +81,7 @@ async function archive(version: '1.4.0' | '1.5.0', map: Record<string, unknown>,
     {
       name: 'creatures/creatures.json',
       data: JSON.stringify([{
-        name: 'Drowned Sailor', gameSystem: 'DND_5E', challengeRating: '1/4', creatureType: 'Medium undead', alignment: 'neutral evil',
+        name: 'Drowned Sailor', gameSystem: 'FIFTH_EDITION', challengeRating: '1/4', creatureType: 'Medium undead', alignment: 'neutral evil',
         imageAssetRef: GOBLIN_PICTURE, statBlock, size: { width: 1, height: 1 }, disposition: 'hostile', displayMode: 'pog',
       }]),
     },
@@ -196,6 +196,6 @@ describe('an archive exported by 1.5.0', () => {
       ['Orc', false, false, 12],
     ]);
     // Every campaign let players draw before the setting existed.
-    expect(campaign).toMatchObject({ spiritLayerEnabled: true, spiritLayerStyle: 'wispy', gameSystem: 'DND_5E', playersMayDraw: true });
+    expect(campaign).toMatchObject({ spiritLayerEnabled: true, spiritLayerStyle: 'wispy', gameSystem: 'FIFTH_EDITION', playersMayDraw: true });
   });
 });

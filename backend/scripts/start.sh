@@ -116,7 +116,9 @@ if ./node_modules/.bin/prisma migrate deploy; then
   echo "✅ Migrations completed successfully"
 else
   echo "❌ Error: Migration failed"
-  echo "   Run 'docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status' to diagnose"
+  echo "   The first failure above names the cause. To list the migrations while the backend restarts, run on the host:"
+  echo "   docker compose run --rm -u appuser --entrypoint ./node_modules/.bin/prisma backend migrate status"
+  echo "   How to recover: docs/DEPLOYMENT.md, 'The backend keeps restarting, and its log says Migration failed'"
   exit 1
 fi
 

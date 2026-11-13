@@ -48,7 +48,7 @@ afterAll(async () => {
 describe('a campaign whose map names its picture with a version', () => {
   it('is exported with the picture, and imported with the map naming its copy', async () => {
     const source = await createTestCampaign(userId, { name: 'Versioned' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
     const file = path.join(UPLOAD_DIR, `${randomUUID()}.png`);
     fs.writeFileSync(file, PNG);

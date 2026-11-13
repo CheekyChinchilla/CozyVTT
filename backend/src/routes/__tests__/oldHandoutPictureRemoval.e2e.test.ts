@@ -4,12 +4,12 @@
  *
  * What a document shows is kept as it is written. The plain text and
  * Markdown documents stored before that were kept are read for it a few at
- * a time, as the table plays, and the check that keeps a former DM from
+ * a time, as the table plays, and the check that keeps a former GM from
  * deleting a picture others use counted only those read so far. Just after
- * the upgrade, a former DM could delete with force a picture an older
- * handout of the new DM's still showed. Now the check reads the remaining
+ * the upgrade, a former GM could delete with force a picture an older
+ * handout of the new GM's still showed. Now the check reads the remaining
  * unread documents that could show it, up to MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL,
- * and refuses while any stay unread. The campaign's DM and an admin delete
+ * and refuses while any stay unread. The campaign's GM and an admin delete
  * as before, reading nothing.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -42,20 +42,20 @@ const startedIn = process.cwd();
 type Agent = ReturnType<typeof request.agent>;
 
 const UNREAD_REFUSAL = {
-  delete: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's DM can delete this asset. Try again later.",
-  move: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's DM can move this asset out of the campaign. Try again later.",
+  delete: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's GM can delete this asset. Try again later.",
+  move: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's GM can move this asset out of the campaign. Try again later.",
 };
-const USED_BY_OTHERS = "Others in the campaign use this asset, so only the campaign's DM can delete it";
+const USED_BY_OTHERS = "Others in the campaign use this asset, so only the campaign's GM can delete it";
 
 const userIds: string[] = [];
 const campaignIds: string[] = [];
 let campaignId = '';
 let otherCampaignId = '';
-let newDmsOtherCampaignId = '';
-const id = { newDm: '', formerDm: '', player: '', spectator: '', stranger: '', leaver: '' };
+let newGmsOtherCampaignId = '';
+const id = { newGm: '', formerGm: '', player: '', spectator: '', stranger: '', leaver: '' };
 let adminUser: Agent;
-let newDm: Agent;
-let formerDm: Agent;
+let newGm: Agent;
+let formerGm: Agent;
 let player: Agent;
 let spectator: Agent;
 let stranger: Agent;
@@ -66,12 +66,12 @@ async function login(email: string): Promise<Agent> {
   return agent;
 }
 
-/** A map picture the former DM uploaded into the campaign while they ran it. */
+/** A map picture the former GM uploaded into the campaign while they ran it. */
 async function picture(): Promise<{ id: string; address: string }> {
   const filename = `picture-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
   const asset = await prisma.asset.create({
     data: {
-      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: id.formerDm, filename, originalName: filename,
+      type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: id.formerGm, filename, originalName: filename,
       mimeType: 'image/png', fileSize: 1, filePath: path.join(DIR, filename), name: 'Old map',
     },
   });
@@ -80,7 +80,7 @@ async function picture(): Promise<{ id: string; address: string }> {
 
 /**
  * A Markdown document stored before what documents show was kept: a row and
- * a file, and nothing read from it. By default a handout the new DM keeps in
+ * a file, and nothing read from it. By default a handout the new GM keeps in
  * the campaign; `by` is another writer, `personal` puts it in their own
  * library and `inCampaign` in another campaign. `missingFile` leaves the
  * file out, so it cannot be read.
@@ -97,7 +97,7 @@ async function storedBefore(
       type: 'DOCUMENT',
       scope: options.personal ? 'USER' : 'CAMPAIGN',
       campaignId: options.personal ? null : options.inCampaign ?? campaignId,
-      uploadedById: options.by ?? id.newDm, filename, originalName: filename,
+      uploadedById: options.by ?? id.newGm, filename, originalName: filename,
       mimeType: 'text/markdown', fileSize: Buffer.byteLength(content), filePath, name: filename,
     },
   });
@@ -139,28 +139,28 @@ beforeAll(async () => {
   const [admin, n, f, p, s, x, l] = await Promise.all([
     make('admin', 'ADMIN'), make('newdm'), make('formerdm'), make('player'), make('spectator'), make('stranger'), make('leaver'),
   ]);
-  [id.newDm, id.formerDm, id.player, id.spectator, id.stranger, id.leaver] = [n.id, f.id, p.id, s.id, x.id, l.id];
+  [id.newGm, id.formerGm, id.player, id.spectator, id.stranger, id.leaver] = [n.id, f.id, p.id, s.id, x.id, l.id];
   userIds.push(admin.id, n.id, f.id, p.id, s.id, x.id, l.id);
 
-  campaignId = (await createTestCampaign(id.newDm, { name: `Handed over ${stamp}` })).id;
+  campaignId = (await createTestCampaign(id.newGm, { name: `Handed over ${stamp}` })).id;
   otherCampaignId = (await createTestCampaign(id.stranger, { name: `Next door ${stamp}` })).id;
-  newDmsOtherCampaignId = (await createTestCampaign(id.newDm, { name: `Their other table ${stamp}` })).id;
-  campaignIds.push(campaignId, otherCampaignId, newDmsOtherCampaignId);
-  // The seat has been handed over: the former DM now sits as a player.
+  newGmsOtherCampaignId = (await createTestCampaign(id.newGm, { name: `Their other table ${stamp}` })).id;
+  campaignIds.push(campaignId, otherCampaignId, newGmsOtherCampaignId);
+  // The seat has been handed over: the former GM now sits as a player.
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: id.newDm, campaignId, role: 'DM', characterIds: [] },
-      { userId: id.formerDm, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: id.newGm, campaignId, role: 'GM', characterIds: [] },
+      { userId: id.formerGm, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: id.player, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: id.spectator, campaignId, role: 'SPECTATOR', characterIds: [] },
-      { userId: id.stranger, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
-      { userId: id.newDm, campaignId: newDmsOtherCampaignId, role: 'DM', characterIds: [] },
+      { userId: id.stranger, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
+      { userId: id.newGm, campaignId: newGmsOtherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
 
   adminUser = await login(admin.email);
-  newDm = await login(n.email);
-  formerDm = await login(f.email);
+  newGm = await login(n.email);
+  formerGm = await login(f.email);
   player = await login(p.email);
   spectator = await login(s.email);
   stranger = await login(x.email);
@@ -180,15 +180,15 @@ afterAll(async () => {
   fs.rmSync(DIR, { recursive: true, force: true });
 });
 
-describe('a former DM, with an older handout of the new DM\'s showing their picture', () => {
+describe('a former GM, with an older handout of the new GM\'s showing their picture', () => {
   it('may not delete the picture, forced or not', async () => {
     const art = await picture();
     await storedBefore(`# The map they found\n\n![Map](${art.address})\n`);
 
-    const forced = await formerDm.delete(`/api/assets/${art.id}?force=true`);
+    const forced = await formerGm.delete(`/api/assets/${art.id}?force=true`);
     expect(forced.status).toBe(403);
     expect(forced.body.message).toBe(USED_BY_OTHERS);
-    expect((await formerDm.delete(`/api/assets/${art.id}`)).status).toBe(403);
+    expect((await formerGm.delete(`/api/assets/${art.id}`)).status).toBe(403);
     expect(await stillThere(art.id)).not.toBeNull();
   });
 
@@ -196,9 +196,9 @@ describe('a former DM, with an older handout of the new DM\'s showing their pict
     const art = await picture();
     await storedBefore(`![Map](${art.address})`);
 
-    const res = await formerDm.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+    const res = await formerGm.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
     expect(res.status).toBe(403);
-    expect(res.body.message).toBe("Others in the campaign use this asset, so only the campaign's DM can move it out of the campaign");
+    expect(res.body.message).toBe("Others in the campaign use this asset, so only the campaign's GM can move it out of the campaign");
     expect(await stillThere(art.id)).toEqual({ scope: 'CAMPAIGN', campaignId });
   });
 
@@ -206,7 +206,7 @@ describe('a former DM, with an older handout of the new DM\'s showing their pict
     const art = await picture();
     const doc = await storedBefore('# Notes\n\nNo pictures here.\n');
 
-    expect((await formerDm.delete(`/api/assets/${art.id}?force=true`)).status).toBe(200);
+    expect((await formerGm.delete(`/api/assets/${art.id}?force=true`)).status).toBe(200);
     expect(await stillThere(art.id)).toBeNull();
     const read = await prisma.asset.findUniqueOrThrow({ where: { id: doc.id }, select: { picturesReadAt: true } });
     expect(read.picturesReadAt).not.toBeNull();
@@ -216,10 +216,10 @@ describe('a former DM, with an older handout of the new DM\'s showing their pict
     const art = await picture();
     await storedBefore(`![Map](${art.address})`, { missingFile: true });
 
-    const deleted = await formerDm.delete(`/api/assets/${art.id}?force=true`);
+    const deleted = await formerGm.delete(`/api/assets/${art.id}?force=true`);
     expect(deleted.status).toBe(403);
     expect(deleted.body.message).toBe(UNREAD_REFUSAL.delete);
-    const moved = await formerDm.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+    const moved = await formerGm.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
     expect(moved.status).toBe(403);
     expect(moved.body.message).toBe(UNREAD_REFUSAL.move);
     expect(await stillThere(art.id)).toEqual({ scope: 'CAMPAIGN', campaignId });
@@ -232,24 +232,24 @@ describe('a former DM, with an older handout of the new DM\'s showing their pict
     const files = docs.map((doc) => doc.filePath);
 
     let first: request.Response | undefined;
-    const openedFirst = await filesOpenedBy(files, async () => { first = await formerDm.delete(`/api/assets/${art.id}?force=true`); });
+    const openedFirst = await filesOpenedBy(files, async () => { first = await formerGm.delete(`/api/assets/${art.id}?force=true`); });
     expect(first?.status).toBe(403);
     expect(first?.body.message).toBe(UNREAD_REFUSAL.delete);
     expect(openedFirst).toBe(MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL);
     expect(await stillThere(art.id)).not.toBeNull();
 
     // The next try reads what is left.
-    expect((await formerDm.delete(`/api/assets/${art.id}?force=true`)).status).toBe(200);
+    expect((await formerGm.delete(`/api/assets/${art.id}?force=true`)).status).toBe(200);
     expect(await prisma.asset.count({ where: { id: { in: docs.map((doc) => doc.id) }, picturesReadAt: null } })).toBe(0);
   });
 });
 
-describe('which older documents a former DM\'s delete reads', () => {
+describe('which older documents a former GM\'s delete reads', () => {
   it('reads a co-member\'s document in their own library, and is refused when it shows the picture', async () => {
     const art = await picture();
     const doc = await storedBefore(`![Map](${art.address})`, { personal: true });
 
-    const res = await formerDm.delete(`/api/assets/${art.id}?force=true`);
+    const res = await formerGm.delete(`/api/assets/${art.id}?force=true`);
     expect(res.status).toBe(403);
     expect(res.body.message).toBe(USED_BY_OTHERS);
     const read = await prisma.asset.findUniqueOrThrow({ where: { id: doc.id }, select: { picturesReadAt: true } });
@@ -258,9 +258,9 @@ describe('which older documents a former DM\'s delete reads', () => {
 
   it('reads a co-member\'s document in another campaign, and is refused when it shows the picture', async () => {
     const art = await picture();
-    await storedBefore(`![Map](${art.address})`, { inCampaign: newDmsOtherCampaignId });
+    await storedBefore(`![Map](${art.address})`, { inCampaign: newGmsOtherCampaignId });
 
-    const res = await formerDm.delete(`/api/assets/${art.id}?force=true`);
+    const res = await formerGm.delete(`/api/assets/${art.id}?force=true`);
     expect(res.status).toBe(403);
     expect(res.body.message).toBe(USED_BY_OTHERS);
   });
@@ -268,14 +268,14 @@ describe('which older documents a former DM\'s delete reads', () => {
   it('leaves alone an unreadable document of their own, of a former member and of someone outside the campaign', async () => {
     const art = await picture();
     const docs = [
-      await storedBefore(`![Map](${art.address})`, { missingFile: true, by: id.formerDm, personal: true }),
+      await storedBefore(`![Map](${art.address})`, { missingFile: true, by: id.formerGm, personal: true }),
       await storedBefore(`![Map](${art.address})`, { missingFile: true, by: id.leaver, personal: true }),
       await storedBefore(`![Map](${art.address})`, { missingFile: true, by: id.stranger, inCampaign: otherCampaignId }),
     ];
 
     let status = 0;
     const opened = await filesOpenedBy(docs.map((doc) => doc.filePath), async () => {
-      status = (await formerDm.delete(`/api/assets/${art.id}?force=true`)).status;
+      status = (await formerGm.delete(`/api/assets/${art.id}?force=true`)).status;
     });
     expect(status).toBe(200);
     expect(opened).toBe(0);
@@ -283,29 +283,29 @@ describe('which older documents a former DM\'s delete reads', () => {
   });
 });
 
-describe('the campaign\'s DM and an admin, with an older handout showing the picture', () => {
-  it('the DM deletes it with force as before, reading no document', async () => {
+describe('the campaign\'s GM and an admin, with an older handout showing the picture', () => {
+  it('the GM deletes it with force as before, reading no document', async () => {
     const art = await picture();
     const doc = await storedBefore(`![Map](${art.address})`);
 
     let status = 0;
-    const opened = await filesOpenedBy([doc.filePath], async () => { status = (await newDm.delete(`/api/assets/${art.id}?force=true`)).status; });
+    const opened = await filesOpenedBy([doc.filePath], async () => { status = (await newGm.delete(`/api/assets/${art.id}?force=true`)).status; });
     expect(status).toBe(200);
     expect(opened).toBe(0);
     expect(await stillThere(art.id)).toBeNull();
   });
 
-  it('the DM moves it to another campaign they run as before, reading no document', async () => {
+  it('the GM moves it to another campaign they run as before, reading no document', async () => {
     const art = await picture();
     const doc = await storedBefore(`![Map](${art.address})`);
 
     let status = 0;
     const opened = await filesOpenedBy([doc.filePath], async () => {
-      status = (await newDm.patch(`/api/assets/${art.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: newDmsOtherCampaignId })).status;
+      status = (await newGm.patch(`/api/assets/${art.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: newGmsOtherCampaignId })).status;
     });
     expect(status).toBe(200);
     expect(opened).toBe(0);
-    expect(await stillThere(art.id)).toEqual({ scope: 'CAMPAIGN', campaignId: newDmsOtherCampaignId });
+    expect(await stillThere(art.id)).toEqual({ scope: 'CAMPAIGN', campaignId: newGmsOtherCampaignId });
   });
 
   it('an admin deletes it with force as before, reading no document', async () => {

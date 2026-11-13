@@ -22,21 +22,21 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let characterId: string;
 let player: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
-  dmId = (await createTestUser({ displayName: 'Unassign DM' })).id;
+  gmId = (await createTestUser({ displayName: 'Unassign GM' })).id;
   const playerUser = await createTestUser({ displayName: 'Unassign Player' });
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Unassign' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Unassign' })).id;
   characterId = (await prisma.character.create({ data: { userId: playerId, campaignId, name: 'Aldra', gameSystem: null, data: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [characterId] },
     ],
   });
@@ -47,7 +47,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.character.deleteMany({ where: { id: characterId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 

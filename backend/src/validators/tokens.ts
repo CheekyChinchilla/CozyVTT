@@ -55,7 +55,7 @@ export const TokenHpSchema = z.object({
 /**
  * Conditions on a token.
  *
- * Free text rather than an enum: a DM may track something the rules do not name,
+ * Free text rather than an enum: a GM may track something the rules do not name,
  * and homebrew is not worth blocking. Bounded so the column cannot be used as
  * storage, and blanks dropped so an empty chip cannot appear on the map.
  */
@@ -113,7 +113,7 @@ const IdSchema = z.uuid();
  * square — instead of what arrived. The routes used to type-check a few
  * fields by hand and store the rest as sent: a player could keep any extra
  * keys beside a position's x and y and any value at all as a rotation, and a
- * DM's `visible: 'false'` was a truthy string that showed everyone a token
+ * GM's `visible: 'false'` was a truthy string that showed everyone a token
  * they believed hidden.
  */
 export type TokenShapes = {

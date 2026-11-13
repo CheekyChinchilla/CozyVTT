@@ -29,35 +29,35 @@ jest.setTimeout(20000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let watcherId: string;
 let campaignId: string;
 let otherCampaignId: string;
 let strangerCampaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 let watcherCookie: string;
 
 type Moved = { tokenId: string; x: number; y: number; dragging?: boolean };
 
 beforeAll(async () => {
-  const [dm, player, watcher] = await Promise.all(['dm', 'player', 'watcher'].map((name) =>
+  const [gm, player, watcher] = await Promise.all(['dm', 'player', 'watcher'].map((name) =>
     prisma.user.create({ data: { email: `carriergone-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Carrier ${name}` } })));
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
   watcherId = watcher.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Carrier gone ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Carrier gone ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
   otherCampaignId = (await prisma.campaign.create({ data: { name: `Carrier elsewhere ${runId}`, ownerId: playerId, vibeSettings: {} } })).id;
   // One the player is not in.
-  strangerCampaignId = (await prisma.campaign.create({ data: { name: `Carrier stranger ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  strangerCampaignId = (await prisma.campaign.create({ data: { name: `Carrier stranger ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: watcherId, campaignId, role: 'PLAYER', characterIds: [] },
-      { userId: playerId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: playerId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
   mapId = (await prisma.map.create({
@@ -69,7 +69,7 @@ beforeAll(async () => {
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie, watcherCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId), server.loginAs(watcherId)]);
+  [gmCookie, playerCookie, watcherCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId), server.loginAs(watcherId)]);
 });
 
 afterAll(async () => {
@@ -77,7 +77,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: { in: [campaignId, otherCampaignId, strangerCampaignId] } } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, watcherId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, watcherId] } } });
   await prisma.$disconnect();
 });
 
@@ -91,10 +91,10 @@ beforeEach(async () => {
 });
 
 it('sends the token back where it stands when its carrier disconnects', async () => {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
   const player = await server.connectAndAuth(playerCookie, campaignId);
 
-  const frame = waitForEvent<Moved>(dm, 'token.moved');
+  const frame = waitForEvent<Moved>(gm, 'token.moved');
   player.emit('token.move.start', { tokenId: 'hero', mapId });
   player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
   expect(await frame).toMatchObject({ tokenId: 'hero', x: 9, y: 9, dragging: true });
@@ -102,7 +102,7 @@ it('sends the token back where it stands when its carrier disconnects', async ()
   // Started by the disconnect, after any answer: a shutdown, and the end
   // of a test file, let it finish.
   const started = jest.spyOn(backgroundWork, 'inBackground');
-  const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  const back = waitForEvent<Moved>(gm, 'token.moved', 5000);
   player.disconnect();
 
   const moved = await back;
@@ -112,37 +112,37 @@ it('sends the token back where it stands when its carrier disconnects', async ()
   started.mockRestore();
 });
 
-// Removed by the DM, or leaving, mid-hold: the connection stays open but
+// Removed by the GM, or leaving, mid-hold: the connection stays open but
 // is no longer in the campaign, so its disconnect later sends nothing.
 it('sends the token back where it stands when its carrier is taken out of the campaign', async () => {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
   const player = await server.connectAndAuth(playerCookie, campaignId);
 
-  const frame = waitForEvent<Moved>(dm, 'token.moved');
+  const frame = waitForEvent<Moved>(gm, 'token.moved');
   player.emit('token.move.start', { tokenId: 'hero', mapId });
   player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
   expect(await frame).toMatchObject({ tokenId: 'hero', x: 9, y: 9, dragging: true });
 
-  const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  const back = waitForEvent<Moved>(gm, 'token.moved', 5000);
   await tellTableMemberLeft(playerId, campaignId, 'removed');
 
   const moved = await back;
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
   expect(moved.dragging).toBeFalsy();
   player.disconnect();
-  dm.disconnect();
+  gm.disconnect();
 });
 
 it('sends the token back where it stands when its carrier joins another campaign', async () => {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
   const player = await server.connectAndAuth(playerCookie, campaignId);
 
-  const frame = waitForEvent<Moved>(dm, 'token.moved');
+  const frame = waitForEvent<Moved>(gm, 'token.moved');
   player.emit('token.move.start', { tokenId: 'hero', mapId });
   player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
   await frame;
 
-  const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  const back = waitForEvent<Moved>(gm, 'token.moved', 5000);
   const joined = waitForEvent(player, 'authenticated');
   player.emit('authenticate', { campaignId: otherCampaignId });
   await joined;
@@ -151,30 +151,30 @@ it('sends the token back where it stands when its carrier joins another campaign
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
   expect(moved.dragging).toBeFalsy();
   player.disconnect();
-  dm.disconnect();
+  gm.disconnect();
 });
 
 // A join of a campaign the carrier is not in is refused, and the connection
 // leaves the campaign it was in: the table is told it left, and the token
 // goes back.
 it('sends the token back, and tells the table, when its carrier asks to join a campaign it is not in', async () => {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
   const player = await server.connectAndAuth(playerCookie, campaignId);
 
-  const frame = waitForEvent<Moved>(dm, 'token.moved');
+  const frame = waitForEvent<Moved>(gm, 'token.moved');
   player.emit('token.move.start', { tokenId: 'hero', mapId });
   player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
   await frame;
 
-  const back = waitForEvent<Moved>(dm, 'token.moved', 5000);
-  const left = waitForEvent<{ userId: string }>(dm, 'user.left', 5000);
+  const back = waitForEvent<Moved>(gm, 'token.moved', 5000);
+  const left = waitForEvent<{ userId: string }>(gm, 'user.left', 5000);
   const offline = new Promise<string[]>((resolve) => {
     const onPresence = (data: { onlineUserIds: string[] }) => {
       if (data.onlineUserIds.includes(playerId)) return;
-      dm.off('presence.state', onPresence);
+      gm.off('presence.state', onPresence);
       resolve(data.onlineUserIds);
     };
-    dm.on('presence.state', onPresence);
+    gm.on('presence.state', onPresence);
   });
   const revoked = waitForEvent<AccessRevoked>(player, 'campaign.access.revoked', 5000);
   player.emit('authenticate', { campaignId: strangerCampaignId });
@@ -183,7 +183,7 @@ it('sends the token back, and tells the table, when its carrier asks to join a c
     campaignId: strangerCampaignId, reason: 'not-member', message: 'You are not a member of this campaign.',
   });
   expect((await left).userId).toBe(playerId);
-  expect(await offline).toEqual([dmId]);
+  expect(await offline).toEqual([gmId]);
   const moved = await back;
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
   expect(moved.dragging).toBeFalsy();
@@ -194,14 +194,14 @@ it('sends the token back, and tells the table, when its carrier asks to join a c
   expect(socket?.campaignId).toBeUndefined();
   expect(socket?.role).toBeUndefined();
   player.disconnect();
-  dm.disconnect();
+  gm.disconnect();
 });
 
 // The carrier let go without putting it down (Esc), so its drag was never
-// closed; the DM then hid the token and moved it somewhere secret. The
+// closed; the GM then hid the token and moved it somewhere secret. The
 // release on the carrier's disconnect must not send that place to players.
-it('sends a token the DM has since hidden to no player', async () => {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
+it('sends a token the GM has since hidden to no player', async () => {
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
   const watcher = await server.connectAndAuth(watcherCookie, campaignId);
   const player = await server.connectAndAuth(playerCookie, campaignId);
 
@@ -213,10 +213,10 @@ it('sends a token the DM has since hidden to no player', async () => {
 
   const leaked: Moved[] = [];
   watcher.on('token.moved', (data: Moved) => leaked.push(data));
-  const toDm = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  const toGm = waitForEvent<Moved>(gm, 'token.moved', 5000);
   player.disconnect();
 
-  expect(await toDm).toMatchObject({ tokenId: 'hero', x: 15, y: 15 });
+  expect(await toGm).toMatchObject({ tokenId: 'hero', x: 15, y: 15 });
   await new Promise((resolve) => setTimeout(resolve, 500));
   expect(leaked).toEqual([]);
 });

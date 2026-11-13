@@ -1,5 +1,5 @@
 /**
- * The DM adds many walls to a map in one request.
+ * The GM adds many walls to a map in one request.
  *
  * Mapmaker's Save added each wall of the rooms painted as a request of its
  * own, each a locked rewrite of the map's walls and each counted against the
@@ -32,9 +32,9 @@ const users: string[] = [];
 const campaigns: string[] = [];
 let campaignId: string;
 let otherCampaignId: string;
-let dmId: string;
+let gmId: string;
 let playerId: string;
-let dm: request.Agent;
+let gm: request.Agent;
 let player: request.Agent;
 let spectator: request.Agent;
 let stranger: request.Agent;
@@ -67,7 +67,7 @@ const storedWalls = async (mapId: string) =>
   (await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true } })).wallSegments as Array<{ id: string; x1: number }>;
 const batchUrl = (mapId: string, campaign = campaignId) => `/api/campaigns/${campaign}/maps/${mapId}/walls/batch`;
 
-async function member(role: 'DM' | 'PLAYER' | 'SPECTATOR', campaign: string): Promise<{ id: string; agent: request.Agent }> {
+async function member(role: 'GM' | 'PLAYER' | 'SPECTATOR', campaign: string): Promise<{ id: string; agent: request.Agent }> {
   const user = await createTestUser({ displayName: `Batch ${role}` });
   users.push(user.id);
   await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign, role, characterIds: [] } });
@@ -79,23 +79,23 @@ async function member(role: 'DM' | 'PLAYER' | 'SPECTATOR', campaign: string): Pr
 beforeAll(async () => {
   const owner = await createTestUser({ displayName: 'Batch owner' });
   users.push(owner.id);
-  dmId = owner.id;
+  gmId = owner.id;
   campaignId = (await createTestCampaign(owner.id)).id;
   campaigns.push(campaignId);
-  await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: owner.email, password: TEST_PASSWORD })).status).toBe(200);
+  await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: owner.email, password: TEST_PASSWORD })).status).toBe(200);
 
   const p = await member('PLAYER', campaignId);
   playerId = p.id;
   player = p.agent;
   spectator = (await member('SPECTATOR', campaignId)).agent;
 
-  const otherOwner = await createTestUser({ displayName: 'Other DM' });
+  const otherOwner = await createTestUser({ displayName: 'Other GM' });
   users.push(otherOwner.id);
   otherCampaignId = (await createTestCampaign(otherOwner.id)).id;
   campaigns.push(otherCampaignId);
-  stranger = (await member('DM', otherCampaignId)).agent;
+  stranger = (await member('GM', otherCampaignId)).agent;
 
   server = await createWsTestServer();
 });
@@ -113,13 +113,13 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe('the DM', () => {
+describe('the GM', () => {
   it('adds every wall in one request, in order, giving an id to each that has none', async () => {
     const mapId = await newMap();
     const named = wall(100);
     const { id: _a, ...unnamed1 } = wall(110);
     const { id: _b, ...unnamed2 } = wall(120);
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [named, unnamed1, unnamed2] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [named, unnamed1, unnamed2] });
 
     expect(res.status).toBe(200);
     const body = res.body as BatchAnswer;
@@ -135,7 +135,7 @@ describe('the DM', () => {
   it('adds the walls after those the map holds already', async () => {
     const first = wall(50);
     const mapId = await newMap([first]);
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [wall(60), wall(70)] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [wall(60), wall(70)] });
     expect(res.status).toBe(200);
     expect((res.body as BatchAnswer).total).toBe(3);
     expect((await storedWalls(mapId)).map((w) => w.x1)).toEqual([50, 60, 70]);
@@ -146,7 +146,7 @@ describe('the DM', () => {
     const mapId = await newMap([onMap]);
     const kept1 = wall(60);
     const kept2 = wall(70);
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [kept1, outside(), wall(80, onMap.id), kept2] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [kept1, outside(), wall(80, onMap.id), kept2] });
 
     expect(res.status).toBe(200);
     const body = res.body as BatchAnswer;
@@ -162,7 +162,7 @@ describe('the DM', () => {
   it('skips a wall whose id an earlier wall in the same request took', async () => {
     const mapId = await newMap();
     const id = randomUUID();
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [wall(60, id), wall(70, id)] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [wall(60, id), wall(70, id)] });
     expect(res.status).toBe(200);
     const body = res.body as BatchAnswer;
     expect(body.added.map((w) => w.x1)).toEqual([60]);
@@ -172,7 +172,7 @@ describe('the DM', () => {
 
   it('counts the walls added earlier in the request against the map\'s cap', async () => {
     const mapId = await newMap(Array.from({ length: MAX_WALL_SEGMENTS - 2 }, () => wall()));
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [wall(60), wall(70), wall(80), wall(90)] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [wall(60), wall(70), wall(80), wall(90)] });
     expect(res.status).toBe(200);
     const body = res.body as BatchAnswer;
     expect(body.added.map((w) => w.x1)).toEqual([60, 70]);
@@ -189,7 +189,7 @@ describe('the DM', () => {
   it('answers 200 with nothing added when every wall is skipped', async () => {
     const onMap = wall(50);
     const mapId = await newMap([onMap]);
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [outside(), wall(60, onMap.id)] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [outside(), wall(60, onMap.id)] });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       added: [],
@@ -201,7 +201,7 @@ describe('the DM', () => {
 
   it('answers 200 with nothing added for an empty list', async () => {
     const mapId = await newMap();
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [] });
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ added: [], skipped: [], total: 0 });
   });
@@ -215,7 +215,7 @@ describe('a request that is not a list of walls', () => {
     ['a wall that is not an object', { segments: [7] }],
   ])('is refused with 400: %s', async (_what, body) => {
     const mapId = await newMap();
-    const res = await dm.post(batchUrl(mapId)).send(body);
+    const res = await gm.post(batchUrl(mapId)).send(body);
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Validation Error');
     expect(await storedWalls(mapId)).toEqual([]);
@@ -224,7 +224,7 @@ describe('a request that is not a list of walls', () => {
   it('is refused with 400 when it holds more walls than a map can', async () => {
     const mapId = await newMap();
     const segments = Array.from({ length: MAX_WALL_SEGMENTS + 1 }, () => ({ x1: 0, y1: 0, x2: 10, y2: 0, type: 'wall' }));
-    const res = await dm.post(batchUrl(mapId)).send({ segments });
+    const res = await gm.post(batchUrl(mapId)).send({ segments });
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'Validation Error', message: TOO_MANY_WALLS_MESSAGE });
     expect(await storedWalls(mapId)).toEqual([]);
@@ -232,17 +232,17 @@ describe('a request that is not a list of walls', () => {
 
   it('names the wall that is not one', async () => {
     const mapId = await newMap();
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [wall(), { ...wall(), type: 'lava' }] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [wall(), { ...wall(), type: 'lava' }] });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/^Wall 1: /);
   });
 });
 
-describe('anyone but the DM', () => {
+describe('anyone but the GM', () => {
   it.each([
     ['a player', () => player, 403],
     ['a spectator', () => spectator, 403],
-    ['the DM of another campaign', () => stranger, 403],
+    ['the GM of another campaign', () => stranger, 403],
     ['someone not signed in', () => request(app), 401],
   ])('is refused: %s', async (_who, agent, status) => {
     const mapId = await newMap();
@@ -253,7 +253,7 @@ describe('anyone but the DM', () => {
 
   it('cannot reach a map of another campaign through their own', async () => {
     const mapId = await newMap([], otherCampaignId);
-    const res = await dm.post(batchUrl(mapId)).send({ segments: [wall()] });
+    const res = await gm.post(batchUrl(mapId)).send({ segments: [wall()] });
     expect(res.status).toBe(404);
     expect(await storedWalls(mapId)).toEqual([]);
   });
@@ -265,26 +265,26 @@ describe('open pages', () => {
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
     const resend = jest.spyOn(shared, 'resendSightAfterChange');
     const playerPage = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
-    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const gmPage = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     try {
       let heard = 0;
       playerPage.on('walls:replaced', () => { heard += 1; });
       const noSingles = expectNoEvent(playerPage, 'wall:added', 800);
       const toPlayer = waitForEvent<{ mapId: string; segments: Array<{ type: string }> }>(playerPage, 'walls:replaced');
-      const toDm = waitForEvent<{ mapId: string; segments: Array<{ type: string }> }>(dmPage, 'walls:replaced');
+      const toGm = waitForEvent<{ mapId: string; segments: Array<{ type: string }> }>(gmPage, 'walls:replaced');
       const door = { ...wall(70), type: 'door-locked' };
-      const res = await dm.post(batchUrl(mapId)).send({ segments: [wall(60), door, outside()] });
+      const res = await gm.post(batchUrl(mapId)).send({ segments: [wall(60), door, outside()] });
       expect(res.status).toBe(200);
 
       expect((await toPlayer)).toMatchObject({ mapId, segments: [{ type: 'wall' }, { type: 'door-closed' }] });
-      expect((await toDm).segments.map((w) => w.type)).toEqual(['wall', 'door-locked']);
+      expect((await toGm).segments.map((w) => w.type)).toEqual(['wall', 'door-locked']);
       await noSingles;
       expect(heard).toBe(1);
       expect(resend).toHaveBeenCalledTimes(1);
       expect(resend).toHaveBeenCalledWith(expect.anything(), campaignId, mapId);
     } finally {
       playerPage.disconnect();
-      dmPage.disconnect();
+      gmPage.disconnect();
       await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
     }
   });
@@ -293,16 +293,16 @@ describe('open pages', () => {
     const mapId = await newMap();
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
     const resend = jest.spyOn(shared, 'resendSightAfterChange');
-    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const gmPage = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     try {
-      const quiet = expectNoEvent(dmPage, 'walls:replaced', 800);
-      const res = await dm.post(batchUrl(mapId)).send({ segments: [outside()] });
+      const quiet = expectNoEvent(gmPage, 'walls:replaced', 800);
+      const res = await gm.post(batchUrl(mapId)).send({ segments: [outside()] });
       expect(res.status).toBe(200);
       expect((res.body as BatchAnswer).added).toEqual([]);
       await quiet;
       expect(resend).not.toHaveBeenCalled();
     } finally {
-      dmPage.disconnect();
+      gmPage.disconnect();
       await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
     }
   });
@@ -332,7 +332,7 @@ async function batchWhileMapChanges(mapId: string, segments: unknown[], change: 
     await tx.map.update({ where: { id: mapId }, data: change });
   });
   await holding;
-  const answer = dm.post(batchUrl(mapId)).send({ segments }).then((r) => r);
+  const answer = gm.post(batchUrl(mapId)).send({ segments }).then((r) => r);
   await writeWaitingForLock(mapId);
   release();
   await holder;
@@ -374,7 +374,7 @@ describe('a map deleted while the request waits for its lock', () => {
   it('is answered as not there, with nothing sent to open pages', async () => {
     const mapId = await newMap();
     const resend = jest.spyOn(shared, 'resendSightAfterChange');
-    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const gmPage = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     try {
       let release!: () => void;
       const gate = new Promise<void>((resolve) => { release = resolve; });
@@ -386,8 +386,8 @@ describe('a map deleted while the request waits for its lock', () => {
         await tx.map.delete({ where: { id: mapId } });
       });
       await holding;
-      const quiet = expectNoEvent(dmPage, 'walls:replaced', 800);
-      const answer = dm.post(batchUrl(mapId)).send({ segments: [wall()] }).then((r) => r);
+      const quiet = expectNoEvent(gmPage, 'walls:replaced', 800);
+      const answer = gm.post(batchUrl(mapId)).send({ segments: [wall()] }).then((r) => r);
       await writeWaitingForLock(mapId);
       release();
       await holder;
@@ -397,7 +397,7 @@ describe('a map deleted while the request waits for its lock', () => {
       await quiet;
       expect(resend).not.toHaveBeenCalled();
     } finally {
-      dmPage.disconnect();
+      gmPage.disconnect();
     }
   });
 });

@@ -1,5 +1,5 @@
 // ============================================
-// Campaign documents: rulebooks and handouts a DM shares with one table.
+// Campaign documents: rulebooks and handouts a GM shares with one table.
 //
 // Moved out of routes/campaigns.ts, which had grown to 38 endpoints. Mounted
 // under /api/campaigns beside it; the paths are exactly what they were.
@@ -7,7 +7,7 @@
 
 import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/rbac';
-import { campaignMember, campaignDM } from '../middleware/compose';
+import { campaignMember, campaignGM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canReadAsset, mayChangeAsset } from '../services/permissions';
 import { LinkDocumentSchema } from '../validators/campaignDocuments';
@@ -69,7 +69,7 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
         ...link.asset,
         linkedAt: link.createdAt,
         linkedBy: link.linkedBy,
-        // Shared in from elsewhere: the DM can stop sharing it.
+        // Shared in from elsewhere: the GM can stop sharing it.
         shared: true,
       })),
       ...own
@@ -100,18 +100,18 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
 
 /**
  * POST /api/campaigns/:campaignId/documents
- * Share a document with this campaign. Requires: Campaign DM role
+ * Share a document with this campaign. Requires: Campaign GM role
  *
- * Two checks. The DM must be able to read the asset, or linking would be a way
+ * Two checks. The GM must be able to read the asset, or linking would be a way
  * to grant a whole table access to a stranger's private file from nothing but
- * its id. And reading is not enough: the document must be the DM's own, or
+ * its id. And reading is not enough: the document must be the GM's own, or
  * global. A document shared into a campaign is readable by its members, and a
  * member who runs another campaign could otherwise pass it on to a table the
  * uploader never chose. That holds for an admin too: an admin can read every
  * file, so an admin who runs a table could otherwise hand anyone's private
  * document to it.
  */
-router.post('/:campaignId/documents', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:campaignId/documents', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const parsed = LinkDocumentSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -164,11 +164,11 @@ router.post('/:campaignId/documents', campaignDM, async (req: AuthenticatedReque
 
 /**
  * DELETE /api/campaigns/:campaignId/documents/:assetId
- * Stop sharing a document with this campaign. Requires: Campaign DM role
+ * Stop sharing a document with this campaign. Requires: Campaign GM role
  *
  * The document itself is untouched; only the link goes.
  */
-router.delete('/:campaignId/documents/:assetId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:campaignId/documents/:assetId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { count } = await prisma.campaignDocument.deleteMany({
       where: { campaignId: req.params.campaignId, assetId: req.params.assetId },

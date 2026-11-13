@@ -5,11 +5,11 @@
  * clever. Players type whatever they like into a comma-separated box, and real
  * lists look like:
  *
- *   NakuDama-Amphibious, NakuDama-Prehensile Tongue, NakuDama-Frog Leap,
+ *   MarshKin-Amphibious, MarshKin-Prehensile Tongue, MarshKin-Frog Leap,
  *   Aspiring Shadow Warrior
  *
  * Any rule that split a name on a hyphen or a colon to invent a description
- * would turn "NakuDama-Amphibious" into "NakuDama" described as "Amphibious",
+ * would turn "MarshKin-Amphibious" into "MarshKin" described as "Amphibious",
  * and would do it to thousands of sheets at once. So the rule is that a typed
  * string becomes the name, whole, and nothing else. These tests exist mostly to
  * hold that line.
@@ -39,11 +39,11 @@ describe('readFeatureEntriesForEditing', () => {
   it('keeps blank rows alongside real ones, in order', () => {
     expect(
       readFeatureEntriesForEditing([
-        { name: 'NakuDama-Amphibious', description: '' },
+        { name: 'MarshKin-Amphibious', description: '' },
         { name: '', description: '' },
       ])
     ).toEqual([
-      { name: 'NakuDama-Amphibious', description: '' },
+      { name: 'MarshKin-Amphibious', description: '' },
       { name: '', description: '' },
     ]);
   });
@@ -93,17 +93,17 @@ describe('parity with the frontend copy', () => {
 
 describe('a real player list survives untouched', () => {
   const typed = [
-    'NakuDama-Amphibious',
-    'NakuDama-Prehensile Tongue',
-    'NakuDama-Frog Leap',
+    'MarshKin-Amphibious',
+    'MarshKin-Prehensile Tongue',
+    'MarshKin-Frog Leap',
     'Aspiring Shadow Warrior',
   ];
 
   it('keeps each entry whole, in order, with no description invented', () => {
     expect(readFeatureEntries(typed)).toEqual([
-      { name: 'NakuDama-Amphibious', description: '' },
-      { name: 'NakuDama-Prehensile Tongue', description: '' },
-      { name: 'NakuDama-Frog Leap', description: '' },
+      { name: 'MarshKin-Amphibious', description: '' },
+      { name: 'MarshKin-Prehensile Tongue', description: '' },
+      { name: 'MarshKin-Frog Leap', description: '' },
       { name: 'Aspiring Shadow Warrior', description: '' },
     ]);
   });
@@ -120,7 +120,7 @@ describe('a real player list survives untouched', () => {
 
 describe('names that would tempt a parser', () => {
   it.each([
-    'NakuDama-Amphibious',
+    'MarshKin-Amphibious',
     'Fighting Style: Defense',
     'Eldritch Invocations — Agonizing Blast',
     'Rage (2/day)',
@@ -294,10 +294,10 @@ describe('mergeFeatureEntries', () => {
 describe('collectSheetFeatures', () => {
   it('reads a sheet that only ever used the editor', () => {
     const sheet = {
-      featuresAndTraits: ['NakuDama-Amphibious', 'Aspiring Shadow Warrior'],
+      featuresAndTraits: ['MarshKin-Amphibious', 'Aspiring Shadow Warrior'],
     };
     expect(collectSheetFeatures(sheet).map((f) => f.name)).toEqual([
-      'NakuDama-Amphibious',
+      'MarshKin-Amphibious',
       'Aspiring Shadow Warrior',
     ]);
   });
@@ -319,11 +319,11 @@ describe('collectSheetFeatures', () => {
     // A character built from the Fighter template and then edited: the typed
     // list is the only thing that has ever been visible, so it stays first.
     const sheet = {
-      featuresAndTraits: ['NakuDama-Frog Leap'],
+      featuresAndTraits: ['MarshKin-Frog Leap'],
       features: [{ name: 'Second Wind', description: 'Regain 1d10.' }],
     };
     expect(collectSheetFeatures(sheet).map((f) => f.name)).toEqual([
-      'NakuDama-Frog Leap',
+      'MarshKin-Frog Leap',
       'Second Wind',
     ]);
   });
@@ -369,7 +369,7 @@ describe('alreadyMigrated', () => {
   });
 
   it('is false for the string form', () => {
-    expect(alreadyMigrated({ featuresAndTraits: ['NakuDama-Amphibious'] })).toBe(false);
+    expect(alreadyMigrated({ featuresAndTraits: ['MarshKin-Amphibious'] })).toBe(false);
   });
 
   it('is false for a sheet that has neither field, so it gets normalised once', () => {
@@ -380,7 +380,7 @@ describe('alreadyMigrated', () => {
 describe('the conversion is idempotent', () => {
   it('reading its own output changes nothing', () => {
     const once = collectSheetFeatures({
-      featuresAndTraits: ['NakuDama-Amphibious', 'Aspiring Shadow Warrior'],
+      featuresAndTraits: ['MarshKin-Amphibious', 'Aspiring Shadow Warrior'],
       features: [{ name: 'Second Wind', description: 'Regain 1d10.' }],
     });
     const twice = collectSheetFeatures({ featuresAndTraits: once });

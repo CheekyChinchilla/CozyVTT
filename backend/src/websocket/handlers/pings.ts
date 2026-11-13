@@ -52,12 +52,12 @@ export function registerPingHandlers(io: Server, socket: AuthenticatedSocket): v
 
       // A map of this campaign the sender may read, as every other map event
       // checks: a ping naming another campaign's map, or a player's on a map
-      // the DM is preparing, is dropped like one over the limit.
+      // the GM is preparing, is dropped like one over the limit.
       const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, campaign: { select: { currentMapId: true } } } });
       if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
       // The sender included, so they see their own ping as well; a ping on
-      // a map the DM is preparing reaches only the DM.
+      // a map the GM is preparing reaches only the GM.
       await emitToMapReaders(io, socket.campaignId, mapId, 'map.pinged', {
         mapId,
         x,

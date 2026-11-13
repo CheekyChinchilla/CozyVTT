@@ -6,8 +6,9 @@
  * displays. The transforms live in utils/sheetFieldMigrations, which the
  * character routes also apply to each sheet they are sent; this script applies
  * them to every sheet at once, so they read correctly without being saved
- * first. Pathfinder 2e strikes and class features need it, since the view does
- * not read the old fields.
+ * first. Fantasy d20 strikes and class features need it, since the view does
+ * not read the old fields. A Horror d100 sheet in the shape before 1.7.0 is
+ * converted to the rebuilt sheet, as the server converts it when it starts.
  *
  *   node dist/scripts/migrate-sheet-fields.js --dry-run    # report, change nothing
  *   node dist/scripts/migrate-sheet-fields.js              # apply
@@ -27,11 +28,12 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { createPrismaClient } from '../config/prismaClient';
 import {
   isSheet,
-  migrateDnD5e,
-  migratePathfinder2e,
-  migrateCallOfCthulhu,
+  migrateFifthEdition,
+  migrateFantasyD20,
+  migrateHorrorD100,
   type Sheet,
 } from '../utils/sheetFieldMigrations';
+import { convertHorrorD100Sheet } from '../legacy/horrorD100Sheet';
 
 interface Change {
   id: string;
@@ -57,14 +59,24 @@ function migrateSheet(gameSystem: string | null, data: unknown): { next: Sheet; 
   if (!isSheet(data)) return null;
   const notes: string[] = [];
   switch (gameSystem) {
-    case 'DND_5E':
-      return { next: migrateDnD5e(data, notes), notes };
-    case 'PATHFINDER_2E':
-      return { next: migratePathfinder2e(data, notes), notes };
-    case 'CALL_OF_CTHULHU_7E':
-      return { next: migrateCallOfCthulhu(data, notes), notes };
+    case 'FIFTH_EDITION':
+      return { next: migrateFifthEdition(data, notes), notes };
+    case 'FANTASY_D20':
+      return { next: migrateFantasyD20(data, notes), notes };
+    case 'HORROR_D100': {
+      // A sheet in the shape before 1.7.0 is converted to the rebuilt one, as
+      // the server converts it when it starts; what it could not place is
+      // listed, and kept in the sheet's conversion record.
+      const { sheet, kept } = convertHorrorD100Sheet(data, new Date());
+      if (sheet !== data && isSheet(sheet)) {
+        notes.push('converted to the rebuilt Horror d100 sheet', ...kept.map((item) => `kept ${item}`));
+        return { next: sheet, notes };
+      }
+      return { next: migrateHorrorD100(data, notes), notes };
+    }
     default:
-      // Flexible sheets have no fixed shape, and Shadowrun is not implemented.
+      // Flexible sheets have no fixed shape, and a system CozyVTT no longer
+      // supports has no older shape to move from.
       return null;
   }
 }

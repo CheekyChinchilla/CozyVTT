@@ -88,7 +88,7 @@ export const CoordinateSchema = z
 /**
  * How far outside a map its walls and lights may reach, in its own grid
  * squares: as far as the largest map is wide. Generous on purpose. A
- * Universal VTT export can carry walls well past its picture, and a DM can
+ * Universal VTT export can carry walls well past its picture, and a GM can
  * draw past the edge; this only refuses geometry nowhere near the map.
  */
 export const GEOMETRY_MARGIN_SQUARES = MAP_LIMITS.maxSide;
@@ -134,7 +134,7 @@ const lightKey = (l: LightLike) => `${l.id}|${l.x}|${l.y}`;
 /**
  * The first wall that lies outside the map's region, or undefined. A wall
  * that is already stored, unchanged, is let through: one put there before
- * this bound existed must not stop the DM saving the rest of the list.
+ * this bound existed must not stop the GM saving the rest of the list.
  */
 export function wallOutsideMap(walls: WallLike[], map: MapExtent, stored: unknown = []): WallLike | undefined {
   const region = geometryRegion(map);

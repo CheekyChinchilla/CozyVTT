@@ -64,7 +64,7 @@ beforeAll(async () => {
     createTestUser({ email: `revoke-admin-${stamp}@test.cozyvtt.local`, displayName: 'Acting Admin', role: 'ADMIN' }),
     createTestUser({ email: `revoke-target-${stamp}@test.cozyvtt.local`, displayName: 'Target Admin', role: 'ADMIN' }),
     createTestUser({ email: `revoke-doomed-${stamp}@test.cozyvtt.local`, displayName: 'Doomed User' }),
-    createTestUser({ email: `revoke-keeper-${stamp}@test.cozyvtt.local`, displayName: 'Keeper' }),
+    createTestUser({ email: `revoke-kept-${stamp}@test.cozyvtt.local`, displayName: 'Still Signed In' }),
   ]);
   actingAdminId = a.id;
   targetId = t.id;

@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * The limits on what a creature, token template or stat block says in words:
  * names, the stat block's text fields and its lists of traits and actions;
@@ -9,7 +12,7 @@
  * frontend/src/constants/statBlockLimits.ts, and a test keeps the two copies
  * identical, so a form never allows what the server refuses.
  */
-import { MAX_ABILITY_SCORE, MIN_ABILITY_SCORE } from '../utils/rules/dnd5e';
+import { MAX_ABILITY_SCORE, MIN_ABILITY_SCORE } from '../utils/rules/fifthEdition';
 
 export const STAT_BLOCK_LIMITS = {
   /** The longest name a creature or token template may have. */
@@ -36,9 +39,9 @@ export const STAT_BLOCK_LIMITS = {
   maxNotesLength: 5000,
   /**
    * The lowest and highest total a save or skill may hold. Wide, because every
-   * system shares them: Pathfinder 2e's pass +33 at high level, so a bound
-   * fitted to D&D 5e would refuse real creatures. A backstop, not a rules check.
-   * A Call of Cthulhu creature's skills have their own highest, below.
+   * system shares them: Fantasy d20's pass +33 at high level, so a bound
+   * fitted to 5E would refuse real creatures. A backstop, not a rules check.
+   * A Horror d100 creature's skills have their own highest, below.
    */
   minBonus: -50,
   maxBonus: 50,
@@ -47,19 +50,19 @@ export const STAT_BLOCK_LIMITS = {
   /** The longest name of a save or skill. */
   maxBonusKeyLength: 50,
   /**
-   * The highest characteristic a Call of Cthulhu creature may hold in one of
-   * the six score slots. An investigator's run to 99 and creatures go far
-   * past that: checked against the Call of Cthulhu core rulebook, its largest
-   * creature can roll STR 5,000 and SIZ 5,500, and its gods have CON 2,000.
-   * Four digits hold every one of them. A backstop, not a rules check.
+   * The highest characteristic a Horror d100 creature may hold in one of
+   * the six score slots. A character's seldom pass 21, and the largest
+   * creatures of the open d100 rules reach the low hundreds in STR, SIZ or
+   * CON. Three digits hold every one of them, as they hold a character's on
+   * its sheet. A backstop, not a rules check.
    */
-  maxCallOfCthulhuCharacteristic: 9999,
+  maxHorrorD100Characteristic: 999,
   /**
-   * The highest skill a Call of Cthulhu creature may hold. Skills are
-   * percentages; the rulebook's creatures reach 100%, and nothing in the rules
-   * stops one going higher, so three digits.
+   * The highest skill a Horror d100 creature may hold. Skills are
+   * percentages; a creature's can reach 100%, and nothing in the rules stops
+   * one going higher, so three digits.
    */
-  maxCallOfCthulhuSkill: 999,
+  maxHorrorD100Skill: 999,
 } as const;
 
 /** The lowest and highest score and skill a stat block may hold. */
@@ -72,17 +75,17 @@ export interface StatBlockNumberBounds {
 
 /**
  * The bounds on a stat block's six scores and its skills, by the game system
- * the stat block names. A Call of Cthulhu creature keeps its characteristics in
+ * the stat block names. A Horror d100 creature keeps its characteristics in
  * the score slots and its skills as percentages, so its bounds are wider. Every
- * other system, and a stat block that names none, keeps D&D 5e's scores and the
+ * other system, and a stat block that names none, keeps 5E's scores and the
  * skill bound every system shares.
  */
 export function statBlockNumberBounds(gameSystem: string | null | undefined): StatBlockNumberBounds {
-  const callOfCthulhu = gameSystem === 'CALL_OF_CTHULHU_7E';
+  const horrorD100 = gameSystem === 'HORROR_D100';
   return {
     minScore: MIN_ABILITY_SCORE,
-    maxScore: callOfCthulhu ? STAT_BLOCK_LIMITS.maxCallOfCthulhuCharacteristic : MAX_ABILITY_SCORE,
+    maxScore: horrorD100 ? STAT_BLOCK_LIMITS.maxHorrorD100Characteristic : MAX_ABILITY_SCORE,
     minSkill: STAT_BLOCK_LIMITS.minBonus,
-    maxSkill: callOfCthulhu ? STAT_BLOCK_LIMITS.maxCallOfCthulhuSkill : STAT_BLOCK_LIMITS.maxBonus,
+    maxSkill: horrorD100 ? STAT_BLOCK_LIMITS.maxHorrorD100Skill : STAT_BLOCK_LIMITS.maxBonus,
   };
 }

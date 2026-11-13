@@ -23,11 +23,11 @@ jest.setTimeout(30000);
 const runId = randomUUID().slice(0, 8);
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 type StateEvent = { mapId: string; userId: string; cells: number[] };
@@ -42,18 +42,18 @@ async function remembered(): Promise<number[]> {
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: `explorewrites-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Explore ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Explore writes ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Explore writes ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -66,7 +66,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
@@ -74,7 +74,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -154,9 +154,9 @@ describe('exploration:reveal', () => {
     player.disconnect();
   });
 
-  it('forgets reports still waiting to be written when the DM resets the map', async () => {
+  it('forgets reports still waiting to be written when the GM resets the map', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     player.emit('exploration:reveal', { mapId, cells: [7] });
     await sleep(200);
     player.emit('exploration:reveal', { mapId, cells: [8] });
@@ -164,11 +164,11 @@ describe('exploration:reveal', () => {
     // report that reaches the server after the reset is written, as it should
     // be: the player saw those cells after it.)
     await sleep(150);
-    dm.emit('exploration:reset', { mapId });
+    gm.emit('exploration:reset', { mapId });
     await sleep(1600);
 
     expect(await remembered()).toEqual([]);
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 });

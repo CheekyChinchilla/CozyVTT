@@ -18,7 +18,7 @@ import { bestEffort, campaignSockets } from '../utils';
 
 export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
-   * SPIRIT_LAYER.TOGGLE - DM toggles spirit layer visibility for the campaign.
+   * SPIRIT_LAYER.TOGGLE - GM toggles spirit layer visibility for the campaign.
    */
   socket.on('spirit_layer.toggle', async (data: { visible: boolean }) => {
     try {
@@ -28,9 +28,9 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       }
       if (!withinCeiling(socket, 'spirit_layer.toggle')) return;
 
-      // DM only
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only the DM can toggle the spirit layer' });
+      // GM only
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only the GM can toggle the spirit layer' });
         return;
       }
 
@@ -89,14 +89,14 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
   });
 
   /**
-   * SPIRIT_LAYER.STYLE_CHANGE - DM changes the realm atmosphere style.
+   * SPIRIT_LAYER.STYLE_CHANGE - GM changes the realm atmosphere style.
    * No DB write here — the REST API already persisted it.
    */
   socket.on('spirit_layer.style_change', (data: { style: string }) => {
     if (!socket.campaignId) return;
     if (!withinCeiling(socket, 'spirit_layer.style_change')) return;
-    if (socket.role !== 'DM') {
-      socket.emit('error', { message: 'Only DMs can change spirit layer style' });
+    if (socket.role !== 'GM') {
+      socket.emit('error', { message: 'Only GMs can change spirit layer style' });
       return;
     }
     // Same allowlist as the REST write path: a named look or custom:#RRGGBB.
@@ -109,7 +109,7 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
   });
 
   /**
-   * SPIRIT_LAYER.TOKEN.TOGGLE - DM toggles visibility of a specific token.
+   * SPIRIT_LAYER.TOKEN.TOGGLE - GM toggles visibility of a specific token.
    * Role-filtered broadcast.
    */
   socket.on('spirit_layer.token.toggle', async (data: { mapId: string; tokenId: string; visible: boolean }) => {
@@ -120,9 +120,9 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       }
       if (!withinCeiling(socket, 'spirit_layer.token.toggle')) return;
 
-      // DM only
-      if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only the DM can toggle token visibility' });
+      // GM only
+      if (socket.role !== 'GM') {
+        socket.emit('error', { message: 'Only the GM can toggle token visibility' });
         return;
       }
 
@@ -163,18 +163,18 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         return;
       }
 
-      // The DM's own clients get the toggle with the token. Then everyone,
-      // the DM included, gets the map again as they may see it: a player is
+      // The GM's own clients get the toggle with the token. Then everyone,
+      // the GM included, gets the map again as they may see it: a player is
       // sent the token only if the map fetch would send it (visible, on
-      // their plane, in their sight on a lit map), and never with the DM's
+      // their plane, in their sight on a lit map), and never with the GM's
       // notes. This used to hand every player the whole token.
       const toggled = { mapId, tokenId, visible, token, toggledBy: socket.userId, timestamp: new Date().toISOString() };
       const campaignId = socket.campaignId;
       // The token is saved by now: a failure to tell the table is logged,
-      // not reported to the DM as a failed toggle.
+      // not reported to the GM as a failed toggle.
       await bestEffort('spirit_layer.token.toggle re-send', async () => {
         for (const s of await campaignSockets(io, campaignId)) {
-          if ((s as unknown as AuthenticatedSocket).role === 'DM') s.emit('spirit_layer.token.toggled', toggled);
+          if ((s as unknown as AuthenticatedSocket).role === 'GM') s.emit('spirit_layer.token.toggled', toggled);
         }
         // Only when this is the map the table is on: map.changed puts every
         // client onto the map it carries.

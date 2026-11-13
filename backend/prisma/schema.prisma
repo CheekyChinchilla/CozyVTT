@@ -30,7 +30,7 @@ enum CampaignStatus {
 }
 
 enum CampaignRole {
-  DM
+  GM
   PLAYER
   SPECTATOR
 }
@@ -52,7 +52,7 @@ enum AssetScope {
 
 enum MessageType {
   PLAYER
-  DM
+  GM
   SYSTEM
   DICE_ROLL
   CHARACTER_ACTION
@@ -67,10 +67,9 @@ enum LogLevel {
 }
 
 enum GameSystem {
-  DND_5E
-  PATHFINDER_2E
-  SHADOWRUN_6E
-  CALL_OF_CTHULHU_7E
+  FIFTH_EDITION
+  FANTASY_D20
+  HORROR_D100
 }
 
 enum InvitationStatus {
@@ -80,14 +79,14 @@ enum InvitationStatus {
 }
 
 // Who a drawing on a map is sent to: everyone who may read the map, or the
-// DM alone.
+// GM alone.
 enum DrawingAudience {
   ALL
-  DM
+  GM
 }
 
 // Where a drawing sits on a map: MARKUP over the grid, GROUND under it for
-// DM-drawn map art. Only MARKUP is accepted so far (validators/drawings.ts).
+// GM-drawn map art. Only MARKUP is accepted so far (validators/drawings.ts).
 enum DrawingLayer {
   MARKUP
   GROUND
@@ -229,11 +228,11 @@ model Campaign {
   chatCooldownSeconds Int     @default(5)
 
   // Drawing Settings
-  // Players may draw on the map while the session is live; the DM always may.
+  // Players may draw on the map while the session is live; the GM always may.
   playersMayDraw Boolean @default(true)
 
   // Dice Settings
-  // When the DM clears roll history, this records when — rolls older than it
+  // When the GM clears roll history, this records when — rolls older than it
   // are hidden from the panel. A watermark rather than a delete, because every
   // roll including secret ones is kept deliberately for audit (see the
   // DiceRoll.secret column), and an accidental clear should not destroy that.
@@ -306,11 +305,11 @@ model CampaignInvitation {
 // SESSION MANAGEMENT
 // ============================================
 
-/// Notes a player or DM keeps for themselves, written in Markdown.
+/// Notes a player or GM keeps for themselves, written in Markdown.
 ///
-/// Private to whoever wrote them — including from the DM. Not to be confused
+/// Private to whoever wrote them — including from the GM. Not to be confused
 /// with `Session.notes`, which is a shared recap the whole campaign reads, or
-/// with `TokenTemplate.notes`. Secret dice rolls are visible to the DM because
+/// with `TokenTemplate.notes`. Secret dice rolls are visible to the GM because
 /// disputes need settling; nothing here needs that, so "personal" means it, and
 /// every route scopes its query by the session's own user id.
 ///
@@ -390,7 +389,7 @@ model CampaignDocument {
   asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   /// Who shared it, for the audit trail. Before a user is deleted, their
-  /// shares pass to the campaign's DM or owner (services/accountDeletion.ts),
+  /// shares pass to the campaign's GM or owner (services/accountDeletion.ts),
   /// so the cascade removes none.
   linkedById String
   linkedBy   User   @relation(fields: [linkedById], references: [id], onDelete: Cascade)
@@ -514,7 +513,7 @@ model Map {
   height   Int // In grid units
   gridSize      Int    @default(50) // Pixels per grid square
   feetPerSquare Int    @default(5)  // Feet represented by one grid square
-  diagonalRule  String @default("flat") // "flat" (D&D 5e) or "alternating" (PF2e 5/10)
+  diagonalRule  String @default("flat") // "flat" (5E: every diagonal one square) or "alternating" (Fantasy d20: 5 then 10 feet)
   // The colour a map drawn in CozyVTT was made in, as #rrggbb: what
   // Mapmaker's eraser paints. Null for a map made from a picture, and for one
   // drawn before this was kept.
@@ -557,7 +556,7 @@ model MapDrawing {
   id        String          @id @default(uuid())
   mapId     String
   map       Map             @relation(fields: [mapId], references: [id], onDelete: Cascade)
-  /// Null once the author's account is deleted; the drawing stays, the DM's to erase.
+  /// Null once the author's account is deleted; the drawing stays, the GM's to erase.
   authorId  String?
   author    User?           @relation(fields: [authorId], references: [id], onDelete: SetNull)
   audience  DrawingAudience @default(ALL)
@@ -738,7 +737,7 @@ model DiceRoll {
   purpose       String? // e.g., "Attack roll", "Perception check"
 
   // Visibility
-  secret Boolean @default(false) // Secret rolls visible only to roller and DM
+  secret Boolean @default(false) // Secret rolls visible only to roller and GM
 
   // Metadata
   rolledAt DateTime @default(now())

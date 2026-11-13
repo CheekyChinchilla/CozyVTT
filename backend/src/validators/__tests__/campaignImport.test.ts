@@ -125,7 +125,7 @@ describe('imported token allowlists and limits', () => {
 
   it('falls back on a value outside the allowlists and still imports the token', () => {
     // 'Spirit' would vanish for players (the role filter matches exact
-    // strings) and 'Hostile' would be refused the next time the DM edited
+    // strings) and 'Hostile' would be refused the next time the GM edited
     // the token; the live routes take none of these.
     const t = importedTokens(map({ layer: 'Spirit', type: 'Monster', disposition: 'Hostile', displayMode: 'cutout' }))[0];
     expect([t.layer, t.type, t.disposition, t.displayMode]).toEqual(['token', 'npc', null, 'pog']);

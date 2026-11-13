@@ -31,15 +31,15 @@ const email = (name: string) => `resend-${name}-${runId}@test.cozyvtt.local`;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapA: string;
 let mapB: string;
 let characterId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
-let dmRest: ReturnType<typeof request.agent>;
+let gmRest: ReturnType<typeof request.agent>;
 let playerRest: ReturnType<typeof request.agent>;
 
 const HERO = 'hero', SCOUT = 'scout', WISP = 'wisp', HIDDEN = 'hidden';
@@ -61,16 +61,16 @@ const mapData = (name: string) => ({
 });
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) => createTestUser({ email: email(name), displayName: `Resend ${name}` }))
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Resend ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
-  characterId = (await prisma.character.create({ data: { userId: playerId, campaignId, name: 'Hero', gameSystem: 'DND_5E', data: {}, tokenImageUrl: PICTURE } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Resend ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
+  characterId = (await prisma.character.create({ data: { userId: playerId, campaignId, name: 'Hero', gameSystem: 'FIFTH_EDITION', data: {}, tokenImageUrl: PICTURE } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [characterId] },
     ],
   });
@@ -79,9 +79,9 @@ beforeAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapA } });
 
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
-  dmRest = request.agent(app);
-  expect((await dmRest.post('/api/auth/login').send({ email: email('dm'), password: TEST_PASSWORD })).status).toBe(200);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
+  gmRest = request.agent(app);
+  expect((await gmRest.post('/api/auth/login').send({ email: email('dm'), password: TEST_PASSWORD })).status).toBe(200);
   playerRest = request.agent(app);
   expect((await playerRest.post('/api/auth/login').send({ email: email('player'), password: TEST_PASSWORD })).status).toBe(200);
 });
@@ -100,17 +100,17 @@ afterAll(async () => {
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.character.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 type Client = Awaited<ReturnType<WsTestServer['connectAndAuth']>>;
 
-/** Add combatants as the DM, waiting for each broadcast, then let the players' copies land. */
-async function addAll(dm: Client, tokenIds: string[], mapId = mapA) {
+/** Add combatants as the GM, waiting for each broadcast, then let the players' copies land. */
+async function addAll(gm: Client, tokenIds: string[], mapId = mapA) {
   for (const tokenId of tokenIds) {
-    const done = waitForEvent<State>(dm, 'initiative.state');
-    dm.emit('initiative.add', { tokenId, mapId });
+    const done = waitForEvent<State>(gm, 'initiative.state');
+    gm.emit('initiative.add', { tokenId, mapId });
     await done;
   }
   await sleep(100);
@@ -118,50 +118,50 @@ async function addAll(dm: Client, tokenIds: string[], mapId = mapA) {
 
 describe('ending a fight', () => {
   it('ends it on every screen, even with an earlier send still in flight', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    await addAll(dm, [HERO, HIDDEN]);
-    const started = waitForEvent<State>(dm, 'initiative.state');
-    dm.emit('initiative.start');
+    await addAll(gm, [HERO, HIDDEN]);
+    const started = waitForEvent<State>(gm, 'initiative.state');
+    gm.emit('initiative.start');
     await started;
     await sleep(100);
 
     const seen: State[] = [];
     player.on('initiative.state', (s: State) => { seen.push(s); });
-    dm.emit('initiative.next');
-    dm.emit('initiative.end');
+    gm.emit('initiative.next');
+    gm.emit('initiative.end');
     await sleep(800);
 
     expect(seen.length).toBeGreaterThan(0);
     expect(seen[seen.length - 1]).toMatchObject({ active: false, combatants: [] });
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
 
 describe('the order is sent again when a member\'s view of it changes', () => {
   it("through a plane crossing by a token of theirs that is not in the order", async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    await addAll(dm, [HERO, WISP]);
+    await addAll(gm, [HERO, WISP]);
 
     const crossed = waitForEvent<State>(player, 'initiative.state');
-    expect((await dmRest.put(`/api/campaigns/${campaignId}/maps/${mapA}/tokens/${SCOUT}`).send({ layer: 'spirit' })).status).toBe(200);
+    expect((await gmRest.put(`/api/campaigns/${campaignId}/maps/${mapA}/tokens/${SCOUT}`).send({ layer: 'spirit' })).status).toBe(200);
     // In the spirit realm now: the spirit-plane combatant, and not the material one.
     expect(ids(await crossed)).toEqual([WISP]);
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('through the live toggle of any token, not only a combatant', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    await addAll(dm, [HERO]);
+    await addAll(gm, [HERO]);
 
     const toggled = waitForEvent<State>(player, 'initiative.state');
-    dm.emit('spirit_layer.token.toggle', { mapId: mapA, tokenId: SCOUT, visible: false });
+    gm.emit('spirit_layer.token.toggle', { mapId: mapA, tokenId: SCOUT, visible: false });
     expect(ids(await toggled)).toEqual([HERO]);
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -169,67 +169,67 @@ describe('the order is sent again when a member\'s view of it changes', () => {
   // combatant left behind on the old map leaves their tracker, and comes
   // back with the map.
   it('through a map switch, listing only what stands on the map shown', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    await addAll(dm, [HERO]);
+    await addAll(gm, [HERO]);
 
     const switched = waitForEvent<State>(player, 'initiative.state');
-    expect((await dmRest.put(`/api/campaigns/${campaignId}/maps/${mapB}/set-current`)).status).toBe(200);
+    expect((await gmRest.put(`/api/campaigns/${campaignId}/maps/${mapB}/set-current`)).status).toBe(200);
     expect(ids(await switched)).toEqual([]);
 
     const back = waitForEvent<State>(player, 'initiative.state');
-    expect((await dmRest.put(`/api/campaigns/${campaignId}/maps/${mapA}/set-current`)).status).toBe(200);
+    expect((await gmRest.put(`/api/campaigns/${campaignId}/maps/${mapA}/set-current`)).status).toBe(200);
     expect(ids(await back)).toEqual([HERO]);
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('through a role change, so a demoted spectator no longer sees their old token\'s hit points', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    await addAll(dm, [HERO]);
+    await addAll(gm, [HERO]);
 
     const demoted = waitForEvent<State>(player, 'initiative.state');
-    expect((await dmRest.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' })).status).toBe(200);
+    expect((await gmRest.put(`/api/campaigns/${campaignId}/members/${playerId}/role`).send({ role: 'SPECTATOR' })).status).toBe(200);
     const seen = await demoted;
     expect(ids(seen)).toEqual([HERO]);
     expect(seen.combatants[0].hp).toBeNull();
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it("through a bound character's new picture", async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    await addAll(dm, [HERO]);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    await addAll(gm, [HERO]);
 
-    const repainted = waitForEvent<State>(dm, 'initiative.state');
+    const repainted = waitForEvent<State>(gm, 'initiative.state');
     expect((await playerRest.put(`/api/characters/${characterId}`).send({ tokenImageUrl: null })).status).toBe(200);
     expect((await repainted).combatants.find((c) => c.tokenId === HERO)?.imageUrl).toBe('');
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
 describe('a combatant whose token is gone', () => {
   it('leaves the order when its token is deleted', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    await addAll(dm, [HERO, WISP]);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    await addAll(gm, [HERO, WISP]);
 
-    const dropped = waitForEvent<State>(dm, 'initiative.state');
-    expect((await dmRest.delete(`/api/campaigns/${campaignId}/maps/${mapA}/tokens/${WISP}`)).status).toBe(200);
+    const dropped = waitForEvent<State>(gm, 'initiative.state');
+    expect((await gmRest.delete(`/api/campaigns/${campaignId}/maps/${mapA}/tokens/${WISP}`)).status).toBe(200);
     expect(ids(await dropped)).toEqual([HERO]);
     expect(getState(campaignId).combatants.map((c) => c.tokenId)).toEqual([HERO]);
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('leaves the order when its map is deleted', async () => {
     const mapC = (await prisma.map.create({ data: { ...mapData('C'), tokens: [{ ...base, id: 'rock', name: 'Rock', position: { x: 1, y: 1 } }] } })).id;
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    await addAll(dm, [HERO]);
-    await addAll(dm, ['rock'], mapC);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    await addAll(gm, [HERO]);
+    await addAll(gm, ['rock'], mapC);
 
-    const dropped = waitForEvent<State>(dm, 'initiative.state');
-    expect((await dmRest.delete(`/api/campaigns/${campaignId}/maps/${mapC}`)).status).toBe(200);
+    const dropped = waitForEvent<State>(gm, 'initiative.state');
+    expect((await gmRest.delete(`/api/campaigns/${campaignId}/maps/${mapC}`)).status).toBe(200);
     expect(ids(await dropped)).toEqual([HERO]);
-    dm.disconnect();
+    gm.disconnect();
   });
 });

@@ -1,0 +1,46 @@
+{
+  "investigatorName": "  Patchwork  ",
+  "occupation": "Drifter",
+  "era": "Unknown",
+  "player": "Lee",
+  "playerName": "Morgan",
+  "characteristics": {
+    "STR": { "regular": "sixty", "half": 30, "fifth": 12 },
+    "CON": 55,
+    "SIZ": { "regular": "65" },
+    "DEX": { "regular": 50, "half": 25, "fifth": 10, "note": "steady hands" },
+    "APP": null,
+    "POW": { "regular": 60 },
+    "LUCK": 40
+  },
+  "derivedStats": {
+    "hp": { "maximum": "ten", "current": 6 },
+    "magicPoints": "full",
+    "sanity": { "starting": 60, "current": 40, "maximum": 99 },
+    "luck": { "score": "lucky", "notes": 7 },
+    "damageBonus": 3,
+    "build": "big",
+    "moveRate": 8,
+    "stamina": 12
+  },
+  "skills": {
+    "climb": { "baseValue": 20, "currentValue": "high", "improvementChecked": "yes" },
+    "spotHidden": { "baseValue": 25, "currentValue": 55, "improvementChecked": true, "specialization": "Tracks", "flair": "keen" },
+    "charm": 30,
+    "fighting": { "brawl": { "currentValue": 40 }, "custom": "knife" },
+    "firearms": { "handgun": { "currentValue": 30 } },
+    "languageOther": [{ "language": "Basque", "currentValue": 20 }, "Dutch"],
+    "customSkills": [{ "currentValue": 10 }],
+    "dreaming": { "currentValue": 33 }
+  },
+  "combat": { "weapons": "a club", "armour": "leather" },
+  "conditions": { "dying": "maybe", "indefiniteInsanity": "sometimes", "bleeding": true },
+  "pulpTalents": "Lucky",
+  "spellsAndMythos": { "cthulhuMythos": "a little", "spells": "none", "tomes": 2 },
+  "wealth": "comfortable",
+  "backstory": { "description": 42, "traits": "Quiet.", "favouriteFood": "Soup" },
+  "possessions": "a bag",
+  "notes": "  The GM's secret: Lee is a twin.  ",
+  "background": "Came from the hills.",
+  "experience": [1, 2, 3]
+}

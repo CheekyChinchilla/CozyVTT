@@ -7,7 +7,7 @@
 // ============================================
 
 import { z } from 'zod';
-import { GameSystem } from '../game-systems';
+import { GameSystemSchema } from './gameSystem';
 
 /** POST /api/character-templates */
 export const CreateCharacterTemplateSchema = z.object({
@@ -19,7 +19,7 @@ export const CreateCharacterTemplateSchema = z.object({
   description: z.string().trim().max(2000, 'Description must be 2000 characters or fewer').nullish(),
   data: z.any().optional(),
   tokenImageUrl: z.string().max(500).nullish(),
-  gameSystem: z.nativeEnum(GameSystem).nullish(),
+  gameSystem: GameSystemSchema.nullish(),
 });
 
 /** PUT /api/character-templates/:id */

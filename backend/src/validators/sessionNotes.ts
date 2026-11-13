@@ -1,5 +1,5 @@
 /**
- * The recap a DM writes for a session.
+ * The recap a GM writes for a session.
  *
  * Shared by the route that ends a session and the route that edits one
  * afterwards, so the two cannot disagree about how long a recap may be.

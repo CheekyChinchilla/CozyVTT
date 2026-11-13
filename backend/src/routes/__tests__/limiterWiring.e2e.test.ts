@@ -84,7 +84,7 @@ interface Context {
   /** A second sign-in of `user` left at the two-factor code step, from `address`; only with `mfa`. */
   pending: request.Agent;
   user: { id: string; email: string };
-  /** A campaign `user` is the DM of. */
+  /** A campaign `user` is the GM of. */
   campaignId: string;
 }
 
@@ -195,7 +195,7 @@ describe('each limited route', () => {
     created.push(user.id);
     const campaign = await createTestCampaign(user.id);
     campaigns.push(campaign.id);
-    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'GM', characterIds: [] } });
 
     // Every request from this row carries the row's address.
     const agent = request.agent(proxied).set('X-Forwarded-For', address);

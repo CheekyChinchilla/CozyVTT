@@ -28,11 +28,11 @@ jest.setTimeout(60000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const waitFor = async (done: () => boolean, timeoutMs = 3000) => {
@@ -42,19 +42,19 @@ const waitFor = async (done: () => boolean, timeoutMs = 3000) => {
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `resize-draw-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `resize-draw-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `resize-draw-p-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Resize drawings ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Resize drawings ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -73,13 +73,13 @@ afterAll(async () => {
   await server.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
 const draw = (points: number[][], extra: Record<string, unknown> = {}) =>
-  prisma.mapDrawing.create({ data: { mapId, authorId: dmId, kind: 'pen', color: '#3d8bd9', width: 4, points, ...extra } });
-const resize = (body: Record<string, unknown>) => dm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send(body);
+  prisma.mapDrawing.create({ data: { mapId, authorId: gmId, kind: 'pen', color: '#3d8bd9', width: 4, points, ...extra } });
+const resize = (body: Record<string, unknown>) => gm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send(body);
 const stored = (id: string) => prisma.mapDrawing.findUniqueOrThrow({ where: { id } });
 
 it('stretches a drawing twice across and once down, and its width by the mean of the two', async () => {
@@ -124,20 +124,20 @@ it('leaves the drawings alone when the size stays the same', async () => {
 
 it('sends every open page the drawings again, each as its role may see them', async () => {
   const shared = await draw([[100, 100], [200, 200]]);
-  const secret = await draw([[10, 10], [20, 20]], { audience: 'DM' });
-  const dmSocket = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  const secret = await draw([[10, 10], [20, 20]], { audience: 'GM' });
+  const gmSocket = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
   const playerSocket = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
   type State = { mapId: string; drawings: Array<{ id: string; points: number[][] }> };
-  const toDm = waitForEvent<State>(dmSocket, 'drawings:state');
+  const toGm = waitForEvent<State>(gmSocket, 'drawings:state');
   const toPlayer = waitForEvent<State>(playerSocket, 'drawings:state');
   expect((await resize({ width: 20, height: 20 })).status).toBe(200);
-  const forDm = await toDm;
+  const forGm = await toGm;
   const forPlayer = await toPlayer;
-  expect(forDm.mapId).toBe(mapId);
-  expect(forDm.drawings.map((d) => d.id).sort()).toEqual([shared.id, secret.id].sort());
+  expect(forGm.mapId).toBe(mapId);
+  expect(forGm.drawings.map((d) => d.id).sort()).toEqual([shared.id, secret.id].sort());
   expect(forPlayer.drawings.map((d) => d.id)).toEqual([shared.id]);
   expect(forPlayer.drawings[0].points).toEqual([[200, 200], [400, 400]]);
-  dmSocket.disconnect();
+  gmSocket.disconnect();
   playerSocket.disconnect();
 });
 
@@ -154,7 +154,7 @@ it('sends the drawings again from under the map\'s lock, with what a write holdi
   await withMapsLocked([mapId], async (tx) => {
     resent = resendDrawings(campaignId, mapId);
     await expectNoEvent(playerSocket, 'drawings:state', 400);
-    added = (await tx.mapDrawing.create({ data: { mapId, authorId: dmId, kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [5, 5]] } })).id;
+    added = (await tx.mapDrawing.create({ data: { mapId, authorId: gmId, kind: 'line', color: '#1a1a1a', width: 2, points: [[0, 0], [5, 5]] } })).id;
   });
   await resent;
   await waitFor(() => states.length > 0);
@@ -184,10 +184,10 @@ it('makes an erase sent during a resize wait for it', async () => {
 it('resizes a map holding all the drawing its markup layer can, inside the transaction\'s time', async () => {
   const perDrawing = DRAWING_LIMITS.maxPoints;
   // Both shares at their budget of points: the most the layer holds.
-  const count = (DRAWING_LIMITS.markupShares.DM.points + DRAWING_LIMITS.markupShares.PLAYERS.points) / perDrawing;
+  const count = (DRAWING_LIMITS.markupShares.GM.points + DRAWING_LIMITS.markupShares.PLAYERS.points) / perDrawing;
   const points = Array.from({ length: perDrawing }, (_, i) => [i % 500, Math.floor(i / 500)]);
   await prisma.mapDrawing.createMany({
-    data: Array.from({ length: count }, () => ({ mapId, authorId: dmId, kind: 'pen', color: '#1a1a1a', width: 2, points })),
+    data: Array.from({ length: count }, () => ({ mapId, authorId: gmId, kind: 'pen', color: '#1a1a1a', width: 2, points })),
   });
   const started = Date.now();
   expect((await resize({ width: 20, height: 30 })).status).toBe(200);

@@ -17,7 +17,7 @@ import { prisma as appPrisma } from '../../config/database';
 
 const app = createTestApp();
 const CAMPAIGNS = 6;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 const campaigns: string[] = [];
 let player: ReturnType<typeof request.agent>;
@@ -25,24 +25,24 @@ let player: ReturnType<typeof request.agent>;
 const spirit: Array<{ id: string; visible: boolean }> = [];
 
 beforeAll(async () => {
-  const [dm, p] = await Promise.all([createTestUser({ displayName: 'Spirit DM' }), createTestUser({ displayName: 'Spirit Player' })]);
-  dmId = dm.id;
+  const [gm, p] = await Promise.all([createTestUser({ displayName: 'Spirit GM' }), createTestUser({ displayName: 'Spirit Player' })]);
+  gmId = gm.id;
   playerId = p.id;
   for (let i = 0; i < CAMPAIGNS; i += 1) {
     // Every other campaign has its spirit plane open to everyone.
     const open = i % 2 === 0;
-    const campaignId = (await createTestCampaign(dmId, { name: `Spirit ${i}` })).id;
+    const campaignId = (await createTestCampaign(gmId, { name: `Spirit ${i}` })).id;
     campaigns.push(campaignId);
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: open } });
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+        { userId: gmId, campaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       ],
     });
     const art = await prisma.asset.create({
       data: {
-        type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: dmId, filename: 's.png', originalName: 's.png',
+        type: 'MAP', scope: 'CAMPAIGN', campaignId, uploadedById: gmId, filename: 's.png', originalName: 's.png',
         mimeType: 'image/png', fileSize: 1, filePath: '/nonexistent/s.png', name: `Spirit art ${i}`,
       },
     });
@@ -65,9 +65,9 @@ afterEach(() => {
 
 afterAll(async () => {
   for (const id of campaigns) await prisma.campaign.update({ where: { id }, data: { currentMapId: null } });
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns(campaigns);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 

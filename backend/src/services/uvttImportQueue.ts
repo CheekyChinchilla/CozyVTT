@@ -8,9 +8,9 @@
  *
  * The queue always moves on. An import that runs past its time limit is
  * stopped at its next step, removes what it saved, and the next one starts.
- * An import that cannot start soon enough is refused, so the DM is told to
+ * An import that cannot start soon enough is refused, so the GM is told to
  * try again before the bundled nginx gives up on the request (its
- * proxy_read_timeout for the API is 60 seconds), and an import whose DM has
+ * proxy_read_timeout for the API is 60 seconds), and an import whose GM has
  * left is dropped without being read.
  */
 
@@ -27,7 +27,7 @@ export const UVTT_IMPORT_TIME_LIMIT_MS = 30_000;
 
 /**
  * Longest an import may wait for its turn. Waiting and running together stay
- * under nginx's 60 seconds, so the DM sees the reason and not a proxy error;
+ * under nginx's 60 seconds, so the GM sees the reason and not a proxy error;
  * keepInStep.test.ts holds the two at least five seconds under it.
  */
 export const UVTT_IMPORT_MAX_WAIT_MS = 20_000;

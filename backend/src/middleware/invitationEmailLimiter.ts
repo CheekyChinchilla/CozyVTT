@@ -1,17 +1,17 @@
 /**
- * How many campaign invitation emails one DM may have the instance send.
+ * How many campaign invitation emails one GM may have the instance send.
  *
  * Each one goes out from the instance's own mail account and carries a
- * campaign name and description the DM wrote, and any signed-in user can be
- * the DM of a campaign of their own. Without a ceiling, one account could use
+ * campaign name and description the GM wrote, and any signed-in user can be
+ * the GM of a campaign of their own. Without a ceiling, one account could use
  * the instance to mail every other account, over and over, and burn the
  * self-hoster's mail account.
  *
- * A DM inviting a table of four to six players sends a handful; 20 an hour is
+ * A GM inviting a table of four to six players sends a handful; 20 an hour is
  * several tables at once. The invitation itself is never limited here: only a
  * request that asks for an email, on a server that can send one, counts, and
  * one the route refuses (already a member, already invited) sends nothing and
- * is not counted. Past the ceiling the DM can still invite without the email.
+ * is not counted. Past the ceiling the GM can still invite without the email.
  */
 
 import rateLimit, { ipKeyGenerator, type RateLimitInfo } from 'express-rate-limit';

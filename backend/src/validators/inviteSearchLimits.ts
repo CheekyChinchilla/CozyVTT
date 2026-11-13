@@ -1,7 +1,7 @@
 /**
  * The limits of the Invite Player search.
  *
- * The server applies them and the Invite Player dialog tells the DM what they
+ * The server applies them and the Invite Player dialog tells the GM what they
  * are. This file exists twice, as backend/src/validators/inviteSearchLimits.ts
  * and frontend/src/constants/inviteSearchLimits.ts, and a test keeps the two
  * copies identical, so the dialog never describes a search the server does

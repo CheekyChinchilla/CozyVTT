@@ -4,13 +4,13 @@
  * The update route and the drop of a drag read the map, checked the move
  * against it and clamped it by the token's size, then took the lock and
  * merged the result into the token as it was by then. A change landing in
- * between was judged against the old token: the DM growing a token while
+ * between was judged against the old token: the GM growing a token while
  * a player's move to the far column waited left it hanging off the map, and
- * metadata the DM set meanwhile was written over by a merge with the old
+ * metadata the GM set meanwhile was written over by a merge with the old
  * copy. The bounds, the clamp and the metadata merge are now worked out
  * under the lock, and who is told of a drop is judged by the token and the
- * map as the drop wrote them: a token the DM hid meanwhile went on reaching
- * players, and so did one on a map the DM lit meanwhile.
+ * map as the drop wrote them: a token the GM hid meanwhile went on reaching
+ * players, and so did one on a map the GM lit meanwhile.
  *
  * Each case holds the lock, sends the update, waits until it is in line for
  * the lock (so it has read the map), changes the token and commits.
@@ -33,12 +33,12 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let otherPlayerId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 
 const HERO = randomUUID();
@@ -114,16 +114,16 @@ async function roundTrip(client: ClientSocket): Promise<void> {
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `tokenlock-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `tokenlock-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `tokenlock-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
   const otherUser = await createTestUser({ email: `tokenlock-other-${stamp}@test.cozyvtt.local`, displayName: 'Other' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
   otherPlayerId = otherUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Token lock ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Token lock ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: otherPlayerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
@@ -135,8 +135,8 @@ beforeAll(async () => {
     },
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   player = request.agent(app);
   expect((await player.post('/api/auth/login').send({ email: playerUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
@@ -151,11 +151,11 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId, otherPlayerId]);
+  await cleanupUsers([gmId, playerId, otherPlayerId]);
   await prisma.$disconnect();
 });
 
-describe('a move to the last column while the DM grows the token', () => {
+describe('a move to the last column while the GM grows the token', () => {
   it('over REST ends one square in, so the whole token is on the map', async () => {
     const res = await changeTokenWhileWaiting(
       () => player.put(tokenUrl()).send({ position: { x: 9, y: 1 } }).then((r) => r),
@@ -179,55 +179,55 @@ describe('a move to the last column while the DM grows the token', () => {
   });
 });
 
-describe('a drop while the DM hides the token', () => {
-  it('is not sent to another player, and the DM is still told', async () => {
+describe('a drop while the GM hides the token', () => {
+  it('is not sent to another player, and the GM is still told', async () => {
     const page = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
     const other = await server.connectAndAuth(await server.loginAs(otherPlayerId), campaignId);
-    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const gmPage = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     try {
-      const dmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(dmPage, 'token.moved', 5000);
+      const gmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(gmPage, 'token.moved', 5000);
       const otherSaw = recordEvents(other, ['token.moved']);
       await changeTokenWhileWaiting(
         async () => { page.emit('token.move.end', { tokenId: HERO, mapId, x: 5, y: 1 }); },
         (t) => ({ ...t, visible: false })
       );
-      expect(await dmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 5, y: 1 }));
+      expect(await gmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 5, y: 1 }));
       await roundTrip(other);
       expect(otherSaw).toEqual([]);
       expect(await storedHero()).toEqual(expect.objectContaining({ visible: false, position: { x: 5, y: 1 } }));
     } finally {
       page.disconnect();
       other.disconnect();
-      dmPage.disconnect();
+      gmPage.disconnect();
     }
   });
 });
 
-describe('a drop while the DM turns dynamic lighting on', () => {
+describe('a drop while the GM turns dynamic lighting on', () => {
   // The other player has no token, so on a lit map they are sent no other.
   it('reaches another player only as the lit map lets them see it', async () => {
     const page = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
     const other = await server.connectAndAuth(await server.loginAs(otherPlayerId), campaignId);
-    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const gmPage = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     try {
-      const dmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(dmPage, 'token.moved', 5000);
+      const gmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(gmPage, 'token.moved', 5000);
       const otherSaw = recordEvents(other, ['token.moved', 'token:appeared']);
       await whileWriteWaits(
         async () => { page.emit('token.move.end', { tokenId: HERO, mapId, x: 5, y: 1 }); },
         (tx) => tx.map.update({ where: { id: mapId }, data: { lightingEnabled: true } })
       );
-      expect(await dmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 5, y: 1 }));
+      expect(await gmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 5, y: 1 }));
       await roundTrip(other);
       expect(otherSaw).toEqual([]);
     } finally {
       page.disconnect();
       other.disconnect();
-      dmPage.disconnect();
+      gmPage.disconnect();
     }
   });
 });
 
-describe('a drop while the DM closes a door on a lit map', () => {
+describe('a drop while the GM closes a door on a lit map', () => {
   // A door the full height of the map at x = 250 px, between the other
   // player's token in square 1 and the drop in square 7. Everything in line
   // of sight is lit (Global Illumination), so only the door decides.
@@ -241,26 +241,26 @@ describe('a drop while the DM closes a door on a lit map', () => {
     });
     const page = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
     const other = await server.connectAndAuth(await server.loginAs(otherPlayerId), campaignId);
-    const dmPage = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const gmPage = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     try {
-      const dmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(dmPage, 'token.moved', 5000);
+      const gmTold = waitForEvent<{ tokenId: string; x: number; y: number }>(gmPage, 'token.moved', 5000);
       const otherSaw = recordEvents(other, ['token.moved', 'token:appeared']);
       await whileWriteWaits(
         async () => { page.emit('token.move.end', { tokenId: HERO, mapId, x: 7, y: 1 }); },
         (tx) => tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson(door('door-closed')) } })
       );
-      expect(await dmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 7, y: 1 }));
+      expect(await gmTold).toEqual(expect.objectContaining({ tokenId: HERO, x: 7, y: 1 }));
       await roundTrip(other);
       expect(otherSaw).toEqual([]);
     } finally {
       page.disconnect();
       other.disconnect();
-      dmPage.disconnect();
+      gmPage.disconnect();
     }
   });
 });
 
-describe('a move while the DM shrinks the map', () => {
+describe('a move while the GM shrinks the map', () => {
   it('over REST is refused against the map as it is then', async () => {
     let res: { status: number; body: { message?: string } } | undefined;
     let release!: () => void;
@@ -284,10 +284,10 @@ describe('a move while the DM shrinks the map', () => {
   });
 });
 
-describe("the DM's metadata", () => {
+describe("the GM's metadata", () => {
   it('is merged into what the token holds under the lock', async () => {
     const res = await changeTokenWhileWaiting(
-      () => dm.put(tokenUrl()).send({ metadata: { later: 'b' } }).then((r) => r),
+      () => gm.put(tokenUrl()).send({ metadata: { later: 'b' } }).then((r) => r),
       (t) => ({ ...t, metadata: { earlier: 'a' } })
     );
     expect(res.status).toBe(200);
@@ -295,7 +295,7 @@ describe("the DM's metadata", () => {
   });
 });
 
-describe('a drop whose token the DM deletes while it waits', () => {
+describe('a drop whose token the GM deletes while it waits', () => {
   /** Which of `events` the client is sent first, and what it carried. */
   function firstOf(client: ClientSocket, events: string[], timeoutMs = 5000): Promise<{ event: string; data: unknown }> {
     return new Promise((resolve, reject) => {

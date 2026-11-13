@@ -76,16 +76,16 @@ beforeAll(async () => {
   campaignA = a.id;
   campaignB = b.id;
 
-  // The switcher is a player at A's table and the DM of B.
+  // The switcher is a player at A's table and the GM of B.
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: hostId, campaignId: campaignA, role: 'DM', characterIds: [] },
+      { userId: hostId, campaignId: campaignA, role: 'GM', characterIds: [] },
       { userId: switcherId, campaignId: campaignA, role: 'PLAYER', characterIds: [] },
-      { userId: switcherId, campaignId: campaignB, role: 'DM', characterIds: [] },
+      { userId: switcherId, campaignId: campaignB, role: 'GM', characterIds: [] },
     ],
   });
 
-  // A map in A with one token players may see and one only the DM may.
+  // A map in A with one token players may see and one only the GM may.
   const base = { imageUrl: '', size: { width: 1, height: 1 }, rotation: 0, conditions: [] as string[], metadata: {} as Record<string, unknown>, layer: 'token', controlledBy: null };
   const map = await prisma.map.create({
     data: {
@@ -128,17 +128,17 @@ describe('authenticating into another campaign on the same socket', () => {
     const switcher = await server.connectAndAuth(switcherCookie, campaignA);
 
     const heard = waitForEvent(switcher, 'chat.message');
-    host.emit('chat.message', { content: 'before the switch', type: 'DM' });
+    host.emit('chat.message', { content: 'before the switch', type: 'GM' });
     await expect(heard).resolves.toBeDefined();
 
     await reauth(switcher, campaignB);
 
     const silence = expectNoEvent(switcher, 'chat.message', 500);
-    host.emit('chat.message', { content: 'after the switch', type: 'DM' });
+    host.emit('chat.message', { content: 'after the switch', type: 'GM' });
     await expect(silence).resolves.toBeUndefined();
 
     const echoed = waitForEvent<{ content: string }>(switcher, 'chat.message');
-    switcher.emit('chat.message', { content: 'at my own table', type: 'DM' });
+    switcher.emit('chat.message', { content: 'at my own table', type: 'GM' });
     expect((await echoed).content).toBe('at my own table');
 
     host.disconnect();
@@ -184,10 +184,10 @@ describe('authenticating into another campaign on the same socket', () => {
     await both;
     expect(authed).toEqual([campaignA, campaignB]);
 
-    // Nothing from A: not chat, not the map, and the DM's copy least of all.
+    // Nothing from A: not chat, not the map, and the GM's copy least of all.
     const noChat = expectNoEvent(switcher, 'chat.message', 500);
     const noMap = expectNoEvent(switcher, 'map.changed', 500);
-    host.emit('chat.message', { content: 'A after the race', type: 'DM' });
+    host.emit('chat.message', { content: 'A after the race', type: 'GM' });
     host.emit('map.change', { mapId: mapA });
     await expect(noChat).resolves.toBeUndefined();
     await expect(noMap).resolves.toBeUndefined();
@@ -199,7 +199,7 @@ describe('authenticating into another campaign on the same socket', () => {
 
     // B is where it lives now.
     const echoed = waitForEvent<{ content: string }>(switcher, 'chat.message');
-    switcher.emit('chat.message', { content: 'settled at B', type: 'DM' });
+    switcher.emit('chat.message', { content: 'settled at B', type: 'GM' });
     expect((await echoed).content).toBe('settled at B');
 
     host.disconnect();
@@ -217,8 +217,8 @@ describe('authenticating into another campaign on the same socket', () => {
     expect(seen).toContain(SEEN_TOKEN);
     expect(seen).not.toContain(HIDDEN_TOKEN);
 
-    // Now a DM elsewhere. A's fan-out must not reach this socket at all,
-    // let alone with the DM's copy of A's map.
+    // Now a GM elsewhere. A's fan-out must not reach this socket at all,
+    // let alone with the GM's copy of A's map.
     await reauth(switcher, campaignB);
     const nothing = expectNoEvent(switcher, 'map.changed', 500);
     host.emit('map.change', { mapId: mapA });

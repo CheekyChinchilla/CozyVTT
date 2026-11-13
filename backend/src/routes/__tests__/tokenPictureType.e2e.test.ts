@@ -38,18 +38,18 @@ const app = createTestApp();
 const NOT_A_TOKEN_PICTURE = 'The token image must be a token picture from the asset library.';
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082', 'hex');
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let otherCampaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 const assetIds: string[] = [];
 
 const commoner = { ac: 10, hpMax: 4, speed: '30 ft.', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 14, cha: 10 }, challengeRating: '0' };
-const dnd5eSheet = { ...(getBlankCharacterTemplate(AppGameSystem.DND_5E) as Record<string, unknown>), characterName: 'Picture Hero' };
+const fifthEditionSheet = { ...(getBlankCharacterTemplate(AppGameSystem.FIFTH_EDITION) as Record<string, unknown>), characterName: 'Picture Hero' };
 
 /**
- * A global asset the DM uploaded, so every read check passes, the character
+ * A global asset the GM uploaded, so every read check passes, the character
  * template's included, and only the asset's type is in question.
  */
 async function makeAsset(type: AssetType): Promise<string> {
@@ -57,21 +57,21 @@ async function makeAsset(type: AssetType): Promise<string> {
   const filePath = path.join(UPLOAD_DIR, filename);
   fs.writeFileSync(filePath, PNG);
   const asset = await prisma.asset.create({
-    data: { type, scope: 'GLOBAL', uploadedById: dmId, filename, originalName: filename, mimeType: 'image/png', fileSize: PNG.length, filePath, name: filename },
+    data: { type, scope: 'GLOBAL', uploadedById: gmId, filename, originalName: filename, mimeType: 'image/png', fileSize: PNG.length, filePath, name: filename },
   });
   assetIds.push(asset.id);
   return asset.id;
 }
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'Token Picture DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Token picture types' })).id;
-  otherCampaignId = (await createTestCampaign(dmId, { name: 'Token picture copies' })).id;
+  const user = await createTestUser({ displayName: 'Token Picture GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Token picture types' })).id;
+  otherCampaignId = (await createTestCampaign(gmId, { name: 'Token picture copies' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
-      { userId: dmId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
+      { userId: gmId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
   const mapPicture = await makeAsset('MAP');
@@ -81,19 +81,19 @@ beforeAll(async () => {
       width: 20, height: 20, gridSize: 50, annotations: [], tokens: [],
     },
   })).id;
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.tokenTemplate.deleteMany({ where: { campaignId: { in: [campaignId, otherCampaignId] } } });
   await prisma.creatureTemplate.deleteMany({ where: { campaignId } });
-  await prisma.character.deleteMany({ where: { userId: dmId } });
-  await prisma.characterTemplate.deleteMany({ where: { createdById: dmId } });
+  await prisma.character.deleteMany({ where: { userId: gmId } });
+  await prisma.characterTemplate.deleteMany({ where: { createdById: gmId } });
   await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
   await cleanupCampaigns([campaignId, otherCampaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -120,16 +120,16 @@ async function storedTokenPicture(tokenId: string): Promise<unknown> {
 }
 
 const storedTemplate = async (imageUrl: string | null) => (await prisma.tokenTemplate.create({
-  data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Stored', imageUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+  data: { id: randomUUID(), campaignId, createdById: gmId, name: 'Stored', imageUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
 })).id;
 const storedCreature = async (imageUrl: string | null) => (await prisma.creatureTemplate.create({
-  data: { campaignId, createdById: dmId, name: 'Stored', imageUrl, statBlock: commoner },
+  data: { campaignId, createdById: gmId, name: 'Stored', imageUrl, statBlock: commoner },
 })).id;
 const storedCharacter = async (tokenImageUrl: string | null) => (await prisma.character.create({
-  data: { userId: dmId, name: 'Stored', tokenImageUrl, data: {} },
+  data: { userId: gmId, name: 'Stored', tokenImageUrl, data: {} },
 })).id;
 const storedCharacterTemplate = async (tokenImageUrl: string | null) => (await prisma.characterTemplate.create({
-  data: { name: 'Stored', gameSystem: GameSystem.DND_5E, tokenImageUrl, data: dnd5eSheet, createdById: dmId },
+  data: { name: 'Stored', gameSystem: GameSystem.FIFTH_EDITION, tokenImageUrl, data: fifthEditionSheet, createdById: gmId },
 })).id;
 
 /**
@@ -138,65 +138,65 @@ const storedCharacterTemplate = async (tokenImageUrl: string | null) => (await p
  */
 const WRITES: Array<[string, (address: string) => Promise<{ res: request.Response; stored: () => Promise<unknown> }>]> = [
   ['placing a token', async (a) => {
-    const res = await dm.post(at(`/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 1, y: 1 }, imageUrl: a });
+    const res = await gm.post(at(`/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 1, y: 1 }, imageUrl: a });
     return { res, stored: async () => (res.body.token ? storedTokenPicture(res.body.token.id) : null) };
   }],
   ['editing a token', async (a) => {
     const id = await storedToken('');
-    const res = await dm.put(at(`/maps/${mapId}/tokens/${id}`)).send({ imageUrl: a });
+    const res = await gm.put(at(`/maps/${mapId}/tokens/${id}`)).send({ imageUrl: a });
     return { res, stored: () => storedTokenPicture(id) };
   }],
   ['a new token template', async (a) => {
-    const res = await dm.post(at('/token-templates')).send({ name: 'Imp', imageUrl: a });
+    const res = await gm.post(at('/token-templates')).send({ name: 'Imp', imageUrl: a });
     return { res, stored: async () => (res.body.id ? (await prisma.tokenTemplate.findUniqueOrThrow({ where: { id: res.body.id } })).imageUrl : null) };
   }],
   ['editing a token template', async (a) => {
     const id = await storedTemplate(null);
-    const res = await dm.put(at(`/token-templates/${id}`)).send({ imageUrl: a });
+    const res = await gm.put(at(`/token-templates/${id}`)).send({ imageUrl: a });
     return { res, stored: async () => (await prisma.tokenTemplate.findUniqueOrThrow({ where: { id } })).imageUrl };
   }],
   ['Save as Template', async (a) => {
-    const res = await dm.post(at('/token-templates/from-token')).send({ name: 'Imp', imageUrl: a });
+    const res = await gm.post(at('/token-templates/from-token')).send({ name: 'Imp', imageUrl: a });
     return { res, stored: async () => (res.body.id ? (await prisma.tokenTemplate.findUniqueOrThrow({ where: { id: res.body.id } })).imageUrl : null) };
   }],
   ['copying a token template to another campaign', async (a) => {
     const id = await storedTemplate(a);
-    const res = await dm.post(at(`/token-templates/${id}/copy-to/${otherCampaignId}`));
+    const res = await gm.post(at(`/token-templates/${id}/copy-to/${otherCampaignId}`));
     return { res, stored: async () => (await prisma.tokenTemplate.findFirst({ where: { campaignId: otherCampaignId, imageUrl: { not: null } }, orderBy: { createdAt: 'desc' } }))?.imageUrl ?? null };
   }],
   ['a new creature', async (a) => {
-    const res = await dm.post(at('/creatures')).send({ name: 'Imp', statBlock: commoner, imageUrl: a });
+    const res = await gm.post(at('/creatures')).send({ name: 'Imp', statBlock: commoner, imageUrl: a });
     return { res, stored: async () => (res.body.id ? (await prisma.creatureTemplate.findUniqueOrThrow({ where: { id: res.body.id } })).imageUrl : null) };
   }],
   // A creature stored before the rule may hold another kind of picture; its
   // copy is a new record, held to the rule as a template's copy is.
   ['duplicating a creature', async (a) => {
     const id = await storedCreature(a);
-    const res = await dm.post(at(`/creatures/${id}/duplicate`));
+    const res = await gm.post(at(`/creatures/${id}/duplicate`));
     return { res, stored: async () => (res.body.id ? (await prisma.creatureTemplate.findUniqueOrThrow({ where: { id: res.body.id } })).imageUrl : null) };
   }],
   ['editing a creature', async (a) => {
     const id = await storedCreature(null);
-    const res = await dm.put(at(`/creatures/${id}`)).send({ imageUrl: a });
+    const res = await gm.put(at(`/creatures/${id}`)).send({ imageUrl: a });
     return { res, stored: async () => (await prisma.creatureTemplate.findUniqueOrThrow({ where: { id } })).imageUrl };
   }],
   ['a new character', async (a) => {
-    const res = await dm.post('/api/characters').send({ name: 'Imp', data: {}, tokenImageUrl: a });
+    const res = await gm.post('/api/characters').send({ name: 'Imp', data: {}, tokenImageUrl: a });
     const id = res.body.character?.id;
     return { res, stored: async () => (id ? (await prisma.character.findUniqueOrThrow({ where: { id } })).tokenImageUrl : null) };
   }],
   ['editing a character', async (a) => {
     const id = await storedCharacter(null);
-    const res = await dm.put(`/api/characters/${id}`).send({ tokenImageUrl: a });
+    const res = await gm.put(`/api/characters/${id}`).send({ tokenImageUrl: a });
     return { res, stored: async () => (await prisma.character.findUniqueOrThrow({ where: { id } })).tokenImageUrl };
   }],
   ['a new character template', async (a) => {
-    const res = await dm.post('/api/character-templates').send({ name: 'Imp', gameSystem: GameSystem.DND_5E, data: dnd5eSheet, tokenImageUrl: a });
+    const res = await gm.post('/api/character-templates').send({ name: 'Imp', gameSystem: GameSystem.FIFTH_EDITION, data: fifthEditionSheet, tokenImageUrl: a });
     return { res, stored: async () => (res.body.id ? (await prisma.characterTemplate.findUniqueOrThrow({ where: { id: res.body.id } })).tokenImageUrl : null) };
   }],
   ['editing a character template', async (a) => {
     const id = await storedCharacterTemplate(null);
-    const res = await dm.put(`/api/character-templates/${id}`).send({ tokenImageUrl: a });
+    const res = await gm.put(`/api/character-templates/${id}`).send({ tokenImageUrl: a });
     return { res, stored: async () => (await prisma.characterTemplate.findUniqueOrThrow({ where: { id } })).tokenImageUrl };
   }],
 ];
@@ -241,36 +241,36 @@ describe('a record stored before with another kind of asset as its picture', () 
 
   it('keeps it on a token through an edit that sends it back unchanged', async () => {
     const id = await storedToken(storedUrl);
-    const res = await dm.put(at(`/maps/${mapId}/tokens/${id}`)).send({ name: 'Renamed', imageUrl: storedUrl });
+    const res = await gm.put(at(`/maps/${mapId}/tokens/${id}`)).send({ name: 'Renamed', imageUrl: storedUrl });
     expect(res.status).toBe(200);
     expect(await storedTokenPicture(id)).toBe(storedUrl);
   });
 
   it('keeps it on a token template', async () => {
     const id = await storedTemplate(storedUrl);
-    expect((await dm.put(at(`/token-templates/${id}`)).send({ name: 'Renamed', imageUrl: storedUrl })).status).toBe(200);
+    expect((await gm.put(at(`/token-templates/${id}`)).send({ name: 'Renamed', imageUrl: storedUrl })).status).toBe(200);
   });
 
   it('keeps it on a creature', async () => {
     const id = await storedCreature(storedUrl);
-    expect((await dm.put(at(`/creatures/${id}`)).send({ name: 'Renamed', imageUrl: storedUrl })).status).toBe(200);
+    expect((await gm.put(at(`/creatures/${id}`)).send({ name: 'Renamed', imageUrl: storedUrl })).status).toBe(200);
   });
 
   it('keeps it on a character', async () => {
     const id = await storedCharacter(storedUrl);
-    expect((await dm.put(`/api/characters/${id}`).send({ name: 'Renamed', tokenImageUrl: storedUrl })).status).toBe(200);
+    expect((await gm.put(`/api/characters/${id}`).send({ name: 'Renamed', tokenImageUrl: storedUrl })).status).toBe(200);
   });
 
   it('keeps it on a character template', async () => {
     const id = await storedCharacterTemplate(storedUrl);
-    expect((await dm.put(`/api/character-templates/${id}`).send({ name: 'Renamed', tokenImageUrl: storedUrl })).status).toBe(200);
+    expect((await gm.put(`/api/character-templates/${id}`).send({ name: 'Renamed', tokenImageUrl: storedUrl })).status).toBe(200);
   });
 
   it('can still be cleared from a token, a template, a creature and a character', async () => {
     const token = await storedToken(storedUrl);
-    expect((await dm.put(at(`/maps/${mapId}/tokens/${token}`)).send({ imageUrl: '' })).status).toBe(200);
-    expect((await dm.put(at(`/token-templates/${await storedTemplate(storedUrl)}`)).send({ imageUrl: null })).status).toBe(200);
-    expect((await dm.put(at(`/creatures/${await storedCreature(storedUrl)}`)).send({ imageUrl: null })).status).toBe(200);
-    expect((await dm.put(`/api/characters/${await storedCharacter(storedUrl)}`).send({ tokenImageUrl: null })).status).toBe(200);
+    expect((await gm.put(at(`/maps/${mapId}/tokens/${token}`)).send({ imageUrl: '' })).status).toBe(200);
+    expect((await gm.put(at(`/token-templates/${await storedTemplate(storedUrl)}`)).send({ imageUrl: null })).status).toBe(200);
+    expect((await gm.put(at(`/creatures/${await storedCreature(storedUrl)}`)).send({ imageUrl: null })).status).toBe(200);
+    expect((await gm.put(`/api/characters/${await storedCharacter(storedUrl)}`).send({ tokenImageUrl: null })).status).toBe(200);
   });
 });

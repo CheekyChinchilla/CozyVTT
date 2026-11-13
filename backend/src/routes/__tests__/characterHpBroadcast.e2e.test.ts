@@ -83,7 +83,7 @@ const hpBroadcasts = () =>
     .map((b) => b.data as HpBroadcast);
 
 describe('character HP broadcast on sheet save', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
   let characterId: string;
@@ -92,15 +92,15 @@ describe('character HP broadcast on sheet save', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dmEmail = `hp_dm_${stamp}@test.invalid`;
+    const gmEmail = `hp_dm_${stamp}@test.invalid`;
     const playerEmail = `hp_pl_${stamp}@test.invalid`;
 
-    const dm = await createTestUser({ email: dmEmail, isApproved: true });
+    const gm = await createTestUser({ email: gmEmail, isApproved: true });
     const player = await createTestUser({ email: playerEmail, isApproved: true });
-    dmId = dm.id;
+    gmId = gm.id;
     playerId = player.id;
 
-    const campaign = await createTestCampaign(dmId, { name: `HP Broadcast ${stamp}` });
+    const campaign = await createTestCampaign(gmId, { name: `HP Broadcast ${stamp}` });
     campaignId = campaign.id;
 
     const character = await prisma.character.create({
@@ -108,7 +108,7 @@ describe('character HP broadcast on sheet save', () => {
         userId: playerId,
         campaignId,
         name: 'Aldra Fenn',
-        gameSystem: 'DND_5E',
+        gameSystem: 'FIFTH_EDITION',
         data: sheet(STARTING_HP),
       },
     });
@@ -119,7 +119,7 @@ describe('character HP broadcast on sheet save', () => {
       data: {
         userId: playerId,
         name: 'Unassigned',
-        gameSystem: 'DND_5E',
+        gameSystem: 'FIFTH_EDITION',
         data: sheet(STARTING_HP),
       },
     });
@@ -127,7 +127,7 @@ describe('character HP broadcast on sheet save', () => {
 
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId, userId: playerId, role: 'PLAYER', characterIds: [characterId] },
       ],
     });
@@ -150,7 +150,7 @@ describe('character HP broadcast on sheet save', () => {
   afterAll(async () => {
     await prisma.character.deleteMany({ where: { id: { in: [characterId, looseCharacterId] } } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId]);
+    await cleanupUsers([gmId, playerId]);
     await prisma.$disconnect();
   });
 

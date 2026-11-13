@@ -5,7 +5,7 @@
  * but the frames before it (`token.move`, up to sixty a second) went to the
  * whole room for any visible material token, so on a lit map a player
  * received the exact path of a monster in the dark or behind a wall. The
- * frames now go to the DM's sockets and to the players whose tokens can see
+ * frames now go to the GM's sockets and to the players whose tokens can see
  * the token where each frame puts it, tested against sight decided once per
  * drag; the end event still decides who is sent where it stopped.
  *
@@ -30,11 +30,11 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `dragframes-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 const OWN = 'token-own';
@@ -57,24 +57,24 @@ async function resetMap(lightingEnabled: boolean, globalIllumination: boolean) {
 }
 
 /** A drag as the client sends it: a start event, then frames. */
-function drag(dm: ClientSocket, tokenId: string, xs: number[]) {
-  dm.emit('token.move.start', { tokenId, mapId });
-  for (const x of xs) dm.emit('token.move', { tokenId, mapId, x, y: 5 });
+function drag(gm: ClientSocket, tokenId: string, xs: number[]) {
+  gm.emit('token.move.start', { tokenId, mapId });
+  for (const x of xs) gm.emit('token.move', { tokenId, mapId, x, y: 5 });
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Frames ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Drag Frames ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Drag Frames ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -87,7 +87,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
@@ -95,60 +95,60 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 describe('drag frames on a lit map', () => {
   it('do not reach a player whose tokens cannot see the token', async () => {
     await resetMap(true, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const dmToo = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const gmToo = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const noStart = expectNoEvent(player, 'token.move.start', 600);
     const noFrames = expectNoEvent(player, 'token.moved', 600);
-    const dmFrame = waitForEvent<{ tokenId: string; x: number }>(dmToo, 'token.moved');
-    drag(dm, FAR, [16, 15, 14]);
+    const gmFrame = waitForEvent<{ tokenId: string; x: number }>(gmToo, 'token.moved');
+    drag(gm, FAR, [16, 15, 14]);
     await Promise.all([noStart, noFrames]);
-    expect((await dmFrame).tokenId).toBe(FAR);
+    expect((await gmFrame).tokenId).toBe(FAR);
 
-    dm.disconnect();
-    dmToo.disconnect();
+    gm.disconnect();
+    gmToo.disconnect();
     player.disconnect();
   });
 
   it('reach a player whose tokens can see it', async () => {
     await resetMap(true, true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const frame = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
-    drag(dm, FAR, [16]);
+    drag(gm, FAR, [16]);
     expect(await frame).toMatchObject({ tokenId: FAR, x: 16 });
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('are decided again for the next drag once the last one ends', async () => {
     await resetMap(true, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const dark = expectNoEvent(player, 'token.moved', 500);
-    drag(dm, FAR, [16]);
+    drag(gm, FAR, [16]);
     await dark;
-    dm.emit('token.move.end', { tokenId: FAR, mapId, x: 16, y: 5 });
-    await waitForEvent(dm, 'token.moved');
+    gm.emit('token.move.end', { tokenId: FAR, mapId, x: 16, y: 5 });
+    await waitForEvent(gm, 'token.moved');
 
     // Lit now: the next drag is decided afresh.
     await prisma.map.update({ where: { id: mapId }, data: { globalIllumination: true } });
     const frame = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
-    drag(dm, FAR, [15]);
+    drag(gm, FAR, [15]);
     expect(await frame).toMatchObject({ tokenId: FAR, x: 15 });
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -184,67 +184,67 @@ describe('drag frames carried across the edge of sight', () => {
 
   it('stop reaching a player once the token is carried out of their sight, who is told it has gone', async () => {
     await litMapWith(8);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const seen = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
-    drag(dm, FAR, [9]);
+    drag(gm, FAR, [9]);
     expect(await seen).toMatchObject({ tokenId: FAR, x: 9 });
 
     const beyond: number[] = [];
     const gone: unknown[] = [];
     player.on('token.moved', (e: { x: number }) => beyond.push(e.x));
     player.on('token:disappeared', (e: unknown) => gone.push(e));
-    dm.emit('token.move', { tokenId: FAR, mapId, x: 12, y: 5 });
+    gm.emit('token.move', { tokenId: FAR, mapId, x: 12, y: 5 });
     await new Promise((resolve) => setTimeout(resolve, 100));
-    dm.emit('token.move', { tokenId: FAR, mapId, x: 13, y: 5 });
+    gm.emit('token.move', { tokenId: FAR, mapId, x: 13, y: 5 });
     await new Promise((resolve) => setTimeout(resolve, 600));
     expect(beyond).toEqual([]);
     expect(gone).toEqual([{ tokenId: FAR, mapId }]);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('bring the token back to a player when it is carried back into their sight, as a cancelled drag does', async () => {
     await litMapWith(8);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const gone = waitForEvent(player, 'token:disappeared');
-    drag(dm, FAR, [12]);
+    drag(gm, FAR, [12]);
     await gone;
 
     await new Promise((resolve) => setTimeout(resolve, 100));
     const back = waitForEvent<{ token: { id: string; position: { x: number; y: number }; notes?: string }; mapId: string }>(player, 'token:appeared');
     const frame = waitForEvent<{ tokenId: string; x: number; dragging?: boolean }>(player, 'token.moved');
-    dm.emit('token.move', { tokenId: FAR, mapId, x: 8, y: 5 });
+    gm.emit('token.move', { tokenId: FAR, mapId, x: 8, y: 5 });
     const appeared = await back;
     expect(appeared.token).toMatchObject({ id: FAR, position: { x: 8, y: 5 } });
     expect(appeared.token.notes).toBeUndefined();
     expect(await frame).toMatchObject({ tokenId: FAR, x: 8, dragging: true });
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('reach a player once the token is carried into their sight from beyond it', async () => {
     await litMapWith(12);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const unseen = expectNoEvent(player, 'token.moved', 400);
-    drag(dm, FAR, [13]);
+    drag(gm, FAR, [13]);
     await unseen;
 
     await new Promise((resolve) => setTimeout(resolve, 100));
     const appeared = waitForEvent<{ token: { id: string; position: { x: number; y: number } } }>(player, 'token:appeared');
     const frame = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
-    dm.emit('token.move', { tokenId: FAR, mapId, x: 9, y: 5 });
+    gm.emit('token.move', { tokenId: FAR, mapId, x: 9, y: 5 });
     expect((await appeared).token).toMatchObject({ id: FAR, position: { x: 9, y: 5 } });
     expect(await frame).toMatchObject({ tokenId: FAR, x: 9 });
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -259,7 +259,7 @@ describe('drag frames carried across the edge of sight', () => {
 describe('line of sight during a drag on a lit map', () => {
   it('is worked out once for each player, and again only after DRAG_DECISION_MS', async () => {
     await resetMap(true, true);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     // The server's clock, moved by hand: each frame below arrives as far
@@ -270,13 +270,13 @@ describe('line of sight during a drag on a lit map', () => {
     const sight = jest.spyOn(spiritLayer, 'playerSightOnLitMap');
     try {
       const first = waitForEvent<{ x: number }>(player, 'token.moved');
-      drag(dm, FAR, [16]);
+      drag(gm, FAR, [16]);
       expect((await first).x).toBe(16);
 
       const frameAt = async (ms: number, x: number) => {
         elapsed = ms;
         const frame = waitForEvent<{ x: number }>(player, 'token.moved');
-        dm.emit('token.move', { tokenId: FAR, mapId, x, y: 5 });
+        gm.emit('token.move', { tokenId: FAR, mapId, x, y: 5 });
         expect((await frame).x).toBe(x);
       };
       await frameAt(DRAG_DECISION_MS * 0.3, 15);
@@ -291,33 +291,33 @@ describe('line of sight during a drag on a lit map', () => {
       clock.mockRestore();
     }
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
 
 // A frame says where a token is being carried; the drop, where it stands. A
-// page moves sight and explored memory only for the second, so a DM carrying
+// page moves sight and explored memory only for the second, so a GM carrying
 // a player's token about reveals nothing to that player on the way.
 describe('a drag frame and the drop', () => {
   it('are told apart: every frame is marked as dragging, the drop is not', async () => {
     await resetMap(false, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const frame = waitForEvent<{ tokenId: string; x: number; dragging?: boolean }>(player, 'token.moved');
-    drag(dm, OWN, [7]);
+    drag(gm, OWN, [7]);
     expect(await frame).toMatchObject({ tokenId: OWN, x: 7, dragging: true });
 
     const drop = new Promise<{ tokenId: string; x: number; dragging?: boolean }>((resolve) => {
       player.on('token.moved', (e: { tokenId: string; x: number; dragging?: boolean }) => { if (e.x === 8) resolve(e); });
     });
-    dm.emit('token.move.end', { tokenId: OWN, mapId, x: 8, y: 5 });
+    gm.emit('token.move.end', { tokenId: OWN, mapId, x: 8, y: 5 });
     const dropped = await drop;
     expect(dropped).toMatchObject({ tokenId: OWN, x: 8 });
     expect(dropped.dragging).toBeUndefined();
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -325,14 +325,14 @@ describe('a drag frame and the drop', () => {
 describe('drag frames on an unlit map', () => {
   it('still reach every player, as the map fetch sends every visible token', async () => {
     await resetMap(false, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const frame = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
-    drag(dm, FAR, [16]);
+    drag(gm, FAR, [16]);
     expect(await frame).toMatchObject({ tokenId: FAR, x: 16 });
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -342,7 +342,7 @@ describe('drag frames on an unlit map', () => {
   // map already did.
   it('decide who they go to once per drag, not once per frame', async () => {
     await resetMap(false, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const memberships = jest.spyOn(prisma.campaignMembership, 'findMany');
     memberships.mockClear();
@@ -352,64 +352,64 @@ describe('drag frames on an unlit map', () => {
     const last = new Promise<void>((resolve) => {
       player.on('token.moved', (e: { x: number }) => { if (e.x === 19) resolve(); });
     });
-    drag(dm, FAR, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    drag(gm, FAR, [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
     await last;
 
     expect(memberships.mock.calls.length).toBeLessThanOrEqual(1);
     memberships.mockRestore();
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   // Who the frames go to is decided once per drag, from the token as it was.
-  // The DM can hide it, or move it to the other plane, while the drag goes
+  // The GM can hide it, or move it to the other plane, while the drag goes
   // on; from then on it must reach only those who may still see it.
   it('stop reaching a player once the token is hidden mid-drag', async () => {
     await resetMap(false, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const first = waitForEvent<{ x: number }>(player, 'token.moved');
-    drag(dm, FAR, [16]);
+    drag(gm, FAR, [16]);
     expect((await first).x).toBe(16);
 
     await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, 5, playerId), token(FAR, 16, null, false)] } });
     const quiet = expectNoEvent(player, 'token.moved', 800);
-    dm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
+    gm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
     await quiet;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('stop reaching a material-plane player once the token moves to the spirit layer mid-drag', async () => {
     await resetMap(false, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const first = waitForEvent<{ x: number }>(player, 'token.moved');
-    drag(dm, FAR, [16]);
+    drag(gm, FAR, [16]);
     expect((await first).x).toBe(16);
 
     await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, 5, playerId), { ...token(FAR, 16, null), layer: 'spirit' }] } });
     const quiet = expectNoEvent(player, 'token.moved', 800);
-    dm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
+    gm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
     await quiet;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
-  // Who may see the token also turns on each player's plane, which the DM
+  // Who may see the token also turns on each player's plane, which the GM
   // can change mid-drag without touching the token. The decision is made
   // again at least once a second, so such a change is followed within one.
   it('stop reaching a player who crosses to the other plane mid-drag, within a second', async () => {
     await resetMap(false, false);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const first = waitForEvent<{ x: number }>(player, 'token.moved');
-    drag(dm, FAR, [16]);
+    drag(gm, FAR, [16]);
     expect((await first).x).toBe(16);
 
     // Every player is now on the spirit plane; the dragged token is not.
@@ -418,14 +418,14 @@ describe('drag frames on an unlit map', () => {
     const clock = jest.spyOn(Date, 'now').mockReturnValue(later);
     try {
       const quiet = expectNoEvent(player, 'token.moved', 800);
-      dm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
+      gm.emit('token.move', { tokenId: FAR, mapId, x: 15, y: 5 });
       await quiet;
     } finally {
       clock.mockRestore();
       await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
     }
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });

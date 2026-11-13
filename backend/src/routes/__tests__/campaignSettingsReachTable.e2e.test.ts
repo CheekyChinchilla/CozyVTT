@@ -28,27 +28,27 @@ type SettingsSaved = {
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
-let dmRest: ReturnType<typeof request.agent>;
+let gmRest: ReturnType<typeof request.agent>;
 let player: ClientSocket;
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `settings-table-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `settings-table-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `settings-table-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Settings reach the table ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Settings reach the table ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  dmRest = request.agent(app);
-  expect((await dmRest.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmRest = request.agent(app);
+  expect((await gmRest.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -63,13 +63,13 @@ afterEach(() => {
 afterAll(async () => {
   await server.close();
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
-it('sends every member the chat cooldown the DM turned on', async () => {
+it('sends every member the chat cooldown the GM turned on', async () => {
   const saved = waitForEvent<SettingsSaved>(player, 'campaign.settings.updated');
-  const res = await dmRest.put(`/api/campaigns/${campaignId}`).send({ chatCooldownEnabled: true, chatCooldownSeconds: 7 });
+  const res = await gmRest.put(`/api/campaigns/${campaignId}`).send({ chatCooldownEnabled: true, chatCooldownSeconds: 7 });
   expect(res.status).toBe(200);
 
   expect(await saved).toMatchObject({ campaignId, chatCooldownEnabled: true, chatCooldownSeconds: 7 });
@@ -77,13 +77,13 @@ it('sends every member the chat cooldown the DM turned on', async () => {
 
 it('sends the name and description as stored', async () => {
   const saved = waitForEvent<SettingsSaved>(player, 'campaign.settings.updated');
-  expect((await dmRest.put(`/api/campaigns/${campaignId}`).send({ name: '  The Drowned Bell ', description: '' })).status).toBe(200);
+  expect((await gmRest.put(`/api/campaigns/${campaignId}`).send({ name: '  The Drowned Bell ', description: '' })).status).toBe(200);
 
   expect(await saved).toMatchObject({ campaignId, name: 'The Drowned Bell', description: '' });
 });
 
 it('sends nothing for a refused save', async () => {
   const none = expectNoEvent(player, 'campaign.settings.updated', 500);
-  expect((await dmRest.put(`/api/campaigns/${campaignId}`).send({ chatCooldownSeconds: 0 })).status).toBe(400);
+  expect((await gmRest.put(`/api/campaigns/${campaignId}`).send({ chatCooldownSeconds: 0 })).status).toBe(400);
   await none;
 });

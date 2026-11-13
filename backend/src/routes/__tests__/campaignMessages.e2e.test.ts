@@ -32,10 +32,10 @@ interface Page {
 }
 
 describe('GET /api/campaigns/:campaignId/messages', () => {
-  let dmId: string;
+  let gmId: string;
   let outsiderId: string;
   let campaignId: string;
-  let dmAgent: ReturnType<typeof request.agent>;
+  let gmAgent: ReturnType<typeof request.agent>;
   let outsiderAgent: ReturnType<typeof request.agent>;
 
   async function login(email: string) {
@@ -55,7 +55,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
       await prisma.message.create({
         data: {
           campaignId,
-          userId: row.type === 'SYSTEM' ? null : dmId,
+          userId: row.type === 'SYSTEM' ? null : gmId,
           type: row.type,
           content: row.content,
           createdAt: row.at,
@@ -68,18 +68,18 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dm = await createTestUser({ email: `msg_dm_${stamp}@test.invalid`, isApproved: true });
+    const gm = await createTestUser({ email: `msg_dm_${stamp}@test.invalid`, isApproved: true });
     const outsider = await createTestUser({ email: `msg_out_${stamp}@test.invalid`, isApproved: true });
-    dmId = dm.id;
+    gmId = gm.id;
     outsiderId = outsider.id;
 
-    const campaign = await createTestCampaign(dmId, { name: `Chat History ${stamp}` });
+    const campaign = await createTestCampaign(gmId, { name: `Chat History ${stamp}` });
     campaignId = campaign.id;
     await prisma.campaignMembership.create({
-      data: { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+      data: { campaignId, userId: gmId, role: 'GM', characterIds: [] },
     });
 
-    dmAgent = await login(`msg_dm_${stamp}@test.invalid`);
+    gmAgent = await login(`msg_dm_${stamp}@test.invalid`);
     outsiderAgent = await login(`msg_out_${stamp}@test.invalid`);
   });
 
@@ -89,7 +89,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
 
   afterAll(async () => {
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, outsiderId]);
+    await cleanupUsers([gmId, outsiderId]);
   });
 
   it('fills a page with chat even when dice rolls outnumber it', async () => {
@@ -102,7 +102,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
     }
     await seed(rows);
 
-    const res = await dmAgent.get(`/api/campaigns/${campaignId}/messages?limit=50`);
+    const res = await gmAgent.get(`/api/campaigns/${campaignId}/messages?limit=50`);
     expect(res.status).toBe(200);
     const body = res.body as Page;
     expect(body.messages).toHaveLength(50);
@@ -124,7 +124,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
     // Capped so a cursor that never terminates fails loudly instead of hanging.
     for (let page = 0; page < 10; page++) {
       const url = `/api/campaigns/${campaignId}/messages?limit=25${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
-      const res = await dmAgent.get(url);
+      const res = await gmAgent.get(url);
       expect(res.status).toBe(200);
       const body = res.body as Page;
       seen.push(...body.messages.map((m) => m.content));
@@ -155,7 +155,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
     let cursor: string | null = null;
     for (let page = 0; page < 5; page++) {
       const url = `/api/campaigns/${campaignId}/messages?limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
-      const body = (await dmAgent.get(url)).body as Page;
+      const body = (await gmAgent.get(url)).body as Page;
       seen.push(...body.messages.map((m) => m.content));
       if (!body.pagination.hasMore) break;
       cursor = body.pagination.nextCursor;
@@ -168,7 +168,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
     await seed(
       Array.from({ length: 50 }, (_, i) => ({ type: 'PLAYER' as const, content: `chat ${i}`, at: at(i) }))
     );
-    const body = (await dmAgent.get(`/api/campaigns/${campaignId}/messages?limit=50`)).body as Page;
+    const body = (await gmAgent.get(`/api/campaigns/${campaignId}/messages?limit=50`)).body as Page;
     expect(body.messages).toHaveLength(50);
     expect(body.pagination.hasMore).toBe(false);
     expect(body.pagination.nextCursor).toBeNull();
@@ -176,7 +176,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
 
   it('rejects a cursor it did not mint', async () => {
     for (const bad of ['garbage', Buffer.from('nonsense').toString('base64url')]) {
-      const res = await dmAgent.get(`/api/campaigns/${campaignId}/messages?cursor=${encodeURIComponent(bad)}`);
+      const res = await gmAgent.get(`/api/campaigns/${campaignId}/messages?cursor=${encodeURIComponent(bad)}`);
       expect(res.status).toBe(400);
     }
   });
@@ -189,7 +189,7 @@ describe('GET /api/campaigns/:campaignId/messages', () => {
       { type: 'PLAYER', content: 'chat', at: at(0) },
       { type: 'DICE_ROLL', content: 'rolled 1d20', at: at(1) },
     ]);
-    const body = (await dmAgent.get(`/api/campaigns/${campaignId}/messages`)).body as Page;
+    const body = (await gmAgent.get(`/api/campaigns/${campaignId}/messages`)).body as Page;
     expect(body.messages.map((m) => m.content)).toEqual(['chat']);
   });
 

@@ -4,7 +4,7 @@
  * Vibe Tracker Details
  *
  * Default time periods with visual effects (hue, CSS filter, ambient audio).
- * DMs can customize periods or create their own.
+ * GMs can customize periods or create their own.
  */
 
 export interface VibePeriod {
@@ -63,7 +63,7 @@ export const DEFAULT_VIBE_SETTINGS: VibeSettings = {
  *
  * `vibeSettings.atmosphereAudio` names an asset, and naming one there lets
  * everyone at the table read it. Only the socket handler that sets a track may
- * decide that, because it checks the DM can read the asset first. Every other
+ * decide that, because it checks the GM can read the asset first. Every other
  * writer of this column keeps whatever is already stored and ignores the
  * client's value, so an ordinary settings update neither opens a file nor stops
  * the music.

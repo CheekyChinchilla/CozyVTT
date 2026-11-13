@@ -77,7 +77,7 @@ async function importOne(asset: ArchivedAsset) {
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT test', campaignName: 'Allowlist',
-        gameSystem: 'DND_5E', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+        gameSystem: 'FIFTH_EDITION', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
         includesAudio: true, totalSizeBytes: asset.bytes.length,
       }),
     },
@@ -107,16 +107,16 @@ describe('an imported asset', () => {
   });
 
   it('is stored under the format and extension its bytes show, not the ones the archive gives', async () => {
-    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/webp', originalName: 'Players Handbook.exe', bytes: png });
+    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/webp', originalName: 'Field Notes.exe', bytes: png });
     expect(stored.mimeType).toBe('image/png');
     expect(stored.filename).toMatch(/\.png$/);
     expect(stored.filePath).toMatch(/\.png$/);
-    expect(stored.originalName).toBe('Players Handbook.png');
+    expect(stored.originalName).toBe('Field Notes.png');
   });
 
   it('keeps an allowed name as it was', async () => {
-    const [stored] = await importOne({ type: 'TOKEN', mimeType: 'image/png', originalName: 'Goblin Boss.png', bytes: png });
-    expect(stored.originalName).toBe('Goblin Boss.png');
+    const [stored] = await importOne({ type: 'TOKEN', mimeType: 'image/png', originalName: 'Goblin.png', bytes: png });
+    expect(stored.originalName).toBe('Goblin.png');
     expect(stored.type).toBe('TOKEN');
   });
 

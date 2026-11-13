@@ -31,7 +31,7 @@ export interface AuthenticatedSocket extends Socket {
   /** The `authenticate` in progress, so the next one on this socket waits for it (events.ts). */
   authenticating?: Promise<void>;
   /**
-   * On a DM's socket, the player whose explored memory its Player Preview is
+   * On a GM's socket, the player whose explored memory its Player Preview is
    * showing, as its last `exploration:request` named them: the one other
    * member's memory it is sent as it grows.
    */

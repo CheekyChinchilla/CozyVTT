@@ -39,7 +39,7 @@ const manifest = (overrides: Record<string, unknown> = {}) =>
     exportedAt: '2026-10-06T00:00:00.000Z',
     exportedFrom: 'CozyVTT test',
     campaignName: 'Bounded',
-    gameSystem: 'DND_5E',
+    gameSystem: 'FIFTH_EDITION',
     mapCount: 0,
     tokenCount: 0,
     creatureCount: 0,

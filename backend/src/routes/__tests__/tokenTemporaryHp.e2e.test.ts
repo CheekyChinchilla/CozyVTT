@@ -2,7 +2,7 @@
  * A creature's temporary hit points, as Temporary HP... on its token's menu
  * changes them: through the token update route, whose rule they follow.
  *
- * A creature's hit points are its token's, and only the DM changes a token's
+ * A creature's hit points are its token's, and only the GM changes a token's
  * hit points, its temporary ones included: a player, even one the token names
  * as its controller, is refused. A character's token carries no hit points of
  * its own; its menu grants the character's (character.hp.temporary). A token
@@ -20,29 +20,29 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 
 const WOLF = randomUUID();
 const hp = (temp: number) => ({ current: 11, max: 11, temp });
 
 beforeAll(async () => {
-  const dmUser = await createTestUser({ displayName: 'Temp HP DM' });
+  const gmUser = await createTestUser({ displayName: 'Temp HP GM' });
   const playerUser = await createTestUser({ displayName: 'Temp HP Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Temp HP tokens' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Temp HP tokens' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  // A wolf the DM has handed to the player, as a companion.
+  // A wolf the GM has handed to the player, as a companion.
   mapId = (await prisma.map.create({
     data: {
       campaignId, name: 'Woods', imageUrl: '/api/assets/maps/none', baseLayerUrl: '/api/assets/maps/none',
@@ -54,16 +54,16 @@ beforeAll(async () => {
     },
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
-  dm = request.agent(app);
+  gm = request.agent(app);
   player = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   expect((await player.post('/api/auth/login').send({ email: playerUser.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -72,8 +72,8 @@ const storedHp = async () =>
   readTokens((await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens).find((t) => t.id === WOLF)?.hp;
 
 describe("a creature token's temporary hit points", () => {
-  it('are the DM to change', async () => {
-    const res = await dm.put(tokenUrl()).send({ hp: hp(7) });
+  it('are the GM to change', async () => {
+    const res = await gm.put(tokenUrl()).send({ hp: hp(7) });
     expect(res.status).toBe(200);
     expect(await storedHp()).toEqual(hp(7));
   });
@@ -81,14 +81,23 @@ describe("a creature token's temporary hit points", () => {
   it('are refused to a player, even the one the token names as its controller', async () => {
     const res = await player.put(tokenUrl()).send({ hp: hp(30) });
     expect(res.status).toBe(403);
-    expect(res.body.message).toBe('Only DM can update token field: hp');
+    expect(res.body.message).toBe('Only the GM can update token field: hp');
     expect((await storedHp())?.temp).not.toBe(30);
   });
 
   it(`hold at most ${MAX_TEMPORARY_HIT_POINTS.toLocaleString('en-US')}`, async () => {
-    expect((await dm.put(tokenUrl()).send({ hp: hp(MAX_TEMPORARY_HIT_POINTS) })).status).toBe(200);
-    const over = await dm.put(tokenUrl()).send({ hp: hp(MAX_TEMPORARY_HIT_POINTS + 1) });
+    expect((await gm.put(tokenUrl()).send({ hp: hp(MAX_TEMPORARY_HIT_POINTS) })).status).toBe(200);
+    const over = await gm.put(tokenUrl()).send({ hp: hp(MAX_TEMPORARY_HIT_POINTS + 1) });
     expect(over.status).toBe(400);
     expect((await storedHp())?.temp).toBe(MAX_TEMPORARY_HIT_POINTS);
+  });
+});
+
+// A token's layer is the GM's to change too, and the refusal says who may.
+describe("a creature token's layer", () => {
+  it('is refused to the player who controls it, naming the GM', async () => {
+    const res = await player.put(tokenUrl()).send({ layer: 'spirit' });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Only the GM can change token layer');
   });
 });

@@ -6,13 +6,13 @@
  *   was gone after a reload. It is stored now, with its id on the live entry
  *   so the two are one entry. A roll for a token that is not sent to every
  *   player (hidden, on the spirit plane, on a map the table is not showing)
- *   is stored and sent as a secret roll: to the roller, and to the DM.
+ *   is stored and sent as a secret roll: to the roller, and to the GM.
  * - A player rolling for their own obscured token saw it logged as "Unknown
  *   creature". The roller is sent the token's name; everyone else, and the
  *   history, the placeholder.
  * - A player could roll again and again until combat started, keeping the
- *   best. They roll once; the DM can still change the number.
- * - A DM's roll for a token deleted while it was being worked out added a
+ *   best. They roll once; the GM can still change the number.
+ * - A GM's roll for a token deleted while it was being worked out added a
  *   combatant for a token that no longer existed.
  * - A player's roll was counted against the dice ceiling only after its
  *   checks, so a flood of rolls refused by them was never counted.
@@ -34,7 +34,7 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `inithistory-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let floodId: string;
 let campaignId: string;
@@ -59,13 +59,13 @@ async function placeTokens(tokens: ReturnType<typeof token>[], inOrder: string[]
 const connect = (who: string): Promise<ClientSocket> => server.connectAndAuth(cookies[who], campaignId);
 
 beforeAll(async () => {
-  const users = await Promise.all(['dm', 'player', 'flood'].map((name) =>
+  const users = await Promise.all(['gm', 'player', 'flood'].map((name) =>
     prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `History ${name}` } })));
-  [dmId, playerId, floodId] = users.map((u) => u.id);
-  campaignId = (await prisma.campaign.create({ data: { name: `Initiative history ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  [gmId, playerId, floodId] = users.map((u) => u.id);
+  campaignId = (await prisma.campaign.create({ data: { name: `Initiative history ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: floodId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
@@ -78,7 +78,7 @@ beforeAll(async () => {
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  for (const [name, id] of [['dm', dmId], ['player', playerId], ['flood', floodId]] as const) cookies[name] = await server.loginAs(id);
+  for (const [name, id] of [['gm', gmId], ['player', playerId], ['flood', floodId]] as const) cookies[name] = await server.loginAs(id);
 });
 
 beforeEach(async () => {
@@ -92,42 +92,42 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, floodId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, floodId] } } });
   await prisma.$disconnect();
 });
 
 describe('the dice history', () => {
   it('stores a roll for a token everyone is sent, and the live entry carries its id', async () => {
     await placeTokens([token('Goblin')]);
-    const dm = await connect('dm');
+    const gm = await connect('gm');
     const player = await connect('player');
     const toPlayer = waitForEvent<Rolled>(player, 'dice.rolled');
 
-    dm.emit('initiative.roll', { tokenId: 'Goblin', mapId });
+    gm.emit('initiative.roll', { tokenId: 'Goblin', mapId });
 
     const live = await toPlayer;
     const stored = await prisma.diceRoll.findFirstOrThrow({ where: { campaignId } });
-    expect(stored).toMatchObject({ userId: dmId, characterName: 'Goblin', purpose: 'Goblin Initiative', secret: false, result: live.result });
+    expect(stored).toMatchObject({ userId: gmId, characterName: 'Goblin', purpose: 'Goblin Initiative', secret: false, result: live.result });
     expect(live).toMatchObject({ id: stored.id, characterName: 'Goblin', secret: false });
   });
 
   it('stores a roll for a hidden token as a secret roll, sent to no player', async () => {
     await placeTokens([token('Assassin', { visible: false })]);
-    const dm = await connect('dm');
+    const gm = await connect('gm');
     const player = await connect('player');
-    const toDm = waitForEvent<Rolled>(dm, 'dice.rolled');
+    const toGm = waitForEvent<Rolled>(gm, 'dice.rolled');
     const nothingToPlayer = expectNoEvent(player, 'dice.rolled', 500);
 
-    dm.emit('initiative.roll', { tokenId: 'Assassin', mapId });
+    gm.emit('initiative.roll', { tokenId: 'Assassin', mapId });
 
-    const live = await toDm;
+    const live = await toGm;
     const stored = await prisma.diceRoll.findFirstOrThrow({ where: { campaignId } });
     expect(stored.secret).toBe(true);
     expect(live).toMatchObject({ id: stored.id, secret: true });
     await nothingToPlayer;
   });
 
-  it('stores a roll for a token on a map the table is not on as a secret roll, for the DM alone', async () => {
+  it('stores a roll for a token on a map the table is not on as a secret roll, for the GM alone', async () => {
     const prepared = await prisma.map.create({
       data: {
         campaignId, name: 'Prepared', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
@@ -135,14 +135,14 @@ describe('the dice history', () => {
       },
     });
     clearState(campaignId);
-    const dm = await connect('dm');
+    const gm = await connect('gm');
     const player = await connect('player');
-    const toDm = waitForEvent<Rolled>(dm, 'dice.rolled');
+    const toGm = waitForEvent<Rolled>(gm, 'dice.rolled');
     const nothingToPlayer = expectNoEvent(player, 'dice.rolled', 500);
 
-    dm.emit('initiative.roll', { tokenId: 'Lich', mapId: prepared.id });
+    gm.emit('initiative.roll', { tokenId: 'Lich', mapId: prepared.id });
 
-    const live = await toDm;
+    const live = await toGm;
     const stored = await prisma.diceRoll.findFirstOrThrow({ where: { campaignId } });
     expect(stored).toMatchObject({ secret: true, characterName: 'Lich' });
     expect(live).toMatchObject({ id: stored.id, secret: true });
@@ -151,44 +151,44 @@ describe('the dice history', () => {
   });
 
   it('names an obscured token for the player who rolled it, and no one else', async () => {
-    await placeTokens([token('Seelah', { obscured: true, controlledBy: playerId })], ['Seelah']);
-    const dm = await connect('dm');
+    await placeTokens([token('Maren', { obscured: true, controlledBy: playerId })], ['Maren']);
+    const gm = await connect('gm');
     const player = await connect('player');
     const toPlayer = waitForEvent<Rolled>(player, 'dice.rolled');
-    const toDm = waitForEvent<Rolled>(dm, 'dice.rolled');
+    const toGm = waitForEvent<Rolled>(gm, 'dice.rolled');
 
-    player.emit('initiative.roll', { tokenId: 'Seelah', mapId });
+    player.emit('initiative.roll', { tokenId: 'Maren', mapId });
 
-    expect(await toPlayer).toMatchObject({ characterName: 'Seelah', purpose: 'Seelah Initiative' });
-    expect(await toDm).toMatchObject({ characterName: 'Unknown creature', purpose: 'Unknown creature Initiative' });
+    expect(await toPlayer).toMatchObject({ characterName: 'Maren', purpose: 'Maren Initiative' });
+    expect(await toGm).toMatchObject({ characterName: 'Unknown creature', purpose: 'Unknown creature Initiative' });
     expect(await prisma.diceRoll.findFirstOrThrow({ where: { campaignId } })).toMatchObject({ characterName: 'Unknown creature' });
   });
 });
 
 describe('a player\'s roll', () => {
   it('is made once for each time the token joins the order', async () => {
-    await placeTokens([token('Brann', { controlledBy: playerId })], ['Brann']);
+    await placeTokens([token('Corvel', { controlledBy: playerId })], ['Corvel']);
     const player = await connect('player');
-    const dm = await connect('dm');
+    const gm = await connect('gm');
 
     const first = waitForEvent<Rolled>(player, 'dice.rolled');
-    player.emit('initiative.roll', { tokenId: 'Brann', mapId });
+    player.emit('initiative.roll', { tokenId: 'Corvel', mapId });
     await first;
 
     const refused = waitForEvent<{ message: string }>(player, 'error');
-    player.emit('initiative.roll', { tokenId: 'Brann', mapId });
-    expect((await refused).message).toBe('You have rolled initiative for this fight already. Ask your DM to change it.');
+    player.emit('initiative.roll', { tokenId: 'Corvel', mapId });
+    expect((await refused).message).toBe('You have rolled initiative for this fight already. Ask your GM to change it.');
     expect(await prisma.diceRoll.count({ where: { campaignId } })).toBe(1);
 
     // Out of the order and back in: a new roll.
-    const removed = waitForEvent(dm, 'initiative.state');
-    dm.emit('initiative.remove', { tokenId: 'Brann' });
+    const removed = waitForEvent(gm, 'initiative.state');
+    gm.emit('initiative.remove', { tokenId: 'Corvel' });
     await removed;
-    const added = waitForEvent(dm, 'initiative.state');
-    dm.emit('initiative.add', { tokenId: 'Brann', mapId });
+    const added = waitForEvent(gm, 'initiative.state');
+    gm.emit('initiative.add', { tokenId: 'Corvel', mapId });
     await added;
     const again = waitForEvent<Rolled>(player, 'dice.rolled');
-    player.emit('initiative.roll', { tokenId: 'Brann', mapId });
+    player.emit('initiative.roll', { tokenId: 'Corvel', mapId });
     await again;
     expect(await prisma.diceRoll.count({ where: { campaignId } })).toBe(2);
   });
@@ -208,11 +208,11 @@ describe('a player\'s roll', () => {
 describe('a token deleted while its roll is worked out', () => {
   it('is not added to the order', async () => {
     await placeTokens([token('Ghost')]);
-    const dm = await connect('dm');
-    const refused = waitForEvent<{ message: string }>(dm, 'error', 5000);
+    const gm = await connect('gm');
+    const refused = waitForEvent<{ message: string }>(gm, 'error', 5000);
 
     await withMapsLocked([mapId], async (tx) => {
-      dm.emit('initiative.roll', { tokenId: 'Ghost', mapId });
+      gm.emit('initiative.roll', { tokenId: 'Ghost', mapId });
       for (let tries = 0; tries < 100 && writersWaitingFor(mapId) === 0; tries++) await pause(50);
       const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
       await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== 'Ghost')) } });

@@ -11,6 +11,8 @@
  */
 
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { io as ioc } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { Prisma, GameSystem } from '@prisma/client';
@@ -34,20 +36,27 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `ws-${name}-${runId}@test.cozyvtt.local`;
 
 const PLAYER_TOKEN_ID = randomUUID();
-const DM_TOKEN_ID = randomUUID();
+
+/** A Horror d100 sheet as versions before 1.7.0 stored it, from the server's fixtures of that shape. */
+function oldHorrorD100Sheet(name: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(fs.readFileSync(path.resolve(__dirname, `../../legacy/__fixtures__/horror-d100-sheets/${name}.json`), 'utf8'));
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error(`${name}.json holds no sheet`);
+  return { ...parsed };
+}
+const GM_TOKEN_ID = randomUUID();
 const SPIRIT_TOKEN_ID = randomUUID();
 const WALL_ID = randomUUID();
 const DOOR_CLOSED_ID = randomUUID();
 const DOOR_LOCKED_ID = randomUUID();
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let player1Id: string;
 let player2Id: string;
 let outsiderId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let player1Cookie: string;
 let player2Cookie: string;
 let outsiderCookie: string;
@@ -63,7 +72,7 @@ function seedTokens() {
   };
   return [
     { ...base, id: PLAYER_TOKEN_ID, name: 'Hero', position: { x: 5, y: 5 }, layer: 'token', controlledBy: player1Id },
-    { ...base, id: DM_TOKEN_ID, name: 'Goblin', position: { x: 10, y: 10 }, layer: 'token', controlledBy: null },
+    { ...base, id: GM_TOKEN_ID, name: 'Goblin', position: { x: 10, y: 10 }, layer: 'token', controlledBy: null },
     { ...base, id: SPIRIT_TOKEN_ID, name: 'Ghost', position: { x: 15, y: 15 }, layer: 'spirit', controlledBy: null },
   ];
 }
@@ -97,7 +106,7 @@ async function resetGameState() {
 
 beforeAll(async () => {
   // Seed users
-  const [dm, player1, player2, outsider] = await Promise.all(
+  const [gm, player1, player2, outsider] = await Promise.all(
     ['dm', 'player1', 'player2', 'outsider'].map((name) =>
       prisma.user.create({
         data: {
@@ -108,7 +117,7 @@ beforeAll(async () => {
       })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   player1Id = player1.id;
   player2Id = player2.id;
   outsiderId = outsider.id;
@@ -117,7 +126,7 @@ beforeAll(async () => {
   const campaign = await prisma.campaign.create({
     data: {
       name: `WS Test Campaign ${runId}`,
-      ownerId: dmId,
+      ownerId: gmId,
       vibeSettings: {},
     },
   });
@@ -143,15 +152,15 @@ beforeAll(async () => {
 
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: player1Id, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: player2Id, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
 
   server = await createWsTestServer();
-  [dmCookie, player1Cookie, player2Cookie, outsiderCookie] = await Promise.all([
-    server.loginAs(dmId),
+  [gmCookie, player1Cookie, player2Cookie, outsiderCookie] = await Promise.all([
+    server.loginAs(gmId),
     server.loginAs(player1Id),
     server.loginAs(player2Id),
     server.loginAs(outsiderId),
@@ -162,7 +171,7 @@ afterAll(async () => {
   await server?.close();
   // Campaign cascade removes memberships, maps, messages, dice rolls
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, player1Id, player2Id, outsiderId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, player1Id, player2Id, outsiderId] } } });
   await prisma.$disconnect();
 });
 
@@ -220,12 +229,12 @@ describe('connection & authentication', () => {
 describe('token movement', () => {
   it('broadcasts and persists a player moving their own token', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const dmSees = waitForEvent<{ tokenId: string; x: number; y: number }>(dm, 'token.moved');
+    const gmSees = waitForEvent<{ tokenId: string; x: number; y: number }>(gm, 'token.moved');
     player.emit('token.move.end', { tokenId: PLAYER_TOKEN_ID, mapId, x: 8, y: 9 });
 
-    const moved = await dmSees;
+    const moved = await gmSees;
     expect(moved.tokenId).toBe(PLAYER_TOKEN_ID);
     expect(moved.x).toBe(8);
     expect(moved.y).toBe(9);
@@ -235,26 +244,26 @@ describe('token movement', () => {
     expect(token?.position).toEqual({ x: 8, y: 9 });
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('denies a player moving a token they do not control, without broadcasting', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
     const denial = waitForEvent<{ message: string }>(player, 'error');
-    const silence = expectNoEvent(dm, 'token.moved');
-    player.emit('token.move.end', { tokenId: DM_TOKEN_ID, mapId, x: 12, y: 12 });
+    const silence = expectNoEvent(gm, 'token.moved');
+    player.emit('token.move.end', { tokenId: GM_TOKEN_ID, mapId, x: 12, y: 12 });
 
     expect((await denial).message).toBe('You do not have permission to move this token');
     await silence;
 
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-    const token = readTokens(map.tokens).find((t) => t.id === DM_TOKEN_ID);
+    const token = readTokens(map.tokens).find((t) => t.id === GM_TOKEN_ID);
     expect(token?.position).toEqual({ x: 10, y: 10 });
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('rejects out-of-bounds positions', async () => {
@@ -270,21 +279,21 @@ describe('token movement', () => {
   it('answers a drag frame off the map with an error, even from a player who may not move the token', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(player, 'error');
-    player.emit('token.move', { tokenId: DM_TOKEN_ID, mapId, x: 999, y: 5 });
+    player.emit('token.move', { tokenId: GM_TOKEN_ID, mapId, x: 999, y: 5 });
     expect((await denial).message).toBe('Token position out of bounds');
     player.disconnect();
   });
 
   it('drops a drag frame on the map from a player who may not move the token, without an answer', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const noAnswer = expectNoEvent(player, 'error');
-    const nothingSent = expectNoEvent(dm, 'token.moved');
-    player.emit('token.move', { tokenId: DM_TOKEN_ID, mapId, x: 12, y: 12 });
+    const nothingSent = expectNoEvent(gm, 'token.moved');
+    player.emit('token.move', { tokenId: GM_TOKEN_ID, mapId, x: 12, y: 12 });
     await noAnswer;
     await nothingSent;
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
@@ -297,53 +306,53 @@ describe('walls & doors', () => {
     await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: false } });
   });
 
-  it('DM can add a wall segment: broadcast + persisted', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('GM can add a wall segment: broadcast + persisted', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
     const segment = { id: randomUUID(), x1: 1, y1: 1, x2: 2, y2: 2, type: 'wall' };
     const playerSees = waitForEvent<{ mapId: string; segment: { id: string; type: string } }>(player, 'wall:added');
-    dm.emit('wall:add', { mapId, segment });
+    gm.emit('wall:add', { mapId, segment });
 
     expect((await playerSees).segment).toEqual(segment);
 
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true } });
     expect((map.wallSegments as Array<{ id: string }>).some((s) => s.id === segment.id)).toBe(true);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('rejects a Zod-invalid wall segment without persisting', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const denial = waitForEvent<{ message: string }>(dm, 'error');
-    dm.emit('wall:add', { mapId, segment: { id: randomUUID(), x1: 1, y1: 1, x2: 2, y2: 2, type: 'force-field' } });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const denial = waitForEvent<{ message: string }>(gm, 'error');
+    gm.emit('wall:add', { mapId, segment: { id: randomUUID(), x1: 1, y1: 1, x2: 2, y2: 2, type: 'force-field' } });
     expect((await denial).message).toBeTruthy();
 
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { wallSegments: true } });
     expect(map.wallSegments as Array<{ id: string }>).toHaveLength(seedWalls().length);
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('denies wall:add from a PLAYER', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(player, 'error');
     player.emit('wall:add', { mapId, segment: { id: randomUUID(), x1: 1, y1: 1, x2: 2, y2: 2, type: 'wall' } });
-    expect((await denial).message).toBe('Only DMs can add wall segments');
+    expect((await denial).message).toBe('Only GMs can add wall segments');
     player.disconnect();
   });
 
   it('a player can toggle an unlocked door', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
     const opened = { ...seedWalls()[1], type: 'door-open' };
-    const dmSees = waitForEvent<{ segment: { id: string; type: string } }>(dm, 'wall:updated');
+    const gmSees = waitForEvent<{ segment: { id: string; type: string } }>(gm, 'wall:updated');
     player.emit('wall:update', { mapId, segment: opened });
 
-    expect((await dmSees).segment.type).toBe('door-open');
+    expect((await gmSees).segment.type).toBe('door-open');
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('a player cannot open a locked door', async () => {
@@ -362,17 +371,17 @@ describe('walls & doors', () => {
     player.disconnect();
   });
 
-  it("a player's toggle keeps the door where the DM drew it", async () => {
+  it("a player's toggle keeps the door where the GM drew it", async () => {
     // The whole segment the client sent used to be stored, so a player could
     // move or stretch any unlocked door by toggling it with new coordinates.
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
     const moved = { ...seedWalls()[1], x1: 0, y1: 0, x2: 19, y2: 19, type: 'door-open' };
-    const dmSees = waitForEvent<{ segment: { id: string; type: string; x1: number; y1: number; x2: number; y2: number } }>(dm, 'wall:updated');
+    const gmSees = waitForEvent<{ segment: { id: string; type: string; x1: number; y1: number; x2: number; y2: number } }>(gm, 'wall:updated');
     player.emit('wall:update', { mapId, segment: moved });
 
-    const seen = (await dmSees).segment;
+    const seen = (await gmSees).segment;
     expect(seen.type).toBe('door-open');
     expect([seen.x1, seen.y1, seen.x2, seen.y2]).toEqual([5, 0, 6, 0]);
 
@@ -382,7 +391,7 @@ describe('walls & doors', () => {
     expect(stored).toMatchObject({ x1: 5, y1: 0, x2: 6, y2: 0, type: 'door-open' });
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('a spectator cannot toggle a door', async () => {
@@ -408,16 +417,16 @@ describe('walls & doors', () => {
 // ── 4. Fog of war ────────────────────────────────────────────────────────────
 
 describe('fog of war', () => {
-  it('DM fog reveal: DM gets full state, player gets revealed cells, state persists', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('GM fog reveal: GM gets full state, player gets revealed cells, state persists', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
-    const dmSees = waitForEvent<{ mapId: string; fogState: { revealed: boolean[] } }>(dm, 'fog:updated');
+    const gmSees = waitForEvent<{ mapId: string; fogState: { revealed: boolean[] } }>(gm, 'fog:updated');
     const playerSees = waitForEvent<{ revealedCells: number[]; fogCols: number; fogRows: number }>(player, 'fog:cells');
-    dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1, 2] } });
+    gm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1, 2] } });
 
-    const dmPayload = await dmSees;
-    expect(dmPayload.fogState.revealed[0]).toBe(true);
+    const gmPayload = await gmSees;
+    expect(gmPayload.fogState.revealed[0]).toBe(true);
 
     const playerPayload = await playerSees;
     expect(playerPayload.revealedCells).toEqual(expect.arrayContaining([0, 1, 2]));
@@ -426,18 +435,18 @@ describe('fog of war', () => {
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } });
     expect((map.fogData as unknown as { revealed: boolean[] }).revealed[1]).toBe(true);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('refuses fog operations and sends no fog state while fog is off for the map', async () => {
     await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: false } });
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
-    const denial = waitForEvent<{ message: string }>(dm, 'error');
+    const denial = waitForEvent<{ message: string }>(gm, 'error');
     const playerSeesNothing = expectNoEvent(player, 'fog:cells');
-    dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1, 2] } });
+    gm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1, 2] } });
     expect((await denial).message).toBe('Fog of war is off for this map');
     await playerSeesNothing;
 
@@ -448,7 +457,7 @@ describe('fog of war', () => {
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } });
     expect(map.fogData).toBeNull();
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -456,7 +465,7 @@ describe('fog of war', () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(player, 'error');
     player.emit('fog:operation', { mapId, operation: { op: 'reveal_all' } });
-    expect((await denial).message).toBe('Only DMs can modify fog of war');
+    expect((await denial).message).toBe('Only GMs can modify fog of war');
     player.disconnect();
   });
 });
@@ -474,35 +483,35 @@ describe('lights', () => {
     enabled: true,
   });
 
-  it('DM can add a light: broadcast + persisted', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('GM can add a light: broadcast + persisted', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
     const light = validLight();
     const playerSees = waitForEvent<{ light: { id: string } }>(player, 'light:added');
-    dm.emit('light:add', { mapId, light });
+    gm.emit('light:add', { mapId, light });
     expect((await playerSees).light).toEqual(light);
 
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { lights: true } });
     expect((map.lights as Array<{ id: string }>).some((l) => l.id === light.id)).toBe(true);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('rejects a light with dimRadius < brightRadius', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const denial = waitForEvent<{ message: string }>(dm, 'error');
-    dm.emit('light:add', { mapId, light: { ...validLight(), brightRadius: 10, dimRadius: 5 } });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const denial = waitForEvent<{ message: string }>(gm, 'error');
+    gm.emit('light:add', { mapId, light: { ...validLight(), brightRadius: 10, dimRadius: 5 } });
     expect((await denial).message).toContain('dimRadius');
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('denies light:add from a PLAYER', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(player, 'error');
     player.emit('light:add', { mapId, light: validLight() });
-    expect((await denial).message).toBe('Only DMs can add light sources');
+    expect((await denial).message).toBe('Only GMs can add light sources');
     player.disconnect();
   });
 });
@@ -514,22 +523,22 @@ describe('initiative', () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(player, 'error');
     player.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
-    expect((await denial).message).toBe('Only the DM can modify initiative');
+    expect((await denial).message).toBe('Only the GM can modify initiative');
     player.disconnect();
   });
 
-  it('DM adds a combatant and sets initiative: state broadcast + token persisted', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('GM adds a combatant and sets initiative: state broadcast + token persisted', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
     const playerSeesAdd = waitForEvent<{ combatants: Array<{ tokenId: string; initiative: number | null }> }>(player, 'initiative.state');
-    dm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
+    gm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
     const stateAfterAdd = await playerSeesAdd;
     expect(stateAfterAdd.combatants).toHaveLength(1);
     expect(stateAfterAdd.combatants[0].tokenId).toBe(PLAYER_TOKEN_ID);
 
     const playerSeesSet = waitForEvent<{ combatants: Array<{ tokenId: string; initiative: number | null }> }>(player, 'initiative.state');
-    dm.emit('initiative.set', { tokenId: PLAYER_TOKEN_ID, mapId, value: 17 });
+    gm.emit('initiative.set', { tokenId: PLAYER_TOKEN_ID, mapId, value: 17 });
     const stateAfterSet = await playerSeesSet;
     expect(stateAfterSet.combatants[0].initiative).toBe(17);
 
@@ -537,7 +546,7 @@ describe('initiative', () => {
     const token = readTokens(map.tokens).find((t) => t.id === PLAYER_TOKEN_ID);
     expect(token?.initiative).toBe(17);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -546,49 +555,49 @@ describe('initiative', () => {
   // to a new fight must therefore not seed from it, or the token arrives already
   // placed in the order carrying last fight's result.
   it('adds a token with no initiative, even when it still carries one from a previous fight', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
     // First fight: roll for the Goblin, which persists the value on the token.
-    const firstAdd = waitForEvent<InitiativeState>(dm, 'initiative.state');
-    dm.emit('initiative.add', { tokenId: DM_TOKEN_ID, mapId });
+    const firstAdd = waitForEvent<InitiativeState>(gm, 'initiative.state');
+    gm.emit('initiative.add', { tokenId: GM_TOKEN_ID, mapId });
     await firstAdd;
 
-    const firstRoll = waitForEvent<InitiativeState>(dm, 'initiative.state');
-    dm.emit('initiative.roll', { tokenId: DM_TOKEN_ID, mapId, expression: '1d20' });
+    const firstRoll = waitForEvent<InitiativeState>(gm, 'initiative.state');
+    gm.emit('initiative.roll', { tokenId: GM_TOKEN_ID, mapId, expression: '1d20' });
     await firstRoll;
 
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-    const stored = readTokens(map.tokens).find((t) => t.id === DM_TOKEN_ID);
+    const stored = readTokens(map.tokens).find((t) => t.id === GM_TOKEN_ID);
     expect(typeof stored?.initiative).toBe('number');   // the value that used to leak
 
     // The fight ends, and the same token is added to the next one.
-    dm.emit('initiative.end');
-    await waitForEvent<{ active: boolean }>(dm, 'initiative.state');
+    gm.emit('initiative.end');
+    await waitForEvent<{ active: boolean }>(gm, 'initiative.state');
 
-    const secondAdd = waitForEvent<InitiativeState>(dm, 'initiative.state');
-    dm.emit('initiative.add', { tokenId: DM_TOKEN_ID, mapId });
+    const secondAdd = waitForEvent<InitiativeState>(gm, 'initiative.state');
+    gm.emit('initiative.add', { tokenId: GM_TOKEN_ID, mapId });
     const state = await secondAdd;
 
-    const entry = state.combatants.find((c) => c.tokenId === DM_TOKEN_ID);
+    const entry = state.combatants.find((c) => c.tokenId === GM_TOKEN_ID);
     expect(entry?.initiative).toBeNull();
 
-    dm.disconnect();
+    gm.disconnect();
   });
 
   // Rolling is the one initiative action a player may take, and only for their
-  // own token, and only once the DM has put it in the order. Everything else —
-  // who is in the fight, the order, whose turn it is — stays with the DM.
+  // own token, and only once the GM has put it in the order. Everything else —
+  // who is in the fight, the order, whose turn it is — stays with the GM.
   describe('a player rolling their own initiative', () => {
-    it('is allowed once the DM has added their token', async () => {
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+    it('is allowed once the GM has added their token', async () => {
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
       const player = await server.connectAndAuth(player1Cookie, campaignId);
 
       const added = waitForEvent<InitiativeState>(player, 'initiative.state');
-      dm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
+      gm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
       await added;
 
       const rolled = waitForEvent<InitiativeState>(player, 'initiative.state');
-      const diceLogged = waitForEvent<{ purpose: string; userId: string }>(dm, 'dice.rolled');
+      const diceLogged = waitForEvent<{ purpose: string; userId: string }>(gm, 'dice.rolled');
       player.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId, expression: '1d20' });
 
       const state = await rolled;
@@ -596,8 +605,8 @@ describe('initiative', () => {
       expect(entry?.initiative).toBeGreaterThanOrEqual(1);
       expect(entry?.initiative).toBeLessThanOrEqual(20);
 
-      // The roll is public — it reaches the DM's dice log, attributed to the
-      // player rather than to the DM.
+      // The roll is public — it reaches the GM's dice log, attributed to the
+      // player rather than to the GM.
       const roll = await diceLogged;
       expect(roll.purpose).toBe('Hero Initiative');
       expect(roll.userId).toBe(player1Id);
@@ -607,11 +616,11 @@ describe('initiative', () => {
       const token = readTokens(map.tokens).find((t) => t.id === PLAYER_TOKEN_ID);
       expect(token?.initiative).toBe(entry?.initiative);
 
-      dm.disconnect();
+      gm.disconnect();
       player.disconnect();
     });
 
-    it('is refused before the DM has added their token', async () => {
+    it('is refused before the GM has added their token', async () => {
       const player = await server.connectAndAuth(player1Cookie, campaignId);
       const denial = waitForEvent<{ message: string }>(player, 'error');
       player.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId, expression: '1d20' });
@@ -620,39 +629,39 @@ describe('initiative', () => {
     });
 
     it("is refused for a token they do not control, even when it is in the order", async () => {
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
       const player = await server.connectAndAuth(player1Cookie, campaignId);
 
       const added = waitForEvent<InitiativeState>(player, 'initiative.state');
-      dm.emit('initiative.add', { tokenId: DM_TOKEN_ID, mapId });   // the Goblin
+      gm.emit('initiative.add', { tokenId: GM_TOKEN_ID, mapId });   // the Goblin
       await added;
 
       const denial = waitForEvent<{ message: string }>(player, 'error');
-      player.emit('initiative.roll', { tokenId: DM_TOKEN_ID, mapId, expression: '1d20' });
+      player.emit('initiative.roll', { tokenId: GM_TOKEN_ID, mapId, expression: '1d20' });
       expect((await denial).message).toBe('You can only roll initiative for your own token');
 
       // Nothing was rolled for it.
       const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-      const token = readTokens(map.tokens).find((t) => t.id === DM_TOKEN_ID);
+      const token = readTokens(map.tokens).find((t) => t.id === GM_TOKEN_ID);
       expect(token?.initiative ?? null).toBeNull();
 
-      dm.disconnect();
+      gm.disconnect();
       player.disconnect();
     });
 
     it('is refused for another player\'s token', async () => {
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
       const player2 = await server.connectAndAuth(player2Cookie, campaignId);
 
       const added = waitForEvent<InitiativeState>(player2, 'initiative.state');
-      dm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });   // player1's Hero
+      gm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });   // player1's Hero
       await added;
 
       const denial = waitForEvent<{ message: string }>(player2, 'error');
       player2.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId, expression: '1d20' });
       expect((await denial).message).toBe('You can only roll initiative for your own token');
 
-      dm.disconnect();
+      gm.disconnect();
       player2.disconnect();
     });
 
@@ -660,31 +669,31 @@ describe('initiative', () => {
       // Re-rolling re-sorts the order, and the turn pointer walks it by
       // position, so a player who rolls above the current combatant would end
       // the round early and skip whoever was in between.
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
       const player = await server.connectAndAuth(player1Cookie, campaignId);
 
       const added = waitForEvent<InitiativeState>(player, 'initiative.state');
-      dm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
+      gm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
       await added;
 
       const started = waitForEvent<{ active: boolean }>(player, 'initiative.state');
-      dm.emit('initiative.start');
+      gm.emit('initiative.start');
       expect((await started).active).toBe(true);
 
       const denial = waitForEvent<{ message: string }>(player, 'error');
       player.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
       expect((await denial).message).toMatch(/Combat has started/);
 
-      dm.disconnect();
+      gm.disconnect();
       player.disconnect();
     });
 
     it('is refused for a spectator, even on a token still marked as theirs', async () => {
       // `controlledBy` survives a demotion, so an ex-player would otherwise keep
       // the ability to reorder a fight after losing the ability to move a token.
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
-      const added = waitForEvent<InitiativeState>(dm, 'initiative.state');
-      dm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
+      const added = waitForEvent<InitiativeState>(gm, 'initiative.state');
+      gm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
       await added;
 
       await prisma.campaignMembership.updateMany({
@@ -704,7 +713,7 @@ describe('initiative', () => {
         });
       }
 
-      dm.disconnect();
+      gm.disconnect();
     });
 
     // A player's roll must never be a back door into the combatant list.
@@ -714,27 +723,27 @@ describe('initiative', () => {
       player.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId, expression: '1d20' });
       await denial;
 
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
-      const state = waitForEvent<InitiativeState>(dm, 'initiative.state');
-      dm.emit('initiative.request_state');
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
+      const state = waitForEvent<InitiativeState>(gm, 'initiative.state');
+      gm.emit('initiative.request_state');
       expect((await state).combatants).toHaveLength(0);
 
-      dm.disconnect();
+      gm.disconnect();
       player.disconnect();
     });
 
-    it('still lets the DM roll for any token, including one not yet in the order', async () => {
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+    it('still lets the GM roll for any token, including one not yet in the order', async () => {
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-      const rolled = waitForEvent<InitiativeState>(dm, 'initiative.state');
-      dm.emit('initiative.roll', { tokenId: DM_TOKEN_ID, mapId, expression: '1d20' });
+      const rolled = waitForEvent<InitiativeState>(gm, 'initiative.state');
+      gm.emit('initiative.roll', { tokenId: GM_TOKEN_ID, mapId, expression: '1d20' });
 
       const state = await rolled;
-      const entry = state.combatants.find((c) => c.tokenId === DM_TOKEN_ID);
+      const entry = state.combatants.find((c) => c.tokenId === GM_TOKEN_ID);
       expect(entry).toBeDefined();
       expect(entry?.initiative).toBeGreaterThanOrEqual(1);
 
-      dm.disconnect();
+      gm.disconnect();
     });
   });
 
@@ -754,7 +763,7 @@ describe('initiative', () => {
       return character.id;
     }
 
-    const dnd5eSheet = (dexScore: number, initiativeBonus = 0) => ({
+    const fifthEditionSheet = (dexScore: number, initiativeBonus = 0) => ({
       stats: {
         strength: { score: 10, modifier: 0 },
         dexterity: { score: dexScore, modifier: Math.floor((dexScore - 10) / 2) },
@@ -766,112 +775,126 @@ describe('initiative', () => {
       initiativeBonus,
     });
 
-    it('uses a D&D 5e character\'s Dexterity modifier', async () => {
+    it('uses a 5E character\'s Dexterity modifier', async () => {
       // Dexterity 20 is +5, so every result must land in [6, 25]. A flat d20
       // could return 1..5, which this rejects.
-      await linkCharacter('DND_5E', dnd5eSheet(20));
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      await linkCharacter('FIFTH_EDITION', fifthEditionSheet(20));
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
       for (let i = 0; i < 12; i++) {
-        const rolled = waitForEvent<InitiativeState>(dm, 'initiative.state');
-        dm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
+        const rolled = waitForEvent<InitiativeState>(gm, 'initiative.state');
+        gm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
         const state = await rolled;
         const entry = state.combatants.find((c) => c.tokenId === PLAYER_TOKEN_ID);
         expect(entry?.initiative).toBeGreaterThanOrEqual(6);
         expect(entry?.initiative).toBeLessThanOrEqual(25);
       }
 
-      dm.disconnect();
+      gm.disconnect();
     });
 
     it('adds the manual bonus a feat gives', async () => {
       // Dexterity 14 (+2) with a feat's +5 is +7, so results land in [8, 27].
-      await linkCharacter('DND_5E', dnd5eSheet(14, 5));
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      await linkCharacter('FIFTH_EDITION', fifthEditionSheet(14, 5));
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-      const logged = waitForEvent<{ expression: string }>(dm, 'dice.rolled');
-      const rolled = waitForEvent<InitiativeState>(dm, 'initiative.state');
-      dm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
+      const logged = waitForEvent<{ expression: string }>(gm, 'dice.rolled');
+      const rolled = waitForEvent<InitiativeState>(gm, 'initiative.state');
+      gm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
 
       expect((await logged).expression).toBe('1d20+7');
       const entry = (await rolled).combatants.find((c) => c.tokenId === PLAYER_TOKEN_ID);
       expect(entry?.initiative).toBeGreaterThanOrEqual(8);
       expect(entry?.initiative).toBeLessThanOrEqual(27);
 
-      dm.disconnect();
+      gm.disconnect();
     });
 
     it('ignores a dice expression the client tries to supply', async () => {
       // The server derives its own, so a client cannot roll d100 for initiative.
-      await linkCharacter('DND_5E', dnd5eSheet(14));
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      await linkCharacter('FIFTH_EDITION', fifthEditionSheet(14));
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-      const logged = waitForEvent<{ expression: string }>(dm, 'dice.rolled');
-      dm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId, expression: '1d100+99' });
+      const logged = waitForEvent<{ expression: string }>(gm, 'dice.rolled');
+      gm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId, expression: '1d100+99' });
 
       expect((await logged).expression).toBe('1d20+2');
-      dm.disconnect();
+      gm.disconnect();
     });
 
-    it('takes a Call of Cthulhu investigator\'s DEX without rolling', async () => {
-      // Call of Cthulhu ranks combatants in DEX order; there is no roll.
-      await linkCharacter('CALL_OF_CTHULHU_7E', {
-        characteristics: { DEX: { regular: 65, half: 32, fifth: 13 } },
+    it('takes a Horror d100 character\'s DEX without rolling', async () => {
+      // Horror d100 ranks combatants in DEX order; there is no roll.
+      await linkCharacter('HORROR_D100', {
+        characteristics: { STR: 10, CON: 10, SIZ: 10, INT: 10, POW: 10, DEX: 13, CHA: 10 },
       });
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-      const rolled = waitForEvent<InitiativeState>(dm, 'initiative.state');
-      const noDice = expectNoEvent(dm, 'dice.rolled', 600);
-      dm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
+      const rolled = waitForEvent<InitiativeState>(gm, 'initiative.state');
+      const noDice = expectNoEvent(gm, 'dice.rolled', 600);
+      gm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
 
       const entry = (await rolled).combatants.find((c) => c.tokenId === PLAYER_TOKEN_ID);
-      expect(entry?.initiative).toBe(65);   // exactly DEX, every time
+      expect(entry?.initiative).toBe(13);   // exactly DEX, every time
       await noDice;                        // and nothing claimed dice were thrown
 
-      dm.disconnect();
+      gm.disconnect();
     });
 
-    it('uses a Pathfinder 2e character\'s Perception, or the skill they switch to', async () => {
+    it('takes the DEX of a Horror d100 character still stored in the shape before 1.7.0, on the new scale, and writes nothing', async () => {
+      // DEX 70 on the old scale is 14 on the open rules'.
+      const id = await linkCharacter('HORROR_D100', oldHorrorD100Sheet('v1.6.0-detective-played'));
+      const before = await prisma.character.findUniqueOrThrow({ where: { id } });
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
+
+      const rolled = waitForEvent<InitiativeState>(gm, 'initiative.state');
+      gm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
+
+      expect((await rolled).combatants.find((c) => c.tokenId === PLAYER_TOKEN_ID)?.initiative).toBe(14);
+      expect(await prisma.character.findUniqueOrThrow({ where: { id } })).toEqual(before);
+      gm.disconnect();
+    });
+
+    it('uses a Fantasy d20 character\'s Perception, or the skill they switch to', async () => {
       // Level 1, trained: Perception 3 + Wisdom 6 is +9; Stealth 3 + Dexterity
       // 1 is +4. Worked out from these parts, the stored totals left at 0.
-      await linkCharacter('PATHFINDER_2E', {
+      await linkCharacter('FANTASY_D20', {
         level: 1,
         attributes: { wisdom: { score: 22, modifier: 6 }, dexterity: { score: 12, modifier: 1 } },
         initiative: { usedStat: 'stealth', bonus: 0 },
         perception: { proficiencyRank: 'trained', bonus: 0 },
         skills: { stealth: { attribute: 'dexterity', proficiencyRank: 'trained', bonus: 0 } },
       });
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-      const logged = waitForEvent<{ expression: string }>(dm, 'dice.rolled');
-      dm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
+      const logged = waitForEvent<{ expression: string }>(gm, 'dice.rolled');
+      gm.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId });
       expect((await logged).expression).toBe('1d20+4');
 
-      dm.disconnect();
+      gm.disconnect();
     });
 
     it('falls back to a plain d20 for a token with nothing to derive from', async () => {
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-      const logged = waitForEvent<{ expression: string }>(dm, 'dice.rolled');
-      dm.emit('initiative.roll', { tokenId: DM_TOKEN_ID, mapId });   // plain NPC, no stat block
+      const logged = waitForEvent<{ expression: string }>(gm, 'dice.rolled');
+      gm.emit('initiative.roll', { tokenId: GM_TOKEN_ID, mapId });   // plain NPC, no stat block
       expect((await logged).expression).toBe('1d20');
 
-      dm.disconnect();
+      gm.disconnect();
     });
 
-    // A player may control a token with no sheet and no stat block — a DM can
+    // A player may control a token with no sheet and no stat block — a GM can
     // assign them one — which is the one path where a client expression would
     // otherwise be used. It must not be, or a player could name their own dice.
     it('ignores a player\'s dice expression even when nothing can be derived', async () => {
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
       const player = await server.connectAndAuth(player1Cookie, campaignId);
 
       const added = waitForEvent<InitiativeState>(player, 'initiative.state');
-      dm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
+      gm.emit('initiative.add', { tokenId: PLAYER_TOKEN_ID, mapId });
       await added;
 
-      const logged = waitForEvent<{ expression: string }>(dm, 'dice.rolled');
+      const logged = waitForEvent<{ expression: string }>(gm, 'dice.rolled');
       const rolled = waitForEvent<InitiativeState>(player, 'initiative.state');
       // The seeded Hero token has no characterId and no statBlock.
       player.emit('initiative.roll', { tokenId: PLAYER_TOKEN_ID, mapId, expression: '1d20+9999' });
@@ -880,20 +903,20 @@ describe('initiative', () => {
       const entry = (await rolled).combatants.find((c) => c.tokenId === PLAYER_TOKEN_ID);
       expect(entry?.initiative).toBeLessThanOrEqual(20);
 
-      dm.disconnect();
+      gm.disconnect();
       player.disconnect();
     });
 
-    // The DM keeps the fallback: they can type any initiative value in by hand
+    // The GM keeps the fallback: they can type any initiative value in by hand
     // anyway, so there is nothing to gain by restricting them.
-    it('still honours the DM\'s own expression on the fallback path', async () => {
-      const dm = await server.connectAndAuth(dmCookie, campaignId);
+    it('still honours the GM\'s own expression on the fallback path', async () => {
+      const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-      const logged = waitForEvent<{ expression: string }>(dm, 'dice.rolled');
-      dm.emit('initiative.roll', { tokenId: DM_TOKEN_ID, mapId, expression: '1d20+3' });
+      const logged = waitForEvent<{ expression: string }>(gm, 'dice.rolled');
+      gm.emit('initiative.roll', { tokenId: GM_TOKEN_ID, mapId, expression: '1d20+3' });
       expect((await logged).expression).toBe('1d20+3');
 
-      dm.disconnect();
+      gm.disconnect();
     });
   });
 });
@@ -902,15 +925,15 @@ describe('initiative', () => {
 
 describe('map pings', () => {
   it('a PLAYER can ping, and every member including the sender receives it', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
-    const dmSees = waitForEvent<{ mapId: string; x: number; y: number; userId: string }>(dm, 'map.pinged');
+    const gmSees = waitForEvent<{ mapId: string; x: number; y: number; userId: string }>(gm, 'map.pinged');
     const senderSees = waitForEvent<{ x: number; y: number }>(player, 'map.pinged');
 
     player.emit('map.ping', { mapId, x: 123.5, y: 456.25 });
 
-    const received = await dmSees;
+    const received = await gmSees;
     expect(received.mapId).toBe(mapId);
     expect(received.x).toBeCloseTo(123.5);
     expect(received.y).toBeCloseTo(456.25);
@@ -921,16 +944,16 @@ describe('map pings', () => {
     // io.to (not socket.to) — the sender sees their own ping
     expect((await senderSees).x).toBeCloseTo(123.5);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('ignores a ping with non-finite coordinates', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
     let seen = false;
-    dm.on('map.pinged', () => { seen = true; });
+    gm.on('map.pinged', () => { seen = true; });
 
     player.emit('map.ping', { mapId, x: Number.NaN, y: 10 });
     player.emit('map.ping', { mapId, x: 10, y: Number.POSITIVE_INFINITY });
@@ -938,12 +961,12 @@ describe('map pings', () => {
 
     // A valid ping afterwards proves the socket is still live and that the
     // three above were dropped rather than merely slow.
-    const valid = waitForEvent<{ x: number }>(dm, 'map.pinged');
+    const valid = waitForEvent<{ x: number }>(gm, 'map.pinged');
     player.emit('map.ping', { mapId, x: 7, y: 8 });
     expect((await valid).x).toBe(7);
     expect(seen).toBe(true); // only from the valid one
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -951,10 +974,10 @@ describe('map pings', () => {
   // dropped as a non-number is: silently, and before the limit, so a burst
   // of them costs the sender none of their ten pings.
   it('ignores a ping far off any map, and counts none against the limit', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player2Cookie, campaignId);
 
-    const first = waitForEvent<{ x: number; y: number }>(dm, 'map.pinged');
+    const first = waitForEvent<{ x: number; y: number }>(gm, 'map.pinged');
     const silent = expectNoEvent(player, 'error');
     for (let i = 0; i < 6; i++) player.emit('map.ping', { mapId, x: i % 2 === 0 ? 1e9 : -1e9, y: 10 });
     for (let i = 0; i < 6; i++) player.emit('map.ping', { mapId, x: 10, y: i % 2 === 0 ? 1e9 : -1e9 });
@@ -965,7 +988,7 @@ describe('map pings', () => {
     expect(received.y).toBe(8);
     await silent;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -975,12 +998,12 @@ describe('map pings', () => {
 describe('chat', () => {
   it('broadcasts and persists a chat message', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const dmSees = waitForEvent<{ id: string; userId: string; userName: string; content: string; type: string }>(dm, 'chat.message');
+    const gmSees = waitForEvent<{ id: string; userId: string; userName: string; content: string; type: string }>(gm, 'chat.message');
     player.emit('chat.message', { content: 'Hello from the integration test', type: 'PLAYER' });
 
-    const msg = await dmSees;
+    const msg = await gmSees;
     expect(msg.userId).toBe(player1Id);
     expect(msg.content).toBe('Hello from the integration test');
     expect(msg.type).toBe('PLAYER');
@@ -989,46 +1012,46 @@ describe('chat', () => {
     expect(row?.content).toBe('Hello from the integration test');
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('rejects an invalid message type', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
     const denial = waitForEvent<{ message: string }>(player, 'error');
     player.emit('chat.message', { content: 'hi', type: 'SYSTEM' });
-    expect((await denial).message).toBe('Invalid message type. Must be PLAYER or DM.');
+    expect((await denial).message).toBe('Invalid message type. Must be PLAYER or GM.');
     player.disconnect();
   });
 
-  it('marks a player\'s message PLAYER even when the payload claims DM', async () => {
+  it('marks a player\'s message PLAYER even when the payload claims GM', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const dmSees = waitForEvent<{ id: string; type: string }>(dm, 'chat.message');
-    player.emit('chat.message', { content: 'You all take 4d6 damage.', type: 'DM' });
+    const gmSees = waitForEvent<{ id: string; type: string }>(gm, 'chat.message');
+    player.emit('chat.message', { content: 'You all take 4d6 damage.', type: 'GM' });
 
-    const msg = await dmSees;
+    const msg = await gmSees;
     expect(msg.type).toBe('PLAYER');
     const row = await prisma.message.findUnique({ where: { id: msg.id } });
     expect(row?.type).toBe('PLAYER');
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  it('marks the DM\'s message DM, and PLAYER when the DM asks for it', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('gives the GM\'s message the type GM, and PLAYER when the GM asks for it', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
     const first = waitForEvent<{ type: string }>(player, 'chat.message');
-    dm.emit('chat.message', { content: 'The door creaks open.', type: 'DM' });
-    expect((await first).type).toBe('DM');
+    gm.emit('chat.message', { content: 'The door creaks open.', type: 'GM' });
+    expect((await first).type).toBe('GM');
 
     const second = waitForEvent<{ type: string }>(player, 'chat.message');
-    dm.emit('chat.message', { content: '(ooc) back in five', type: 'PLAYER' });
+    gm.emit('chat.message', { content: '(ooc) back in five', type: 'PLAYER' });
     expect((await second).type).toBe('PLAYER');
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -1055,12 +1078,12 @@ describe('chat', () => {
 describe('dice', () => {
   it('broadcasts and persists a dice roll', async () => {
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const dmSees = waitForEvent<{ userId: string; expression: string; result: number }>(dm, 'dice.rolled');
+    const gmSees = waitForEvent<{ userId: string; expression: string; result: number }>(gm, 'dice.rolled');
     player.emit('dice.roll', { expression: '1d20' });
 
-    const roll = await dmSees;
+    const roll = await gmSees;
     expect(roll.userId).toBe(player1Id);
     expect(roll.expression).toBe('1d20');
     expect(roll.result).toBeGreaterThanOrEqual(1);
@@ -1070,7 +1093,7 @@ describe('dice', () => {
     expect(rows.length).toBeGreaterThanOrEqual(1);
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('rejects an invalid dice expression', async () => {
@@ -1086,61 +1109,61 @@ describe('dice', () => {
 
 describe('spirit layer filtering', () => {
   it('refuses a spirit style outside the allowlist and broadcasts nothing', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
-    const denial = waitForEvent<{ message: string }>(dm, 'error');
+    const denial = waitForEvent<{ message: string }>(gm, 'error');
     const nothing = expectNoEvent(player, 'spirit_layer.style_changed');
-    dm.emit('spirit_layer.style_change', { style: 'custom:url(https://evil.example/x.svg):wispy' });
+    gm.emit('spirit_layer.style_change', { style: 'custom:url(https://evil.example/x.svg):wispy' });
 
     expect((await denial).message).toMatch(/style/i);
     await nothing;
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('broadcasts a valid custom spirit style', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
     const seen = waitForEvent<{ style: string }>(player, 'spirit_layer.style_changed');
-    dm.emit('spirit_layer.style_change', { style: 'custom:#7c3aed:dream' });
+    gm.emit('spirit_layer.style_change', { style: 'custom:#7c3aed:dream' });
     expect((await seen).style).toBe('custom:#7c3aed:dream');
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('spirit token movement is hidden from players without spirit visibility', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
-    // DM (sender) receives the spirit-branch broadcast; the player must not.
-    const dmSees = waitForEvent<{ tokenId: string }>(dm, 'token.moved');
+    // GM (sender) receives the spirit-branch broadcast; the player must not.
+    const gmSees = waitForEvent<{ tokenId: string }>(gm, 'token.moved');
     const playerBlind = expectNoEvent(player, 'token.moved');
-    dm.emit('token.move.end', { tokenId: SPIRIT_TOKEN_ID, mapId, x: 16, y: 16 });
+    gm.emit('token.move.end', { tokenId: SPIRIT_TOKEN_ID, mapId, x: 16, y: 16 });
 
-    expect((await dmSees).tokenId).toBe(SPIRIT_TOKEN_ID);
+    expect((await gmSees).tokenId).toBe(SPIRIT_TOKEN_ID);
     await playerBlind;
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('spirit token movement reaches players once the spirit layer is enabled', async () => {
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
 
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
 
     const playerSees = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
-    dm.emit('token.move.end', { tokenId: SPIRIT_TOKEN_ID, mapId, x: 17, y: 17 });
+    gm.emit('token.move.end', { tokenId: SPIRIT_TOKEN_ID, mapId, x: 17, y: 17 });
 
     const moved = await playerSees;
     expect(moved.tokenId).toBe(SPIRIT_TOKEN_ID);
     expect(moved.x).toBe(17);
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
@@ -1153,12 +1176,12 @@ describe('spirit layer filtering', () => {
     await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
 
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const dmSees = waitForEvent<{ tokenId: string; x: number }>(dm, 'token.moved');
+    const gmSees = waitForEvent<{ tokenId: string; x: number }>(gm, 'token.moved');
     player.emit('token.move.end', { tokenId: SPIRIT_TOKEN_ID, mapId, x: 18, y: 18 });
 
-    const moved = await dmSees;
+    const moved = await gmSees;
     expect(moved.tokenId).toBe(SPIRIT_TOKEN_ID);
     expect(moved.x).toBe(18);
 
@@ -1167,12 +1190,12 @@ describe('spirit layer filtering', () => {
     expect(token?.position).toEqual({ x: 18, y: 18 });
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   // A hidden spirit token does not take its player across, so they may not
   // act on it. token.move.start and token.move.end refuse; the frames in
-  // between used to go out anyway, to the DM and any player who could see
+  // between used to go out anyway, to the GM and any player who could see
   // the plane.
   it('drops the drag frames of a player who has not crossed over', async () => {
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false } });
@@ -1182,13 +1205,13 @@ describe('spirit layer filtering', () => {
     await prisma.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
 
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const quiet = expectNoEvent(dm, 'token.moved', 800);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const quiet = expectNoEvent(gm, 'token.moved', 800);
     player.emit('token.move', { tokenId: SPIRIT_TOKEN_ID, mapId, x: 16, y: 16 });
     await expect(quiet).resolves.toBeUndefined();
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('a player without control cannot move a spirit token', async () => {
@@ -1217,7 +1240,7 @@ describe('hit dice', () => {
         userId: player1Id,
         campaignId,
         name: 'Hit Dice Test',
-        gameSystem: 'DND_5E',
+        gameSystem: 'FIFTH_EDITION',
         data: toJson({ hitDice: [{ class: 'fighter', ...pool, remaining }] }),
       },
     });
@@ -1243,12 +1266,12 @@ describe('hit dice', () => {
   it('spends one die and tells the campaign', async () => {
     const characterId = await giveHitDice(3);
     const player = await server.connectAndAuth(player1Cookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const dmSees = waitForEvent<{ characterId: string; character: { data: { hitDice: Array<{ remaining: number }> } } }>(dm, 'character.updated');
+    const gmSees = waitForEvent<{ characterId: string; character: { data: { hitDice: Array<{ remaining: number }> } } }>(gm, 'character.updated');
     player.emit('character.hitdice.spend', { characterId, index: 0 });
 
-    const update = await dmSees;
+    const update = await gmSees;
     expect(update.characterId).toBe(characterId);
     expect(update.character.data.hitDice[0].remaining).toBe(2);
 
@@ -1257,7 +1280,7 @@ describe('hit dice', () => {
     expect(hitDiceOf(row.data)[0].remaining).toBe(2);
 
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('refuses to spend a die that is not there', async () => {
@@ -1288,15 +1311,15 @@ describe('hit dice', () => {
     other.disconnect();
   });
 
-  it('lets the DM spend for a player, to cover an absent one', async () => {
+  it('lets the GM spend for a player, to cover an absent one', async () => {
     const characterId = await giveHitDice(3);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const spent = waitForEvent<{ character: { data: { hitDice: Array<{ remaining: number }> } } }>(dm, 'character.updated');
-    dm.emit('character.hitdice.spend', { characterId, index: 0 });
+    const spent = waitForEvent<{ character: { data: { hitDice: Array<{ remaining: number }> } } }>(gm, 'character.updated');
+    gm.emit('character.hitdice.spend', { characterId, index: 0 });
     expect((await spent).character.data.hitDice[0].remaining).toBe(2);
 
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('refuses an index that is not in the pool', async () => {

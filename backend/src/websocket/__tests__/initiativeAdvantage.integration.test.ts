@@ -1,5 +1,5 @@
 /**
- * A D&D 5e character whose sheet has advantage on initiative rolls two d20s
+ * A 5E character whose sheet has advantage on initiative rolls two d20s
  * and keeps the higher when the server rolls for its token.
  *
  * The server decides what initiative rolls, from the sheet of the character a
@@ -24,10 +24,10 @@ const runId = randomUUID().slice(0, 8);
 const email = `init-advantage-dm-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 
 const WITH_ADVANTAGE = 'with-advantage';
 const WITHOUT_FIELD = 'without-field';
@@ -41,7 +41,7 @@ type Rolled = {
 
 /** A 5e sheet whose Dexterity gives a +2 initiative modifier, with `extra` laid over it. */
 function sheet(extra: Record<string, unknown> = {}): Record<string, unknown> {
-  const data = JSON.parse(JSON.stringify(getBlankTemplate(GameSystem.DND_5E).data)) as Record<string, unknown> & {
+  const data = JSON.parse(JSON.stringify(getBlankTemplate(GameSystem.FIFTH_EDITION).data)) as Record<string, unknown> & {
     stats: { dexterity: { score: number; modifier: number } };
   };
   data.stats.dexterity = { score: 14, modifier: 2 };
@@ -51,18 +51,18 @@ function sheet(extra: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 beforeAll(async () => {
-  const dm = await prisma.user.create({
-    data: { email, passwordHash: 'not-used-by-socket-auth', displayName: 'Init advantage DM' },
+  const gm = await prisma.user.create({
+    data: { email, passwordHash: 'not-used-by-socket-auth', displayName: 'Init advantage GM' },
   });
-  dmId = dm.id;
+  gmId = gm.id;
   const campaign = await prisma.campaign.create({
-    data: { name: `Init advantage ${runId}`, ownerId: dmId, vibeSettings: {} },
+    data: { name: `Init advantage ${runId}`, ownerId: gmId, vibeSettings: {} },
   });
   campaignId = campaign.id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
 
   const make = (name: string, data: Record<string, unknown>) =>
-    prisma.character.create({ data: { userId: dmId, campaignId, gameSystem: 'DND_5E', name, data: toJson(data) } });
+    prisma.character.create({ data: { userId: gmId, campaignId, gameSystem: 'FIFTH_EDITION', name, data: toJson(data) } });
   const [quick, plain, tired] = await Promise.all([
     make('Wren Quickstep', sheet({ initiativeAdvantage: true })),
     make('Odo Plainfield', sheet()),
@@ -84,15 +84,15 @@ beforeAll(async () => {
   mapId = map.id;
 
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
-  await prisma.character.deleteMany({ where: { userId: dmId } });
+  await prisma.character.deleteMany({ where: { userId: gmId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: dmId } });
+  await prisma.user.deleteMany({ where: { id: gmId } });
   await prisma.$disconnect();
 });
 
@@ -100,22 +100,22 @@ beforeEach(() => { clearState(campaignId); });
 afterEach(() => { jest.restoreAllMocks(); });
 
 /**
- * Roll initiative for a token as the DM, with d20s that come up 5, 17, 5, 17
+ * Roll initiative for a token as the GM, with d20s that come up 5, 17, 5, 17
  * and so on. The server rolls an expression once to check it before the roll
  * that counts, so a pair of dice comes up 5 and 17 either way.
  */
 async function rollFor(tokenId: string): Promise<Rolled> {
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
-  const added = waitForEvent(dm, 'initiative.state');
-  dm.emit('initiative.add', { tokenId, mapId });
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
+  const added = waitForEvent(gm, 'initiative.state');
+  gm.emit('initiative.add', { tokenId, mapId });
   await added;
-  const rolled = waitForEvent<Rolled>(dm, 'dice.rolled');
+  const rolled = waitForEvent<Rolled>(gm, 'dice.rolled');
   const faces = [0.2, 0.8];
   let next = 0;
   jest.spyOn(Math, 'random').mockImplementation(() => faces[next++ % faces.length]);
-  dm.emit('initiative.roll', { tokenId, mapId });
+  gm.emit('initiative.roll', { tokenId, mapId });
   const roll = await rolled;
-  dm.disconnect();
+  gm.disconnect();
   return roll;
 }
 

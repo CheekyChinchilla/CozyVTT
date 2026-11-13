@@ -6,7 +6,7 @@
  *
  * Both were the same 403. A USER-scoped asset is readable only by whoever
  * uploaded it, and nothing about *using* one as a campaign's map changed that.
- * A DM who picked a map out of their own asset library — which the picker
+ * A GM who picked a map out of their own asset library — which the picker
  * offers, since it lists assets with no campaign filter — produced a campaign
  * whose battlemap no player could load.
  *
@@ -50,7 +50,7 @@ const PNG = Buffer.from(
 );
 
 describe('assets used in a campaign', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let strangerId: string;
   let campaignId: string;
@@ -61,11 +61,11 @@ describe('assets used in a campaign', () => {
   let characterAssetId: string;
   let unusedAssetId: string;
 
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
   let player: ReturnType<typeof request.agent>;
   let stranger: ReturnType<typeof request.agent>;
 
-  /** A USER-scoped asset owned by the DM, with a real file behind it. */
+  /** A USER-scoped asset owned by the GM, with a real file behind it. */
   async function makeAsset(type: 'MAP' | 'TOKEN', label: string) {
     const filePath = path.join(UPLOAD_DIR, `${label}.png`);
     fs.writeFileSync(filePath, PNG);
@@ -73,7 +73,7 @@ describe('assets used in a campaign', () => {
       data: {
         type,
         scope: 'USER',
-        uploadedById: dmId,
+        uploadedById: gmId,
         filename: `${label}.png`,
         originalName: `${label}.png`,
         mimeType: 'image/png',
@@ -94,18 +94,18 @@ describe('assets used in a campaign', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dmEmail = `aa_dm_${stamp}@test.invalid`;
+    const gmEmail = `aa_dm_${stamp}@test.invalid`;
     const playerEmail = `aa_pl_${stamp}@test.invalid`;
     const strangerEmail = `aa_st_${stamp}@test.invalid`;
 
-    dmId = (await createTestUser({ email: dmEmail, isApproved: true })).id;
+    gmId = (await createTestUser({ email: gmEmail, isApproved: true })).id;
     playerId = (await createTestUser({ email: playerEmail, isApproved: true })).id;
     strangerId = (await createTestUser({ email: strangerEmail, isApproved: true })).id;
 
-    campaignId = (await createTestCampaign(dmId, { name: `Asset Access ${stamp}` })).id;
+    campaignId = (await createTestCampaign(gmId, { name: `Asset Access ${stamp}` })).id;
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId, userId: playerId, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -163,7 +163,7 @@ describe('assets used in a campaign', () => {
       },
     });
 
-    dm = await login(dmEmail);
+    gm = await login(gmEmail);
     player = await login(playerEmail);
     stranger = await login(strangerEmail);
   });
@@ -175,7 +175,7 @@ describe('assets used in a campaign', () => {
       where: { id: { in: [mapAssetId, tokenAssetId, characterAssetId, unusedAssetId] } },
     });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId, strangerId]);
+    await cleanupUsers([gmId, playerId, strangerId]);
     await prisma.$disconnect();
     fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
   });
@@ -195,7 +195,7 @@ describe('assets used in a campaign', () => {
       expect((await player.get(`/api/assets/tokens/${characterAssetId}`)).status).toBe(200);
     });
 
-    it("cannot read an asset of the DM's that the campaign does not use", async () => {
+    it("cannot read an asset of the GM's that the campaign does not use", async () => {
       expect((await player.get(`/api/assets/maps/${unusedAssetId}`)).status).toBe(404);
     });
 
@@ -235,7 +235,7 @@ describe('assets used in a campaign', () => {
       const campaign = await createTestCampaign(strangerId, { name: `Stranger own ${Date.now()}` });
       strangerCampaignId = campaign.id;
       await prisma.campaignMembership.create({
-        data: { campaignId: strangerCampaignId, userId: strangerId, role: 'DM', characterIds: [] },
+        data: { campaignId: strangerCampaignId, userId: strangerId, role: 'GM', characterIds: [] },
       });
 
       // Reference the victim's asset from a map in the attacker's own campaign.
@@ -253,7 +253,7 @@ describe('assets used in a campaign', () => {
       const campaign = await createTestCampaign(strangerId, { name: `Stranger write ${Date.now()}` });
       strangerCampaignId = campaign.id;
       await prisma.campaignMembership.create({
-        data: { campaignId: strangerCampaignId, userId: strangerId, role: 'DM', characterIds: [] },
+        data: { campaignId: strangerCampaignId, userId: strangerId, role: 'GM', characterIds: [] },
       });
 
       const res = await stranger
@@ -276,17 +276,17 @@ describe('assets used in a campaign', () => {
 
   describe('the owner', () => {
     it('reads their own asset as before', async () => {
-      expect((await dm.get(`/api/assets/maps/${mapAssetId}`)).status).toBe(200);
+      expect((await gm.get(`/api/assets/maps/${mapAssetId}`)).status).toBe(200);
     });
 
     it('reads their own unused asset as before', async () => {
-      expect((await dm.get(`/api/assets/maps/${unusedAssetId}`)).status).toBe(200);
+      expect((await gm.get(`/api/assets/maps/${unusedAssetId}`)).status).toBe(200);
     });
   });
 
-  // A map the DM has prepared but not shown is the DM's alone, artwork and
+  // A map the GM has prepared but not shown is the GM's alone, artwork and
   // token art included, until the campaign switches to it.
-  describe('a map the DM has prepared but not shown', () => {
+  describe('a map the GM has prepared but not shown', () => {
     let preparedMapAssetId: string;
     let preparedTokenAssetId: string;
     let preparedMapId: string;
@@ -319,8 +319,8 @@ describe('assets used in a campaign', () => {
       await prisma.asset.deleteMany({ where: { id: { in: [preparedMapAssetId, preparedTokenAssetId] } } });
     });
 
-    it('is readable by the DM', async () => {
-      expect((await dm.get(`/api/assets/maps/${preparedMapAssetId}`)).status).toBe(200);
+    it('is readable by the GM', async () => {
+      expect((await gm.get(`/api/assets/maps/${preparedMapAssetId}`)).status).toBe(200);
     });
 
     it('keeps its artwork and its token art from a player until the campaign shows it', async () => {
@@ -330,7 +330,7 @@ describe('assets used in a campaign', () => {
       await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: preparedMapId } });
       expect((await player.get(`/api/assets/maps/${preparedMapAssetId}`)).status).toBe(200);
       expect((await player.get(`/api/assets/tokens/${preparedTokenAssetId}`)).status).toBe(200);
-      // And the map it replaced is the DM's again.
+      // And the map it replaced is the GM's again.
       expect((await player.get(`/api/assets/maps/${mapAssetId}`)).status).toBe(404);
     });
   });

@@ -1,0 +1,289 @@
+/**
+ * Transferring the GM seat — End-to-End Tests
+ *
+ * A campaign has exactly one GM, and until now that seat could not move: the
+ * role route refuses to touch a GM and refuses to mint a second one. That guard
+ * is right for ordinary role edits but left no way to hand off a game, so people
+ * were editing the database by hand.
+ *
+ * The invariant is unchanged — one GM, always — it just became movable, in a
+ * single action rather than a demote-then-promote that could strand a campaign
+ * with two GMs or none.
+ *
+ * The other fact pinned here: `Campaign.ownerId` does NOT move. Ownership and
+ * the GM role are separate, which is what lets an owner hand the game to someone
+ * else and stay at the table as a player.
+ *
+ * Requires PostgreSQL at DATABASE_URL.
+ */
+
+import request from 'supertest';
+import { createTestApp } from '../../__tests__/helpers/test-app';
+import {
+  prisma,
+  createTestUser,
+  createTestCampaign,
+  cleanupUsers,
+  cleanupCampaigns,
+  TEST_PASSWORD,
+} from '../../__tests__/helpers/db';
+
+const app = createTestApp();
+
+describe('PUT /api/campaigns/:campaignId/gm', () => {
+  let ownerId: string;
+  let gmId: string;
+  let playerId: string;
+  let spectatorId: string;
+  let adminId: string;
+  let outsiderId: string;
+  let campaignId: string;
+
+  const emails: Record<string, string> = {};
+
+  async function login(email: string) {
+    const agent = request.agent(app);
+    const res = await agent.post('/api/auth/login').send({ email, password: TEST_PASSWORD });
+    expect(res.status).toBe(200);
+    return agent;
+  }
+
+  beforeAll(async () => {
+    const stamp = Date.now();
+    for (const who of ['owner', 'gm', 'player', 'spectator', 'admin', 'outsider']) {
+      emails[who] = `dmtransfer-${who}-${stamp}@test.cozyvtt.local`;
+    }
+
+    const [owner, gm, player, spectator, admin, outsider] = await Promise.all([
+      createTestUser({ email: emails.owner, displayName: 'Owner' }),
+      createTestUser({ email: emails.gm, displayName: 'Sitting GM' }),
+      createTestUser({ email: emails.player, displayName: 'Player' }),
+      createTestUser({ email: emails.spectator, displayName: 'Spectator' }),
+      createTestUser({ email: emails.admin, displayName: 'Admin', role: 'ADMIN' }),
+      createTestUser({ email: emails.outsider, displayName: 'Outsider' }),
+    ]);
+
+    ownerId = owner.id;
+    gmId = gm.id;
+    playerId = player.id;
+    spectatorId = spectator.id;
+    adminId = admin.id;
+    outsiderId = outsider.id;
+
+    // The owner is NOT the GM here. That is the arrangement this route exists to
+    // make reachable, and it keeps the two facts visibly distinct in every case
+    // below.
+    const campaign = await createTestCampaign(ownerId, { name: `GM Transfer ${stamp}` });
+    campaignId = campaign.id;
+  });
+
+  afterAll(async () => {
+    await cleanupCampaigns([campaignId]);
+    await cleanupUsers([ownerId, gmId, playerId, spectatorId, adminId, outsiderId]);
+    await prisma.$disconnect();
+  });
+
+  /** Put the campaign back to: owner plays, gm runs it, player and spectator watch. */
+  beforeEach(async () => {
+    await prisma.campaignMembership.deleteMany({ where: { campaignId } });
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: ownerId, campaignId, role: 'PLAYER', characterIds: [] },
+        { userId: gmId, campaignId, role: 'GM', characterIds: [] },
+        { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
+        { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
+      ],
+    });
+  });
+
+  async function rolesById(): Promise<Record<string, string>> {
+    const rows = await prisma.campaignMembership.findMany({
+      where: { campaignId },
+      select: { userId: true, role: true },
+    });
+    return Object.fromEntries(rows.map((r) => [r.userId, r.role]));
+  }
+
+  describe('the transfer itself', () => {
+    it('moves the seat and leaves exactly one GM', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toBe('GM role transferred successfully');
+
+      const roles = await rolesById();
+      expect(roles[playerId]).toBe('GM');
+      expect(roles[gmId]).toBe('PLAYER');
+      expect(Object.values(roles).filter((r) => r === 'GM')).toHaveLength(1);
+    });
+
+    it('does not move campaign ownership', async () => {
+      const agent = await login(emails.gm);
+      await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { ownerId: true },
+      });
+      // The owner was never the GM and is not made one; the new GM does not
+      // become the owner. This is the whole point of keeping them separate.
+      expect(campaign?.ownerId).toBe(ownerId);
+    });
+
+    it('can hand the seat to a spectator', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: spectatorId });
+
+      expect(res.status).toBe(200);
+      const roles = await rolesById();
+      expect(roles[spectatorId]).toBe('GM');
+      expect(roles[gmId]).toBe('PLAYER');
+    });
+
+    it('returns the full membership list so a client can re-derive roles', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+
+      expect(Array.isArray(res.body.memberships)).toBe(true);
+      expect(res.body.memberships).toHaveLength(4);
+      // SECURITY: the payload must not carry member email addresses.
+      for (const m of res.body.memberships) {
+        expect(m.user.email).toBeUndefined();
+      }
+    });
+  });
+
+  describe('who is allowed to do it', () => {
+    it('allows the sitting GM', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+      expect(res.status).toBe(200);
+    });
+
+    it('allows the campaign owner even though they are only a player', async () => {
+      const agent = await login(emails.owner);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+      expect(res.status).toBe(200);
+      expect((await rolesById())[playerId]).toBe('GM');
+    });
+
+    it('allows a platform admin who is not a member at all', async () => {
+      const agent = await login(emails.admin);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+      expect(res.status).toBe(200);
+    });
+
+    it('refuses an ordinary player', async () => {
+      const agent = await login(emails.player);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+
+      expect(res.status).toBe(403);
+      // The refusal must be real: nothing moved.
+      expect((await rolesById())[gmId]).toBe('GM');
+      expect((await rolesById())[playerId]).toBe('PLAYER');
+    });
+
+    it('refuses a spectator', async () => {
+      const agent = await login(emails.spectator);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: spectatorId });
+      expect(res.status).toBe(403);
+      expect((await rolesById())[gmId]).toBe('GM');
+    });
+
+    it('refuses someone with no membership in the campaign', async () => {
+      const agent = await login(emails.outsider);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: playerId });
+      expect(res.status).toBe(404);
+      expect((await rolesById())[gmId]).toBe('GM');
+    });
+
+    it('refuses an unauthenticated caller', async () => {
+      const res = await request(app)
+        .put(`/api/campaigns/${campaignId}/gm`)
+        .send({ userId: playerId });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('rejected targets', () => {
+    it('rejects a user who is not a member', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: outsiderId });
+
+      expect(res.status).toBe(404);
+      expect((await rolesById())[gmId]).toBe('GM');
+    });
+
+    it('rejects transferring to the current GM', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: gmId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('That member is already the GM');
+      expect((await rolesById())[gmId]).toBe('GM');
+    });
+
+    it('rejects a missing or malformed userId', async () => {
+      const agent = await login(emails.gm);
+
+      expect((await agent.put(`/api/campaigns/${campaignId}/gm`).send({})).status).toBe(400);
+      expect(
+        (await agent.put(`/api/campaigns/${campaignId}/gm`).send({ userId: 'not-a-uuid' })).status
+      ).toBe(400);
+
+      expect((await rolesById())[gmId]).toBe('GM');
+    });
+
+    it('404s on a campaign that does not exist', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent
+        .put('/api/campaigns/00000000-0000-4000-8000-000000000000/gm')
+        .send({ userId: playerId });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe('the one-GM rule still holds elsewhere', () => {
+    it('the role endpoint still refuses to touch the GM', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent
+        .put(`/api/campaigns/${campaignId}/members/${gmId}/role`)
+        .send({ role: 'PLAYER' });
+
+      // Transferring is the supported way to move the seat; the generic role
+      // route must not become a second, non-atomic path to the same thing.
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe("Cannot change the GM's role");
+      expect((await rolesById())[gmId]).toBe('GM');
+    });
+
+    it('the role endpoint still refuses to mint a second GM', async () => {
+      const agent = await login(emails.gm);
+      const res = await agent
+        .put(`/api/campaigns/${campaignId}/members/${playerId}/role`)
+        .send({ role: 'GM' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Campaign already has a GM. Only one GM per campaign is allowed.');
+      expect(Object.values(await rolesById()).filter((r) => r === 'GM')).toHaveLength(1);
+    });
+  });
+
+  // The GM's Role picker offers Spectator beside the owner too. Being one
+  // changes what they may do at the table, and nothing ownership gives them.
+  describe('an owner made a spectator', () => {
+    it('stays the owner and can still take the seat back', async () => {
+      const gm = await login(emails.gm);
+      const demoted = await gm.put(`/api/campaigns/${campaignId}/members/${ownerId}/role`).send({ role: 'SPECTATOR' });
+      expect(demoted.status).toBe(200);
+      expect(demoted.body.membership).toMatchObject({ userId: ownerId, role: 'SPECTATOR' });
+      expect((await prisma.campaign.findUnique({ where: { id: campaignId } }))?.ownerId).toBe(ownerId);
+
+      const owner = await login(emails.owner);
+      const back = await owner.put(`/api/campaigns/${campaignId}/gm`).send({ userId: ownerId });
+      expect(back.status).toBe(200);
+      expect((await rolesById())[ownerId]).toBe('GM');
+    });
+  });
+});

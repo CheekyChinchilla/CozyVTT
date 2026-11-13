@@ -19,9 +19,9 @@ import { createWsTestServer, WsTestServer } from '../../__tests__/helpers/websoc
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const token = (i: number) => ({
   id: randomUUID(), name: `Goblin ${i}`, imageUrl: '', position: { x: i % 20, y: Math.floor(i / 20) % 20 },
@@ -41,23 +41,23 @@ async function newMap(count: number): Promise<string> {
 const count = async (mapId: string) =>
   readTokens((await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens).length;
 const add = (mapId: string, body: Record<string, unknown> = {}) =>
-  dm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({ name: 'Goblin', position: { x: 1, y: 1 }, ...body });
+  gm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({ name: 'Goblin', position: { x: 1, y: 1 }, ...body });
 
 beforeAll(async () => {
   const stamp = Date.now();
   const user = await createTestUser({ email: `tokenlimits-${stamp}@test.cozyvtt.local` });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Token limits ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Token limits ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
 afterAll(async () => {
   await server.close();
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -93,7 +93,7 @@ describe('tokens per map', () => {
     const target = await newMap(998);
     const sourceTokens = readTokens((await prisma.map.findUniqueOrThrow({ where: { id: source } })).tokens);
 
-    const res = await dm
+    const res = await gm
       .post(`/api/campaigns/${campaignId}/maps/${source}/tokens/move`)
       .send({ tokenIds: sourceTokens.slice(0, 3).map((t) => t.id), targetMapId: target });
 
@@ -107,8 +107,8 @@ describe('tokens per map', () => {
     const mapId = await newMap(1001);
     const [first] = readTokens((await prisma.map.findUniqueOrThrow({ where: { id: mapId } })).tokens);
 
-    expect((await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${first.id}`).send({ name: 'Renamed' })).status).toBe(200);
-    expect((await dm.delete(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${first.id}`)).status).toBe(200);
+    expect((await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${first.id}`).send({ name: 'Renamed' })).status).toBe(200);
+    expect((await gm.delete(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${first.id}`)).status).toBe(200);
   });
 });
 

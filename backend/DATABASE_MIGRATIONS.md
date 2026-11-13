@@ -20,10 +20,23 @@ When you start CozyVTT with Docker Compose, the backend container will automatic
 
 This ensures that your database schema is always up-to-date.
 
+Since 1.7.0 the application does one more thing before it takes requests, with
+or without Docker: it converts every stored Horror d100 character and character
+template still in the shape versions before 1.7.0 stored to the sheet rebuilt on
+the open d100 rules (`src/legacy/storedHorrorD100Sheets.ts`). PostgreSQL picks
+those sheets out by the keys only the old shape has and answers with their ids,
+so the backend loads one sheet at a time and never one made on 1.7.0 or later,
+however many or large they are. Each sheet is
+converted in a transaction of its own and keeps its old values in its
+`converted` record, which also marks it as done, so a later start reads none of
+them again. A sheet that fails is logged and left as it was, the backend starts
+all the same and answers that sheet converted, and the next start tries it
+again.
+
 A restore from the Admin Panel also runs `prisma migrate deploy` once the
-backup has loaded, so a backup taken on an older release is brought up to the
-running version without a restart. If that step fails the restore reports it
-and asks for a backend restart, which runs the same command.
+backup has loaded, and then the same conversion, so a backup taken on an older
+release is brought up to the running version without a restart. If either step
+fails the restore reports it and asks for a backend restart, which runs both.
 
 ## Manual Migration Commands
 
@@ -97,7 +110,7 @@ about; the list is not exhaustive.
   dice rolls in one campaign. Additive in the same way: one `CREATE TABLE`, an
   index and two foreign keys, with no `ALTER` on anything existing.
 - `20260911215959_add_campaign_documents` - `CampaignDocument` table linking a
-  document asset to a campaign, so a DM can share a rulebook with one table
+  document asset to a campaign, so a GM can share a rulebook with one table
   without making it visible to the whole instance. One `CREATE TABLE`, three
   indexes and three foreign keys. Nothing existing is altered.
 - `20260917003045_add_map_fog_enabled` - `Map.fogEnabled`, a boolean defaulting to `true`.
@@ -148,8 +161,9 @@ about; the list is not exhaustive.
   1.5.4's client does not know `WHISPER`, and its chat history route answers
   500 for any page that holds a whisper.
 - `20261027171654_add_map_drawings` - The `MapDrawing` table, one row per
-  drawing on a map, with its two enums, `DrawingAudience` (`ALL`, `DM`) and
-  `DrawingLayer` (`MARKUP`, `GROUND`), and `Campaign.playersMayDraw`. Two
+  drawing on a map, with its two enums, `DrawingAudience` (`ALL` and the
+  GM's value, which 1.7.0 renamed `GM`) and `DrawingLayer` (`MARKUP`,
+  `GROUND`), and `Campaign.playersMayDraw`. Two
   `CREATE TYPE ... AS ENUM`, one `ALTER TABLE ... ADD COLUMN` with a
   constant default, one `CREATE TABLE`, one index on `mapId` and two foreign
   keys: `mapId` to `Map` with `ON DELETE CASCADE`, so a drawing goes with its
@@ -194,6 +208,46 @@ about; the list is not exhaustive.
   so every existing map gets null; Mapmaker then reads the colour off the
   picture's top-left pixel, as before. No existing row is changed or removed.
   1.5.4 runs on an upgraded database: it reads no such column.
+- `20261112013825_name_systems_and_gm_role` - The game systems and the game
+  master's role get CozyVTT's own names: `GameSystem` holds `FIFTH_EDITION`,
+  `FANTASY_D20` and `HORROR_D100`, and `CampaignRole`, `MessageType` and
+  `DrawingAudience` hold `GM` for the game master. This one changes rows, and
+  like every migration it runs by itself when the backend starts. It is
+  written by hand: `migrate diff` cannot tell a renamed enum value from a new
+  one, and the script it writes casts every stored value to a type that lacks
+  it, which fails on the first row. In order, it:
+  1. renames each value in place with `ALTER TYPE ... RENAME VALUE`, which
+     changes the catalogue and rewrites no row;
+  2. gives no system to each campaign, character, character template and
+     creature whose system is none of the three: the value of an unreleased
+     system that never shipped, which the app already treated as none;
+  3. replaces `GameSystem` with a type holding only the three (`CREATE TYPE`,
+     `ALTER COLUMN ... TYPE` on each of the four columns, which rebuilds their
+     indexes, then `DROP TYPE` of the old one once no column uses it), so that
+     value can never be stored again;
+  4. renames the game system a stat block names inside its JSON, in
+     `CreatureTemplate.statBlock`, `TokenTemplate.statBlock`, each token of
+     `Map.tokens` and each token of `Session.savedState`, keeping every token
+     in its place. Every seeded SRD creature names its system there, and
+     initiative reads its DEX only while that name is the campaign's system.
+
+  No row is deleted. Each step looks before it changes anything, so a second
+  run changes nothing, and the file runs as one transaction, so a failure
+  leaves the data as it was. It does not leave the instance ready to start,
+  though: Prisma records the migration as started and not finished, and every
+  later `migrate deploy`, the one the backend runs as it starts included,
+  stops there (P3009) until
+  `prisma migrate resolve --rolled-back 20261112013825_name_systems_and_gm_role`
+  has been run. The next start then runs the migration from its beginning; see
+  [A migration fails on an instance with real data](#a-migration-fails-on-an-instance-with-real-data).
+  Step 3 rewrites those four tables, `Character`
+  among them, so the first start after the upgrade takes longer on a large
+  instance. A request, an archive, a character file or a script that still
+  sends an old value is read through `src/legacy/gameSystemAliases.ts`. 1.6.0
+  cannot run on an upgraded database, since its client knows none of the new
+  values, so going back means restoring a backup taken before the upgrade.
+  `src/legacy/__tests__/storedNamesMigration.test.ts` builds a 1.6.0 database
+  from the migrations before it and checks every step.
 
 ## Data migrations (one-off scripts)
 
@@ -222,13 +276,13 @@ read-only, so `validate-characters.js --export` writes its report to
 ### `migrate:sheet-fields`
 
 The built-in character templates had been written against an older shape, so
-sheets created from them hold content in fields nothing displays: a D&D 5e
-Fighter's features, its armour and weapon proficiencies, a Pathfinder 2e
+sheets created from them hold content in fields nothing displays: a 5E
+Fighter's features, its armour and weapon proficiencies, a Fantasy d20
 character's strikes and class features.
 
-Reading is already fixed for D&D 5e: those sheets display correctly with no
-migration at all. **Pathfinder 2e sheets need this script** to show their
-strikes and class features, and running it also tidies the 5e duplicates away
+Reading is already fixed for 5E: those sheets display correctly with no
+migration at all. **Fantasy d20 sheets need this script** to show their
+strikes and class features, and running it also tidies the 5E duplicates away
 so the same fact is not stored twice.
 
 The same transforms, in `src/utils/sheetFieldMigrations.ts`, run on every
@@ -255,7 +309,7 @@ after `npm run build`.
 
 What it does with each older field:
 
-- **D&D 5e.** The template's `features` are added to Features & Traits; a
+- **5E.** The template's `features` are added to Features & Traits; a
   feature already there by name is filled in or skipped, and one whose text
   differs is added beside it. The flat `proficiencies` list and `languages`
   are added to the proficiency list (and the languages to the Languages box).
@@ -263,11 +317,16 @@ What it does with each older field:
   personality boxes; where a box already holds other text, the older text is
   added after it as a new paragraph. `allies` fills an empty Allies name, or is
   added after the description.
-- **Pathfinder 2e.** `attacks` are added after the character's own strikes,
+- **Fantasy d20.** `attacks` are added after the character's own strikes,
   skipping any with the name of one already there. `specialAbilities` are
   added to the class features. Top-level `senses`, `resistances` and
   `immunities` are added to the lists inside `perception` and `hp`.
-- **Call of Cthulhu 7e.** `player` becomes `playerName` when that is empty.
+- **Horror d100.** A sheet in the shape before 1.7.0 is converted to the
+  sheet rebuilt on the open d100 rules, exactly as the backend converts every
+  such sheet before it listens (`src/legacy/storedHorrorD100Sheets.ts`); the
+  report lists it as converted, with each value the conversion kept in the
+  sheet's record because it had nowhere else to go. Otherwise `player`
+  becomes `playerName` when that is empty.
 
 An older field is removed only once everything in it is in the new place,
 whether it was there already or has just been added. A field holding
@@ -309,17 +368,21 @@ Only a **high-confidence** guess is applied, and only to a character in no
 campaign or in a campaign of that same game system. A character in a Flexible
 campaign, or in a campaign of another system, is listed and left alone, and
 medium and low guesses are only ever listed. Each change is printed with the
-character's id, so it can be undone by hand.
+character's id, so it can be undone by hand. A character given Horror d100
+has its sheet converted to the rebuilt one in the same write, as every stored
+Horror d100 sheet is.
 
 ### `validate:characters`
 
 Checks every character against its game system's rules the way a save does,
 after moving older fields as a save does, and lists each one the server would
-refuse, with its id and the fields at fault. Nothing is written.
+refuse, with its id and the fields at fault. A Horror d100 sheet still in the
+shape before 1.7.0 is judged converted, as the server answers and saves it.
+Nothing is written.
 
 ```bash
 npm run validate:characters                          # every character
-npm run validate:characters -- --system DND_5E       # one game system; dnd5e works too
+npm run validate:characters -- --system FIFTH_EDITION  # one game system; fifthedition and the name older versions used work too
 npm run validate:characters -- --verbose             # every error for every character
 npm run validate:characters -- --export              # also write validation-report.json
 ```
@@ -354,10 +417,44 @@ docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate deploy
 ### A migration fails on an instance with real data
 
 Do not reset anything. Each migration runs as a single step, so a failed one
-normally leaves your data as it was. Take the last lines of `docker compose logs backend` and the output of
-`docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status`, and open an issue
-with both. If you have to get back to a working instance first, restore the last
-backup (see [Database Backups](../docs/DEPLOYMENT.md#database-backups)).
+normally leaves your data as it was. It still blocks the next start: Prisma has
+recorded the migration as started and not finished, `migrate deploy` refuses to
+go on while that record stands, and `start.sh` exits, so under Docker the
+backend container restarts over and over, and its log shows `Migration failed`.
+
+The log gives the cause once, at the first failure, as Prisma's P3018 with the
+database's own message; every later start prints only P3009, `migrate found
+failed migrations`. Find the first with
+`docker compose logs backend | grep -B2 -A8 "Database error"` (the same text is
+in the `logs` column of the migration's row in `_prisma_migrations`), and
+remove the cause where there is one, such as a full disk, or the migration
+fails the same way again.
+
+Then mark the migration as rolled back, naming the one the log names, and start
+again. The backend container is not running, so `docker compose exec` cannot
+reach it; `docker compose run` starts one for the command, with Prisma as its
+entry point in place of `start.sh`:
+
+```bash
+docker compose run --rm -u appuser --entrypoint ./node_modules/.bin/prisma backend migrate resolve --rolled-back 20261112013825_name_systems_and_gm_role
+docker compose up -d
+```
+
+Without Docker, from the `backend` folder:
+
+```bash
+npx prisma migrate resolve --rolled-back 20261112013825_name_systems_and_gm_role
+npx prisma migrate deploy
+```
+
+The migration then runs again from its beginning. This is the recovery for
+1.7.0's migration, named above, and for any other that failed with nothing
+changed. If it fails a second time, take the last lines of
+`docker compose logs backend` and the output of `migrate status`, run the same
+way as the `resolve` command above, and open an issue with both. If you have to
+get back to a working instance first, go back to the version you came from with
+the backup taken before the upgrade (see
+[Going back to the version you came from](../docs/DEPLOYMENT.md#going-back-to-the-version-you-came-from)).
 
 ### Migration conflicts (development only)
 

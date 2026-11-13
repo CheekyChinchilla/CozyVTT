@@ -1,8 +1,8 @@
 /**
- * The invite picker searches by name, and never hands a DM the whole user
+ * The invite picker searches by name, and never hands a GM the whole user
  * directory.
  *
- * Any signed-in user can create a campaign and so become its DM, and the
+ * Any signed-in user can create a campaign and so become its GM, and the
  * picker used to answer with every account on the instance that was not
  * already in or invited to the campaign: id, display name and avatar, accounts
  * still waiting for an administrator's approval included, unpaged. It now
@@ -30,9 +30,9 @@ const stamp = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
 /** A name part no other test's users share, so searches see only this file's accounts. */
 const tag = `Zq${stamp.slice(-6)}`;
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: request.Agent;
+let gm: request.Agent;
 const users: string[] = [];
 
 async function account(displayName: string, isApproved = true): Promise<string> {
@@ -60,10 +60,10 @@ let percentOnlyId: string;
 let accentedId: string;
 
 beforeAll(async () => {
-  const owner = await createTestUser({ email: `invitable-dm-${stamp}@test.invalid`, displayName: `DM ${tag}` });
-  dmId = owner.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Invitable ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { campaignId, userId: dmId, role: 'DM', characterIds: [] } });
+  const owner = await createTestUser({ email: `invitable-dm-${stamp}@test.invalid`, displayName: `GM ${tag}` });
+  gmId = owner.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Invitable ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { campaignId, userId: gmId, role: 'GM', characterIds: [] } });
 
   aliceId = await account(`Alice ${tag}`);
   memberId = await account(`Member ${tag}`);
@@ -80,18 +80,18 @@ beforeAll(async () => {
   await prisma.campaignMembership.create({ data: { campaignId, userId: memberId, role: 'PLAYER', characterIds: [] } });
   await prisma.campaignInvitation.create({ data: { campaignId, userId: invitedId, status: 'PENDING' } });
 
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: owner.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: owner.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, ...users]);
+  await cleanupUsers([gmId, ...users]);
   await prisma.$disconnect();
 });
 
 const search = (term?: string) =>
-  dm.get(`/api/campaigns/${campaignId}/invitable-users`).query(term === undefined ? {} : { search: term });
+  gm.get(`/api/campaigns/${campaignId}/invitable-users`).query(term === undefined ? {} : { search: term });
 
 describe('GET /api/campaigns/:campaignId/invitable-users', () => {
   it('returns nobody without a search', async () => {
@@ -143,7 +143,7 @@ describe('GET /api/campaigns/:campaignId/invitable-users', () => {
     expect(ids).not.toContain(memberId);
     expect(ids).not.toContain(invitedId);
     expect(ids).not.toContain(pendingApprovalId);
-    expect(ids).not.toContain(dmId);
+    expect(ids).not.toContain(gmId);
     expect(ids).toContain(aliceId);
   });
 
@@ -166,7 +166,7 @@ describe('GET /api/campaigns/:campaignId/invitable-users', () => {
   });
 
   it('refuses a search sent twice, or longer than a display name can be', async () => {
-    const twice = await dm.get(`/api/campaigns/${campaignId}/invitable-users?search=al&search=ic`);
+    const twice = await gm.get(`/api/campaigns/${campaignId}/invitable-users?search=al&search=ic`);
     expect(twice.status).toBe(400);
     const long = await search('x'.repeat(51));
     expect(long.status).toBe(400);
@@ -176,7 +176,7 @@ describe('GET /api/campaigns/:campaignId/invitable-users', () => {
 
 describe('POST /api/campaigns/:campaignId/invite', () => {
   it('will not invite an account still waiting for approval, answering as for no account', async () => {
-    const res = await dm.post(`/api/campaigns/${campaignId}/invite`).send({ userId: pendingApprovalId });
+    const res = await gm.post(`/api/campaigns/${campaignId}/invite`).send({ userId: pendingApprovalId });
     expect(res.status).toBe(404);
     expect(res.body.message).toBe('User not found');
     expect(await prisma.campaignInvitation.count({ where: { campaignId, userId: pendingApprovalId } })).toBe(0);

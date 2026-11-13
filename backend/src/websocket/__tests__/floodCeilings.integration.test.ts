@@ -29,12 +29,12 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `flood-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let spectatorId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 let spectatorCookie: string;
 
@@ -72,19 +72,19 @@ async function errorsFrom(
 }
 
 beforeAll(async () => {
-  const [dm, player, spectator] = await Promise.all(
+  const [gm, player, spectator] = await Promise.all(
     ['dm', 'player', 'spectator'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Flood ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
   spectatorId = spectator.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Flood ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Flood ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
@@ -104,7 +104,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie, spectatorCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId), server.loginAs(spectatorId)]);
+  [gmCookie, playerCookie, spectatorCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId), server.loginAs(spectatorId)]);
 });
 
 afterAll(async () => {
@@ -112,7 +112,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, spectatorId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, spectatorId] } } });
   await prisma.$disconnect();
 });
 
@@ -125,8 +125,8 @@ beforeEach(async () => {
 
 describe.each([
   ['wall:update', 'a player', () => playerCookie, 40, { segment: {} }],
-  ['light:add', 'the DM', () => dmCookie, 40, { light: {} }],
-  ['fog:operation', 'the DM', () => dmCookie, 10, { operation: {} }],
+  ['light:add', 'the GM', () => gmCookie, 40, { light: {} }],
+  ['fog:operation', 'the GM', () => gmCookie, 10, { operation: {} }],
 ])('%s', (event, who, cookie, ceiling, payload) => {
   it(`is one budget for ${who}, however many sockets they open`, async () => {
     const first = await server.connectAndAuth(cookie(), campaignId);
@@ -152,18 +152,18 @@ describe('token.move.start', () => {
   });
 
   it("is one budget across the user's sockets, and reads nothing once it is spent", async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const first = await server.connectAndAuth(playerCookie, campaignId);
     const second = await server.connectAndAuth(playerCookie, campaignId);
     expect(await errorsFrom(first, 'token.move.start', { mapId }, 30, { expected: 30 })).toBe(30);
     const reads = jest.spyOn(prisma.map, 'findUnique');
 
-    const quiet = expectNoEvent(dm, 'token.move.start', 500);
+    const quiet = expectNoEvent(gm, 'token.move.start', 500);
     second.emit('token.move.start', { tokenId: PAWN, mapId });
     await quiet;
     expect(reads).not.toHaveBeenCalled();
 
-    dm.disconnect();
+    gm.disconnect();
     first.disconnect();
     second.disconnect();
   });
@@ -171,9 +171,9 @@ describe('token.move.start', () => {
 
 describe('initiative.roll', () => {
   it("refuses a spectator's roll before reading anything", async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const added = waitForEvent(dm, 'initiative.state');
-    dm.emit('initiative.add', { tokenId: HERO, mapId });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const added = waitForEvent(gm, 'initiative.state');
+    gm.emit('initiative.add', { tokenId: HERO, mapId });
     await added;
     const spectator = await server.connectAndAuth(spectatorCookie, campaignId);
     const reads = jest.spyOn(prisma.map, 'findUnique');
@@ -183,7 +183,7 @@ describe('initiative.roll', () => {
     expect((await denial).message).toBe('Spectators cannot roll initiative');
     expect(reads).not.toHaveBeenCalled();
 
-    dm.disconnect();
+    gm.disconnect();
     spectator.disconnect();
   });
 });

@@ -11,7 +11,6 @@
 
 import { allBuiltInTemplates } from '../../../__tests__/helpers/builtInTemplates';
 import { validateCharacterData } from '../../../validators/game-systems';
-import type { GameSystem } from '../../../game-systems';
 
 /** Every key path in a plain-object tree, arrays descended by index. */
 function keyPaths(value: unknown, prefix = ''): string[] {
@@ -37,7 +36,7 @@ describe('built-in templates survive their schema', () => {
   it.each(templates.map((t) => [t.gameSystem, t.name, t] as const))(
     '%s: "%s" loses no keys',
     (_system, _name, template) => {
-      const result = validateCharacterData(template.gameSystem as GameSystem, template.data);
+      const result = validateCharacterData(template.gameSystem, template.data);
       expect(result.success).toBe(true);
       if (!result.success) return;
       const before = keyPaths(template.data);

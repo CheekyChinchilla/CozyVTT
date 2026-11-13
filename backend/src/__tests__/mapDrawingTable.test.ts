@@ -5,7 +5,7 @@
  * A drawing is one row, with its map and its author. It goes with its map,
  * and so with its campaign; it stays when its author's account is deleted,
  * with no author. Every campaign, those that existed before the column
- * included, lets players draw until its DM says otherwise. The migration
+ * included, lets players draw until its GM says otherwise. The migration
  * that makes them only adds: an instance upgrading onto years of campaigns
  * loses and changes nothing.
  *
@@ -28,7 +28,7 @@ afterAll(async () => {
 });
 
 async function campaignWithMap() {
-  const owner = await createTestUser({ displayName: 'Drawing DM' });
+  const owner = await createTestUser({ displayName: 'Drawing GM' });
   userIds.push(owner.id);
   const campaign = await createTestCampaign(owner.id, { name: 'Drawing table' });
   const map = await prisma.map.create({
@@ -56,12 +56,12 @@ describe('the MapDrawing table', () => {
     expect(drawing.createdAt).toBeInstanceOf(Date);
   });
 
-  it('takes a drawing for the DM alone and on the ground layer, which the database allows', async () => {
+  it('takes a drawing for the GM alone and on the ground layer, which the database allows', async () => {
     const { owner, map } = await campaignWithMap();
     const drawing = await prisma.mapDrawing.create({
-      data: { mapId: map.id, authorId: owner.id, kind: 'rect', color: '#1a1a1a', width: 2, points: [[0, 0], [5, 5]], audience: 'DM', layer: 'GROUND' },
+      data: { mapId: map.id, authorId: owner.id, kind: 'rect', color: '#1a1a1a', width: 2, points: [[0, 0], [5, 5]], audience: 'GM', layer: 'GROUND' },
     });
-    expect(drawing).toMatchObject({ audience: 'DM', layer: 'GROUND' });
+    expect(drawing).toMatchObject({ audience: 'GM', layer: 'GROUND' });
   });
 
   it('loses a map\'s drawings with the map', async () => {

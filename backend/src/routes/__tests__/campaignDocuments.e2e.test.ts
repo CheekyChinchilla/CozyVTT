@@ -1,7 +1,7 @@
 /**
  * Sharing and reading documents — End-to-End Tests
  *
- * The rule under test: a document is private to its uploader until a DM links
+ * The rule under test: a document is private to its uploader until a GM links
  * it to a campaign, and then that campaign's members can read it. Everyone else
  * gets 404, not 403, so a reply never confirms a private id exists.
  *
@@ -39,7 +39,7 @@ const MARKDOWN_THAT_IS_HTML = Buffer.from('<html><body><script>document.title="p
 const TEXT = Buffer.from('Just some notes.\n');
 
 describe('campaign documents', () => {
-  let ownerId: string;   // uploads the documents, and is DM of campaign A
+  let ownerId: string;   // uploads the documents, and is GM of campaign A
   let playerId: string;  // member of campaign A only
   let strangerId: string; // member of campaign B only
   let campaignA: string;
@@ -89,9 +89,9 @@ describe('campaign documents', () => {
     campaignB = (await createTestCampaign(strangerId, { name: `Docs B ${stamp}` })).id;
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: ownerId, campaignId: campaignA, role: 'DM', characterIds: [] },
+        { userId: ownerId, campaignId: campaignA, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId: campaignA, role: 'PLAYER', characterIds: [] },
-        { userId: strangerId, campaignId: campaignB, role: 'DM', characterIds: [] },
+        { userId: strangerId, campaignId: campaignB, role: 'GM', characterIds: [] },
       ],
     });
 
@@ -127,7 +127,7 @@ describe('campaign documents', () => {
     });
 
     it('a member of the uploader\'s campaign cannot', async () => {
-      // Being at the same table is not access. The DM has to share it.
+      // Being at the same table is not access. The GM has to share it.
       expect((await serve(player, pdfId)).status).toBe(404);
     });
 
@@ -143,7 +143,7 @@ describe('campaign documents', () => {
   });
 
   describe('sharing', () => {
-    it('the DM can share a document they can read', async () => {
+    it('the GM can share a document they can read', async () => {
       expect((await link(owner, campaignA, pdfId)).status).toBe(201);
     });
 
@@ -157,16 +157,16 @@ describe('campaign documents', () => {
       expect((await link(player, campaignA, pdfId)).status).toBe(403);
     });
 
-    it('a DM cannot share a document they cannot read', async () => {
-      // The stranger is DM of campaign B but has never seen the owner's file.
-      // Allowing this would let any DM grant a whole table access to a private
+    it('a GM cannot share a document they cannot read', async () => {
+      // The stranger is GM of campaign B but has never seen the owner's file.
+      // Allowing this would let any GM grant a whole table access to a private
       // file from nothing but its id.
       const res = await link(stranger, campaignB, pdfId);
       expect(res.status).toBe(404);
       expect(await prisma.campaignDocument.count({ where: { assetId: pdfId } })).toBe(0);
     });
 
-    it('a DM cannot pass on a document that was merely shared with them', async () => {
+    it('a GM cannot pass on a document that was merely shared with them', async () => {
       // The owner shares with campaign A. The stranger sits in A as a player
       // and runs campaign B. Reading it in A must not let them share it into
       // B: the owner chose one table, not every table a member of it runs.
@@ -191,7 +191,7 @@ describe('campaign documents', () => {
       // uploader chose who sees it, and an admin's table is not on that list.
       const admin = await createTestUser({ email: `campdocs-admin-${Date.now()}@test.cozyvtt.local`, role: 'ADMIN' });
       const table = (await createTestCampaign(admin.id, { name: `Docs Admin ${Date.now()}` })).id;
-      await prisma.campaignMembership.create({ data: { userId: admin.id, campaignId: table, role: 'DM', characterIds: [] } });
+      await prisma.campaignMembership.create({ data: { userId: admin.id, campaignId: table, role: 'GM', characterIds: [] } });
       try {
         const adminAgent = await login(admin.email);
         const res = await link(adminAgent, table, pdfId);
@@ -205,7 +205,7 @@ describe('campaign documents', () => {
       }
     });
 
-    it('a DM can share a global document they did not upload', async () => {
+    it('a GM can share a global document they did not upload', async () => {
       const global = await prisma.asset.create({
         data: {
           type: 'DOCUMENT', scope: 'GLOBAL', uploadedById: ownerId,
@@ -408,7 +408,7 @@ describe('campaign documents', () => {
       expect(served.text).toBe('# Typed\n\nHello');
     });
 
-    it('a DM can create a campaign document that members read at once', async () => {
+    it('a GM can create a campaign document that members read at once', async () => {
       const res = await create(owner, {
         name: 'Table Notes', format: 'txt', content: 'Session 1', scope: 'CAMPAIGN', campaignId: campaignA,
       });
@@ -550,7 +550,7 @@ describe('campaign documents', () => {
     it('deleting the campaign keeps the document', async () => {
       const stamp = Date.now();
       const doomed = (await createTestCampaign(ownerId, { name: `Doomed ${stamp}` })).id;
-      await prisma.campaignMembership.create({ data: { userId: ownerId, campaignId: doomed, role: 'DM', characterIds: [] } });
+      await prisma.campaignMembership.create({ data: { userId: ownerId, campaignId: doomed, role: 'GM', characterIds: [] } });
       expect((await link(owner, doomed, txtId)).status).toBe(201);
 
       await prisma.campaign.delete({ where: { id: doomed } });

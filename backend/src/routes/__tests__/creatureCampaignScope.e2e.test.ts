@@ -2,10 +2,10 @@
  * A creature template belongs to one campaign, and stays there.
  *
  * The creature routes are mounted under a campaign, so `campaignMember` and
- * `campaignDM` prove the caller belongs to the campaign named in the URL. They
+ * `campaignGM` prove the caller belongs to the campaign named in the URL. They
  * say nothing about the campaign the requested creature actually belongs to.
  * Reading, duplicating and favouriting all looked a template up by id alone and
- * never compared the two, so a DM of any campaign could name another campaign's
+ * never compared the two, so a GM of any campaign could name another campaign's
  * homebrew and read its full stat block. Duplicating turned that into a copy
  * filed under their own campaign, which outlives the original being deleted.
  * The editing routes in the same file already made this comparison.
@@ -66,8 +66,8 @@ beforeAll(async () => {
   // Neither is a platform admin: an admin may read everything by design, which
   // would hide the bug under test.
   const [o, v] = await Promise.all([
-    createTestUser({ email: `creature-out-${stamp}@test.cozyvtt.local`, displayName: 'Outsider DM' }),
-    createTestUser({ email: `creature-vic-${stamp}@test.cozyvtt.local`, displayName: 'Victim DM' }),
+    createTestUser({ email: `creature-out-${stamp}@test.cozyvtt.local`, displayName: 'Outsider GM' }),
+    createTestUser({ email: `creature-vic-${stamp}@test.cozyvtt.local`, displayName: 'Victim GM' }),
   ]);
   outsiderId = o.id;
   victimId = v.id;
@@ -76,8 +76,8 @@ beforeAll(async () => {
   victimCampaignId = (await createTestCampaign(victimId, { name: `Victim ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: outsiderId, campaignId: outsiderCampaignId, role: 'DM', characterIds: [] },
-      { userId: victimId, campaignId: victimCampaignId, role: 'DM', characterIds: [] },
+      { userId: outsiderId, campaignId: outsiderCampaignId, role: 'GM', characterIds: [] },
+      { userId: victimId, campaignId: victimCampaignId, role: 'GM', characterIds: [] },
     ],
   });
 
@@ -99,7 +99,7 @@ afterAll(async () => {
 
 const base = () => `/api/campaigns/${outsiderCampaignId}/creatures`;
 
-describe("a DM naming another campaign's creature", () => {
+describe("a GM naming another campaign's creature", () => {
   it('cannot read it', async () => {
     const res = await outsider.get(`${base()}/${privateCreatureId}`);
     expect(res.status).toBe(404);

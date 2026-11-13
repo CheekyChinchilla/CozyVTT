@@ -58,7 +58,7 @@ beforeAll(async () => {
   attackerId = attackerUser.id;
   victimId = victimUser.id;
   campaignId = (await createTestCampaign(attackerId, { name: 'Attacker campaign' })).id;
-  await prisma.campaignMembership.create({ data: { userId: attackerId, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: attackerId, campaignId, role: 'GM', characterIds: [] } });
   privateId = await makeAsset(victimId, 'victim-private', 'DOCUMENT');
   ownId = await makeAsset(attackerId, 'attacker-own', 'TOKEN');
   mapId = (await prisma.map.create({

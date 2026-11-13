@@ -2,7 +2,7 @@
  * Campaign import and its preview, end to end.
  *
  * Any signed-in user may import a campaign, players included; they become
- * its owner and DM. These cover the round trip from an export, the archives
+ * its owner and GM. These cover the round trip from an export, the archives
  * the routes refuse, and that an uploaded archive does not outlive its
  * request.
  *
@@ -37,7 +37,7 @@ const manifest = JSON.stringify({
   exportedAt: '2026-10-06T00:00:00.000Z',
   exportedFrom: 'CozyVTT test',
   campaignName: 'Crafted',
-  gameSystem: 'DND_5E',
+  gameSystem: 'FIFTH_EDITION',
   mapCount: 0,
   tokenCount: 0,
   creatureCount: 0,
@@ -47,11 +47,11 @@ const manifest = JSON.stringify({
   totalSizeBytes: 0,
 });
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let playerEmail: string;
 let sourceCampaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 let exported: string;
 
@@ -65,20 +65,20 @@ async function signIn(email: string) {
 const tempFiles = () => (fs.existsSync(IMPORT_TEMP) ? fs.readdirSync(IMPORT_TEMP) : []);
 
 beforeAll(async () => {
-  const dmUser = await createTestUser({ displayName: 'Import DM' });
+  const gmUser = await createTestUser({ displayName: 'Import GM' });
   const playerUser = await createTestUser({ displayName: 'Import Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
   playerEmail = playerUser.email;
-  sourceCampaignId = (await createTestCampaign(dmId, { name: 'Round Trip' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: sourceCampaignId, role: 'DM', characterIds: [] } });
+  sourceCampaignId = (await createTestCampaign(gmId, { name: 'Round Trip' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId: sourceCampaignId, role: 'GM', characterIds: [] } });
 
   const mapFile = path.join(UPLOAD_DIR, 'source-map.png');
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   fs.writeFileSync(mapFile, PNG);
   const asset = await prisma.asset.create({
     data: {
-      type: 'MAP', scope: 'CAMPAIGN', campaignId: sourceCampaignId, uploadedById: dmId, filename: 'source-map.png',
+      type: 'MAP', scope: 'CAMPAIGN', campaignId: sourceCampaignId, uploadedById: gmId, filename: 'source-map.png',
       originalName: 'Keep.png', mimeType: 'image/png', fileSize: PNG.length, filePath: mapFile, name: 'Keep',
     },
   });
@@ -90,10 +90,10 @@ beforeAll(async () => {
     },
   });
 
-  dm = await signIn(dmUser.email);
+  gm = await signIn(gmUser.email);
   player = await signIn(playerUser.email);
 
-  const res = await dm.get(`/api/campaigns/${sourceCampaignId}/export`).buffer(true).parse((r, done) => {
+  const res = await gm.get(`/api/campaigns/${sourceCampaignId}/export`).buffer(true).parse((r, done) => {
     const chunks: Buffer[] = [];
     r.on('data', (c: Buffer) => chunks.push(c));
     r.on('end', () => done(null, Buffer.concat(chunks)));
@@ -104,9 +104,9 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: { in: [dmId, playerId] } } });
-  await prisma.campaign.deleteMany({ where: { ownerId: { in: [dmId, playerId] } } });
-  await cleanupUsers([dmId, playerId]);
+  await prisma.asset.deleteMany({ where: { uploadedById: { in: [gmId, playerId] } } });
+  await prisma.campaign.deleteMany({ where: { ownerId: { in: [gmId, playerId] } } });
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
   fs.rmSync(SCRATCH, { recursive: true, force: true });
 });
@@ -146,7 +146,7 @@ describe('POST /api/campaigns/import/preview', () => {
 });
 
 describe('POST /api/campaigns/import', () => {
-  it('lets a player import an exported campaign, as its owner and DM', async () => {
+  it('lets a player import an exported campaign, as its owner and GM', async () => {
     const res = await player.post('/api/campaigns/import').field('campaignName', 'My Copy').attach('file', exported);
 
     expect(res.status).toBe(201);
@@ -156,7 +156,7 @@ describe('POST /api/campaigns/import', () => {
       include: { maps: true, memberships: true, assets: true },
     });
     expect(campaign.ownerId).toBe(playerId);
-    expect(campaign.memberships).toEqual([expect.objectContaining({ userId: playerId, role: 'DM' })]);
+    expect(campaign.memberships).toEqual([expect.objectContaining({ userId: playerId, role: 'GM' })]);
     expect(campaign.maps).toHaveLength(1);
     expect(campaign.assets).toHaveLength(1);
     expect(fs.readFileSync(path.resolve(campaign.assets[0].filePath))).toEqual(PNG);

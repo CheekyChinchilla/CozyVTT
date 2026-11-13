@@ -5,13 +5,13 @@
  * Each of these moves up to 500 MB through the one backend every table
  * shares, and any signed-in user can preview and import. So each user gets a
  * number of each an hour (20 unless CAMPAIGN_ARCHIVE_RATE_LIMIT says
- * otherwise), counted apart, and one archive at a time across all three. A DM
+ * otherwise), counted apart, and one archive at a time across all three. A GM
  * moving a campaign to another server previews it and imports it once or
  * twice; the ceiling is far above that and is there to stop a script.
  *
  * Asset uploads (pictures, audio, documents) and Universal VTT map imports
  * are not archives and are not counted here. They keep their own upload
- * limiter, ASSET_UPLOAD_RATE_LIMIT, so a DM setting up a campaign is not
+ * limiter, ASSET_UPLOAD_RATE_LIMIT, so a GM setting up a campaign is not
  * slowed down.
  */
 

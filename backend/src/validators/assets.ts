@@ -49,7 +49,7 @@ export function isDrawnPicture(asset: { type: string; tags: readonly string[] })
 
 /**
  * Whether an upload of `type` at `scope` may carry the tags it sends: the
- * drawn-map tag only on a campaign map picture, which only the campaign's DM
+ * drawn-map tag only on a campaign map picture, which only the campaign's GM
  * may place (canPlaceAssetAtScope), as Paint's own upload is.
  */
 export function tagsAllowedOn(tags: readonly string[], type: string, scope: string): boolean {

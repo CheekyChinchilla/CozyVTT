@@ -35,7 +35,7 @@ beforeAll(async () => {
   stranger = await signIn('stranger');
   const res = await owner
     .post('/api/characters')
-    .send({ name: 'Probed', gameSystem: 'DND_5E', data: getBlankTemplate(GameSystem.DND_5E).data });
+    .send({ name: 'Probed', gameSystem: 'FIFTH_EDITION', data: getBlankTemplate(GameSystem.FIFTH_EDITION).data });
   expect(res.status).toBe(201);
   characterId = res.body.character.id;
 });
@@ -45,7 +45,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-it.each(['DND_5E', 'PATHFINDER_2E'])(
+it.each(['FIFTH_EDITION', 'FANTASY_D20'])(
   'answers a stranger 404 whichever system they name (%s)',
   async (gameSystem) => {
     const res = await stranger.put(`/api/characters/${characterId}`).send({ gameSystem });
@@ -55,7 +55,7 @@ it.each(['DND_5E', 'PATHFINDER_2E'])(
 );
 
 it('still tells the owner the game system cannot change', async () => {
-  const res = await owner.put(`/api/characters/${characterId}`).send({ gameSystem: 'PATHFINDER_2E' });
+  const res = await owner.put(`/api/characters/${characterId}`).send({ gameSystem: 'FANTASY_D20' });
 
   expect(res.status).toBe(400);
   expect(res.body.message).toMatch(/Cannot change game system/);

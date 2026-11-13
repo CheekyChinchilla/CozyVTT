@@ -58,9 +58,9 @@ import {
 const app = createTestApp();
 
 describe('session lifecycle', () => {
-  let dmId: string;
+  let gmId: string;
   let campaignId: string;
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
 
   const sessions = (path = '') => `/api/campaigns/${campaignId}/sessions${path}`;
   const campaignRow = () => prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
@@ -73,7 +73,7 @@ describe('session lifecycle', () => {
   };
 
   const start = async () => {
-    const res = await dm.post(sessions()).send({});
+    const res = await gm.post(sessions()).send({});
     expect(res.status).toBe(201);
     return res.body.session.id as string;
   };
@@ -110,12 +110,12 @@ describe('session lifecycle', () => {
   };
 
   beforeAll(async () => {
-    const dmUser = await createTestUser({ displayName: 'Lifecycle DM' });
-    dmId = dmUser.id;
-    campaignId = (await createTestCampaign(dmId, { name: 'Lifecycle' })).id;
-    await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-    dm = request.agent(app);
-    await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
+    const gmUser = await createTestUser({ displayName: 'Lifecycle GM' });
+    gmId = gmUser.id;
+    campaignId = (await createTestCampaign(gmId, { name: 'Lifecycle' })).id;
+    await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+    gm = request.agent(app);
+    await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD });
   });
 
   beforeEach(reset);
@@ -123,18 +123,18 @@ describe('session lifecycle', () => {
   afterAll(async () => {
     await prisma.session.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId]);
+    await cleanupUsers([gmId]);
     await prisma.$disconnect();
   });
 
   describe('ending a session', () => {
     it('ends it without saving the state, and keeps the snapshot taken at pause', async () => {
       const id = await start();
-      expect((await dm.put(sessions(`/${id}/pause`))).status).toBe(200);
+      expect((await gm.put(sessions(`/${id}/pause`))).status).toBe(200);
       const paused = (await sessionRow(id)).savedState;
       expect(paused).not.toBeNull();
 
-      const res = await dm.put(sessions(`/${id}/end`)).send({ saveState: false });
+      const res = await gm.put(sessions(`/${id}/end`)).send({ saveState: false });
 
       expect(res.status).toBe(200);
       expect(res.body.stateSaved).toBe(false);
@@ -146,14 +146,14 @@ describe('session lifecycle', () => {
 
     it('refuses a saveState that is not true or false', async () => {
       const id = await start();
-      const res = await dm.put(sessions(`/${id}/end`)).send({ saveState: 'false' });
+      const res = await gm.put(sessions(`/${id}/end`)).send({ saveState: 'false' });
       expect(res.status).toBe(400);
       expect((await sessionRow(id)).endedAt).toBeNull();
     });
 
     it('refuses notes over the recap limit, as editing them afterwards does', async () => {
       const id = await start();
-      const res = await dm.put(sessions(`/${id}/end`)).send({ notes: 'x'.repeat(MAX_SESSION_NOTES_LENGTH + 1) });
+      const res = await gm.put(sessions(`/${id}/end`)).send({ notes: 'x'.repeat(MAX_SESSION_NOTES_LENGTH + 1) });
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(String(MAX_SESSION_NOTES_LENGTH));
       expect((await sessionRow(id)).endedAt).toBeNull();
@@ -161,8 +161,8 @@ describe('session lifecycle', () => {
 
     it('stores the notes trimmed, and refuses notes that are not text', async () => {
       const id = await start();
-      expect((await dm.put(sessions(`/${id}/end`)).send({ notes: { recap: 'x' } })).status).toBe(400);
-      expect((await dm.put(sessions(`/${id}/end`)).send({ notes: '  The vault opened.  ' })).status).toBe(200);
+      expect((await gm.put(sessions(`/${id}/end`)).send({ notes: { recap: 'x' } })).status).toBe(400);
+      expect((await gm.put(sessions(`/${id}/end`)).send({ notes: '  The vault opened.  ' })).status).toBe(200);
       expect((await sessionRow(id)).notes).toBe('The vault opened.');
     });
   });
@@ -170,9 +170,9 @@ describe('session lifecycle', () => {
   describe('starting a session', () => {
     it('is refused while one is paused, which is resumed or ended instead', async () => {
       const id = await start();
-      expect((await dm.put(sessions(`/${id}/pause`))).status).toBe(200);
+      expect((await gm.put(sessions(`/${id}/pause`))).status).toBe(200);
 
-      const res = await dm.post(sessions()).send({});
+      const res = await gm.post(sessions()).send({});
 
       expect(res.status).toBe(400);
       expect(await prisma.session.count({ where: { campaignId } })).toBe(1);
@@ -180,7 +180,7 @@ describe('session lifecycle', () => {
     });
 
     it('makes one session when two Starts arrive at once', async () => {
-      const post = () => dm.post(sessions()).send({}).then((r) => r);
+      const post = () => gm.post(sessions()).send({}).then((r) => r);
       const results = await beside('getNextSessionNumber', post, post);
 
       expect(results.map((r) => r.status).sort()).toEqual([201, 400]);
@@ -191,10 +191,10 @@ describe('session lifecycle', () => {
     it('starts one when the campaign says a session is running but none is open', async () => {
       // A campaign left PAUSED by an older version, its session already ended.
       const id = await start();
-      expect((await dm.put(sessions(`/${id}/end`)).send({})).status).toBe(200);
+      expect((await gm.put(sessions(`/${id}/end`)).send({})).status).toBe(200);
       await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'PAUSED' } });
 
-      const res = await dm.post(sessions()).send({});
+      const res = await gm.post(sessions()).send({});
 
       expect(res.status).toBe(201);
       expect(res.body.session.sessionNumber).toBe(2);
@@ -205,8 +205,8 @@ describe('session lifecycle', () => {
   describe('pausing a session', () => {
     it('is refused when it is already paused', async () => {
       const id = await start();
-      expect((await dm.put(sessions(`/${id}/pause`))).status).toBe(200);
-      expect((await dm.put(sessions(`/${id}/pause`))).status).toBe(400);
+      expect((await gm.put(sessions(`/${id}/pause`))).status).toBe(200);
+      expect((await gm.put(sessions(`/${id}/pause`))).status).toBe(400);
     });
 
     it('cannot leave an ended session marked PAUSED when an End lands beside it', async () => {
@@ -214,8 +214,8 @@ describe('session lifecycle', () => {
 
       const [paused, ended] = await beside(
         'captureGameState',
-        () => dm.put(sessions(`/${id}/pause`)).then((r) => r),
-        () => dm.put(sessions(`/${id}/end`)).send({ saveState: false }).then((r) => r),
+        () => gm.put(sessions(`/${id}/pause`)).then((r) => r),
+        () => gm.put(sessions(`/${id}/end`)).send({ saveState: false }).then((r) => r),
       );
 
       expect(ended.status).toBe(200);
@@ -233,9 +233,9 @@ describe('session lifecycle', () => {
     it('reopens a paused session and gives its start time', async () => {
       const id = await start();
       const startedAt = (await sessionRow(id)).startedAt.toISOString();
-      expect((await dm.put(sessions(`/${id}/pause`))).status).toBe(200);
+      expect((await gm.put(sessions(`/${id}/pause`))).status).toBe(200);
 
-      const res = await dm.put(`/api/campaigns/${campaignId}/resume`);
+      const res = await gm.put(`/api/campaigns/${campaignId}/resume`);
 
       expect(res.status).toBe(200);
       expect(res.body.session).toEqual({ id, sessionNumber: 1, startedAt });
@@ -244,9 +244,9 @@ describe('session lifecycle', () => {
 
     it('does not reopen an ended session', async () => {
       const id = await start();
-      expect((await dm.put(sessions(`/${id}/end`)).send({})).status).toBe(200);
+      expect((await gm.put(sessions(`/${id}/end`)).send({})).status).toBe(200);
 
-      const res = await dm.put(`/api/campaigns/${campaignId}/resume`);
+      const res = await gm.put(`/api/campaigns/${campaignId}/resume`);
 
       expect(res.status).toBe(400);
       expect((await sessionRow(id)).endedAt).not.toBeNull();
@@ -255,26 +255,26 @@ describe('session lifecycle', () => {
 
     it('is refused while the session is running', async () => {
       await start();
-      expect((await dm.put(`/api/campaigns/${campaignId}/resume`)).status).toBe(400);
+      expect((await gm.put(`/api/campaigns/${campaignId}/resume`)).status).toBe(400);
     });
   });
 
   describe('the campaign status in settings', () => {
     it.each(['ACTIVE', 'PAUSED', 'INACTIVE'])('refuses %s, which only a session sets', async (status) => {
-      const res = await dm.put(`/api/campaigns/${campaignId}`).send({ status });
+      const res = await gm.put(`/api/campaigns/${campaignId}`).send({ status });
       expect(res.status).toBe(400);
       expect((await campaignRow()).status).toBe('PREPARATION');
     });
 
     it.each(['COMPLETED', 'ARCHIVED', 'PREPARATION'])('sets %s between sessions', async (status) => {
-      const res = await dm.put(`/api/campaigns/${campaignId}`).send({ status });
+      const res = await gm.put(`/api/campaigns/${campaignId}`).send({ status });
       expect(res.status).toBe(200);
       expect((await campaignRow()).status).toBe(status);
     });
 
     it('refuses any status while a session is open', async () => {
       await start();
-      const res = await dm.put(`/api/campaigns/${campaignId}`).send({ status: 'COMPLETED' });
+      const res = await gm.put(`/api/campaigns/${campaignId}`).send({ status: 'COMPLETED' });
       expect(res.status).toBe(400);
       expect((await campaignRow()).status).toBe('ACTIVE');
     });

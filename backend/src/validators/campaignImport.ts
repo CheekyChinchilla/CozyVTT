@@ -5,7 +5,8 @@
  */
 
 import { z } from 'zod';
-import { GameSystem } from '@prisma/client';
+import { GameSystemSchema } from './gameSystem';
+import { normaliseGameSystem } from '../legacy/gameSystemAliases';
 import { ImportVibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { NpcStatBlockSchema } from './statBlock';
@@ -66,7 +67,7 @@ const PositionSchema = z.object({
 // the same allowlists. A value outside them falls back to the default instead
 // of refusing the whole map, as the creature templates below already do; a
 // stored value the routes refuse would otherwise vanish for players (the role
-// filter matches layers exactly) or fail the next time the DM edited it.
+// filter matches layers exactly) or fail the next time the GM edited it.
 const TokenLayerSchema = z.enum(['token', 'spirit']).default('token').catch('token');
 const TokenTypeSchema = z.enum(TOKEN_TYPES);
 const TokenDispositionSchema = z.enum(TOKEN_DISPOSITIONS).nullable().default(null).catch(null);
@@ -87,11 +88,11 @@ const ImportConditionsSchema = z
 const StatBlockSchema = NpcStatBlockSchema;
 
 /**
- * A game system, as the database stores one. The importer checks it on its
- * own and imports the campaign or creature with none when it is not one, so
- * an unknown name costs nothing else.
+ * A game system CozyVTT supports. The importer checks it on its own and
+ * imports the campaign or creature with none when it is not one, so an
+ * unknown name costs nothing else.
  */
-export const ImportGameSystemSchema = z.nativeEnum(GameSystem).nullable().optional();
+export const ImportGameSystemSchema = GameSystemSchema.nullable().optional();
 
 // ── Manifest ────────────────────────────────────────────────────────────────
 
@@ -100,7 +101,12 @@ export const ManifestSchema = z.object({
   exportedAt: z.string().max(50),
   exportedFrom: z.string().max(100),
   campaignName: z.string().min(1).max(CAMPAIGN_LIMITS.maxNameLength),
-  gameSystem: z.string().max(50),
+  // Any text, as the preview shows it: a system's value from an older
+  // version is given as its new one, and anything else as written.
+  gameSystem: z
+    .string()
+    .max(50)
+    .transform((named) => normaliseGameSystem(named) ?? named),
   mapCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_FILE_COUNT),
   tokenCount: z.number().int().min(0),
   creatureCount: z.number().int().min(0),
@@ -142,7 +148,7 @@ export const ImportTokenSchema = z.object({
   position: PositionSchema,
   size: TokenSizeSchema.catch({ width: 1, height: 1 }),
   layer: TokenLayerSchema,
-  // A flag that is not one hides the token: the DM can show it again, and a
+  // A flag that is not one hides the token: the GM can show it again, and a
   // token they meant to keep hidden is not shown to the table.
   visible: z.boolean().optional().default(true).catch(false),
   rotation: z.number().min(0).max(360).optional().catch(undefined),
@@ -188,7 +194,7 @@ export const ImportFogSchema = z
  *
  * imageAssetRef is null when the export left the picture out (deleted, or one
  * the person exporting could not open): the map imports without a picture,
- * its walls, tokens and fog intact, and the DM gives it one in Edit Map.
+ * its walls, tokens and fog intact, and the GM gives it one in Edit Map.
  */
 // A field checked by the importer on its own is z.unknown().optional() here:
 // zod treats a missing z.unknown() key as an error since 4.4, and an archive

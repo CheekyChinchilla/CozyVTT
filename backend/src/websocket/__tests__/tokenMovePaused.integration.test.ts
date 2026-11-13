@@ -4,7 +4,7 @@
  * The guides said so, and the shipped client greyed the drag out, but only
  * the client checked the campaign's status: the three move events and the
  * REST update took a player's move whatever the status was, so a scripted
- * client moved its token freely through a pause. The DM moves tokens at any
+ * client moved its token freely through a pause. The GM moves tokens at any
  * time, which is how a scene is set up between sessions.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -21,12 +21,12 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `paused-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let otherId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 let otherCookie: string;
 
@@ -46,19 +46,19 @@ const positionOf = async (id: string) => {
 };
 
 beforeAll(async () => {
-  const [dm, player, other] = await Promise.all(
+  const [gm, player, other] = await Promise.all(
     ['dm', 'player', 'other'].map((name) =>
       prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Paused ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
   otherId = other.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Paused ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } });
+  const campaign = await prisma.campaign.create({ data: { name: `Paused ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: otherId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
@@ -73,7 +73,7 @@ beforeAll(async () => {
   // Players are told of moves on the map the campaign is showing.
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie, otherCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId), server.loginAs(otherId)]);
+  [gmCookie, playerCookie, otherCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId), server.loginAs(otherId)]);
 });
 
 beforeEach(async () => {
@@ -85,7 +85,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, otherId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, otherId] } } });
   await prisma.$disconnect();
 });
 
@@ -114,33 +114,33 @@ describe.each(['PAUSED', 'INACTIVE'] as const)('while the campaign is %s', (stat
 
   it('refuses a player starting a move', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const denial = waitForEvent<{ message: string }>(player, 'error');
-    const silence = expectNoEvent(dm, 'token.move.start');
+    const silence = expectNoEvent(gm, 'token.move.start');
     player.emit('token.move.start', { tokenId: OWN, mapId });
     expect((await denial).message).toMatch(/paused|session/i);
     await silence;
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('drops a player\'s drag frames, so nobody sees the token move', async () => {
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const silence = expectNoEvent(dm, 'token.moved');
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const silence = expectNoEvent(gm, 'token.moved');
     player.emit('token.move', { tokenId: OWN, mapId, x: 6, y: 6 });
     await silence;
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  it('still lets the DM move a token, to set the scene', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const done = waitForEvent<{ tokenId: string }>(dm, 'token.moved');
-    dm.emit('token.move.end', { tokenId: NPC, mapId, x: 7, y: 7 });
+  it('still lets the GM move a token, to set the scene', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const done = waitForEvent<{ tokenId: string }>(gm, 'token.moved');
+    gm.emit('token.move.end', { tokenId: NPC, mapId, x: 7, y: 7 });
     expect((await done).tokenId).toBe(NPC);
     expect(await positionOf(NPC)).toEqual({ x: 7, y: 7 });
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
@@ -165,26 +165,26 @@ describe('a pause landing in the middle of a drag', () => {
   it('puts the token back for everyone who saw the drag', async () => {
     await setStatus('ACTIVE');
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const framed = waitForEvent<{ x: number }>(dm, 'token.moved');
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const framed = waitForEvent<{ x: number }>(gm, 'token.moved');
     player.emit('token.move.start', { tokenId: OWN, mapId });
     player.emit('token.move', { tokenId: OWN, mapId, x: 4, y: 4 });
     expect((await framed).x).toBe(4);
 
     await setStatus('PAUSED');
-    const toDm = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(dm, 'token.moved');
+    const toGm = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(gm, 'token.moved');
     const toMover = waitForEvent<{ movedBy: string | null }>(player, 'token.moved');
     player.emit('token.move.end', { tokenId: OWN, mapId, x: 5, y: 5 });
-    expect(await toDm).toEqual({ tokenId: OWN, mapId, x: 1, y: 1, movedBy: null });
+    expect(await toGm).toEqual({ tokenId: OWN, mapId, x: 1, y: 1, movedBy: null });
     expect((await toMover).movedBy).toBeNull();
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
 
 // Any refusal of a drop after the drag began leaves the same mismatch: the
-// DM taking the token back mid-drag, say, refuses the drop for want of
+// GM taking the token back mid-drag, say, refuses the drop for want of
 // control. Every screen that saw the frames is told where the token is.
 describe('control taken away in the middle of a drag', () => {
   afterAll(async () => {
@@ -195,21 +195,21 @@ describe('control taken away in the middle of a drag', () => {
     await setStatus('ACTIVE');
     await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const framed = waitForEvent<{ x: number }>(dm, 'token.moved');
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const framed = waitForEvent<{ x: number }>(gm, 'token.moved');
     player.emit('token.move.start', { tokenId: OWN, mapId });
     player.emit('token.move', { tokenId: OWN, mapId, x: 4, y: 4 });
     expect((await framed).x).toBe(4);
 
     await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, null), token(NPC, null)] } });
-    const toDm = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(dm, 'token.moved');
+    const toGm = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(gm, 'token.moved');
     const toMover = waitForEvent<{ x: number; movedBy: string | null }>(player, 'token.moved');
     player.emit('token.move.end', { tokenId: OWN, mapId, x: 5, y: 5 });
-    expect(await toDm).toEqual({ tokenId: OWN, mapId, x: 1, y: 1, movedBy: null });
+    expect(await toGm).toEqual({ tokenId: OWN, mapId, x: 1, y: 1, movedBy: null });
     expect(await toMover).toMatchObject({ x: 1, movedBy: null });
     expect(await positionOf(OWN)).toEqual({ x: 1, y: 1 });
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   // Its pick-up was refused too, or never sent, and the mover's screen has
@@ -218,17 +218,17 @@ describe('control taken away in the middle of a drag', () => {
     await setStatus('ACTIVE');
     await prisma.map.update({ where: { id: mapId }, data: { tokens: [token(OWN, playerId), token(NPC, null)] } });
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const refused = waitForEvent<{ message: string }>(player, 'error');
     const back = waitForEvent<{ tokenId: string; x: number; y: number; movedBy: string | null }>(player, 'token.moved');
-    const quietDm = expectNoEvent(dm, 'token.moved', 600);
+    const quietGm = expectNoEvent(gm, 'token.moved', 600);
     player.emit('token.move.end', { tokenId: NPC, mapId, x: 5, y: 5 });
     expect((await refused).message).toMatch(/permission/i);
     expect(await back).toEqual({ tokenId: NPC, mapId, x: 1, y: 1, movedBy: null });
-    await quietDm;
+    await quietGm;
     expect(await positionOf(NPC)).toEqual({ x: 1, y: 1 });
     player.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('tells nobody where a hidden token stands for a drop that never began as a drag', async () => {
@@ -251,7 +251,7 @@ describe('control taken away in the middle of a drag', () => {
 // screen the map fetch would give the token to now. A drag entry outlives a
 // drag the client abandons without a drop (a cancelled hold sends one frame
 // back to the start and no token.move.end), and by the time a drop names the
-// token again the DM may have hidden it and moved it somewhere secret.
+// token again the GM may have hidden it and moved it somewhere secret.
 describe('a drop long after a drag, once the token is hidden', () => {
   afterAll(async () => {
     await setStatus('ACTIVE');

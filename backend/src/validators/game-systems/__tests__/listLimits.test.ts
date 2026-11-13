@@ -10,20 +10,22 @@
 
 import { describe, it, expect } from '@jest/globals';
 import { z } from 'zod';
-import { GameSystem } from '../../../game-systems';
+import { GameSystem, type SupportedGameSystem } from '../../../game-systems';
 import {
   getBlankCharacterTemplate,
   validateCharacterData,
-  dnd5eCharacterDataSchema,
-  pathfinder2eCharacterDataSchema,
-  callOfCthulhu7eCharacterDataSchema,
-  shadowrun6eCharacterDataSchema,
+  fifthEditionCharacterDataSchema,
+  fantasyD20CharacterDataSchema,
+  HorrorD100SheetSchema,
   flexibleCharacterDataSchema,
 } from '../index';
 import { unboundedLists } from '../../../__tests__/helpers/sheetSchemaWalk';
+import { HORROR_D100_SPECIALISED_SKILLS } from '../../../utils/rules/horrorD100';
 import {
-  PF2E_ITEM_BONUS_MAX,
-  PF2E_ITEM_BONUS_MIN,
+  FANTASY_D20_ITEM_BONUS_MAX,
+  FANTASY_D20_ITEM_BONUS_MIN,
+  HORROR_D100_FIREARM_LIST_MAX,
+  HORROR_D100_OWN_SKILL_LIST_MAX,
   SHEET_LIST_MAX,
   SHEET_ROW_TAGS_MAX,
   SPELL_SLOTS_MAX,
@@ -31,10 +33,12 @@ import {
 
 describe('every list on a sheet', () => {
   it.each([
-    ['DND_5E', dnd5eCharacterDataSchema],
-    ['PATHFINDER_2E', pathfinder2eCharacterDataSchema],
-    ['CALL_OF_CTHULHU_7E', callOfCthulhu7eCharacterDataSchema],
-    ['SHADOWRUN_6E', shadowrun6eCharacterDataSchema],
+    ['FIFTH_EDITION', fifthEditionCharacterDataSchema],
+    ['FANTASY_D20', fantasyD20CharacterDataSchema],
+    // The conversion record is the server's: written when a sheet is
+    // converted, kept on every save, and never taken from a request. It holds
+    // lists copied from an older sheet, so it has no limit of its own.
+    ['HORROR_D100', HorrorD100SheetSchema.omit({ converted: true })],
     ['Flexible', flexibleCharacterDataSchema],
   ] as Array<[string, z.ZodType]>)('has a count limit in %s', (_system, schema) => {
     expect(unboundedLists(schema)).toEqual([]);
@@ -42,16 +46,16 @@ describe('every list on a sheet', () => {
 });
 
 /** The issues a sheet is refused with, as `path: message` lines. */
-function refusals(system: GameSystem, data: unknown): string[] {
+function refusals(system: SupportedGameSystem, data: unknown): string[] {
   const result = validateCharacterData(system, data);
   return result.success ? [] : result.errors.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`);
 }
 
-const blank = (system: GameSystem) => getBlankCharacterTemplate(system) as Record<string, unknown>;
+const blank = (system: SupportedGameSystem) => getBlankCharacterTemplate(system) as Record<string, unknown>;
 const rows = (count: number, row: unknown) => Array.from({ length: count }, () => row);
 
-describe('the D&D 5e lists', () => {
-  const sheet = (fields: Record<string, unknown>) => ({ ...blank(GameSystem.DND_5E), ...fields });
+describe('the 5E lists', () => {
+  const sheet = (fields: Record<string, unknown>) => ({ ...blank(GameSystem.FIFTH_EDITION), ...fields });
   const item = { name: 'Rope' };
   const named = (name: string) => ({ name, attackBonus: 0 });
 
@@ -64,7 +68,7 @@ describe('the D&D 5e lists', () => {
     ['proficienciesAndLanguages', rows(SHEET_LIST_MAX + 1, 'Common')],
     ['proficiencies', rows(SHEET_LIST_MAX + 1, 'Common')],
   ])('refuse %s past the limit, naming the list', (field, list) => {
-    expect(refusals(GameSystem.DND_5E, sheet({ [field]: list }))).toEqual([
+    expect(refusals(GameSystem.FIFTH_EDITION, sheet({ [field]: list }))).toEqual([
       `${field}: Can hold at most ${SHEET_LIST_MAX} entries`,
     ]);
   });
@@ -72,10 +76,10 @@ describe('the D&D 5e lists', () => {
   it('refuse spells and cantrips past the limit, naming the list', () => {
     const spell = { level: 1, name: 'Shield', prepared: true, ritual: false, concentration: false };
     expect(
-      refusals(GameSystem.DND_5E, sheet({ spellcasting: { spells: rows(SHEET_LIST_MAX + 1, spell) } }))
+      refusals(GameSystem.FIFTH_EDITION, sheet({ spellcasting: { spells: rows(SHEET_LIST_MAX + 1, spell) } }))
     ).toEqual([`spellcasting.spells: Can hold at most ${SHEET_LIST_MAX} entries`]);
     expect(
-      refusals(GameSystem.DND_5E, sheet({ spellcasting: { cantrips: rows(SHEET_LIST_MAX + 1, 'Light') } }))
+      refusals(GameSystem.FIFTH_EDITION, sheet({ spellcasting: { cantrips: rows(SHEET_LIST_MAX + 1, 'Light') } }))
     ).toEqual([`spellcasting.cantrips: Can hold at most ${SHEET_LIST_MAX} entries`]);
   });
 
@@ -83,7 +87,7 @@ describe('the D&D 5e lists', () => {
     const spell = { level: 1, name: 'Shield', prepared: true, ritual: false, concentration: false };
     expect(
       refusals(
-        GameSystem.DND_5E,
+        GameSystem.FIFTH_EDITION,
         sheet({
           inventory: rows(SHEET_LIST_MAX, item),
           attacks: rows(SHEET_LIST_MAX, named('Dagger')),
@@ -106,9 +110,9 @@ function setAt(sheet: Record<string, unknown>, path: string, value: unknown): Re
   return { ...sheet, [head]: setAt(inner, rest.join('.'), value) };
 }
 
-describe('the Pathfinder 2e lists', () => {
+describe('the Fantasy d20 lists', () => {
   const sheet = (path: string, value: unknown) => {
-    const withList = setAt(blank(GameSystem.PATHFINDER_2E), path, value);
+    const withList = setAt(blank(GameSystem.FANTASY_D20), path, value);
     // Focus spells come with their points.
     return path.startsWith('spellcasting.focusSpells')
       ? setAt(withList, 'spellcasting.focusSpells.focusPoints', { total: 1, current: 1 })
@@ -118,7 +122,7 @@ describe('the Pathfinder 2e lists', () => {
   const lore = { name: 'Warfare', attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 };
   const named = { name: 'Rope' };
 
-  /** Every list on a Pathfinder 2e sheet, with an entry that is valid in it. */
+  /** Every list on a Fantasy d20 sheet, with an entry that is valid in it. */
   const lists: Array<[string, unknown]> = [
     ['perception.senses', 'darkvision'],
     ['loreSkills', lore],
@@ -149,27 +153,27 @@ describe('the Pathfinder 2e lists', () => {
   });
 
   it.each(lists)('refuse %s past the limit, naming the list', (path, entry) => {
-    expect(refusals(GameSystem.PATHFINDER_2E, sheet(path, rows(SHEET_LIST_MAX + 1, entry)))).toEqual([
+    expect(refusals(GameSystem.FANTASY_D20, sheet(path, rows(SHEET_LIST_MAX + 1, entry)))).toEqual([
       `${path}: Can hold at most ${SHEET_LIST_MAX} entries`,
     ]);
   });
 
   it.each(lists)('take %s at the limit', (path, entry) => {
-    expect(refusals(GameSystem.PATHFINDER_2E, sheet(path, rows(SHEET_LIST_MAX, entry)))).toEqual([]);
+    expect(refusals(GameSystem.FANTASY_D20, sheet(path, rows(SHEET_LIST_MAX, entry)))).toEqual([]);
   });
 
   it(`refuse more than ${SHEET_ROW_TAGS_MAX} traits on one strike`, () => {
     const strike = (count: number) => [{ name: 'Sword', traits: rows(count, 'agile') }];
-    expect(refusals(GameSystem.PATHFINDER_2E, sheet('strikes', strike(SHEET_ROW_TAGS_MAX + 1)))).toEqual([
+    expect(refusals(GameSystem.FANTASY_D20, sheet('strikes', strike(SHEET_ROW_TAGS_MAX + 1)))).toEqual([
       `strikes.0.traits: Can hold at most ${SHEET_ROW_TAGS_MAX} entries`,
     ]);
-    expect(refusals(GameSystem.PATHFINDER_2E, sheet('strikes', strike(SHEET_ROW_TAGS_MAX)))).toEqual([]);
+    expect(refusals(GameSystem.FANTASY_D20, sheet('strikes', strike(SHEET_ROW_TAGS_MAX)))).toEqual([]);
   });
 });
 
-describe('the Pathfinder 2e item bonuses', () => {
-  const sheet = (path: string, value: unknown) => setAt(blank(GameSystem.PATHFINDER_2E), path, value);
-  const message = `Must be from ${PF2E_ITEM_BONUS_MIN} to ${PF2E_ITEM_BONUS_MAX}`;
+describe('the Fantasy d20 item bonuses', () => {
+  const sheet = (path: string, value: unknown) => setAt(blank(GameSystem.FANTASY_D20), path, value);
+  const message = `Must be from ${FANTASY_D20_ITEM_BONUS_MIN} to ${FANTASY_D20_ITEM_BONUS_MAX}`;
   const lore = { name: 'Warfare', attribute: 'intelligence', proficiencyRank: 'trained', bonus: 0 };
   const strike = { name: 'Sword' };
 
@@ -194,107 +198,88 @@ describe('the Pathfinder 2e item bonuses', () => {
   ];
 
   it.each(places)('%s is refused past the range, in either direction', (path, withBonus) => {
-    expect(refusals(GameSystem.PATHFINDER_2E, withBonus(PF2E_ITEM_BONUS_MAX + 1))).toEqual([`${path}: ${message}`]);
-    expect(refusals(GameSystem.PATHFINDER_2E, withBonus(PF2E_ITEM_BONUS_MIN - 1))).toEqual([`${path}: ${message}`]);
-    expect(refusals(GameSystem.PATHFINDER_2E, withBonus(5_000_000))).toEqual([`${path}: ${message}`]);
+    expect(refusals(GameSystem.FANTASY_D20, withBonus(FANTASY_D20_ITEM_BONUS_MAX + 1))).toEqual([`${path}: ${message}`]);
+    expect(refusals(GameSystem.FANTASY_D20, withBonus(FANTASY_D20_ITEM_BONUS_MIN - 1))).toEqual([`${path}: ${message}`]);
+    expect(refusals(GameSystem.FANTASY_D20, withBonus(5_000_000))).toEqual([`${path}: ${message}`]);
   });
 
   it.each(places)('%s takes the ends of the range', (_path, withBonus) => {
-    expect(refusals(GameSystem.PATHFINDER_2E, withBonus(PF2E_ITEM_BONUS_MAX))).toEqual([]);
-    expect(refusals(GameSystem.PATHFINDER_2E, withBonus(PF2E_ITEM_BONUS_MIN))).toEqual([]);
-    expect(refusals(GameSystem.PATHFINDER_2E, withBonus(4))).toEqual([]);
+    expect(refusals(GameSystem.FANTASY_D20, withBonus(FANTASY_D20_ITEM_BONUS_MAX))).toEqual([]);
+    expect(refusals(GameSystem.FANTASY_D20, withBonus(FANTASY_D20_ITEM_BONUS_MIN))).toEqual([]);
+    expect(refusals(GameSystem.FANTASY_D20, withBonus(4))).toEqual([]);
   });
 });
 
-describe('the Pathfinder 2e spell slots', () => {
+describe('the Fantasy d20 spell slots', () => {
   const withSlot = (slot: Record<string, number>) => {
     const slots = Object.fromEntries(
       ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].map((rank) => [rank, { total: 0, expended: 0 }])
     );
-    return setAt(blank(GameSystem.PATHFINDER_2E), 'spellcasting', { slots: { ...slots, '3': slot } });
+    return setAt(blank(GameSystem.FANTASY_D20), 'spellcasting', { slots: { ...slots, '3': slot } });
   };
 
   it('refuse a total of 5,000,000, naming the rank', () => {
-    expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: 5_000_000, expended: 0 }))).toEqual([
+    expect(refusals(GameSystem.FANTASY_D20, withSlot({ total: 5_000_000, expended: 0 }))).toEqual([
       `spellcasting.slots.3.total: Must be from 0 to ${SPELL_SLOTS_MAX}`,
     ]);
   });
 
   it(`refuse a total of ${SPELL_SLOTS_MAX + 1}, and more than ${SPELL_SLOTS_MAX} used`, () => {
-    expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: SPELL_SLOTS_MAX + 1, expended: 0 }))).toEqual([
+    expect(refusals(GameSystem.FANTASY_D20, withSlot({ total: SPELL_SLOTS_MAX + 1, expended: 0 }))).toEqual([
       `spellcasting.slots.3.total: Must be from 0 to ${SPELL_SLOTS_MAX}`,
     ]);
     // Also more used than the 4 there are, which is refused on its own.
-    expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: 4, expended: SPELL_SLOTS_MAX + 1 }))).toEqual([
+    expect(refusals(GameSystem.FANTASY_D20, withSlot({ total: 4, expended: SPELL_SLOTS_MAX + 1 }))).toEqual([
       `spellcasting.slots.3.expended: Must be from 0 to ${SPELL_SLOTS_MAX}`,
       'spellcasting.slots.3.expended: Used slots cannot be more than the total',
     ]);
   });
 
   it(`take ${SPELL_SLOTS_MAX} slots, all used, and no slots`, () => {
-    expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: SPELL_SLOTS_MAX, expended: SPELL_SLOTS_MAX }))).toEqual([]);
-    expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: 0, expended: 0 }))).toEqual([]);
+    expect(refusals(GameSystem.FANTASY_D20, withSlot({ total: SPELL_SLOTS_MAX, expended: SPELL_SLOTS_MAX }))).toEqual([]);
+    expect(refusals(GameSystem.FANTASY_D20, withSlot({ total: 0, expended: 0 }))).toEqual([]);
   });
 });
 
-describe('the Call of Cthulhu lists', () => {
-  const sheet = (path: string, value: unknown) => {
-    const withList = setAt(blank(GameSystem.CALL_OF_CTHULHU_7E), path, value);
-    // The shipped blank sheet has no spells block; the editor writes the
-    // Cthulhu Mythos value beside the spells, and the schema requires it.
-    return path.startsWith('spellsAndMythos') ? setAt(withList, 'spellsAndMythos.cthulhuMythos', 0) : withList;
-  };
-  const skill = { baseValue: 20, currentValue: 20, improvementChecked: false };
+describe('the Horror d100 lists', () => {
+  const sheet = (path: string, value: unknown) => setAt(blank(GameSystem.HORROR_D100), path, value);
+  const rating = { value: 20, experienceCheck: false };
   const named = { name: 'Revolver' };
 
-  /** Every list on a Call of Cthulhu sheet, with an entry that is valid in it. */
+  // A sheet converted from the shape before 1.7.0 can hold more firearms
+  // and skills of its own than other lists take, and must still save.
+  const limitOf = (path: string) =>
+    path === 'skills.firearm' ? HORROR_D100_FIREARM_LIST_MAX : path === 'skills.own' ? HORROR_D100_OWN_SKILL_LIST_MAX : SHEET_LIST_MAX;
+
+  /** Every list on a Horror d100 sheet, with an entry that is valid in it. */
   const lists: Array<[string, unknown]> = [
-    ['skills.fighting.custom', skill],
-    ['skills.firearms.custom', skill],
-    ['skills.languageOther', { ...skill, language: 'Latin' }],
-    ['skills.science', { ...skill, specialization: 'Botany' }],
-    ['skills.customSkills', { ...skill, name: 'Spelunking' }],
-    ['combat.weapons', named],
-    ['spellsAndMythos.spells', 'Contact Nyarlathotep'],
-    ['pulpTalents', 'Hardy'],
+    ...Object.keys(HORROR_D100_SPECIALISED_SKILLS).map((key): [string, unknown] => [`skills.${key}`, { ...rating, specialty: 'Any' }]),
+    ['skills.own', { ...rating, name: 'Spelunking' }],
+    ['weapons', named],
+    ['armor', { name: 'Leather jacket' }],
+    ['distinctiveFeatures', 'A crooked smile'],
+    ['spells', 'Call the Grey Lantern'],
     ['possessions', named],
-    ['contacts', { name: 'Dr Armitage' }],
+    ['story', { title: 'Background', text: 'Grew up by the sea.' }],
+    ['contacts', { name: 'Dr Vane' }],
   ];
 
   it('are all of them tried here', () => {
-    expect(lists).toHaveLength(10);
+    expect(lists).toHaveLength(Object.keys(HORROR_D100_SPECIALISED_SKILLS).length + 8);
   });
 
   it.each(lists)('refuse %s past the limit, naming the list', (path, entry) => {
-    expect(refusals(GameSystem.CALL_OF_CTHULHU_7E, sheet(path, rows(SHEET_LIST_MAX + 1, entry)))).toEqual([
-      `${path}: Can hold at most ${SHEET_LIST_MAX} entries`,
+    const max = limitOf(path);
+    expect(refusals(GameSystem.HORROR_D100, sheet(path, rows(max + 1, entry)))).toEqual([
+      `${path}: Can hold at most ${max} entries`,
     ]);
   });
 
   it.each(lists)('take %s at the limit', (path, entry) => {
-    expect(refusals(GameSystem.CALL_OF_CTHULHU_7E, sheet(path, rows(SHEET_LIST_MAX, entry)))).toEqual([]);
-  });
-});
-
-describe('the Shadowrun 6e lists', () => {
-  // No editor offers Shadowrun yet, but the API still takes a sheet for it.
-  const sheet = (path: string, value: unknown) => setAt(blank(GameSystem.SHADOWRUN_6E), path, value);
-
-  const lists: Array<[string, unknown]> = [
-    ['conditions', 'Stunned'],
-    ['vehicles', 'Westwind 2000'],
-    ['qualities', { name: 'Ambidextrous', type: 'positive', cost: 4, notes: '' }],
-    ['contacts', { name: 'Mr. Johnson', role: 'Fixer', loyalty: 1, connection: 1, notes: '' }],
-    ['magic.spells', 'Manaball'],
-    ['matrixStats.programs', 'Decryption'],
-  ];
-
-  it.each(lists)('refuse %s past the limit, naming the list', (path, entry) => {
-    const refused = refusals(GameSystem.SHADOWRUN_6E, sheet(path, rows(SHEET_LIST_MAX + 1, entry)));
-    expect(refused).toContain(`${path}: Can hold at most ${SHEET_LIST_MAX} entries`);
+    expect(refusals(GameSystem.HORROR_D100, sheet(path, rows(limitOf(path), entry)))).toEqual([]);
   });
 
-  it('take a list at the limit', () => {
-    expect(refusals(GameSystem.SHADOWRUN_6E, sheet('vehicles', rows(SHEET_LIST_MAX, 'Westwind 2000')))).toEqual([]);
+  it('take three more firearms and four more skills of the character\'s own than other lists', () => {
+    expect([HORROR_D100_FIREARM_LIST_MAX, HORROR_D100_OWN_SKILL_LIST_MAX]).toEqual([SHEET_LIST_MAX + 3, SHEET_LIST_MAX + 4]);
   });
 });

@@ -22,21 +22,21 @@ const runId = randomUUID().slice(0, 8);
 const REFUSAL = 'Text cannot contain the null character (U+0000).';
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 
 const stored = () => prisma.message.findMany({ where: { campaignId, type: { not: 'SYSTEM' } } });
 
 beforeAll(async () => {
-  const dm = await prisma.user.create({
-    data: { email: `nul-dm-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: 'Nul DM' },
+  const gm = await prisma.user.create({
+    data: { email: `nul-dm-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: 'Nul GM' },
   });
-  dmId = dm.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Nul ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  gmId = gm.id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Nul ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
 });
 
 beforeEach(async () => {
@@ -47,13 +47,13 @@ afterAll(async () => {
   await server?.close();
   await prisma.message.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: dmId } });
+  await prisma.user.deleteMany({ where: { id: gmId } });
   await prisma.$disconnect();
 });
 
 describe('an event holding U+0000', () => {
   it('is refused through its acknowledgement, stores nothing and logs no error', async () => {
-    const client = await server.connectAndAuth(dmCookie, campaignId);
+    const client = await server.connectAndAuth(gmCookie, campaignId);
     const noError = expectNoEvent(client, 'error');
     const logs = captureLogs();
 
@@ -68,7 +68,7 @@ describe('an event holding U+0000', () => {
   });
 
   it('is refused with error when it has no acknowledgement, wherever in the payload it is', async () => {
-    const client = await server.connectAndAuth(dmCookie, campaignId);
+    const client = await server.connectAndAuth(gmCookie, campaignId);
     const refused = waitForEvent<{ message: string }>(client, 'error');
 
     client.emit('dice.roll', { expression: '1d20', purpose: 'Stealth\u0000' });
@@ -79,7 +79,7 @@ describe('an event holding U+0000', () => {
   });
 
   it('tells a flood without acknowledgements once in ten seconds, and answers every acknowledgement', async () => {
-    const client = await server.connectAndAuth(dmCookie, campaignId);
+    const client = await server.connectAndAuth(gmCookie, campaignId);
     const errors: unknown[] = [];
     client.on('error', (data: unknown) => errors.push(data));
 
@@ -97,7 +97,7 @@ describe('an event holding U+0000', () => {
   });
 
   it('leaves an event without one alone', async () => {
-    const client = await server.connectAndAuth(dmCookie, campaignId);
+    const client = await server.connectAndAuth(gmCookie, campaignId);
 
     const answer: unknown = await client.timeout(3000).emitWithAck('chat.message', { content: 'Written as \\u0000' });
 

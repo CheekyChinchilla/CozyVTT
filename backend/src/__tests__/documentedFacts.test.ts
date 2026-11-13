@@ -16,6 +16,7 @@ import { BACKGROUND_WAIT_MS, backgroundLeftMessage } from '../utils/shutdown';
 import { MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL } from '../services/sharedDocumentPictures';
 import { EMAIL_CHANGES_PER_HOUR, EMAIL_CHANGE_WINDOW_MS, EMAIL_CHANGE_LIMIT_MESSAGE } from '../middleware/emailChangeLimiter';
 import { MAX_ARCHIVE_NAME_BYTES } from '../utils/archive';
+import { SUPPORTED_GAME_SYSTEMS } from '../game-systems';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -302,12 +303,39 @@ describe('the game systems named in the guides', () => {
   const selectable = [...options.slice(0, options.indexOf('];')).matchAll(/^\s*value: GameSystem\.(\w+)/gm)].map((m) => m[1]);
   const words = ['no', 'one', 'two', 'three', 'four', 'five', 'six'];
 
-  // Shadowrun 6e is in the code but not in the lists a game system is chosen
-  // from. The guides called it shipped, planned and on the roadmap, and the
-  // number of systems counted it.
+  // A system that was in the code but not in the lists a game system is
+  // chosen from was called shipped, planned and on the roadmap, and the
+  // number of systems counted it. Every system the code has can be chosen.
   it('are counted in GAME_SYSTEMS.md as the ones that can be chosen', () => {
-    expect(selectable).not.toContain('SHADOWRUN_6E');
+    expect(selectable).toEqual([...SUPPORTED_GAME_SYSTEMS]);
     expect(read('docs/GAME_SYSTEMS.md')).toContain(`CozyVTT currently ships ${words[selectable.length]} systems you can choose`);
+  });
+});
+
+// The user guide quotes the lines over the sheet of a character, and of a
+// template, of a game system CozyVTT no longer supports, word for word.
+describe('the guide on an unsupported system', () => {
+  const constants = read('frontend/src/constants/game-systems.ts');
+  const guide = section('docs/USER_GUIDE.md', '#### Unsupported system', '\n---');
+  /** The text a constant of the game system constants is set to, as one quoted line. */
+  const setTo = (name: string) => {
+    const match = new RegExp(`export const ${name} =\\s*'([^']+)';`).exec(constants);
+    if (!match) throw new Error(`frontend/src/constants/game-systems.ts no longer sets ${name} to one quoted line`);
+    return match[1];
+  };
+
+  it('names the system as the app does', () => {
+    expect(guide).toContain(`**${setTo('UNSUPPORTED_SYSTEM_LABEL')}**`);
+  });
+
+  it.each(['UNSUPPORTED_SYSTEM_NOTICE', 'UNSUPPORTED_SYSTEM_TEMPLATE_NOTICE'])('quotes %s as the app shows it', (name) => {
+    expect(guide).toContain(`*${setTo(name)}*`);
+  });
+
+  it('quotes what the import window says of a character file naming that system', () => {
+    const match = /export const RETIRED_SYSTEM_FILE_NOTICE =\s*"([^"]+)";/.exec(read('frontend/src/utils/character-export.ts'));
+    if (!match) throw new Error('frontend/src/utils/character-export.ts no longer sets RETIRED_SYSTEM_FILE_NOTICE to one quoted line');
+    expect(guide).toContain(`*${match[1]}*`);
   });
 });
 
@@ -631,7 +659,7 @@ describe('what a reader is asked to send, and where', () => {
 });
 
 describe('the guides on moving a token and on setting up', () => {
-  const guides = ['README.md', 'docs/USER_GUIDE.md', 'docs/PLAYER_GUIDE.md', 'docs/DM_GUIDE.md'].map((rel) => ({ rel, text: read(rel).replace(/\*\*/g, '') }));
+  const guides = ['README.md', 'docs/USER_GUIDE.md', 'docs/PLAYER_GUIDE.md', 'docs/GM_GUIDE.md'].map((rel) => ({ rel, text: read(rel).replace(/\*\*/g, '') }));
 
   // The map picks a token up on one click and puts it down on the next;
   // letting go of the button does nothing to a held token (MapCanvas).
@@ -687,9 +715,9 @@ describe('what the comments in the backend source point to', () => {
     expect(found).toEqual([]);
   });
 
-  // The Shadowrun types cited /Examples/Shadowrun_character.json, a file the
-  // repository does not have. Those types are gone and nothing cites an
-  // example file now; this keeps any new citation true.
+  // The types of an unreleased system cited an example file the repository
+  // does not have. Those types are gone and nothing cites an example file
+  // now; this keeps any new citation true.
   it('name only example character files that exist', () => {
     expect(sources.length).toBeGreaterThan(0);
     const cited = sources.flatMap((rel) => [...read(rel).matchAll(/\/Examples\/([\w.-]+)/g)].map((m) => ({ rel, file: m[1] })));
@@ -806,7 +834,7 @@ describe('the keyboard shortcuts the guides list', () => {
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((k, i) => k === b[i]);
   const tables = [
     { rel: 'docs/PLAYER_GUIDE.md', mine: (who?: string) => who === 'everyone' || who === 'actors' },
-    { rel: 'docs/DM_GUIDE.md', mine: (who?: string) => who === 'dm' },
+    { rel: 'docs/GM_GUIDE.md', mine: (who?: string) => who === 'gm' },
   ];
 
   it('are read from the source in its one-line form, every row of it', () => {
@@ -814,7 +842,7 @@ describe('the keyboard shortcuts the guides list', () => {
     expect(shortcuts.length).toBeGreaterThanOrEqual(15);
     for (const s of shortcuts) {
       expect(s.keys.length).toBeGreaterThan(0);
-      expect(['everyone', 'actors', 'dm']).toContain(s.who);
+      expect(['everyone', 'actors', 'gm']).toContain(s.who);
     }
   });
 
@@ -839,7 +867,7 @@ describe('the keyboard shortcuts the guides list', () => {
     const hint = /export const MAP_KEYS_HINT =\s*'([^']*)'/.exec(source)?.[1];
     if (hint === undefined) throw new Error('keyboard.ts no longer declares MAP_KEYS_HINT as one quoted string');
     const named = shortcuts
-      .filter((s) => s.who !== 'dm')
+      .filter((s) => s.who !== 'gm')
       .flatMap((s) => s.keys)
       .filter((k) => k !== 'Tab' && !k.includes('click') && !k.includes('tap'));
     for (const k of named) {
@@ -862,7 +890,7 @@ describe('how many older documents a delete by a campaign asset\'s uploader read
   // The cap is a constant in the code and a number in four documents.
   const stated: Array<[string, RegExp]> = [
     ['docs/USER_GUIDE.md', /first checks up to (\d+) of the older documents/],
-    ['docs/api-changes/1.6.1.md', /first read up to (\d+) of the campaign's other members' documents/],
+    ['docs/api-changes/1.7.0.md', /first read up to (\d+) of the campaign's other members' documents/],
     ['backend/docs/API_DOCUMENTATION.yaml', /newest first, at most (\d+) of them a request/],
     ['backend/RBAC_QUICK_REFERENCE.md', /`MAX_UNREAD_DOCUMENTS_READ_FOR_REMOVAL` \((\d+)\) a request/],
   ];
@@ -882,7 +910,7 @@ describe('how many times an hour one account may try to change its own email add
     ['SECURITY.md', /changing one's own email address is allowed (\d+) attempts an hour per account/],
     ['SECURITY.md', /use up the owner's (\d+) email-change attempts for an hour/],
     ['docs/API_REFERENCE.md', /also limited to (\d+) attempts an hour for the account/],
-    ['docs/api-changes/1.6.1.md', /caps changing your own email address at (\d+) attempts an hour per account/],
+    ['docs/api-changes/1.7.0.md', /caps changing your own email address at (\d+) attempts an hour per account/],
   ];
   const words: Record<string, number> = { three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
@@ -896,7 +924,7 @@ describe('how many times an hour one account may try to change its own email add
     expect(words[match[1]] ?? Number(match[1])).toBe(EMAIL_CHANGES_PER_HOUR);
   });
 
-  it.each(['docs/USER_GUIDE.md', 'docs/API_REFERENCE.md', 'docs/api-changes/1.6.1.md'])('%s quotes the refusal as the server words it', (rel) => {
+  it.each(['docs/USER_GUIDE.md', 'docs/API_REFERENCE.md', 'docs/api-changes/1.7.0.md'])('%s quotes the refusal as the server words it', (rel) => {
     const quoted = /You have tried to change your email address .*? Please try again later\./.exec(read(rel).replace(/\s+/g, ' '))?.[0];
     if (quoted === undefined) throw new Error(`${rel} no longer quotes the email-change refusal`);
     expect(quoted).toBe(EMAIL_CHANGE_LIMIT_MESSAGE);
@@ -909,10 +937,10 @@ describe('the longest file name an archive may hold', () => {
   const stated: Array<[string, RegExp]> = [
     ['docs/DEPLOYMENT.md', /would be longer than ([\d,]+) bytes \(folders nested very deep\)/],
     ['docs/DEPLOYMENT.md', /each with a name of at most ([\d,]+) bytes/],
-    ['docs/DM_GUIDE.md', /An archive with a file name longer than ([\d,]+) bytes is refused/],
-    ['docs/api-changes/1.6.1.md', /An archive with an entry name longer than ([\d,]+) bytes/],
-    ['docs/api-changes/1.6.1.md', /"The archive has a file name longer than ([\d,]+) bytes, which an archive from this server never has\."/],
-    ['docs/api-changes/1.6.1.md', /would be longer than ([\d,]+) bytes, logging/],
+    ['docs/GM_GUIDE.md', /An archive with a file name longer than ([\d,]+) bytes is refused/],
+    ['docs/api-changes/1.7.0.md', /An archive with an entry name longer than ([\d,]+) bytes/],
+    ['docs/api-changes/1.7.0.md', /"The archive has a file name longer than ([\d,]+) bytes, which an archive from this server never has\."/],
+    ['docs/api-changes/1.7.0.md', /would be longer than ([\d,]+) bytes, logging/],
     ['backend/docs/API_DOCUMENTATION.yaml', /holds a NUL character, is longer than ([\d,]+) bytes/],
   ];
 
@@ -920,5 +948,224 @@ describe('the longest file name an archive may hold', () => {
     const match = pattern.exec(read(rel).replace(/\s+/g, ' '));
     if (!match) throw new Error(`${rel} no longer states the longest archive file name, as ${pattern}`);
     expect(Number(match[1].replace(/,/g, ''))).toBe(MAX_ARCHIVE_NAME_BYTES);
+  });
+});
+
+describe('the game content notices', () => {
+  // The sentence the SRD 5.1 asks every work that uses it to carry, as the
+  // SRD's first page writes it, its curly quotes included.
+  const SRD_SENTENCE =
+    'This work includes material taken from the System Reference Document 5.1 (“SRD 5.1”) by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.';
+  const NOTICES = 'GAME_CONTENT_NOTICES.md';
+  const exists = (rel: string) => fs.existsSync(path.join(root, rel));
+  // CC BY 4.0 asks a work to say whether it changed the material, apart from
+  // the attribution, which the SRD asks be given as it writes it.
+  const SRD_MODIFIED = 'CozyVTT has reformatted this material and, in places, reworded it.';
+  // The Reserved Material statement and the offer of the rules, as each copy
+  // of the notices gives them.
+  const RESERVED =
+    "Reserved Material elements in this product include, but may not be limited to: CozyVTT's name, logo, mascot, artwork and visual themes, and all elements designated as Reserved Material under the ORC License.";
+  const ADAPTED =
+    "CozyVTT's code is under the AGPL-3.0. The rules it expresses in the files listed in docs/GAME_SYSTEMS.md are Adapted Licensed Material, which CozyVTT offers under the ORC License.";
+  /** The three copies of the notice, each as its lines. */
+  const copies = (): [string, string[]][] => [
+    [NOTICES, read(NOTICES).split('\n')],
+    ['frontend/src/constants/gameContentNotices.ts', shownLines()],
+    ['THIRD_PARTY_NOTICES.txt', noticesSection2()],
+  ];
+
+  /**
+   * The lines the app shows, in About CozyVTT and the Creature Library. Read
+   * as text, since Jest cannot import the frontend's modules: each is a
+   * template literal on a line of its own.
+   */
+  function shownLines(): string[] {
+    return read('frontend/src/constants/gameContentNotices.ts')
+      .split('\n')
+      .flatMap((line) => {
+        const literal = /^\s*`([^`$\\]*)`[,;]?$/.exec(line);
+        return literal ? [literal[1]] : [];
+      });
+  }
+
+  /** Section 2 of THIRD_PARTY_NOTICES.txt, which credits the game content, line by line. */
+  function noticesSection2(): string[] {
+    const text = read('THIRD_PARTY_NOTICES.txt');
+    const start = text.indexOf('SECTION 2: GAME CONTENT');
+    const end = text.indexOf('SECTION 3:', start);
+    if (start === -1 || end === -1) throw new Error('THIRD_PARTY_NOTICES.txt no longer has the headings SECTION 2: GAME CONTENT and SECTION 3:');
+    return text.slice(start, end).split('\n').map((line) => line.trim());
+  }
+
+  it('GAME_CONTENT_NOTICES.md carries the SRD 5.1 sentence character for character', () => {
+    expect(read(NOTICES).split('\n')).toContain(SRD_SENTENCE);
+  });
+
+  it('the app shows the SRD 5.1 sentence as it is written', () => {
+    expect(shownLines()).toContain(SRD_SENTENCE);
+  });
+
+  it('every line the app shows is a line of GAME_CONTENT_NOTICES.md and of Section 2 of THIRD_PARTY_NOTICES.txt, word for word', () => {
+    const shown = shownLines();
+    expect(shown.length).toBeGreaterThanOrEqual(10);
+    const notices = read(NOTICES).split('\n');
+    const section2 = noticesSection2();
+    expect(shown.filter((line) => !notices.includes(line))).toEqual([]);
+    expect(shown.filter((line) => !section2.includes(line))).toEqual([]);
+  });
+
+  // Section 2 indents each credit by two spaces; its own sentences are not.
+  it('every credit in Section 2 of THIRD_PARTY_NOTICES.txt is a line the app shows', () => {
+    const text = read('THIRD_PARTY_NOTICES.txt');
+    const credits = text
+      .slice(text.indexOf('SECTION 2: GAME CONTENT'), text.indexOf('SECTION 3:'))
+      .split('\n')
+      .filter((line) => /^ {2}\S/.test(line))
+      .map((line) => line.trim());
+    expect(credits.length).toBeGreaterThanOrEqual(10);
+    const shown = shownLines();
+    expect(credits.filter((line) => !shown.includes(line))).toEqual([]);
+  });
+
+  // It replaced SRD_ATTRIBUTION.md and SRD_LICENSE.txt.
+  it('is linked from README.md, and nothing points to the two files it replaced', () => {
+    expect(read('README.md')).toContain('](GAME_CONTENT_NOTICES.md)');
+    expect(exists('SRD_ATTRIBUTION.md') || exists('SRD_LICENSE.txt')).toBe(false);
+    const pointing = [
+      'README.md',
+      'THIRD_PARTY_LICENSES.md',
+      'THIRD_PARTY_NOTICES.txt',
+      'docs/GAME_SYSTEMS.md',
+      'backend/src/services/creatureSeed.ts',
+      'frontend/src/components/campaign/CreatureLibrary.tsx',
+    ].filter((rel) => /SRD_ATTRIBUTION\.md|SRD_LICENSE\.txt/.test(read(rel)));
+    expect(pointing).toEqual([]);
+  });
+
+  it('says beside the SRD 5.1 credit, on a line of its own, that CozyVTT changed the material', () => {
+    for (const [name, lines] of copies()) {
+      const credit = lines.indexOf(SRD_SENTENCE);
+      const next = lines.slice(credit + 1).find((line) => line.trim() !== '');
+      expect([name, credit >= 0, next]).toEqual([name, true, SRD_MODIFIED]);
+    }
+  });
+
+  it("reserves CozyVTT's name and art but not its code, and offers the rules its code expresses under the ORC License", () => {
+    for (const [name, lines] of copies()) {
+      expect([name, lines.includes(RESERVED), lines.includes(ADAPTED)]).toEqual([name, true, true]);
+      expect([name, lines.filter((line) => /Reserved Material elements/.test(line) && /software/.test(line))]).toEqual([name, []]);
+    }
+  });
+
+  // The credit CozyVTT asks for its own material reads the same in each copy.
+  it("gives the credit for CozyVTT's own material the same in each copy", () => {
+    const CREDIT =
+      'If you use our Licensed Material in your own published works, please credit us as follows: CozyVTT, © 2026 CozyVTT Development Team, https://github.com/CheekyChinchilla/CozyVTT.';
+    for (const [name, lines] of copies()) {
+      expect([name, lines.filter((line) => line.startsWith('If you use our Licensed Material'))]).toEqual([name, [CREDIT]]);
+    }
+  });
+
+  // The Horror d100 sheet follows the open d100 rules since 1.7.0, and each
+  // copy of the notice says so.
+  it('says in each copy, beside the Horror d100 credit, that the sheet follows the open d100 rules', () => {
+    const FOLLOWS = "CozyVTT's Horror d100 sheet follows this document's rules for a character, in CozyVTT's own words.";
+    // The Horror d100 notice is the one that says where the licence is held;
+    // the credit is the second line after it.
+    for (const [name, lines] of copies()) {
+      const notice = lines.findIndex((line) => line.includes('ORC License held in the Library of Congress'));
+      expect([name, notice >= 0, lines.indexOf(FOLLOWS) > notice + 1]).toEqual([name, true, true]);
+    }
+  });
+
+  // The table is in the guide, so the notices name no source path.
+  it('keeps no table of files, and points to the one in docs/GAME_SYSTEMS.md', () => {
+    const notices = read(NOTICES);
+    expect(notices).not.toMatch(/^\| System \| Files/m);
+    expect(notices).toContain('](docs/GAME_SYSTEMS.md#files-that-hold-orc-material)');
+  });
+
+  it("links only the addresses its notices give", () => {
+    expect(read(NOTICES)).not.toMatch(/aonprd/i);
+  });
+
+  /** The paths the guide lists as holding material under the ORC License. */
+  function orcFiles(): string[] {
+    const guide = read('docs/GAME_SYSTEMS.md');
+    const start = guide.indexOf('## Files that hold ORC material');
+    if (start === -1) throw new Error('docs/GAME_SYSTEMS.md no longer has the heading ## Files that hold ORC material');
+    const table = guide.slice(start).split('\n').filter((line) => line.startsWith('| ') && !line.startsWith('| System'));
+    return table.flatMap((row) => [...(row.split('|')[2] ?? '').matchAll(/`([\w./-]+)`/g)].map((m) => m[1]));
+  }
+
+  it('names only files that exist among those holding material under the ORC License, and no folder', () => {
+    const named = orcFiles();
+    expect(named.length).toBeGreaterThan(20);
+    expect(named.filter((rel) => !exists(rel) || fs.statSync(path.join(root, rel)).isDirectory())).toEqual([]);
+  });
+
+  // A licence scanner, a fork or a contributor reading one file sees only the
+  // AGPL-3.0 unless the file says otherwise. A JSON file has no comments.
+  it('gives each file that holds material under the ORC License a header that says so', () => {
+    const code = [
+      "// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.",
+      '// See GAME_CONTENT_NOTICES.md for the notice and credits.',
+    ];
+    const markdown = [
+      "<!-- This file holds material under the ORC License, beside CozyVTT's own text under the AGPL-3.0. -->",
+      '<!-- See GAME_CONTENT_NOTICES.md for the notice and credits. -->',
+    ];
+    const missing = orcFiles()
+      .filter((rel) => !rel.endsWith('.json'))
+      .filter((rel) => {
+        const top = read(rel).split('\n').slice(0, 2);
+        return JSON.stringify(top) !== JSON.stringify(rel.endsWith('.md') ? markdown : code);
+      });
+    expect(missing).toEqual([]);
+  });
+
+  it('the About window links the source repository the README clones', () => {
+    const clone = /git clone (https:\/\/github\.com\/\S+?)\.git/.exec(read('README.md'))?.[1];
+    const linked = /const SOURCE_CODE_URL = '([^']+)'/.exec(read('frontend/src/components/common/AboutDialog.tsx'))?.[1];
+    expect(clone).toBeDefined();
+    expect(linked).toBe(clone);
+  });
+});
+
+describe('the game content checklist for a new game system', () => {
+  const checklist = read('docs/GAME_SYSTEMS.md').slice(read('docs/GAME_SYSTEMS.md').indexOf('## Game content sources'));
+
+  // The guide settles where a system's content comes from before any code.
+  it.each([
+    'An open licence',
+    'A CozyVTT name',
+    'Our own sentences',
+    'GAME_CONTENT_NOTICES.md',
+    'frontend/src/constants/gameContentNotices.ts',
+    'scripts/tests/test_system_names.py',
+    'Say what you changed',
+    'Rules features stay open',
+    'The numbers and the structure too',
+    'Every source checked',
+  ])('names %s', (needle) => {
+    expect(checklist).toContain(needle);
+  });
+
+  it('has a game content group at the top of the full checklist, and points the notice line at condition 4', () => {
+    const full = read('docs/GAME_SYSTEMS.md');
+    const agreed = full.slice(full.indexOf('**Agreed first**'), full.indexOf('**Backend**'));
+    expect(agreed).toContain('Game content settled first');
+    expect(agreed).toContain('game-content-sources');
+    expect(full).toContain('The notice in both places (condition 4)');
+  });
+
+  it('is linked from the contributor standards', () => {
+    expect(read('docs/CONTRIBUTING.md')).toContain('GAME_SYSTEMS.md#game-content-sources');
+  });
+
+  it('tells contributors that what they add to game content is offered under its licence too', () => {
+    expect(read('docs/CONTRIBUTING.md').replace(/\s+/g, ' ')).toContain(
+      'A contribution to game content, such as a sheet or its rules, is also offered under the licence of the content it adds to'
+    );
   });
 });

@@ -104,18 +104,18 @@ describe('POST /api/characters/:id/copy', () => {
 
   it('writes the copy name into the sheet, so the first save keeps it', async () => {
     const { id, agent } = await signedIn();
-    const dnd = await prisma.character.create({
-      data: { userId: id, name: 'Aldra', gameSystem: 'DND_5E', data: { characterName: 'Aldra', level: 3 } },
+    const fifthEdition = await prisma.character.create({
+      data: { userId: id, name: 'Aldra', gameSystem: 'FIFTH_EDITION', data: { characterName: 'Aldra', level: 3 } },
     });
-    const coc = await prisma.character.create({
-      data: { userId: id, name: 'Harvey', gameSystem: 'CALL_OF_CTHULHU_7E', data: { investigatorName: 'Harvey' } },
+    const horrorD100 = await prisma.character.create({
+      data: { userId: id, name: 'Mara', gameSystem: 'HORROR_D100', data: { characterName: 'Mara' } },
     });
 
-    const dndCopy = await agent.post(`/api/characters/${dnd.id}/copy`);
-    expect(dndCopy.status).toBe(201);
-    expect(dndCopy.body.character.data).toEqual({ characterName: 'Aldra (Copy)', level: 3 });
-    const cocCopy = await agent.post(`/api/characters/${coc.id}/copy`);
-    expect(cocCopy.status).toBe(201);
-    expect(cocCopy.body.character.data.investigatorName).toBe('Harvey (Copy)');
+    const fifthEditionCopy = await agent.post(`/api/characters/${fifthEdition.id}/copy`);
+    expect(fifthEditionCopy.status).toBe(201);
+    expect(fifthEditionCopy.body.character.data).toEqual({ characterName: 'Aldra (Copy)', level: 3 });
+    const horrorD100Copy = await agent.post(`/api/characters/${horrorD100.id}/copy`);
+    expect(horrorD100Copy.status).toBe(201);
+    expect(horrorD100Copy.body.character.data.characterName).toBe('Mara (Copy)');
   });
 });

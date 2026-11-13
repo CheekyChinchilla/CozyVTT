@@ -18,8 +18,8 @@ jest.mock('../../utils/logger', () => ({ __esModule: true, default: { error: jes
 
 import {
   loadCampaignMembership,
-  requireDM,
-  requireDMOrPlayer,
+  requireGM,
+  requireGMOrPlayer,
   requireCampaignMember,
   type AuthenticatedRequest,
 } from '../rbac';
@@ -80,7 +80,7 @@ describe('loadCampaignMembership', () => {
   });
 
   it('checks the route\'s campaign when the body names another', async () => {
-    mockFindUnique.mockResolvedValue({ role: 'DM', characterIds: [], campaignId: 'c1' });
+    mockFindUnique.mockResolvedValue({ role: 'GM', characterIds: [], campaignId: 'c1' });
     await run(loadCampaignMembership, { session: { userId: 'u1' }, params: { campaignId: 'c1' }, body: { campaignId: 'c2' } });
     expect(mockFindUnique).toHaveBeenCalledWith({ where: { userId_campaignId: { userId: 'u1', campaignId: 'c1' } } });
   });
@@ -105,7 +105,7 @@ describe('loadCampaignMembership', () => {
     const answer = await run(loadCampaignMembership, {
       session: { userId: 'u1' },
       params: { campaignId: 'c1' },
-      body: { userId: 'someone-else', role: 'DM' },
+      body: { userId: 'someone-else', role: 'GM' },
     });
     expect(mockFindUnique).toHaveBeenCalledWith({ where: { userId_campaignId: { userId: 'u1', campaignId: 'c1' } } });
     expect(answer.nexted).toBe(true);
@@ -122,11 +122,11 @@ describe('loadCampaignMembership', () => {
 
 describe('the role checks', () => {
   it.each([
-    ['requireDM', requireDM, { DM: true, PLAYER: false, SPECTATOR: false }],
-    ['requireDMOrPlayer', requireDMOrPlayer, { DM: true, PLAYER: true, SPECTATOR: false }],
-    ['requireCampaignMember', requireCampaignMember, { DM: true, PLAYER: true, SPECTATOR: true }],
+    ['requireGM', requireGM, { GM: true, PLAYER: false, SPECTATOR: false }],
+    ['requireGMOrPlayer', requireGMOrPlayer, { GM: true, PLAYER: true, SPECTATOR: false }],
+    ['requireCampaignMember', requireCampaignMember, { GM: true, PLAYER: true, SPECTATOR: true }],
   ] as const)('%s lets through exactly the roles it names', async (_name, guard, allowed) => {
-    for (const role of ['DM', 'PLAYER', 'SPECTATOR'] as const) {
+    for (const role of ['GM', 'PLAYER', 'SPECTATOR'] as const) {
       const answer = await run(guard, { campaignMembership: membership(role) });
       expect({ role, nexted: answer.nexted, status: answer.status }).toEqual(
         allowed[role] ? { role, nexted: true, status: undefined } : { role, nexted: false, status: 403 }
@@ -135,8 +135,8 @@ describe('the role checks', () => {
   });
 
   it.each([
-    ['requireDM', requireDM],
-    ['requireDMOrPlayer', requireDMOrPlayer],
+    ['requireGM', requireGM],
+    ['requireGMOrPlayer', requireGMOrPlayer],
     ['requireCampaignMember', requireCampaignMember],
   ] as const)('%s refuses, and never lets through, a request whose membership was not loaded', async (_name, guard) => {
     const answer = await run(guard, {});

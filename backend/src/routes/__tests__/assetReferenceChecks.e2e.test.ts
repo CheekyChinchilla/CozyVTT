@@ -6,7 +6,7 @@
  * read rule counts a reference as use: a map's image, a token's art, a token
  * or creature template's picture, a character's token. Map creation and the
  * character routes checked the reference before storing it. The map update,
- * the token routes and the two template libraries did not, so a DM who knew
+ * the token routes and the two template libraries did not, so a GM who knew
  * a player's private asset id could name it on any of them and then read it.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -28,11 +28,11 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 const app = createTestApp();
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082', 'hex');
 
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let privateId: string;
 let outsiderId: string | undefined;
 let adminId: string | undefined;
@@ -53,30 +53,30 @@ async function makeAsset(uploadedById: string, label: string, type: 'TOKEN' | 'M
 }
 
 beforeAll(async () => {
-  const dmUser = await createTestUser({ displayName: 'Refs DM' });
+  const gmUser = await createTestUser({ displayName: 'Refs GM' });
   const playerUser = await createTestUser({ displayName: 'Refs Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Asset references' })).id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Asset references' })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   privateId = await makeAsset(playerId, 'player-private');
   // A map picture, which a map's picture and spirit layer must be, and a
   // token picture, which a token's, a template's and a creature's must be.
-  ownId = await makeAsset(dmId, 'dm-own', 'MAP');
-  ownTokenId = await makeAsset(dmId, 'dm-own-token');
+  ownId = await makeAsset(gmId, 'dm-own', 'MAP');
+  ownTokenId = await makeAsset(gmId, 'dm-own-token');
   mapId = (await prisma.map.create({
     data: {
       campaignId, name: 'Refs', imageUrl: `/api/assets/maps/${ownId}`, baseLayerUrl: `/api/assets/maps/${ownId}`,
       width: 10, height: 10, gridSize: 50, annotations: [], tokens: [],
     },
   })).id;
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
 });
 
 afterAll(async () => {
@@ -85,7 +85,7 @@ afterAll(async () => {
   await prisma.creatureTemplate.deleteMany({ where: { campaignId } });
   await prisma.asset.deleteMany({ where: { id: { in: assetIds } } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId, ...[outsiderId, adminId, departedId].filter((id): id is string => id !== undefined)]);
+  await cleanupUsers([gmId, playerId, ...[outsiderId, adminId, departedId].filter((id): id is string => id !== undefined)]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -94,52 +94,52 @@ const base = `/api/campaigns/${'CAMPAIGN'}`;
 const url = (p: string) => p.replace('CAMPAIGN', campaignId);
 const commoner = { ac: 10, hpMax: 4, speed: '30 ft.', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 14, cha: 10 }, challengeRating: '0' };
 
-/** Each route that stores a reference, sent the given address, with the DM's own asset of the kind it takes. */
+/** Each route that stores a reference, sent the given address, with the GM's own asset of the kind it takes. */
 const WRITES: Array<[string, (address: string) => Promise<request.Response>, () => string]> = [
-  ['the map update, image', (a) => dm.put(url(`${base}/maps/${mapId}`)).send({ imageUrl: a }), () => ownId],
-  ['the map update, spirit layer', (a) => dm.put(url(`${base}/maps/${mapId}`)).send({ spiritLayerUrl: a }), () => ownId],
-  ['placing a token', (a) => dm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 1, y: 1 }, imageUrl: a }), () => ownTokenId],
-  ['a token template', (a) => dm.post(url(`${base}/token-templates`)).send({ name: 'Imp', imageUrl: a }), () => ownTokenId],
-  ['a creature template', (a) => dm.post(url(`${base}/creatures`)).send({ name: 'Imp', statBlock: commoner, imageUrl: a }), () => ownTokenId],
+  ['the map update, image', (a) => gm.put(url(`${base}/maps/${mapId}`)).send({ imageUrl: a }), () => ownId],
+  ['the map update, spirit layer', (a) => gm.put(url(`${base}/maps/${mapId}`)).send({ spiritLayerUrl: a }), () => ownId],
+  ['placing a token', (a) => gm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 1, y: 1 }, imageUrl: a }), () => ownTokenId],
+  ['a token template', (a) => gm.post(url(`${base}/token-templates`)).send({ name: 'Imp', imageUrl: a }), () => ownTokenId],
+  ['a creature template', (a) => gm.post(url(`${base}/creatures`)).send({ name: 'Imp', statBlock: commoner, imageUrl: a }), () => ownTokenId],
 ];
 
-describe('a reference to an asset the DM cannot read', () => {
+describe('a reference to an asset the GM cannot read', () => {
   it.each(WRITES)('is refused by %s, and the asset stays private', async (_route, write) => {
     const res = await write(`/api/assets/tokens/${privateId}`);
     expect(res.status).toBe(403);
-    expect((await dm.get(`/api/assets/tokens/${privateId}`)).status).toBe(404);
+    expect((await gm.get(`/api/assets/tokens/${privateId}`)).status).toBe(404);
   });
 });
 
-describe("a reference to the DM's own asset", () => {
+describe("a reference to the GM's own asset", () => {
   it.each(WRITES)('is stored by %s', async (_route, write, own) => {
     expect((await write(`/api/assets/tokens/${own()}`)).status).toBeLessThan(300);
   });
 });
 
-describe('an update naming an asset the DM cannot read', () => {
+describe('an update naming an asset the GM cannot read', () => {
   const privateUrl = () => `/api/assets/tokens/${privateId}`;
 
   it('is refused for a token, a token template and a creature template', async () => {
-    const placed = await dm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 2, y: 2 } });
+    const placed = await gm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Imp', position: { x: 2, y: 2 } });
     expect(placed.status).toBe(201);
-    expect((await dm.put(url(`${base}/maps/${mapId}/tokens/${placed.body.token.id}`)).send({ imageUrl: privateUrl() })).status).toBe(403);
+    expect((await gm.put(url(`${base}/maps/${mapId}/tokens/${placed.body.token.id}`)).send({ imageUrl: privateUrl() })).status).toBe(403);
 
-    const template = await dm.post(url(`${base}/token-templates`)).send({ name: 'Imp' });
+    const template = await gm.post(url(`${base}/token-templates`)).send({ name: 'Imp' });
     expect(template.status).toBe(201);
-    expect((await dm.put(url(`${base}/token-templates/${template.body.id ?? template.body.template?.id}`)).send({ imageUrl: privateUrl() })).status).toBe(403);
+    expect((await gm.put(url(`${base}/token-templates/${template.body.id ?? template.body.template?.id}`)).send({ imageUrl: privateUrl() })).status).toBe(403);
 
-    const creature = await dm.post(url(`${base}/creatures`)).send({ name: 'Imp', statBlock: commoner });
+    const creature = await gm.post(url(`${base}/creatures`)).send({ name: 'Imp', statBlock: commoner });
     expect(creature.status).toBe(201);
     const creatureId = creature.body.id ?? creature.body.creature?.id ?? creature.body.template?.id;
-    expect((await dm.put(url(`${base}/creatures/${creatureId}`)).send({ imageUrl: privateUrl() })).status).toBe(403);
+    expect((await gm.put(url(`${base}/creatures/${creatureId}`)).send({ imageUrl: privateUrl() })).status).toBe(403);
 
-    expect((await dm.get(privateUrl())).status).toBe(404);
+    expect((await gm.get(privateUrl())).status).toBe(404);
   });
 });
 
 describe('an update that leaves a stored reference as it was', () => {
-  // A picture that exists but that the DM can no longer read: its uploader is
+  // A picture that exists but that the GM can no longer read: its uploader is
   // in no campaign with them (a player who has left, say), so the reference
   // grants no one anything. An edit re-sends the stored address, and refusing
   // it would refuse every edit of the record. An asset that no longer exists
@@ -149,21 +149,21 @@ describe('an update that leaves a stored reference as it was', () => {
     const outsider = await createTestUser({ displayName: 'Refs Outsider' });
     outsiderId = outsider.id;
     strandedUrl = `/api/assets/tokens/${await makeAsset(outsiderId, 'stranded')}`;
-    expect((await dm.get(strandedUrl)).status).toBe(404);
+    expect((await gm.get(strandedUrl)).status).toBe(404);
   });
 
   it('goes through for a token template', async () => {
     const template = await prisma.tokenTemplate.create({
-      data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Old', imageUrl: strandedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+      data: { id: randomUUID(), campaignId, createdById: gmId, name: 'Old', imageUrl: strandedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
     });
-    expect((await dm.put(url(`${base}/token-templates/${template.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+    expect((await gm.put(url(`${base}/token-templates/${template.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
   });
 
   it('goes through for a creature template', async () => {
     const creature = await prisma.creatureTemplate.create({
-      data: { campaignId, createdById: dmId, name: 'Old', imageUrl: strandedUrl, statBlock: commoner },
+      data: { campaignId, createdById: gmId, name: 'Old', imageUrl: strandedUrl, statBlock: commoner },
     });
-    expect((await dm.put(url(`${base}/creatures/${creature.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+    expect((await gm.put(url(`${base}/creatures/${creature.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
   });
 
   it('goes through for a token', async () => {
@@ -174,14 +174,14 @@ describe('an update that leaves a stored reference as it was', () => {
       where: { id: mapId },
       data: { tokens: [...tokens, { id: tokenId, name: 'Old', imageUrl: strandedUrl, position: { x: 3, y: 3 }, size: { width: 1, height: 1 }, layer: 'token', visible: true, rotation: 0, conditions: [], metadata: {}, type: 'npc' }] },
     });
-    expect((await dm.put(url(`${base}/maps/${mapId}/tokens/${tokenId}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+    expect((await gm.put(url(`${base}/maps/${mapId}/tokens/${tokenId}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
   });
 
   it('goes through for a map', async () => {
     const other = await prisma.map.create({
       data: { campaignId, name: 'Old', imageUrl: strandedUrl, baseLayerUrl: strandedUrl, width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
     });
-    expect((await dm.put(url(`${base}/maps/${other.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
+    expect((await gm.put(url(`${base}/maps/${other.id}`)).send({ name: 'Renamed', imageUrl: strandedUrl })).status).toBe(200);
   });
 });
 
@@ -201,36 +201,36 @@ describe('a copy naming a picture already used in the campaign', () => {
     otherUrl = `/api/assets/tokens/${await makeAsset(departedId, 'departed-unused')}`;
     theirsId = randomUUID();
     await prisma.tokenTemplate.create({
-      data: { id: theirsId, campaignId, createdById: dmId, name: 'Theirs', imageUrl: usedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+      data: { id: theirsId, campaignId, createdById: gmId, name: 'Theirs', imageUrl: usedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
     });
-    expect((await dm.get(usedUrl)).status).toBe(404);
+    expect((await gm.get(usedUrl)).status).toBe(404);
   });
 
   it('goes through, even when the picture can no longer be read', async () => {
-    expect((await dm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Copy', position: { x: 4, y: 4 }, imageUrl: usedUrl })).status).toBe(201);
-    expect((await dm.post(url(`${base}/token-templates`)).send({ name: 'Copy', imageUrl: usedUrl })).status).toBe(201);
-    expect((await dm.post(url(`${base}/creatures`)).send({ name: 'Copy', statBlock: commoner, imageUrl: usedUrl })).status).toBe(201);
+    expect((await gm.post(url(`${base}/maps/${mapId}/tokens`)).send({ name: 'Copy', position: { x: 4, y: 4 }, imageUrl: usedUrl })).status).toBe(201);
+    expect((await gm.post(url(`${base}/token-templates`)).send({ name: 'Copy', imageUrl: usedUrl })).status).toBe(201);
+    expect((await gm.post(url(`${base}/creatures`)).send({ name: 'Copy', statBlock: commoner, imageUrl: usedUrl })).status).toBe(201);
   });
 
   it('is still refused for a picture the campaign does not already use', async () => {
-    expect((await dm.post(url(`${base}/token-templates`)).send({ name: 'Other', imageUrl: otherUrl })).status).toBe(403);
+    expect((await gm.post(url(`${base}/token-templates`)).send({ name: 'Other', imageUrl: otherUrl })).status).toBe(403);
   });
 
   // Copying a template to another campaign stores its picture there, where
   // nothing used it: the first reference, and from then on the reason the
   // other campaign's members may read it.
   it('is refused when a template is copied into another campaign that does not use it', async () => {
-    const elsewhere = (await createTestCampaign(dmId, { name: 'Asset references, elsewhere' })).id;
+    const elsewhere = (await createTestCampaign(gmId, { name: 'Asset references, elsewhere' })).id;
     try {
-      await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: elsewhere, role: 'DM', characterIds: [] } });
-      const res = await dm.post(url(`${base}/token-templates/${theirsId}/copy-to/${elsewhere}`));
+      await prisma.campaignMembership.create({ data: { userId: gmId, campaignId: elsewhere, role: 'GM', characterIds: [] } });
+      const res = await gm.post(url(`${base}/token-templates/${theirsId}/copy-to/${elsewhere}`));
       expect(res.status).toBe(403);
       expect(await prisma.tokenTemplate.count({ where: { campaignId: elsewhere } })).toBe(0);
 
       const own = await prisma.tokenTemplate.create({
-        data: { id: randomUUID(), campaignId, createdById: dmId, name: 'Mine', imageUrl: `/api/assets/tokens/${ownTokenId}`, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
+        data: { id: randomUUID(), campaignId, createdById: gmId, name: 'Mine', imageUrl: `/api/assets/tokens/${ownTokenId}`, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
       });
-      expect((await dm.post(url(`${base}/token-templates/${own.id}/copy-to/${elsewhere}`))).status).toBe(201);
+      expect((await gm.post(url(`${base}/token-templates/${own.id}/copy-to/${elsewhere}`))).status).toBe(201);
     } finally {
       await prisma.tokenTemplate.deleteMany({ where: { campaignId: elsewhere } });
       await cleanupCampaigns([elsewhere]);
@@ -242,30 +242,30 @@ describe('creating a map', () => {
   // As on every other route: a picture deleted since the list was loaded
   // grants nothing, and is not a reason to refuse.
   it('accepts a picture that no longer exists', async () => {
-    const res = await dm.post(url(`${base}/maps`)).send({ name: 'Gone', imageUrl: `/api/assets/maps/${randomUUID()}`, width: 10, height: 10, gridSize: 50 });
+    const res = await gm.post(url(`${base}/maps`)).send({ name: 'Gone', imageUrl: `/api/assets/maps/${randomUUID()}`, width: 10, height: 10, gridSize: 50 });
     expect(res.status).toBe(201);
   });
 
   it("refuses a player's private picture", async () => {
-    const res = await dm.post(url(`${base}/maps`)).send({ name: 'Theirs', imageUrl: `/api/assets/maps/${privateId}`, width: 10, height: 10, gridSize: 50 });
+    const res = await gm.post(url(`${base}/maps`)).send({ name: 'Theirs', imageUrl: `/api/assets/maps/${privateId}`, width: 10, height: 10, gridSize: 50 });
     expect(res.status).toBe(403);
   });
 });
 
 // Storing a reference opens the asset to everyone at the table, so it needs
-// more than an administrator's right to read any file: the DM must be able to
-// read it as the DM, as setting a scene's music already requires.
-describe('a DM who is also an administrator', () => {
+// more than an administrator's right to read any file: the GM must be able to
+// read it as the GM, as setting a scene's music already requires.
+describe('a GM who is also an administrator', () => {
   let adminCampaignId: string;
   let adminMapId: string;
   let admin: ReturnType<typeof request.agent>;
   beforeAll(async () => {
-    const adminUser = await createTestUser({ displayName: 'Refs Admin DM', role: PlatformRole.ADMIN });
+    const adminUser = await createTestUser({ displayName: 'Refs Admin GM', role: PlatformRole.ADMIN });
     adminId = adminUser.id;
     adminCampaignId = (await createTestCampaign(adminId, { name: 'Admin refs' })).id;
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: adminId, campaignId: adminCampaignId, role: 'DM', characterIds: [] },
+        { userId: adminId, campaignId: adminCampaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId: adminCampaignId, role: 'PLAYER', characterIds: [] },
       ],
     });

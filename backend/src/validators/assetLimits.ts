@@ -21,10 +21,10 @@ export const ASSET_LIMITS = {
 /**
  * The tag every picture Paint makes carries, which is how a map's picture is
  * known to be one Paint may change and a save may write over: matched exactly,
- * case included. Only a campaign map picture, which only the campaign's DM
+ * case included. Only a campaign map picture, which only the campaign's GM
  * may upload, may carry it; every other upload is refused it, in any case,
  * and a campaign archive's import leaves it out. A tag no earlier version
- * made, so none a DM typed then means this.
+ * made, so none a GM typed then means this.
  */
 export const DRAWN_MAP_TAG = 'cozyvtt-drawn-map';
 

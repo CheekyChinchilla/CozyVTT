@@ -48,9 +48,9 @@ beforeAll(async () => {
   campaigns.push(mine, alsoMine, theirs);
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: me.id, campaignId: mine, role: 'DM', characterIds: [] },
-      { userId: me.id, campaignId: alsoMine, role: 'DM', characterIds: [] },
-      { userId: them.id, campaignId: theirs, role: 'DM', characterIds: [] },
+      { userId: me.id, campaignId: mine, role: 'GM', characterIds: [] },
+      { userId: me.id, campaignId: alsoMine, role: 'GM', characterIds: [] },
+      { userId: them.id, campaignId: theirs, role: 'GM', characterIds: [] },
     ],
   });
 
@@ -77,7 +77,7 @@ beforeAll(async () => {
   campaigns.push(readable.campaign);
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: them.id, campaignId: readable.campaign, role: 'DM', characterIds: [] },
+      { userId: them.id, campaignId: readable.campaign, role: 'GM', characterIds: [] },
       { userId: me.id, campaignId: readable.campaign, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -127,7 +127,7 @@ const routes: Array<[string, () => string, Call]> = [
   ['GET a token picture', () => other.tokenAsset, (id) => caller.get(`/api/assets/tokens/${id}`)],
   ['move an asset', () => other.personalAsset, (id) => caller.patch(`/api/assets/${id}/scope`).send({ scope: 'USER' })],
   ['move an asset into a campaign', () => theirs, (id) => caller.patch(`/api/assets/${ownAsset}/scope`).send({ scope: 'CAMPAIGN', campaignId: id })],
-  ['hand over a campaign\'s DM seat', () => theirs, (id) => caller.put(`/api/campaigns/${id}/dm`).send({ userId: other.member })],
+  ['hand over a campaign\'s GM seat', () => theirs, (id) => caller.put(`/api/campaigns/${id}/gm`).send({ userId: other.member })],
   ['accept an invitation', () => other.invitation, (id) => caller.post(`/api/invitations/${id}/accept`).send({ characterIds: [] })],
   ['decline an invitation', () => other.invitation, (id) => caller.post(`/api/invitations/${id}/decline`)],
 ];
@@ -146,7 +146,7 @@ it('leaves every record as it was', async () => {
   expect(await prisma.asset.findUnique({ where: { id: other.personalAsset } })).toMatchObject({ scope: 'USER' });
   expect(await prisma.asset.findUnique({ where: { id: ownAsset } })).toMatchObject({ scope: 'USER', campaignId: null });
   expect(await prisma.campaignInvitation.findUnique({ where: { id: other.invitation } })).toMatchObject({ status: 'PENDING' });
-  expect((await prisma.campaignMembership.findFirst({ where: { campaignId: theirs, role: 'DM' } }))?.userId).toBe(other.member);
+  expect((await prisma.campaignMembership.findFirst({ where: { campaignId: theirs, role: 'GM' } }))?.userId).toBe(other.member);
 });
 
 describe('a record the caller may read but not change', () => {
@@ -154,8 +154,8 @@ describe('a record the caller may read but not change', () => {
     ['validating a fellow player\'s character', () => caller.get(`/api/characters/${readable.character}/validate`)],
     ['deleting a fellow player\'s character', () => caller.delete(`/api/characters/${readable.character}`)],
     ['copying a fellow player\'s character', () => caller.post(`/api/characters/${readable.character}/copy`)],
-    ['deleting the DM\'s campaign asset', () => caller.delete(`/api/assets/${readable.asset}`)],
-    ['handing over the DM seat as a player', () => caller.put(`/api/campaigns/${readable.campaign}/dm`).send({ userId: other.member })],
+    ['deleting the GM\'s campaign asset', () => caller.delete(`/api/assets/${readable.asset}`)],
+    ['handing over the GM seat as a player', () => caller.put(`/api/campaigns/${readable.campaign}/gm`).send({ userId: other.member })],
     ['editing an SRD creature', () => caller.put(`/api/campaigns/${mine}/creatures/${readable.srdCreature}`).send({ name: 'Mine now' })],
     ['deleting an SRD creature', () => caller.delete(`/api/campaigns/${mine}/creatures/${readable.srdCreature}`)],
   ];

@@ -7,8 +7,8 @@
  *
  * A period's stored audio can also be junk: a free-text note from before the
  * field became a track picker, or the id of an asset that has since been
- * deleted or was never the DM's to open. A note counts quietly as no track;
- * a dead id silences the table and tells the DM, but never blocks the switch.
+ * deleted or was never the GM's to open. A note counts quietly as no track;
+ * a dead id silences the table and tells the GM, but never blocks the switch.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -28,11 +28,11 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `vibeaudio-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let outsiderId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 let trackId: string;
 let strangersTrackId: string;
@@ -86,40 +86,40 @@ async function setPeriods(periods: Array<{ name: string; audio: string | null }>
 }
 
 beforeAll(async () => {
-  const [dm, player, outsider] = await Promise.all(
+  const [gm, player, outsider] = await Promise.all(
     ['dm', 'player', 'outsider'].map((name) =>
       prisma.user.create({
         data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `VibeAudio ${name}` },
       })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
   outsiderId = outsider.id;
 
   campaignId = (await prisma.campaign.create({
-    data: { name: `VibeAudio ${runId}`, ownerId: dmId, vibeSettings: {} },
+    data: { name: `VibeAudio ${runId}`, ownerId: gmId, vibeSettings: {} },
   })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
 
-  trackId = await audioAsset(dmId, 'USER', 'battle-drums');
+  trackId = await audioAsset(gmId, 'USER', 'battle-drums');
   strangersTrackId = await audioAsset(outsiderId, 'USER', 'private-recording');
 
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
   playerCookie = await server.loginAs(playerId);
 });
 
 afterAll(async () => {
   await server?.close();
-  await prisma.asset.deleteMany({ where: { uploadedById: { in: [dmId, outsiderId] } } });
+  await prisma.asset.deleteMany({ where: { uploadedById: { in: [gmId, outsiderId] } } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, outsiderId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, outsiderId] } } });
   await prisma.$disconnect();
 });
 
@@ -140,11 +140,11 @@ describe('a vibe switch drives the ambient track', () => {
       },
     });
 
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const vibe = waitForEvent(player, 'vibe.updated');
     const audio = waitForEvent<AudioUpdated>(player, 'atmosphere.audio.updated');
-    dm.emit('vibe.update', { period: 'battle' });
+    gm.emit('vibe.update', { period: 'battle' });
     await vibe;
     const heard = await audio;
     expect(heard).toMatchObject({
@@ -154,55 +154,55 @@ describe('a vibe switch drives the ambient track', () => {
       loop: true,
     });
     expect(await storedState()).toEqual({ currentVibe: 'battle', ambientAssetId: trackId });
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('a period with no track silences the table', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const audio = waitForEvent<AudioUpdated>(player, 'atmosphere.audio.updated');
-    dm.emit('vibe.update', { period: 'camp' });
+    gm.emit('vibe.update', { period: 'camp' });
     expect((await audio).assetId).toBeNull();
     expect(await storedState()).toEqual({ currentVibe: 'camp', ambientAssetId: null });
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 
   it('a free-text note from the old field counts quietly as no track', async () => {
     await setPeriods([{ name: 'legacy', audio: 'birds_chirping.mp3' }]);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const audio = waitForEvent<AudioUpdated>(dm, 'atmosphere.audio.updated');
-    const silence = expectNoEvent(dm, 'error');
-    dm.emit('vibe.update', { period: 'legacy' });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const audio = waitForEvent<AudioUpdated>(gm, 'atmosphere.audio.updated');
+    const silence = expectNoEvent(gm, 'error');
+    gm.emit('vibe.update', { period: 'legacy' });
     expect((await audio).assetId).toBeNull();
     await silence;
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  it("a track the DM cannot open silences the table, tells the DM, and the switch stands", async () => {
+  it("a track the GM cannot open silences the table, tells the GM, and the switch stands", async () => {
     await setPeriods([
       { name: 'stolen', audio: strangersTrackId },
       { name: 'gone', audio: randomUUID() },
     ]);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
 
     const vibe = waitForEvent(player, 'vibe.updated');
     const audio = waitForEvent<AudioUpdated>(player, 'atmosphere.audio.updated');
-    const told = waitForEvent<{ message: string }>(dm, 'error');
-    dm.emit('vibe.update', { period: 'stolen' });
+    const told = waitForEvent<{ message: string }>(gm, 'error');
+    gm.emit('vibe.update', { period: 'stolen' });
     await vibe;
     expect((await audio).assetId).toBeNull();
     expect((await told).message).toMatch(/audio/i);
     expect(await storedState()).toEqual({ currentVibe: 'stolen', ambientAssetId: null });
 
-    const told2 = waitForEvent<{ message: string }>(dm, 'error');
-    dm.emit('vibe.update', { period: 'gone' });
+    const told2 = waitForEvent<{ message: string }>(gm, 'error');
+    gm.emit('vibe.update', { period: 'gone' });
     expect((await told2).message).toMatch(/audio/i);
     expect((await storedState()).currentVibe).toBe('gone');
 
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });

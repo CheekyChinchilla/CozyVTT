@@ -9,7 +9,7 @@
  * back on every screen.
  *
  * A roll reads the order, then awaits the sheet, the dice and the token
- * write, then wrote back the copy it had read: a DM ending combat in that
+ * write, then wrote back the copy it had read: a GM ending combat in that
  * gap saw the ended fight come back.
  *
  * Requires PostgreSQL at DATABASE_URL.
@@ -32,11 +32,11 @@ const GOBLIN = randomUUID();
 const HERO = randomUUID();
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ClientSocket;
+let gm: ClientSocket;
 
 const token = (id: string, extra: Record<string, unknown>) => ({
   id, name: id, imageUrl: '', position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, layer: 'token',
@@ -62,14 +62,14 @@ async function rollWaitingForLock(): Promise<void> {
 }
 
 beforeAll(async () => {
-  const [dmUser, playerUser] = await Promise.all(['dm', 'player'].map((name) =>
+  const [gmUser, playerUser] = await Promise.all(['dm', 'player'].map((name) =>
     prisma.user.create({ data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Order ${name}` } })));
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Send order ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Send order ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -94,10 +94,10 @@ beforeEach(async () => {
     },
   });
   clearState(campaignId);
-  dm = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+  gm = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
 });
 
-afterEach(() => dm.disconnect());
+afterEach(() => gm.disconnect());
 
 afterAll(async () => {
   await server.close();
@@ -105,14 +105,14 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 it('drops an older send that a send started by a token change overtakes', async () => {
   setState(campaignId, { active: true, round: 1, currentTokenId: null, combatants: [entry(GOBLIN, 'npc')] });
   const seen: number[] = [];
-  dm.on('initiative.state', (state: { combatants: Array<{ tokenId: string; hp: { current: number } | null }> }) => {
+  gm.on('initiative.state', (state: { combatants: Array<{ tokenId: string; hp: { current: number } | null }> }) => {
     const goblin = state.combatants.find((c) => c.tokenId === GOBLIN);
     if (goblin?.hp) seen.push(goblin.hp.current);
   });
@@ -128,7 +128,7 @@ it('drops an older send that a send started by a token change overtakes', async 
   const first = sendInitiativeState(server.io, campaignId);
   await hasRead;
 
-  // The DM edits the goblin's hit points; that change sends the order again.
+  // The GM edits the goblin's hit points; that change sends the order again.
   const tokens = (await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens as Array<Record<string, unknown>>;
   await prisma.map.update({
     where: { id: mapId },
@@ -143,7 +143,7 @@ it('drops an older send that a send started by a token change overtakes', async 
   expect(seen[seen.length - 1]).toBe(3);
 });
 
-it('does not bring back a fight the DM ended while a roll was in progress', async () => {
+it('does not bring back a fight the GM ended while a roll was in progress', async () => {
   setState(campaignId, { active: false, round: 0, currentTokenId: null, combatants: [entry(HERO, 'player')] });
   const player = await server.connectAndAuth(await server.loginAs(playerId), campaignId);
 
@@ -157,8 +157,8 @@ it('does not bring back a fight the DM ended while a roll was in progress', asyn
 
   player.emit('initiative.roll', { tokenId: HERO, mapId });
   await rollWaitingForLock();
-  const ended = waitForEvent<{ combatants: unknown[] }>(dm, 'initiative.state');
-  dm.emit('initiative.end');
+  const ended = waitForEvent<{ combatants: unknown[] }>(gm, 'initiative.state');
+  gm.emit('initiative.end');
   expect((await ended).combatants).toEqual([]);
 
   // The roll's dice log entry goes out once it has written the order.
@@ -170,7 +170,7 @@ it('does not bring back a fight the DM ended while a roll was in progress', asyn
   player.disconnect();
 });
 
-it("does not bring back a combatant the DM removed while the DM's own roll for it was in progress", async () => {
+it("does not bring back a combatant the GM removed while the GM's own roll for it was in progress", async () => {
   setState(campaignId, { active: true, round: 1, currentTokenId: null, combatants: [entry(GOBLIN, 'npc'), entry(HERO, 'player')] });
 
   let release!: () => void;
@@ -180,13 +180,13 @@ it("does not bring back a combatant the DM removed while the DM's own roll for i
   const holder = withMapsLocked([mapId], async () => { locked(); await gate; });
   await holding;
 
-  dm.emit('initiative.roll', { tokenId: GOBLIN, mapId });
+  gm.emit('initiative.roll', { tokenId: GOBLIN, mapId });
   await rollWaitingForLock();
-  const removed = waitForEvent<{ combatants: Array<{ tokenId: string }> }>(dm, 'initiative.state');
-  dm.emit('initiative.remove', { tokenId: GOBLIN });
+  const removed = waitForEvent<{ combatants: Array<{ tokenId: string }> }>(gm, 'initiative.state');
+  gm.emit('initiative.remove', { tokenId: GOBLIN });
   expect((await removed).combatants.map((c) => c.tokenId)).toEqual([HERO]);
 
-  const rolled = waitForEvent(dm, 'dice.rolled');
+  const rolled = waitForEvent(gm, 'dice.rolled');
   release();
   await holder;
   await rolled;

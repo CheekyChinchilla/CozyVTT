@@ -3,6 +3,7 @@ import {
   NpcStatBlockSchema,
   createNpcStatBlockSchema,
 } from '../statBlock';
+import { HORROR_D100_VALUE_MAX } from '../game-systems/sheetLimits';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../creatures';
 import { issueMessages } from '../issueMessages';
 import { STAT_BLOCK_LIMITS } from '../statBlockLimits';
@@ -52,10 +53,10 @@ describe('NpcStatBlockSchema', () => {
       expect(result.success).toBe(true);
     });
 
-    // The storage bound has to clear Pathfinder 2e, whose creature-building
+    // The storage bound has to clear Fantasy d20, whose creature-building
     // benchmarks put an extreme skill at +33 by level 15 and higher beyond
-    // that. A bound fitted to D&D 5e alone would reject real PF2e creatures.
-    it('accepts a high-level Pathfinder 2e modifier', () => {
+    // that. A bound fitted to 5E alone would reject real Fantasy d20 creatures.
+    it('accepts a high-level Fantasy d20 modifier', () => {
       const result = NpcStatBlockSchema.safeParse({
         ...baseStatBlock,
         level: 15,
@@ -89,8 +90,8 @@ describe('NpcStatBlockSchema', () => {
     });
 
     // Keys stay unconstrained on purpose: the stat block is shared across game
-    // systems, so Pathfinder 2e's fortitude/reflex/will must fit alongside
-    // D&D 5e's six ability saves.
+    // systems, so Fantasy d20's fortitude/reflex/will must fit alongside
+    // 5E's six ability saves.
     it('accepts non-5e save keys', () => {
       const result = NpcStatBlockSchema.safeParse({
         ...baseStatBlock,
@@ -144,7 +145,7 @@ describe('NpcStatBlockSchema', () => {
     });
   });
 
-  describe('Pathfinder 2e fields', () => {
+  describe('Fantasy d20 fields', () => {
     it('accepts printed attribute modifiers and a creature level', () => {
       const result = NpcStatBlockSchema.safeParse({
         ...baseStatBlock,
@@ -168,13 +169,13 @@ describe('NpcStatBlockSchema', () => {
     });
   });
 
-  // A Call of Cthulhu creature keeps its characteristics in the six score
-  // slots and its skills as percentages, so it gets wider bounds than D&D 5e's
+  // A Horror d100 creature keeps its characteristics in the six score
+  // slots and its skills as percentages, so it gets wider bounds than 5E's
   // scores and the shared skill bound. Every other system keeps those.
-  describe('Call of Cthulhu bounds', () => {
+  describe('Horror d100 bounds', () => {
     const invented = {
       ...baseStatBlock,
-      gameSystem: 'CALL_OF_CTHULHU_7E',
+      gameSystem: 'HORROR_D100',
       abilities: { str: 60, dex: 45, con: 70, int: 40, wis: 50, cha: 15 },
       skills: { 'Lurk in Mud': 55 },
     };
@@ -187,49 +188,51 @@ describe('NpcStatBlockSchema', () => {
       expect(messages(invented)).toBe('');
     });
 
-    it('still refuses a D&D 5e score over 30, with the same message', () => {
-      const dnd = { ...invented, gameSystem: 'DND_5E', skills: undefined, abilities: { ...baseStatBlock.abilities, str: 31 } };
-      expect(messages(dnd)).toBe('abilities.str: Too big: expected number to be <=30');
+    it('still refuses a 5E score over 30, with the same message', () => {
+      const fifthEdition = { ...invented, gameSystem: 'FIFTH_EDITION', skills: undefined, abilities: { ...baseStatBlock.abilities, str: 31 } };
+      expect(messages(fifthEdition)).toBe('abilities.str: Too big: expected number to be <=30');
     });
 
-    it('still refuses a skill over 50 in D&D 5e, in Pathfinder 2e and with no game system', () => {
-      for (const gameSystem of ['DND_5E', 'PATHFINDER_2E', undefined]) {
+    it('still refuses a skill over 50 in 5E, in Fantasy d20 and with no game system', () => {
+      for (const gameSystem of ['FIFTH_EDITION', 'FANTASY_D20', undefined]) {
         expect(messages({ ...baseStatBlock, gameSystem, skills: { Athletics: 51 } })).toBe(
           'skills.Athletics: Too big: expected number to be <=50'
         );
       }
     });
 
-    it('still refuses a score over 30 in Pathfinder 2e and with no game system', () => {
-      for (const gameSystem of ['PATHFINDER_2E', undefined]) {
+    it('still refuses a score over 30 in Fantasy d20 and with no game system', () => {
+      for (const gameSystem of ['FANTASY_D20', undefined]) {
         const block = { ...baseStatBlock, gameSystem, abilities: { ...baseStatBlock.abilities, str: 60 } };
         expect(NpcStatBlockSchema.safeParse(block).success).toBe(false);
       }
     });
 
-    it('refuses a characteristic or a skill past the Call of Cthulhu bound', () => {
-      const { maxCallOfCthulhuCharacteristic, maxCallOfCthulhuSkill } = STAT_BLOCK_LIMITS;
+    it('refuses a characteristic or a skill past the Horror d100 bound', () => {
+      const { maxHorrorD100Characteristic, maxHorrorD100Skill } = STAT_BLOCK_LIMITS;
+      // The highest rating a character's sheet takes, for a characteristic and a skill alike.
+      expect([maxHorrorD100Characteristic, maxHorrorD100Skill]).toEqual([HORROR_D100_VALUE_MAX, HORROR_D100_VALUE_MAX]);
       const atBound = {
         ...invented,
-        abilities: { ...invented.abilities, str: maxCallOfCthulhuCharacteristic },
-        skills: { 'Lurk in Mud': maxCallOfCthulhuSkill },
+        abilities: { ...invented.abilities, str: maxHorrorD100Characteristic },
+        skills: { 'Lurk in Mud': maxHorrorD100Skill },
       };
       expect(messages(atBound)).toBe('');
-      expect(messages({ ...atBound, abilities: { ...atBound.abilities, str: maxCallOfCthulhuCharacteristic + 1 } })).toBe(
-        `abilities.str: Too big: expected number to be <=${maxCallOfCthulhuCharacteristic}`
+      expect(messages({ ...atBound, abilities: { ...atBound.abilities, str: maxHorrorD100Characteristic + 1 } })).toBe(
+        `abilities.str: Too big: expected number to be <=${maxHorrorD100Characteristic}`
       );
-      expect(messages({ ...atBound, skills: { 'Lurk in Mud': maxCallOfCthulhuSkill + 1 } })).toBe(
-        `skills.Lurk in Mud: Too big: expected number to be <=${maxCallOfCthulhuSkill}`
+      expect(messages({ ...atBound, skills: { 'Lurk in Mud': maxHorrorD100Skill + 1 } })).toBe(
+        `skills.Lurk in Mud: Too big: expected number to be <=${maxHorrorD100Skill}`
       );
     });
 
-    it('keeps a whole number, and the lowest score, in Call of Cthulhu', () => {
+    it('keeps a whole number, and the lowest score, in Horror d100', () => {
       expect(NpcStatBlockSchema.safeParse({ ...invented, abilities: { ...invented.abilities, str: 60.5 } }).success).toBe(false);
       expect(NpcStatBlockSchema.safeParse({ ...invented, abilities: { ...invented.abilities, str: -1 } }).success).toBe(false);
       expect(NpcStatBlockSchema.safeParse({ ...invented, skills: { 'Lurk in Mud': 55.5 } }).success).toBe(false);
     });
 
-    it('keeps the shared bound on saving throws in Call of Cthulhu', () => {
+    it('keeps the shared bound on saving throws in Horror d100', () => {
       expect(NpcStatBlockSchema.safeParse({ ...invented, savingThrows: { wis: 60 } }).success).toBe(false);
     });
 
@@ -297,9 +300,9 @@ describe('CreateCreatureSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts a Call of Cthulhu creature with STR 60 and a skill of 55', () => {
-    const statBlock = { ...baseStatBlock, gameSystem: 'CALL_OF_CTHULHU_7E', abilities: { ...baseStatBlock.abilities, str: 60 }, skills: { Burrow: 55 } };
-    expect(CreateCreatureSchema.safeParse({ ...valid, gameSystem: 'CALL_OF_CTHULHU_7E', statBlock }).success).toBe(true);
+  it('accepts a Horror d100 creature with STR 60 and a skill of 55', () => {
+    const statBlock = { ...baseStatBlock, gameSystem: 'HORROR_D100', abilities: { ...baseStatBlock.abilities, str: 60 }, skills: { Burrow: 55 } };
+    expect(CreateCreatureSchema.safeParse({ ...valid, gameSystem: 'HORROR_D100', statBlock }).success).toBe(true);
   });
 
   it('rejects an unknown disposition', () => {

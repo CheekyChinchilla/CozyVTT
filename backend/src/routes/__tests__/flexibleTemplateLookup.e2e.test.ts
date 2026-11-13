@@ -59,7 +59,7 @@ describe('GET /api/characters/templates/null/:templateName', () => {
 
 describe('GET /api/characters/templates/:gameSystem/:templateName', () => {
   it('finds a game system\'s template', async () => {
-    const res = await agent.get('/api/characters/templates/DND_5E/fighter');
+    const res = await agent.get('/api/characters/templates/FIFTH_EDITION/fighter');
     expect(res.status).toBe(200);
     expect(res.body.name).toBe('Level 1 Fighter');
   });

@@ -24,13 +24,13 @@ export function extractCharacterHp(
   if (!data || !gameSystem) return null;
 
   switch (gameSystem) {
-    case 'DND_5E':
-    case 'PATHFINDER_2E':
+    case 'FIFTH_EDITION':
+    case 'FANTASY_D20':
       return readHp(record(data.hp), false);
-    case 'CALL_OF_CTHULHU_7E':
-      // Call of Cthulhu keeps hit points under derived stats, and has no
+    case 'HORROR_D100':
+      // Horror d100 keeps hit points in a block of their own, and has no
       // temporary hit points.
-      return readHp(record(record(data.derivedStats)?.hp), true);
+      return readHp(record(data.hitPoints), true);
     default:
       return null;
   }

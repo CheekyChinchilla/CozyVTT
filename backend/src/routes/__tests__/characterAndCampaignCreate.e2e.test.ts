@@ -124,61 +124,58 @@ describe('POST /api/characters/:id/copy', () => {
 });
 
 describe('POST /api/characters into a campaign', () => {
-  async function campaignOwnedBy(userId: string, gameSystem: 'DND_5E' | null) {
+  async function campaignOwnedBy(userId: string, gameSystem: 'FIFTH_EDITION' | null) {
     const made = await createTestCampaign(userId, { gameSystem });
     campaigns.push(made.id);
-    await prisma.campaignMembership.create({ data: { userId, campaignId: made.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: made.id, role: 'GM', characterIds: [] } });
     return made.id;
   }
 
   it('refuses a game system the campaign does not play, as assigning does', async () => {
-    const dnd = await campaignOwnedBy(ownerId, 'DND_5E');
+    const fifthEdition = await campaignOwnedBy(ownerId, 'FIFTH_EDITION');
     const flexible = await campaignOwnedBy(ownerId, null);
 
-    const intoDnd = await owner.post('/api/characters').send({ name: 'Valeros', gameSystem: 'PATHFINDER_2E', campaignId: dnd, data: {} });
-    expect(intoDnd.status).toBe(400);
-    expect(intoDnd.body).toEqual({
+    const intoFifthEdition = await owner.post('/api/characters').send({ name: 'Tobin', gameSystem: 'FANTASY_D20', campaignId: fifthEdition, data: {} });
+    expect(intoFifthEdition.status).toBe(400);
+    expect(intoFifthEdition.body).toEqual({
       error: 'Game System Mismatch',
-      message: 'Cannot assign a PATHFINDER_2E character to a DND_5E campaign. Character and campaign game systems must match.',
+      message: 'Cannot assign a FANTASY_D20 character to a FIFTH_EDITION campaign. Character and campaign game systems must match.',
     });
 
-    const intoFlexible = await owner.post('/api/characters').send({ name: 'Valeros', gameSystem: 'DND_5E', campaignId: flexible, data: {} });
+    const intoFlexible = await owner.post('/api/characters').send({ name: 'Tobin', gameSystem: 'FIFTH_EDITION', campaignId: flexible, data: {} });
     expect(intoFlexible.status).toBe(400);
     expect(intoFlexible.body.message).toBe(
-      'Cannot assign a DND_5E character to a flexible campaign. Character and campaign game systems must match.',
+      'Cannot assign a FIFTH_EDITION character to a flexible campaign. Character and campaign game systems must match.',
     );
 
-    expect(await prisma.character.count({ where: { userId: ownerId, name: 'Valeros' } })).toBe(0);
+    expect(await prisma.character.count({ where: { userId: ownerId, name: 'Tobin' } })).toBe(0);
   });
 });
 
 describe('POST /api/characters with a game system that does not exist', () => {
   it('answers 400 from the body check, and creates nothing', async () => {
-    const res = await owner.post('/api/characters').send({ name: 'Nobody', gameSystem: 'WARHAMMER_4E', data: {} });
+    const res = await owner.post('/api/characters').send({ name: 'Nobody', gameSystem: 'NOT_A_SYSTEM', data: {} });
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({
-      error: 'Validation Error',
-      message: 'Invalid option: expected one of "DND_5E"|"PATHFINDER_2E"|"SHADOWRUN_6E"|"CALL_OF_CTHULHU_7E"',
-    });
+    expect(res.body).toEqual({ error: 'Validation Error', message: 'CozyVTT does not support that game system.' });
     expect(await prisma.character.count({ where: { userId: ownerId, name: 'Nobody' } })).toBe(0);
   });
 });
 
 describe('POST /api/campaigns', () => {
-  it('creates the campaign with the caller as its owner and DM', async () => {
-    const res = await owner.post('/api/campaigns').send({ name: '  The Sunless Citadel  ', gameSystem: 'DND_5E' });
+  it('creates the campaign with the caller as its owner and GM', async () => {
+    const res = await owner.post('/api/campaigns').send({ name: '  The Lantern Road  ', gameSystem: 'FIFTH_EDITION' });
 
     expect(res.status).toBe(201);
     const made = res.body.campaign as { id: string; name: string; ownerId: string; gameSystem: string };
     campaigns.push(made.id);
-    expect(made.name).toBe('The Sunless Citadel');
+    expect(made.name).toBe('The Lantern Road');
     expect(made.ownerId).toBe(ownerId);
-    expect(made.gameSystem).toBe('DND_5E');
+    expect(made.gameSystem).toBe('FIFTH_EDITION');
     const membership = await prisma.campaignMembership.findUniqueOrThrow({
       where: { userId_campaignId: { userId: ownerId, campaignId: made.id } },
     });
-    expect(membership.role).toBe('DM');
+    expect(membership.role).toBe('GM');
     // Member-facing answers never carry email addresses.
     expect(JSON.stringify(res.body)).not.toContain('@');
   });
@@ -202,17 +199,17 @@ describe('GET /api/campaigns', () => {
     const theirs = await createTestCampaign(otherId);
     campaigns.push(mine.id, theirs.id);
     await prisma.campaignMembership.create({
-      data: { userId: ownerId, campaignId: mine.id, role: 'DM', characterIds: [] },
+      data: { userId: ownerId, campaignId: mine.id, role: 'GM', characterIds: [] },
     });
     await prisma.campaignMembership.create({
-      data: { userId: otherId, campaignId: theirs.id, role: 'DM', characterIds: [] },
+      data: { userId: otherId, campaignId: theirs.id, role: 'GM', characterIds: [] },
     });
 
     const res = await owner.get('/api/campaigns');
 
     expect(res.status).toBe(200);
     const listed = res.body.campaigns as Array<{ id: string; userRole: string }>;
-    expect(listed.find((c) => c.id === mine.id)?.userRole).toBe('DM');
+    expect(listed.find((c) => c.id === mine.id)?.userRole).toBe('GM');
     expect(listed.map((c) => c.id)).not.toContain(theirs.id);
     expect(JSON.stringify(res.body)).not.toMatch(/"email"/);
   });

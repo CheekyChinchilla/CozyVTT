@@ -4,12 +4,11 @@
  * Character Management
  */
 
-import { GameSystem } from '@prisma/client';
+import { GameSystem, type SupportedGameSystem } from '../../game-systems';
 import type { CharacterTemplate } from './types';
-import { getDnD5eTemplate } from './dnd5e-templates';
-import { getPF2eTemplate } from './pathfinder2e-templates';
-import { getSR6Template } from './shadowrun6e-templates';
-import { getCoC7eTemplate } from './callOfCthulhu7e-templates';
+import { getFifthEditionTemplate } from './fifthEdition-templates';
+import { getFantasyD20Template } from './fantasyD20-templates';
+import { getHorrorD100Template } from './horrorD100-templates';
 
 export type { CharacterTemplate };
 
@@ -20,18 +19,16 @@ export type { CharacterTemplate };
  * @returns The character template
  */
 export function getCharacterTemplate(
-  gameSystem: GameSystem,
+  gameSystem: SupportedGameSystem,
   templateName?: string
 ): CharacterTemplate {
   switch (gameSystem) {
-    case GameSystem.DND_5E:
-      return getDnD5eTemplate(templateName);
-    case GameSystem.PATHFINDER_2E:
-      return getPF2eTemplate(templateName);
-    case GameSystem.SHADOWRUN_6E:
-      return getSR6Template(templateName);
-    case GameSystem.CALL_OF_CTHULHU_7E:
-      return getCoC7eTemplate(templateName);
+    case GameSystem.FIFTH_EDITION:
+      return getFifthEditionTemplate(templateName);
+    case GameSystem.FANTASY_D20:
+      return getFantasyD20Template(templateName);
+    case GameSystem.HORROR_D100:
+      return getHorrorD100Template(templateName);
     default:
       throw new Error(`Unsupported game system: ${gameSystem}`);
   }
@@ -42,6 +39,6 @@ export function getCharacterTemplate(
  * @param gameSystem - The game system
  * @returns The blank character template
  */
-export function getBlankTemplate(gameSystem: GameSystem): CharacterTemplate {
+export function getBlankTemplate(gameSystem: SupportedGameSystem): CharacterTemplate {
   return getCharacterTemplate(gameSystem, 'blank');
 }

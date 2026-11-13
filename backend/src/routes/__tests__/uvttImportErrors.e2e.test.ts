@@ -52,28 +52,28 @@ function uvttWithImage(image: Buffer): Buffer {
   );
 }
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const url = () => `/api/campaigns/${campaignId}/maps/import-uvtt`;
 const mapCount = () => prisma.map.count({ where: { campaignId } });
 
 beforeAll(async () => {
   const stamp = Date.now();
-  const user = await createTestUser({ email: `uvtt-errors-${stamp}@test.cozyvtt.local`, displayName: 'UVTT Errors DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: `UVTT errors ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
-  dm = request.agent(app);
-  const login = await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
+  const user = await createTestUser({ email: `uvtt-errors-${stamp}@test.cozyvtt.local`, displayName: 'UVTT Errors GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: `UVTT errors ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
+  gm = request.agent(app);
+  const login = await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
   expect(login.status).toBe(200);
 });
 
 afterAll(async () => {
-  await prisma.asset.deleteMany({ where: { uploadedById: dmId } });
+  await prisma.asset.deleteMany({ where: { uploadedById: gmId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
 });
@@ -82,26 +82,26 @@ beforeEach(() => prisma.map.deleteMany({ where: { campaignId } }));
 
 describe('a refused UVTT upload answers with a reason', () => {
   it('answers 400 for a file sent under the wrong field name', async () => {
-    const res = await dm.post(url()).attach('map', uvttWithImage(PNG), 'a.uvtt');
+    const res = await gm.post(url()).attach('map', uvttWithImage(PNG), 'a.uvtt');
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/file/i);
     expect(await mapCount()).toBe(0);
   });
 
   it('answers 400 for a file with the wrong extension', async () => {
-    const res = await dm.post(url()).attach('file', Buffer.from('hello'), { filename: 'notes.txt', contentType: 'text/plain' });
+    const res = await gm.post(url()).attach('file', Buffer.from('hello'), { filename: 'notes.txt', contentType: 'text/plain' });
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/\.uvtt/);
   });
 
   it('answers 413 for a file over the size limit, and says the limit', async () => {
-    const res = await dm.post(url()).attach('file', Buffer.alloc(10 * 1024 * 1024, 0x20), 'big.uvtt');
+    const res = await gm.post(url()).attach('file', Buffer.alloc(10 * 1024 * 1024, 0x20), 'big.uvtt');
     expect(res.status).toBe(413);
     expect(res.body.message).toMatch(/larger than the 9MB.*at most 1MB/);
   });
 
   it('answers 400 for a body that is not valid multipart', async () => {
-    const res = await dm
+    const res = await gm
       .post(url())
       .set('Content-Type', 'multipart/form-data; boundary=xyz')
       .send('--xyz\r\nContent-Disposition: form-data; name="file"; filename="a.uvtt"\r\n\r\nabc');
@@ -109,7 +109,7 @@ describe('a refused UVTT upload answers with a reason', () => {
   });
 
   it('answers 400 for a field name past the ceilings', async () => {
-    const res = await dm.post(url()).field('a[5000]', 'x').field('a[b]', 'y').attach('file', uvttWithImage(PNG), 'a.uvtt');
+    const res = await gm.post(url()).field('a[5000]', 'x').field('a[b]', 'y').attach('file', uvttWithImage(PNG), 'a.uvtt');
     expect(res.status).toBe(400);
     expect(await mapCount()).toBe(0);
   });
@@ -117,34 +117,34 @@ describe('a refused UVTT upload answers with a reason', () => {
 
 describe('the name field', () => {
   it('answers 400, not 500, when the name is sent twice', async () => {
-    const res = await dm.post(url()).field('name', 'one').field('name', 'two').attach('file', uvttWithImage(PNG), 'a.uvtt');
+    const res = await gm.post(url()).field('name', 'one').field('name', 'two').attach('file', uvttWithImage(PNG), 'a.uvtt');
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/name/i);
     expect(await mapCount()).toBe(0);
   });
 
   it('refuses a name over 200 characters', async () => {
-    const res = await dm.post(url()).field('name', 'n'.repeat(201)).attach('file', uvttWithImage(PNG), 'a.uvtt');
+    const res = await gm.post(url()).field('name', 'n'.repeat(201)).attach('file', uvttWithImage(PNG), 'a.uvtt');
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/200/);
   });
 
   it('takes a name of exactly 200 characters', async () => {
-    const res = await dm.post(url()).field('name', 'n'.repeat(200)).attach('file', uvttWithImage(PNG), 'a.uvtt');
+    const res = await gm.post(url()).field('name', 'n'.repeat(200)).attach('file', uvttWithImage(PNG), 'a.uvtt');
     expect(res.status).toBe(201);
   });
 });
 
 describe('the picture inside', () => {
   it('is refused when it is a PDF', async () => {
-    const res = await dm.post(url()).attach('file', uvttWithImage(PDF), 'pdf.uvtt');
+    const res = await gm.post(url()).attach('file', uvttWithImage(PDF), 'pdf.uvtt');
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/image/i);
     expect(await mapCount()).toBe(0);
   });
 
   it('is refused over the map limit before it is decoded', async () => {
-    const res = await dm.post(url()).attach('file', uvttWithImage(Buffer.concat([PNG, Buffer.alloc(2 * 1024 * 1024)])), 'big.uvtt');
+    const res = await gm.post(url()).attach('file', uvttWithImage(Buffer.concat([PNG, Buffer.alloc(2 * 1024 * 1024)])), 'big.uvtt');
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/too large/i);
   });
@@ -153,7 +153,7 @@ describe('the picture inside', () => {
 describe('importing one map after another', () => {
   it('is never slowed down: ten in a row all succeed', async () => {
     for (let i = 0; i < 10; i++) {
-      const res = await dm.post(url()).field('name', `map ${i}`).attach('file', uvttWithImage(PNG), `m${i}.uvtt`);
+      const res = await gm.post(url()).field('name', `map ${i}`).attach('file', uvttWithImage(PNG), `m${i}.uvtt`);
       expect(res.status).toBe(201);
     }
   }, 60000);

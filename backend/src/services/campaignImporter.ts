@@ -818,7 +818,12 @@ export async function importCampaign(
     const vibeSettings =
       keptVibe && typeof keptVibe === 'object' && ambient ? { ...(keptVibe as Record<string, unknown>), atmosphereAudio: ambient } : keptVibe;
     const name = campaignName || campaignSettings.name;
-    const gameSystem = importedGameSystem(campaignSettings.gameSystem, "The campaign's", report);
+    const gameSystem = importedGameSystem(
+      campaignSettings.gameSystem,
+      "The campaign's",
+      "The archive's game system is no longer supported, so the campaign has none.",
+      report,
+    );
 
     // 6. Every row in one transaction: a failure anywhere leaves none of them.
     // A row's creation time is the transaction's own start unless it is
@@ -846,7 +851,7 @@ export async function importCampaign(
             },
           });
           await tx.campaignMembership.create({
-            data: { id: randomUUID(), userId: importingUserId, campaignId: newCampaignId, role: 'DM' },
+            data: { id: randomUUID(), userId: importingUserId, campaignId: newCampaignId, role: 'GM' },
           });
           if (assets.length > 0) {
             await tx.asset.createMany({
@@ -909,9 +914,9 @@ export async function importCampaign(
             // keep the archive's order.
             if (prepared.drawings.length > 0) {
               await tx.mapDrawing.createMany({
-                // The DM's share goes back to the importing DM, the players' with no author.
+                // The GM's share goes back to the importing GM, the players' with no author.
                 data: prepared.drawings.map(({ share, ...drawing }, n) => ({
-                  ...drawing, mapId, authorId: share === 'DM' ? importingUserId : null, createdAt: new Date(importedAt + n),
+                  ...drawing, mapId, authorId: share === 'GM' ? importingUserId : null, createdAt: new Date(importedAt + n),
                 })),
               });
             }

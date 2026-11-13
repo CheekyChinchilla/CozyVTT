@@ -22,7 +22,7 @@ jest.setTimeout(20000);
 
 const runId = randomUUID().slice(0, 8);
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let playerCookie: string;
@@ -61,14 +61,14 @@ async function newMap(lightingEnabled: boolean, fog?: Fog): Promise<string> {
 }
 
 beforeAll(async () => {
-  const dm = await prisma.user.create({ data: { email: `doors-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Door DM' } });
+  const gm = await prisma.user.create({ data: { email: `doors-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Door GM' } });
   const player = await prisma.user.create({ data: { email: `doors-pl-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Door Player' } });
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Doors ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Doors ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -81,7 +81,7 @@ afterAll(async () => {
   await prisma.campaign.updateMany({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -159,14 +159,14 @@ describe('under manual fog', () => {
     player.disconnect();
   });
 
-  it('leaves the DM free to open any door', async () => {
+  it('leaves the GM free to open any door', async () => {
     const mapId = await newMap(false, { revealed: [] });
-    const dmCookie = await server.loginAs(dmId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const opened = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
-    dm.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
+    const gmCookie = await server.loginAs(gmId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const opened = waitForEvent<{ segment: Wall }>(gm, 'wall:updated');
+    gm.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
     expect((await opened).segment.type).toBe('door-open');
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
@@ -235,7 +235,7 @@ describe('the sight check and the map\'s lock', () => {
     player.disconnect();
   });
 
-  it('refuses a door the DM moves out of the player\'s sight meanwhile, judged where it is now', async () => {
+  it('refuses a door the GM moves out of the player\'s sight meanwhile, judged where it is now', async () => {
     const mapId = await newMap(true);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const beyond = { ...NEAR, x1: 800, x2: 800 };
@@ -254,7 +254,7 @@ describe('the sight check and the map\'s lock', () => {
     player.disconnect();
   });
 
-  it('refuses a door the DM locks meanwhile, judged on what it is now', async () => {
+  it('refuses a door the GM locks meanwhile, judged on what it is now', async () => {
     const mapId = await newMap(true);
     const player = await server.connectAndAuth(playerCookie, campaignId);
     const meanwhile = whileSightIsWorkedOut(moveDoor(mapId, { ...NEAR, type: 'door-locked' }));

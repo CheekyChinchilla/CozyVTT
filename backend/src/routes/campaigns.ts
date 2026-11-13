@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { AuthenticatedRequest, NOT_A_MEMBER_MESSAGE } from '../middleware/rbac';
-import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
+import { authenticated, campaignMember, campaignGM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
+import { canDeleteCampaign, canTransferGM, canReadMap } from '../services/permissions';
 import { getSpiritVisibility, MAP_SELECT_SENT_TO_EVERYONE } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, withSessionsHeld, openSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
@@ -19,12 +19,14 @@ import { prepareCampaignExport, ExportTooLargeError, type PreparedExport } from 
 import { CAMPAIGN_ARCHIVE_MAX_BYTES, megabytes } from '../utils/campaignArchiveSize';
 import { previewCampaignImport, importCampaign, importTempDirectory, IMPORT_FAILED_MESSAGE } from '../services/campaignImporter';
 import { ArchiveRefusedError } from '../utils/archive';
-import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema, VibeSettingsSchema } from '../validators/campaigns';
+import { CreateCampaignSchema, UpdateCampaignSchema, TransferGMSchema, CampaignInviteSchema, VibeSettingsSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
 import { UpdateSessionNotesSchema, EndSessionSchema } from '../validators/sessionNotes';
 import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
 import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
-import type { GameSystem, Prisma } from '@prisma/client';
+import { CampaignRole, type GameSystem, type Prisma } from '@prisma/client';
+import { normaliseRole } from '../legacy/gameSystemAliases';
+import { sheetAsRead } from '../legacy/sheetConversion';
 import { errorMessage } from '../utils/errors';
 import { inSerializableTransaction } from '../utils/serializable';
 import { toJson, readJsonObject } from '../utils/prisma-json';
@@ -57,7 +59,7 @@ const router = Router();
 /**
  * What a campaign member's account carries wherever a membership is sent:
  * the roster, the campaign fetch, the members list and a role change. Never
- * the email address: these go to every member, and a DM must not be able to
+ * the email address: these go to every member, and a GM must not be able to
  * collect the addresses of the people at their table.
  */
 export const MEMBER_USER_SELECT = { id: true, displayName: true, avatarUrl: true } as const satisfies Prisma.UserSelect;
@@ -211,7 +213,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
  * POST /api/campaigns
  * Create a new campaign
  * Requires: Authentication
- * Note: Creator automatically becomes campaign owner and DM
+ * Note: Creator automatically becomes campaign owner and GM
  */
 router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -237,12 +239,12 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       },
     });
 
-    // Automatically add creator as DM
+    // Automatically add creator as GM
     await prisma.campaignMembership.create({
       data: {
         userId,
         campaignId: campaign.id,
-        role: 'DM',
+        role: 'GM',
         characterIds: [],
       },
     });
@@ -341,13 +343,13 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
     // Flatten sessions array → activeSession (first open session, or null)
     const { sessions: _sessions, ...campaignRest } = campaign;
 
-    // A map's spirit layer is for the DM and for a player who has crossed
+    // A map's spirit layer is for the GM and for a player who has crossed
     // over. The map fetch hides its address from everyone else, and so must
     // this list: any member can fetch the image by the address alone.
     const role = req.campaignMembership!.role;
-    const spiritVisible = role === 'DM' || (await getSpiritVisibility(campaignId, req.session.userId!));
+    const spiritVisible = role === 'GM' || (await getSpiritVisibility(campaignId, req.session.userId!));
     // A player is told about the map the campaign is showing and no other;
-    // the rest are the DM's until they switch to them (canReadMap).
+    // the rest are the GM's until they switch to them (canReadMap).
     const shown = campaignRest.maps.filter((m) => canReadMap(role, m.id, campaignRest.currentMapId));
     const maps = spiritVisible
       ? shown
@@ -398,6 +400,12 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
     const allCharacterIds = memberships.flatMap((m) => m.characterIds);
 
     // Fetch character details including data for HP extraction
+    // TODO(play): this loads the whole sheet of every character in the
+    // campaign at once, only to read its hit points. A sheet may be near the
+    // 1 MB body limit and a member may bring many characters, so a campaign
+    // of large sheets costs this request that much memory (suspected, not
+    // measured). Right: read the sheets a few at a time, or select the hit
+    // point fields alone in SQL for each system.
     const characters = await prisma.character.findMany({
       where: {
         id: { in: allCharacterIds },
@@ -418,7 +426,7 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
         .filter((c) => membership.characterIds.includes(c.id))
         .map(({ data, ...char }) => ({
           ...char,
-          hp: extractCharacterHp(char.gameSystem, readJsonObject(data)),
+          hp: extractCharacterHp(char.gameSystem, readJsonObject(sheetAsRead(char.gameSystem, data))),
         }));
 
       return {
@@ -443,7 +451,7 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
 
 /**
  * `campaign.settings.updated`: the Campaign Settings every member's page
- * shows, as stored, sent when the DM saves any of them. The frontend declares
+ * shows, as stored, sent when the GM saves any of them. The frontend declares
  * the same fields (keepInStep.test.ts).
  */
 export interface CampaignSettingsUpdatedBroadcast {
@@ -459,9 +467,9 @@ export interface CampaignSettingsUpdatedBroadcast {
 /**
  * PUT /api/campaigns/:campaignId
  * Update campaign settings
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  */
-router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:campaignId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const parsed = UpdateCampaignSchema.safeParse(req.body);
@@ -478,7 +486,7 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (description !== undefined) updateData.description = description;
     if (status !== undefined) updateData.status = status;
     // Vibe settings are saved after the rest, as PUT .../vibe saves them;
-    // a track the DM may not play to the table refuses the whole request
+    // a track the GM may not play to the table refuses the whole request
     // before anything is written.
     if (vibeSettings !== undefined) {
       const refusal = await vibeAudioRefusal(campaignId, req.session.userId!, vibeSettings);
@@ -553,10 +561,10 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
 /**
  * PUT /api/campaigns/:campaignId/vibe
  * Update vibe tracker settings for a campaign
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  * Vibe Tracker Details
  */
-router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:campaignId/vibe', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     if (!req.body?.vibeSettings) {
@@ -653,12 +661,12 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
  * `hasMore` when there were more.
  * Excludes: existing members, users with a pending invitation, and accounts
  * still waiting for an administrator's approval.
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  *
- * Any user can create a campaign and so become a DM, so this must never hand
+ * Any user can create a campaign and so become a GM, so this must never hand
  * out the whole user directory: it used to, unpaged.
  */
-router.get('/:campaignId/invitable-users', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:campaignId/invitable-users', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const raw: unknown = req.query.search;
@@ -696,8 +704,8 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
     ];
 
     // SECURITY: narrow select to displayName/avatar only. Any authenticated
-    // DM can call this endpoint, and `sanitizeUser` only strips password/MFA
-    // — it does NOT strip email. Returning emails here would let any DM
+    // GM can call this endpoint, and `sanitizeUser` only strips password/MFA
+    // — it does NOT strip email. Returning emails here would let any GM
     // harvest every account's email address via the invite picker.
     const found = await prisma.user.findMany({
       where: {
@@ -734,11 +742,11 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
  * POST /api/campaigns/:campaignId/invite
  * Invite a user to join the campaign.
  * Creates a pending invitation that the user must accept.
- * Requires: Campaign DM role
- * An invitation that asks for an email counts against the DM's hourly
+ * Requires: Campaign GM role
+ * An invitation that asks for an email counts against the GM's hourly
  * ceiling on invitation emails (middleware/invitationEmailLimiter).
  */
-router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:campaignId/invite', campaignGM, invitationEmailLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const parsed = CampaignInviteSchema.safeParse(req.body);
@@ -753,14 +761,14 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
 
     // Emailing is opt-in per invitation. The invitation itself is created
     // either way — a player sees it on their dashboard — so an instance with no
-    // mail server, or a DM who would rather tell their player in person, loses
+    // mail server, or a GM who would rather tell their player in person, loses
     // nothing by leaving this off. Anything other than an explicit true means
     // no email.
     const wantsEmail = sendEmail === true;
 
     // Check if user exists. An account still waiting for an administrator's
     // approval cannot sign in to accept, and is answered as no account, so
-    // the invite route does not tell a DM which accounts are waiting.
+    // the invite route does not tell a GM which accounts are waiting.
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -813,8 +821,8 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
     }
 
-    // Get campaign info and DM info for notification and email
-    const [campaign, dmUser] = await Promise.all([
+    // Get campaign info and GM info for notification and email
+    const [campaign, gmUser] = await Promise.all([
       prisma.campaign.findUnique({
         where: { id: campaignId },
         select: { name: true, description: true },
@@ -868,7 +876,7 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
       // Don't fail the request if broadcast fails
     }
 
-    // Email only when the DM asked for it and the instance can actually send.
+    // Email only when the GM asked for it and the instance can actually send.
     // Awaited rather than fire-and-forget, because the response reports whether
     // it went out — the same shape POST /api/admin/users uses. A failure is
     // logged and swallowed: the invitation is the thing that matters, and it
@@ -889,7 +897,7 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
               user.email,
               user.displayName,
               campaign!.name,
-              dmUser?.displayName ?? 'Your Dungeon Master',
+              gmUser?.displayName ?? null,
               campaign!.description ?? null
             ),
             new Promise((_, reject) => {
@@ -926,10 +934,10 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
 /**
  * GET /api/campaigns/:campaignId/invitations
  * The campaign's invitations that still stand (pending and in date), newest
- * first, so the DM can see who has been asked and withdraw one.
- * Requires: Campaign DM role
+ * first, so the GM can see who has been asked and withdraw one.
+ * Requires: Campaign GM role
  */
-router.get('/:campaignId/invitations', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:campaignId/invitations', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const invitations = await prisma.campaignInvitation.findMany({
@@ -949,9 +957,9 @@ router.get('/:campaignId/invitations', campaignDM, async (req: AuthenticatedRequ
  * Withdraw a pending invitation: it is deleted, so the player no longer has
  * it and can be invited again. One of another campaign, or one already
  * answered, is answered 404 as an unknown one is.
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  */
-router.delete('/:campaignId/invitations/:invitationId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:campaignId/invitations/:invitationId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, invitationId } = req.params;
     const { count } = await prisma.campaignInvitation.deleteMany({
@@ -967,20 +975,20 @@ router.delete('/:campaignId/invitations/:invitationId', campaignDM, async (req: 
   }
 });
 
-/** What the DM is told when a removal is refused (services/campaignMembers.ts). */
+/** What the GM is told when a removal is refused (services/campaignMembers.ts). */
 const REMOVAL_REFUSED: Record<TakeOutRefusal, { status: number; error: string; message: string }> = {
   'not-member': { status: 404, error: 'Not Found', message: 'User is not a member of this campaign' },
-  dm: { status: 400, error: 'Bad Request', message: 'Cannot remove the Dungeon Master from the campaign' },
+  gm: { status: 400, error: 'Bad Request', message: 'Cannot remove the GM from the campaign' },
   owner: { status: 400, error: 'Bad Request', message: 'Cannot remove the campaign owner from their own campaign' },
 };
 
 /**
  * DELETE /api/campaigns/:campaignId/members/:userId
  * Remove a member from the campaign
- * Requires: Campaign DM role
- * Cannot remove the DM or the campaign's owner
+ * Requires: Campaign GM role
+ * Cannot remove the GM or the campaign's owner
  */
-router.delete('/:campaignId/members/:userId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:campaignId/members/:userId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, userId } = req.params;
 
@@ -1005,8 +1013,8 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
 
 /**
  * What a member is told when their leave is refused. Not a member any more
- * (the DM's removal won the race with this request) is answered as the
- * `campaignMember` guard answers it. The wording of the DM's refusal follows
+ * (the GM's removal won the race with this request) is answered as the
+ * `campaignMember` guard answers it. The wording of the GM's refusal follows
  * account deletion's (services/accountDeletion.ts).
  */
 const LEAVE_REFUSED: Record<TakeOutRefusal, { status: number; error: string; message: string }> = {
@@ -1016,20 +1024,20 @@ const LEAVE_REFUSED: Record<TakeOutRefusal, { status: number; error: string; mes
     error: 'Conflict',
     message: "You own this campaign, so you cannot leave it. If you no longer want it, delete it in the campaign's settings.",
   },
-  dm: {
+  gm: {
     status: 409,
     error: 'Conflict',
-    message: "You run this campaign. Hand the DM seat to someone else in the campaign's settings, then leave it.",
+    message: "You run this campaign. Hand the GM seat to someone else in the campaign's settings, then leave it.",
   },
 };
 
 /**
  * POST /api/campaigns/:campaignId/leave
- * Leave the campaign, as a player or a spectator: the same as the DM's
+ * Leave the campaign, as a player or a spectator: the same as the GM's
  * Remove, asked by the member. Their characters go back to their own list;
  * their tokens, combatants, drawings, notes and macros stay with the campaign.
  * Requires: Campaign membership, any role. The owner (asked first) and the
- * DM are refused in the transaction, which reads the role as it stands.
+ * GM are refused in the transaction, which reads the role as it stands.
  */
 router.post('/:campaignId/leave', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1059,7 +1067,7 @@ router.post('/:campaignId/leave', campaignMember, async (req: AuthenticatedReque
  * (it groups by role from its own list), and each copy of the initiative
  * order, of the map the table is on and of its drawings is sent again as
  * the new roles see it. A spectator on a lit map is sent no tokens, a player their own and
- * what they see, a DM every hidden creature and its notes.
+ * what they see, a GM every hidden creature and its notes.
  */
 async function followNewRoles(campaignId: string, userIds: string[]): Promise<void> {
   for (const userId of userIds) announceRosterChange(userId, [campaignId], 'member.role');
@@ -1068,34 +1076,36 @@ async function followNewRoles(campaignId: string, userIds: string[]): Promise<vo
   const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
   if (!map) return;
   await broadcastMapData(getSocketInstance(), campaignId, map);
-  // A drawing for the DM alone goes with the seat: the new DM's page is sent
-  // it, and the old DM's page is sent the list without it.
+  // A drawing for the GM alone goes with the seat: the new GM's page is sent
+  // it, and the old GM's page is sent the list without it.
   await resendDrawings(campaignId, map.id);
 }
 
 /**
  * PUT /api/campaigns/:campaignId/members/:userId/role
  * Change a member's role in the campaign
- * Requires: Campaign DM role
- * Only ONE DM per campaign, cannot change DM's role
+ * Requires: Campaign GM role
+ * Only ONE GM per campaign, cannot change GM's role
  */
-router.put('/:campaignId/members/:userId/role', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:campaignId/members/:userId/role', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, userId } = req.params;
-    const { role } = req.body;
+    // The GM's value from an older version is read as GM.
+    const given = normaliseRole(req.body.role);
+    const role = Object.values(CampaignRole).find((option) => option === given);
 
     // Validate role
-    if (!role || !['DM', 'PLAYER', 'SPECTATOR'].includes(role)) {
+    if (!role) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'Role must be DM, PLAYER, or SPECTATOR',
+        message: 'Role must be GM, PLAYER, or SPECTATOR',
       });
     }
 
     // The member's role now, and the change, in one serializable transaction
-    // (utils/serializable.ts): a DM hand-over landing in between could
+    // (utils/serializable.ts): a GM hand-over landing in between could
     // otherwise give this member the seat just before this took it away,
-    // leaving the campaign with no DM, or a second DM could be made.
+    // leaving the campaign with no GM, or a second GM could be made.
     const outcome = await inSerializableTransaction(async (tx) => {
       const membership = await tx.campaignMembership.findUnique({
         where: { userId_campaignId: { userId, campaignId } },
@@ -1105,19 +1115,19 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
         return { ok: false, refused: { status: 404, error: 'Not Found', message: 'User is not a member of this campaign' } } as const;
       }
 
-      // CRITICAL: Cannot change the DM's role
-      if (membership.role === 'DM') {
-        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'Cannot change the Dungeon Master\'s role' } } as const;
+      // CRITICAL: Cannot change the GM's role
+      if (membership.role === 'GM') {
+        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'Cannot change the GM\'s role' } } as const;
       }
 
-      // CRITICAL: Cannot promote to DM while the campaign has one (only one DM per campaign)
-      if (role === 'DM' && (await tx.campaignMembership.findFirst({ where: { campaignId, role: 'DM' }, select: { userId: true } }))) {
+      // CRITICAL: Cannot promote to GM while the campaign has one (only one GM per campaign)
+      if (role === 'GM' && (await tx.campaignMembership.findFirst({ where: { campaignId, role: 'GM' }, select: { userId: true } }))) {
         return {
           ok: false,
           refused: {
             status: 400,
             error: 'Bad Request',
-            message: 'Campaign already has a Dungeon Master. Only one DM per campaign is allowed.',
+            message: 'Campaign already has a GM. Only one GM per campaign is allowed.',
           },
         } as const;
       }
@@ -1136,7 +1146,7 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
     }
     const updatedMembership = outcome.updated;
 
-    // Same reason as the DM transfer below: a socket caches its role from when
+    // Same reason as the GM transfer below: a socket caches its role from when
     // it authenticated, so a demotion has to reach any open connection or the
     // person keeps what they had until they reload.
     try {
@@ -1163,27 +1173,31 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
 });
 
 /**
- * PUT /api/campaigns/:campaignId/dm
- * Hand the DM seat to another member of the campaign.
- * Requires: the sitting DM, the campaign owner, or a platform admin
+ * PUT /api/campaigns/:campaignId/gm
+ * Hand the GM seat to another member of the campaign.
+ * Requires: the sitting GM, the campaign owner, or a platform admin
+ *
+ * Also answered at PUT /api/campaigns/:campaignId/dm, the path versions
+ * before 1.7.0 gave it, so a script or a browser tab made for one still
+ * works.
  *
  * A dedicated route rather than a loosening of the role endpoint above, which
- * still refuses to touch a DM. Promoting one member and demoting the other are
+ * still refuses to touch a GM. Promoting one member and demoting the other are
  * one action, not two: done separately the campaign is briefly observable with
- * two DMs or none, and a failure between them would strand it that way.
+ * two GMs or none, and a failure between them would strand it that way.
  *
- * The campaign's `ownerId` is deliberately untouched. Ownership and the DM role
+ * The campaign's `ownerId` is deliberately untouched. Ownership and the GM role
  * are separate, and keeping them separate is what lets an owner hand the game to
- * somebody else — a co-host, or an automated DM account — and stay at the table
+ * somebody else — a co-host, or an automated GM account — and stay at the table
  * as a player without giving away the campaign itself.
  */
-router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, res: Response) => {
+async function transferGMSeat(req: AuthenticatedRequest, res: Response) {
   try {
     const { campaignId } = req.params;
     const callerId = req.session.userId!;
     const platformRole = req.session.platformRole!;
 
-    const parsed = TransferDMSchema.safeParse(req.body);
+    const parsed = TransferGMSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
@@ -1208,15 +1222,15 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     }
 
     // Who may hand the seat over, who holds it, and the hand-over itself, in
-    // one serializable transaction (utils/serializable.ts), so the one-DM rule
+    // one serializable transaction (utils/serializable.ts), so the one-GM rule
     // cannot be caught half-applied. Two hand-overs at once each read the same
-    // sitting DM and each seated their own member, leaving two DMs; now the
+    // sitting GM and each seated their own member, leaving two GMs; now the
     // second one runs again and sees the first.
     const transfer = await inSerializableTransaction(async (tx) => {
-      if (!(await canTransferDM(callerId, campaignId, platformRole, tx))) {
+      if (!(await canTransferGM(callerId, campaignId, platformRole, tx))) {
         return {
           ok: false,
-          refused: { status: 403, error: 'Forbidden', message: 'Only the DM, the campaign owner, or an admin can transfer the DM role' },
+          refused: { status: 403, error: 'Forbidden', message: 'Only the GM, the campaign owner, or an admin can transfer the GM role' },
         } as const;
       }
 
@@ -1227,24 +1241,24 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
       if (!incoming) {
         return { ok: false, refused: { status: 404, error: 'Not Found', message: 'That user is not a member of this campaign' } } as const;
       }
-      if (incoming.role === 'DM') {
-        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'That member is already the Dungeon Master' } } as const;
+      if (incoming.role === 'GM') {
+        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'That member is already the GM' } } as const;
       }
 
-      // Every DM row is stepped down, so a campaign an older version left with
-      // two DMs comes out of this with one. A campaign with no DM row is not
+      // Every GM row is stepped down, so a campaign an older version left with
+      // two GMs comes out of this with one. A campaign with no GM row is not
       // supposed to happen, but it is recoverable and this route is how you
       // would recover it, so it is seated rather than the transfer refused.
       const sitting = await tx.campaignMembership.findMany({
-        where: { campaignId, role: 'DM' },
+        where: { campaignId, role: 'GM' },
         select: { userId: true },
       });
       if (sitting.length > 0) {
-        await tx.campaignMembership.updateMany({ where: { campaignId, role: 'DM' }, data: { role: 'PLAYER' } });
+        await tx.campaignMembership.updateMany({ where: { campaignId, role: 'GM' }, data: { role: 'PLAYER' } });
       }
       await tx.campaignMembership.update({
         where: { userId_campaignId: { userId: incomingId, campaignId } },
-        data: { role: 'DM' },
+        data: { role: 'GM' },
       });
       return { ok: true, steppedDown: sitting.map((m) => m.userId) } as const;
     });
@@ -1263,29 +1277,36 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
 
     // Bring any live connections into line before telling anyone the seat has
     // moved. Sockets cache the role from when they authenticated, so until this
-    // runs the outgoing DM still holds DM powers over an open connection and the
+    // runs the outgoing GM still holds GM powers over an open connection and the
     // incoming one cannot use theirs. Best-effort: a socket layer that is not up
     // must not fail a transfer that is already committed.
     try {
       for (const previous of steppedDown) {
         await applyRoleToLiveSockets(previous, campaignId, 'PLAYER');
       }
-      await applyRoleToLiveSockets(incomingId, campaignId, 'DM');
+      await applyRoleToLiveSockets(incomingId, campaignId, 'GM');
 
-      broadcastToCampaign(campaignId, 'campaign.dm.transferred', {
+      // Sent under the name and with the fields versions before 1.7.0 used
+      // as well, for this release, so a tab or script made for one still
+      // hears that the seat moved.
+      const transferred = {
         campaignId,
+        previousGmId: outgoing?.userId ?? null,
+        newGmId: incomingId,
         previousDmId: outgoing?.userId ?? null,
         newDmId: incomingId,
-      });
+      };
+      broadcastToCampaign(campaignId, 'campaign.gm.transferred', transferred);
+      broadcastToCampaign(campaignId, 'campaign.dm.transferred', transferred);
       await followNewRoles(campaignId, [...steppedDown, incomingId]);
     } catch (error) {
-      logger.error('DM transfer committed but live sockets were not updated', {
+      logger.error('GM transfer committed but live sockets were not updated', {
         err: error,
         campaignId,
       });
     }
 
-    logger.info('campaign.dm.transferred', {
+    logger.info('campaign.gm.transferred', {
       campaignId,
       from: outgoing?.userId ?? null,
       to: incomingId,
@@ -1293,17 +1314,20 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     });
 
     return res.status(200).json({
-      message: 'Dungeon Master role transferred successfully',
+      message: 'GM role transferred successfully',
       memberships,
     });
   } catch (error) {
-    logger.error('Error transferring DM role', { err: error });
+    logger.error('Error transferring GM role', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Failed to transfer the Dungeon Master role',
+      message: 'Failed to transfer the GM role',
     });
   }
-});
+}
+
+router.put('/:campaignId/gm', authenticated, transferGMSeat);
+router.put('/:campaignId/dm', authenticated, transferGMSeat);
 
 /**
  * GET /api/campaigns/admin/all
@@ -1348,7 +1372,7 @@ router.get('/admin/all', adminOnly, async (_req: AuthenticatedRequest, res: Resp
  * Chat Messages - Load last 50 messages with pagination
  *
  * A whisper is sent to the two people it is between, its sender and its
- * recipient, and to nobody else: the DM reads only their own.
+ * recipient, and to nobody else: the GM reads only their own.
  */
 router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1471,19 +1495,19 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
 /**
  * DELETE /api/campaigns/:campaignId/messages/join-leave
  * Remove the legacy "X has joined / has left the campaign" system messages.
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  *
  * Those messages are no longer written — they fired on every refresh and every
  * brief disconnect, and presence in the roster says the same thing better. Rows
  * already in the database are left alone on upgrade rather than deleted behind
- * the DM's back, since a chat log is a record of a session. This is how a DM
+ * the GM's back, since a chat log is a record of a session. This is how a GM
  * clears the backlog when they want to.
  *
  * Matched on `metadata.action`, deliberately NOT on the message text: the
  * wording is display copy and could reasonably change or be translated, while
  * the action tag is what the writer actually meant.
  */
-router.delete('/:campaignId/messages/join-leave', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:campaignId/messages/join-leave', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
 
@@ -1526,8 +1550,8 @@ router.delete('/:campaignId/messages/join-leave', campaignDM, async (req: Authen
  *
  * SECURITY: secret rolls are the reason this endpoint cannot be a plain
  * "last N rolls for this campaign". The live socket path sends a secret roll
- * only to the person who made it and to DMs; replaying history without the same
- * restriction would hand every player the DM's hidden rolls the moment they
+ * only to the person who made it and to GMs; replaying history without the same
+ * restriction would hand every player the GM's hidden rolls the moment they
  * pressed refresh — a worse bug than the one being fixed. The visibility filter
  * is applied in the query below, server-side, and must stay there: filtering in
  * the client would still ship the rolls over the wire.
@@ -1567,20 +1591,20 @@ router.get('/:campaignId/dice-rolls', campaignMember, async (req: AuthenticatedR
     }
 
     // Role comes from the membership the campaignMember middleware loaded, not
-    // from campaign.ownerId — a co-DM by membership is a DM here too.
-    const isDM = req.campaignMembership?.role === 'DM';
+    // from campaign.ownerId — a co-GM by membership is a GM here too.
+    const isGM = req.campaignMembership?.role === 'GM';
     const userId = req.session.userId!;
 
     const where = {
       campaignId,
-      // Rolls from before the DM last cleared the history stay in the table for
+      // Rolls from before the GM last cleared the history stay in the table for
       // audit, but are not served.
       ...(campaign.rollHistoryClearedAt
         ? { rolledAt: { gt: campaign.rollHistoryClearedAt } }
         : {}),
-      // A DM sees everything. Everyone else sees public rolls plus their own
+      // A GM sees everything. Everyone else sees public rolls plus their own
       // secret ones — never someone else's.
-      ...(isDM ? {} : { OR: [{ secret: false }, { secret: true, userId }] }),
+      ...(isGM ? {} : { OR: [{ secret: false }, { secret: true, userId }] }),
     };
 
     const [totalCount, rolls] = await Promise.all([
@@ -1633,7 +1657,7 @@ router.get('/:campaignId/dice-rolls', campaignMember, async (req: AuthenticatedR
 // ============================================
 // PERSONAL NOTES
 //
-// A player's own notes, in Markdown. Private to whoever wrote them — the DM
+// A player's own notes, in Markdown. Private to whoever wrote them — the GM
 // included. `Session.notes` is the shared recap; this is not that.
 //
 // SECURITY: every query below is scoped by `req.session.userId` as well as the
@@ -1809,7 +1833,7 @@ router.delete('/:campaignId/notes/:noteId', campaignMember, async (req: Authenti
  * Scoped and answered exactly the way personal notes are: every query carries
  * the session's own user id, and a macro belonging to someone else answers 404
  * rather than 403, so the response cannot confirm that the id exists. A macro is
- * private to whoever saved it, the DM included.
+ * private to whoever saved it, the GM included.
  *
  * The expression is validated on the way in — see `validators/diceMacros.ts` —
  * so a stored macro is always one that can actually be rolled.
@@ -1820,7 +1844,7 @@ router.delete('/:campaignId/notes/:noteId', campaignMember, async (req: Authenti
  * Past sessions and the notes recorded when each one ended.
  * Requires: Campaign membership (any role)
  *
- * The DM has always been able to write notes when ending a session, and the
+ * The GM has always been able to write notes when ending a session, and the
  * dialog said they were kept — but nothing read them back, so they were stored
  * and invisible. They were never private: the field is labelled "Session Notes"
  * and asks "What happened this session?", so every member can read them, which
@@ -1861,14 +1885,14 @@ router.get('/:campaignId/sessions', campaignMember, async (req: AuthenticatedReq
 /**
  * PUT /api/campaigns/:campaignId/sessions/:sessionId/notes
  * Rewrite or clear the recap for a session that has already ended.
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  *
  * Sessions were being ended with notes long before anything displayed them, so
- * the history list showed every recap ever written at once. A DM who had treated
+ * the history list showed every recap ever written at once. A GM who had treated
  * that box as private working notes had no way to take them back. Sending an
  * empty string clears the recap outright.
  */
-router.put('/:campaignId/sessions/:sessionId/notes', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:campaignId/sessions/:sessionId/notes', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, sessionId } = req.params;
 
@@ -1882,7 +1906,7 @@ router.put('/:campaignId/sessions/:sessionId/notes', campaignDM, async (req: Aut
 
     const trimmed = parsed.data.notes.trim();
 
-    // Scoped by campaign as well as id, in one statement: `campaignDM` proves
+    // Scoped by campaign as well as id, in one statement: `campaignGM` proves
     // the caller runs *this* campaign, and looking the session up separately
     // would leave a window between the check and the write. A session belonging
     // to someone else's campaign matches nothing and answers 404 — a 403 would
@@ -1914,10 +1938,10 @@ router.put('/:campaignId/sessions/:sessionId/notes', campaignDM, async (req: Aut
 /**
  * POST /api/campaigns/:campaignId/sessions
  * Start a new session
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  * Starting a Session
  */
-router.post('/:campaignId/sessions', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:campaignId/sessions', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
 
@@ -1976,10 +2000,10 @@ router.post('/:campaignId/sessions', campaignDM, async (req: AuthenticatedReques
 /**
  * PUT /api/campaigns/:campaignId/sessions/:sessionId/pause
  * Pause the current session
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  * Pausing a Session
  */
-router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:campaignId/sessions/:sessionId/pause', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, sessionId } = req.params;
 
@@ -2028,10 +2052,10 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
 /**
  * PUT /api/campaigns/:campaignId/sessions/:sessionId/end
  * End the current session and save state
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  * Ending a Session
  */
-router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:campaignId/sessions/:sessionId/end', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, sessionId } = req.params;
     const parsed = EndSessionSchema.safeParse(req.body ?? {});
@@ -2100,16 +2124,16 @@ router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: Authe
 /**
  * PUT /api/campaigns/:campaignId/resume
  * Reopen the paused session. The snapshot taken at pause is not applied.
- * Requires: Campaign DM role
+ * Requires: Campaign GM role
  * Resuming a Session
  */
-router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:campaignId/resume', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
 
     // The live state is the state: everything is stored as it is played, so
     // the snapshot pause took is a record of where the break began and is
-    // never written back. Restoring it undid whatever the DM did during the
+    // never written back. Restoring it undid whatever the GM did during the
     // break, silently: a token hidden then was shown to players again, a
     // moved one jumped back, an added one vanished, a map switch reverted.
     const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
@@ -2170,10 +2194,10 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
  * Query params:
  *   includeAudio (boolean, default false)
  *   includeTokens (boolean, default true)
- * Requires: Campaign DM role. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
+ * Requires: Campaign GM role. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
  * (20 by default), and one archive operation at a time.
  */
-router.get('/:campaignId/export', campaignDM, downloadOnly, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:campaignId/export', campaignGM, downloadOnly, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
   await whileHoldingArchiveSlot(res, async () => {
     const { campaignId } = req.params;
     const includeAudio = req.query.includeAudio === 'true';

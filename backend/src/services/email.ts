@@ -351,13 +351,15 @@ export async function sendEmailChangedNotice(
 }
 
 /**
- * Send a campaign invitation email when a DM invites a player
+ * Send a campaign invitation email when a GM invites a player. `gmName` is
+ * null when the GM's account could not be read; the email then names no one
+ * as its sender.
  */
 export async function sendCampaignInvitationEmail(
   toEmail: string,
   displayName: string,
   campaignName: string,
-  dmName: string,
+  gmName: string | null,
   campaignDescription: string | null
 ): Promise<void> {
   const transporter = createTransporter();
@@ -372,12 +374,14 @@ export async function sendCampaignInvitationEmail(
   const content =
     h2("You've Been Invited!") +
     p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
-    p(`<strong>${escapeHtml(dmName)}</strong> has invited you to join their campaign on ${escapeHtml(instanceName)}:`) +
+    p(gmName === null
+      ? `You have been invited to join a campaign on ${escapeHtml(instanceName)}:`
+      : `<strong>${escapeHtml(gmName)}</strong> has invited you to join their campaign on ${escapeHtml(instanceName)}:`) +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 20px;">
       <tr>
         <td style="background-color:#F0EAD8;border:1px solid #C9B99A;border-radius:8px;padding:20px 24px;text-align:center;">
           <div style="font-size:20px;font-weight:bold;color:#3D6B4F;font-family:Georgia,'Times New Roman',serif;">${escapeHtml(campaignName)}</div>
-          <div style="font-size:13px;color:#8B7355;margin-top:4px;font-family:Georgia,'Times New Roman',serif;">Dungeon Master: ${escapeHtml(dmName)}</div>
+          ${gmName === null ? '' : `<div style="font-size:13px;color:#8B7355;margin-top:4px;font-family:Georgia,'Times New Roman',serif;">Game master: ${escapeHtml(gmName)}</div>`}
         </td>
       </tr>
     </table>` +
@@ -387,15 +391,15 @@ export async function sendCampaignInvitationEmail(
     divider +
     p('<em style="color:#8B7355;font-size:13px;">You can accept or decline this invitation from your Dashboard. Invitations may expire if not responded to.</em>');
 
-  // The subject and the inbox preview carry no text the DM chose. The
-  // campaign name and the DM's display name are anyone's to set, and in a
+  // The subject and the inbox preview carry no text the GM chose. The
+  // campaign name and the GM's display name are anyone's to set, and in a
   // subject line from the instance's own address they read as the instance
   // speaking. They appear in the body, escaped, beside who sent them.
   await transporter.sendMail({
     from: fromAddress,
     to: toEmail,
     subject: `You have a new campaign invitation on ${instanceName}`,
-    html: emailLayout(instanceName, content, `A Dungeon Master on ${instanceName} has invited you to their campaign.`),
+    html: emailLayout(instanceName, content, `A game master on ${instanceName} has invited you to their campaign.`),
   });
   logger.info('Email sent', { type: 'campaign_invitation', to: toEmail, campaign: campaignName });
 }

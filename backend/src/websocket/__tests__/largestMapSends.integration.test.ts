@@ -24,11 +24,11 @@ const runId = randomUUID().slice(0, 8);
 const SIDE = MAP_LIMITS.maxSide;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 /** A message's length in bytes as the server reads it: the packet types, then the event and its payload as JSON. */
@@ -56,18 +56,18 @@ async function revealedCount(): Promise<number> {
 }
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(
+  const [gm, player] = await Promise.all(
     ['dm', 'player'].map((name) =>
       prisma.user.create({ data: { email: `largestsends-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Largest ${name}` } })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  const campaign = await prisma.campaign.create({ data: { name: `Largest sends ${runId}`, ownerId: dmId, vibeSettings: {} } });
+  const campaign = await prisma.campaign.create({ data: { name: `Largest sends ${runId}`, ownerId: gmId, vibeSettings: {} } });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -81,7 +81,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [gmCookie, playerCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId)]);
 });
 
 afterAll(async () => {
@@ -90,34 +90,34 @@ afterAll(async () => {
   await prisma.mapExploration.deleteMany({ where: { mapId } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
 describe('a fog operation on the largest map', () => {
   it('is not read one byte past the message limit: the connection closes and nothing is stored', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const message = revealOfLength(MAX_SOCKET_MESSAGE_BYTES + 1);
     expect(messageBytes('fog:operation', message)).toBe(MAX_SOCKET_MESSAGE_BYTES + 1);
-    const closed = waitForEvent<string>(dm, 'disconnect');
+    const closed = waitForEvent<string>(gm, 'disconnect');
 
-    dm.emit('fog:operation', message);
+    gm.emit('fog:operation', message);
 
     await closed;
     expect(await revealedCount()).toBe(0);
   });
 
   it('is read and stored at exactly the message limit', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const message = revealOfLength(MAX_SOCKET_MESSAGE_BYTES);
     expect(messageBytes('fog:operation', message)).toBe(MAX_SOCKET_MESSAGE_BYTES);
-    const stored = waitForEvent<{ mapId: string }>(dm, 'fog:updated', 10000);
+    const stored = waitForEvent<{ mapId: string }>(gm, 'fog:updated', 10000);
 
-    dm.emit('fog:operation', message);
+    gm.emit('fog:operation', message);
 
     expect((await stored).mapId).toBe(mapId);
     expect(await revealedCount()).toBe(message.operation.cells.length);
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
@@ -143,7 +143,7 @@ describe("a player's explored ground on the largest map", () => {
 
   // One sight of the whole map is 13 reports, and the ceiling counts every
   // tab of a player together: four tabs or devices seeing at once, as when
-  // the DM turns Global Illumination on, send 52 in a second. A dropped
+  // the GM turns Global Illumination on, send 52 in a second. A dropped
   // report's squares are never sent again. Each tab's parts here name squares
   // of their own, smaller than a page's, so that a dropped one shows.
   it("remembers every part of four tabs' sights reported in the same second", async () => {

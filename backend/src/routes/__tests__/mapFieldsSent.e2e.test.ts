@@ -25,25 +25,25 @@ jest.setTimeout(30000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 let player: ReturnType<typeof request.agent>;
 
 const annotation = { id: 'note', type: 'circle', position: { x: 1, y: 1 }, color: '#ff0000', text: 'The trap is under the rug' };
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `mfs-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `mfs-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `mfs-player-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Map fields sent ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Map fields sent ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -54,8 +54,8 @@ beforeAll(async () => {
     },
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   player = request.agent(app);
   expect((await player.post('/api/auth/login').send({ email: playerUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
@@ -65,13 +65,13 @@ afterAll(async () => {
   await server.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
 describe('a map with a stored annotation', () => {
   it('is fetched by nobody with the annotation', async () => {
-    for (const agent of [dm, player]) {
+    for (const agent of [gm, player]) {
       const res = await agent.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       expect(res.status).toBe(200);
       expect(res.body.map.annotations).toEqual([]);
@@ -81,12 +81,12 @@ describe('a map with a stored annotation', () => {
 
   it('reaches nobody with the annotation when the table is sent it again', async () => {
     const sockets: ClientSocket[] = [
-      await server.connectAndAuth(await server.loginAs(dmId), campaignId),
+      await server.connectAndAuth(await server.loginAs(gmId), campaignId),
       await server.connectAndAuth(await server.loginAs(playerId), campaignId),
     ];
     try {
       const changed = sockets.map((s) => waitForEvent<{ mapData: { annotations: unknown } }>(s, 'map.changed'));
-      expect((await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ name: 'Imported Again' })).status).toBe(200);
+      expect((await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}`).send({ name: 'Imported Again' })).status).toBe(200);
       for (const sent of await Promise.all(changed)) {
         expect(sent.mapData.annotations).toEqual([]);
         expect(JSON.stringify(sent)).not.toContain('under the rug');
@@ -101,8 +101,8 @@ describe('the map list and the campaign fetch', () => {
   const everyone = [...MAP_FIELDS_SENT_TO_EVERYONE].sort();
   const withSpiritLayer = [...MAP_FIELDS_SENT_TO_EVERYONE, 'spiritLayerUrl'].sort();
 
-  it('list each map with the fields everyone is sent, and its spirit layer for the DM alone', async () => {
-    const mine = await dm.get(`/api/campaigns/${campaignId}/maps`);
+  it('list each map with the fields everyone is sent, and its spirit layer for the GM alone', async () => {
+    const mine = await gm.get(`/api/campaigns/${campaignId}/maps`);
     expect(mine.status).toBe(200);
     expect(Object.keys(mine.body.maps[0]).sort()).toEqual(withSpiritLayer);
     const theirs = await player.get(`/api/campaigns/${campaignId}/maps`);
@@ -111,7 +111,7 @@ describe('the map list and the campaign fetch', () => {
   });
 
   it("give each of the campaign's maps the fields everyone is sent and its spirit layer", async () => {
-    for (const agent of [dm, player]) {
+    for (const agent of [gm, player]) {
       const res = await agent.get(`/api/campaigns/${campaignId}`);
       expect(res.status).toBe(200);
       expect(Object.keys(res.body.campaign.maps[0]).sort()).toEqual(withSpiritLayer);

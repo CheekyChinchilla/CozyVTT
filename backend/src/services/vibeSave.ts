@@ -6,7 +6,7 @@
 // each of them the periods as saved and the vibe they leave. The vibe owns the
 // soundtrack (see atmosphereAudio), so its track follows the period in force:
 // an edited period's new track plays, and a vibe that ends takes its track
-// with it. A track the DM put on over the vibe from the Atmosphere panel is
+// with it. A track the GM put on over the vibe from the Atmosphere panel is
 // left playing.
 
 import { Server } from 'socket.io';
@@ -25,7 +25,7 @@ import { replaceVibeSettingsKeepingLive } from './vibeSettingsColumn';
 /**
  * Why a period's track cannot be saved, or null when each can be. A period's
  * audio names an asset the whole table fetches while that period is the vibe,
- * so the save asks the same question the ambient setter asks: may this DM
+ * so the save asks the same question the ambient setter asks: may this GM
  * open this track to the room? Never as an admin, for the same reason the
  * setter refuses that.
  */

@@ -5,7 +5,7 @@
  * spectator could still be named on a token. The move handlers refused them,
  * but everything that asked "is this token theirs" for what to send them
  * (hit points, darkvision, an obscured identity, sight on a lit map) still
- * said yes, and the DM could hand a token to a spectator outright. A
+ * said yes, and the GM could hand a token to a spectator outright. A
  * spectator who owned a character in the campaign could also edit it, which
  * changed that character's tokens on every screen.
  *
@@ -29,7 +29,7 @@ const app = createTestApp();
 const OLD_PICTURE = '/api/assets/tokens/00000000-0000-4000-8000-00000000a01d';
 
 describe('a spectator never controls a token', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let spectatorId: string;
   let outsiderId: string;
@@ -37,36 +37,36 @@ describe('a spectator never controls a token', () => {
   let mapId: string;
   let spectatorCharacterId: string;
   let looseCharacterId: string;
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
   let spectator: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
-    const dmUser = await createTestUser({ displayName: 'Spectator Test DM' });
+    const gmUser = await createTestUser({ displayName: 'Spectator Test GM' });
     const playerUser = await createTestUser({ displayName: 'Spectator Test Player' });
     const spectatorUser = await createTestUser({ displayName: 'Spectator Test Spectator' });
     const outsiderUser = await createTestUser({ displayName: 'Spectator Test Outsider' });
-    dmId = dmUser.id;
+    gmId = gmUser.id;
     playerId = playerUser.id;
     spectatorId = spectatorUser.id;
     outsiderId = outsiderUser.id;
 
-    const campaign = await createTestCampaign(dmId, { name: 'Spectator Control' });
+    const campaign = await createTestCampaign(gmId, { name: 'Spectator Control' });
     campaignId = campaign.id;
 
     // A character the spectator brought while they were still a player, and
     // one of theirs that belongs to no campaign but has a token on this map.
     const inCampaign = await prisma.character.create({
-      data: { userId: spectatorId, campaignId, name: 'Aldra', gameSystem: 'DND_5E', data: {} },
+      data: { userId: spectatorId, campaignId, name: 'Aldra', gameSystem: 'FIFTH_EDITION', data: {} },
     });
     spectatorCharacterId = inCampaign.id;
     const loose = await prisma.character.create({
-      data: { userId: spectatorId, name: 'Loose', gameSystem: 'DND_5E', data: {}, tokenImageUrl: OLD_PICTURE },
+      data: { userId: spectatorId, name: 'Loose', gameSystem: 'FIFTH_EDITION', data: {}, tokenImageUrl: OLD_PICTURE },
     });
     looseCharacterId = loose.id;
 
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+        { userId: gmId, campaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
         { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [spectatorCharacterId] },
       ],
@@ -97,8 +97,8 @@ describe('a spectator never controls a token', () => {
     // The campaign is showing this map: a player is sent the current map only.
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
 
-    dm = request.agent(app);
-    await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
+    gm = request.agent(app);
+    await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD });
     spectator = request.agent(app);
     await spectator.post('/api/auth/login').send({ email: spectatorUser.email, password: TEST_PASSWORD });
   });
@@ -107,12 +107,12 @@ describe('a spectator never controls a token', () => {
     await prisma.map.deleteMany({ where: { campaignId } });
     await prisma.character.deleteMany({ where: { id: { in: [spectatorCharacterId, looseCharacterId] } } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId, spectatorId, outsiderId]);
+    await cleanupUsers([gmId, playerId, spectatorId, outsiderId]);
     await prisma.$disconnect();
   });
 
   const place = (body: Record<string, unknown>) =>
-    dm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({ name: 'Placed', position: { x: 1, y: 1 }, ...body });
+    gm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({ name: 'Placed', position: { x: 1, y: 1 }, ...body });
   const storedToken = async (id: string) => {
     const row = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
     return readTokens(row.tokens).find((t) => t.id === id);
@@ -132,14 +132,14 @@ describe('a spectator never controls a token', () => {
       expect(placed.status).toBe(201);
       const url = `/api/campaigns/${campaignId}/maps/${mapId}/tokens/${placed.body.token.id}`;
 
-      const toSpectator = await dm.put(url).send({ controlledBy: spectatorId });
+      const toSpectator = await gm.put(url).send({ controlledBy: spectatorId });
       expect(toSpectator.status).toBe(400);
       expect(toSpectator.body.message).toMatch(/controlledBy/);
-      const toOutsider = await dm.put(url).send({ controlledBy: outsiderId });
+      const toOutsider = await gm.put(url).send({ controlledBy: outsiderId });
       expect(toOutsider.status).toBe(400);
       expect((await storedToken(placed.body.token.id))?.controlledBy).toBe(playerId);
 
-      const released = await dm.put(url).send({ controlledBy: null });
+      const released = await gm.put(url).send({ controlledBy: null });
       expect(released.status).toBe(200);
       expect(released.body.token.controlledBy).toBeNull();
     });
@@ -188,8 +188,8 @@ describe('a spectator never controls a token', () => {
       expect(row.name).toBe('Aldra');
     });
 
-    it('can still be edited by the DM', async () => {
-      const res = await dm.put(`/api/characters/${spectatorCharacterId}`).send({ name: 'Aldra the Watched' });
+    it('can still be edited by the GM', async () => {
+      const res = await gm.put(`/api/characters/${spectatorCharacterId}`).send({ name: 'Aldra the Watched' });
       expect(res.status).toBe(200);
     });
 

@@ -27,16 +27,16 @@ import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampai
 jest.setTimeout(30000);
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let player: ReturnType<typeof request.agent>;
 const campaignIds: string[] = [];
 
 /** A new campaign of the given system, with a pending invitation for the player. */
 async function invitation(gameSystem: GameSystem | null) {
-  const campaign = await createTestCampaign(dmId, { name: `Accept ${Date.now()}`, gameSystem });
+  const campaign = await createTestCampaign(gmId, { name: `Accept ${Date.now()}`, gameSystem });
   campaignIds.push(campaign.id);
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId: campaign.id, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId: campaign.id, role: 'GM', characterIds: [] } });
   const invite = await prisma.campaignInvitation.create({ data: { campaignId: campaign.id, userId: playerId } });
   return { campaignId: campaign.id, id: invite.id };
 }
@@ -51,7 +51,7 @@ const accept = (id: string, body?: unknown) => {
 
 beforeAll(async () => {
   const stamp = Date.now();
-  dmId = (await createTestUser({ email: `accept_dm_${stamp}@test.invalid` })).id;
+  gmId = (await createTestUser({ email: `accept_dm_${stamp}@test.invalid` })).id;
   const playerUser = await createTestUser({ email: `accept_pl_${stamp}@test.invalid` });
   playerId = playerUser.id;
   player = request.agent(app);
@@ -60,7 +60,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await cleanupCampaigns(campaignIds);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -73,7 +73,7 @@ describe('POST /api/invitations/:id/accept', () => {
     ['an empty id', { characterIds: [''] }],
     ['more than 50 ids', { characterIds: Array.from({ length: 51 }, (_, i) => `id-${i}`) }],
   ])('refuses characterIds given as %s with 400, and leaves the invitation pending', async (_what, body) => {
-    const invite = await invitation('DND_5E');
+    const invite = await invitation('FIFTH_EDITION');
     const res = await accept(invite.id, body);
     expect(res.status).toBe(400);
     expect((await prisma.campaignInvitation.findUnique({ where: { id: invite.id } }))?.status).toBe('PENDING');
@@ -83,7 +83,7 @@ describe('POST /api/invitations/:id/accept', () => {
   });
 
   it('joins without characters when the body names none', async () => {
-    const invite = await invitation('DND_5E');
+    const invite = await invitation('FIFTH_EDITION');
     expect((await accept(invite.id)).status).toBe(200);
     const membership = await prisma.campaignMembership.findUnique({
       where: { userId_campaignId: { userId: playerId, campaignId: invite.campaignId } },
@@ -92,17 +92,17 @@ describe('POST /api/invitations/:id/accept', () => {
   });
 
   it('brings a character of the campaign\'s own game system', async () => {
-    const invite = await invitation('DND_5E');
-    const hero = await character('Matching hero', 'DND_5E');
+    const invite = await invitation('FIFTH_EDITION');
+    const hero = await character('Matching hero', 'FIFTH_EDITION');
     const res = await accept(invite.id, { characterIds: [hero.id] });
     expect(res.status).toBe(200);
     expect((await prisma.character.findUnique({ where: { id: hero.id } }))?.campaignId).toBe(invite.campaignId);
   });
 
   it.each([
-    ['a Flexible character into a D&D 5e campaign', null, 'DND_5E'],
-    ['a D&D 5e character into a Flexible campaign', 'DND_5E', null],
-    ['a Pathfinder 2e character into a D&D 5e campaign', 'PATHFINDER_2E', 'DND_5E'],
+    ['a Flexible character into a 5E campaign', null, 'FIFTH_EDITION'],
+    ['a 5E character into a Flexible campaign', 'FIFTH_EDITION', null],
+    ['a Fantasy d20 character into a 5E campaign', 'FANTASY_D20', 'FIFTH_EDITION'],
   ] as const)('refuses %s, as assigning it would', async (_what, characterSystem, campaignSystem) => {
     const invite = await invitation(campaignSystem);
     const hero = await character('Mismatched hero', characterSystem);

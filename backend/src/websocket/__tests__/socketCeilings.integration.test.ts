@@ -2,7 +2,7 @@
  * Every socket event a member can send has a per-user ceiling, counted across
  * all of that user's sockets, and the events past it change nothing.
  *
- * Chat had a ceiling only while the DM's cooldown was on, which it is not by
+ * Chat had a ceiling only while the GM's cooldown was on, which it is not by
  * default. Hit points and hit dice had none, and each event takes a row lock
  * for the length of a transaction, so a burst of them held every database
  * connection. Picking a token up and putting it down shared the 150-a-second
@@ -16,7 +16,7 @@
  * per socket, so a thousand of them multiplied what everyone else's moves
  * cost the server.
  *
- * The DM's own events had no ceiling at all, and any user can be the DM of a
+ * The GM's own events had no ceiling at all, and any user can be the GM of a
  * campaign of their own: `map.change` alone rebuilt and sent the whole map to
  * every member, line of sight included on a lit map.
  *
@@ -43,10 +43,10 @@ const runId = randomUUID().slice(0, 8);
 let counter = 0;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 const users: string[] = [];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -94,7 +94,7 @@ async function newPlayer(): Promise<{ id: string; cookie: string; characterId: s
     hitDice: [{ class: 'fighter', die: 'd10', maximum: 200, remaining: 200 }],
   };
   const character = await prisma.character.create({
-    data: { userId: user.id, campaignId, name: `Hero ${counter}`, gameSystem: 'DND_5E', data: toJson(sheet) },
+    data: { userId: user.id, campaignId, name: `Hero ${counter}`, gameSystem: 'FIFTH_EDITION', data: toJson(sheet) },
   });
   await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'PLAYER', characterIds: [character.id] } });
   const tokenId = `token-${counter}`;
@@ -118,15 +118,15 @@ const sheetOf = async (characterId: string): Promise<Sheet> =>
   (await prisma.character.findUniqueOrThrow({ where: { id: characterId } })).data as unknown as Sheet;
 
 beforeAll(async () => {
-  const dm = await prisma.user.create({
-    data: { email: `ceiling-dm-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: 'Ceiling DM' },
+  const gm = await prisma.user.create({
+    data: { email: `ceiling-dm-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: 'Ceiling GM' },
   });
-  dmId = dm.id;
-  users.push(dmId);
+  gmId = gm.id;
+  users.push(gmId);
   // A live session, so a player may move their token.
-  const campaign = await prisma.campaign.create({ data: { name: `Ceilings ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } });
+  const campaign = await prisma.campaign.create({ data: { name: `Ceilings ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } });
   campaignId = campaign.id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   const map = await prisma.map.create({
     data: {
       campaignId, name: 'Ceiling Map', imageUrl: '/api/assets/maps/none', baseLayerUrl: '/api/assets/maps/none',
@@ -136,7 +136,7 @@ beforeAll(async () => {
   mapId = map.id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
 });
 
 afterAll(async () => {
@@ -255,9 +255,9 @@ describe('drawing on the map', () => {
 
   it.each([
     ['drawing:clear_mine', 'player'],
-    ['drawing:clear', 'dm'],
+    ['drawing:clear', 'gm'],
   ] as const)('takes 5 %s every ten seconds, refusing the rest through the acknowledgement', async (event, who) => {
-    const cookie = who === 'dm' ? dmCookie : (await newPlayer()).cookie;
+    const cookie = who === 'gm' ? gmCookie : (await newPlayer()).cookie;
     const client = await server.connectAndAuth(cookie, campaignId);
     const answers = await Promise.all(
       Array.from({ length: 8 }, () => client.timeout(5000).emitWithAck(event, { mapId, layer: 'MARKUP' }) as Promise<{ ok: boolean; error?: string }>)
@@ -271,7 +271,7 @@ describe('drawing on the map', () => {
 describe('dice.roll', () => {
   const stored = (userId: string) => prisma.diceRoll.count({ where: { campaignId, userId } });
 
-  // A DM clicking through a mob's attacks and damage from the roll buttons
+  // A GM clicking through a mob's attacks and damage from the roll buttons
   // passes 30 a minute in an ordinary round, which the old ceiling was.
   it('takes 50 a second and 200 a minute, and says so once', async () => {
     const player = await newPlayer();
@@ -357,26 +357,26 @@ describe('character.hitdice.spend', () => {
 describe('picking a token up and putting it down', () => {
   it('takes 30 token.move.start a second, of its own', async () => {
     const player = await newPlayer();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const client = await server.connectAndAuth(player.cookie, campaignId);
     const told = refusals(client);
-    const started = collect(dm, 'token.move.start');
+    const started = collect(gm, 'token.move.start');
 
     for (let i = 0; i < 40; i += 1) client.emit('token.move.start', { tokenId: player.tokenId, mapId });
     await settle(() => started.length >= 30);
 
     expect(started).toHaveLength(30);
     expect(told).toHaveLength(1);
-    dm.disconnect();
+    gm.disconnect();
     client.disconnect();
   });
 
   it('writes 30 token.move.end a second, of its own, and leaves the frames their budget', async () => {
     const player = await newPlayer();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const client = await server.connectAndAuth(player.cookie, campaignId);
     const told = refusals(client);
-    const moved = collect<{ tokenId: string; dragging?: boolean }>(dm, 'token.moved');
+    const moved = collect<{ tokenId: string; dragging?: boolean }>(gm, 'token.moved');
     const writes = jest.spyOn(prisma, '$transaction');
 
     // Past the frames' 150 too, which the drops used to spend.
@@ -391,7 +391,7 @@ describe('picking a token up and putting it down', () => {
     client.emit('token.move', { tokenId: player.tokenId, mapId, x: 3, y: 3 });
     await settle(() => moved.some((m) => m.dragging === true), 3000);
     expect(moved.some((m) => m.dragging === true)).toBe(true);
-    dm.disconnect();
+    gm.disconnect();
     client.disconnect();
   });
 });
@@ -413,11 +413,11 @@ describe('authenticate', () => {
 
   it('does not announce a socket again when it re-joins the campaign it is in', async () => {
     const player = await newPlayer();
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const client = await server.connectAndAuth(player.cookie, campaignId);
     await sleep(300);
 
-    const quiet = expectNoEvent(dm, 'user.joined', 600);
+    const quiet = expectNoEvent(gm, 'user.joined', 600);
     const again = waitForEvent(client, 'authenticated');
     const presence = waitForEvent<{ onlineUserIds: string[] }>(client, 'presence.state');
     client.emit('authenticate', { campaignId });
@@ -425,7 +425,7 @@ describe('authenticate', () => {
     expect((await presence).onlineUserIds).toContain(player.id);
     await quiet;
 
-    dm.disconnect();
+    gm.disconnect();
     client.disconnect();
   });
 });
@@ -464,7 +464,7 @@ describe('sockets per user', () => {
   });
 });
 
-describe("the DM's events", () => {
+describe("the GM's events", () => {
   /**
    * Each refused for its payload after the ceiling is checked, so the
    * answers that are not ceiling refusals count what got past it.
@@ -485,20 +485,20 @@ describe("the DM's events", () => {
     ['initiative.roll', {}],
     ['exploration:reset', {}],
   ])('%s takes 50 a second', async (event, payload) => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     let answered = 0;
     let told = 0;
-    dm.on('error', (data: { message: string }) => {
+    gm.on('error', (data: { message: string }) => {
       if (CEILING_REFUSAL.test(data.message)) told += 1;
       else answered += 1;
     });
 
-    for (let i = 0; i < 60; i += 1) dm.emit(event, payload);
+    for (let i = 0; i < 60; i += 1) gm.emit(event, payload);
     await settle(() => answered >= 50);
 
     expect(answered).toBe(50);
     expect(told).toBe(1);
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it.each([
@@ -506,16 +506,16 @@ describe("the DM's events", () => {
     ['dice.clearHistory', undefined, 'dice.historyCleared'],
     ['initiative.end', undefined, 'initiative.state'],
   ])('%s takes 50 a second', async (event, payload, reply) => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const told = refusals(dm);
-    const replies = collect(dm, reply);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const told = refusals(gm);
+    const replies = collect(gm, reply);
 
-    for (let i = 0; i < 60; i += 1) dm.emit(event, payload);
+    for (let i = 0; i < 60; i += 1) gm.emit(event, payload);
     await settle(() => replies.length >= 50, 5000);
 
     // A newer initiative send overtakes an older one, so fewer may arrive.
     expect(replies.length).toBeLessThanOrEqual(50);
     expect(told).toHaveLength(1);
-    dm.disconnect();
+    gm.disconnect();
   });
 });

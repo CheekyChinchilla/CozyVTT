@@ -54,7 +54,7 @@ it('refuses the connection while the password change is pending', async () => {
   await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
   const campaign = await createTestCampaign(user.id);
   campaigns.push(campaign.id);
-  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId: user.id, campaignId: campaign.id, role: 'GM', characterIds: [] } });
 
   const cookie = await server.loginAs(user.id);
 

@@ -24,10 +24,10 @@
  * is on its way (removePersonalFilesAfterwards), since working out which may
  * go costs several queries a file.
  *
- * A campaign needs an owner and a DM. One they own while someone else sits as
- * its DM passes to that DM. One whose DM seat is theirs, owned by them or not,
- * or one they own with nobody in the DM seat, stops the deletion until they
- * hand the DM seat over or delete the campaign; nothing is changed then.
+ * A campaign needs an owner and a GM. One they own while someone else sits as
+ * its GM passes to that GM. One whose GM seat is theirs, owned by them or not,
+ * or one they own with nobody in the GM seat, stops the deletion until they
+ * hand the GM seat over or delete the campaign; nothing is changed then.
  */
 
 import type { AssetType, Prisma } from '@prisma/client';
@@ -41,8 +41,8 @@ import { isOnlyAdmin } from './platformAdmins';
 import { inSerializableTransaction } from '../utils/serializable';
 
 /**
- * A campaign that stops a deletion, with the other members its DM seat could
- * go to, so an admin can hand it over (the DM transfer route lets an admin
+ * A campaign that stops a deletion, with the other members its GM seat could
+ * go to, so an admin can hand it over (the GM transfer route lets an admin
  * do that) or delete it, and a user who will not cannot keep their account
  * that way.
  */
@@ -122,7 +122,7 @@ async function personalUploadUses(userId: string): Promise<Map<string, FoundUse[
 /**
  * Delete an account, unless it is the instance's only admin
  * (services/platformAdmins) or runs a campaign. One serializable transaction
- * (utils/serializable.ts), so an admin removed at the same moment, or a DM
+ * (utils/serializable.ts), so an admin removed at the same moment, or a GM
  * seat handed over meanwhile, is seen before anything is written.
  */
 export async function deleteAccount(userId: string): Promise<AccountDeletion> {
@@ -136,9 +136,9 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       return { deleted: false, refused: 'onlyAdmin' };
     }
 
-    // The campaigns they own, and the ones whose DM seat is theirs.
+    // The campaigns they own, and the ones whose GM seat is theirs.
     const theirs = await tx.campaign.findMany({
-      where: { OR: [{ ownerId: userId }, { memberships: { some: { userId, role: 'DM' } } }] },
+      where: { OR: [{ ownerId: userId }, { memberships: { some: { userId, role: 'GM' } } }] },
       select: {
         id: true,
         name: true,
@@ -146,10 +146,10 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
         memberships: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
       },
     });
-    const dmOf = (c: (typeof theirs)[number]) => c.memberships.find((m) => m.role === 'DM')?.userId;
+    const gmOf = (c: (typeof theirs)[number]) => c.memberships.find((m) => m.role === 'GM')?.userId;
     const owned = theirs.filter((c) => c.ownerId === userId);
     const runs = theirs
-      .filter((c) => dmOf(c) === userId || (c.ownerId === userId && dmOf(c) === undefined))
+      .filter((c) => gmOf(c) === userId || (c.ownerId === userId && gmOf(c) === undefined))
       .map((c) => ({
         id: c.id,
         name: c.name,
@@ -159,24 +159,24 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       }));
     if (runs.length > 0) return { deleted: false, refused: 'runsCampaigns', runs };
 
-    // Every campaign left here has a DM other than this user.
+    // Every campaign left here has a GM other than this user.
     for (const campaign of owned) {
-      const dm = dmOf(campaign);
-      if (dm !== undefined) await tx.campaign.update({ where: { id: campaign.id }, data: { ownerId: dm } });
+      const gm = gmOf(campaign);
+      if (gm !== undefined) await tx.campaign.update({ where: { id: campaign.id }, data: { ownerId: gm } });
     }
     // Documents they shared into a campaign stay shared: the share passes to
-    // the campaign's DM, or to its owner when the DM seat is empty.
-    // Owned campaigns have just passed to their DM above.
+    // the campaign's GM, or to its owner when the GM seat is empty.
+    // Owned campaigns have just passed to their GM above.
     const shares = await tx.campaignDocument.findMany({
       where: { linkedById: userId },
       select: {
         id: true,
-        campaign: { select: { ownerId: true, memberships: { where: { role: 'DM' }, select: { userId: true } } } },
+        campaign: { select: { ownerId: true, memberships: { where: { role: 'GM' }, select: { userId: true } } } },
       },
     });
     for (const share of shares) {
-      const dm = share.campaign.memberships[0]?.userId;
-      const heir = dm !== undefined && dm !== userId ? dm : share.campaign.ownerId;
+      const gm = share.campaign.memberships[0]?.userId;
+      const heir = gm !== undefined && gm !== userId ? gm : share.campaign.ownerId;
       if (heir !== userId) await tx.campaignDocument.update({ where: { id: share.id }, data: { linkedById: heir } });
     }
 
@@ -321,6 +321,6 @@ export function removePersonalFilesAfterwards(personal: PersonalAsset[]): void {
 export function runsCampaignsMessage(runs: BlockingCampaign[], whose: 'you' | 'they'): string {
   const list = runs.map((c) => `"${c.name}"`).join(', ');
   return whose === 'you'
-    ? `You run ${list}. Hand the DM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.`
-    : `This user runs ${list}. Hand each one's DM seat to another member, or delete it, then delete the user.`;
+    ? `You run ${list}. Hand the GM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.`
+    : `This user runs ${list}. Hand each one's GM seat to another member, or delete it, then delete the user.`;
 }

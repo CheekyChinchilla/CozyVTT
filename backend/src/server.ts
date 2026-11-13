@@ -20,6 +20,7 @@ import { backupsInProgress } from './services/backupsInProgress';
 import { personalFilesBeingRemoved } from './services/accountDeletion';
 import { makeDummyPasswordHash } from './services/auth';
 import { backgroundWork } from './utils/backgroundWork';
+import { convertStoredHorrorD100SheetsAtStart } from './legacy/storedHorrorD100Sheets';
 
 // An error nothing caught is written to the log before the process ends.
 onProcessFailure();
@@ -57,37 +58,48 @@ applyRequestTimeouts(httpServer);
 // emails find it made or being made; see services/auth.ts.
 void makeDummyPasswordHash();
 
-httpServer.listen(PORT, () => {
-  logger.info(`CozyVTT Backend running on port ${PORT}`);
-  logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+/**
+ * Converts every stored Horror d100 sheet still in the shape before 1.7.0,
+ * whatever version the instance upgraded from, then listens. A failure is
+ * logged and the server starts all the same: an unconverted sheet is
+ * answered converted and converted when saved (legacy/sheetConversion.ts).
+ */
+async function start(): Promise<void> {
+  await convertStoredHorrorD100SheetsAtStart(prisma);
+  httpServer.listen(PORT, () => {
+    logger.info(`CozyVTT Backend running on port ${PORT}`);
+    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
 
-  const uploadLimits = Object.entries(UPLOAD_LIMITS)
-    .map(([type, bytes]) => `${type} ${Math.round(bytes / (1024 * 1024))}MB`)
-    .join(', ');
-  logger.info(`Upload limits: ${uploadLimits}`);
+    const uploadLimits = Object.entries(UPLOAD_LIMITS)
+      .map(([type, bytes]) => `${type} ${Math.round(bytes / (1024 * 1024))}MB`)
+      .join(', ');
+    logger.info(`Upload limits: ${uploadLimits}`);
 
-  // A proxy body-size cap below the configured limits turns uploads into 413s
-  // that never reach this process — surface it at startup rather than in a
-  // bug report.
-  for (const warning of getProxyLimitWarnings()) {
-    logger.warn(warning);
-  }
+    // A proxy body-size cap below the configured limits turns uploads into 413s
+    // that never reach this process — surface it at startup rather than in a
+    // bug report.
+    for (const warning of getProxyLimitWarnings()) {
+      logger.warn(warning);
+    }
 
-  // A backend stopped mid-restore left the uploaded backup in the backups
-  // folder; nothing can finish restoring it now.
-  void removeLeftoverRestoreUploads(resolveBackupDir());
+    // A backend stopped mid-restore left the uploaded backup in the backups
+    // folder; nothing can finish restoring it now.
+    void removeLeftoverRestoreUploads(resolveBackupDir());
 
-  // Until setup has run, the wizard asks for a token only the owner can
-  // read, so a stranger who finds the instance first cannot become its
-  // administrator. Printed here, where the owner reads the log, unless they
-  // set one themselves in .env.
-  setupState()
-    .then(({ setupCompleted }) => {
-      if (setupCompleted) return;
-      logger.warn(`Setup is not complete. ${setupTokenHint()}`);
-    })
-    .catch((err: unknown) => logger.error('Could not read the setup state at start', { err }));
-});
+    // Until setup has run, the wizard asks for a token only the owner can
+    // read, so a stranger who finds the instance first cannot become its
+    // administrator. Printed here, where the owner reads the log, unless they
+    // set one themselves in .env.
+    setupState()
+      .then(({ setupCompleted }) => {
+        if (setupCompleted) return;
+        logger.warn(`Setup is not complete. ${setupTokenHint()}`);
+      })
+      .catch((err: unknown) => logger.error('Could not read the setup state at start', { err }));
+  });
+}
+
+void start();
 
 export default app;

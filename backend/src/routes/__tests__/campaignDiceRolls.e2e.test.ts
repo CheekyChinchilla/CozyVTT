@@ -6,8 +6,8 @@
  * read them back.
  *
  * The case that matters most here is **secret rolls**. The live socket path
- * sends a secret roll only to the person who made it and to DMs. Replaying
- * history without the same restriction would hand every player the DM's hidden
+ * sends a secret roll only to the person who made it and to GMs. Replaying
+ * history without the same restriction would hand every player the GM's hidden
  * rolls the moment they pressed refresh — a worse bug than the one being fixed —
  * so the visibility rule is pinned from every angle below rather than only on
  * the happy path.
@@ -32,12 +32,12 @@ import {
 const app = createTestApp();
 
 describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let outsiderId: string;
   let campaignId: string;
 
-  let dmAgent: ReturnType<typeof request.agent>;
+  let gmAgent: ReturnType<typeof request.agent>;
   let playerAgent: ReturnType<typeof request.agent>;
   let outsiderAgent: ReturnType<typeof request.agent>;
 
@@ -65,25 +65,25 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
 
   beforeAll(async () => {
     const stamp = Date.now();
-    const dm = await createTestUser({ email: `roll_dm_${stamp}@test.invalid`, isApproved: true });
+    const gm = await createTestUser({ email: `roll_dm_${stamp}@test.invalid`, isApproved: true });
     const player = await createTestUser({ email: `roll_pl_${stamp}@test.invalid`, isApproved: true });
     const outsider = await createTestUser({ email: `roll_out_${stamp}@test.invalid`, isApproved: true });
 
-    dmId = dm.id;
+    gmId = gm.id;
     playerId = player.id;
     outsiderId = outsider.id;
 
-    const campaign = await createTestCampaign(dmId, { name: `Roll History ${stamp}` });
+    const campaign = await createTestCampaign(gmId, { name: `Roll History ${stamp}` });
     campaignId = campaign.id;
 
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM', characterIds: [] },
+        { campaignId, userId: gmId, role: 'GM', characterIds: [] },
         { campaignId, userId: playerId, role: 'PLAYER', characterIds: [] },
       ],
     });
 
-    dmAgent = await login(`roll_dm_${stamp}@test.invalid`);
+    gmAgent = await login(`roll_dm_${stamp}@test.invalid`);
     playerAgent = await login(`roll_pl_${stamp}@test.invalid`);
     outsiderAgent = await login(`roll_out_${stamp}@test.invalid`);
   });
@@ -98,7 +98,7 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
 
   afterAll(async () => {
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId, outsiderId]);
+    await cleanupUsers([gmId, playerId, outsiderId]);
     await prisma.$disconnect();
   });
 
@@ -106,11 +106,11 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
     // Seeded a second apart: three rolls made back to back can share a
     // millisecond, and then "newest" is not defined by the timestamp.
     const base = Date.now() - 10_000;
-    await addRoll(dmId, '1d4', false, { rolledAt: new Date(base) });
+    await addRoll(gmId, '1d4', false, { rolledAt: new Date(base) });
     await addRoll(playerId, '1d6', false, { rolledAt: new Date(base + 1000) });
     await addRoll(playerId, '1d8', false, { rolledAt: new Date(base + 2000) });
 
-    const res = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
+    const res = await gmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
     expect(res.status).toBe(200);
     expect(res.body.rolls.map((r: { expression: string }) => r.expression)).toEqual([
       '1d8',
@@ -127,31 +127,31 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
     const ids = ['00000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-00000000000c'];
     for (const id of ids) await addRoll(playerId, `tie-${id.slice(-1)}`, false, { id, rolledAt: at });
 
-    const whole = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
+    const whole = await gmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
     expect(whole.body.rolls.map((r: { id: string }) => r.id)).toEqual([...ids].reverse());
 
     const paged: string[] = [];
     for (const offset of [0, 1, 2]) {
-      const page = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls?limit=1&offset=${offset}`);
+      const page = await gmAgent.get(`/api/campaigns/${campaignId}/dice-rolls?limit=1&offset=${offset}`);
       paged.push(page.body.rolls[0].id);
     }
     expect(paged).toEqual([...ids].reverse());
   });
 
   describe('secret roll visibility', () => {
-    it('gives the DM every roll, including secret ones', async () => {
-      await addRoll(dmId, 'dm-secret', true);
+    it('gives the GM every roll, including secret ones', async () => {
+      await addRoll(gmId, 'dm-secret', true);
       await addRoll(playerId, 'player-secret', true);
       await addRoll(playerId, 'public', false);
 
-      const res = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
+      const res = await gmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
       expect(res.status).toBe(200);
       expect(expressionsIn(res.body)).toEqual(['dm-secret', 'player-secret', 'public']);
     });
 
     // The regression this endpoint could most easily introduce.
     it("never leaks another user's secret roll to a player", async () => {
-      await addRoll(dmId, 'dm-secret', true);
+      await addRoll(gmId, 'dm-secret', true);
       await addRoll(playerId, 'public', false);
 
       const res = await playerAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
@@ -163,8 +163,8 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
 
     it('gives a player their own secret rolls back', async () => {
       await addRoll(playerId, 'mine-secret', true);
-      await addRoll(dmId, 'theirs-secret', true);
-      await addRoll(dmId, 'public', false);
+      await addRoll(gmId, 'theirs-secret', true);
+      await addRoll(gmId, 'public', false);
 
       const res = await playerAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
       expect(expressionsIn(res.body)).toEqual(['mine-secret', 'public']);
@@ -186,18 +186,18 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       await addRoll(playerId, 'after-clear', false);
 
-      const res = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
+      const res = await gmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
       expect(expressionsIn(res.body)).toEqual(['after-clear']);
     });
 
     it('keeps the cleared rows in the table for audit', async () => {
-      const cleared = await addRoll(dmId, 'secret-before-clear', true);
+      const cleared = await addRoll(gmId, 'secret-before-clear', true);
       await prisma.campaign.update({
         where: { id: campaignId },
         data: { rollHistoryClearedAt: new Date(cleared.rolledAt.getTime() + 1) },
       });
 
-      const res = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
+      const res = await gmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
       expect(res.body.rolls).toHaveLength(0);
 
       // Hidden from the endpoint, still on disk — the point of a watermark.
@@ -208,7 +208,7 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
 
   describe('access', () => {
     it('refuses a user who is not a member of the campaign', async () => {
-      await addRoll(dmId, 'public', false);
+      await addRoll(gmId, 'public', false);
       const res = await outsiderAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
       expect([403, 404]).toContain(res.status);
     });
@@ -219,7 +219,7 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
     });
 
     it('rejects an out-of-range limit', async () => {
-      const res = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls?limit=500`);
+      const res = await gmAgent.get(`/api/campaigns/${campaignId}/dice-rolls?limit=500`);
       expect(res.status).toBe(400);
     });
   });

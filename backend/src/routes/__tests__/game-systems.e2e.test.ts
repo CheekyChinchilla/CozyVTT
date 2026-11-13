@@ -40,12 +40,12 @@ describe('Game Systems - E2E Tests', () => {
     await prisma.$disconnect();
   });
 
-  describe('D&D 5e Character Management', () => {
+  describe('5E Character Management', () => {
     let characterId: string;
 
-    it('should create a D&D 5e character with valid data', async () => {
+    it('should create a 5E character with valid data', async () => {
       const characterData = {
-        characterName: 'Thorin Ironshield',
+        characterName: 'Hale Stonefield',
         playerName: 'Test Player',
         class: 'Fighter',
         level: 5,
@@ -65,29 +65,29 @@ describe('Game Systems - E2E Tests', () => {
         data: {
           name: characterData.characterName,
           userId: testUserId,
-          gameSystem: PrismaGameSystem.DND_5E,
+          gameSystem: PrismaGameSystem.FIFTH_EDITION,
           data: characterData,
         },
       });
 
       characterId = character.id;
       expect(character).toBeDefined();
-      expect(character.gameSystem).toBe(GameSystem.DND_5E);
-      expect(character.name).toBe('Thorin Ironshield');
+      expect(character.gameSystem).toBe(GameSystem.FIFTH_EDITION);
+      expect(character.name).toBe('Hale Stonefield');
     });
 
-    it('should validate D&D 5e character data successfully', async () => {
+    it('should validate 5E character data successfully', async () => {
       const character = await prisma.character.findUnique({
         where: { id: characterId },
       });
 
       expect(character).toBeDefined();
-      expect(validateCharacterData(GameSystem.DND_5E, character!.data).success).toBe(true);
+      expect(validateCharacterData(GameSystem.FIFTH_EDITION, character!.data).success).toBe(true);
     });
 
-    it('should update D&D 5e character data', async () => {
+    it('should update 5E character data', async () => {
       const updatedData = {
-        characterName: 'Thorin Ironshield',
+        characterName: 'Hale Stonefield',
         playerName: 'Test Player',
         class: 'Fighter',
         level: 6, // Level up!
@@ -112,12 +112,12 @@ describe('Game Systems - E2E Tests', () => {
       expect((character.data as unknown as typeof updatedData).stats.strength.score).toBe(17);
     });
 
-    it('should assign D&D 5e character to campaign', async () => {
+    it('should assign 5E character to campaign', async () => {
       const campaign = await prisma.campaign.create({
         data: {
-          name: 'Test D&D Campaign',
+          name: 'Test 5E Campaign',
           ownerId: testUserId,
-          gameSystem: PrismaGameSystem.DND_5E,
+          gameSystem: PrismaGameSystem.FIFTH_EDITION,
           vibeSettings: {},
         },
       });
@@ -151,16 +151,16 @@ describe('Game Systems - E2E Tests', () => {
 
       expect(character).toBeDefined();
       expect(character!.campaign).toBeDefined();
-      expect(character!.campaign!.name).toBe('Test D&D Campaign');
+      expect(character!.campaign!.name).toBe('Test 5E Campaign');
     });
   });
 
-  describe('Pathfinder 2e Character Management', () => {
+  describe('Fantasy d20 Character Management', () => {
     let characterId: string;
 
-    it('should create a Pathfinder 2e character', async () => {
+    it('should create a Fantasy d20 character', async () => {
       const characterData = {
-        characterName: 'Seelah Brightblade',
+        characterName: 'Maren Ashford',
         class: 'Paladin',
         level: 3,
         ancestry: 'Human',
@@ -179,116 +179,54 @@ describe('Game Systems - E2E Tests', () => {
         data: {
           name: characterData.characterName,
           userId: testUserId,
-          gameSystem: PrismaGameSystem.PATHFINDER_2E,
+          gameSystem: PrismaGameSystem.FANTASY_D20,
           data: characterData,
         },
       });
 
       characterId = character.id;
-      expect(character.gameSystem).toBe(GameSystem.PATHFINDER_2E);
+      expect(character.gameSystem).toBe(GameSystem.FANTASY_D20);
     });
 
-    it('should validate Pathfinder 2e character data', async () => {
+    it('should validate Fantasy d20 character data', async () => {
       const character = await prisma.character.findUnique({
         where: { id: characterId },
       });
 
-      expect(validateCharacterData(GameSystem.PATHFINDER_2E, character!.data).success).toBe(true);
+      expect(validateCharacterData(GameSystem.FANTASY_D20, character!.data).success).toBe(true);
     });
   });
 
-  describe('Call of Cthulhu 7e Character Management', () => {
+  describe('Horror d100 Character Management', () => {
     let characterId: string;
 
-    it('should create a Call of Cthulhu character', async () => {
+    it('should create a Horror d100 character', async () => {
       const characterData = {
-        investigatorName: 'Randolph Carter',
-        occupation: 'Antiquarian',
+        characterName: 'Iris Calloway',
+        profession: 'Scholar',
         era: '1920s',
-        characteristics: {
-          STR: { regular: 50, half: 25, fifth: 10 },
-          CON: { regular: 60, half: 30, fifth: 12 },
-          SIZ: { regular: 55, half: 27, fifth: 11 },
-          DEX: { regular: 70, half: 35, fifth: 14 },
-          APP: { regular: 60, half: 30, fifth: 12 },
-          INT: { regular: 80, half: 40, fifth: 16 },
-          POW: { regular: 75, half: 37, fifth: 15 },
-          EDU: { regular: 85, half: 42, fifth: 17 },
-        },
-      };
-
-      const character = await prisma.character.create({
-        data: {
-          name: characterData.investigatorName,
-          userId: testUserId,
-          gameSystem: PrismaGameSystem.CALL_OF_CTHULHU_7E,
-          data: characterData,
-        },
-      });
-
-      characterId = character.id;
-      expect(character.gameSystem).toBe(GameSystem.CALL_OF_CTHULHU_7E);
-    });
-
-    it('should validate Call of Cthulhu character data', async () => {
-      const character = await prisma.character.findUnique({
-        where: { id: characterId },
-      });
-
-      expect(validateCharacterData(GameSystem.CALL_OF_CTHULHU_7E, character!.data).success).toBe(true);
-    });
-  });
-
-  describe('Shadowrun 6e Character Management', () => {
-    let characterId: string;
-
-    it('should create a Shadowrun 6e character', async () => {
-      const characterData = {
-        characterName: 'Cipher',
-        metatype: 'Elf',
-        archetype: 'Decker',
-        karma: { current: 0, total: 0 },
-        attributes: {
-          physical: {
-            body: { base: 2, augmented: 2 },
-            agility: { base: 4, augmented: 4 },
-            reaction: { base: 4, augmented: 4 },
-            strength: { base: 2, augmented: 2 },
-          },
-          mental: {
-            willpower: { base: 3, augmented: 3 },
-            logic: { base: 6, augmented: 6 },
-            intuition: { base: 5, augmented: 5 },
-            charisma: { base: 3, augmented: 3 },
-          },
-          special: {
-            edge: { base: 2, augmented: 2 },
-            essence: { current: 6.0, maximum: 6.0 },
-            magic: null,
-            resonance: null,
-          },
-        },
+        characteristics: { STR: 10, CON: 12, SIZ: 11, INT: 16, POW: 15, DEX: 14, CHA: 12, EDU: 17 },
       };
 
       const character = await prisma.character.create({
         data: {
           name: characterData.characterName,
           userId: testUserId,
-          gameSystem: PrismaGameSystem.SHADOWRUN_6E,
+          gameSystem: PrismaGameSystem.HORROR_D100,
           data: characterData,
         },
       });
 
       characterId = character.id;
-      expect(character.gameSystem).toBe(GameSystem.SHADOWRUN_6E);
+      expect(character.gameSystem).toBe(GameSystem.HORROR_D100);
     });
 
-    it('should validate Shadowrun 6e character data', async () => {
+    it('should validate Horror d100 character data', async () => {
       const character = await prisma.character.findUnique({
         where: { id: characterId },
       });
 
-      expect(validateCharacterData(GameSystem.SHADOWRUN_6E, character!.data).success).toBe(true);
+      expect(validateCharacterData(GameSystem.HORROR_D100, character!.data).success).toBe(true);
     });
   });
 
@@ -320,27 +258,27 @@ describe('Game Systems - E2E Tests', () => {
   });
 
   describe('Game System Mismatch Scenarios', () => {
-    let dnd5eCampaignId: string;
-    let pf2eCharacterId: string;
+    let fifthEditionCampaignId: string;
+    let fantasyD20CharacterId: string;
 
     beforeAll(async () => {
-      // Create D&D 5e campaign
+      // Create 5E campaign
       const campaign = await prisma.campaign.create({
         data: {
-          name: 'D&D Campaign for Mismatch Test',
+          name: '5E Campaign for Mismatch Test',
           ownerId: testUserId,
-          gameSystem: PrismaGameSystem.DND_5E,
+          gameSystem: PrismaGameSystem.FIFTH_EDITION,
           vibeSettings: {},
         },
       });
-      dnd5eCampaignId = campaign.id;
+      fifthEditionCampaignId = campaign.id;
 
-      // Create Pathfinder 2e character
+      // Create Fantasy d20 character
       const character = await prisma.character.create({
         data: {
           name: 'Mismatched Character',
           userId: testUserId,
-          gameSystem: PrismaGameSystem.PATHFINDER_2E,
+          gameSystem: PrismaGameSystem.FANTASY_D20,
           data: {
             characterName: 'Test',
             class: 'Fighter',
@@ -358,24 +296,24 @@ describe('Game Systems - E2E Tests', () => {
           },
         },
       });
-      pf2eCharacterId = character.id;
+      fantasyD20CharacterId = character.id;
     });
 
     it('should allow assigning character to campaign (no strict validation)', async () => {
       // Note: In the current implementation, we allow mismatched systems
       // This is intentional to support multi-system campaigns
       const character = await prisma.character.update({
-        where: { id: pf2eCharacterId },
-        data: { campaignId: dnd5eCampaignId },
+        where: { id: fantasyD20CharacterId },
+        data: { campaignId: fifthEditionCampaignId },
       });
 
-      expect(character.campaignId).toBe(dnd5eCampaignId);
+      expect(character.campaignId).toBe(fifthEditionCampaignId);
     });
   });
 
   describe('Character Permissions', () => {
     let ownerId: string;
-    let dmId: string;
+    let gmId: string;
     let playerId: string;
     let characterId: string;
     let campaignId: string;
@@ -391,14 +329,14 @@ describe('Game Systems - E2E Tests', () => {
       });
       ownerId = owner.id;
 
-      const dm = await prisma.user.create({
+      const gm = await prisma.user.create({
         data: {
-          email: 'dm@example.com',
-          displayName: 'DM',
+          email: 'gm@example.com',
+          displayName: 'GM',
           passwordHash: 'hash',
         },
       });
-      dmId = dm.id;
+      gmId = gm.id;
 
       const player = await prisma.user.create({
         data: {
@@ -413,8 +351,8 @@ describe('Game Systems - E2E Tests', () => {
       const campaign = await prisma.campaign.create({
         data: {
           name: 'Permissions Test Campaign',
-          ownerId: dmId,
-          gameSystem: PrismaGameSystem.DND_5E,
+          ownerId: gmId,
+          gameSystem: PrismaGameSystem.FIFTH_EDITION,
           vibeSettings: {},
         },
       });
@@ -425,7 +363,7 @@ describe('Game Systems - E2E Tests', () => {
         data: {
           name: 'Owned Character',
           userId: ownerId,
-          gameSystem: PrismaGameSystem.DND_5E,
+          gameSystem: PrismaGameSystem.FIFTH_EDITION,
           campaignId: campaign.id,
           data: {
             characterName: 'Test',
@@ -448,7 +386,7 @@ describe('Game Systems - E2E Tests', () => {
 
       // Create memberships
       await prisma.campaignMembership.create({
-        data: { userId: dmId, campaignId: campaign.id, role: 'DM' },
+        data: { userId: gmId, campaignId: campaign.id, role: 'GM' },
       });
       await prisma.campaignMembership.create({
         data: { userId: ownerId, campaignId: campaign.id, role: 'PLAYER' },
@@ -463,7 +401,7 @@ describe('Game Systems - E2E Tests', () => {
       await prisma.campaignMembership.deleteMany({ where: { campaignId } });
       await prisma.campaign.delete({ where: { id: campaignId } });
       await prisma.user.deleteMany({
-        where: { id: { in: [ownerId, dmId, playerId] } },
+        where: { id: { in: [ownerId, gmId, playerId] } },
       });
     });
 
@@ -478,7 +416,7 @@ describe('Game Systems - E2E Tests', () => {
       expect(character).toBeDefined();
     });
 
-    it('DM can view character in their campaign', async () => {
+    it('GM can view character in their campaign', async () => {
       const character = await prisma.character.findFirst({
         where: {
           id: characterId,
@@ -486,12 +424,12 @@ describe('Game Systems - E2E Tests', () => {
         },
       });
 
-      // Verify DM has access through campaign membership
+      // Verify GM has access through campaign membership
       const membership = await prisma.campaignMembership.findFirst({
         where: {
-          userId: dmId,
+          userId: gmId,
           campaignId,
-          role: 'DM',
+          role: 'GM',
         },
       });
 
@@ -530,14 +468,14 @@ describe('Game Systems - E2E Tests', () => {
     });
 
     it('should filter characters by game system', async () => {
-      const dnd5eCharacters = await prisma.character.findMany({
+      const fifthEditionCharacters = await prisma.character.findMany({
         where: {
           userId: testUserId,
-          gameSystem: PrismaGameSystem.DND_5E,
+          gameSystem: PrismaGameSystem.FIFTH_EDITION,
         },
       });
 
-      expect(dnd5eCharacters.every(c => c.gameSystem === GameSystem.DND_5E)).toBe(true);
+      expect(fifthEditionCharacters.every(c => c.gameSystem === GameSystem.FIFTH_EDITION)).toBe(true);
     });
 
     it('should retrieve characters by campaign', async () => {

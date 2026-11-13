@@ -9,7 +9,7 @@
  * The token *template* route has always validated the same shapes, so the
  * schemas existed; the map routes simply never used them. Nothing in the app's
  * own UI sends a bad shape, which is why this went unseen — but any
- * authenticated user may be hostile, and a DM is authenticated. Types are erased at runtime, so the schema is the only thing
+ * authenticated user may be hostile, and a GM is authenticated. Types are erased at runtime, so the schema is the only thing
  * actually standing here.
  *
  * The visible consequence was HP written in the character-sheet shape
@@ -36,25 +36,25 @@ import {
 const app = createTestApp();
 
 describe('map token validation', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
   let mapId: string;
   let spectatorId: string;
-  let dm: ReturnType<typeof request.agent>;
+  let gm: ReturnType<typeof request.agent>;
   let player: ReturnType<typeof request.agent>;
   let spectator: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
-    const dmUser = await createTestUser({ displayName: 'Token Validation DM' });
-    dmId = dmUser.id;
-    const campaign = await createTestCampaign(dmId, { name: 'Token Validation' });
+    const gmUser = await createTestUser({ displayName: 'Token Validation GM' });
+    gmId = gmUser.id;
+    const campaign = await createTestCampaign(gmId, { name: 'Token Validation' });
     campaignId = campaign.id;
 
-    // createTestCampaign records the owner but not the membership the DM route
+    // createTestCampaign records the owner but not the membership the GM route
     // guard reads, so the role has to be granted explicitly.
     await prisma.campaignMembership.create({
-      data: { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      data: { userId: gmId, campaignId, role: 'GM', characterIds: [] },
     });
 
     const playerUser = await createTestUser({ displayName: 'Token Validation Player' });
@@ -69,8 +69,8 @@ describe('map token validation', () => {
       data: { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     });
 
-    dm = request.agent(app);
-    await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD });
+    gm = request.agent(app);
+    await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD });
 
     player = request.agent(app);
     await player.post('/api/auth/login').send({
@@ -105,12 +105,12 @@ describe('map token validation', () => {
   afterAll(async () => {
     await prisma.map.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId, spectatorId]);
+    await cleanupUsers([gmId, playerId, spectatorId]);
     await prisma.$disconnect();
   });
 
   const place = (body: Record<string, unknown>) =>
-    dm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({
+    gm.post(`/api/campaigns/${campaignId}/maps/${mapId}/tokens`).send({
       name: 'Test Token',
       position: { x: 1, y: 1 },
       ...body,
@@ -119,10 +119,10 @@ describe('map token validation', () => {
   /**
    * Sight radius: how far a token makes things out in the dark, in grid
    * squares. 0 means none. It decides what the server sends a player, so a
-   * player cannot set it on their own token; the DM can.
+   * player cannot set it on their own token; the GM can.
    */
   describe('sight radius', () => {
-    it('stores the radius the DM gives a new token', async () => {
+    it('stores the radius the GM gives a new token', async () => {
       const res = await place({ sightRadius: 12 });
       expect(res.status).toBe(201);
       expect(res.body.token.sightRadius).toBe(12);
@@ -140,7 +140,7 @@ describe('map token validation', () => {
       expect(res.body.message).toMatch(/sightRadius/);
     });
 
-    it('lets the DM change it, and refuses a player', async () => {
+    it('lets the GM change it, and refuses a player', async () => {
       const created = await place({ controlledBy: playerId, sightRadius: 0 });
       expect(created.status).toBe(201);
       const tokenId = created.body.token.id;
@@ -148,9 +148,9 @@ describe('map token validation', () => {
       const byPlayer = await player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send({ sightRadius: 12 });
       expect(byPlayer.status).toBe(403);
 
-      const byDm = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send({ sightRadius: 12 });
-      expect(byDm.status).toBe(200);
-      expect(byDm.body.token.sightRadius).toBe(12);
+      const byGm = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send({ sightRadius: 12 });
+      expect(byGm.status).toBe(200);
+      expect(byGm.body.token.sightRadius).toBe(12);
     });
   });
 
@@ -230,7 +230,7 @@ describe('map token validation', () => {
     });
 
     const update = (body: Record<string, unknown>) =>
-      dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send(body);
+      gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send(body);
 
     it('accepts a valid HP update', async () => {
       const res = await update({ hp: { current: 2, max: 5, temp: 0 } });
@@ -248,7 +248,7 @@ describe('map token validation', () => {
 
     it('leaves the stored token untouched when an update is rejected', async () => {
       await update({ hp: { current: 9, maximum: 9 } });
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       const token = after.body.map.tokens.find((t: { id: string }) => t.id === tokenId);
       expect(token.hp).toEqual({ current: 2, max: 5, temp: 0 });
     });
@@ -279,7 +279,7 @@ describe('map token validation', () => {
       });
 
       it('leaves the stored metadata as it was when the merge is refused', async () => {
-        const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
         const token = after.body.map.tokens.find((t: { id: string }) => t.id === tokenId);
         expect(Object.keys(token.metadata).sort()).toEqual(['a', 'b', 'c']);
       });
@@ -306,7 +306,7 @@ describe('map token validation', () => {
   /**
    * What a player may change on a token they control.
    *
-   * `metadata` was not on the DM-only list, so any campaign member controlling a
+   * `metadata` was not on the GM-only list, so any campaign member controlling a
    * token could write arbitrary data into the map's JSON. Nothing reads it
    * structurally and nothing player-facing writes it, so it was a write-only
    * channel into the database that served no purpose.
@@ -339,25 +339,25 @@ describe('map token validation', () => {
     });
 
     it('leaves the stored metadata untouched when refused', async () => {
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       const token = after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId);
       expect(token.metadata).toEqual({});
     });
 
     // Size decides how far a token sees of its own accord: the visibility rule
     // lights half the token's footprint around it, so a player who could set
-    // size 10 would grant themself a five-square sight disc the DM never gave.
+    // size 10 would grant themself a five-square sight disc the GM never gave.
     it('may not resize it', async () => {
       const res = await playerUpdate({ size: { width: 10, height: 10 } });
       expect(res.status).toBe(403);
       expect(res.body.message).toMatch(/size/);
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       const token = after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId);
       expect(token.size).toEqual({ width: 1, height: 1 });
     });
 
-    it('the DM may resize it', async () => {
-      const res = await dm
+    it('the GM may resize it', async () => {
+      const res = await gm
         .put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${ownedTokenId}`)
         .send({ size: { width: 2, height: 2 } });
       expect(res.status).toBe(200);
@@ -365,7 +365,7 @@ describe('map token validation', () => {
     });
 
     // The reply carries the map, and it used to be the stored row: every
-    // token, hidden ones included, with the DM's notes, stat blocks and hit
+    // token, hidden ones included, with the GM's notes, stat blocks and hit
     // points, the fog grid and the spirit layer's address. A player moving
     // their own token could read all of it. The reply is now filtered exactly
     // as the map fetch is.
@@ -375,7 +375,7 @@ describe('map token validation', () => {
         hp: { current: 7, max: 7, temp: 0 }, showHpBar: false,
       });
       const seen = await place({
-        name: 'Cultist', position: { x: 8, y: 8 }, notes: 'a note for the DM',
+        name: 'Cultist', position: { x: 8, y: 8 }, notes: 'a note for the GM',
         hp: { current: 9, max: 9, temp: 0 }, showHpBar: false, sightRadius: 12,
       });
       expect(hidden.status).toBe(201);
@@ -400,7 +400,7 @@ describe('map token validation', () => {
       expect(ids).not.toContain(hidden.body.token.id);
       expect(ids).toContain(seen.body.token.id);
       expect(text).not.toContain('secret ambusher');
-      expect(text).not.toContain('a note for the DM');
+      expect(text).not.toContain('a note for the GM');
       expect(text).not.toContain('statBlock');
       expect(text).not.toContain('spirit-secret');
       const cultist = res.body.map.tokens.find((t: { id: string }) => t.id === seen.body.token.id);
@@ -414,14 +414,14 @@ describe('map token validation', () => {
     });
 
     // Obscuring hides what a token is from everyone who does not control it.
-    // Only the DM decides that, and the mask is applied before sending, so
+    // Only the GM decides that, and the mask is applied before sending, so
     // the player's own fetch is the proof.
     // The client greys the drag out while the session is paused or ended;
     // the server now holds the same line, over REST as over the socket.
     describe('while the session is paused or ended', () => {
       const url = () => `/api/campaigns/${campaignId}/maps/${mapId}/tokens/${ownedTokenId}`;
       const positionNow = async () => {
-        const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
         return after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId).position;
       };
 
@@ -429,14 +429,14 @@ describe('map token validation', () => {
         await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'ACTIVE' } });
       });
 
-      it.each(['PAUSED', 'INACTIVE'] as const)("refuses the player's move while %s, and the DM's goes through", async (status) => {
+      it.each(['PAUSED', 'INACTIVE'] as const)("refuses the player's move while %s, and the GM's goes through", async (status) => {
         await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
         const before = await positionNow();
         const res = await playerUpdate({ position: { x: 2, y: 2 } });
         expect(res.status).toBe(403);
         expect(res.body.message).toMatch(/paused|session/i);
         expect(await positionNow()).toEqual(before);
-        expect((await dm.put(url()).send({ position: before })).status).toBe(200);
+        expect((await gm.put(url()).send({ position: before })).status).toBe(200);
       });
 
       it('lets the player move again once the session is live', async () => {
@@ -445,13 +445,13 @@ describe('map token validation', () => {
       });
 
       // Turning follows the move rule: a player turns their token only while
-      // the session is live; the DM turns any token at any time.
+      // the session is live; the GM turns any token at any time.
       const rotationNow = async () => {
-        const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
         return after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId).rotation;
       };
 
-      it.each(['PAUSED', 'INACTIVE'] as const)("refuses the player's turn while %s, and the DM's goes through", async (status) => {
+      it.each(['PAUSED', 'INACTIVE'] as const)("refuses the player's turn while %s, and the GM's goes through", async (status) => {
         await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'ACTIVE' } });
         expect((await playerUpdate({ rotation: 45 })).status).toBe(200);
         await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
@@ -460,7 +460,7 @@ describe('map token validation', () => {
         expect(res.status).toBe(403);
         expect(res.body.message).toBe(PAUSED_MOVE_REFUSAL);
         expect(await rotationNow()).toBe(45);
-        expect((await dm.put(url()).send({ rotation: 180 })).status).toBe(200);
+        expect((await gm.put(url()).send({ rotation: 180 })).status).toBe(200);
         expect(await rotationNow()).toBe(180);
       });
 
@@ -496,13 +496,13 @@ describe('map token validation', () => {
       });
 
       it('must be a boolean', async () => {
-        const res = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: 'yes' });
+        const res = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: 'yes' });
         expect(res.status).toBe(400);
         expect(res.body.message).toMatch(/obscured/);
       });
 
-      it('is set by the DM, and reaches the player as a shape with no identity', async () => {
-        const set = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: true });
+      it('is set by the GM, and reaches the player as a shape with no identity', async () => {
+        const set = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: true });
         expect(set.status).toBe(200);
         expect(set.body.token.obscured).toBe(true);
         expect(set.body.token.name).toBe('Something Large');
@@ -526,7 +526,7 @@ describe('map token validation', () => {
         });
         expect(placed.status).toBe(201);
         const rogueId = placed.body.token.id;
-        const set = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${rogueId}`).send({ obscured: true });
+        const set = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${rogueId}`).send({ obscured: true });
         expect(set.status).toBe(200);
 
         const seenByOther = await spectator.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
@@ -544,8 +544,8 @@ describe('map token validation', () => {
         expect(toController.type).toBe('player');
       });
 
-      it('is revealed again by the DM', async () => {
-        const reveal = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: false });
+      it('is revealed again by the GM', async () => {
+        const reveal = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${veiledId}`).send({ obscured: false });
         expect(reveal.status).toBe(200);
         const seen = await player.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
         const veiled = seen.body.map.tokens.find((t: { id: string }) => t.id === veiledId);
@@ -565,11 +565,11 @@ describe('map token validation', () => {
       const res = await place({ name: 'Wisp', layer: 'spirit', controlledBy: playerId, position: { x: 14, y: 14 } });
       expect(res.status).toBe(201);
       wispId = res.body.token.id;
-      // Placing may or may not take the layer; the DM's update always does.
+      // Placing may or may not take the layer; the GM's update always does.
       // Hidden, because a visible spirit-plane token of the player's on the
       // current map would itself put them in the spirit realm, and the first
       // case below needs them unable to see that plane.
-      const moved = await dm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ layer: 'spirit', visible: false });
+      const moved = await gm.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${wispId}`).send({ layer: 'spirit', visible: false });
       expect(moved.status).toBe(200);
       expect(moved.body.token.layer).toBe('spirit');
     });
@@ -592,7 +592,7 @@ describe('map token validation', () => {
       expect(res.status).toBe(200);
       const stored = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
       expect((stored.tokens as Array<{ id: string; position: object }>).find((t) => t.id === wispId)?.position).toEqual({ x: 15, y: 14 });
-      // Still hidden by the DM, so the reply leaves it out, as the map in the
+      // Still hidden by the GM, so the reply leaves it out, as the map in the
       // same reply does.
       expect(res.body.token).toBeNull();
       expect(JSON.stringify(res.body)).not.toContain('Wisp');
@@ -626,7 +626,7 @@ describe('map token validation', () => {
         .put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${heldTokenId}`)
         .send({ position: { x: 8, y: 8 } });
       expect(res.status).toBe(403);
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       const token = after.body.map.tokens.find((t: { id: string }) => t.id === heldTokenId);
       expect(token.position).toEqual({ x: 7, y: 7 });
     });
@@ -646,7 +646,7 @@ describe('map token validation', () => {
     const update = (body: Record<string, unknown>) =>
       player.put(`/api/campaigns/${campaignId}/maps/${mapId}/tokens/${tokenId}`).send(body);
     const stored = async () => {
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       return after.body.map.tokens.find((t: { id: string }) => t.id === tokenId);
     };
 
@@ -674,9 +674,9 @@ describe('map token validation', () => {
     });
   });
 
-  // The DM's fields were stored as sent too: `visible: 'false'` is a truthy
-  // string, so a token the DM believed hidden was shown to everyone.
-  describe('the fields the DM sets', () => {
+  // The GM's fields were stored as sent too: `visible: 'false'` is a truthy
+  // string, so a token the GM believed hidden was shown to everyone.
+  describe('the fields the GM sets', () => {
     it.each([
       ['visible', 'false'],
       ['showHpBar', 'no'],
@@ -690,26 +690,26 @@ describe('map token validation', () => {
       const res = await place({ name: `Bad ${field}`, [field]: value });
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(new RegExp(field));
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       expect(after.body.map.tokens.some((t: { name: string }) => t.name === `Bad ${field}`)).toBe(false);
     });
 
     it('refuses the same on update, leaving the token as it was', async () => {
-      const placed = await place({ name: 'Typed DM Token', visible: false });
+      const placed = await place({ name: 'Typed GM Token', visible: false });
       const id = placed.body.token.id;
       const url = `/api/campaigns/${campaignId}/maps/${mapId}/tokens/${id}`;
-      expect((await dm.put(url).send({ visible: 'true' })).status).toBe(400);
-      expect((await dm.put(url).send({ name: { evil: true } })).status).toBe(400);
-      expect((await dm.put(url).send({ initiative: '12' })).status).toBe(400);
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      expect((await gm.put(url).send({ visible: 'true' })).status).toBe(400);
+      expect((await gm.put(url).send({ name: { evil: true } })).status).toBe(400);
+      expect((await gm.put(url).send({ initiative: '12' })).status).toBe(400);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       const token = after.body.map.tokens.find((t: { id: string }) => t.id === id);
-      expect(token).toMatchObject({ name: 'Typed DM Token', visible: false, initiative: null });
+      expect(token).toMatchObject({ name: 'Typed GM Token', visible: false, initiative: null });
     });
   });
 
   // A token could be bound to any character id at all, and the initiative roll
   // then read that sheet. Character ids are visible to every member of a
-  // shared campaign, and anyone can be the DM of a campaign they create.
+  // shared campaign, and anyone can be the GM of a campaign they create.
   describe('a token bound to a character', () => {
     let ownCharacterId: string;
     let foreignCharacterId: string;
@@ -744,12 +744,12 @@ describe('map token validation', () => {
       const res = await place({ name: 'Bound Elsewhere', characterId: id() });
       expect(res.status).toBe(400);
       expect(res.body.message).toMatch(/character/i);
-      const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+      const after = await gm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
       expect(after.body.map.tokens.some((t: { name: string }) => t.name === 'Bound Elsewhere')).toBe(false);
     });
   });
 
-  // The create route is the DM's. It now derives a controller and accepts
+  // The create route is the GM's. It now derives a controller and accepts
   // the obscured flag, and the client builds player tokens from a character
   // drag, so the guard is worth pinning: nothing a player or spectator sends
   // is written.

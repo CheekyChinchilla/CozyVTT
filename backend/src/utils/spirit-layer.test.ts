@@ -249,11 +249,11 @@ describe('filterTokensByLighting', () => {
       expect(out.tokens.some((t: { id: string }) => t.id === 'behind')).toBe(false);
     });
 
-    it('still shows everything to the DM', () => {
+    it('still shows everything to the GM', () => {
       const player = makeToken('player', 2, 5, 'user1', 0);
       const behindWall = makeToken('behind', 7, 5);
 
-      const out = filterMapData(litMap([player, behindWall]) as never, 'DM', true, 'dm-user');
+      const out = filterMapData(litMap([player, behindWall]) as never, 'GM', true, 'dm-user');
 
       expect(out.tokens.some((t: { id: string }) => t.id === 'behind')).toBe(true);
     });
@@ -270,12 +270,12 @@ describe('filterTokensByLighting', () => {
     it('passes the fog flag through to every role, so a client knows whether to draw fog', () => {
       const map = { ...litMap([]), fogEnabled: false };
       expect(filterMapData(map as never, 'PLAYER', false, 'user1').fogEnabled).toBe(false);
-      expect(filterMapData(map as never, 'DM', true, 'dm-user').fogEnabled).toBe(false);
+      expect(filterMapData(map as never, 'GM', true, 'dm-user').fogEnabled).toBe(false);
     });
   });
 
   /**
-   * What a viewer makes out in the dark. The rule the DM guide has always
+   * What a viewer makes out in the dark. The rule the GM guide has always
    * stated: the sight radius governs how far you make things out unlit; it
    * does not limit how far you notice something that is lit.
    */
@@ -362,7 +362,7 @@ describe('filterTokensByRole', () => {
   const hp = { current: 7, max: 7, temp: 0 };
   const npc = { ...makeToken('npc', 3, 3, null, 12), hp, showHpBar: false, notes: 'secret ambusher', statBlock: { ac: 13 } };
   const shown = { ...makeToken('shown', 4, 4, null, 6), hp, showHpBar: true };
-  const mine = { ...makeToken('mine', 5, 5, 'user1', 6), hp, showHpBar: false, notes: 'the DM wrote this' };
+  const mine = { ...makeToken('mine', 5, 5, 'user1', 6), hp, showHpBar: false, notes: 'the GM wrote this' };
   const tokens = [npc, shown, mine];
   const byId = (list: { id: string }[], id: string) => list.find((t) => t.id === id) as Record<string, unknown> | undefined;
 
@@ -409,7 +409,7 @@ describe('filterTokensByRole', () => {
 
   // "Own" is the recipient's controller id and nobody else's: another
   // player's token is sent without its hit points or darkvision, and masked
-  // when obscured, exactly like the DM's.
+  // when obscured, exactly like the GM's.
   it("sends another player's token as any other token: no hit points, no darkvision, masked when obscured", () => {
     const theirs = { ...makeToken('theirs', 6, 6, 'user2', 9), hp, showHpBar: false };
     const theirsVeiled = { ...makeToken('theirs-veiled', 7, 7, 'user2', 9), hp, showHpBar: false, obscured: true, conditions: ['prone'] };
@@ -436,8 +436,8 @@ describe('filterTokensByRole', () => {
     expect(sent?.showHpBar).toBe(false);
   });
 
-  it('gives the DM the tokens exactly as stored', () => {
-    expect(filterTokensByRole(tokens, 'DM', false, 'dm')).toBe(tokens);
+  it('gives the GM the tokens exactly as stored', () => {
+    expect(filterTokensByRole(tokens, 'GM', false, 'dm')).toBe(tokens);
   });
 
   describe('an obscured token', () => {
@@ -479,8 +479,8 @@ describe('filterTokensByRole', () => {
       expect(sent?.conditions).toEqual(['prone']);
     });
 
-    it('reaches the DM as stored', () => {
-      expect(filterTokensByRole([veiled], 'DM', false, 'dm')[0]).toBe(veiled);
+    it('reaches the GM as stored', () => {
+      expect(filterTokensByRole([veiled], 'GM', false, 'dm')[0]).toBe(veiled);
     });
   });
 });
@@ -497,10 +497,10 @@ describe('filterTokensByRole', () => {
 describe('filterMapData on a whole map', () => {
   const base = { imageUrl: '', size: { width: 1, height: 1 }, visible: true, rotation: 0, conditions: [], metadata: {} };
   // Each token as a player is sent it (tokenMask.ts), then as stored: the
-  // DM's notes and stat block never go to a player, and sight, the template
+  // GM's notes and stat block never go to a player, and sight, the template
   // link and, while the bar is off, hit points only to the token's controller.
   const fighterSent = { ...base, id: 'fighter', name: 'Fighter', position: { x: 2, y: 5 }, layer: 'token', controlledBy: 'player-a', type: 'player', hp: { current: 20, max: 20, temp: 0 }, showHpBar: false, sightRadius: 12 };
-  const fighter = { ...fighterSent, notes: 'Owes the DM a favour' };
+  const fighter = { ...fighterSent, notes: 'Owes the GM a favour' };
   const goblinSent = { ...base, id: 'goblin', name: 'Goblin', position: { x: 4, y: 5 }, layer: 'token', controlledBy: null, type: 'npc', showHpBar: false };
   const goblin = { ...goblinSent, hp: { current: 7, max: 7, temp: 0 }, notes: 'Carries the key', statBlock: { ac: 15 }, creatureTemplateId: 'template-goblin', sightRadius: 12 };
   const assassin = { ...base, id: 'assassin', name: 'Assassin', position: { x: 3, y: 5 }, layer: 'token', controlledBy: null, visible: false };
@@ -542,7 +542,7 @@ describe('filterMapData on a whole map', () => {
     updatedAt: new Date('2026-10-02T10:00:00Z'),
   };
 
-  // Anyone but the DM: a locked door as a closed one, only the lights that
+  // Anyone but the GM: a locked door as a closed one, only the lights that
   // are on, and no fog data.
   const asPlayersHaveIt = {
     wallSegments: [wall, { ...lockedDoor, type: 'door-closed' }],
@@ -550,8 +550,8 @@ describe('filterMapData on a whole map', () => {
     fogData: null,
   };
 
-  it('sends the DM the stored map, without its annotations', () => {
-    expect(filterMapData(row, 'DM', true, 'dm-user')).toStrictEqual({ ...row, annotations: [] });
+  it('sends the GM the stored map, without its annotations', () => {
+    expect(filterMapData(row, 'GM', true, 'dm-user')).toStrictEqual({ ...row, annotations: [] });
   });
 
   it('sends a player on the material plane what they see of it there, and no spirit layer', () => {

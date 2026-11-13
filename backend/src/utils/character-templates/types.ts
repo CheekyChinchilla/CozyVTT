@@ -3,12 +3,12 @@
  * template file.
  */
 
-import type { GameSystem } from '@prisma/client';
+import type { SupportedGameSystem } from '../../game-systems';
 
 export interface CharacterTemplate {
   name: string;
   description: string;
-  gameSystem: GameSystem;
+  gameSystem: SupportedGameSystem;
   /** The sheet itself. Shaped by `gameSystem`; validated by that system's Zod schema. */
   data: Record<string, unknown>;
 }

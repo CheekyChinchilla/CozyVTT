@@ -2,8 +2,8 @@
  * Removing someone from a campaign reaching a connection that is already open.
  *
  * A socket reads its campaign and role once, when it authenticates, and every
- * handler trusts that from then on. Changing the DM seat already pushed the new
- * role to live connections. Removing a member did not, so a player the DM had
+ * handler trusts that from then on. Changing the GM seat already pushed the new
+ * role to live connections. Removing a member did not, so a player the GM had
  * just removed kept sending chat and dice and kept receiving everything the
  * table did, for as long as they left the tab open.
  *
@@ -35,12 +35,12 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `revoked-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let outsiderId: string;
 let campaignId: string;
 let otherCampaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 let outsiderCookie: string;
 
@@ -63,7 +63,7 @@ function attemptChat(client: ClientSocket, content: string): Promise<'sent' | 'r
 }
 
 beforeAll(async () => {
-  const [dm, player, outsider] = await Promise.all(
+  const [gm, player, outsider] = await Promise.all(
     ['dm', 'player', 'outsider'].map((name) =>
       prisma.user.create({
         data: {
@@ -74,12 +74,12 @@ beforeAll(async () => {
       })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
   outsiderId = outsider.id;
 
   const [campaign, other] = await Promise.all([
-    prisma.campaign.create({ data: { name: `Revoked Campaign ${runId}`, ownerId: dmId, vibeSettings: {} } }),
+    prisma.campaign.create({ data: { name: `Revoked Campaign ${runId}`, ownerId: gmId, vibeSettings: {} } }),
     prisma.campaign.create({ data: { name: `Other Campaign ${runId}`, ownerId: playerId, vibeSettings: {} } }),
   ]);
   campaignId = campaign.id;
@@ -87,20 +87,20 @@ beforeAll(async () => {
 
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
-      { userId: playerId, campaignId: otherCampaignId, role: 'DM', characterIds: [] },
+      { userId: playerId, campaignId: otherCampaignId, role: 'GM', characterIds: [] },
     ],
   });
 
   server = await createWsTestServer();
-  [dmCookie, playerCookie, outsiderCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId), server.loginAs(outsiderId)]);
+  [gmCookie, playerCookie, outsiderCookie] = await Promise.all([server.loginAs(gmId), server.loginAs(playerId), server.loginAs(outsiderId)]);
 });
 
 afterAll(async () => {
   await server?.close();
   await prisma.campaign.deleteMany({ where: { id: { in: [campaignId, otherCampaignId] } } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, outsiderId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId, outsiderId] } } });
   await prisma.$disconnect();
 });
 
@@ -121,20 +121,20 @@ describe('clearCampaignFromLiveSockets', () => {
 
   it('stops it hearing what the table says', async () => {
     const playerClient = await server.connectAndAuth(playerCookie, campaignId);
-    const dmClient = await server.connectAndAuth(dmCookie, campaignId);
+    const gmClient = await server.connectAndAuth(gmCookie, campaignId);
 
     const heard = waitForEvent(playerClient, 'chat.message');
-    dmClient.emit('chat.message', { content: 'before removal', type: 'DM' });
+    gmClient.emit('chat.message', { content: 'before removal', type: 'GM' });
     await expect(heard).resolves.toBeDefined();
 
     await clearCampaignFromLiveSockets(playerId, campaignId);
 
     const silence = expectNoEvent(playerClient, 'chat.message', 500);
-    dmClient.emit('chat.message', { content: 'after removal', type: 'DM' });
+    gmClient.emit('chat.message', { content: 'after removal', type: 'GM' });
     await expect(silence).resolves.toBeUndefined();
 
     playerClient.disconnect();
-    dmClient.disconnect();
+    gmClient.disconnect();
   });
 
   it('leaves a connection to another campaign alone', async () => {
@@ -241,7 +241,7 @@ describe('a refused join', () => {
       expect(serverSocket(client).role).toBeUndefined();
       expect(await attemptChat(client, 'not in it any more')).toBe('refused');
     } finally {
-      await prisma.campaignMembership.create({ data: { userId: playerId, campaignId: otherCampaignId, role: 'DM', characterIds: [] } });
+      await prisma.campaignMembership.create({ data: { userId: playerId, campaignId: otherCampaignId, role: 'GM', characterIds: [] } });
       client.disconnect();
     }
   });
@@ -251,7 +251,7 @@ describe('a refused join', () => {
   // that the user is not a member.
   describe('a connection coming back after its member was removed', () => {
     beforeEach(async () => {
-      // What the DM's Remove does.
+      // What the GM's Remove does.
       expect(await takeMemberOut(campaignId, playerId, 'removed')).toBeNull();
       await tellTableMemberLeft(playerId, campaignId, 'removed');
     });
@@ -296,11 +296,11 @@ describe('taking a member out', () => {
   beforeEach(async () => {
     // A campaign of its own each time: a record left by another test would
     // answer for this one.
-    const fresh = await prisma.campaign.create({ data: { name: `Departure ${runId}`, ownerId: dmId, vibeSettings: {} } });
+    const fresh = await prisma.campaign.create({ data: { name: `Departure ${runId}`, ownerId: gmId, vibeSettings: {} } });
     freshCampaignId = fresh.id;
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dmId, campaignId: freshCampaignId, role: 'DM', characterIds: [] },
+        { userId: gmId, campaignId: freshCampaignId, role: 'GM', characterIds: [] },
         { userId: playerId, campaignId: freshCampaignId, role: 'PLAYER', characterIds: [] },
       ],
     });

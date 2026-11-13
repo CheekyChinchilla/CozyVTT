@@ -32,19 +32,19 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `tokenmove-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let ownerId: string;
 let otherId: string;
 let spectatorId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let ownerCookie: string;
 let otherCookie: string;
 let spectatorCookie: string;
 
 const OWNED_TOKEN = 'token-owned';
-const DM_TOKEN = 'token-dm';
+const GM_TOKEN = 'token-dm';
 
 function token(id: string, controlledBy: string | null) {
   return {
@@ -65,12 +65,12 @@ function token(id: string, controlledBy: string | null) {
 async function resetTokens() {
   await prisma.map.update({
     where: { id: mapId },
-    data: { tokens: [token(OWNED_TOKEN, ownerId), token(DM_TOKEN, null)] },
+    data: { tokens: [token(OWNED_TOKEN, ownerId), token(GM_TOKEN, null)] },
   });
 }
 
 beforeAll(async () => {
-  const [dm, owner, other, spectator] = await Promise.all(
+  const [gm, owner, other, spectator] = await Promise.all(
     ['dm', 'owner', 'other', 'spectator'].map((name) =>
       prisma.user.create({
         data: {
@@ -81,19 +81,19 @@ beforeAll(async () => {
       })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   ownerId = owner.id;
   otherId = other.id;
   spectatorId = spectator.id;
 
   const campaign = await prisma.campaign.create({
-    data: { name: `Token Move ${runId}`, ownerId: dmId, vibeSettings: {} },
+    data: { name: `Token Move ${runId}`, ownerId: gmId, vibeSettings: {} },
   });
   campaignId = campaign.id;
 
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: ownerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: otherId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
@@ -108,7 +108,7 @@ beforeAll(async () => {
       baseLayerUrl: '/api/assets/maps/none',
       width: 20,
       height: 20,
-      tokens: [token(OWNED_TOKEN, ownerId), token(DM_TOKEN, null)],
+      tokens: [token(OWNED_TOKEN, ownerId), token(GM_TOKEN, null)],
       annotations: [],
     },
   });
@@ -117,8 +117,8 @@ beforeAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
 
   server = await createWsTestServer();
-  [dmCookie, ownerCookie, otherCookie, spectatorCookie] = await Promise.all([
-    server.loginAs(dmId),
+  [gmCookie, ownerCookie, otherCookie, spectatorCookie] = await Promise.all([
+    server.loginAs(gmId),
     server.loginAs(ownerId),
     server.loginAs(otherId),
     server.loginAs(spectatorId),
@@ -130,7 +130,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, ownerId, otherId, spectatorId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, ownerId, otherId, spectatorId] } } });
   await prisma.$disconnect();
 });
 
@@ -139,7 +139,7 @@ beforeEach(resetTokens);
 describe('token.move, the per-frame event', () => {
   it('does not move a token the sender does not control', async () => {
     const other = await server.connectAndAuth(otherCookie, campaignId);
-    const watcher = await server.connectAndAuth(dmCookie, campaignId);
+    const watcher = await server.connectAndAuth(gmCookie, campaignId);
 
     const silence = expectNoEvent(watcher, 'token.moved', 500);
     other.emit('token.move', { tokenId: OWNED_TOKEN, mapId, x: 9, y: 9 });
@@ -151,10 +151,10 @@ describe('token.move, the per-frame event', () => {
 
   it('does not let a spectator move anything', async () => {
     const spectator = await server.connectAndAuth(spectatorCookie, campaignId);
-    const watcher = await server.connectAndAuth(dmCookie, campaignId);
+    const watcher = await server.connectAndAuth(gmCookie, campaignId);
 
     const silence = expectNoEvent(watcher, 'token.moved', 500);
-    spectator.emit('token.move', { tokenId: DM_TOKEN, mapId, x: 8, y: 8 });
+    spectator.emit('token.move', { tokenId: GM_TOKEN, mapId, x: 8, y: 8 });
     await expect(silence).resolves.toBeUndefined();
 
     spectator.disconnect();
@@ -163,7 +163,7 @@ describe('token.move, the per-frame event', () => {
 
   it('still moves a token for the player who controls it', async () => {
     const owner = await server.connectAndAuth(ownerCookie, campaignId);
-    const watcher = await server.connectAndAuth(dmCookie, campaignId);
+    const watcher = await server.connectAndAuth(gmCookie, campaignId);
 
     const moved = waitForEvent(watcher, 'token.moved');
     owner.emit('token.move', { tokenId: OWNED_TOKEN, mapId, x: 5, y: 5 });
@@ -173,15 +173,15 @@ describe('token.move, the per-frame event', () => {
     watcher.disconnect();
   });
 
-  it('still moves any token for the DM', async () => {
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+  it('still moves any token for the GM', async () => {
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const watcher = await server.connectAndAuth(ownerCookie, campaignId);
 
     const moved = waitForEvent(watcher, 'token.moved');
-    dm.emit('token.move', { tokenId: OWNED_TOKEN, mapId, x: 6, y: 6 });
+    gm.emit('token.move', { tokenId: OWNED_TOKEN, mapId, x: 6, y: 6 });
     await expect(moved).resolves.toMatchObject({ tokenId: OWNED_TOKEN, x: 6, y: 6 });
 
-    dm.disconnect();
+    gm.disconnect();
     watcher.disconnect();
   });
 });
@@ -192,7 +192,7 @@ describe('token.move.end, the event that saves', () => {
     // would let this through.
     await prisma.map.update({
       where: { id: mapId },
-      data: { tokens: [token(OWNED_TOKEN, spectatorId), token(DM_TOKEN, null)] },
+      data: { tokens: [token(OWNED_TOKEN, spectatorId), token(GM_TOKEN, null)] },
     });
 
     const spectator = await server.connectAndAuth(spectatorCookie, campaignId);

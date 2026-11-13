@@ -40,7 +40,7 @@ describe('CreateDiceMacroSchema', () => {
       ['4d6kh3', 'stat generation — the example from the issue'],
       ['1d20+5', 'an attack the sheet does not model'],
       ['2d20kh1', 'advantage, which the expression says on its own'],
-      ['1d100', 'a wild magic surge'],
+      ['1d100', 'a table of random weather'],
       ['3d8', 'plain damage'],
     ])('accepts %s (%s)', (expression) => {
       const result = CreateDiceMacroSchema.safeParse({ name: 'Test', expression });
@@ -223,8 +223,8 @@ describe('a saved roll\'s character and purpose', () => {
   });
 
   it('are trimmed', () => {
-    const result = create({ characterName: '  Goblin boss  ', purpose: '  Scimitar attack ' });
-    expect(result.data).toMatchObject({ characterName: 'Goblin boss', purpose: 'Scimitar attack' });
+    const result = create({ characterName: '  Hobgoblin  ', purpose: '  Longsword attack ' });
+    expect(result.data).toMatchObject({ characterName: 'Hobgoblin', purpose: 'Longsword attack' });
   });
 
   it.each([[''], ['   '], [null]])('are null when given %j', (value) => {

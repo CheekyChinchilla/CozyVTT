@@ -65,7 +65,7 @@ async function importedTags(campaignId: string): Promise<Record<string, string[]
 describe('a campaign exported and imported again', () => {
   it('keeps the tags of its map and token pictures', async () => {
     const source = await createTestCampaign(userId, { name: 'Tagged' });
-    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId, campaignId: source.id, role: 'GM', characterIds: [] } });
     const crypt = await picture(source.id, 'MAP', 'crypt', ['drawn-map', 'Undercroft']);
     const goblin = await picture(source.id, 'TOKEN', 'goblin', ['goblin', 'monster']);
     await prisma.map.create({
@@ -101,11 +101,11 @@ async function archiveOf(entries: Array<[name: string, fields: Record<string, un
       name: 'manifest.json',
       data: JSON.stringify({
         formatVersion: 1, exportedAt: '2026-11-01T12:00:00.000Z', exportedFrom: 'CozyVTT v1.5.4', campaignName: 'Hand-made',
-        gameSystem: 'DND_5E', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
+        gameSystem: 'FIFTH_EDITION', mapCount: 0, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0,
         assetCount: entries.length, includesAudio: false, totalSizeBytes: PNG.length * entries.length,
       }),
     },
-    { name: 'campaign.json', data: JSON.stringify({ name: 'Hand-made', gameSystem: 'DND_5E' }) },
+    { name: 'campaign.json', data: JSON.stringify({ name: 'Hand-made', gameSystem: 'FIFTH_EDITION' }) },
     {
       name: 'assets/asset-manifest.json',
       data: JSON.stringify(Object.fromEntries(entries.map(([name, fields], i) => [

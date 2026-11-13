@@ -20,21 +20,21 @@ import { prisma as appPrisma } from '../../config/database';
 
 const app = createTestApp();
 
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let creatureId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 beforeAll(async () => {
-  const user = await createTestUser({ displayName: 'Favourite DM' });
-  dmId = user.id;
-  campaignId = (await createTestCampaign(dmId, { name: 'Favourites' })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  const user = await createTestUser({ displayName: 'Favourite GM' });
+  gmId = user.id;
+  campaignId = (await createTestCampaign(gmId, { name: 'Favourites' })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   creatureId = (await prisma.creatureTemplate.create({
-    data: { campaignId, createdById: dmId, name: 'Rat', source: 'custom', statBlock: { ac: 12, speed: '30 ft.', abilities: { str: 2, dex: 11, con: 9, int: 2, wis: 10, cha: 4 } } },
+    data: { campaignId, createdById: gmId, name: 'Rat', source: 'custom', statBlock: { ac: 12, speed: '30 ft.', abilities: { str: 2, dex: 11, con: 9, int: 2, wis: 10, cha: 4 } } },
   })).id;
-  dm = request.agent(app);
-  await dm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
+  gm = request.agent(app);
+  await gm.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
 });
 
 beforeEach(async () => {
@@ -48,15 +48,15 @@ afterEach(() => {
 afterAll(async () => {
   await prisma.creatureFavorite.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
-const toggle = () => dm.post(`/api/campaigns/${campaignId}/creatures/${creatureId}/favorite`);
-const isFavourite = async () => (await prisma.creatureFavorite.count({ where: { campaignId, userId: dmId, creatureId } })) === 1;
+const toggle = () => gm.post(`/api/campaigns/${campaignId}/creatures/${creatureId}/favorite`);
+const isFavourite = async () => (await prisma.creatureFavorite.count({ where: { campaignId, userId: gmId, creatureId } })) === 1;
 
 it('adds a favourite another click added a moment before', async () => {
-  await prisma.creatureFavorite.create({ data: { id: crypto.randomUUID(), campaignId, userId: dmId, creatureId } });
+  await prisma.creatureFavorite.create({ data: { id: crypto.randomUUID(), campaignId, userId: gmId, creatureId } });
   jest.spyOn(appPrisma.creatureFavorite, 'findUnique').mockResolvedValueOnce(null);
   const res = await toggle();
   expect(res.status).toBe(200);
@@ -66,7 +66,7 @@ it('adds a favourite another click added a moment before', async () => {
 
 it('removes a favourite another click removed a moment before', async () => {
   jest.spyOn(appPrisma.creatureFavorite, 'findUnique').mockResolvedValueOnce(
-    { id: crypto.randomUUID(), campaignId, userId: dmId, creatureId, createdAt: new Date() } as never
+    { id: crypto.randomUUID(), campaignId, userId: gmId, creatureId, createdAt: new Date() } as never
   );
   const res = await toggle();
   expect(res.status).toBe(200);

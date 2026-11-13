@@ -16,11 +16,11 @@ jest.setTimeout(20000);
 
 const app = createTestApp();
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
 let mapId: string;
-let dm: ReturnType<typeof request.agent>;
+let gm: ReturnType<typeof request.agent>;
 
 const token = (id: string, x: number, y: number, controlledBy: string | null) => ({
   id, name: id, imageUrl: '', position: { x, y }, size: { width: 1, height: 1 }, layer: 'token', visible: true,
@@ -29,14 +29,14 @@ const token = (id: string, x: number, y: number, controlledBy: string | null) =>
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dmUser = await createTestUser({ email: `sightrest-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
+  const gmUser = await createTestUser({ email: `sightrest-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
   const playerUser = await createTestUser({ email: `sightrest-p-${stamp}@test.cozyvtt.local`, displayName: 'Player' });
-  dmId = dmUser.id;
+  gmId = gmUser.id;
   playerId = playerUser.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Sight over REST ${stamp}` })).id;
+  campaignId = (await createTestCampaign(gmId, { name: `Sight over REST ${stamp}` })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
@@ -48,8 +48,8 @@ beforeAll(async () => {
     },
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
-  dm = request.agent(app);
-  expect((await dm.post('/api/auth/login').send({ email: dmUser.email, password: TEST_PASSWORD })).status).toBe(200);
+  gm = request.agent(app);
+  expect((await gm.post('/api/auth/login').send({ email: gmUser.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -57,7 +57,7 @@ afterAll(async () => {
   await server.close();
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId, playerId]);
+  await cleanupUsers([gmId, playerId]);
   await prisma.$disconnect();
 });
 
@@ -71,7 +71,7 @@ it('sends a player the creature a light added through the API reveals', async ()
     });
   });
 
-  const res = await dm.post(`/api/campaigns/${campaignId}/maps/${mapId}/lights`)
+  const res = await gm.post(`/api/campaigns/${campaignId}/maps/${mapId}/lights`)
     .send({ id: randomUUID(), x: 425, y: 875, brightRadius: 2, dimRadius: 4, color: '#ffaa33', enabled: true });
   expect(res.status).toBeLessThan(300);
   expect(await shown).toEqual(expect.arrayContaining(['hero', 'goblin']));

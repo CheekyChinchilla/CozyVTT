@@ -15,9 +15,9 @@ jest.setTimeout(20000);
 
 const runId = randomUUID().slice(0, 8);
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 
 const ogre = () => ({
   id: randomUUID(), name: 'Ogre', imageUrl: '', position: { x: 1, y: 1 }, size: { width: 2, height: 2 },
@@ -38,12 +38,12 @@ const storedPosition = async (mapId: string) =>
   readTokens((await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } })).tokens)[0].position;
 
 beforeAll(async () => {
-  const dm = await prisma.user.create({ data: { email: `drop-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Drop DM' } });
-  dmId = dm.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Drop ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  const gm = await prisma.user.create({ data: { email: `drop-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Drop GM' } });
+  gmId = gm.id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Drop ${runId}`, ownerId: gmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
 });
 
 afterAll(async () => {
@@ -51,32 +51,32 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: dmId } });
+  await prisma.user.deleteMany({ where: { id: gmId } });
   await prisma.$disconnect();
 });
 
 it('refuses a drop between squares, and the token stays where it was', async () => {
   const token = ogre();
   const mapId = await newMap([token]);
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
-  const error = waitForEvent<{ message: string }>(dm, 'error');
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
+  const error = waitForEvent<{ message: string }>(gm, 'error');
 
-  dm.emit('token.move.end', { tokenId: token.id, mapId, x: 3.5, y: 2 });
+  gm.emit('token.move.end', { tokenId: token.id, mapId, x: 3.5, y: 2 });
 
   expect((await error).message).toMatch(/Invalid token move data/);
   expect(await storedPosition(mapId)).toEqual({ x: 1, y: 1 });
-  dm.disconnect();
+  gm.disconnect();
 });
 
 it('pulls a drop that would hang off the edge back onto the map, and says where it went', async () => {
   const token = ogre();
   const mapId = await newMap([token]);
-  const dm = await server.connectAndAuth(dmCookie, campaignId);
-  const moved = waitForEvent<{ x: number; y: number }>(dm, 'token.moved');
+  const gm = await server.connectAndAuth(gmCookie, campaignId);
+  const moved = waitForEvent<{ x: number; y: number }>(gm, 'token.moved');
 
-  dm.emit('token.move.end', { tokenId: token.id, mapId, x: 9, y: 9 });
+  gm.emit('token.move.end', { tokenId: token.id, mapId, x: 9, y: 9 });
 
   expect(await moved).toMatchObject({ x: 8, y: 8 });
   expect(await storedPosition(mapId)).toEqual({ x: 8, y: 8 });
-  dm.disconnect();
+  gm.disconnect();
 });

@@ -4,9 +4,9 @@
  *
  * Editing a document's text checked only that the caller had uploaded it.
  * Deleting a campaign's document is tied to the campaign: its uploader while
- * still a member, its DM, or an admin. So a DM who wrote a campaign handout,
+ * still a member, its GM, or an admin. So a GM who wrote a campaign handout,
  * handed the seat on and was removed could still rewrite what every member
- * reads, while the campaign's DM could not edit the campaign's own document.
+ * reads, while the campaign's GM could not edit the campaign's own document.
  * A global document's uploader kept the right after losing Global Assets.
  * Moving a global asset to another scope let any global asset manager take
  * another manager's asset out of the library, which deleting it forbids.
@@ -61,7 +61,7 @@ afterAll(async () => {
 });
 
 describe('editing a campaign document', () => {
-  it('is refused to a former DM removed from the campaign, and open to the DM who runs it now', async () => {
+  it('is refused to a former GM removed from the campaign, and open to the GM who runs it now', async () => {
     const owner = await signedIn('Campaign Owner');
     const coHost = await signedIn('Former Co-host');
     const campaign = await createTestCampaign(owner.id);
@@ -70,13 +70,13 @@ describe('editing a campaign document', () => {
     await prisma.campaignMembership.createMany({
       data: [
         { userId: owner.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
-        { userId: coHost.id, campaignId: campaign.id, role: 'DM', characterIds: [] },
+        { userId: coHost.id, campaignId: campaign.id, role: 'GM', characterIds: [] },
       ],
     });
     const id = await documentBy(coHost.agent, 'CAMPAIGN', campaign.id);
 
     // The owner takes the seat back and removes the co-host.
-    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: owner.id, campaignId: campaign.id } }, data: { role: 'DM' } });
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: owner.id, campaignId: campaign.id } }, data: { role: 'GM' } });
     await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: coHost.id, campaignId: campaign.id } } });
 
     const former = await coHost.agent.put(`/api/assets/documents/${id}/content`).send({ content: 'False rulings' });
@@ -88,27 +88,27 @@ describe('editing a campaign document', () => {
   });
 
   it('stays open to its uploader while they are still a member', async () => {
-    const dm = await signedIn('Handout Writer');
-    const campaign = await createTestCampaign(dm.id);
+    const gm = await signedIn('Handout Writer');
+    const campaign = await createTestCampaign(gm.id);
     campaignIds.push(campaign.id);
-    await prisma.campaignMembership.create({ data: { userId: dm.id, campaignId: campaign.id, role: 'DM', characterIds: [] } });
-    const id = await documentBy(dm.agent, 'CAMPAIGN', campaign.id);
+    await prisma.campaignMembership.create({ data: { userId: gm.id, campaignId: campaign.id, role: 'GM', characterIds: [] } });
+    const id = await documentBy(gm.agent, 'CAMPAIGN', campaign.id);
 
-    expect((await dm.agent.put(`/api/assets/documents/${id}/content`).send({ content: 'Edited' })).status).toBe(200);
+    expect((await gm.agent.put(`/api/assets/documents/${id}/content`).send({ content: 'Edited' })).status).toBe(200);
   });
 
   it('is refused to a player of the campaign who did not write it', async () => {
-    const dm = await signedIn('Handout DM');
+    const gm = await signedIn('Handout GM');
     const player = await signedIn('Handout Reader');
-    const campaign = await createTestCampaign(dm.id);
+    const campaign = await createTestCampaign(gm.id);
     campaignIds.push(campaign.id);
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dm.id, campaignId: campaign.id, role: 'DM', characterIds: [] },
+        { userId: gm.id, campaignId: campaign.id, role: 'GM', characterIds: [] },
         { userId: player.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
       ],
     });
-    const id = await documentBy(dm.agent, 'CAMPAIGN', campaign.id);
+    const id = await documentBy(gm.agent, 'CAMPAIGN', campaign.id);
 
     expect((await player.agent.put(`/api/assets/documents/${id}/content`).send({ content: 'Edited' })).status).toBe(404);
   });
@@ -151,10 +151,10 @@ describe('moving a global asset out of the library', () => {
 describe('moving a campaign asset with no campaign recorded', () => {
   it('is refused to anyone but an admin, so nobody can carry it into a campaign of their own', async () => {
     const uploader = await signedIn('Orphan Uploader');
-    const stranger = await signedIn('Stranger DM');
+    const stranger = await signedIn('Stranger GM');
     const theirs = await createTestCampaign(stranger.id);
     campaignIds.push(theirs.id);
-    await prisma.campaignMembership.create({ data: { userId: stranger.id, campaignId: theirs.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: stranger.id, campaignId: theirs.id, role: 'GM', characterIds: [] } });
     const orphan = await prisma.asset.create({
       data: {
         type: 'MAP', scope: 'CAMPAIGN', campaignId: null, uploadedById: uploader.id,
@@ -195,19 +195,19 @@ describe('the campaign document list', () => {
   type Listed = { id: string; canEdit: boolean };
 
   it('says who may edit each document, matching what the edit answers', async () => {
-    const dm = await signedIn('Listing Manager', true);
+    const gm = await signedIn('Listing Manager', true);
     const player = await signedIn('Listing Player');
-    const campaign = await createTestCampaign(dm.id);
+    const campaign = await createTestCampaign(gm.id);
     campaignIds.push(campaign.id);
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dm.id, campaignId: campaign.id, role: 'DM', characterIds: [] },
+        { userId: gm.id, campaignId: campaign.id, role: 'GM', characterIds: [] },
         { userId: player.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
       ],
     });
-    const global = await documentBy(dm.agent, 'GLOBAL');
-    expect((await dm.agent.post(`/api/campaigns/${campaign.id}/documents`).send({ assetId: global })).status).toBe(201);
-    const own = await documentBy(dm.agent, 'CAMPAIGN', campaign.id);
+    const global = await documentBy(gm.agent, 'GLOBAL');
+    expect((await gm.agent.post(`/api/campaigns/${campaign.id}/documents`).send({ assetId: global })).status).toBe(201);
+    const own = await documentBy(gm.agent, 'CAMPAIGN', campaign.id);
 
     const listedFor = async (agent: ReturnType<typeof request.agent>) => {
       const res = await agent.get(`/api/campaigns/${campaign.id}/documents`);
@@ -217,14 +217,14 @@ describe('the campaign document list', () => {
     const saves = async (agent: ReturnType<typeof request.agent>, id: string) =>
       (await agent.put(`/api/assets/documents/${id}/content`).send({ content: '# Revised' })).status === 200;
 
-    expect(await listedFor(dm.agent)).toEqual({ [global]: true, [own]: true });
+    expect(await listedFor(gm.agent)).toEqual({ [global]: true, [own]: true });
     expect(await listedFor(player.agent)).toEqual({ [global]: false, [own]: false });
 
-    await prisma.user.update({ where: { id: dm.id }, data: { globalAssetManager: false } });
-    const lapsed = await listedFor(dm.agent);
+    await prisma.user.update({ where: { id: gm.id }, data: { globalAssetManager: false } });
+    const lapsed = await listedFor(gm.agent);
     expect(lapsed).toEqual({ [global]: false, [own]: true });
-    expect(await saves(dm.agent, global)).toBe(lapsed[global]);
-    expect(await saves(dm.agent, own)).toBe(lapsed[own]);
+    expect(await saves(gm.agent, global)).toBe(lapsed[global]);
+    expect(await saves(gm.agent, own)).toBe(lapsed[own]);
     expect(await saves(player.agent, own)).toBe(false);
   });
 });
@@ -232,22 +232,22 @@ describe('the campaign document list', () => {
 // The asset list says the same of each asset, for the Documents page, which
 // offered Edit and Delete to an admin and to the uploader: a global
 // document's uploader who no longer manages global assets was offered both
-// and refused, and the DM of a campaign was offered neither on the
+// and refused, and the GM of a campaign was offered neither on the
 // campaign's own documents, which they may change.
 describe('the asset list', () => {
   type Listed = { id: string; canChange: boolean };
 
   it('says of each document whether the caller may change it, matching what editing and deleting answer', async () => {
     const writer = await signedIn('Library Writer', true);
-    const dm = await signedIn('Library DM');
+    const gm = await signedIn('Library GM');
     const player = await signedIn('Library Player');
-    const campaign = await createTestCampaign(dm.id);
+    const campaign = await createTestCampaign(gm.id);
     campaignIds.push(campaign.id);
     // The writer held the seat when they wrote the handout.
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: writer.id, campaignId: campaign.id, role: 'DM', characterIds: [] },
-        { userId: dm.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
+        { userId: writer.id, campaignId: campaign.id, role: 'GM', characterIds: [] },
+        { userId: gm.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
         { userId: player.id, campaignId: campaign.id, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -255,7 +255,7 @@ describe('the asset list', () => {
     const handout = await documentBy(writer.agent, 'CAMPAIGN', campaign.id);
     // The seat passes on; the writer stays as a player.
     await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: writer.id, campaignId: campaign.id } }, data: { role: 'PLAYER' } });
-    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: dm.id, campaignId: campaign.id } }, data: { role: 'DM' } });
+    await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: gm.id, campaignId: campaign.id } }, data: { role: 'GM' } });
 
     const listedFor = async (agent: ReturnType<typeof request.agent>) => {
       const res = await agent.get('/api/assets').query({ type: 'DOCUMENT', limit: 100 });
@@ -265,7 +265,7 @@ describe('the asset list', () => {
     };
 
     expect(await listedFor(writer.agent)).toEqual({ global: true, handout: true });
-    expect(await listedFor(dm.agent)).toEqual({ global: false, handout: true });
+    expect(await listedFor(gm.agent)).toEqual({ global: false, handout: true });
     expect(await listedFor(player.agent)).toEqual({ global: false, handout: false });
 
     await prisma.user.update({ where: { id: writer.id }, data: { globalAssetManager: false } });
@@ -275,7 +275,7 @@ describe('the asset list', () => {
     expect((await writer.agent.put(`/api/assets/documents/${global}/content`).send({ content: '# Revised' })).status).toBe(404);
     expect((await writer.agent.delete(`/api/assets/${global}`)).status).toBe(403);
     expect((await player.agent.delete(`/api/assets/${handout}`)).status).toBe(403);
-    expect((await dm.agent.put(`/api/assets/documents/${handout}/content`).send({ content: '# Revised' })).status).toBe(200);
+    expect((await gm.agent.put(`/api/assets/documents/${handout}/content`).send({ content: '# Revised' })).status).toBe(200);
   });
 });
 
@@ -283,37 +283,37 @@ describe('the asset list', () => {
 // sends; the move's reply carries it too, so the panel stays right afterwards.
 describe('a move\'s reply', () => {
   it('says whether the mover may still change the asset where it now is', async () => {
-    const dm = await signedIn('Move Reply DM');
-    const table = await createTestCampaign(dm.id);
+    const gm = await signedIn('Move Reply GM');
+    const table = await createTestCampaign(gm.id);
     campaignIds.push(table.id);
-    await prisma.campaignMembership.create({ data: { userId: dm.id, campaignId: table.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: gm.id, campaignId: table.id, role: 'GM', characterIds: [] } });
     const art = await prisma.asset.create({
       data: {
-        type: 'TOKEN', scope: 'USER', uploadedById: dm.id, filename: 'art.png', originalName: 'art.png', mimeType: 'image/png',
+        type: 'TOKEN', scope: 'USER', uploadedById: gm.id, filename: 'art.png', originalName: 'art.png', mimeType: 'image/png',
         fileSize: 1, filePath: path.join(UPLOAD_DIR, 'art.png'), name: 'Art', tags: [],
       },
     });
 
-    const res = await dm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
+    const res = await gm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
 
     expect(res.status).toBe(200);
     expect(res.body.asset).toMatchObject({ scope: 'CAMPAIGN', campaignId: table.id, canChange: true });
   });
 });
 
-// A personal asset is its uploader's. A DM's move of a player's campaign
+// A personal asset is its uploader's. A GM's move of a player's campaign
 // asset to Personal put it in the player's personal library, out of the
-// campaign and out of the DM's reach. Only the uploader moves one there now;
-// a DM keeps the other moves the server allowed.
+// campaign and out of the GM's reach. Only the uploader moves one there now;
+// a GM keeps the other moves the server allowed.
 describe('moving an asset to Personal', () => {
   async function playerArtAtTable() {
-    const dm = await signedIn('Personal Move DM');
+    const gm = await signedIn('Personal Move GM');
     const player = await signedIn('Personal Move Player');
-    const table = await createTestCampaign(dm.id);
+    const table = await createTestCampaign(gm.id);
     campaignIds.push(table.id);
     await prisma.campaignMembership.createMany({
       data: [
-        { userId: dm.id, campaignId: table.id, role: 'DM', characterIds: [] },
+        { userId: gm.id, campaignId: table.id, role: 'GM', characterIds: [] },
         { userId: player.id, campaignId: table.id, role: 'PLAYER', characterIds: [] },
       ],
     });
@@ -323,12 +323,12 @@ describe('moving an asset to Personal', () => {
         mimeType: 'image/png', fileSize: 1, filePath: path.join(UPLOAD_DIR, 'p.png'), name: 'Player art', tags: [],
       },
     });
-    return { dm, player, table, art };
+    return { gm, player, table, art };
   }
 
-  it('is refused to the campaign\'s DM for a player\'s asset, which stays in the campaign', async () => {
-    const { dm, table, art } = await playerArtAtTable();
-    const res = await dm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+  it('is refused to the campaign\'s GM for a player\'s asset, which stays in the campaign', async () => {
+    const { gm, table, art } = await playerArtAtTable();
+    const res = await gm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
     expect(res.status).toBe(403);
     expect(res.body.message).toBe('Only the asset\'s uploader can move it to their personal library');
     expect(await prisma.asset.findUniqueOrThrow({ where: { id: art.id } })).toMatchObject({ scope: 'CAMPAIGN', campaignId: table.id });
@@ -403,7 +403,7 @@ describe('an admin moving someone else\'s personal file', () => {
 
   it('writes nothing when the owner moves their own file', async () => {
     const { owner, table, file } = await setUp();
-    await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId: table.id, role: 'DM', characterIds: [] } });
+    await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId: table.id, role: 'GM', characterIds: [] } });
     const res = await owner.agent.patch(`/api/assets/${file.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
     expect(res.status).toBe(200);
     expect(await prisma.systemLog.count({ where: { context: { path: ['assetId'], equals: file.id } } })).toBe(0);

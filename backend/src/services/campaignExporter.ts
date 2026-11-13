@@ -26,7 +26,7 @@ import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { MAX_EXTENSION_LENGTH, MAX_ORIGINAL_NAME_LENGTH, shortenFileName } from '../validators/assets';
-import { DRAWING_ORDER, campaignDmId, drawingForArchive } from './mapDrawings';
+import { DRAWING_ORDER, campaignGmId, drawingForArchive } from './mapDrawings';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -149,9 +149,9 @@ export async function prepareCampaignExport(
   });
 
   if (!campaign) throw new Error('Campaign not found');
-  // The campaign's DM, by whom each drawing's share of its map's markup
+  // The campaign's GM, by whom each drawing's share of its map's markup
   // layer is written (drawingShare).
-  const dmId = await campaignDmId(prisma, campaignId);
+  const gmId = await campaignGmId(prisma, campaignId);
 
   // 2. Collect all asset IDs we need to include
   const assetIds = new Set<string>();
@@ -217,13 +217,13 @@ export async function prepareCampaignExport(
       drawnBackground: map.drawnBackground,
       tokens,
       // Empty: releases up to 1.5.4 store an archive's annotations and send
-      // them to every member of the campaign, so a drawing for the DM alone
+      // them to every member of the campaign, so a drawing for the GM alone
       // must not be here. They drop a key they do not know, such as
       // `drawings`. Map.annotations, which nothing reads, is not written.
       annotations: [],
       // The map's drawings, in drawing order and without their authors, each
       // with the share of the markup layer it counts to.
-      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map((row) => drawingForArchive(row, dmId)),
+      drawings: (await prisma.mapDrawing.findMany({ where: { mapId: map.id }, orderBy: [...DRAWING_ORDER] })).map((row) => drawingForArchive(row, gmId)),
       wallSegments: map.wallSegments || [],
       fogData: map.fogData || null,
       lightingEnabled: map.lightingEnabled,
@@ -296,7 +296,7 @@ export async function prepareCampaignExport(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.6.1'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.7.0'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,

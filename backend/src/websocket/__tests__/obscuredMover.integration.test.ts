@@ -3,7 +3,7 @@
  *
  * Every move event names the mover in `movedBy`. For an obscured token that
  * is its controller, which is part of what obscuring hides: the campaign
- * roster maps the id to a name. So while a token is obscured, only the DM and
+ * roster maps the id to a name. So while a token is obscured, only the GM and
  * the mover's own screens are told who moved it; anyone else gets null. A
  * token that is not obscured names its mover to everyone, as before.
  *
@@ -20,12 +20,12 @@ const runId = randomUUID().slice(0, 8);
 const email = (name: string) => `obscuredmover-${name}-${runId}@test.cozyvtt.local`;
 
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let ownerId: string;
 let otherId: string;
 let campaignId: string;
 let mapId: string;
-let dmCookie: string;
+let gmCookie: string;
 let ownerCookie: string;
 let otherCookie: string;
 
@@ -55,24 +55,24 @@ interface MoveEvent {
 }
 
 beforeAll(async () => {
-  const [dm, owner, other] = await Promise.all(
+  const [gm, owner, other] = await Promise.all(
     ['dm', 'owner', 'other'].map((name) =>
       prisma.user.create({
         data: { email: email(name), passwordHash: 'not-used-by-socket-auth', displayName: `Mover ${name}` },
       })
     )
   );
-  dmId = dm.id;
+  gmId = gm.id;
   ownerId = owner.id;
   otherId = other.id;
 
   const campaign = await prisma.campaign.create({
-    data: { name: `Obscured Mover ${runId}`, ownerId: dmId, vibeSettings: {} },
+    data: { name: `Obscured Mover ${runId}`, ownerId: gmId, vibeSettings: {} },
   });
   campaignId = campaign.id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: ownerId, campaignId, role: 'PLAYER', characterIds: [] },
       { userId: otherId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
@@ -95,8 +95,8 @@ beforeAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
 
   server = await createWsTestServer();
-  [dmCookie, ownerCookie, otherCookie] = await Promise.all([
-    server.loginAs(dmId),
+  [gmCookie, ownerCookie, otherCookie] = await Promise.all([
+    server.loginAs(gmId),
     server.loginAs(ownerId),
     server.loginAs(otherId),
   ]);
@@ -107,7 +107,7 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, ownerId, otherId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, ownerId, otherId] } } });
   await prisma.$disconnect();
 });
 
@@ -125,22 +125,22 @@ describe('the mover of an obscured token', () => {
     ['token.move.start', 'token.move.start', {}],
     ['token.move', 'token.moved', { x: 4, y: 4 }],
     ['token.move.end', 'token.moved', { x: 5, y: 5 }],
-  ])('is not named to another player by %s, and is to the DM', async (sent, received, coords) => {
+  ])('is not named to another player by %s, and is to the GM', async (sent, received, coords) => {
     const owner = await server.connectAndAuth(ownerCookie, campaignId);
     const other = await server.connectAndAuth(otherCookie, campaignId);
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
     const toOther = waitForEvent<MoveEvent>(other, received);
-    const toDm = waitForEvent<MoveEvent>(dm, received);
+    const toGm = waitForEvent<MoveEvent>(gm, received);
     owner.emit(sent, { tokenId: VEILED, mapId, ...coords });
 
-    const [seenByOther, seenByDm] = await Promise.all([toOther, toDm]);
+    const [seenByOther, seenByGm] = await Promise.all([toOther, toGm]);
     expect(seenByOther.movedBy).toBeNull();
-    expect(seenByDm.movedBy).toBe(ownerId);
+    expect(seenByGm.movedBy).toBe(ownerId);
 
     owner.disconnect();
     other.disconnect();
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('is named to the mover\'s own other screens when the move is saved', async () => {

@@ -37,7 +37,7 @@ beforeAll(async () => {
   const user = await createTestUser({ displayName: 'Upload Names' });
   userId = user.id;
   campaignId = (await createTestCampaign(userId, { name: 'Upload names' })).id;
-  await prisma.campaignMembership.create({ data: { userId, campaignId, role: 'DM', characterIds: [] } });
+  await prisma.campaignMembership.create({ data: { userId, campaignId, role: 'GM', characterIds: [] } });
   agent = request.agent(app);
   await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD }).expect(200);
 });

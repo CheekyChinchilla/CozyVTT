@@ -64,7 +64,7 @@ const router = Router();
 
 /**
  * Per-user rate limiter for asset uploads. Sized to allow legitimate bulk
- * upload during campaign setup (a DM placing tokens for a new dungeon may
+ * upload during campaign setup (a GM placing tokens for a new dungeon may
  * upload 20+ images in a couple of minutes) while blocking obvious abuse
  * (e.g. a script trying to exhaust storage). Keyed by user id so one user's
  * activity does not penalize others on the same NAT.
@@ -118,7 +118,7 @@ const ASSET_PUBLIC_SELECT = {
  *
  * The map and token routes asked this in identical, separately-written blocks,
  * and neither allowed for an asset being *used* by a campaign rather than
- * uploaded into one — which is how a DM's own map, picked from their personal
+ * uploaded into one — which is how a GM's own map, picked from their personal
  * library, 403'd for every player at the table. One place now, so the two
  * cannot answer differently again.
  *
@@ -286,7 +286,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       });
     }
 
-    // A map's pictures are kept from a member who is not the DM until the
+    // A map's pictures are kept from a member who is not the GM until the
     // table is on a map showing them (mapPictureHidden, the rule the read
     // asks too). Only campaign assets: a member's own personal upload is
     // theirs wherever it is used.
@@ -322,7 +322,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
             message: 'You do not have access to this campaign',
           });
         }
-        if (membership.role !== 'DM') await hideMapPictures([campaignId]);
+        if (membership.role !== 'GM') await hideMapPictures([campaignId]);
       }
 
       where.campaignId = campaignId;
@@ -343,7 +343,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         { scope: 'USER', uploadedById: userId },       // User's own personal assets
         ...campaignIds.map((cId: string) => ({ scope: 'CAMPAIGN' as const, campaignId: cId })), // Campaign assets
       ];
-      await hideMapPictures(userMemberships.filter((m) => m.role !== 'DM').map((m) => m.campaignId));
+      await hideMapPictures(userMemberships.filter((m) => m.role !== 'GM').map((m) => m.campaignId));
     }
     if (conditions.length > 0) where.AND = conditions;
     // Admin with no campaignId: no OR filter — sees all assets across all scopes/users
@@ -670,38 +670,38 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 const DELETE_REFUSALS: Record<AssetScopes, string> = {
   GLOBAL: 'Only admins or the uploading global asset manager can delete global assets',
   USER: 'Only the owner can delete personal assets',
-  CAMPAIGN: 'Only the uploader while a member of the campaign, its DM, or an admin can delete campaign assets',
+  CAMPAIGN: 'Only the uploader while a member of the campaign, its GM, or an admin can delete campaign assets',
 };
 
 /** Why a move out of the asset's scope was refused, by that scope. */
 const MOVE_REFUSALS: Record<AssetScopes, string> = {
   GLOBAL: 'Only admins or the uploading global asset manager can move a global asset out of the library',
   USER: 'Only the asset owner can move personal assets',
-  CAMPAIGN: 'Only the asset owner or campaign DM can move this asset',
+  CAMPAIGN: 'Only the asset owner or campaign GM can move this asset',
 };
 
 /** Why an uploader who does not run the campaign may not delete, or move, an asset others there use (mayRemoveAsset). */
 const USED_BY_OTHERS = {
-  delete: "Others in the campaign use this asset, so only the campaign's DM can delete it",
-  move: "Others in the campaign use this asset, so only the campaign's DM can move it out of the campaign",
+  delete: "Others in the campaign use this asset, so only the campaign's GM can delete it",
+  move: "Others in the campaign use this asset, so only the campaign's GM can move it out of the campaign",
 };
 
 /** The same, when the only such use is a character template, which everyone on the instance is offered. */
 const USED_BY_A_TEMPLATE = {
-  delete: "A character template uses this asset, so only the campaign's DM can delete it",
-  move: "A character template uses this asset, so only the campaign's DM can move it out of the campaign",
+  delete: "A character template uses this asset, so only the campaign's GM can delete it",
+  move: "A character template uses this asset, so only the campaign's GM can move it out of the campaign",
 };
 
 /** The same, while documents of the campaign's members stored before 1.6.0 are still to be read for the pictures they show (mayRemoveAsset). */
 const DOCUMENTS_UNREAD = {
-  delete: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's DM can delete this asset. Try again later.",
-  move: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's DM can move this asset out of the campaign. Try again later.",
+  delete: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's GM can delete this asset. Try again later.",
+  move: "Some older documents have not yet been checked for the pictures they show, so for now only the campaign's GM can move this asset out of the campaign. Try again later.",
 };
 
 /**
  * DELETE /api/assets/:id
  * Delete an asset
- * Requires: Authentication + ownership or campaign DM. A campaign asset's
+ * Requires: Authentication + ownership or campaign GM. A campaign asset's
  * uploader who does not run the campaign is refused with 403 while anything
  * but their own characters, tokens and documents uses it, or while documents
  * of the campaign's other members stored before 1.6.0 are still to be read
@@ -940,7 +940,7 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
  * PUT /api/assets/documents/:id/content
  * Replace the text of a plain text or Markdown document.
  * Requires: whoever may change it (mayChangeAsset): for a campaign's document
- * its uploader while still a member, the campaign's DM, or an admin; for a
+ * its uploader while still a member, the campaign's GM, or an admin; for a
  * global one an admin, or its uploader while they manage global assets; for a
  * personal one its uploader, or an admin
  *
@@ -1035,9 +1035,9 @@ const pictureSaveTurns = createTurnQueue();
  * Write a new picture over a drawn map's picture: Paint's Save. The asset
  * keeps its id, so the map, a shared Document and a note naming it all show
  * the new painting; no earlier version is kept.
- * Requires: authentication, and to be the DM of the asset's campaign. A
+ * Requires: authentication, and to be the GM of the asset's campaign. A
  * platform admin who is not is refused like anyone else: overwriting a
- * campaign's picture is the DM's choice at their table.
+ * campaign's picture is the GM's choice at their table.
  *
  * Only a picture Paint made (isDrawnPicture, in a campaign's library) may be
  * written over; any other answers 400, and an asset the caller may not read
@@ -1069,8 +1069,8 @@ router.put(
         where: { userId_campaignId: { userId: req.session.userId!, campaignId: asset.campaignId } },
         select: { role: true },
       });
-      if (membership?.role !== 'DM') {
-        return res.status(403).json({ error: 'Forbidden', message: "Only the campaign's DM can save over its drawn pictures" });
+      if (membership?.role !== 'GM') {
+        return res.status(403).json({ error: 'Forbidden', message: "Only the campaign's GM can save over its drawn pictures" });
       }
       req.replacing = asset.id;
       req.assetType = 'MAP';
@@ -1234,7 +1234,7 @@ function sendImageAsset(res: Response, filePath: string): void {
  * Serve a document (PDF, text or Markdown) for reading inline.
  * Requires: authentication, and read access to the asset
  *
- * A document is private to its uploader unless a DM has shared it with a
+ * A document is private to its uploader unless a GM has shared it with a
  * campaign the caller belongs to. `canReadAsset` is where that is decided; this
  * route only asks.
  *
@@ -1615,7 +1615,7 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
  *   Admin → any move
  *   Moving out of a scope → whoever may delete the asset there (mayRemoveAsset):
  *     GLOBAL: its uploader while a global asset manager; USER: its owner;
- *     CAMPAIGN: the campaign's DM, or its uploader while still a member and
+ *     CAMPAIGN: the campaign's GM, or its uploader while still a member and
  *     while nothing but their own characters, tokens and documents uses it
  *   Moving to or from GLOBAL → also a global asset manager
  *   Moving to CAMPAIGN → also whoever may upload that type there
@@ -1698,8 +1698,8 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     if (!isAdmin) {
       // Moving out of where it is: whoever may delete it there. A global asset
       // manager moving another manager's global asset out of the library
-      // would take it from every DM, which deleting it forbids; a campaign
-      // asset others there use is its DM's alone, a former DM's included.
+      // would take it from every GM, which deleting it forbids; a campaign
+      // asset others there use is its GM's alone, a former GM's included.
       const removal = await mayRemoveAsset(asset, userId, false);
       if (!removal.allowed) {
         const message = removal.reason === 'used-by-others' ? USED_BY_OTHERS.move
@@ -1710,8 +1710,8 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       }
 
       // A personal asset is its uploader's, so only they move one there. A
-      // campaign's DM moving a player's upload to Personal would put it in
-      // the player's library, out of the campaign and out of the DM's reach.
+      // campaign's GM moving a player's upload to Personal would put it in
+      // the player's library, out of the campaign and out of the GM's reach.
       if (scope === 'USER' && asset.uploadedById !== userId) {
         return res.status(403).json({
           error: 'Forbidden',
@@ -1721,7 +1721,7 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
 
       // Moving TO CAMPAIGN: the same question the upload route asks, so a
       // member who could not upload here cannot publish here either. That is
-      // the DM, or a player moving token art.
+      // the GM, or a player moving token art.
       if (scope === 'CAMPAIGN' && resolvedCampaignId) {
         const placement = await canPlaceAssetAtScope(userId, asset.type, 'CAMPAIGN', resolvedCampaignId);
         if (!placement.allowed) {

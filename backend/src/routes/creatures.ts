@@ -7,7 +7,7 @@
 import { Router, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
 import { AuthenticatedRequest } from '../middleware/rbac';
-import { campaignMember, campaignDM } from '../middleware/compose';
+import { campaignMember, campaignGM } from '../middleware/compose';
 import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
@@ -19,7 +19,8 @@ import { TOKEN_IMAGE_NOT_A_TOKEN_PICTURE_MESSAGE } from '../validators/tokens';
 import { issueMessages } from '../validators/issueMessages';
 import { toJson } from '../utils/prisma-json';
 import { readEnumQuery, readStringQueries } from '../utils/queryEnum';
-import { GameSystem } from '../game-systems';
+import { normaliseGameSystem } from '../legacy/gameSystemAliases';
+import { GAME_SYSTEM_NOT_SUPPORTED, SUPPORTED_GAME_SYSTEMS } from '../game-systems';
 import logger from '../utils/logger';
 import { escapeLikePattern } from '../utils/likePattern';
 
@@ -66,8 +67,8 @@ export const SEED_ADMIN_ONLY =
 
 /**
  * The import writes creatures every campaign shares and fetches from Open5e
- * each time, so it is the instance's administrators' to run, not any DM's:
- * any user can be the DM of a campaign of their own. The campaign in the
+ * each time, so it is the instance's administrators' to run, not any GM's:
+ * any user can be the GM of a campaign of their own. The campaign in the
  * address plays no part.
  */
 function adminToSeed(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
@@ -111,10 +112,10 @@ router.post('/seed', requireAuth, adminToSeed, async (_req: AuthenticatedRequest
 // ============================================
 // LIST — GET /
 // Returns SRD + campaign-specific templates, with search/filter support.
-// DM only: a template carries the DM's notes, stat block and hit points.
+// GM only: a template carries the GM's notes, stat block and hit points.
 // ============================================
 
-router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const text = readStringQueries(req.query, ['search', 'source', 'cr', 'limit', 'offset'] as const);
@@ -122,9 +123,10 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
       return res.status(400).json({ error: 'Validation Error', message: text.message });
     }
     const { search, source, cr, limit = '50', offset = '0' } = text.values;
-    const system = readEnumQuery(req.query.gameSystem, 'gameSystem', Object.values(GameSystem));
+    // A system's value from an older version is read as its new one.
+    const system = readEnumQuery(normaliseGameSystem(req.query.gameSystem) ?? req.query.gameSystem, 'gameSystem', SUPPORTED_GAME_SYSTEMS);
     if (!system.ok) {
-      return res.status(400).json({ error: 'Validation Error', message: system.message });
+      return res.status(400).json({ error: 'Validation Error', message: GAME_SYSTEM_NOT_SUPPORTED });
     }
     const gameSystem = system.value;
 
@@ -201,7 +203,7 @@ function isVisibleFromCampaign(
 // GET ONE — GET /:creatureId
 // ============================================
 
-router.get('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:creatureId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
 
@@ -224,10 +226,10 @@ router.get('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
 
 // ============================================
 // CREATE — POST /
-// DM only. Creates a campaign-specific custom creature.
+// GM only. Creates a campaign-specific custom creature.
 // ============================================
 
-router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const userId = req.session.userId!;
@@ -241,7 +243,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     }
     const data = parsed.data;
 
-    // A picture the DM may read: a creature's picture counts as the campaign using it.
+    // A picture the GM may read: a creature's picture counts as the campaign using it.
     const imageUrl = normalizeAssetUrl(data.imageUrl || null, 'tokens');
     if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
@@ -281,10 +283,10 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
 
 // ============================================
 // UPDATE — PUT /:creatureId
-// DM only. Can only update campaign-specific creatures (not SRD).
+// GM only. Can only update campaign-specific creatures (not SRD).
 // ============================================
 
-router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:creatureId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
 
@@ -320,7 +322,7 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(403).json({ error: 'Forbidden', message: 'Cannot edit creatures from another campaign' });
     }
 
-    // A new picture the DM may read; the one already stored may stay.
+    // A new picture the GM may read; the one already stored may stay.
     const nextImageUrl = data.imageUrl === undefined ? undefined : data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
     if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
@@ -355,10 +357,10 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
 
 // ============================================
 // DELETE — DELETE /:creatureId
-// DM only. Cannot delete SRD creatures.
+// GM only. Cannot delete SRD creatures.
 // ============================================
 
-router.delete('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:creatureId', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
 
@@ -389,10 +391,10 @@ router.delete('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res:
 
 // ============================================
 // DUPLICATE — POST /:creatureId/duplicate
-// DM only. Copies any creature (including SRD) into a campaign-specific custom creature.
+// GM only. Copies any creature (including SRD) into a campaign-specific custom creature.
 // ============================================
 
-router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:creatureId/duplicate', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
     const userId = req.session.userId!;
@@ -445,7 +447,7 @@ router.post('/:creatureId/duplicate', campaignDM, async (req: AuthenticatedReque
 // Returns creature IDs that the current user has favorited in this campaign.
 // ============================================
 
-router.get('/favorites/list', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/favorites/list', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const userId = req.session.userId!;
@@ -473,7 +475,7 @@ router.get('/favorites/list', campaignDM, async (req: AuthenticatedRequest, res:
 // Toggle favorite for the current user in this campaign.
 // ============================================
 
-router.post('/:creatureId/favorite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:creatureId/favorite', campaignGM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, creatureId } = req.params;
     const userId = req.session.userId!;

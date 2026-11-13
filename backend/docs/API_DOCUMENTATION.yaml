@@ -65,7 +65,20 @@ info:
 
     ## Authorization
     - **Platform roles**: `ADMIN` (full system access), `USER` (campaign access)
-    - **Campaign roles**: `DM` (full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (watches, chats and pings; keeps their own notes and dice macros; cannot roll dice or initiative, move or edit tokens, or edit a character)
+    - **Campaign roles**: `GM` (the game master, with full campaign control), `PLAYER` (limited interaction), `SPECTATOR` (watches, chats and pings; keeps their own notes and dice macros; cannot roll dice or initiative, move or edit tokens, or edit a character)
+
+    ## Values older versions used
+    Version 1.7.0 renamed the game systems to `FIFTH_EDITION`, `FANTASY_D20`
+    and `HORROR_D100`, and the game master's campaign role, chat message type,
+    drawing audience and archive drawing share to `GM` (it was `DM`). Every
+    route, live-table event, campaign archive and character file still takes
+    each system's earlier value, and `DM`, and reads them as the new ones,
+    though the enums below list only the new values; answers carry the new
+    values. The GM's hand-over still answers at its old path,
+    `PUT /api/campaigns/{campaignId}/dm`. For this release its event also goes
+    out as `campaign.dm.transferred`, both names with `previousDmId` and
+    `newDmId` beside `previousGmId` and `newGmId`, and a pending invitation
+    names its GM as `dm` beside `gm`.
 
     ## Rate Limiting
     The HTTP limits are counted per client address as the backend sees it: the
@@ -173,11 +186,11 @@ info:
       answering 429 `Too Many Requests` past that
     - Invitation emails (`POST /api/campaigns/{campaignId}/invite` with
       `sendEmail: true`, on an instance with SMTP configured): 20 per hour per
-      DM, then 429 `Too Many Requests`. An invitation the route creates is
+      GM, then 429 `Too Many Requests`. An invitation the route creates is
       counted whether or not its email goes out; one the route refuses is
       not counted, and one sent without the email is never limited
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
-      The DM can also turn on the campaign's chat cooldown (off by default),
+      The GM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
     - Dice rolls (WebSocket): 50 a second and 200 a minute per user
     - Token movement (WebSocket), per user: drag frames (`token.move`) 150 a
@@ -255,7 +268,7 @@ info:
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     The event reference is `backend/docs/WEBSOCKET_DOCUMENTATION.md`.
 
-  version: 1.6.1
+  version: 1.7.0
   contact:
     name: CozyVTT
     url: https://cozyvtt.com
@@ -299,9 +312,9 @@ tags:
   - name: Creatures
     description: Creature template library — SRD and custom creatures, favorites, seeding
   - name: Token Templates
-    description: Reusable token configurations savable per-campaign and copyable across campaigns the DM owns
+    description: Reusable token configurations savable per-campaign and copyable across campaigns the GM owns
   - name: Walls & Lighting
-    description: Per-map wall segments, light sources, and fog-of-war state (DM-only writes)
+    description: Per-map wall segments, light sources, and fog-of-war state (GM-only writes)
   - name: Invitations
     description: Campaign invitation lifecycle (send, list, accept, decline)
   - name: Campaign Export/Import
@@ -309,7 +322,7 @@ tags:
   - name: Messages
     description: Chat message history
   - name: Documents
-    description: PDF, text and Markdown files uploaded as assets, shared with a campaign by its DM and read inline
+    description: PDF, text and Markdown files uploaded as assets, shared with a campaign by its GM and read inline
   - name: Dice Macros
     description: A player's own saved dice rolls for one campaign, private to whoever saved them
   - name: Admin
@@ -397,7 +410,7 @@ paths:
                     description: >-
                       Whether this instance can send email. Host, port and
                       credentials stay on the admin-only `GET /api/admin/config`;
-                      this bare boolean lets a non-admin DM tell whether an
+                      this bare boolean lets a non-admin GM tell whether an
                       invitation's "also email them" option will do anything.
                     properties:
                       configured:
@@ -757,7 +770,7 @@ paths:
                     first, sign-ins waiting for their two-factor code
                     included.
             example:
-              email: dm@example.com
+              email: gm@example.com
               password: hunter2-correct-horse-battery
               rememberMe: true
       responses:
@@ -1559,10 +1572,10 @@ paths:
         was not in, or outside a campaign, stays `USER` and an activity log
         line names it. Their chat messages, dice rolls, campaign assets and
         the personal assets that stay are kept with the user field set to
-        null, as are what they drew on maps (`authorId` null; the DM's to
+        null, as are what they drew on maps (`authorId` null; the GM's to
         erase) and the whispers sent to them (`recipientId` null; their
         sender's alone), and documents they shared into a campaign stay shared (the
-        share passes to the campaign's DM, or its owner). Character
+        share passes to the campaign's GM, or its owner). Character
         templates they published, and token templates and creatures they
         made, stay with no author: their `createdById` is set to null.
 
@@ -1572,11 +1585,11 @@ paths:
         removal to finish.
 
         The user's campaigns are checked before anything is written. A campaign
-        the user owns whose DM seat another member holds passes to that DM.
+        the user owns whose GM seat another member holds passes to that GM.
         The deletion is refused with 409, and nothing changes, when the user
-        sits in the DM seat of any campaign, whether or not they own it (the
+        sits in the GM seat of any campaign, whether or not they own it (the
         seat can be held by a member who is not the owner), or owns a campaign
-        whose DM seat is empty. A campaign the user is only a player or
+        whose GM seat is empty. A campaign the user is only a player or
         spectator in is not checked.
 
         Rate limits: the wrong-password allowance above is checked before the
@@ -1642,8 +1655,8 @@ paths:
         '409':
           description: >-
             The caller is the instance's only admin (another user has to be
-            promoted to admin first), or sits as DM of a campaign, whether or
-            not they own it, or owns a campaign whose DM seat is empty (the
+            promoted to admin first), or sits as GM of a campaign, whether or
+            not they own it, or owns a campaign whose GM seat is empty (the
             message names each one). Checked after the password. Nothing was changed. The body is `{ error, message }`
             only; unlike `DELETE /api/users/{id}` it carries no `campaigns`
             list.
@@ -1653,7 +1666,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Conflict
-                message: You run "Curse of the Lantern". Hand the DM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.
+                message: You run "Curse of the Lantern". Hand the GM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.
         '429':
           description: >-
             The account has had 10 wrong passwords in 15 minutes from every
@@ -1730,7 +1743,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AppearanceSettings'
               example:
-                instanceName: The Hearthstone Tavern
+                instanceName: The Mossy Lantern
                 themeId: cozy-default
                 customThemeColors: null
                 fontId: default
@@ -2035,8 +2048,8 @@ paths:
         every login session and live WebSocket connection the deleted user
         had, and broadcasts `roster.updated` (`member.left`) to each campaign
         they were a member of. What stays and what goes, which campaigns are
-        checked, and the 409 for a user who sits as DM of any campaign, owned
-        or not, or owns one whose DM seat is empty, are as for
+        checked, and the 409 for a user who sits as GM of any campaign, owned
+        or not, or owns one whose GM seat is empty, are as for
         `DELETE /api/auth/account`, and so is the removal of the personal files
         just after the answer. No password is asked for, so the wrong-password
         allowance does not apply; only the general API limit can answer 429.
@@ -2090,11 +2103,11 @@ paths:
           description: >-
             The user is the instance's only admin (which can happen only when
             the calling admin lost the role at the same moment), with no
-            `campaigns`; or the user sits as DM of a campaign, whether or not
-            they own it, or owns a campaign whose DM seat is empty. `campaigns`
+            `campaigns`; or the user sits as GM of a campaign, whether or not
+            they own it, or owns a campaign whose GM seat is empty. `campaigns`
             lists each such campaign with its other members,
-            so the admin can hand the DM seat over (`PUT
-            /api/campaigns/{campaignId}/dm`) or delete the campaign and try
+            so the admin can hand the GM seat over (`PUT
+            /api/campaigns/{campaignId}/gm`) or delete the campaign and try
             again. Nothing was changed.
           content:
             application/json:
@@ -2365,7 +2378,7 @@ paths:
                                 $ref: '#/components/schemas/CampaignMembership'
                             userRole:
                               type: string
-                              enum: [DM, PLAYER, SPECTATOR]
+                              enum: [GM, PLAYER, SPECTATOR]
                             characterIds:
                               type: array
                               items: { type: string, format: uuid }
@@ -2375,7 +2388,7 @@ paths:
         - Campaigns
       summary: Create campaign
       description: |
-        Create a new campaign. The caller becomes its owner and its DM, and it
+        Create a new campaign. The caller becomes its owner and its GM, and it
         starts with the default atmosphere periods (dawn, day, dusk, night).
         The optional `gameSystem` field can also be set later. A validation
         failure is a 400 whose `message` names the first problem found.
@@ -2402,7 +2415,7 @@ paths:
                   description: Optional, stored as an empty string when omitted. Null is refused here, although the update route accepts it.
                 gameSystem:
                   type: string
-                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                   nullable: true
                   description: Optional game system for the campaign
       responses:
@@ -2437,11 +2450,11 @@ paths:
         active session, and the caller's own role (requires campaign
         membership). An unknown campaign id answers the membership 403.
 
-        `maps` lists every map to the DM and only the campaign's current map
+        `maps` lists every map to the GM and only the campaign's current map
         to other members (none when no map is current). It carries metadata
         only, not the token, wall, fog or light data a map fetch
         (`GET /api/campaigns/{campaignId}/maps/{id}`) returns. `spiritLayerUrl` is filled in for the
-        DM, for every member while the campaign's spirit layer is switched on,
+        GM, for every member while the campaign's spirit layer is switched on,
         and for a player who has a visible token of their own on the spirit
         layer of the current map. Everyone else gets `null`, so a map's spirit
         image is never addressable by someone who should not see it.
@@ -2523,7 +2536,7 @@ paths:
                               startedAt: { type: string, format: date-time }
                           userRole:
                             type: string
-                            enum: [DM, PLAYER, SPECTATOR]
+                            enum: [GM, PLAYER, SPECTATOR]
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -2532,7 +2545,7 @@ paths:
         - Campaigns
       summary: Update campaign
       description: |
-        Update campaign settings (DM only). Every field is optional and is
+        Update campaign settings (GM only). Every field is optional and is
         validated when present; a bad value is a 400 whose message describes
         the first problem found. Most messages name the field; a value of the
         wrong type for `name` or `description`, a `spiritLayerStyle` over 100
@@ -2585,7 +2598,7 @@ paths:
                     in the request is stored.
                 gameSystem:
                   type: string
-                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                   nullable: true
                   description: Game system for the campaign (warning logged if characters exist)
                 vibeSettings:
@@ -2597,7 +2610,7 @@ paths:
                     same check of each period's track, the current period
                     kept or cleared, and `vibe.settings.updated` sent to the
                     table. They are saved after the other fields; a track the
-                    DM may not play to the table refuses the whole request
+                    GM may not play to the table refuses the whole request
                     with 400 before anything is written.
                   required: [periods]
                   properties:
@@ -2642,7 +2655,7 @@ paths:
                   type: boolean
                   description: >-
                     Whether players may draw on the map (`drawing:add`,
-                    `drawing:preview`); the DM always may. A player's own
+                    `drawing:preview`); the GM always may. A player's own
                     drawings stay theirs to erase while it is off. Anything
                     but `true` or `false` answers 400 with "playersMayDraw
                     must be true or false".
@@ -2733,7 +2746,7 @@ paths:
                         userAvatar: { type: string, nullable: true }
                         role:
                           type: string
-                          enum: [DM, PLAYER, SPECTATOR]
+                          enum: [GM, PLAYER, SPECTATOR]
                         joinedAt: { type: string, format: date-time }
                         characters:
                           type: array
@@ -2751,10 +2764,12 @@ paths:
                                 description: >-
                                   Null unless the sheet records a positive maximum,
                                   and always null for a character with no game
-                                  system or one other than D&D 5e, Pathfinder 2e
-                                  and Call of Cthulhu 7e. `current` falls back to
+                                  system or one other than 5E, Fantasy d20
+                                  and Horror d100. `current` falls back to
                                   the maximum when unset; `temp` is 0 when unset
-                                  and always 0 for Call of Cthulhu.
+                                  and always 0 for Horror d100. A Horror d100
+                                  character's `current` is below 0 once it has
+                                  lost more hit points than it had.
                                 properties:
                                   current: { type: number }
                                   max: { type: number }
@@ -2775,7 +2790,7 @@ paths:
         invitation to it that is still in date (one past its `expiresAt`
         does not count), and are not
         waiting for an administrator's
-        approval. Used by the DM-side invite picker. DM only.
+        approval. Used by the GM-side invite picker. GM only.
 
         A `search` of 2 or more characters (after trimming) finds display
         names that contain it. A 1-character `search` finds only display
@@ -2813,7 +2828,7 @@ paths:
                     maxItems: 20
                     items:
                       type: object
-                      description: Never includes `email`, so a DM cannot collect addresses through the invite picker. Ordered by display name.
+                      description: Never includes `email`, so a GM cannot collect addresses through the invite picker. Ordered by display name.
                       properties:
                         id: { type: string, format: uuid }
                         displayName: { type: string }
@@ -2841,7 +2856,7 @@ paths:
         - Campaigns
       summary: Invite user to campaign
       description: >-
-        Create a PENDING invitation for a user (DM only). This route does not
+        Create a PENDING invitation for a user (GM only). This route does not
         create a membership; the user joins as PLAYER once they accept it with
         `POST /api/invitations/{id}/accept`. An account still waiting for an
         administrator's approval is answered 404, as for no account. 400 when `userId` is missing or
@@ -2887,9 +2902,9 @@ paths:
                   description: >-
                     Email the invitation if the instance has SMTP configured.
                     Anything other than exactly `true` is treated as no email.
-                    Each DM may make 20 invitations an hour that ask for an
+                    Each GM may make 20 invitations an hour that ask for an
                     email; see the 429 response. The email's subject and inbox preview name
-                    the instance only, never the campaign or the DM.
+                    the instance only, never the campaign or the GM.
       responses:
         '201':
           description: >-
@@ -2933,7 +2948,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: >-
-            `sendEmail` was `true`, SMTP is configured, and this DM has already
+            `sendEmail` was `true`, SMTP is configured, and this GM has already
             made 20 invitations that asked for an email in the last hour,
             counted whether or not each email went out (`emailSent: false`
             counts too). No invitation is created. Requests without
@@ -2956,7 +2971,7 @@ paths:
       summary: List the campaign's invitations that still stand
       description: >-
         The campaign's pending invitations that have not passed their
-        `expiresAt`, newest first (DM only). Invitations sent from the web app
+        `expiresAt`, newest first (GM only). Invitations sent from the web app
         expire after 14 days.
       operationId: listCampaignInvitations
       security:
@@ -2993,7 +3008,7 @@ paths:
         - Campaigns
       summary: Withdraw a pending invitation
       description: >-
-        Deletes a pending invitation of this campaign (DM only), so the invited
+        Deletes a pending invitation of this campaign (GM only), so the invited
         user no longer has it and can be invited again. An invitation of
         another campaign, one already accepted or declined, or an unknown id
         answers 404 (`Invitation not found`).
@@ -3026,9 +3041,9 @@ paths:
         - Campaigns
       summary: Remove member
       description: >-
-        Remove a member from campaign (DM only). The sitting DM and the
+        Remove a member from campaign (GM only). The sitting GM and the
         campaign owner cannot be removed; both return 400 (`Cannot remove the
-        Dungeon Master from the campaign`, `Cannot remove the campaign owner
+        GM from the campaign`, `Cannot remove the campaign owner
         from their own campaign`). The member's
         characters are taken out of the campaign in the same step (their
         `campaignId` becomes null), and a character still naming a campaign
@@ -3077,7 +3092,7 @@ paths:
         - Campaigns
       summary: Leave the campaign
       description: >-
-        Leave the campaign, as a player or a spectator: what the DM's
+        Leave the campaign, as a player or a spectator: what the GM's
         Remove does, asked by the member. No body. The caller's characters
         are taken out of the campaign in the same step (their `campaignId`
         becomes null); their tokens, combatants, drawings, notes and dice
@@ -3088,10 +3103,10 @@ paths:
         of them is carrying is sent back to its square, and the campaign
         receives `presence.state` and `roster.updated` (`{ action:
         'member.left', userId, campaignId }`). The campaign's owner and its
-        DM are refused with 409, the owner first, so an owner sitting as DM
+        GM are refused with 409, the owner first, so an owner sitting as GM
         is told they own it; the role is read in the same serializable
         transaction as the change, so a hand-over at the same moment is
-        caught. Only the DM can invite the caller back.
+        caught. Only the GM can invite the caller back.
       operationId: leaveCampaign
       security:
         - cookieAuth: []
@@ -3112,7 +3127,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: >-
-            `You are not a member of this campaign`, also when the DM removed
+            `You are not a member of this campaign`, also when the GM removed
             the caller just before this request was handled
           content:
             application/json:
@@ -3121,8 +3136,8 @@ paths:
         '409':
           description: >-
             The owner: `You own this campaign, so you cannot leave it. If you
-            no longer want it, delete it in the campaign's settings.` The DM:
-            `You run this campaign. Hand the DM seat to someone else in the
+            no longer want it, delete it in the campaign's settings.` The GM:
+            `You run this campaign. Hand the GM seat to someone else in the
             campaign's settings, then leave it.`
           content:
             application/json:
@@ -3135,13 +3150,14 @@ paths:
         - Campaigns
       summary: Change member role
       description: >-
-        Switch a member between PLAYER and SPECTATOR (DM only). The DM seat
-        cannot be moved here: naming the DM as the member answers 400 `Cannot
-        change the Dungeon Master's role`, and asking for `DM` answers 400
-        `Campaign already has a Dungeon Master. Only one DM per campaign is
-        allowed.`; use `PUT /api/campaigns/{campaignId}/dm`. Any `role` other
-        than `DM`, `PLAYER` or `SPECTATOR` answers 400 `Role must be DM,
-        PLAYER, or SPECTATOR`, checked before the member is looked up. The
+        Switch a member between PLAYER and SPECTATOR (GM only). The GM seat
+        cannot be moved here: naming the GM as the member answers 400 `Cannot
+        change the GM's role`, and asking for `GM` (or `DM`, as versions
+        before 1.7.0 sent it) answers 400 `Campaign already has a GM. Only one
+        GM per campaign is allowed.`; use `PUT /api/campaigns/{campaignId}/gm`.
+        Any `role` other than `GM`, `DM`, `PLAYER` or `SPECTATOR` answers 400
+        `Role must be GM, PLAYER, or SPECTATOR`, checked before the member is
+        looked up. The
         member keeps their assigned
         characters. Their open connections take the new role at once, and
         `campaign.role.changed` (`{ campaignId, userId, role }`) goes to
@@ -3170,7 +3186,7 @@ paths:
               properties:
                 role:
                   type: string
-                  enum: [DM, PLAYER, SPECTATOR]
+                  enum: [GM, PLAYER, SPECTATOR]
       responses:
         '200':
           description: Role updated
@@ -3194,38 +3210,41 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/campaigns/{campaignId}/dm:
+  /api/campaigns/{campaignId}/gm:
     put:
       tags:
         - Campaigns
-      summary: Transfer the DM role
+      summary: Transfer the GM role
       description: >-
-        Hand the Dungeon Master seat to another member of the campaign. The
-        outgoing DM becomes a PLAYER and the named member becomes DM, as a single
-        atomic change, so the campaign is never observable with two DMs or none.
-        The campaign's owner is NOT changed: ownership and the DM role are
+        Hand the GM seat to another member of the campaign. The
+        outgoing GM becomes `PLAYER` and the named member becomes `GM`, as a single
+        atomic change, so the campaign is never observable with two GMs or none.
+        The campaign's owner is NOT changed: ownership and the GM role are
         separate, which lets an owner hand the game to someone else and remain at
-        the table as a player. Callable by the sitting DM, the campaign owner
-        (even when they are not the DM), or a platform admin. Both members'
-        open connections take their new roles at once; `campaign.dm.transferred`
+        the table as a player. Callable by the sitting GM, the campaign owner
+        (even when they are not the GM), or a platform admin. Both members'
+        open connections take their new roles at once; `campaign.gm.transferred`
+        (and, for this release, the same event as `campaign.dm.transferred`)
         and a `roster.updated` for each go to the campaign, and the initiative
         order, the map on screen and its drawings (`drawings:state`) are sent
-        again as each new role sees them, so a drawing for the DM alone goes
+        again as each new role sees them, so a drawing for the GM alone goes
         with the seat.
         The caller need not be a member when they own the campaign or are an
         admin, so the route answers for itself: a campaign that does not exist,
         or one the caller is neither a member of, its owner nor an admin,
         answers 404, as does a `userId` that is not a member; naming the
-        sitting DM is a 400.
+        sitting GM is a 400.
         Who may hand the seat over, who holds it and the change are read and
         made as one serializable transaction, so of two hand-overs at the same
-        moment the second sees the first: a sitting DM whose seat was handed
+        moment the second sees the first: a sitting GM whose seat was handed
         on meanwhile is refused with 403 unless they own the campaign or are
-        an admin. Every DM row is stepped down, so a
-        campaign left with two DMs by an older version comes out with one;
-        `previousDmId` names the first of them.
+        an admin. Every GM row is stepped down, so a
+        campaign left with two GMs by an older version comes out with one;
+        `previousGmId` names the first of them.
+        Also answered at `PUT /api/campaigns/{campaignId}/dm`, the path
+        versions before 1.7.0 gave it.
         The response lists every membership with its `user`.
-      operationId: transferDM
+      operationId: transferGM
       security:
         - cookieAuth: []
       parameters:
@@ -3242,10 +3261,10 @@ paths:
                 userId:
                   type: string
                   format: uuid
-                  description: The campaign member who should become DM
+                  description: The campaign member who should become GM
       responses:
         '200':
-          description: DM role transferred
+          description: GM role transferred
           content:
             application/json:
               schema:
@@ -3263,17 +3282,17 @@ paths:
             campaign member must be named by their user id"), is missing or
             not text (`Validation Error`, "Invalid input: expected string,
             received undefined" or the type received), or names the sitting
-            DM (`Bad Request`, "That member is already the Dungeon Master").
+            GM (`Bad Request`, "That member is already the GM").
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Bad Request
-                message: That member is already the Dungeon Master
+                message: That member is already the GM
         '403':
           description: >-
-            The caller is a member of the campaign but not the sitting DM, the
+            The caller is a member of the campaign but not the sitting GM, the
             campaign owner or a platform admin.
           content:
             application/json:
@@ -3281,7 +3300,87 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Forbidden
-                message: Only the DM, the campaign owner, or an admin can transfer the DM role
+                message: Only the GM, the campaign owner, or an admin can transfer the GM role
+        '404':
+          description: >-
+            The campaign does not exist, or the caller is neither a member, its
+            owner nor a platform admin ("Campaign not found", answered alike
+            for both), or `userId` is not a member of it ("That user is not a
+            member of this campaign").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: That user is not a member of this campaign
+
+  /api/campaigns/{campaignId}/dm:
+    put:
+      tags:
+        - Campaigns
+      summary: Transfer the GM role, at the path older versions gave it
+      description: >-
+        The same route as `PUT /api/campaigns/{campaignId}/gm`, with the same
+        body, answers and events, at the path versions before 1.7.0 gave it,
+        so a script made for one still works.
+      operationId: transferGMAtOldPath
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  description: The campaign member who should become GM
+      responses:
+        '200':
+          description: GM role transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  memberships:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CampaignMembership'
+        '400':
+          description: >-
+            `userId` is text that is not a user id (`Validation Error`, "A
+            campaign member must be named by their user id"), is missing or
+            not text (`Validation Error`, "Invalid input: expected string,
+            received undefined" or the type received), or names the sitting
+            GM (`Bad Request`, "That member is already the GM").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: That member is already the GM
+        '403':
+          description: >-
+            The caller is a member of the campaign but not the sitting GM, the
+            campaign owner or a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the GM, the campaign owner, or an admin can transfer the GM role
         '404':
           description: >-
             The campaign does not exist, or the caller is neither a member, its
@@ -3302,12 +3401,12 @@ paths:
         - Campaigns
       summary: Update atmosphere (vibe) settings
       description: |
-        Replace the campaign's atmosphere periods (DM only). Changing which
+        Replace the campaign's atmosphere periods (GM only). Changing which
         period is *current* is done over the socket (`vibe.update`), not here.
         Each period's `hue` must be a `#RRGGBB` colour and its `filter` may use
         only `brightness()`, `saturate()`, `contrast()` and `hue-rotate()`,
         the functions the atmosphere editor produces. A period's `audio` is
-        null (or absent) for no track, or the id of an audio asset the DM can
+        null (or absent) for no track, or the id of an audio asset the GM can
         read (their admin rights are not counted) that does not belong to
         another campaign; anything else is a 400 naming the period. Other
         problems answer 400 with each one led by its field, such as
@@ -3328,7 +3427,7 @@ paths:
         stands. When the current period's track changes, the table is sent
         `atmosphere.audio.updated` with the new one, if it is playing the old
         one or nothing; when the save clears the current period while its
-        track plays, with none. A track the DM put on over the vibe is left
+        track plays, with none. A track the GM put on over the vibe is left
         playing.
       operationId: updateVibe
       security:
@@ -3506,16 +3605,24 @@ paths:
                         owner:
                           type: object
                           description: >-
-                            The campaign's owner. After a DM handover this need
-                            not be the member who holds the DM seat.
+                            The campaign's owner. After a GM handover this need
+                            not be the member who holds the GM seat.
+                          properties:
+                            displayName: { type: string }
+                        gm:
+                          type: object
+                          nullable: true
+                          description: >-
+                            The member who holds the GM seat, which the app
+                            shows as the campaign's GM; null if nobody does.
                           properties:
                             displayName: { type: string }
                         dm:
                           type: object
                           nullable: true
                           description: >-
-                            The member who holds the DM seat, which the app
-                            shows as the campaign's DM; null if nobody does.
+                            The same as `gm`, under the name versions before
+                            1.7.0 gave it, sent for this release only.
                           properties:
                             displayName: { type: string }
         '401':
@@ -3537,8 +3644,8 @@ paths:
       description: |
         Accept the invitation and join the campaign as a `PLAYER`. Optionally
         assigns one or more of the accepting user's characters to the campaign
-        in the same transaction. A Call of Cthulhu character brought in loses
-        its Keeper's Notes (see `Character.data`).
+        in the same transaction. A Horror d100 character brought in loses
+        its GM's Notes (see `Character.data`).
 
         Validation, in this order:
         - `characterIds`, when sent, must be a list of at most 50 non-empty ids.
@@ -3633,7 +3740,7 @@ paths:
         Marks the invitation as `DECLINED`. The invitation must belong to
         the authenticated user and currently be `PENDING`; an expired one can
         still be declined. Does not create any campaign membership, and sends
-        no WebSocket event. A DM can invite the same user again afterwards,
+        no WebSocket event. A GM can invite the same user again afterwards,
         which sets the same invitation back to `PENDING`.
       operationId: declineInvitation
       security:
@@ -3707,7 +3814,7 @@ paths:
 
         A whisper (`type` WHISPER) is returned only to its sender and its
         recipient; whispers between other people are left out of every page,
-        the DM's included. One whose recipient's account was deleted has a
+        the GM's included. One whose recipient's account was deleted has a
         null `recipientId` and is returned to its sender alone.
       operationId: getMessages
       security:
@@ -3760,7 +3867,7 @@ paths:
   # Private to the signed-in user. Every route scopes its query by the session's
   # own user id as well as the campaign, never by an id from the request, and a
   # note belonging to somebody else answers 404 rather than 403 — a 403 would
-  # confirm the id exists. The DM has no access to a player's notes.
+  # confirm the id exists. The GM has no access to a player's notes.
   # ============================================
 
   /api/campaigns/{campaignId}/documents:
@@ -3770,7 +3877,7 @@ paths:
       summary: List documents shared with a campaign
       description: >-
         Every member can list. Two kinds appear: documents shared into the
-        campaign by the DM, and the campaign's own, created or uploaded at
+        campaign by the GM, and the campaign's own, created or uploaded at
         CAMPAIGN scope. Either way, appearing here means members may read it
         through `GET /api/assets/documents/{id}`. Each says in `canEdit`
         whether the caller may rewrite its text.
@@ -3803,7 +3910,7 @@ paths:
         - Documents
       summary: Share a document with a campaign
       description: >-
-        DM only, and only for a document the DM uploaded or wrote themselves,
+        GM only, and only for a document the GM uploaded or wrote themselves,
         or a global one. A document the caller cannot read answers 404, so
         sharing cannot be used to grant a table access to a stranger's private
         file from nothing but its id. A document the caller can read but did
@@ -3870,7 +3977,7 @@ paths:
         - Documents
       summary: Stop sharing a document with a campaign
       description: >-
-        DM only. The document itself is untouched; only the share is removed.
+        GM only. The document itself is untouched; only the share is removed.
         A campaign's own document (`shared: false` in the list) has no share
         to remove and answers 404, as does an id that is not shared here.
       operationId: unlinkCampaignDocument
@@ -3910,7 +4017,7 @@ paths:
         The caller's macros for this campaign, **oldest first** — so a macro keeps
         its place in the row of buttons. These are things people aim at without
         looking, and ordering by last edit would move one every time it changed.
-        Private to the caller; a DM sees only their own.
+        Private to the caller; a GM sees only their own.
       operationId: listDiceMacros
       security:
         - cookieAuth: []
@@ -3981,7 +4088,7 @@ paths:
                   description: >
                     Over 200 characters after trimming answers 400 with
                     "Character name must be 200 characters or fewer".
-                  example: Goblin boss
+                  example: Hobgoblin
                 purpose:
                   type: string
                   nullable: true
@@ -3989,7 +4096,7 @@ paths:
                   description: >
                     Over 200 characters after trimming answers 400 with
                     "Purpose must be 200 characters or fewer".
-                  example: Scimitar attack
+                  example: Longsword attack
       responses:
         '201':
           description: Macro saved
@@ -4468,7 +4575,7 @@ paths:
       summary: Read one of your notes
       description: >
         The note with its Markdown source. Answers 404 for a note that is not
-        yours — including to the campaign's DM — rather than 403, so the
+        yours — including to the campaign's GM — rather than 403, so the
         response does not confirm that the id exists.
       operationId: getPersonalNote
       security:
@@ -4604,7 +4711,7 @@ paths:
         - Sessions
       summary: List past sessions
       description: >
-        Sessions for the campaign, newest first, with the notes the DM recorded
+        Sessions for the campaign, newest first, with the notes the GM recorded
         when each one ended. Any campaign member may read them — the notes
         describe what happened at the table, which is what the session history
         panel shows a player before the next game.
@@ -4655,7 +4762,7 @@ paths:
         - Sessions
       summary: Start new session
       description: >-
-        Start a new game session for the campaign (DM only), numbered one
+        Start a new game session for the campaign (GM only), numbered one
         past the highest session number so far. Sets the campaign ACTIVE and
         its `lastPlayedAt` to now, posts a "Session N has started!" system
         message to chat, and broadcasts `session.started` (`{ sessionId,
@@ -4704,7 +4811,7 @@ paths:
         - Sessions
       summary: Pause session
       description: >-
-        Pause a session that has not ended (DM only). Captures the current
+        Pause a session that has not ended (GM only). Captures the current
         map's tokens and annotations, the current map id, vibe and spirit
         layer setting into the session's saved state (replacing any earlier
         snapshot), sets the campaign PAUSED, posts a "Session N has been
@@ -4757,7 +4864,7 @@ paths:
         - Sessions
       summary: End session
       description: >-
-        End a session that has not ended (DM only). Sets its end time, sets
+        End a session that has not ended (GM only). Sets its end time, sets
         the campaign INACTIVE, posts a "Session N has ended." system message
         (adding "Game state saved!" when it was), and broadcasts
         `session.ended` (`{ sessionId, sessionNumber }`). With `saveState`
@@ -4833,7 +4940,7 @@ paths:
       summary: Edit or clear a past session's notes
       description: >-
         Rewrite the recap recorded for a session, or clear it by sending an
-        empty string. DM only. The session need not have ended. It must
+        empty string. GM only. The session need not have ended. It must
         belong to the campaign in the path; one that does not answers 404,
         not 403, so the response cannot be used to discover which session ids
         exist. The recap is trimmed before it is stored. Nothing is
@@ -4897,7 +5004,7 @@ paths:
         - Sessions
       summary: Resume the paused session
       description: >
-        Carry on with the paused session (DM only): the campaign is set ACTIVE
+        Carry on with the paused session (GM only): the campaign is set ACTIVE
         with `lastPlayedAt` now, a "Session N has been resumed!" system
         message is posted, and `session.resumed` (`{ sessionId,
         sessionNumber, startedAt }`) is broadcast, `startedAt` being when the
@@ -4978,8 +5085,9 @@ paths:
                         campaignId: { type: string, format: uuid, nullable: true }
                         gameSystem:
                           type: string
-                          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                          enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                           nullable: true
+                          description: A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
                         name: { type: string }
                         tokenImageUrl: { type: string, nullable: true }
                         createdAt: { type: string, format: date-time }
@@ -5006,19 +5114,19 @@ paths:
           Otherwise the answer is 400 `Game System Mismatch` with the assign
           route's message, and nothing is created.
         - For a typed game system, `name` is written into the sheet's own name
-          field (`characterName`, or `investigatorName` for
-          `CALL_OF_CTHULHU_7E`) and the caller's display name into
+          field (`characterName`) and the caller's display name into
           `playerName`, overwriting whatever `data` held there, before the
           sheet is validated. A Flexible sheet's fields are not filled in.
         - With a game system (sent or inherited), `data` is validated against
           that system's sheet schema and stored as the schema's parsed output,
           so a key the schema does not declare is dropped. Sheet fields from
           before version 1.3.0 are moved to their current names first. The
-          top-level fields each system requires are: `DND_5E` `class`,
-          `level`, `race`, `proficiencyBonus`, `stats`; `PATHFINDER_2E`
+          top-level fields each system requires are: `FIFTH_EDITION` `class`,
+          `level`, `race`, `proficiencyBonus`, `stats`; `FANTASY_D20`
           `class`, `level`, `ancestry`, `heritage`, `attributes`;
-          `SHADOWRUN_6E` `metatype`, `archetype`, `attributes`;
-          `CALL_OF_CTHULHU_7E` `occupation`, `era`, `characteristics` (the
+          `HORROR_D100` `profession`, `era` (each at least one character)
+          and `characteristics`, which must hold `STR`, `CON`, `SIZ`, `INT`,
+          `POW`, `DEX` and `CHA` and may hold `EDU` (the
           name field is filled in from `name`). `GET
           /api/characters/templates/{gameSystem}/blank` returns a sheet that
           passes.
@@ -5064,7 +5172,7 @@ paths:
                   maxLength: 200
                 gameSystem:
                   type: string
-                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                   nullable: true
                   description: Optional game system (auto-inherited from campaign if campaignId provided)
                 campaignId:
@@ -5075,7 +5183,7 @@ paths:
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `DND_5E` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `PATHFINDER_2E` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `PATHFINDER_2E` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `PATHFINDER_2E` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`), and no more `expended` than its `total` (`Used slots cannot be more than the total`); `PATHFINDER_2E` `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` are whole numbers with no minimum; every list on a `CALL_OF_CTHULHU_7E` sheet (`skills.fighting.custom`, `skills.firearms.custom`, `skills.languageOther`, `skills.science`, `skills.customSkills`, `combat.weapons`, `spellsAndMythos.spells`, `pulpTalents`, `possessions`, `contacts`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; every list on a `SHADOWRUN_6E` sheet at most 500 entries, and the `firingModes` of one ranged weapon and the `licenses` of one fake ID at most 50; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `FIFTH_EDITION` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `FIFTH_EDITION` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `FIFTH_EDITION` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `FANTASY_D20` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `FANTASY_D20` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `FANTASY_D20` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`), and no more `expended` than its `total` (`Used slots cannot be more than the total`); `FANTASY_D20` `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` are whole numbers with no minimum; every list on a `HORROR_D100` sheet (each specialty list of `skills`, such as `skills.knowledge`, and `weapons`, `armor`, `distinctiveFeatures`, `spells`, `possessions`, `story` and `contacts`) at most 500 entries, `skills.firearm` 503 and `skills.own` 504, refused with the list's path and `Can hold at most 500 entries` (or 503, 504); every `HORROR_D100` rating (each characteristic, each skill's `value`, `move`, a weapon's `skillValue`, an armour's `armorValue`) a whole number from 0 to 999; `HORROR_D100` `hitPoints.maximum` a whole number of 0 or more and `hitPoints.current` any whole number, below 0 included; `powerPoints.maximum` and `powerPoints.current` whole numbers of 0 or more; `sanity.starting`, `sanity.maximum` and `sanity.current` whole numbers from 0 to 99; a weapon's `attacks` a whole number of 1 or more, its `ammo` a whole number of 0 or more or null and its `malfunction` a whole number from 0 to 100 or null; `wealth.cash` 0 or more; a weapon's, an armour's and a possession's `name` at least one character, and a `story` note's `title` at most 200; the `skills` block, when sent, whole, with every skill of the sheet; a `HORROR_D100` sheet in the shape versions before 1.7.0 stored (holding `investigatorName`, `occupation`, `pulpTalents` or `spellsAndMythos`, old derived attributes, an `APP` characteristic or one stored as `{ regular }`, or an old skill row) is converted to the rebuilt sheet before it is checked, and the record of that conversion, `converted`, is written by that conversion or, on `POST /api/characters` only, taken from the request; `PUT /api/characters/{id}` keeps the stored one whatever it sends, or stores none where the stored sheet has none; `FIFTH_EDITION` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
                 tokenImageUrl:
                   type: string
                   nullable: true
@@ -5145,12 +5253,12 @@ paths:
       summary: Get character
       description: >-
         The owner can always read it. If it is in a campaign, any member of
-        that campaign (DM, player or spectator) can read it too, as long as
+        that campaign (GM, player or spectator) can read it too, as long as
         the owner is still a member there; anyone else gets 404, as for an id
         that names nothing.
         The response includes `campaign` (`id`, `name`) and the owner as
-        `user` (`id`, `displayName`, `avatarUrl`). A Call of Cthulhu sheet's
-        Keeper's Notes go to the campaign's DM alone (see `Character.data`).
+        `user` (`id`, `displayName`, `avatarUrl`). A Horror d100 sheet's
+        GM's Notes go to the campaign's GM alone (see `Character.data`).
       operationId: getCharacterById
       security:
         - cookieAuth: []
@@ -5191,7 +5299,7 @@ paths:
         - Characters
       summary: Update character
       description: |
-        The owner may edit it. The DM of the character's campaign may edit it
+        The owner may edit it. The GM of the character's campaign may edit it
         too, but only while the character's owner is still a member of that
         campaign. A spectator in the character's campaign may not edit it,
         even when it is their own.
@@ -5201,10 +5309,10 @@ paths:
           system cannot change. This comparison happens after the permission
           check, so a caller who may not edit the character gets the same
           answer (404 for one they may not read, 403 for one they may) for
-          any of the four values or null. The body's shape is checked before the
+          any of the three values or null. The body's shape is checked before the
           character is looked up: a `name` that is empty or over 200
-          characters, a `gameSystem` that is not one of the four values or
-          null, a `tokenImageUrl` that is not text, or a malformed `updatedAt`
+          characters, a `gameSystem` that is not one of the three values or
+          null (`CozyVTT does not support that game system.`), a `tokenImageUrl` that is not text, or a malformed `updatedAt`
           answers 400 to anyone, even for an id that does not exist.
         - If the character has a `gameSystem`, `data` is validated against
           that system's sheet schema (after moving sheet fields from before
@@ -5214,8 +5322,7 @@ paths:
           must be an object matching `FlexibleCharacterData`, and is stored as
           parsed; null, a string, a number or an array answers 400.
         - If `name` is omitted, `data` is sent, the character has a game
-          system, and the sheet's own name field (`characterName`, or
-          `investigatorName` for `CALL_OF_CTHULHU_7E`) holds a non-blank value
+          system, and the sheet's own name field (`characterName`) holds a non-blank value
           different from the stored `name`, the `name` column is set to that
           value, trimmed. An explicit `name` in the body always wins.
         - A new `tokenImageUrl` follows the rule on create (403, or 400 for an
@@ -5232,8 +5339,8 @@ paths:
           campaign, not only this character's own) has its picture set to the
           new address, or to an empty string when it was cleared, except in a
           campaign where the caller is a spectator. When the caller is not the
-          owner (the DM of the character's campaign), only tokens in
-          campaigns the caller is DM of are changed. The token's name is not
+          owner (the GM of the character's campaign), only tokens in
+          campaigns the caller is GM of are changed. The token's name is not
           touched. Each campaign whose tokens changed has its initiative
           state resent. A failure here is logged and does not fail the save.
         - If the character is in a campaign and its owner is still a member,
@@ -5267,14 +5374,14 @@ paths:
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `DND_5E` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `PATHFINDER_2E` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `PATHFINDER_2E` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `PATHFINDER_2E` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`), and no more `expended` than its `total` (`Used slots cannot be more than the total`); `PATHFINDER_2E` `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` are whole numbers with no minimum; every list on a `CALL_OF_CTHULHU_7E` sheet (`skills.fighting.custom`, `skills.firearms.custom`, `skills.languageOther`, `skills.science`, `skills.customSkills`, `combat.weapons`, `spellsAndMythos.spells`, `pulpTalents`, `possessions`, `contacts`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; every list on a `SHADOWRUN_6E` sheet at most 500 entries, and the `firingModes` of one ranged weapon and the `licenses` of one fake ID at most 50; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `FIFTH_EDITION` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `FIFTH_EDITION` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `FIFTH_EDITION` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `FANTASY_D20` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `FANTASY_D20` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `FANTASY_D20` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`), and no more `expended` than its `total` (`Used slots cannot be more than the total`); `FANTASY_D20` `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` are whole numbers with no minimum; every list on a `HORROR_D100` sheet (each specialty list of `skills`, such as `skills.knowledge`, and `weapons`, `armor`, `distinctiveFeatures`, `spells`, `possessions`, `story` and `contacts`) at most 500 entries, `skills.firearm` 503 and `skills.own` 504, refused with the list's path and `Can hold at most 500 entries` (or 503, 504); every `HORROR_D100` rating (each characteristic, each skill's `value`, `move`, a weapon's `skillValue`, an armour's `armorValue`) a whole number from 0 to 999; `HORROR_D100` `hitPoints.maximum` a whole number of 0 or more and `hitPoints.current` any whole number, below 0 included; `powerPoints.maximum` and `powerPoints.current` whole numbers of 0 or more; `sanity.starting`, `sanity.maximum` and `sanity.current` whole numbers from 0 to 99; a weapon's `attacks` a whole number of 1 or more, its `ammo` a whole number of 0 or more or null and its `malfunction` a whole number from 0 to 100 or null; `wealth.cash` 0 or more; a weapon's, an armour's and a possession's `name` at least one character, and a `story` note's `title` at most 200; the `skills` block, when sent, whole, with every skill of the sheet; a `HORROR_D100` sheet in the shape versions before 1.7.0 stored (holding `investigatorName`, `occupation`, `pulpTalents` or `spellsAndMythos`, old derived attributes, an `APP` characteristic or one stored as `{ regular }`, or an old skill row) is converted to the rebuilt sheet before it is checked, and the record of that conversion, `converted`, is written by that conversion or, on `POST /api/characters` only, taken from the request; `PUT /api/characters/{id}` keeps the stored one whatever it sends, or stores none where the stored sheet has none; `FIFTH_EDITION` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
                 tokenImageUrl:
                   type: string
                   nullable: true
                   description: A bare asset id, or a full `/api/assets/<kind>/<id>` address; the address already stored may be sent back unchanged.
                 gameSystem:
                   type: string
-                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                   nullable: true
                   deprecated: true
                   description: Optional. If sent it must equal the character's current gameSystem (null for a flexible character), or the request answers 400. It is never written.
@@ -5330,7 +5437,7 @@ paths:
         '403':
           description: >-
             The caller may read the character but is neither its owner nor the
-            DM of its campaign, or is a spectator in that campaign, or
+            GM of its campaign, or is a spectator in that campaign, or
             `tokenImageUrl` names a picture the caller may not use.
         '404':
           description: >-
@@ -5422,11 +5529,11 @@ paths:
       summary: Assign character to campaign, or unassign it
       description: |
         Assigning is the owner's alone. Unassigning is the owner's, or the
-        campaign DM's: the DM of the campaign the character is in may take it
+        campaign GM's: the GM of the campaign the character is in may take it
         out of that campaign while its owner is still a member, and it stays
         with its owner. Anyone else who may read the character answers
         403 (`Only the character owner can assign this character to a
-        campaign`, or `Only the character owner, or the DM of its campaign, can
+        campaign`, or `Only the character owner, or the GM of its campaign, can
         take it out of a campaign`); anyone who may not answers 404. A `campaignId` that is not a string or null
         answers 400 (`Validation Error`) before anything is looked up.
         - Omitting `campaignId`, or sending it as `null` or `""`, unassigns the
@@ -5440,7 +5547,7 @@ paths:
           the request answers 400 and nothing changes. If the character was
           assigned to another campaign, it is removed from the caller's
           membership there first. A character coming from another campaign,
-          or from none, loses a Call of Cthulhu sheet's Keeper's Notes (see
+          or from none, loses a Horror d100 sheet's GM's Notes (see
           `Character.data`).
         - Assigning broadcasts `roster.updated` to the new campaign, with
           `action` set to `character.assigned` and `characterId`, `userId`
@@ -5499,11 +5606,11 @@ paths:
                     example: Game System Mismatch
                   message:
                     type: string
-                    example: Cannot assign a DND_5E character to a flexible campaign. Character and campaign game systems must match.
+                    example: Cannot assign a FIFTH_EDITION character to a flexible campaign. Character and campaign game systems must match.
         '403':
           description: >-
             The caller may read the character but does not own it (when
-            unassigning, the DM of its campaign may also take it out).
+            unassigning, the GM of its campaign may also take it out).
         '404':
           description: >-
             No character with this id that the caller may read (`Character
@@ -5594,12 +5701,12 @@ paths:
       summary: Duplicate a character
       description: |
         Creates a copy of the character for the same owner, with the same
-        `gameSystem`, sheet (less a Call of Cthulhu sheet's Keeper's Notes)
+        `gameSystem`, sheet (less a Horror d100 sheet's GM's Notes)
         and `tokenImageUrl`. The copy is unassigned
         (`campaignId: null`), its name is the original's followed by a space
         and `(Copy)`, the original cut short first so the whole is at most 200
         characters, written into the sheet's own name field too
-        (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`),
+        (`characterName`),
         and the response carries no `campaign` object. Only the
         character's owner may copy it. A copy counts towards the 1,000
         characters one account may own; past that it answers 400 with the same
@@ -5621,7 +5728,8 @@ paths:
                   character:
                     $ref: '#/components/schemas/Character'
         '400':
-          description: The owner already has 1,000 characters.
+          description: >-
+            The owner already has 1,000 characters. Nothing is created.
           content:
             application/json:
               schema:
@@ -5674,11 +5782,11 @@ paths:
 
         For anyone but a platform admin, and for an admin who sends
         `usable=true` without `campaignId`, a campaign's map pictures are
-        left out where the caller is a member who is not the DM (a player or
+        left out where the caller is a member who is not the GM (a player or
         a spectator): a CAMPAIGN asset that a map of its campaign names as
         its image, base layer or spirit layer, and any MAP asset of the
         campaign, unless a map they may read shows it to them (see
-        `GET /api/assets/maps/{id}`), a document its campaign's DM shared
+        `GET /api/assets/maps/{id}`), a document its campaign's GM shared
         with the campaign embeds it, or they uploaded it. This is the read rule of the file
         routes, so such a member is listed an asset exactly when its read
         answers 200. Token art and other assets are listed as before. A
@@ -5786,7 +5894,7 @@ paths:
                                 `globalAssetManager`; for a USER asset its
                                 uploader; for a CAMPAIGN asset its uploader
                                 while still a member of that campaign, or that
-                                campaign's DM. A move also needs the rules for
+                                campaign's GM. A move also needs the rules for
                                 where it goes, and a PDF is never rewritten,
                                 whatever this says.
                   pagination:
@@ -5838,7 +5946,7 @@ paths:
         |-------|-----|
         | USER | Anyone signed in, into their own library |
         | GLOBAL | A platform admin, or a user granted `globalAssetManager` |
-        | CAMPAIGN | That campaign's DM; a player may upload only TOKEN art (their own character's); a spectator never |
+        | CAMPAIGN | That campaign's GM; a player may upload only TOKEN art (their own character's); a spectator never |
 
         `type: AVATAR` is always placed at USER scope, whatever `scope` is
         sent: an avatar is always personal. A new avatar deletes the
@@ -5965,7 +6073,7 @@ paths:
                     case, marks a picture Mapmaker made, which Mapmaker may change
                     and a later save writes over in place
                     (`PUT /api/assets/{id}/picture`): it is taken only on a MAP of
-                    CAMPAIGN scope, which only the campaign's DM may upload.
+                    CAMPAIGN scope, which only the campaign's GM may upload.
       responses:
         '201':
           description: Asset uploaded.
@@ -6035,7 +6143,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Forbidden
-                message: Only the Dungeon Master can upload campaign assets
+                message: Only the GM can upload campaign assets
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -6048,7 +6156,7 @@ paths:
         Decided by the same read rule as the file-serving routes below, so a
         caller who may load the file may read its details: its uploader, an
         admin, a member of its campaign (with the map-picture check for a
-        non-DM member), or a member of a campaign that uses it (a DM's
+        non-GM member), or a member of a campaign that uses it (a GM's
         personal map the table is showing, a token's art, a document shared
         with the campaign, the atmosphere track); GLOBAL to anyone signed in.
         A campaign asset with no campaign recorded is its uploader's and an
@@ -6094,7 +6202,7 @@ paths:
       summary: Delete asset
       description: |
         Delete asset. A personal asset, its owner or an admin; a campaign
-        asset, the campaign's DM, an admin, or its uploader while still a
+        asset, the campaign's GM, an admin, or its uploader while still a
         member of that campaign and while nothing but their own characters,
         the tokens they control and the documents they wrote uses it; a
         global asset, an admin or the uploading global asset manager.
@@ -6119,7 +6227,7 @@ paths:
         ignored. Permissions are checked first, so only someone who may delete
         the asset is told where it is used. An admin sees every record by name;
         anyone else sees a name and campaign only for what is in a campaign
-        they are the DM of, a character they own, or a character template,
+        they are the GM of, a character they own, or a character template,
         and a document by name where it is their own, a global one, or one
         written in or shared with a campaign they run. The
         rest is counted per kind with `name` and `campaignName` null. Only an
@@ -6162,15 +6270,15 @@ paths:
             for its scope: "Only admins or the uploading global asset manager
             can delete global assets", "Only the owner can delete personal
             assets" or "Only the uploader while a member of the campaign, its
-            DM, or an admin can delete campaign assets". A campaign asset's
+            GM, or an admin can delete campaign assets". A campaign asset's
             uploader who does not run the campaign, while anything else uses
             it (a map, another member's character, a token they do not
             control, a creature, a template, a campaign's sound, another
             member's document), is told "Others in the campaign use this
-            asset, so only the campaign's DM can delete it", with or without
+            asset, so only the campaign's GM can delete it", with or without
             `force`; when the only such use is a character template, which
             everyone on the instance is offered, their own included, "A
-            character template uses this asset, so only the campaign's DM can
+            character template uses this asset, so only the campaign's GM can
             delete it". Before deciding, the route reads the documents of
             the campaign's other members stored before 1.6.0 (a PDF among
             them, which names nothing) that have not yet been read for the
@@ -6178,12 +6286,12 @@ paths:
             while any is still unread (more were waiting, another request is
             reading it, or its file could not be read) that uploader is told
             "Some older documents have not yet been checked for the pictures
-            they show, so for now only the campaign's DM can delete this
+            they show, so for now only the campaign's GM can delete this
             asset. Try again later.", with or without `force`. A later
             request reads the ones still waiting, again at most 100. A file
             that cannot be read is tried again by every request and keeps the
             refusal until it can be read, so the asset stays the campaign's
-            DM's to delete until then. The campaign's DM and an admin are not
+            GM's to delete until then. The campaign's GM and an admin are not
             refused this way.
           content:
             application/json:
@@ -6278,8 +6386,8 @@ paths:
         | Either the current or the new scope is GLOBAL | Caller has `globalAssetManager` |
         | Current scope is GLOBAL | Caller is the asset's uploader, as for deleting it |
         | Current scope is USER | Caller is the asset's owner |
-        | Current scope is CAMPAIGN | Caller is that campaign's DM, or the asset's owner while still a member of that campaign and while nothing but their own characters, tokens and documents uses it; a CAMPAIGN asset with no campaign recorded is an admin's alone |
-        | New scope is CAMPAIGN | Caller may place an asset of this type in the target campaign: its DM, or a player placing TOKEN art only |
+        | Current scope is CAMPAIGN | Caller is that campaign's GM, or the asset's owner while still a member of that campaign and while nothing but their own characters, tokens and documents uses it; a CAMPAIGN asset with no campaign recorded is an admin's alone |
+        | New scope is CAMPAIGN | Caller may place an asset of this type in the target campaign: its GM, or a player placing TOKEN art only |
 
         The "current scope" rows are the rule for deleting the asset, so a
         right to remove an asset from where it is cannot be had by one route
@@ -6377,23 +6485,23 @@ paths:
             current scope by someone who may not delete the asset there ("Only
             admins or the uploading global asset manager can move a global
             asset out of the library", "Only the asset owner can move personal
-            assets" or "Only the asset owner or campaign DM can move this
+            assets" or "Only the asset owner or campaign GM can move this
             asset"), or by a campaign asset's uploader who does not run the
             campaign while others there use it ("Others in the campaign use
-            this asset, so only the campaign's DM can move it out of the
+            this asset, so only the campaign's GM can move it out of the
             campaign", or "A character template uses this asset, so only the
-            campaign's DM can move it out of the campaign" when a character
+            campaign's GM can move it out of the campaign" when a character
             template is the only such use, or, while documents of the campaign's
             other members stored before 1.6.0 are still to be read for the assets
             they name, as for `DELETE /api/assets/{id}`, "Some older documents
             have not yet been checked for the pictures they show, so for now
-            only the campaign's DM can move this asset out of the campaign. Try
+            only the campaign's GM can move this asset out of the campaign. Try
             again later."); a move to USER by anyone but the asset's uploader or an
             admin ("Only the asset's uploader can move it to their personal
             library"), since the asset would land in the uploader's library;
             or a move into a campaign the caller may not upload this type to
-            ("You do not have access to this campaign" or "Only the Dungeon
-            Master can upload campaign assets").
+            ("You do not have access to this campaign" or "Only the GM can
+            upload campaign assets").
           content:
             application/json:
               schema:
@@ -6429,8 +6537,8 @@ paths:
         `CAMPAIGN` scope tagged exactly `cozyvtt-drawn-map`. The asset keeps
         its id, so every address naming it (a map, a shared Document, a
         note) shows the new picture; no earlier version is kept. Only the
-        current DM of the asset's campaign may call it; a platform admin who
-        is not that DM is refused like anyone else. The multipart body has
+        current GM of the asset's campaign may call it; a platform admin who
+        is not that GM is refused like anyone else. The multipart body has
         one `file` part and is checked as `POST /api/assets/upload` checks a
         map picture: within `MAX_MAP_SIZE_MB`, a PNG, JPEG, WebP or GIF by
         its bytes, within the picture limits. It must also be of the format
@@ -6507,7 +6615,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: >-
-            The caller may read the picture but is not the DM of its campaign:
+            The caller may read the picture but is not the GM of its campaign:
             a player or spectator at the table, or a platform admin.
           content:
             application/json:
@@ -6515,7 +6623,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Forbidden
-                message: Only the campaign's DM can save over its drawn pictures
+                message: Only the campaign's GM can save over its drawn pictures
         '404':
           description: >-
             No asset with this id, one the caller may not read, or one deleted
@@ -6583,7 +6691,7 @@ paths:
       summary: Create a text or Markdown document from typed content
       description: >-
         The same rules as uploading decide who may place it at each scope:
-        anyone into their own library, the DM into their campaign, an admin or
+        anyone into their own library, the GM into their campaign, an admin or
         global asset manager instance-wide. The content is checked to be text,
         bounded at 900 KB (typed content arrives as JSON; anything larger is a
         file to upload), written to disk exactly as sent, and never interpreted.
@@ -6661,7 +6769,7 @@ paths:
         '403':
           description: >-
             GLOBAL without being an admin or global asset manager; CAMPAIGN
-            without being that campaign's DM (a player or spectator, a
+            without being that campaign's GM (a player or spectator, a
             non-member, or a campaign that does not exist).
           content:
             application/json:
@@ -6686,7 +6794,7 @@ paths:
       description: >-
         Whoever may delete the document: for a campaign's own document
         (CAMPAIGN scope), its uploader while still a member of the campaign,
-        the campaign's DM, or an admin; for a GLOBAL document, an admin or its
+        the campaign's GM, or an admin; for a GLOBAL document, an admin or its
         uploader while they still have `globalAssetManager`; for a personal
         document, its uploader or an admin. A document the caller may not edit
         answers 404, so the reply does not confirm a private id exists. A PDF answers
@@ -6826,7 +6934,7 @@ paths:
         - a platform admin may read any asset;
         - GLOBAL: anyone signed in;
         - CAMPAIGN: any member of that campaign, except that a member who is
-          not the DM (a player or a spectator) is refused the campaign's map
+          not the GM (a player or a spectator) is refused the campaign's map
           pictures: an asset a map of the campaign names as its image, base
           layer or spirit layer, and any MAP asset of the campaign. Such a
           picture is readable to them only while one of these shows it: the
@@ -6835,7 +6943,7 @@ paths:
           map of another campaign they are a member of, played in or run,
           with the same spirit rule, while the asset's uploader is a member
           of that campaign too; or a plain text or Markdown document that
-          the asset's campaign's current DM uploaded, written or uploaded in
+          the asset's campaign's current GM uploaded, written or uploaded in
           that campaign or shared with it from their own library or the
           global one (not a document of another campaign), whose first 1 MiB
           names the asset
@@ -6850,7 +6958,7 @@ paths:
         campaign with its uploader in which the asset is in use: as a map's
         image or base layer, a spirit layer they may see, a token's art,
         a character's token picture, a creature or token template's
-        picture, or the campaign's atmosphere track. Among maps, a non-DM
+        picture, or the campaign's atmosphere track. Among maps, a non-GM
         member counts only the one the campaign is currently showing. A document
         shared with one of the caller's campaigns is also readable.
 
@@ -7177,10 +7285,10 @@ paths:
         - Maps
       summary: List campaign maps
       description: |
-        List the campaign's maps, newest first. The DM gets every map; a
+        List the campaign's maps, newest first. The GM gets every map; a
         player or spectator is sent only the map the campaign is showing
-        (`currentMapId`), or an empty list while it shows none. A map the DM
-        has prepared but not switched to is the DM's alone.
+        (`currentMapId`), or an empty list while it shows none. A map the GM
+        has prepared but not switched to is the GM's alone.
       operationId: listMaps
       security:
         - cookieAuth: []
@@ -7189,7 +7297,7 @@ paths:
       responses:
         '200':
           description: >-
-            List of maps. Each item is a summary of 16 fields, and for the DM
+            List of maps. Each item is a summary of 16 fields, and for the GM
             a 17th, `spiritLayerUrl`; not the full Map object: no tokens,
             annotations, walls, lights or fog.
           content:
@@ -7220,7 +7328,7 @@ paths:
                         spiritLayerUrl:
                           type: string
                           nullable: true
-                          description: The DM's alone; absent for anyone else.
+                          description: The GM's alone; absent for anyone else.
                         createdAt: { type: string, format: date-time }
                         updatedAt: { type: string, format: date-time }
         '403':
@@ -7231,7 +7339,7 @@ paths:
         - Maps
       summary: Create map
       description: >-
-        Create a new map for the campaign (DM only). The new map starts with
+        Create a new map for the campaign (GM only). The new map starts with
         lighting, fog of war, Global Illumination and exploration memory all
         off, and no tokens, walls or lights.
 
@@ -7342,7 +7450,7 @@ paths:
         - Maps
       summary: Get map
       description: |
-        Get a map with its tokens, walls and lights. The DM gets the stored
+        Get a map with its tokens, walls and lights. The GM gets the stored
         map whole, except `annotations`, which is sent empty to everyone.
         Anyone else gets it filtered as the Map schema describes: only the
         tokens on their plane that are not hidden (and on a lit map only those
@@ -7383,8 +7491,8 @@ paths:
                     description: >-
                       Whether the caller can currently see the spirit layer,
                       which decides `map.spiritLayerUrl` and which plane's
-                      tokens they get. Always true for the DM. For anyone else
-                      it is true while the DM has revealed the spirit layer to
+                      tokens they get. Always true for the GM. For anyone else
+                      it is true while the GM has revealed the spirit layer to
                       the campaign, and for a player also while a visible
                       spirit-layer token they control stands on the current
                       map.
@@ -7398,7 +7506,7 @@ paths:
         - Maps
       summary: Update map
       description: |
-        Update map settings (DM only). Send only the fields to change. Each
+        Update map settings (GM only). Send only the fields to change. Each
         field sent is checked and a bad one answers 400; unlike on create,
         nothing is replaced with a default. `width` and `height` must be
         whole numbers from 1 to 500, `gridSize` from 10 to 500,
@@ -7418,7 +7526,7 @@ paths:
 
         A request carrying any of the four per-map flags broadcasts
         `map:settings:updated` with all four, to every member for the map the
-        campaign is showing and to the DM's connections for any other. When
+        campaign is showing and to the GM's connections for any other. When
         `lightingEnabled` or `globalIllumination` actually changes, since
         those two decide which tokens a player is sent, or anything the map is
         drawn from (`name`, `imageUrl`, `baseLayerUrl`, `width`, `height`,
@@ -7428,7 +7536,7 @@ paths:
         the library sends no `map.changed`.
 
         Turning `fogEnabled` on from off also pushes the map's fog at once,
-        as a fog operation does: `fog:updated` with the whole grid to the DM,
+        as a fog operation does: `fog:updated` with the whole grid to the GM,
         `fog:cells` with the revealed cells to everyone else who may read the
         map. Changing `width` or `height` pushes nothing, but the stored fog
         no longer matches the map's squares, so from then on it is read as a
@@ -7551,13 +7659,13 @@ paths:
         - Maps
       summary: Delete map
       description: >-
-        Delete a map (DM only). The campaign's current map cannot be deleted:
+        Delete a map (GM only). The campaign's current map cannot be deleted:
         that answers 400 (`Cannot delete the current map. Set a different map
         as current first.`). The map's tokens, walls, lights, fog and
         drawings go with it, as does every player's explored-area memory of it; its image
         asset is kept. If any combatant stood on it, those combatants leave
         the initiative order and the order is sent again to every connected
-        member (`initiative.state`). The DM's connected sockets are then sent
+        member (`initiative.state`). The GM's connected sockets are then sent
         `map.deleted` with the map's `mapId`, so a page preparing that map
         goes back to the table's; players are sent nothing.
       operationId: deleteMap
@@ -7594,7 +7702,7 @@ paths:
         - Maps
       summary: Set current map
       description: >-
-        Set a map as the current map for the campaign (DM only). Which plane
+        Set a map as the current map for the campaign (GM only). Which plane
         each player is on, and which combatants they are sent, follows the
         current map, so while anything is in the initiative order it is sent
         again to every connected member (`initiative.state`). Every connected
@@ -7636,10 +7744,10 @@ paths:
         - Maps
       summary: Add token to map
       description: |
-        Add a new token to the map (DM only). When the map is the one the
+        Add a new token to the map (GM only). When the map is the one the
         campaign is showing, every connected member is then sent
         `map.changed` with the map as they may see it, as `map.change` sends
-        it; a map the DM has not switched to sends nothing. The map goes up to
+        it; a map the GM has not switched to sends nothing. The map goes up to
         100 ms later, at most once in that time for each map, as it stands
         then, so a burst of token changes is sent as one map. Every field is checked against
         the token schema and stored as parsed: a position keeps only `x` and
@@ -7648,7 +7756,7 @@ paths:
         request is refused with 400; a token bound to a character is
         controlled by that character's owner, while the owner is a player of
         this campaign, unless `controlledBy` says otherwise. A character
-        owned by the DM or a spectator gives its token no controller.
+        owned by the GM or a spectator gives its token no controller.
         `name` and `position` are required. The position is whole grid
         squares and must be on the map (`x` at least 0 and less than the
         map's width, `y` likewise with its height; 400 otherwise). A token
@@ -7729,21 +7837,21 @@ paths:
         Update a token. When the map is the one the campaign is showing, every
         connected member is then sent `map.changed` with the map as they may
         see it, a player's own change included, up to 100 ms later and at most
-        once in that time for each map (as for adding a token). The DM may update any token and any field. A player may
+        once in that time for each map (as for adding a token). The GM may update any token and any field. A player may
         update only a token that names them in `controlledBy`, and only its
         `position`, `rotation` and `conditions`; every other field of the body
         below, `size` and `sightRadius` included, answers 403 for a player
-        (`Only DM can update token field: <field>`, or `Only DM can change
-        token layer`). A spectator may not
+        (`Only the GM can update token field: <field>`, or `Only the GM can
+        change token layer`). A spectator may not
         update a token at all, even one that still names them from before they
         were demoted. While the session is paused or has ended (campaign status
         `PAUSED` or `INACTIVE`), a player's `position` or `rotation` change
         answers 403 (`Players cannot move tokens while the session is paused
         or ended`) and nothing in the request is stored; their `conditions`
-        alone still go through, and the DM may move and turn tokens at any
+        alone still go through, and the GM may move and turn tokens at any
         time. On a map the campaign is not showing, a
         player's update answers 404, as fetching that map does, even for a
-        token they control; the DM may update tokens on any map. A token on
+        token they control; the GM may update tokens on any map. A token on
         the spirit plane answers 403 (`You cannot interact with spirit layer
         tokens`) for a player who cannot currently see that plane, even one
         that names them in `controlledBy`.
@@ -7814,12 +7922,12 @@ paths:
                 name:
                   type: string
                   maxLength: 200
-                  description: DM only. An empty name is ignored.
+                  description: GM only. An empty name is ignored.
                 imageUrl:
                   type: string
                   maxLength: 500
                   nullable: true
-                  description: DM only.
+                  description: GM only.
                 position:
                   type: object
                   required: [x, y]
@@ -7832,7 +7940,7 @@ paths:
                 size:
                   type: object
                   required: [width, height]
-                  description: Grid squares. DM only.
+                  description: Grid squares. GM only.
                   properties:
                     width:
                       type: integer
@@ -7845,16 +7953,16 @@ paths:
                 layer:
                   type: string
                   enum: [token, spirit]
-                  description: DM only.
+                  description: GM only.
                 visible:
                   type: boolean
-                  description: DM only.
+                  description: GM only.
                 controlledBy:
                   type: string
                   format: uuid
                   nullable: true
                   description: >
-                    Who controls the token. DM only. Stored as sent: null leaves
+                    Who controls the token. GM only. Stored as sent: null leaves
                     the token with no controller, and a value must name a player
                     of this campaign (400 otherwise); the character-owner default
                     applies only when the token is created.
@@ -7873,54 +7981,54 @@ paths:
                   description: Each entry is trimmed and must not be blank.
                 metadata:
                   type: object
-                  description: DM only. Merged into the stored metadata; the result must stay within 8 KB.
+                  description: GM only. Merged into the stored metadata; the result must stay within 8 KB.
                 sightRadius:
                   type: number
                   minimum: 0
                   maximum: 200
-                  description: Darkvision in grid squares (0 = none). DM only; it decides what the server sends this token's player.
+                  description: Darkvision in grid squares (0 = none). GM only; it decides what the server sends this token's player.
                 obscured:
                   type: boolean
-                  description: Hide what the token is from players who do not control it. DM only; this route is the only way to change it after creation.
+                  description: Hide what the token is from players who do not control it. GM only; this route is the only way to change it after creation.
                 type:
                   type: string
                   enum: [player, npc, object]
-                  description: DM only.
+                  description: GM only.
                 disposition:
                   type: string
                   enum: [friendly, neutral, hostile]
                   nullable: true
-                  description: DM only.
+                  description: GM only.
                 hp:
                   allOf:
                     - $ref: '#/components/schemas/TokenHp'
                   nullable: true
-                  description: DM only.
+                  description: GM only.
                 showHpBar:
                   type: boolean
-                  description: DM only.
+                  description: GM only.
                 notes:
                   type: string
                   maxLength: 5000
                   nullable: true
-                  description: DM only; never sent to a player. Null stores an empty string.
+                  description: GM only; never sent to a player. Null stores an empty string.
                 initiative:
                   type: number
                   nullable: true
-                  description: DM only.
+                  description: GM only.
                 displayMode:
                   type: string
                   enum: [pog, top-down, full-art]
-                  description: DM only.
+                  description: GM only.
                 statBlock:
                   type: object
                   nullable: true
-                  description: DM only; never sent to a player.
+                  description: GM only; never sent to a player.
                 creatureTemplateId:
                   type: string
                   format: uuid
                   nullable: true
-                  description: DM only.
+                  description: GM only.
       responses:
         '200':
           description: Token updated. The token and the map are filtered for the caller as the map fetch is.
@@ -7950,7 +8058,7 @@ paths:
         - Maps
       summary: Delete token
       description: >-
-        Remove a token from the map (DM only). When the map is the one the
+        Remove a token from the map (GM only). When the map is the one the
         campaign is showing, every connected member is then sent
         `map.changed` without it (up to 100 ms later, as for adding a token).
         If it is a combatant, it
@@ -8005,7 +8113,7 @@ paths:
       summary: Move tokens to another map
       description: |
         Move tokens from this map to another map of the campaign in one step
-        (DM only). Each token travels as it is stored, under its own id, with
+        (GM only). Each token travels as it is stored, under its own id, with
         its position clamped onto the target map, and a combatant keeps its
         place in the initiative order. All named tokens move or none does: an
         id that is not on this map answers 404 (`Token not found on this map:
@@ -8015,7 +8123,7 @@ paths:
         move that would leave the target map with more than 1,000 tokens
         (`error: Limit Exceeded`), with nothing moved. Whichever of
         the two maps the campaign is showing is then sent again to every
-        member as `map.changed`, as each may see it; the other stays the DM's
+        member as `map.changed`, as each may see it; the other stays the GM's
         until they switch. While anything is in the initiative order it is
         sent again too (`initiative.state`), since a spirit-layer token moving
         onto or off the current map can move its controller between planes.
@@ -8083,7 +8191,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: List wall segments
-      description: Returns all wall segments for the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise). Anyone but the DM is sent a `door-locked` door as `door-closed`.
+      description: Returns all wall segments for the map. Available to the GM for any map, and to other members for the campaign's current map only (404 otherwise). Anyone but the GM is sent a `door-locked` door as `door-closed`.
       operationId: listWalls
       security:
         - cookieAuth: []
@@ -8110,7 +8218,7 @@ paths:
         - Walls & Lighting
       summary: Replace all wall segments
       description: |
-        Replaces the map's entire wall list atomically. DM only. Every
+        Replaces the map's entire wall list atomically. GM only. Every
         segment needs a UUID `id`, no two the same, and a map holds at most
         5000; a list over that, one that repeats an id, or any invalid
         segment, answers 400 and changes nothing.
@@ -8124,10 +8232,10 @@ paths:
         Each wall route tells connected clients of the change with the event
         the matching socket edit sends (`walls:replaced`, `wall:added`,
         `wall:updated`, `wall:removed`): to every member for the map the
-        campaign is showing, and to the DM's connections for any other. On a
+        campaign is showing, and to the GM's connections for any other. On a
         lit map that the campaign is showing, each player is then sent
         `map.changed` with the map as they can now see it, since walls and
-        doors decide which tokens a player is sent. Anyone but the DM is
+        doors decide which tokens a player is sent. Anyone but the GM is
         sent `walls:replaced` from this route only when the list they are
         sent changes: a list whose walls are, as they see them, the same and
         in the same order, as when closed doors are locked or unlocked, sends
@@ -8178,7 +8286,7 @@ paths:
         omits one, and keeps one it sent, which must be a UUID not already on
         the map (400 otherwise). A map holds at most 5000 segments; adding to a full map answers 400 with
         `error: Limit Exceeded`. Its ends are held to the bounds
-        `replaceWalls` describes. DM only. Connected clients are sent
+        `replaceWalls` describes. GM only. Connected clients are sent
         `wall:added` (see `replaceWalls`).
       operationId: addWall
       security:
@@ -8237,7 +8345,7 @@ paths:
       summary: Add many wall segments
       description: |
         Append many wall segments in one request, after those the map holds,
-        as Mapmaker's Save adds the walls of the rooms painted. DM only.
+        as Mapmaker's Save adds the walls of the rooms painted. GM only.
         Each segment is as `addWall` takes it: the server assigns an `id` to
         one that omits it, and keeps one it sent.
 
@@ -8346,7 +8454,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: Delete a wall segment
-      description: Remove a wall segment by id. DM only. Connected clients are sent `wall:removed` (see `replaceWalls`).
+      description: Remove a wall segment by id. GM only. Connected clients are sent `wall:removed` (see `replaceWalls`).
       operationId: deleteWall
       security:
         - cookieAuth: []
@@ -8374,9 +8482,9 @@ paths:
         close a door. Only `type` is read; any other field in the body is
         ignored, so the segment keeps its position. Any of the five wall
         types is accepted, `door-locked` included, as on every other wall
-        path; anything else answers 400. DM only. Connected clients are
+        path; anything else answers 400. GM only. Connected clients are
         sent `wall:updated` (see `replaceWalls`) with the segment as each
-        may see it. Anyone but the DM whose copy it leaves as it was, as
+        may see it. Anyone but the GM whose copy it leaves as it was, as
         locking or unlocking a closed door does, is sent nothing, and on a
         lit map no `map.changed`.
       operationId: updateWallType
@@ -8425,8 +8533,8 @@ paths:
       description: |
         The map's drawings as the caller may be sent them, in the order they
         are drawn: by `sortKey`, then the time each was made, then `id`. The
-        DM is given every drawing; a player or spectator only those whose
-        `audience` is `ALL`. Available to the DM for any map of the
+        GM is given every drawing; a player or spectator only those whose
+        `audience` is `ALL`. Available to the GM for any map of the
         campaign, and to other members for the campaign's current map only
         (404 otherwise, the answer for a map that does not exist).
         Drawings are made, erased and cleared over the live table
@@ -8462,7 +8570,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: List light sources
-      description: Returns all placed lights on the map. Available to the DM for any map, and to other members for the campaign's current map only (404 otherwise). Anyone but the DM is sent only the lights whose `enabled` is true.
+      description: Returns all placed lights on the map. Available to the GM for any map, and to other members for the campaign's current map only (404 otherwise). Anyone but the GM is sent only the lights whose `enabled` is true.
       operationId: listLights
       security:
         - cookieAuth: []
@@ -8490,7 +8598,7 @@ paths:
       summary: Replace all light sources
       description: |
         Replaces the map's entire light list atomically. Used when committing
-        a large batch of changes or restoring saved lighting state. DM only.
+        a large batch of changes or restoring saved lighting state. GM only.
         Every light needs a UUID `id`, no two the same, and a `dimRadius` at
         least its `brightRadius`, and a map holds at most 200; a list over
         that, one that repeats an id, or any invalid light, answers 400 and
@@ -8505,10 +8613,10 @@ paths:
         Each light route tells connected clients of the change with the event
         the matching socket edit sends (`lights:replaced`, `light:added`,
         `light:updated`, `light:removed`): to every member for the map the
-        campaign is showing, and to the DM's connections for any other. On a
+        campaign is showing, and to the GM's connections for any other. On a
         lit map that the campaign is showing, each player is then sent
         `map.changed` with the map as they can now see it, since lights decide
-        which tokens a player is sent. Anyone but the DM is sent
+        which tokens a player is sent. Anyone but the GM is sent
         `lights:replaced` from this route only when the lights that are on
         change: a list that differs only in lights that are off, such as an
         empty list replacing lights that are all off, sends them nothing. A
@@ -8560,9 +8668,9 @@ paths:
         map (400 otherwise). `dimRadius` must be
         at least `brightRadius`, and the position is held to the bounds
         `replaceLights` describes. A map holds at most 200 lights; adding to a
-        full map answers 400 with `error: Limit Exceeded`. DM only. Connected
+        full map answers 400 with `error: Limit Exceeded`. GM only. Connected
         clients are sent `light:added` (see `replaceLights`); anyone but the
-        DM only when the light is on, and for one that is off nothing at all.
+        GM only when the light is on, and for one that is off nothing at all.
       operationId: addLight
       security:
         - cookieAuth: []
@@ -8629,7 +8737,7 @@ paths:
         checked against the light as it would be stored: one that would leave
         the dim radius smaller than the bright one answers 400 (`dimRadius
         must be >= brightRadius`) and changes nothing. A new position is held
-        to the bounds `replaceLights` describes. DM only. The DM's
+        to the bounds `replaceLights` describes. GM only. The GM's
         connections are sent `light:updated` (see `replaceLights`). Anyone
         else, who is sent only the lights that are on, is sent `light:added`
         for a light turned on, `light:removed` for one turned off,
@@ -8677,7 +8785,7 @@ paths:
       tags:
         - Walls & Lighting
       summary: Delete a light source
-      description: Remove a light. DM only. Connected clients are sent `light:removed` (see `replaceLights`); anyone but the DM only when the light was on, since they are never sent one that is off, and for one that was off nothing at all.
+      description: Remove a light. GM only. Connected clients are sent `light:removed` (see `replaceLights`); anyone but the GM only when the light was on, since they are never sent one that is off, and for one that was off nothing at all.
       operationId: deleteLight
       security:
         - cookieAuth: []
@@ -8704,7 +8812,7 @@ paths:
     get:
       tags:
         - Walls & Lighting
-      summary: Get fog state (DM only)
+      summary: Get fog state (GM only)
       description: |
         Returns the full `FogState` for the map, one cell per grid square,
         whether or not fog of war is on for it. A map with no stored fog, or
@@ -8712,7 +8820,7 @@ paths:
         fresh, fully hidden grid; stored fog of the right size is answered at
         the map's `gridSize`. Players do not see the
         raw fog state; they receive the revealed cells over WebSocket
-        (`fog:cells`) as the DM reveals areas. DM only.
+        (`fog:cells`) as the GM reveals areas. GM only.
 
 
         A map with more than 250,000 grid squares (only one stored before
@@ -8757,8 +8865,8 @@ paths:
         is started again from fully hidden before the operation applies.
         Returns the updated fog state and broadcasts it exactly as the socket
         `fog:operation` event does: `fog:updated` with the whole grid to the
-        DM, and `fog:cells` with the revealed cells to every other member,
-        for the map the campaign is showing; for any other map, only the DM's
+        GM, and `fog:cells` with the revealed cells to every other member,
+        for the map the campaign is showing; for any other map, only the GM's
         connections are told. The body is checked first, so one that is not
         a valid operation answers 400 even while fog is off. A `reveal` or
         `hide` naming more than 250,000 cells, the most grid squares any map
@@ -8768,7 +8876,7 @@ paths:
         then refused with 409 (`Fog of war is off for this map`) while
         `fogEnabled` is off for the map, and with 409 and nothing stored for
         a map with more than 250,000 grid squares, which is too large for
-        fog. DM only.
+        fog. GM only.
       operationId: applyFogOperation
       security:
         - cookieAuth: []
@@ -8823,11 +8931,11 @@ paths:
         it is on, a player is sent only their own tokens and those their
         tokens can see, judged from the map's walls and lights, and a
         spectator none. Manual fog of war is a separate setting
-        (`fogEnabled`). DM only.
+        (`fogEnabled`). GM only.
 
         Every request broadcasts `map:settings:updated`, carrying all four
         per-map flags, to every connected member for the map the campaign is
-        showing and to the DM's connections for any other. When the flag
+        showing and to the GM's connections for any other. When the flag
         actually changes on the map the campaign is showing, each member is
         also sent the map as they can now see it (`map.changed`), so nothing
         needs a reload; a map that is not being shown gets no `map.changed`.
@@ -8875,8 +8983,8 @@ paths:
         Returns SRD (global) + this campaign's custom creature templates,
         ordered by name. Supports search, source filter, challenge rating
         filter, game system filter and pagination; the filters combine.
-        Campaign DM only (403 for any other member): the library holds stat
-        blocks and the DM's homebrew, and the client shows it to the DM alone.
+        Campaign GM only (403 for any other member): the library holds stat
+        blocks and the GM's homebrew, and the client shows it to the GM alone.
       operationId: listCreatures
       security:
         - cookieAuth: []
@@ -8902,7 +9010,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+            enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
           description: >-
             Filter by game system. A creature with no system recorded is
             system-agnostic and is always included, regardless of this filter.
@@ -8950,7 +9058,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: 'gameSystem must be one of: DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E'
+                message: CozyVTT does not support that game system.
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -8958,7 +9066,7 @@ paths:
       tags: [Creatures]
       summary: Create custom creature
       description: >-
-        Create a new campaign-specific custom creature template (DM only),
+        Create a new campaign-specific custom creature template (GM only),
         with `source: custom`. `imageUrl` is normalised before it is checked
         and stored: a bare asset id becomes `/api/assets/tokens/<id>`, an
         address starting `/api/assets/` is kept, and anything else is
@@ -8997,10 +9105,10 @@ paths:
                   description: >
                     Must have `ac` (integer 0-99), `speed` (string, at most 200
                     characters) and `abilities` with all six scores as
-                    integers from 0 to 30, or 0 to 9,999 when the stat block's
-                    own `gameSystem` is `CALL_OF_CTHULHU_7E`. `skills` values
+                    integers from 0 to 30, or 0 to 999 when the stat block's
+                    own `gameSystem` is `HORROR_D100`. `skills` values
                     are integers from -50 to 50 (up to 999 for
-                    `CALL_OF_CTHULHU_7E`) and `savingThrows` values from -50 to
+                    `HORROR_D100`) and `savingThrows` values from -50 to
                     50 in every system. Traits, actions, bonus actions, reactions and
                     legendary actions hold at most 50 entries each, with names
                     up to 200 and descriptions up to 5000 characters. Up to 20
@@ -9010,7 +9118,7 @@ paths:
                     block is too large`).
                 gameSystem:
                   type: string
-                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                   nullable: true
                 challengeRating:
                   type: string
@@ -9068,7 +9176,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Not the campaign's DM, or an image the caller may not reference.
+          description: Not the campaign's GM, or an image the caller may not reference.
           content:
             application/json:
               schema:
@@ -9081,7 +9189,7 @@ paths:
     get:
       tags: [Creatures]
       summary: Get creature template
-      description: Get a single creature template by ID. Campaign DM only. A creature belonging to this campaign, or a global SRD creature; one belonging to another campaign answers 404.
+      description: Get a single creature template by ID. Campaign GM only. A creature belonging to this campaign, or a global SRD creature; one belonging to another campaign answers 404.
       operationId: getCreature
       security:
         - cookieAuth: []
@@ -9109,7 +9217,7 @@ paths:
       tags: [Creatures]
       summary: Update custom creature
       description: >-
-        Update a campaign-specific custom creature template (DM only). A
+        Update a campaign-specific custom creature template (GM only). A
         field left out keeps its value; `null` clears a nullable one. An SRD
         creature answers 403; a creature of another campaign answers 404, as
         an unknown id does and as the read routes do. The body is
@@ -9146,10 +9254,10 @@ paths:
                   description: >
                     Must have `ac` (integer 0-99), `speed` (string, at most 200
                     characters) and `abilities` with all six scores as
-                    integers from 0 to 30, or 0 to 9,999 when the stat block's
-                    own `gameSystem` is `CALL_OF_CTHULHU_7E`. `skills` values
+                    integers from 0 to 30, or 0 to 999 when the stat block's
+                    own `gameSystem` is `HORROR_D100`. `skills` values
                     are integers from -50 to 50 (up to 999 for
-                    `CALL_OF_CTHULHU_7E`) and `savingThrows` values from -50 to
+                    `HORROR_D100`) and `savingThrows` values from -50 to
                     50 in every system. Traits, actions, bonus actions, reactions and
                     legendary actions hold at most 50 entries each, with names
                     up to 200 and descriptions up to 5000 characters. Up to 20
@@ -9159,7 +9267,7 @@ paths:
                     block is too large`).
                 gameSystem:
                   type: string
-                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                   nullable: true
                 challengeRating:
                   type: string
@@ -9215,7 +9323,7 @@ paths:
                 $ref: '#/components/schemas/Error'
         '403':
           description: >-
-            Not the campaign's DM; an SRD creature ("Cannot edit SRD
+            Not the campaign's GM; an SRD creature ("Cannot edit SRD
             creatures. Duplicate it first to create a custom version."); or an
             image the caller may not reference.
           content:
@@ -9239,7 +9347,7 @@ paths:
       tags: [Creatures]
       summary: Delete custom creature
       description: >-
-        Delete a campaign-specific custom creature template (DM only). An SRD
+        Delete a campaign-specific custom creature template (GM only). An SRD
         creature answers 403; a creature of another campaign answers 404, as
         an unknown id does. Everyone's favourites of it are removed with
         it. Tokens already placed from it are not changed.
@@ -9285,7 +9393,7 @@ paths:
       summary: Duplicate creature
       description: >-
         Duplicate a creature of this campaign, or a global SRD creature, as a
-        new custom creature in this campaign (DM only). The copy is named
+        new custom creature in this campaign (GM only). The copy is named
         `<name> (Custom)`, with `source: custom`, and copies the stat block
         and every other field; an older bare-id
         `imageUrl` is normalised to `/api/assets/tokens/<id>`. A creature
@@ -9322,7 +9430,7 @@ paths:
     get:
       tags: [Creatures]
       summary: List creature favorites
-      description: Returns creature IDs and full creature objects that the current user has favorited in this campaign. Campaign DM only, like the library it belongs to.
+      description: Returns creature IDs and full creature objects that the current user has favorited in this campaign. Campaign GM only, like the library it belongs to.
       operationId: listCreatureFavorites
       security:
         - cookieAuth: []
@@ -9352,7 +9460,7 @@ paths:
     post:
       tags: [Creatures]
       summary: Toggle creature favorite
-      description: Toggle favorite for the current user in this campaign. Campaign DM only. If already favorited, removes it; otherwise adds it. Only a creature of this campaign or a global SRD creature can be favorited; another campaign's, or an unknown id, answers 404.
+      description: Toggle favorite for the current user in this campaign. Campaign GM only. If already favorited, removes it; otherwise adds it. Only a creature of this campaign or a global SRD creature can be favorited; another campaign's, or an unknown id, answers 404.
       operationId: toggleCreatureFavorite
       security:
         - cookieAuth: []
@@ -9387,7 +9495,7 @@ paths:
         Returns how many SRD and custom creatures are stored, from which a
         client tells whether SRD creatures have been seeded, whether a
         seed is running on this server, and whether the caller may run one.
-        Any campaign member can check (not DM-only, unlike the rest of this
+        Any campaign member can check (not GM-only, unlike the rest of this
         library).
       operationId: getSrdSeedStatus
       security:
@@ -9425,7 +9533,7 @@ paths:
       summary: Seed SRD creatures
       description: |
         Fetch SRD creatures from Open5e and populate the library. **Platform
-        admins only** (it was any campaign DM, which is any user): anyone else
+        admins only** (it was any campaign GM, which is any user): anyone else
         gets 403 with the message `Only an administrator can import the SRD
         creatures, because every campaign on this server shares them. Ask an
         administrator to import them.` The admin need not be a member of the
@@ -9434,7 +9542,7 @@ paths:
         are not duplicated, even when the command-line seed script or another
         backend process seeds at the same moment. SRD creatures belong to no
         campaign, so seeding from one campaign fills the library of every
-        campaign on the instance. They are stored with `gameSystem: DND_5E`.
+        campaign on the instance. They are stored with `gameSystem: FIFTH_EDITION`.
         The request waits until seeding finishes.
 
         Pages are fetched from `https://api.open5e.com` only, with 15 seconds
@@ -9535,7 +9643,7 @@ paths:
       summary: List token templates
       description: >-
         Get this campaign's token templates, ordered by name, with search,
-        type filtering and pagination. Campaign DM only: a template carries
+        type filtering and pagination. Campaign GM only: a template carries
         the notes, stat block and hit points the map keeps from players.
       operationId: listTokenTemplates
       security:
@@ -9592,7 +9700,7 @@ paths:
       tags: [Token Templates]
       summary: Create token template
       description: >-
-        Create a new token template (DM only). An image address on this server
+        Create a new token template (GM only). An image address on this server
         must be an asset's exact address (`/api/assets/<kind>/<id>`), and one
         naming an existing asset must name one the caller can read (403
         otherwise), unless this campaign already stores that exact address
@@ -9644,7 +9752,7 @@ paths:
       tags: [Token Templates]
       summary: Get token template
       description: >-
-        Campaign DM only, like the list. A template of another campaign
+        Campaign GM only, like the list. A template of another campaign
         answers 404, as an unknown id does, so the answer cannot confirm that
         an id exists.
       operationId: getTokenTemplate
@@ -9675,7 +9783,7 @@ paths:
       tags: [Token Templates]
       summary: Update token template
       description: >-
-        Update a token template (DM only). A field left out keeps its value.
+        Update a token template (GM only). A field left out keeps its value.
         An unknown id and another campaign's template both answer 404, before
         the body is validated. An image address on this server must be
         an asset's exact address (`/api/assets/<kind>/<id>`), and one naming
@@ -9819,8 +9927,8 @@ paths:
       summary: Copy template to another campaign
       description: |
         Copy a token template to another campaign as an independent copy
-        created by the caller. The authenticated user must be the DM of
-        **both** the source and target campaigns; a target they are not DM
+        created by the caller. The authenticated user must be the GM of
+        **both** the source and target campaigns; a target they are not GM
         of, including one that does not exist, answers 403. The template's
         picture is checked as a new reference in the target campaign: an
         existing asset the caller cannot read, and the target campaign does
@@ -9831,7 +9939,7 @@ paths:
         is copied.
 
         Checked in this order: the same campaign as source and target (400);
-        DM of the target (403); the template exists in the source campaign
+        GM of the target (403); the template exists in the source campaign
         (404, for one of another campaign too); the picture (403, then
         400).
       operationId: copyTokenTemplate
@@ -9884,7 +9992,7 @@ paths:
       tags: [Campaign Export/Import]
       summary: Export campaign
       description: |
-        Export a campaign as a .cozyvtt ZIP archive (DM only). The archive is
+        Export a campaign as a .cozyvtt ZIP archive (GM only). The archive is
         sent as it is made, with no `Content-Length`; asset files are stored
         in it uncompressed. Before anything is sent, the asset files' recorded
         sizes, the JSON files and the ZIP's own overhead are added up, and an
@@ -9906,9 +10014,11 @@ paths:
         Each map file (`maps/map-<n>.json`, written without
         indentation) carries the map's drawings in `drawings`, in drawing
         order, each with the `Drawing` fields but `id`, `authorId` and
-        `createdAt`, and `share`, `DM` for every drawing for the DM alone
-        and the campaign's DM's own, and `PLAYERS` for every other, the share
-        of the map's markup layer it counts to; a drawing for the DM alone keeps `audience: DM`. Its
+        `createdAt`, and `share`, `GM` for every drawing for the GM alone
+        and the campaign's GM's own, and `PLAYERS` for every other, the share
+        of the map's markup layer it counts to; a drawing for the GM alone keeps `audience: GM`.
+        Versions before 1.7.0 wrote `DM` for both, and their own game system
+        values. Its
         `annotations` is written as `[]`: releases up to 1.5.4 store an
         archive's `annotations` and send them to every member, and leave out
         a key they do not know, such as `drawings`. A map file over 10 MB is
@@ -9951,7 +10061,7 @@ paths:
                 format: binary
         '403':
           description: >-
-            The caller is not the campaign's DM, or the browser marked the
+            The caller is not the campaign's GM, or the browser marked the
             request as loading part of a page (`Sec-Fetch-Dest` present and
             not `empty` or `document`): `An export is downloaded by the app
             or opened directly, not loaded into a page`. The app's own fetch,
@@ -9963,8 +10073,8 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: >-
-            The campaign was deleted after the DM check passed and before the
-            export read it. An unknown campaign id is answered 403 by the DM
+            The campaign was deleted after the GM check passed and before the
+            export read it. An unknown campaign id is answered 403 by the GM
             check, as on every campaign route.
           content:
             application/json:
@@ -10122,7 +10232,7 @@ paths:
       description: |
         Upload a .cozyvtt archive and create a new campaign from it. Any
         signed-in user may call it; they become the new campaign's owner and
-        DM. The upload rules are those of the preview route, and the
+        GM. The upload rules are those of the preview route, and the
         `campaignExportSizeLimit` setting bounds both the archive and the
         total size of the files read out of it. Each user may import 20
         campaigns an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`), counted apart from
@@ -10209,8 +10319,15 @@ paths:
         treated as one that was empty. A stat block
         that still does not fit is left off its token or template; a
         creature without one is listed in `skipped`. A game system that is
-        not a `GameSystem` value, on the campaign or a creature, imports as
-        none. A data file nested more than 32 levels deep leaves out its map,
+        not one of `FIFTH_EDITION`, `FANTASY_D20` and `HORROR_D100`, or the
+        value versions before 1.7.0 gave one of them, on the campaign or a
+        creature, imports as none. A stat block's own `gameSystem` given as
+        such an earlier value, and `DM` as a drawing's `audience` or `share`,
+        are read as the new values. For the value of an
+        unreleased game system `warnings` says `The archive's game system is
+        no longer supported, so the campaign has none.`, or `Creature
+        "<name>": its game system is no longer supported, so it was imported
+        with none.`; for any other, that it is not one this server knows. A data file nested more than 32 levels deep leaves out its map,
         or its creatures or templates, and refuses the import when it is the
         manifest, campaign settings or asset manifest. Tokens are moved to
         whole squares with their
@@ -10221,9 +10338,9 @@ paths:
         tokens, 5,000 walls and 200 lights. A map's drawings come from its
         file's `drawings`, and from `annotations`, which an older archive may
         hold: each entry is held to what `drawing:add` takes and to the map's
-        region, imported with a new id, as the importing DM's when its `share`
-        is `DM` and with no author when it is `PLAYERS` (a drawing for the DM
-        alone goes to the DM's share whatever it names, and one for everyone
+        region, imported with a new id, as the importing GM's when its `share`
+        is `GM` (or `DM`) and with no author when it is `PLAYERS` (a drawing for the GM
+        alone goes to the GM's share whatever it names, and one for everyone
         without `share` to the players'), and one that is not is left out and
         counted in `warnings`: one that `drawing:add` would refuse, a drawing
         on the ground layer or a record of another shape included, as `Map
@@ -11580,7 +11697,7 @@ paths:
           description: '`flexible` selects the system-agnostic templates (stored with a null gameSystem); otherwise a GameSystem value.'
           schema:
             type: string
-            enum: [flexible, DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+            enum: [flexible, FIFTH_EDITION, FANTASY_D20, HORROR_D100]
         - name: mine
           in: query
           description: '`true` limits the list to templates the caller authored.'
@@ -11620,8 +11737,9 @@ paths:
                         description: { type: string, nullable: true }
                         gameSystem:
                           type: string
-                          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                          enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                           nullable: true
+                          description: A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
                         tokenImageUrl: { type: string, nullable: true }
                         createdById: { type: string, format: uuid, nullable: true }
                         createdBy:
@@ -11646,7 +11764,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: 'gameSystem must be one of: DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E, flexible'
+                message: CozyVTT does not support that game system.
         '401':
           $ref: '#/components/responses/Unauthorized'
     post:
@@ -11661,8 +11779,16 @@ paths:
         is checked as `{}` and so fails), and is stored as the schema's parsed
         output, so a key the schema does not declare is dropped, as it is
         for a character. A typed sheet is stored without `playerName`, and a
-        `CALL_OF_CTHULHU_7E` one without its top-level `notes` (Keeper's
-        Notes), whoever sends it. Sheet
+        `HORROR_D100` one without its top-level `notes` (GM's
+        Notes), whoever sends it. A `HORROR_D100` sheet in the shape
+        versions before 1.7.0 stored is converted to the rebuilt sheet
+        first, as it is for a character. A template takes no `converted`
+        record from a request, whether the request sent one or the
+        conversion of the sheet it sent wrote one. A template stored in
+        the shape before 1.7.0 keeps the record of its own conversion:
+        `GET /api/character-templates/{id}` answers it, and an update
+        keeps it whatever `data` holds under `converted`.
+        Sheet
         fields from before version 1.3.0 are moved to their current names
         first, as they are for a character. Without
         a `gameSystem`, `data` must be an object
@@ -11701,7 +11827,7 @@ paths:
                   maxLength: 2000
                 gameSystem:
                   type: string
-                  enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                  enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                   nullable: true
                 data:
                   type: object
@@ -11723,8 +11849,9 @@ paths:
                   description: { type: string, nullable: true }
                   gameSystem:
                     type: string
-                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                     nullable: true
+                    description: A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
@@ -11750,8 +11877,8 @@ paths:
       operationId: getCharacterTemplate
       description: |
         Any signed-in user may read a template. Its `data` is sent without
-        `playerName` and a `CALL_OF_CTHULHU_7E` sheet's top-level `notes`
-        (Keeper's Notes), even when a template stored before 1.5.4 holds them.
+        `playerName` and a `HORROR_D100` sheet's top-level `notes`
+        (GM's Notes), even when a template stored before 1.5.4 holds them.
       security:
         - cookieAuth: []
       parameters:
@@ -11774,8 +11901,9 @@ paths:
                   description: { type: string, nullable: true }
                   gameSystem:
                     type: string
-                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                     nullable: true
+                    description: A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
@@ -11805,7 +11933,7 @@ paths:
         whole sheet; it is checked against the template's game system (after
         moving sheet fields from before version 1.3.0 to their current names),
         or against `FlexibleCharacterData` if it has none, and stored as
-        parsed, without `playerName` or a `CALL_OF_CTHULHU_7E` sheet's
+        parsed, without `playerName` or a `HORROR_D100` sheet's
         top-level `notes`, as on create; a refused sheet answers 400 with
         `validationErrors` and the message the create route gives.
         `tokenImageUrl` follows the
@@ -11868,8 +11996,9 @@ paths:
                   description: { type: string, nullable: true }
                   gameSystem:
                     type: string
-                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                     nullable: true
+                    description: A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
                   tokenImageUrl: { type: string, nullable: true }
                   data:
                     type: object
@@ -11948,13 +12077,14 @@ paths:
         user-published sheets under /api/character-templates.
 
         `gameSystem` is the literal text `null` or `undefined` for a flexible
-        character's templates, or one of `DND_5E`, `PATHFINDER_2E`,
-        `SHADOWRUN_6E`, `CALL_OF_CTHULHU_7E`; anything else answers 400.
+        character's templates, or one of `FIFTH_EDITION`, `FANTASY_D20`,
+        `HORROR_D100`, each also by the value versions before 1.7.0 gave it;
+        anything else answers 400.
         Template names are matched exactly. The flexible templates are
         `blank` and `basic`, and any other name answers 404. Every typed
-        system has `blank`, plus `fighter` for `DND_5E` and `PATHFINDER_2E`,
-        `streetsamurai` for `SHADOWRUN_6E`, and `privateinvestigator` (or
-        `pi`) for `CALL_OF_CTHULHU_7E`; any other name returns that system's
+        system has `blank`, plus `fighter` for `FIFTH_EDITION` and `FANTASY_D20`,
+        and `privateinvestigator` (or `pi`) for `HORROR_D100`; any
+        other name returns that system's
         `blank` template with 200. The flexible `basic` sheet carries new
         section and field ids in each answer.
       operationId: getBuiltInCharacterTemplate
@@ -11988,13 +12118,13 @@ paths:
                     type: string
                   gameSystem:
                     type: string
-                    enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+                    enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
                     nullable: true
                   data:
                     type: object
                     description: The sheet, in the shape that game system's data takes; for a flexible template (null gameSystem), the `FlexibleCharacterData` layout.
         '400':
-          description: '`gameSystem` is neither `null`/`undefined` nor a recognised game system.'
+          description: '`gameSystem` is neither `null`/`undefined` nor a recognised game system: `CozyVTT does not support that game system.`, which does not repeat the value sent.'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -12008,11 +12138,11 @@ paths:
         Newest first; rolls with the same timestamp (millisecond precision) are
         ordered by id, so the order is the same on every request and page.
         Secret rolls are filtered server-side before anything is
-        sent: a player receives public rolls plus their own secret ones, a DM
+        sent: a player receives public rolls plus their own secret ones, a GM
         receives everything. Initiative rolls that threw dice are included,
         as a secret roll when the token was not sent to every player. Rolls
         older than the last history clear are omitted; the rows themselves
-        are kept, so a DM can still audit them.
+        are kept, so a GM can still audit them.
       operationId: getCampaignDiceRolls
       security:
         - cookieAuth: []
@@ -12080,7 +12210,7 @@ paths:
       tags: [Campaigns]
       summary: Clear the old join and leave chat messages
       description: >
-        DM only. Those notices are no longer written, and nothing is removed on
+        GM only. Those notices are no longer written, and nothing is removed on
         upgrade, so this is how a campaign clears the ones it already has. It
         deletes the campaign's SYSTEM messages whose `metadata.action` is
         `user.joined` or `user.left`. Nothing is broadcast.
@@ -12113,7 +12243,7 @@ paths:
       tags: [Maps]
       summary: Create a map from a Universal VTT file
       description: >-
-        DM only. Accepts .uvtt, .dd2vtt and .df2vtt, bringing in the image along
+        GM only. Accepts .uvtt, .dd2vtt and .df2vtt, bringing in the image along
         with its wall segments, doors and lights.
 
 
@@ -12128,7 +12258,7 @@ paths:
 
         Walls the file keeps in `objects_line_of_sight` (furniture, pillars,
         crates) are left out unless `includeObjectWalls=true`. They block sight
-        like any other wall, so whether they should is the DM's call.
+        like any other wall, so whether they should is the GM's call.
 
 
         When the file needs an answer before it can become a map, the route
@@ -12299,7 +12429,7 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           description: >-
-            The file needs the DM's answer first. Nothing was created. Resend
+            The file needs the GM's answer first. Nothing was created. Resend
             with `confirm=true`, plus `includeObjectWalls` if it offered them.
           content:
             application/json:
@@ -12391,7 +12521,7 @@ paths:
       tags: [Maps]
       summary: Export a map as a Universal VTT file
       description: >-
-        DM only. Downloads the map as a Universal VTT file (format 0.3): a
+        GM only. Downloads the map as a Universal VTT file (format 0.3): a
         JSON attachment named after the map (`<name>.uvtt`, with characters
         other than letters, digits, spaces, `_` and `-` removed) holding the
         map's picture as base64, its size in squares, its walls as
@@ -12470,7 +12600,7 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           description: >-
-            The caller is not the campaign's DM, or the browser marked the
+            The caller is not the campaign's GM, or the browser marked the
             request as loading part of a page (`Sec-Fetch-Dest` present and
             not `empty` or `document`): `An export is downloaded by the app
             or opened directly, not loaded into a page`. The app's own fetch,
@@ -12549,8 +12679,12 @@ paths:
         during the load lands on the restored rows; once the load commits the
         in-memory combat state is dropped, and everyone signs in again. After a
         successful load the migrations run, so an archive from an older release
-        comes up to date. If that step fails, or copying the uploaded files
-        fails, the response is 500 Restore Incomplete and says what to do.
+        comes up to date, and then the restored `HORROR_D100` characters and
+        character templates still in the shape before 1.7.0 are converted to
+        the rebuilt sheet, before the restore answers. If either step fails,
+        a sheet cannot be converted (the message gives the count), or copying
+        the uploaded files fails, the response is 500 Restore Incomplete and
+        says what to do.
       operationId: restoreBackup
       security:
         - cookieAuth: []
@@ -12634,7 +12768,8 @@ paths:
         '500':
           description: >
             Restore Failed (nothing changed), Restore Incomplete (the database was
-            restored but migrating it or copying its files failed), a tool is not
+            restored but migrating it, converting its Horror d100 sheets or
+            copying its files failed), a tool is not
             available in the image, or Internal Server Error for a body that is cut
             off or malformed (nothing changed)
         '503':
@@ -12905,9 +13040,9 @@ components:
           nullable: true
         gameSystem:
           type: string
-          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+          enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
           nullable: true
-          description: Primary game system for this campaign (optional)
+          description: Primary game system for this campaign (optional). A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
         ownerId:
           type: string
           format: uuid
@@ -12942,12 +13077,12 @@ components:
         playersMayDraw:
           type: boolean
           default: true
-          description: Whether players may draw on the map while the session is live; the DM always may.
+          description: Whether players may draw on the map while the session is live; the GM always may.
         rollHistoryClearedAt:
           type: string
           format: date-time
           nullable: true
-          description: When the DM last cleared the dice history; older rolls are not returned.
+          description: When the GM last cleared the dice history; older rolls are not returned.
         createdAt:
           type: string
           format: date-time
@@ -12973,7 +13108,7 @@ components:
           format: uuid
         role:
           type: string
-          enum: [DM, PLAYER, SPECTATOR]
+          enum: [GM, PLAYER, SPECTATOR]
         characterIds:
           type: array
           items:
@@ -13053,7 +13188,7 @@ components:
             (`.pdf`, `.txt` or `.md`), so it is the one to go by.
         originalName:
           type: string
-          example: players-handbook.pdf
+          example: house-rules.pdf
           description: The name it was uploaded or written under, which may not match what it is.
         mimeType:
           type: string
@@ -13094,7 +13229,7 @@ components:
           type: boolean
           description: >-
             True when the document was shared into the campaign by link and the
-            DM can stop sharing it. False when it is the campaign's own, created
+            GM can stop sharing it. False when it is the campaign's own, created
             or uploaded at CAMPAIGN scope, where there is no link to remove.
         canEdit:
           type: boolean
@@ -13102,7 +13237,7 @@ components:
             Whether `PUT /api/assets/documents/{id}/content` would take an edit
             from the caller, by the rule for deleting the document: for a
             campaign's document its uploader while still a member of that
-            campaign, that campaign's DM, or an admin; for a global one an
+            campaign, that campaign's GM, or an admin; for a global one an
             admin, or its uploader while they still manage global assets; for
             a personal one its uploader, or an admin. A PDF is never editable,
             whatever this says.
@@ -13113,7 +13248,7 @@ components:
         A player's saved dice roll for one campaign — a name and an expression,
         shown as a one-click button in the dice panel, with an optional
         character name and purpose of its own. Private to whoever saved
-        it, the DM included. The expression is validated when written against the
+        it, the GM included. The expression is validated when written against the
         same code that rolls it, so a stored macro can always be rolled.
       properties:
         id:
@@ -13128,7 +13263,7 @@ components:
         name:
           type: string
           maxLength: 60
-          example: Wild magic surge
+          example: Random weather
         expression:
           type: string
           maxLength: 200
@@ -13140,14 +13275,14 @@ components:
           description: >
             Who the dice panel rolls it as while its Character box is empty;
             free text, naming no character record. `null` for none.
-          example: Goblin boss
+          example: Hobgoblin
         purpose:
           type: string
           nullable: true
           maxLength: 200
           description: >
             What the roll is for; `null` sends the name in its place.
-          example: Scimitar attack
+          example: Longsword attack
         createdAt:
           type: string
           format: date-time
@@ -13198,20 +13333,20 @@ components:
           type: string
         gameSystem:
           type: string
-          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+          enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
           nullable: true
-          description: Game system for this character (determines data structure)
+          description: Game system for this character (determines data structure). A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
         data:
           type: object
           description: >-
             Flexible JSON data for character stats (structure depends on
-            gameSystem). On a `CALL_OF_CTHULHU_7E` sheet the top-level `notes`
-            (Keeper's Notes) is the DM's alone: it is sent only to the DM of
+            gameSystem). On a `HORROR_D100` sheet the top-level `notes`
+            (GM's Notes) is the GM's alone: it is sent only to the GM of
             the character's campaign, always, as an empty string when nothing
             is written, and never to anyone else, the owner included, on every
             read, every save's reply and every `character.updated` event. A
-            save by anyone but that DM keeps the stored `notes`, whatever it
-            sent; a character created by anyone but the DM of the campaign it
+            save by anyone but that GM keeps the stored `notes`, whatever it
+            sent; a character created by anyone but the GM of the campaign it
             is created in is stored without them; and a character assigned to
             a campaign it was not in, brought in by accepting an invitation,
             or copied loses them.
@@ -13241,8 +13376,9 @@ components:
               type: string
             gameSystem:
               type: string
-              enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+              enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
               nullable: true
+              description: A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration.
         user:
           type: object
           description: >-
@@ -13378,7 +13514,7 @@ components:
         spiritLayerUrl:
           type: string
           nullable: true
-          description: Null for anyone but the DM unless the spirit layer is visible to them.
+          description: Null for anyone but the GM unless the spirit layer is visible to them.
         width:
           type: integer
           description: In grid squares, 1 to 500. A map stored before that limit may be larger.
@@ -13406,7 +13542,7 @@ components:
           items:
             $ref: '#/components/schemas/Token'
           description: >
-            The DM gets every token. Anyone else gets only the tokens on the
+            The GM gets every token. Anyone else gets only the tokens on the
             plane they are on (only spirit tokens once the spirit layer is
             visible to them, otherwise only material ones), never a hidden
             (`visible: false`) one, and on a map with lighting on only the tokens
@@ -13419,7 +13555,7 @@ components:
             type: object
           description: >
             Empty for everyone in a map a member is sent: the map fetch, a
-            token update's reply and `map.changed`. The DM's replies to
+            token update's reply and `map.changed`. The GM's replies to
             `PUT .../maps/{id}` and `POST .../maps/{id}/tokens` return the
             stored row, which can hold what a campaign import brought in.
             Nothing in the app reads them.
@@ -13439,17 +13575,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Wall'
-          description: Every wall of the map. For anyone but the DM, a `door-locked` door is sent as `door-closed`.
+          description: Every wall of the map. For anyone but the GM, a `door-locked` door is sent as `door-closed`.
         lights:
           type: array
           items:
             $ref: '#/components/schemas/LightSource'
-          description: Every light for the DM; for anyone else, only those with `enabled` true.
+          description: Every light for the GM; for anyone else, only those with `enabled` true.
         fogData:
           allOf:
             - $ref: '#/components/schemas/FogState'
           nullable: true
-          description: Always null for anyone but the DM.
+          description: Always null for anyone but the GM.
         createdAt:
           type: string
           format: date-time
@@ -13477,19 +13613,19 @@ components:
     Token:
       type: object
       description: |
-        A token as the DM sees it. A player is sent a subset of each token they
+        A token as the GM sees it. A player is sent a subset of each token they
         may see at all, built from a fixed list of the fields below, so a field
         not listed here never reaches a player: never `notes` or `statBlock`;
         `hp` only for a token they control or one whose `showHpBar` is on;
         `sightRadius` and `creatureTemplateId` only for a token they control.
-        `metadata` is sent to every player who may see the token (only the DM
+        `metadata` is sent to every player who may see the token (only the GM
         can write it), so it is no place for secrets. A token whose `obscured` is true reaches anyone but its
         controller as a shape with no identity, built from a fixed list: `id`,
         `position`, `size`, `layer`, `visible` and `obscured: true` are kept,
         and every other field is neutral (`name` and `imageUrl` empty,
         `conditions` and `metadata` empty, `characterId`, `controlledBy`,
         `creatureTemplateId`, `disposition`, `hp` and `initiative` null, `type`
-        `npc`, `rotation` 0, `showHpBar` false, `displayMode` `pog`). The DM
+        `npc`, `rotation` 0, `showHpBar` false, `displayMode` `pog`). The GM
         receives it whole. The subset is decided on the server before sending.
       properties:
         id:
@@ -13529,12 +13665,12 @@ components:
           description: 'token = normal layer; spirit = spirit/astral layer (hidden from players by default)'
         visible:
           type: boolean
-          description: If false, hidden from players (DM can still see)
+          description: If false, hidden from players (GM can still see)
         controlledBy:
           type: string
           format: uuid
           nullable: true
-          description: User ID of the player who controls this token (null = DM-only)
+          description: User ID of the player who controls this token (null = GM-only)
         rotation:
           type: number
           minimum: 0
@@ -13569,7 +13705,7 @@ components:
           description: Whether to display the HP bar on the map canvas
         notes:
           type: string
-          description: DM-only notes for this token
+          description: GM-only notes for this token
         initiative:
           type: number
           nullable: true
@@ -13586,7 +13722,7 @@ components:
         statBlock:
           type: object
           nullable: true
-          description: The creature's stat block. DM only; never sent to a player.
+          description: The creature's stat block. GM only; never sent to a player.
         creatureTemplateId:
           type: string
           format: uuid
@@ -13595,7 +13731,7 @@ components:
         obscured:
           type: boolean
           default: false
-          description: The DM has hidden what this token is. DM only on write; players who do not control it receive it masked (see the schema description).
+          description: The GM has hidden what this token is. GM only on write; players who do not control it receive it masked (see the schema description).
 
     TokenInput:
       type: object
@@ -13609,7 +13745,7 @@ components:
       properties:
         obscured:
           type: boolean
-          description: Hide what the token is from players who do not control it. DM only.
+          description: Hide what the token is from players who do not control it. GM only.
         sightRadius:
           type: number
           minimum: 0
@@ -13670,7 +13806,7 @@ components:
             Who controls the token. Omitted with a characterId naming a
             character of this campaign: that character's owner if the owner
             is a player of this campaign, otherwise nobody. Explicit null:
-            nobody (the DM). A value must name a player of this campaign (400
+            nobody (the GM). A value must name a player of this campaign (400
             otherwise).
         rotation:
           type: number
@@ -13713,7 +13849,7 @@ components:
           maxLength: 5000
           nullable: true
           default: ''
-          description: DM-only. Null is stored as an empty string.
+          description: GM-only. Null is stored as an empty string.
         initiative:
           type: number
           nullable: true
@@ -13723,10 +13859,10 @@ components:
           description: >
             A creature stat block. When present it must have `ac` (integer
             0-99), `speed` (string, at most 200 characters) and `abilities` with
-            all six scores as integers from 0 to 30, or 0 to 9,999 when the
-            stat block's own `gameSystem` is `CALL_OF_CTHULHU_7E`. `skills`
+            all six scores as integers from 0 to 30, or 0 to 999 when the
+            stat block's own `gameSystem` is `HORROR_D100`. `skills`
             values are integers from -50 to 50 (up to 999 for
-            `CALL_OF_CTHULHU_7E`) and `savingThrows` values from -50 to 50 in
+            `HORROR_D100`) and `savingThrows` values from -50 to 50 in
             every system. Traits, actions, bonus actions,
             reactions and legendary actions hold at most 50 entries each, with
             names up to 200 and descriptions up to 5000 characters. Up to 20
@@ -13800,9 +13936,9 @@ components:
           type: string
         gameSystem:
           type: string
-          enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
+          enum: [FIFTH_EDITION, FANTASY_D20, HORROR_D100]
           nullable: true
-          description: "null means system-agnostic: the creature is included regardless of which gameSystem a listing filters by."
+          description: "null means system-agnostic: the creature is included regardless of which gameSystem a listing filters by. A row that held the value of an unreleased game system before 1.7.0 has none since that version's migration."
         source:
           type: string
           enum: [srd, custom]
@@ -13903,7 +14039,7 @@ components:
               type: string
         type:
           type: string
-          enum: [PLAYER, DM, SYSTEM, DICE_ROLL, CHARACTER_ACTION, WHISPER]
+          enum: [PLAYER, GM, SYSTEM, DICE_ROLL, CHARACTER_ACTION, WHISPER]
           description: DICE_ROLL messages are never returned by the message history; dice have their own history. A WHISPER is returned to its sender and its recipient alone.
         content:
           type: string
@@ -14049,6 +14185,10 @@ components:
           type: string
         gameSystem:
           type: string
+          description: >-
+            The manifest's game system, as written, except that a system's
+            value from a version before 1.7.0 is given as its new one
+            (`FIFTH_EDITION`, `FANTASY_D20` or `HORROR_D100`).
         mapCount:
           type: integer
         tokenCount:
@@ -14143,7 +14283,7 @@ components:
             * `wall` — blocks vision.
             * `door-closed` — blocks vision; clickable to open.
             * `door-open` — does not block vision.
-            * `door-locked` — blocks vision; only DM can unlock.
+            * `door-locked` — blocks vision; only GM can unlock.
             * `window` — does not block vision.
       required: [id, x1, y1, x2, y2, type]
 
@@ -14164,8 +14304,8 @@ components:
           description: Who drew it; null once that account is deleted.
         audience:
           type: string
-          enum: [ALL, DM]
-          description: Who is sent it. A player's drawing is always `ALL`.
+          enum: [ALL, GM]
+          description: Who is sent it, `ALL` or `GM` for the GM alone (`DM`, as versions before 1.7.0 sent it, is read as `GM`). A player's drawing is always `ALL`. The live table's `drawing:add` refuses any other value with "A drawing's audience must be ALL or GM".
         layer:
           type: string
           enum: [MARKUP]
@@ -14242,7 +14382,7 @@ components:
 
     LightSource:
       type: object
-      description: A point light placed by the DM with separate bright and dim radii.
+      description: A point light placed by the GM with separate bright and dim radii.
       properties:
         id:
           type: string
@@ -14356,7 +14496,7 @@ components:
       properties:
         instanceName:
           type: string
-          example: The Hearthstone Tavern
+          example: The Mossy Lantern
           description: >-
             The name set in the setup wizard or Admin → Settings, shown as the
             browser tab's title. Emails use it too.

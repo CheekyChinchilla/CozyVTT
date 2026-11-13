@@ -22,7 +22,7 @@ import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/
 jest.setTimeout(20000);
 
 const app = createTestApp();
-let dmId: string;
+let gmId: string;
 let campaignId: string;
 let agent: ReturnType<typeof request.agent>;
 let server: WsTestServer;
@@ -32,12 +32,12 @@ const LAMP = { id: 'l1', x: 150, y: 250, brightRadius: 2, dimRadius: 4, color: '
 
 beforeAll(async () => {
   const stamp = randomUUID().slice(0, 8);
-  const dm = await createTestUser({ email: `resize-dm-${stamp}@test.cozyvtt.local`, displayName: 'DM' });
-  dmId = dm.id;
-  campaignId = (await createTestCampaign(dmId, { name: `Resize ${stamp}` })).id;
-  await prisma.campaignMembership.create({ data: { userId: dmId, campaignId, role: 'DM', characterIds: [] } });
+  const gm = await createTestUser({ email: `resize-dm-${stamp}@test.cozyvtt.local`, displayName: 'GM' });
+  gmId = gm.id;
+  campaignId = (await createTestCampaign(gmId, { name: `Resize ${stamp}` })).id;
+  await prisma.campaignMembership.create({ data: { userId: gmId, campaignId, role: 'GM', characterIds: [] } });
   agent = request.agent(app);
-  expect((await agent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD })).status).toBe(200);
+  expect((await agent.post('/api/auth/login').send({ email: gm.email, password: TEST_PASSWORD })).status).toBe(200);
   server = await createWsTestServer();
 });
 
@@ -45,7 +45,7 @@ afterAll(async () => {
   await server?.close();
   await prisma.map.deleteMany({ where: { campaignId } });
   await cleanupCampaigns([campaignId]);
-  await cleanupUsers([dmId]);
+  await cleanupUsers([gmId]);
   await prisma.$disconnect();
 });
 
@@ -155,7 +155,7 @@ describe('a page open on the map', () => {
   // have put them back there.
   it('is sent the moved walls and lights', async () => {
     const mapId = await newMap();
-    const page = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
+    const page = await server.connectAndAuth(await server.loginAs(gmId), campaignId);
     try {
       const walls = waitForEvent<{ mapId: string; segments: typeof WALL[] }>(page, 'walls:replaced');
       const lights = waitForEvent<{ mapId: string; lights: typeof LAMP[] }>(page, 'lights:replaced');

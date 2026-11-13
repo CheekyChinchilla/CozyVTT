@@ -33,10 +33,10 @@ const commonerStatBlock = {
 };
 
 describe('Creature template routes', () => {
-  let dmId: string;
+  let gmId: string;
   let playerId: string;
   let campaignId: string;
-  let dmAgent: ReturnType<typeof request.agent>;
+  let gmAgent: ReturnType<typeof request.agent>;
   let playerAgent: ReturnType<typeof request.agent>;
 
   async function login(email: string) {
@@ -47,38 +47,38 @@ describe('Creature template routes', () => {
   }
 
   beforeAll(async () => {
-    const dmEmail = `test_creature_dm_${Date.now()}@test.invalid`;
+    const gmEmail = `test_creature_dm_${Date.now()}@test.invalid`;
     const playerEmail = `test_creature_player_${Date.now()}@test.invalid`;
 
-    const dm = await createTestUser({ email: dmEmail, isApproved: true });
+    const gm = await createTestUser({ email: gmEmail, isApproved: true });
     const player = await createTestUser({ email: playerEmail, isApproved: true });
-    dmId = dm.id;
+    gmId = gm.id;
     playerId = player.id;
 
-    const campaign = await createTestCampaign(dmId, { gameSystem: GameSystem.DND_5E });
+    const campaign = await createTestCampaign(gmId, { gameSystem: GameSystem.FIFTH_EDITION });
     campaignId = campaign.id;
 
     await prisma.campaignMembership.createMany({
       data: [
-        { campaignId, userId: dmId, role: 'DM' },
+        { campaignId, userId: gmId, role: 'GM' },
         { campaignId, userId: playerId, role: 'PLAYER' },
       ],
     });
 
-    dmAgent = await login(dmEmail);
+    gmAgent = await login(gmEmail);
     playerAgent = await login(playerEmail);
   });
 
   afterAll(async () => {
     await prisma.creatureTemplate.deleteMany({ where: { campaignId } });
     await cleanupCampaigns([campaignId]);
-    await cleanupUsers([dmId, playerId]);
+    await cleanupUsers([gmId, playerId]);
     await prisma.$disconnect();
   });
 
   describe('POST / — create', () => {
     it('creates a creature with a valid stat block', async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .post(`/api/campaigns/${campaignId}/creatures`)
         .send({ name: 'Old Lady', statBlock: commonerStatBlock });
 
@@ -91,7 +91,7 @@ describe('Creature template routes', () => {
     // The reported bug, at the layer that has to be authoritative: even if a
     // client bypasses the editor entirely, the API must not store this.
     it('rejects an absurd saving throw', async () => {
-      const res = await dmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
+      const res = await gmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
         name: 'Cheating Commoner',
         statBlock: { ...commonerStatBlock, savingThrows: { wis: 30000 } },
       });
@@ -101,7 +101,7 @@ describe('Creature template routes', () => {
     });
 
     it('rejects an absurd skill bonus', async () => {
-      const res = await dmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
+      const res = await gmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
         name: 'Cheating Commoner',
         statBlock: { ...commonerStatBlock, skills: { perception: 999 } },
       });
@@ -111,7 +111,7 @@ describe('Creature template routes', () => {
 
     it('accepts a plausible derived bonus', async () => {
       // Wisdom 14 (+2) with proficiency at CR 0 (+2) is +4 Perception.
-      const res = await dmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
+      const res = await gmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
         name: 'Perceptive Commoner',
         statBlock: {
           ...commonerStatBlock,
@@ -126,7 +126,7 @@ describe('Creature template routes', () => {
     });
 
     it('rejects a missing name', async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .post(`/api/campaigns/${campaignId}/creatures`)
         .send({ statBlock: commonerStatBlock });
 
@@ -134,7 +134,7 @@ describe('Creature template routes', () => {
     });
 
     it('rejects a missing stat block', async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .post(`/api/campaigns/${campaignId}/creatures`)
         .send({ name: 'Shapeless' });
 
@@ -142,7 +142,7 @@ describe('Creature template routes', () => {
     });
 
     it('rejects an out-of-range ability score', async () => {
-      const res = await dmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
+      const res = await gmAgent.post(`/api/campaigns/${campaignId}/creatures`).send({
         name: 'Impossible',
         statBlock: { ...commonerStatBlock, abilities: { ...commonerStatBlock.abilities, str: 99 } },
       });
@@ -150,29 +150,29 @@ describe('Creature template routes', () => {
       expect(res.status).toBe(400);
     });
 
-    it('takes a Call of Cthulhu creature\'s STR 60 and a skill of 55', async () => {
+    it('takes a Horror d100 creature\'s STR 60 and a skill of 55', async () => {
       const statBlock = {
         ...commonerStatBlock,
-        gameSystem: 'CALL_OF_CTHULHU_7E',
+        gameSystem: 'HORROR_D100',
         abilities: { ...commonerStatBlock.abilities, str: 60 },
         skills: { 'Lurk in Mud': 55 },
       };
-      const res = await dmAgent
+      const res = await gmAgent
         .post(`/api/campaigns/${campaignId}/creatures`)
-        .send({ name: 'Mire Lurker', gameSystem: 'CALL_OF_CTHULHU_7E', statBlock });
+        .send({ name: 'Mire Lurker', gameSystem: 'HORROR_D100', statBlock });
 
       expect(res.status).toBe(201);
       expect(res.body.statBlock.abilities.str).toBe(60);
       expect(res.body.statBlock.skills).toEqual({ 'Lurk in Mud': 55 });
 
-      const dnd = await dmAgent
+      const fifthEdition = await gmAgent
         .post(`/api/campaigns/${campaignId}/creatures`)
-        .send({ name: 'Strong Commoner', statBlock: { ...statBlock, gameSystem: 'DND_5E', skills: undefined } });
-      expect(dnd.status).toBe(400);
-      expect(dnd.body.message).toBe('statBlock.abilities.str: Too big: expected number to be <=30');
+        .send({ name: 'Strong Commoner', statBlock: { ...statBlock, gameSystem: 'FIFTH_EDITION', skills: undefined } });
+      expect(fifthEdition.status).toBe(400);
+      expect(fifthEdition.body.message).toBe('statBlock.abilities.str: Too big: expected number to be <=30');
     });
 
-    it('refuses a player who is not the DM', async () => {
+    it('refuses a player who is not the GM', async () => {
       const res = await playerAgent
         .post(`/api/campaigns/${campaignId}/creatures`)
         .send({ name: 'Player Made', statBlock: commonerStatBlock });
@@ -193,14 +193,14 @@ describe('Creature template routes', () => {
     let creatureId: string;
 
     beforeEach(async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .post(`/api/campaigns/${campaignId}/creatures`)
         .send({ name: 'Editable', statBlock: { ...commonerStatBlock, skills: { stealth: 2 } } });
       creatureId = res.body.id;
     });
 
     it('updates a creature', async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .put(`/api/campaigns/${campaignId}/creatures/${creatureId}`)
         .send({ name: 'Renamed' });
 
@@ -209,16 +209,16 @@ describe('Creature template routes', () => {
     });
 
     it('leaves skills intact when only the name changes', async () => {
-      await dmAgent
+      await gmAgent
         .put(`/api/campaigns/${campaignId}/creatures/${creatureId}`)
         .send({ name: 'Renamed Again' });
 
-      const res = await dmAgent.get(`/api/campaigns/${campaignId}/creatures/${creatureId}`);
+      const res = await gmAgent.get(`/api/campaigns/${campaignId}/creatures/${creatureId}`);
       expect(res.body.statBlock.skills).toEqual({ stealth: 2 });
     });
 
     it('rejects an absurd bonus on update', async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .put(`/api/campaigns/${campaignId}/creatures/${creatureId}`)
         .send({ statBlock: { ...commonerStatBlock, savingThrows: { wis: 500 } } });
 
@@ -226,14 +226,14 @@ describe('Creature template routes', () => {
     });
 
     it('rejects an empty body', async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .put(`/api/campaigns/${campaignId}/creatures/${creatureId}`)
         .send({});
 
       expect(res.status).toBe(400);
     });
 
-    it('refuses a player who is not the DM', async () => {
+    it('refuses a player who is not the GM', async () => {
       const res = await playerAgent
         .put(`/api/campaigns/${campaignId}/creatures/${creatureId}`)
         .send({ name: 'Hijacked' });
@@ -243,11 +243,11 @@ describe('Creature template routes', () => {
   });
 
   describe('GET / — game system filtering', () => {
-    // A Call of Cthulhu table has no use for D&D monsters in its browse list,
+    // A Horror d100 table has no use for 5E monsters in its browse list,
     // but the filter has to let system-agnostic creatures through or a campaign
     // could lose sight of its own content.
-    let dndId: string;
-    let cocId: string;
+    let fifthEditionId: string;
+    let horrorD100Id: string;
     let agnosticId: string;
 
     beforeAll(async () => {
@@ -256,14 +256,14 @@ describe('Creature template routes', () => {
           {
             name: 'Filter Test Dragon',
             source: 'srd',
-            gameSystem: GameSystem.DND_5E,
+            gameSystem: GameSystem.FIFTH_EDITION,
             statBlock: commonerStatBlock,
             campaignId: null,
           },
           {
-            name: 'Filter Test Deep One',
+            name: 'Filter Test Fen Lurker',
             source: 'custom',
-            gameSystem: GameSystem.CALL_OF_CTHULHU_7E,
+            gameSystem: GameSystem.HORROR_D100,
             statBlock: commonerStatBlock,
             campaignId: null,
           },
@@ -282,19 +282,19 @@ describe('Creature template routes', () => {
         where: { name: { startsWith: 'Filter Test ' } },
         select: { id: true, name: true },
       });
-      dndId = rows.find((r) => r.name.endsWith('Dragon'))!.id;
-      cocId = rows.find((r) => r.name.endsWith('Deep One'))!.id;
+      fifthEditionId = rows.find((r) => r.name.endsWith('Dragon'))!.id;
+      horrorD100Id = rows.find((r) => r.name.endsWith('Fen Lurker'))!.id;
       agnosticId = rows.find((r) => r.name.endsWith('Anything'))!.id;
     });
 
     afterAll(async () => {
       await prisma.creatureTemplate.deleteMany({
-        where: { id: { in: [dndId, cocId, agnosticId] } },
+        where: { id: { in: [fifthEditionId, horrorD100Id, agnosticId] } },
       });
     });
 
     async function listNames(query: string): Promise<string[]> {
-      const res = await dmAgent.get(
+      const res = await gmAgent.get(
         `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test ${query}`
       );
       expect(res.status).toBe(200);
@@ -306,25 +306,25 @@ describe('Creature template routes', () => {
       expect(names).toEqual(
         expect.arrayContaining([
           'Filter Test Dragon',
-          'Filter Test Deep One',
+          'Filter Test Fen Lurker',
           'Filter Test Anything',
         ])
       );
     });
 
     it('excludes other systems when filtered', async () => {
-      const res = await dmAgent.get(
-        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=DND_5E`
+      const res = await gmAgent.get(
+        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=FIFTH_EDITION`
       );
       const names = res.body.creatures.map((c: { name: string }) => c.name);
 
       expect(names).toContain('Filter Test Dragon');
-      expect(names).not.toContain('Filter Test Deep One');
+      expect(names).not.toContain('Filter Test Fen Lurker');
     });
 
     it('always includes creatures with no system recorded', async () => {
-      const res = await dmAgent.get(
-        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=DND_5E`
+      const res = await gmAgent.get(
+        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=FIFTH_EDITION`
       );
       const names = res.body.creatures.map((c: { name: string }) => c.name);
 
@@ -332,12 +332,12 @@ describe('Creature template routes', () => {
     });
 
     it('filters to a non-5e system correctly', async () => {
-      const res = await dmAgent.get(
-        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=CALL_OF_CTHULHU_7E`
+      const res = await gmAgent.get(
+        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=HORROR_D100`
       );
       const names = res.body.creatures.map((c: { name: string }) => c.name);
 
-      expect(names).toContain('Filter Test Deep One');
+      expect(names).toContain('Filter Test Fen Lurker');
       expect(names).toContain('Filter Test Anything');
       expect(names).not.toContain('Filter Test Dragon');
     });
@@ -345,19 +345,19 @@ describe('Creature template routes', () => {
     it('still applies the campaign visibility scope alongside the system filter', async () => {
       // A creature belonging to another campaign must not appear even when its
       // system matches — the two scopes are ANDed, not merged into one OR.
-      const otherCampaign = await createTestCampaign(dmId, { gameSystem: GameSystem.DND_5E });
+      const otherCampaign = await createTestCampaign(gmId, { gameSystem: GameSystem.FIFTH_EDITION });
       const hidden = await prisma.creatureTemplate.create({
         data: {
           name: 'Filter Test Hidden',
           source: 'custom',
-          gameSystem: GameSystem.DND_5E,
+          gameSystem: GameSystem.FIFTH_EDITION,
           statBlock: commonerStatBlock,
           campaignId: otherCampaign.id,
         },
       });
 
-      const res = await dmAgent.get(
-        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=DND_5E`
+      const res = await gmAgent.get(
+        `/api/campaigns/${campaignId}/creatures?limit=100&search=Filter Test &gameSystem=FIFTH_EDITION`
       );
       const names = res.body.creatures.map((c: { name: string }) => c.name);
 
@@ -376,7 +376,7 @@ describe('Creature template routes', () => {
         data: {
           name: 'SRD Test Goblin',
           source: 'srd',
-          gameSystem: GameSystem.DND_5E,
+          gameSystem: GameSystem.FIFTH_EDITION,
           challengeRating: '1/4',
           statBlock: { ...commonerStatBlock, skills: { stealth: 6 } },
           campaignId: null,
@@ -390,7 +390,7 @@ describe('Creature template routes', () => {
     });
 
     it('cannot be edited', async () => {
-      const res = await dmAgent
+      const res = await gmAgent
         .put(`/api/campaigns/${campaignId}/creatures/${srdId}`)
         .send({ name: 'Tampered' });
 
@@ -398,13 +398,13 @@ describe('Creature template routes', () => {
     });
 
     it('cannot be deleted', async () => {
-      const res = await dmAgent.delete(`/api/campaigns/${campaignId}/creatures/${srdId}`);
+      const res = await gmAgent.delete(`/api/campaigns/${campaignId}/creatures/${srdId}`);
       expect(res.status).toBe(403);
     });
   });
 
-  // The library is the DM's: a template holds a stat block and the DM's
-  // homebrew, and the client shows the library to the DM alone. Reading it was
+  // The library is the GM's: a template holds a stat block and the GM's
+  // homebrew, and the client shows the library to the GM alone. Reading it was
   // open to every member, which handed a player what the map keeps from them.
   describe('reading the library as a player', () => {
     it('cannot list creatures', async () => {
@@ -413,7 +413,7 @@ describe('Creature template routes', () => {
     });
 
     it('cannot read one creature', async () => {
-      const list = await dmAgent.get(`/api/campaigns/${campaignId}/creatures?limit=1`);
+      const list = await gmAgent.get(`/api/campaigns/${campaignId}/creatures?limit=1`);
       expect(list.status).toBe(200);
       const id = list.body.creatures[0]?.id;
       expect(id).toBeDefined();
@@ -423,7 +423,7 @@ describe('Creature template routes', () => {
     });
 
     it('cannot list or set favourites', async () => {
-      const list = await dmAgent.get(`/api/campaigns/${campaignId}/creatures?limit=1`);
+      const list = await gmAgent.get(`/api/campaigns/${campaignId}/creatures?limit=1`);
       const id = list.body.creatures[0]?.id;
       expect((await playerAgent.get(`/api/campaigns/${campaignId}/creatures/favorites/list`)).status).toBe(403);
       expect((await playerAgent.post(`/api/campaigns/${campaignId}/creatures/${id}/favorite`)).status).toBe(403);

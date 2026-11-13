@@ -62,12 +62,12 @@ describe('ChatMessageSchema', () => {
   });
 
   it.each([['SYSTEM'], ['WHISPER'], [null], [7]])('refuses the type %p with the type refusal', (type) => {
-    expect(refusal({ content: 'Hi', type })).toBe('Invalid message type. Must be PLAYER or DM.');
+    expect(refusal({ content: 'Hi', type })).toBe('Invalid message type. Must be PLAYER or GM.');
   });
 
-  it('takes PLAYER, DM or no type', () => {
+  it('takes PLAYER, GM or no type', () => {
     expect(refusal({ content: 'Hi', type: 'PLAYER' })).toBeNull();
-    expect(refusal({ content: 'Hi', type: 'DM' })).toBeNull();
+    expect(refusal({ content: 'Hi', type: 'GM' })).toBeNull();
     expect(refusal({ content: 'Hi' })).toBeNull();
   });
 
@@ -93,7 +93,7 @@ describe('ChatMessageSchema', () => {
   it('refuses the first thing wrong, in the order the handler checked them', () => {
     expect(refusal({ content: '', type: 'SYSTEM', clientId: '' })).toBe('Message content required');
     expect(refusal({ content: 'x'.repeat(2001), type: 'SYSTEM' })).toBe('Message too long. Maximum 2000 characters.');
-    expect(refusal({ content: 'Hi', type: 'SYSTEM', clientId: '' })).toBe('Invalid message type. Must be PLAYER or DM.');
+    expect(refusal({ content: 'Hi', type: 'SYSTEM', clientId: '' })).toBe('Invalid message type. Must be PLAYER or GM.');
     expect(refusal({ content: 'Hi', clientId: '', recipientId: 'mara' })).toBe('clientId must be 1 to 64 letters, digits, hyphens or underscores');
   });
 });

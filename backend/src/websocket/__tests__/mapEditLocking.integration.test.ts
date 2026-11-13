@@ -4,7 +4,7 @@
  * Each of these handlers reads the map's whole list (or fog grid), changes it
  * and writes it back. The web client sends several at once: placing a door on
  * a wall is one wall:remove and up to three wall:add in the same tick, and a
- * player can toggle a door while the DM draws. Unserialised, every handler
+ * player can toggle a door while the GM draws. Unserialised, every handler
  * read the same list and the last write won, so the screens showed the door
  * while the database kept the original wall. Every read-modify-write of a
  * map's walls, lights or fog now runs under the map's lock and reads the
@@ -23,10 +23,10 @@ jest.setTimeout(20000);
 
 const runId = randomUUID().slice(0, 8);
 let server: WsTestServer;
-let dmId: string;
+let gmId: string;
 let playerId: string;
 let campaignId: string;
-let dmCookie: string;
+let gmCookie: string;
 let playerCookie: string;
 
 type Wall = { id: string; x1: number; y1: number; x2: number; y2: number; type: string };
@@ -75,19 +75,19 @@ function collect<T>(client: ClientSocket, event: string, count: number, timeoutM
 }
 
 beforeAll(async () => {
-  const dm = await prisma.user.create({ data: { email: `mel-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Lock DM' } });
+  const gm = await prisma.user.create({ data: { email: `mel-dm-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Lock GM' } });
   const player = await prisma.user.create({ data: { email: `mel-pl-${runId}@test.cozyvtt.local`, passwordHash: 'x', displayName: 'Lock Player' } });
-  dmId = dm.id;
+  gmId = gm.id;
   playerId = player.id;
-  campaignId = (await prisma.campaign.create({ data: { name: `Map edit locking ${runId}`, ownerId: dmId, vibeSettings: {} } })).id;
+  campaignId = (await prisma.campaign.create({ data: { name: `Map edit locking ${runId}`, ownerId: gmId, vibeSettings: {} } })).id;
   await prisma.campaignMembership.createMany({
     data: [
-      { userId: dmId, campaignId, role: 'DM', characterIds: [] },
+      { userId: gmId, campaignId, role: 'GM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   server = await createWsTestServer();
-  dmCookie = await server.loginAs(dmId);
+  gmCookie = await server.loginAs(gmId);
   playerCookie = await server.loginAs(playerId);
 });
 
@@ -96,7 +96,7 @@ afterAll(async () => {
   await prisma.campaign.updateMany({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [gmId, playerId] } } });
   await prisma.$disconnect();
 });
 
@@ -109,18 +109,18 @@ describe('walls', () => {
     const door = wall(200, 300, 'door-closed');
     const right = wall(300, 400);
 
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const removed = collect(dm, 'wall:removed', 1);
-    const added = collect(dm, 'wall:added', 3);
-    dm.emit('wall:remove', { mapId, segmentId: original.id });
-    dm.emit('wall:add', { mapId, segment: left });
-    dm.emit('wall:add', { mapId, segment: door });
-    dm.emit('wall:add', { mapId, segment: right });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const removed = collect(gm, 'wall:removed', 1);
+    const added = collect(gm, 'wall:added', 3);
+    gm.emit('wall:remove', { mapId, segmentId: original.id });
+    gm.emit('wall:add', { mapId, segment: left });
+    gm.emit('wall:add', { mapId, segment: door });
+    gm.emit('wall:add', { mapId, segment: right });
     await removed;
     await added;
 
     expect(byId(await storedWalls(mapId))).toEqual(byId([keep, left, door, right]));
-    dm.disconnect();
+    gm.disconnect();
   });
 
   it('stores a wall split: one remove and two adds sent together', async () => {
@@ -129,35 +129,35 @@ describe('walls', () => {
     const a = wall(100, 250);
     const b = wall(250, 400);
 
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const removed = collect(dm, 'wall:removed', 1);
-    const added = collect(dm, 'wall:added', 2);
-    dm.emit('wall:remove', { mapId, segmentId: original.id });
-    dm.emit('wall:add', { mapId, segment: a });
-    dm.emit('wall:add', { mapId, segment: b });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const removed = collect(gm, 'wall:removed', 1);
+    const added = collect(gm, 'wall:added', 2);
+    gm.emit('wall:remove', { mapId, segmentId: original.id });
+    gm.emit('wall:add', { mapId, segment: a });
+    gm.emit('wall:add', { mapId, segment: b });
     await removed;
     await added;
 
     expect(byId(await storedWalls(mapId))).toEqual(byId([a, b]));
-    dm.disconnect();
+    gm.disconnect();
   });
 
-  it("keeps a player's door toggle made while the DM adds walls", async () => {
+  it("keeps a player's door toggle made while the GM adds walls", async () => {
     const door = wall(100, 200, 'door-closed');
     const mapId = await newMap({ wallSegments: [door] });
     const drawn = [wall(300, 400), wall(500, 600), wall(700, 800)];
 
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
     const player = await server.connectAndAuth(playerCookie, campaignId);
-    const updated = collect(dm, 'wall:updated', 1);
-    const added = collect(dm, 'wall:added', drawn.length);
-    for (const segment of drawn) dm.emit('wall:add', { mapId, segment });
+    const updated = collect(gm, 'wall:updated', 1);
+    const added = collect(gm, 'wall:added', drawn.length);
+    for (const segment of drawn) gm.emit('wall:add', { mapId, segment });
     player.emit('wall:update', { mapId, segment: { ...door, type: 'door-open' } });
     await updated;
     await added;
 
     expect(byId(await storedWalls(mapId))).toEqual(byId([{ ...door, type: 'door-open' }, ...drawn]));
-    dm.disconnect();
+    gm.disconnect();
     player.disconnect();
   });
 });
@@ -169,36 +169,36 @@ describe('lights', () => {
     const mapId = await newMap({ lights: [moved, gone] });
     const placed = [light(300), light(400), light(500)];
 
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
-    const added = collect(dm, 'light:added', placed.length);
-    const updated = collect(dm, 'light:updated', 1);
-    const removed = collect(dm, 'light:removed', 1);
-    for (const l of placed) dm.emit('light:add', { mapId, light: l });
-    dm.emit('light:update', { mapId, light: { ...moved, x: 150 } });
-    dm.emit('light:remove', { mapId, lightId: gone.id });
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
+    const added = collect(gm, 'light:added', placed.length);
+    const updated = collect(gm, 'light:updated', 1);
+    const removed = collect(gm, 'light:removed', 1);
+    for (const l of placed) gm.emit('light:add', { mapId, light: l });
+    gm.emit('light:update', { mapId, light: { ...moved, x: 150 } });
+    gm.emit('light:remove', { mapId, lightId: gone.id });
     await added;
     await updated;
     await removed;
 
     expect(byId(await storedLights(mapId))).toEqual(byId([{ ...moved, x: 150 }, ...placed]));
-    dm.disconnect();
+    gm.disconnect();
   });
 });
 
 describe('fog', () => {
   it('keeps both of two fog operations sent together', async () => {
     const mapId = await newMap({ fogEnabled: true });
-    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const gm = await server.connectAndAuth(gmCookie, campaignId);
 
-    const updates = collect(dm, 'fog:updated', 2);
-    dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1, 2] } });
-    dm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [40, 41, 42] } });
+    const updates = collect(gm, 'fog:updated', 2);
+    gm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [0, 1, 2] } });
+    gm.emit('fog:operation', { mapId, operation: { op: 'reveal', cells: [40, 41, 42] } });
     await updates;
 
     const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { fogData: true } });
     const revealed = (map.fogData as unknown as { revealed: boolean[] }).revealed;
     const open = revealed.flatMap((v, i) => (v ? [i] : []));
     expect(open).toEqual([0, 1, 2, 40, 41, 42]);
-    dm.disconnect();
+    gm.disconnect();
   });
 });
