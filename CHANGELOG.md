@@ -10,7 +10,7 @@ Game systems and the game master's role are called by their current names throug
 
 ---
 
-## [Unreleased]
+## [1.7.0] - 2026-11-12
 
 ### Upgrading from 1.6.0
 
