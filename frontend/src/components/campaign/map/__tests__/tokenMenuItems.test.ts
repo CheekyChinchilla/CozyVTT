@@ -31,7 +31,7 @@ function actions(): Record<keyof TokenMenuActions, Mock<(...args: unknown[]) => 
 
 function context(extra: Partial<TokenMenuContext> = {}): TokenMenuContext {
   return {
-    role: CampaignRole.DM,
+    role: CampaignRole.GM,
     mayViewSheet: false,
     mayRoll: false,
     mayGrantTemporaryHp: false,
@@ -53,12 +53,12 @@ function commandOf(items: MenuItem[], id: string): MenuCommand {
   return item;
 }
 
-const DM_ITEMS = [
+const GM_ITEMS = [
   'Edit Token', 'Add to Initiative', 'Duplicate Token', 'Save as Template', 'Hide from Players', 'Obscure Identity',
   'Send to Spirit Realm', '---', 'Move to Map…', '---', 'Remove from Map',
 ];
 
-describe('what a viewer who is not the DM is offered', () => {
+describe('what a viewer who is not the GM is offered', () => {
   it.each([CampaignRole.PLAYER, CampaignRole.SPECTATOR, null])('as %s: the sheet, its rolls and the turns, as allowed', (role) => {
     const pc = token({ characterId: 'char-1', type: TokenType.PLAYER });
     expect(labels(tokenMenuItems(pc, context({ role, mayViewSheet: true, mayRoll: true, mayRotate: true }))))
@@ -74,10 +74,10 @@ describe('what a viewer who is not the DM is offered', () => {
   });
 });
 
-describe("the DM's items", () => {
-  it('on a creature: the turns, its Roll..., then every DM item with the rules between', () => {
+describe("the GM's items", () => {
+  it('on a creature: the turns, its Roll..., then every GM item with the rules between', () => {
     const items = tokenMenuItems(token(), context());
-    expect(labels(items)).toEqual(['Rotate Left', 'Rotate Right', 'Roll...', ...DM_ITEMS]);
+    expect(labels(items)).toEqual(['Rotate Left', 'Rotate Right', 'Roll...', ...GM_ITEMS]);
     expect(ids(items)).toEqual([
       'rotate-left', 'rotate-right', 'roll-creature', 'edit', 'add-to-initiative', 'duplicate', 'save-as-template',
       'visibility', 'identity', 'plane', 'separator-moves', 'move-to-map', 'separator-remove', 'remove',
@@ -87,7 +87,7 @@ describe("the DM's items", () => {
   it("on a character: its sheet and Roll... first, and no creature's Roll..., whatever the token's type", () => {
     for (const type of [TokenType.PLAYER, TokenType.NPC, undefined]) {
       const items = tokenMenuItems(token({ characterId: 'char-1', type }), context({ mayViewSheet: true, mayRoll: true }));
-      expect(labels(items)).toEqual(['View Character Sheet', 'Roll...', 'Rotate Left', 'Rotate Right', ...DM_ITEMS]);
+      expect(labels(items)).toEqual(['View Character Sheet', 'Roll...', 'Rotate Left', 'Rotate Right', ...GM_ITEMS]);
       expect(ids(items).slice(0, 2)).toEqual(['view-sheet', 'roll']);
     }
   });
@@ -105,7 +105,7 @@ describe("the DM's items", () => {
 
   it('keeps an object on its plane', () => {
     expect(labels(tokenMenuItems(token({ type: TokenType.OBJECT }), context())))
-      .toEqual(['Rotate Left', 'Rotate Right', ...DM_ITEMS.filter((l) => l !== 'Send to Spirit Realm')]);
+      .toEqual(['Rotate Left', 'Rotate Right', ...GM_ITEMS.filter((l) => l !== 'Send to Spirit Realm')]);
   });
 
   it('offers Add to Initiative only on a map', () => {
@@ -122,7 +122,7 @@ describe("the DM's items", () => {
       .toEqual(['Send to Spirit Realm', '---', 'Remove from Map']);
   });
 
-  it('leaves the DM items out for anyone else, even with every permission', () => {
+  it('leaves the GM items out for anyone else, even with every permission', () => {
     expect(labels(tokenMenuItems(token(), context({ role: CampaignRole.PLAYER })))).toEqual(['Rotate Left', 'Rotate Right']);
   });
 });
@@ -136,9 +136,9 @@ describe('Temporary HP...', () => {
       .toEqual(['View Character Sheet', 'Roll...', 'Temporary HP...', 'Rotate Left', 'Rotate Right']);
   });
 
-  it("follows a creature's Roll... for the DM", () => {
+  it("follows a creature's Roll... for the GM", () => {
     expect(labels(tokenMenuItems(token(), context({ mayGrantTemporaryHp: true }))))
-      .toEqual(['Rotate Left', 'Rotate Right', 'Roll...', 'Temporary HP...', ...DM_ITEMS]);
+      .toEqual(['Rotate Left', 'Rotate Right', 'Roll...', 'Temporary HP...', ...GM_ITEMS]);
   });
 
   it("is never a player's on a creature, whatever the context says", () => {
@@ -273,7 +273,7 @@ describe('whether there is a menu', () => {
     const tokens = [
       token(), token({ characterId: 'char-1' }), token({ type: TokenType.OBJECT }), token({ type: TokenType.PLAYER, characterId: 'char-1' }),
     ];
-    for (const role of [CampaignRole.DM, CampaignRole.PLAYER, CampaignRole.SPECTATOR, null]) {
+    for (const role of [CampaignRole.GM, CampaignRole.PLAYER, CampaignRole.SPECTATOR, null]) {
       for (const mayViewSheet of [false, true]) {
         for (const mayRoll of [false, true]) {
           for (const mayRotate of [false, true]) {

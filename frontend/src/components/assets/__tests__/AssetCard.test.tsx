@@ -80,7 +80,7 @@ describe('AssetCard', () => {
 });
 
 // The card offered Delete to the uploader or an admin by a rule of its own,
-// though the server also lets a campaign's DM delete its assets and refuses
+// though the server also lets a campaign's GM delete its assets and refuses
 // an uploader who has left the campaign. It now goes by what the asset list
 // says the server will allow (canChange).
 describe('AssetCard Delete', () => {

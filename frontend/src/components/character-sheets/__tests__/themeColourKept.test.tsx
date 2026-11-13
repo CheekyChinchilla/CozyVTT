@@ -12,10 +12,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { ComponentType } from 'react';
 import type { Character, CharacterData } from '@/types';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import Pathfinder2eCharacterEditor from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import FantasyD20CharacterEditor from '../fantasy-d20/FantasyD20CharacterEditor';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
 
 vi.mock('@/hooks/queries', () => ({
   useServerConfigQuery: () => ({ data: undefined }),
@@ -28,8 +28,8 @@ interface EditorProps {
 }
 
 const cases: { name: string; Editor: ComponentType<EditorProps>; character: (theme: string) => Character; picked: string; elsewhere: string }[] = [
-  { name: 'D&D 5e', Editor: DnD5eCharacterEditor, character: (theme) => dnd5eCharacter({ themeColor: theme }), picked: 'Royal Blue', elsewhere: 'Teal' },
-  { name: 'Pathfinder 2e', Editor: Pathfinder2eCharacterEditor, character: (theme) => pf2eCharacter({ themeColor: theme }), picked: 'Golden', elsewhere: 'Emerald' },
+  { name: '5E', Editor: FifthEditionCharacterEditor, character: (theme) => fifthEditionCharacter({ themeColor: theme }), picked: 'Royal Blue', elsewhere: 'Teal' },
+  { name: 'Fantasy d20', Editor: FantasyD20CharacterEditor, character: (theme) => fantasyD20Character({ themeColor: theme }), picked: 'Golden', elsewhere: 'Emerald' },
 ];
 
 describe.each(cases)('the $name editor', ({ Editor, character, picked, elsewhere }) => {

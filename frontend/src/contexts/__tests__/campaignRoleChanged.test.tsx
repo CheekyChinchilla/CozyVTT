@@ -1,7 +1,7 @@
 /**
  * The campaign page follows a member's change of role while it is open.
  *
- * The DM's Role picker, under Members in Campaign Settings, changes a role
+ * The GM's Role picker, under Members in Campaign Settings, changes a role
  * while the member may be at the table. The server sends everyone in the
  * campaign `campaign.role.changed`, and the page patches its member list:
  * `userRole`, and every control that asks it, is read from that list, so the
@@ -22,7 +22,7 @@ vi.mock('@/services/api', () => ({
 const onMemberRoleChanged = vi.hoisted(() => vi.fn<(callback: (data: MemberRoleChangedBroadcast) => void) => void>());
 vi.mock('@/services/socket', () => ({
   default: {
-    onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(), onMemberRoleChanged,
+    onCharacterHpUpdated: vi.fn(), onGmTransferred: vi.fn(), onMemberRoleChanged,
     on: vi.fn(), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));
@@ -38,9 +38,9 @@ function Probe() {
 
 async function open() {
   getCampaign.mockResolvedValueOnce({
-    id: 'c1', name: 'The Sunken Crown', description: '', gameSystem: 'DND_5E', status: 'ACTIVE', currentMapId: null, maps: [],
+    id: 'c1', name: 'The Sunken Crown', description: '', gameSystem: 'FIFTH_EDITION', status: 'ACTIVE', currentMapId: null, maps: [],
     memberships: [
-      { userId: 'dm', role: 'DM' },
+      { userId: 'dm', role: 'GM' },
       { userId: 'me', role: 'PLAYER' },
       { userId: 'pip', role: 'PLAYER' },
     ],

@@ -1,10 +1,10 @@
 /**
  * The tab bars of the tabbed sheets.
  *
- * The D&D 5e sheet and editor, the Pathfinder 2e editor and the Call of
- * Cthulhu sheet and editor each wrote the same bar, a row of six or five tabs
- * that never wrapped inside a sheet that clips what overflows it. The D&D and
- * Pathfinder bars need about 810 and 850 px, so on a phone, and on an iPad held
+ * The 5E sheet and editor, the Fantasy d20 editor and the Horror d100
+ * sheet and editor each wrote the same bar, a row of six or five tabs
+ * that never wrapped inside a sheet that clips what overflows it. The 5E and
+ * Fantasy d20 bars need about 810 and 850 px, so on a phone, and on an iPad held
  * upright, the last tabs were cut off and a finger could not reach them. All
  * five now draw one SheetTabs, which wraps onto a second row, or a third, where
  * the bar is too narrow; on a desktop it is one row as before. The open tab
@@ -21,14 +21,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Swords, Target } from 'lucide-react';
 import { SheetTabs, sheetTabPanel, type SheetTab } from '../SheetTabs';
-import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
-import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { FifthEditionCharacterView } from '../fifth-edition/FifthEditionCharacterView';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import { FantasyD20CharacterEditor } from '../fantasy-d20/FantasyD20CharacterEditor';
+import { HorrorD100CharacterView } from '../horror-d100/HorrorD100CharacterView';
+import { HorrorD100CharacterEditor } from '../horror-d100/HorrorD100CharacterEditor';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -36,11 +36,11 @@ const noop = () => Promise.resolve();
 const classes = (element: Element | null) => (element?.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
 
 describe.each([
-  ['the D&D 5e sheet', () => render(<DnD5eCharacterView character={dnd5eCharacter()} />), 6],
-  ['the D&D 5e editor', () => render(<DnD5eCharacterEditor character={dnd5eCharacter()} onSave={noop} onCancel={vi.fn()} />), 6],
-  ['the Pathfinder 2e editor', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={noop} onCancel={vi.fn()} />), 6],
-  ['the Call of Cthulhu sheet', () => render(<CallOfCthulhu7eCharacterView character={cocCharacter()} />), 5],
-  ['the Call of Cthulhu editor', () => render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />), 5],
+  ['the 5E sheet', () => render(<FifthEditionCharacterView character={fifthEditionCharacter()} />), 6],
+  ['the 5E editor', () => render(<FifthEditionCharacterEditor character={fifthEditionCharacter()} onSave={noop} onCancel={vi.fn()} />), 6],
+  ['the Fantasy d20 editor', () => render(<FantasyD20CharacterEditor character={fantasyD20Character()} onSave={noop} onCancel={vi.fn()} />), 6],
+  ['the Horror d100 sheet', () => render(<HorrorD100CharacterView character={horrorD100Character()} />), 5],
+  ['the Horror d100 editor', () => render(<HorrorD100CharacterEditor character={horrorD100Character()} onSave={noop} onCancel={vi.fn()} />), 5],
 ])('%s', (_name, show, count) => {
   it('draws its tabs with the shared bar, which wraps', () => {
     const { container } = show();

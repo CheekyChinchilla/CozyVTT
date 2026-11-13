@@ -47,9 +47,9 @@ interface DesktopTableProps {
   campaign: Campaign;
   /** Whether the viewer owns the campaign, which may differ from running it. */
   isOwner: boolean;
-  /** Which of the DM's slide-overs are open, which the toolbar shows pressed. */
+  /** Which of the GM's slide-overs are open, which the toolbar shows pressed. */
   openTools: Record<SessionToolKey, boolean>;
-  /** Open one of the DM's slide-overs; `settings` is also an owner's way to the settings. */
+  /** Open one of the GM's slide-overs; `settings` is also an owner's way to the settings. */
   onOpenTool: (key: SessionToolKey) => void;
   onOpenDocuments: () => void;
   onOpenShortcuts: () => void;
@@ -153,8 +153,8 @@ export default function DesktopTable({
             </div>
           )}
 
-          {/* DM tools — grouped icon toolbar */}
-          {userRole === 'DM' && (
+          {/* GM tools — grouped icon toolbar */}
+          {userRole === 'GM' && (
             <>
               <div className="h-6 w-px bg-moss-green/20" />
               <SessionToolbar
@@ -167,13 +167,13 @@ export default function DesktopTable({
 
           {/* An owner who has handed the game over keeps two powers — deleting
               the campaign and taking the seat back — and this is their way to
-              them. It sits here, beside where the DM's own settings gear would
+              them. It sits here, beside where the GM's own settings gear would
               be, because that is where somebody goes looking for it; tucked in
               the sidebar it read as missing. */}
-          {isOwner && userRole !== 'DM' && (
+          {isOwner && userRole !== 'GM' && (
             <>
               <div className="h-6 w-px bg-moss-green/20" />
-              <Tooltip content="Owner settings — delete, or take back the DM role" side="bottom">
+              <Tooltip content="Owner settings — delete, or take back the GM role" side="bottom">
                 <Button
                   variant="ghost"
                   iconOnly
@@ -186,7 +186,7 @@ export default function DesktopTable({
           )}
 
           {/* Documents shared with the campaign. Every member, not just the
-              DM: a rulebook the table is meant to read has to be reachable by
+              GM: a rulebook the table is meant to read has to be reachable by
               the people reading it. */}
           <div className="h-6 w-px bg-moss-green/20" />
           <Tooltip content="Campaign documents" side="bottom">
@@ -234,7 +234,7 @@ export default function DesktopTable({
       </header>
 
       {/* Session Paused Banner — visible to players when session is paused */}
-      {campaign.status === CampaignStatus.PAUSED && userRole !== 'DM' && <SessionPausedBanner />}
+      {campaign.status === CampaignStatus.PAUSED && userRole !== 'GM' && <SessionPausedBanner />}
 
       {/* Main Content - Three Resizable Panels. Relative, so it clips what is
           absolutely placed inside it too, such as the hidden names of the
@@ -265,7 +265,7 @@ export default function DesktopTable({
             onResize={(size) => setLeftCollapsed(size.asPercentage === 0)}
             className="h-full"
           >
-            {/* The Party content (campaign info, the roster and, for the DM,
+            {/* The Party content (campaign info, the roster and, for the GM,
                 the Token Roster) is the page's, moved in here (tableHosts.tsx). */}
             <aside ref={partySlot.ref} className="h-full overflow-y-auto p-4 bg-parchment/30 border-r border-moss-green/20" />
           </Panel>

@@ -1,9 +1,9 @@
 /**
  * DrawControls
  * The drawing tools' panel: the tool, its colour, width, fill and snap,
- * whether the DM's drawing is for the DM alone, a polygon's Done and Cancel,
+ * whether the GM's drawing is for the GM alone, a polygon's Done and Cancel,
  * and clearing. It sets no place of its own, so whatever holds it places it:
- * the DM's tool stack, or the corner a player's panel opens in. On the
+ * the GM's tool stack, or the corner a player's panel opens in. On the
  * compact layout the same controls are DrawStrip's, a strip across the
  * map's foot; the two share the tools, the colours, the hints and the
  * questions before a clear, written once here.
@@ -48,7 +48,7 @@ export const HINTS: Record<DrawToolKind, string> = {
 export const SHAPES = new Set<DrawToolKind>(['line', 'arrow', 'rect', 'ellipse', 'polygon']);
 export const FILLABLE = new Set<DrawToolKind>(['rect', 'ellipse', 'polygon']);
 
-/** A member with drawings on the map the DM may clear, and how many. */
+/** A member with drawings on the map the GM may clear, and how many. */
 export interface MemberDrawings {
   authorId: string;
   /** Null for someone no longer in the campaign. */
@@ -61,8 +61,8 @@ export interface DrawControlsProps {
   onKindChange: (kind: DrawToolKind) => void;
   settings: DrawSettings;
   onSettingsChange: (patch: Partial<DrawSettings>) => void;
-  /** The DM's panel offers Only I can see this and Clear drawings; a player's, Clear mine. */
-  isDM: boolean;
+  /** The GM's panel offers Only I can see this and Clear drawings; a player's, Clear mine. */
+  isGM: boolean;
   /**
    * A player who may not draw now (a pause, or Players may draw off) is
    * offered only the eraser and Clear mine, for their own drawings.
@@ -72,10 +72,10 @@ export interface DrawControlsProps {
   polygonCorners: number;
   onPolygonDone: () => void;
   onPolygonCancel: () => void;
-  /** How many drawings on the map this member may clear: their own, or for the DM every one. */
+  /** How many drawings on the map this member may clear: their own, or for the GM every one. */
   clearable: number;
   onClear: () => void;
-  /** For the DM: the other members with drawings on the map, each to clear alone. */
+  /** For the GM: the other members with drawings on the map, each to clear alone. */
   members: MemberDrawings[];
   onClearMember: (authorId: string) => void;
   onClose: () => void;
@@ -88,7 +88,7 @@ const howMany = (count: number) => (count === 1 ? '1 drawing' : `${count} drawin
 /** Whether the colour is one of the named eight, or another one picked. */
 export const isNamedColour = (colour: string) => (DRAWING_LIMITS.namedColors as readonly string[]).includes(colour);
 
-/** What the DM is asked before a clear: about every drawing on the map, or one member's. */
+/** What the GM is asked before a clear: about every drawing on the map, or one member's. */
 export type ClearAsking = 'all' | MemberDrawings | null;
 
 interface ClearDrawingsDialogsProps {
@@ -100,7 +100,7 @@ interface ClearDrawingsDialogsProps {
   onClearMember: (authorId: string) => void;
 }
 
-/** The DM's questions before a clear, which cannot be undone: how many, and whose. */
+/** The GM's questions before a clear, which cannot be undone: how many, and whose. */
 export function ClearDrawingsDialogs({ asking, onAnswered, clearable, onClear, onClearMember }: ClearDrawingsDialogsProps) {
   const member = asking !== null && asking !== 'all' ? asking : null;
   return (
@@ -139,7 +139,7 @@ const toolButton = (on: boolean) =>
   }`;
 
 export default function DrawControls({
-  kind, onKindChange, settings, onSettingsChange, isDM, onlyErase = false, polygonCorners, onPolygonDone, onPolygonCancel, clearable, onClear, members, onClearMember, onClose,
+  kind, onKindChange, settings, onSettingsChange, isGM, onlyErase = false, polygonCorners, onPolygonDone, onPolygonCancel, clearable, onClear, members, onClearMember, onClose,
 }: DrawControlsProps) {
   const [asking, setAsking] = useState<ClearAsking>(null);
   const custom = !isNamedColour(settings.color);
@@ -183,7 +183,7 @@ export default function DrawControls({
       <p className="text-[11px] leading-snug text-stone-400">
         {onlyErase && 'Drawing is off for now. '}
         {HINTS[kind]}
-        {kind === 'eraser' && !isDM && ' You can erase only your own.'}
+        {kind === 'eraser' && !isGM && ' You can erase only your own.'}
       </p>
 
       {kind === 'polygon' && polygonCorners > 0 && (
@@ -279,23 +279,23 @@ export default function DrawControls({
       )}
 
       {/* The laser pointer goes to everyone, so the box is not offered with it. */}
-      {isDM && kind !== 'eraser' && kind !== 'laser' && (
+      {isGM && kind !== 'eraser' && kind !== 'laser' && (
         <label className="touch-target flex items-center gap-2 text-[11px] cursor-pointer select-none">
-          <input type="checkbox" checked={settings.dmOnly} onChange={(e) => onSettingsChange({ dmOnly: e.target.checked })} className="accent-amber-400" />
+          <input type="checkbox" checked={settings.gmOnly} onChange={(e) => onSettingsChange({ gmOnly: e.target.checked })} className="accent-amber-400" />
           Only I can see this
         </label>
       )}
-      {isDM && kind === 'laser' && <p className="text-[11px] text-stone-400">Everyone sees the laser pointer.</p>}
+      {isGM && kind === 'laser' && <p className="text-[11px] text-stone-400">Everyone sees the laser pointer.</p>}
 
       <button
         type="button"
-        onClick={() => (isDM ? setAsking('all') : onClear())}
+        onClick={() => (isGM ? setAsking('all') : onClear())}
         disabled={clearable === 0}
         className="touch-target text-[11px] py-1 rounded border bg-red-900/30 text-red-300 border-red-700/40 hover:bg-red-900/50 disabled:opacity-40"
       >
-        {isDM ? 'Clear drawings' : 'Clear mine'}
+        {isGM ? 'Clear drawings' : 'Clear mine'}
       </button>
-      {isDM && members.length > 0 && (
+      {isGM && members.length > 0 && (
         <div className="flex flex-col gap-1">
           <p className="text-[11px] text-stone-400">Or one member's:</p>
           {members.map((member) => (

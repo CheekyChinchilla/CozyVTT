@@ -2,7 +2,7 @@
 // Whether a key press belongs to a text box rather than the map.
 //
 // The map's shortcuts listen on the window, so they hear every key on the
-// page. While the DM typed in the chat box, a note or a dialog, Backspace
+// page. While the GM typed in the chat box, a note or a dialog, Backspace
 // deleted the selected walls, Ctrl+Z undid a wall edit and the arrow keys
 // moved walls, and the key never reached the box. A key pressed in anything
 // that takes typing is now left to it.

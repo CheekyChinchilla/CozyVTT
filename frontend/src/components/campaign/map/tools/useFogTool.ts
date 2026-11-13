@@ -1,31 +1,31 @@
 // ============================================
-// The DM's fog boxes, Reveal and Hide: the box is anchored on mouse down,
+// The GM's fog boxes, Reveal and Hide: the box is anchored on mouse down,
 // follows the cursor, and sends the squares it covers when the button is let
 // go (map/fogSends.ts).
 // ============================================
 
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { FogState } from '@/types/walls';
-import type { FogToolMode } from '@/components/campaign/DmFogControls';
+import type { FogToolMode } from '@/components/campaign/GmFogControls';
 import { fogRectFromDrag, fogCellsInRect, type FogRect } from '../fogSelection';
 import { fogOperationsForBox } from '../fogSends';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
 
 interface UseFogToolArgs {
-  isDM: boolean;
+  isGM: boolean;
   mapId: string | undefined;
   fogMode: FogToolMode;
   fogState: FogState | null;
   setFogState: Dispatch<SetStateAction<FogState | null>>;
   socket: ToolSocketSource | null | undefined;
   mapControls: MapControls;
-  /** True while the right button pans the map under a DM tool (MapCanvas starts it). */
+  /** True while the right button pans the map under a GM tool (MapCanvas starts it). */
   rightPanActiveRef: RefObject<boolean>;
   markDirty: (...layers: MapLayer[]) => void;
 }
 
-export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty }: UseFogToolArgs) {
+export function useFogTool({ isGM, mapId, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty }: UseFogToolArgs) {
   // Fog selection drag: anchor is fixed on mousedown, current follows the
   // cursor. Both in map pixels — the fog raster is top-left origin like map
   // pixels, so the box never touches the bottom-left grid convention.
@@ -96,7 +96,7 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
   const tool: MapTool = {
     // Fog selection: anchor the box on mousedown
     down({ e, mapPx }: PointerAt) {
-      if (!(fogMode && isDM && fogState)) return false;
+      if (!(fogMode && isGM && fogState)) return false;
       e.preventDefault(); // Prevent native drag — keeps mousemove firing during the drag
       fogDragAnchorRef.current = mapPx;
       setFogDragCurrent(mapPx);
@@ -105,7 +105,7 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
     // Fog selection: track the cursor. Also runs with no button held, so the
     // idle single-cell outline follows the mouse before a drag starts.
     move({ e, mapPx }: PointerAt) {
-      if (!(fogMode && isDM && fogState)) return false;
+      if (!(fogMode && isGM && fogState)) return false;
       if (rightPanActiveRef.current) {
         mapControls.handleDrag(e);
         markDirty('terrain', 'tokens', 'overlay');

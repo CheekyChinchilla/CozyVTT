@@ -2,7 +2,7 @@
  * A sheet that cannot be drawn fails inside its own dialog.
  *
  * The sheet viewer and editor drew the sheet with nothing to catch an error,
- * so a sheet the page could not draw replaced the whole app, the DM's map and
+ * so a sheet the page could not draw replaced the whole app, the GM's map and
  * table included, with the app's error screen. The full-page editor already
  * caught it; these two dialogs now do too.
  */
@@ -37,23 +37,23 @@ vi.mock('@/hooks/queries', () => ({
 vi.mock('@/services/api', () => ({
   api: { getUser: vi.fn().mockResolvedValue({ user: { displayName: 'Owner' } }), updateCharacter: vi.fn() },
 }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ character }: { character: Character }) => {
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ character }: { character: Character }) => {
     if ((character.data as { broken?: boolean }).broken) throw new Error('This sheet cannot be drawn');
     return <p>The whole sheet</p>;
   },
 }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterEditor', () => ({
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterEditor', () => ({
   default: () => {
     throw new Error('This sheet cannot be edited');
   },
 }));
 
 const broken = {
-  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'DND_5E', data: { broken: true },
+  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'FIFTH_EDITION', data: { broken: true },
   campaignId: 'camp-1', updatedAt: '2026-10-01T00:00:00.000Z',
 } as unknown as Character;
-const membership = { userId: 'dm', campaignId: 'camp-1', role: 'DM', characterIds: [] } as unknown as CampaignMembership;
+const membership = { userId: 'dm', campaignId: 'camp-1', role: 'GM', characterIds: [] } as unknown as CampaignMembership;
 
 describe('a sheet that cannot be drawn', () => {
   it('shows an error inside the sheet viewer, which stays open', () => {

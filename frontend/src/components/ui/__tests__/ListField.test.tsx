@@ -59,7 +59,7 @@ describe('ListField', () => {
   });
 
   it('reads one item per line', () => {
-    expect(parseLineList('Elder Sign\n\n  Contact Nyarlathotep \n')).toEqual(['Elder Sign', 'Contact Nyarlathotep']);
+    expect(parseLineList('Ward of Ash\n\n  Call the Grey Lantern \n')).toEqual(['Ward of Ash', 'Call the Grey Lantern']);
   });
 });
 

@@ -1,10 +1,10 @@
 // ============================================
 // NpcQuickEditor
-// DM-only slide-over for live NPC/Object token editing
+// GM-only slide-over for live NPC/Object token editing
 // - HP tracking with ±buttons
 // - Disposition selector
 // - Conditions management
-// - DM notes (never sent to players)
+// - GM notes (never sent to players)
 // - Visibility + remove quick actions
 // ============================================
 
@@ -28,6 +28,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { conditionKey, conditionsOffered, effectsOffered } from '@/utils/conditions';
 import { TOKEN_LIMITS } from '@/constants/tokenLimits';
+import { playedGameSystem } from '@/constants/game-systems';
 import { tokenControllerStanding } from '@/utils/tokenCopy';
 import api from '@/services/api';
 import { useGameStore } from '@/stores/gameStore';
@@ -51,13 +52,13 @@ const STAT_BLOCK_SAVE_DELAY_MS = 750;
 // ============================================
 
 // The listed conditions come from utils/conditions, for the campaign's game
-// system. This file used to keep its own hand-picked twelve, which left a DM
+// system. This file used to keep its own hand-picked twelve, which left a GM
 // unable to mark an NPC Deafened, Grappled or Petrified while a player
 // character could be.
 
 /**
  * One field of the token as a quick control shows it: the table's value, or
- * the DM's change in its place from when it is made until its save is
+ * the GM's change in its place from when it is made until its save is
  * answered, when the table's value is the answer: the change once stored, or
  * what it was if refused. `show` numbers each change, and `drop(change)`
  * clears only that one, so an older save answered late leaves a newer change
@@ -148,7 +149,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const liveToken = useGameStore((s) => s.tokens[token.id]);
   const current = liveToken ?? token;
 
-  // Each quick control shows the DM's change at once, in place of the
+  // Each quick control shows the GM's change at once, in place of the
   // table's value, until its save is answered: then the table's value again,
   // which is the change once stored, or what it was if refused.
   const [hp, showOwnHp, dropOwnHp] = useOwnChange<TokenHp | null>(current.hp ?? null);
@@ -158,7 +159,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [controlledBy, showOwnController, dropOwnController] = useOwnChange<string | null>(current.controlledBy ?? null);
   const controller = tokenControllerStanding(controlledBy, campaign?.memberships);
 
-  // Typed text is the DM's from the first key until it is saved, and stays
+  // Typed text is the GM's from the first key until it is saved, and stays
   // in the box when the save is refused, with the reason shown.
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const name = nameDraft ?? current.name;
@@ -168,10 +169,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
   const notes = notesDraft ?? (current.notes ?? '');
 
-  // A condition of the DM's own, as typed.
+  // A condition of the GM's own, as typed.
   const [customCondition, setCustomCondition] = useState('');
-  const offeredConditions = conditionsOffered(campaign?.gameSystem ?? null);
-  const offeredEffects = effectsOffered(campaign?.gameSystem ?? null);
+  // A campaign of a system CozyVTT no longer supports is played as one with none.
+  const campaignSystem = playedGameSystem(campaign?.gameSystem);
+  const offeredConditions = conditionsOffered(campaignSystem);
+  const offeredEffects = effectsOffered(campaignSystem);
   const effectsHeadingId = useId();
   const conditionsFullId = useId();
   // Hidden and obscured are shown from the table alone, never ahead of it: a
@@ -185,7 +188,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [enableHpPrompt, setEnableHpPrompt] = useState(false);
   const [newHpMax, setNewHpMax] = useState('');
-  // The stat block as typed, while it is the DM's (see the stat block saves
+  // The stat block as typed, while it is the GM's (see the stat block saves
   // below); otherwise the table's.
   const [statBlockDraft, setStatBlockDraft] = useState<{ value: NpcStatBlock | null } | null>(null);
   const statBlock = statBlockDraft ? statBlockDraft.value : ((current.statBlock as NpcStatBlock | null | undefined) ?? null);
@@ -214,7 +217,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const saveUpdate = useCallback(async (changes: UpdateTokenRequest): Promise<boolean> => {
     try {
       const result = await api.updateToken(campaignId, mapId, token.id, changes);
-      // The DM, the only one this editor opens for, always gets the token back.
+      // The GM, the only one this editor opens for, always gets the token back.
       if (result.token) onTokenUpdate(result.token);
       return true;
     } catch (err) {
@@ -274,7 +277,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   // made on, and saves run one after another, so the last edit is the one
   // stored.
   //
-  // The typed stat block is the DM's until the last edit made is stored;
+  // The typed stat block is the GM's until the last edit made is stored;
   // then the table's again, so a change from elsewhere shows.
   const pendingStatBlock = useRef<{ statBlock: NpcStatBlock; save: typeof saveUpdate; edit: number } | null>(null);
   const statBlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -326,7 +329,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setShowCreateStatBlock(false);
     const created = await saveUpdate({ statBlock: newBlock });
     // Typing into the new block while it was being created is a later edit,
-    // which stays the DM's until its own save.
+    // which stays the GM's until its own save.
     if (statBlockEdits.current !== edit) return;
     if (!created) setEditingStatBlock(false);
     setStatBlockDraft(null);
@@ -388,7 +391,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     }
   }, [campaign, saveUpdate, showToast]);
 
-  // Step 1: DM clicks save — try direct update, or prompt for name if SRD
+  // Step 1: GM clicks save — try direct update, or prompt for name if SRD
   const handleSaveImageToCreature = useCallback(async () => {
     if (!campaign || !current.creatureTemplateId || !current.imageUrl) return;
     setIsSavingToCreature(true);
@@ -434,7 +437,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     }
   }, [campaign, current.creatureTemplateId, current.imageUrl, current.name, showToast]);
 
-  // Step 2: DM confirms name — duplicate, rename, set image, relink token
+  // Step 2: GM confirms name — duplicate, rename, set image, relink token
   const handleConfirmDuplicate = useCallback(async () => {
     if (!campaign || !current.creatureTemplateId || !current.imageUrl || !duplicateName.trim()) return;
     setIsSavingToCreature(true);
@@ -954,7 +957,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                   <StatBlockEditor
                     statBlock={statBlock}
                     onChange={handleStatBlockChange}
-                    gameSystem={campaign?.gameSystem ?? null}
+                    gameSystem={campaignSystem}
                   />
                 </div>
               ) : (
@@ -962,7 +965,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                   <StatBlockViewer
                     statBlock={statBlock}
                     tokenName={current.name}
-                    gameSystem={campaign?.gameSystem ?? null}
+                    gameSystem={campaignSystem}
                   />
                 </div>
               )
@@ -1110,7 +1113,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             </div>
           )}
 
-          {/* A condition of the DM's own, in any game system */}
+          {/* A condition of the GM's own, in any game system */}
           <form
             className="flex gap-1.5"
             onSubmit={(e) => {
@@ -1139,10 +1142,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
           </form>
         </section>
 
-        {/* ── DM Notes ── */}
+        {/* ── GM Notes ── */}
         <section>
           <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-            DM Notes <span className="font-normal normal-case opacity-60">(not shown to players)</span>
+            GM Notes <span className="font-normal normal-case opacity-60">(not shown to players)</span>
           </h3>
           <textarea
             value={notes}
@@ -1165,7 +1168,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             onChange={(e) => handleControllerChange(e.target.value === 'none' ? null : e.target.value)}
             className="input-cozy w-full text-sm"
           >
-            <option value="none">Nobody (DM controls)</option>
+            <option value="none">Nobody (GM controls)</option>
             {/* A controller who is no longer a player is shown, so the
                 box says who the token names, and cannot be picked again. */}
             {controller.kind === 'not a player' && controlledBy && (

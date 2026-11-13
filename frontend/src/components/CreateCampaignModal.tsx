@@ -96,7 +96,7 @@ export default function CreateCampaignModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="The Lost Mines of Phandelver"
+              placeholder="The Lantern Road"
               maxLength={CAMPAIGN_LIMITS.maxNameLength}
               disabled={loading}
               data-autofocus
@@ -129,7 +129,7 @@ export default function CreateCampaignModal({
               {...field}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="A classic D&D adventure where heroes search for the lost mines..."
+              placeholder="A classic fantasy adventure where heroes search for a forgotten temple..."
               maxLength={CAMPAIGN_LIMITS.maxDescriptionLength}
               rows={4}
               disabled={loading}
@@ -141,7 +141,7 @@ export default function CreateCampaignModal({
         <div className="rounded-lg p-4 bg-brand/10 border border-brand/30">
           <p className="text-sm text-ink">
             <strong className="text-brand-ink">Note:</strong> You will be automatically assigned
-            as the Dungeon Master (DM) for this campaign. You can invite players from the campaign
+            as the game master (GM) for this campaign. You can invite players from the campaign
             settings page.
           </p>
         </div>

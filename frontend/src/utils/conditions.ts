@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * Condition abbreviations for token badges.
  *
@@ -15,14 +18,14 @@
  */
 
 import { GameSystem } from '@/types/gameSystem';
-import type { CoC7eConditions } from '@/types/game-systems/callOfCthulhu7e';
+import type { HorrorD100SheetConditions } from '@/types/game-systems/horrorD100Sheet';
 
 /**
- * The fifteen conditions of D&D 5e, in the order the rules list them.
+ * The fifteen conditions of 5E, in the order the rules list them.
  *
  * This is the only place the set is written down. It used to be declared twice
  * — the character sheet offered all fifteen, the token editor a hand-picked
- * twelve — and the two drifted: a DM could not mark an NPC Deafened, Grappled
+ * twelve — and the two drifted: a GM could not mark an NPC Deafened, Grappled
  * or Petrified, though a player character could be. Grappled in particular is
  * one of the most frequently applied conditions in play.
  *
@@ -30,9 +33,9 @@ import type { CoC7eConditions } from '@/types/game-systems/callOfCthulhu7e';
  * added here needs an entry in CONDITION_ABBREVIATIONS below; a test checks the
  * two match exactly, in both directions.
  *
- * Rules reference: the Basic Rules, Appendix A "Conditions".
+ * Rules reference: SRD 5.1, "Appendix PH-A: Conditions".
  */
-export const DND5E_CONDITIONS: readonly string[] = [
+export const FIFTH_EDITION_CONDITIONS: readonly string[] = [
   'Blinded',
   'Charmed',
   'Deafened',
@@ -51,54 +54,59 @@ export const DND5E_CONDITIONS: readonly string[] = [
 ];
 
 /**
- * Effects a D&D 5e table marks on a token beside its conditions: the state a
+ * Effects a 5E table marks on a token beside its conditions: the state a
  * spell, a class feature or an action leaves a creature in, named as the
- * creature is (Hexed, from the Hex spell). None is a condition in the rules,
- * so they are a list of their own and DND5E_CONDITIONS stays the rules'
+ * creature is (Blessed, from the Bless spell). None is a condition in the rules,
+ * so they are a list of their own and FIFTH_EDITION_CONDITIONS stays the rules'
  * fifteen. The token editor offers them in a group under the conditions, and
  * a token carries them in its conditions as it carries a typed one. Each
  * needs an entry in CONDITION_ABBREVIATIONS below, as a condition does.
  *
- * Rules reference: the spells Bane, Bless, Haste, Hex, Hunter's Mark and
- * Slow; the Barbarian's Rage; the Dodge action; concentration on a spell.
+ * Rules reference: the spells Bane, Bless, Haste, Hunter's Mark and Slow;
+ * the Barbarian's Rage; the Dodge action; concentration on a spell (all SRD
+ * 5.1). The list follows the SRD 5.1: a token carrying any other effect,
+ * such as one offered before 1.7.0, shows it as a typed one.
  */
-export const DND5E_EFFECTS: readonly string[] = [
+export const FIFTH_EDITION_EFFECTS: readonly string[] = [
   'Baned',
   'Blessed',
   'Concentrating',
   'Dodging',
   'Hasted',
-  'Hexed',
   "Hunter's Mark",
   'Raging',
   'Slowed',
 ];
 
 /**
- * The five conditions a Call of Cthulhu 7e sheet tracks, in the order the
- * rulebook introduces them: the three that follow from hit points, then the
- * two from Sanity. The investigator sheet ticks them by `key`; the token
- * editor offers them by `label`.
+ * The four conditions a Horror d100 sheet tracks: the three that follow
+ * from hit points (open d100 rules, p. 14, Hit Points and Major Wounds),
+ * then the one from Sanity (p. 259, Sanity Mechanics). Major Wound,
+ * Unconscious and Temporary Insanity are the rules' terms. Dying is
+ * CozyVTT's label for a character at 0 hit points, who by that page dies at
+ * the end of the following round; the rules name no such condition. The character sheet
+ * ticks them by `key`; the token editor offers them by `label`. A token
+ * carrying a condition offered before 1.7.0 and not listed here shows it as
+ * a typed one.
  */
-export const COC7E_CONDITIONS: readonly { key: keyof CoC7eConditions; label: string }[] = [
+export const HORROR_D100_CONDITIONS: readonly { key: keyof HorrorD100SheetConditions; label: string }[] = [
   { key: 'majorWound', label: 'Major Wound' },
   { key: 'dying', label: 'Dying' },
   { key: 'unconscious', label: 'Unconscious' },
   { key: 'temporaryInsanity', label: 'Temporary Insanity' },
-  { key: 'indefiniteInsanity', label: 'Indefinite Insanity' },
 ];
 
 /**
  * The conditions the token editor lists for a campaign's game system. Only
- * D&D 5e and Call of Cthulhu have a list here; in every system the DM can
+ * 5E and Horror d100 have a list here; in every system the GM can
  * also type a condition of their own.
  */
 export function conditionsOffered(gameSystem: GameSystem | null): readonly string[] {
   switch (gameSystem) {
-    case GameSystem.DND_5E:
-      return DND5E_CONDITIONS;
-    case GameSystem.CALL_OF_CTHULHU_7E:
-      return COC7E_CONDITIONS.map((condition) => condition.label);
+    case GameSystem.FIFTH_EDITION:
+      return FIFTH_EDITION_CONDITIONS;
+    case GameSystem.HORROR_D100:
+      return HORROR_D100_CONDITIONS.map((condition) => condition.label);
     default:
       return [];
   }
@@ -106,15 +114,15 @@ export function conditionsOffered(gameSystem: GameSystem | null): readonly strin
 
 /**
  * The effects the token editor lists, under the conditions, for a campaign's
- * game system: D&D 5e's, and none in any other.
+ * game system: 5E's, and none in any other.
  */
 export function effectsOffered(gameSystem: GameSystem | null): readonly string[] {
-  return gameSystem === GameSystem.DND_5E ? DND5E_EFFECTS : [];
+  return gameSystem === GameSystem.FIFTH_EDITION ? FIFTH_EDITION_EFFECTS : [];
 }
 
 /**
- * Two-letter codes, one per listed condition and effect (D&D 5e and Call of
- * Cthulhu, which share Unconscious). Every value here is unique; a test
+ * Two-letter codes, one per listed condition and effect (5E and Horror
+ * d100, which share Unconscious). Every value here is unique; a test
  * enforces that, since a collision would quietly bring back the original bug.
  *
  * A Map, so a name finds only an entry of its own: a condition typed as
@@ -140,13 +148,11 @@ export const CONDITION_ABBREVIATIONS: ReadonlyMap<string, string> = new Map(Obje
   'major wound': 'MW',
   dying: 'DY',
   'temporary insanity': 'TI',
-  'indefinite insanity': 'II',
   baned: 'BA',
   blessed: 'BS',
   concentrating: 'CO',
   dodging: 'DO',
   hasted: 'HA',
-  hexed: 'HX',
   "hunter's mark": 'HM',
   raging: 'RG',
   slowed: 'SL',

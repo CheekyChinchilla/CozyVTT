@@ -1,8 +1,8 @@
 /**
- * Paint, through MapCanvas: the DM painting the picture of a map drawn in
+ * Paint, through MapCanvas: the GM painting the picture of a map drawn in
  * CozyVTT, or of a map with no picture.
  *
- * Paint is offered only to the DM, on a map whose picture is a campaign map
+ * Paint is offered only to the GM, on a map whose picture is a campaign map
  * picture tagged DRAWN_MAP_TAG, or which has no picture; never on an uploaded
  * one. While it is on it owns the map: every press is a stroke, and the
  * keys the other tools take are its own, so no token is picked up, turned
@@ -41,7 +41,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     isPreparing: false,
   };
@@ -115,7 +115,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign: h.campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -236,6 +236,14 @@ function pictureCanvas(): HTMLCanvasElement | undefined {
 const callsOn = (canvas: HTMLCanvasElement | undefined): Call[] => (canvas ? recorded.get(canvas) ?? [] : []);
 const strokesOn = (canvas: HTMLCanvasElement | undefined) => callsOn(canvas).filter((c) => c.method === 'stroke' || c.method === 'arc');
 
+/**
+ * A dialog takes Esc once its focus trap is armed, which is when it has moved focus inside. The dialog can be on
+ * screen a moment before that, and a key pressed in the gap is lost.
+ */
+async function untilTrapped(dialog: () => HTMLElement | null) {
+  await waitFor(() => expect(dialog()).toContainElement(document.activeElement as HTMLElement));
+}
+
 function press(key: string, opts: { shiftKey?: boolean; ctrlKey?: boolean } = {}) {
   const map = theMap();
   if (document.activeElement !== map) map.focus();
@@ -312,7 +320,7 @@ beforeEach(() => {
     useGameStore.getState().clearGameState();
     usePaintStore.setState({ mapId: null, unsaved: false, openOnMapId: null });
   });
-  h.set({ userRole: 'DM', isPreparing: false });
+  h.set({ userRole: 'GM', isPreparing: false });
   // The picture's PNG, for Save.
   Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
     configurable: true, writable: true, value(done: BlobCallback) { done(new Blob(['picture'], { type: 'image/png' })); },
@@ -323,7 +331,7 @@ afterEach(() => {
 });
 
 describe('where Paint is offered', () => {
-  it('on a drawn map, to the DM', async () => {
+  it('on a drawn map, to the GM', async () => {
     await showMap();
     expect(await screen.findByRole('button', { name: 'Mapmaker' })).toBeInTheDocument();
   });
@@ -2016,7 +2024,7 @@ describe('Paint owns the map', () => {
     expect(menus()).toHaveLength(0);
   });
 
-  it('puts itself away when a DM tool is armed from the stack', async () => {
+  it('puts itself away when a GM tool is armed from the stack', async () => {
     await showMap();
     await paintOn();
     fireEvent.click(screen.getByText('Walls'));
@@ -2041,7 +2049,7 @@ describe('Paint owns the map', () => {
 /**
  * Painting the map the table is on, while the players play. They are sent
  * nothing until Save, and the map sent again meanwhile (a token moved, the
- * DM's own save coming back) leaves the paint and the stroke under way as
+ * GM's own save coming back) leaves the paint and the stroke under way as
  * they are.
  */
 describe('on the table\'s map', () => {
@@ -2053,7 +2061,7 @@ describe('on the table\'s map', () => {
     });
   };
 
-  it('sends the table nothing while the DM paints, fills and undoes', async () => {
+  it('sends the table nothing while the GM paints, fills and undoes', async () => {
     await showMap();
     await paintOn();
     h.sent.length = 0;
@@ -2209,7 +2217,7 @@ describe('drafts', () => {
   }
   const putBack = () => callsOn(pictureCanvas()).filter((c) => c.method === 'putImageData').map((c) => c.args.slice(1, 3));
 
-  it("keeps a saved room's walls in the draft while they are being added, should the DM paint meanwhile", async () => {
+  it("keeps a saved room's walls in the draft while they are being added, should the GM paint meanwhile", async () => {
     await showMap();
     await paintOn();
     const panel = () => within(screen.getByRole('region', { name: 'Mapmaker' }));
@@ -2224,7 +2232,7 @@ describe('drafts', () => {
       await pressSave();
       for (let i = 0; i < 20 && h.addWalls.mock.calls.length === 0; i += 1) await settle();
       expect(h.addWalls).toHaveBeenCalledTimes(1);
-      // The DM paints while the walls go in, and that painting is drafted.
+      // The GM paints while the walls go in, and that painting is drafted.
       const writes = drafts().writes.length;
       fireEvent.click(panel().getByRole('button', { name: 'Brush' }));
       drag({ clientX: 300, clientY: 300 }, { clientX: 400, clientY: 320 });
@@ -2748,7 +2756,7 @@ describe('drafts', () => {
     });
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     painted = 1;
-    // The picture takes its time to send; the DM paints on meanwhile.
+    // The picture takes its time to send; the GM paints on meanwhile.
     let uploaded = () => undefined as void;
     h.replaceDrawnPicture.mockImplementationOnce((id: string) => new Promise((resolve) => {
       uploaded = () => resolve({ message: 'Picture saved', asset: { id, type: 'MAP', scope: 'CAMPAIGN', campaignId: 'campaign-1', tags: [DRAWN_MAP_TAG] }, imageUrl: `/api/assets/maps/${id}?v=1` });
@@ -2815,7 +2823,7 @@ describe('drafts', () => {
     expect(usePaintStore.getState().unsaved).toBe(true);
   });
 
-  it('of a map no longer in the campaign, deleted from another device, is dropped as the DM opens the campaign', async () => {
+  it('of a map no longer in the campaign, deleted from another device, is dropped as the GM opens the campaign', async () => {
     const header = (mapId: string, userId = 'me') => ({ key: draftKey(userId, 'campaign-1', mapId, 'closed-tab'), userId, campaignId: 'campaign-1', mapId, tabId: 'closed-tab', baseUrl: '', width: 10, height: 10, savedAt: 0 });
     await drafts().put(header('map-gone'), [], true);
     await drafts().put(header('map-b'), [], true);
@@ -2825,7 +2833,7 @@ describe('drafts', () => {
     expect([...drafts().headers.values()].map((d) => `${d.userId} ${d.mapId}`).sort()).toEqual(['me map-b', 'someone-else map-gone']);
   });
 
-  it('is offered to no one but the DM', async () => {
+  it('is offered to no one but the GM', async () => {
     h.set({ userRole: 'PLAYER' });
     keepDraft('');
     await showMap();
@@ -2982,6 +2990,7 @@ describe('paint not saved, asked about before it is left', () => {
     await painted();
     const answer = askAbout('open-other');
     await waitFor(() => expect(question()).toBeInTheDocument());
+    await untilTrapped(question);
     await act(async () => { fireEvent.keyDown(question()!, { key: 'Escape' }); });
     await waitFor(() => expect(answer.value).toBe(false));
     expect(usePaintStore.getState().unsaved).toBe(true);
@@ -3114,6 +3123,7 @@ describe('the question before Save', () => {
   ])('sends nothing on %s, and the paint stays to be saved', async (_how, cancel) => {
     await paintedOn();
     await act(async () => { fireEvent.click(panelSave()); });
+    await untilTrapped(asked);
     await act(async () => { cancel(); });
     await waitFor(() => expect(asked()).toBeNull());
     expect(h.replaceDrawnPicture).not.toHaveBeenCalled();
@@ -3238,7 +3248,7 @@ describe('paint not saved, the page left after answering', () => {
 
 /**
  * Paint not saved on a map that leaves the screen without asking: the map
- * deleted from elsewhere, or the viewer no longer the DM. The painting is
+ * deleted from elsewhere, or the viewer no longer the GM. The painting is
  * kept as a draft and offered as a picture to download, never let go of
  * unsaid.
  */
@@ -3300,13 +3310,13 @@ describe('paint not saved, its map gone without asking', () => {
     expect(reload()).toBe(false);
   });
 
-  it('says why when the viewer is no longer the DM, and Discard drops it and its draft', async () => {
+  it('says why when the viewer is no longer the GM, and Discard drops it and its draft', async () => {
     await showMap();
     await paintOn();
     drag({ clientX: 100, clientY: 100 }, { clientX: 300, clientY: 200 });
     act(() => { h.set({ userRole: 'PLAYER' }); });
     await waitFor(() => expect(offer()).toBeInTheDocument());
-    expect(within(offer()!).getByText(/You are no longer the DM, so your painting of Map A cannot be saved/)).toBeInTheDocument();
+    expect(within(offer()!).getByText(/You are no longer the GM, so your painting of Map A cannot be saved/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Mapmaker' })).toBeNull();
     await act(async () => { fireEvent.click(within(offer()!).getByRole('button', { name: 'Discard my painting' })); });
     await waitFor(() => expect(offer()).toBeNull());

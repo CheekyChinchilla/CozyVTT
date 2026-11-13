@@ -1,6 +1,6 @@
 /**
  * The keyboard shortcuts window: every key the map takes, for whoever is
- * looking. A player is shown the keys that do something for them, the DM the
+ * looking. A player is shown the keys that do something for them, the GM the
  * wall and undo keys as well. The list is MAP_SHORTCUTS, which the guides'
  * tables are held to by a backend check.
  */
@@ -19,8 +19,8 @@ function rows(): Array<[string, string]> {
 }
 
 describe('the keyboard shortcuts window', () => {
-  it('shows the DM every shortcut, the wall keys among them', () => {
-    render(<ShortcutsPanel open onClose={() => undefined} role="DM" />);
+  it('shows the GM every shortcut, the wall keys among them', () => {
+    render(<ShortcutsPanel open onClose={() => undefined} role="GM" />);
 
     expect(screen.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument();
     expect(rows().map(([, does]) => does)).toEqual(MAP_SHORTCUTS.map((s) => s.does));
@@ -31,7 +31,7 @@ describe('the keyboard shortcuts window', () => {
     render(<ShortcutsPanel open onClose={() => undefined} role="PLAYER" />);
 
     const shown = rows().map(([, does]) => does);
-    expect(shown).toEqual(MAP_SHORTCUTS.filter((s) => s.who !== 'dm').map((s) => s.does));
+    expect(shown).toEqual(MAP_SHORTCUTS.filter((s) => s.who !== 'gm').map((s) => s.does));
     expect(shown).toContain('Move the selected token one square');
     expect(screen.queryByText('Undo the last wall change')).not.toBeInTheDocument();
   });
@@ -44,7 +44,7 @@ describe('the keyboard shortcuts window', () => {
   });
 
   it('names each key as a key', () => {
-    render(<ShortcutsPanel open onClose={() => undefined} role="DM" />);
+    render(<ShortcutsPanel open onClose={() => undefined} role="GM" />);
 
     const turn = rows().find(([, does]) => does.startsWith('Turn the selected token'));
     expect(turn?.[0]).toBe('[ ]');
@@ -62,7 +62,7 @@ describe('the keyboard shortcuts window', () => {
   });
 
   it('shows nothing while closed', () => {
-    render(<ShortcutsPanel open={false} onClose={() => undefined} role="DM" />);
+    render(<ShortcutsPanel open={false} onClose={() => undefined} role="GM" />);
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { headerInk, shouldUseWhiteText, toStoredHexColor } from '../themeColor';
 import { AA_TEXT, contrastRatio } from '../color';
 import { THEME_COLOR_PATTERN } from '../styleAllowlists';
-import { COLOR_PRESETS as DND5E } from '@/components/character-sheets/dnd5e/colorPresets';
-import { COLOR_PRESETS as PF2E } from '@/components/character-sheets/pathfinder2e/colorPresets';
-import { COLOR_PRESETS as COC7E } from '@/components/character-sheets/call-of-cthulhu-7e/colorPresets';
+import { COLOR_PRESETS as FIFTH_EDITION } from '@/components/character-sheets/fifth-edition/colorPresets';
+import { COLOR_PRESETS as FANTASY_D20 } from '@/components/character-sheets/fantasy-d20/colorPresets';
+import { COLOR_PRESETS as HORROR_D100 } from '@/components/character-sheets/horror-d100/colorPresets';
 
 describe('shouldUseWhiteText', () => {
   it('puts white text on a dark header and dark text on a light one', () => {
@@ -22,7 +22,7 @@ describe('shouldUseWhiteText', () => {
 
 // A button or chip on a sheet header is the header with a translucent white or
 // black laid over it, and its label is the header's text colour. Lightening
-// behind white text took the Call of Cthulhu Dark Forest header's Edit and
+// behind white text took the Horror d100 Dark Forest header's Edit and
 // Cancel to 4.47:1 where its gradient is lightest (green-800, #166534).
 describe('headerInk fills', () => {
   const rgb = (hex: string): [number, number, number] =>
@@ -34,7 +34,7 @@ describe('headerInk fills', () => {
   const labelOf = (hex: string) => (headerInk(hex).text === 'text-white' ? [255, 255, 255] : [0, 0, 0]) as [number, number, number];
 
   const greys = Array.from({ length: 52 }, (_, i) => `#${(i * 5).toString(16).padStart(2, '0').repeat(3)}`);
-  const headers = [...DND5E, ...PF2E, ...COC7E].map((preset) => preset.hex).concat(greys, ['#166534', '#ffeecc', '#d97706', '#7c3aed']);
+  const headers = [...FIFTH_EDITION, ...FANTASY_D20, ...HORROR_D100].map((preset) => preset.hex).concat(greys, ['#166534', '#ffeecc', '#d97706', '#7c3aed']);
 
   it('never take the label below what it reads on the bare header', () => {
     for (const hex of headers) {
@@ -48,7 +48,7 @@ describe('headerInk fills', () => {
   });
 
   it('keep the Dark Forest Edit and Cancel labels readable at the light end of its gradient', () => {
-    const forest = COC7E.find((preset) => preset.name === 'Dark Forest')!;
+    const forest = HORROR_D100.find((preset) => preset.name === 'Dark Forest')!;
     const ink = headerInk(forest.hex);
     for (const fill of fills(ink.button)) {
       expect(contrastRatio(labelOf(forest.hex), under(rgb('#166534'), fill))).toBeGreaterThanOrEqual(AA_TEXT);
@@ -66,9 +66,9 @@ describe('toStoredHexColor', () => {
 });
 
 describe.each([
-  ['D&D 5e', DND5E],
-  ['Pathfinder 2e', PF2E],
-  ['Call of Cthulhu', COC7E],
+  ['5E', FIFTH_EDITION],
+  ['Fantasy d20', FANTASY_D20],
+  ['Horror d100', HORROR_D100],
 ] as const)('the %s header colours', (_system, presets) => {
   it('each have a name the server will store', () => {
     for (const preset of presets) expect(preset.name).toMatch(THEME_COLOR_PATTERN);

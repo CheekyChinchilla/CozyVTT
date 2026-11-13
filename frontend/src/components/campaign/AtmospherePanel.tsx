@@ -2,7 +2,7 @@
  * AtmospherePanel
  * Atmosphere & Immersion
  *
- * DM-only slide-over panel. Provides:
+ * GM-only slide-over panel. Provides:
  *   1. Particle overlay selector (rain, mist, leaves, sparkles, snow)
  *   2. Ambient audio track picker (from AUDIO assets)
  *   3. Volume slider + loop toggle

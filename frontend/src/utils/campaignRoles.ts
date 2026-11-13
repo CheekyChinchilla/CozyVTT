@@ -2,14 +2,14 @@
  * Who runs a campaign, and who owns it.
  *
  * These are two different facts. `Campaign.ownerId` is whoever created it and
- * never moves; the DM is a membership role and can be handed to someone else.
+ * never moves; the GM is a membership role and can be handed to someone else.
  * They match in a campaign whose creator still runs it, which is most of them —
  * and that coincidence is exactly why the difference kept being missed.
  *
- * Five places had independently worked out "the DM" by looking up the *owner*,
+ * Five places had independently worked out "the GM" by looking up the *owner*,
  * so after a handover the dashboard, the campaign info panel, the character
  * editor's permission check and the asset scope picker all still named or
- * empowered the previous DM. A sixth, in the dice handler, refused the real DM
+ * empowered the previous GM. A sixth, in the dice handler, refused the real GM
  * outright.
  *
  * One place to ask, so the answer cannot drift apart again.
@@ -19,23 +19,28 @@ import { CampaignRole } from '@/types';
 import type { Campaign, CampaignMembership } from '@/types';
 
 /**
- * Each role in a campaign by the name the page gives it: on the dashboard's
- * campaign card (CampaignCard), beside a whisper's recipient whose name
- * another member shares (utils/chatWhisper.ts), and on the Members tab's
- * badges and Role pickers, Remove's question and its toast (CampaignSettingsModal),
- * and "Your role" in Campaign Info (CampaignInfo).
+ * Each role in a campaign by the name the page gives it: GM, the short form
+ * of game master, Player and Spectator. Code compares the stored value,
+ * never this label. Used on the dashboard's campaign cards and
+ * invitations (CampaignCard, DashboardPage), beside a whisper's recipient
+ * whose name another member shares (utils/chatWhisper.ts) and as the chat's
+ * group for the GM (ChatPanel), on the Members tab's badges and Role
+ * pickers, Remove's question and its toast (CampaignSettingsModal), as the
+ * roster's heading (CampaignRoster), in the invitation window
+ * (InvitationModal), and for who runs the game and "Your role" in Campaign
+ * Info (CampaignInfo).
  */
 export const CAMPAIGN_ROLE_LABEL: Record<CampaignRole, string> = {
-  [CampaignRole.DM]: 'DM',
+  [CampaignRole.GM]: 'GM',
   [CampaignRole.PLAYER]: 'Player',
   [CampaignRole.SPECTATOR]: 'Spectator',
 };
 
 /** The membership of whoever currently runs the campaign, if it is loaded. */
-export function campaignDmMembership(
+export function campaignGmMembership(
   campaign: Pick<Campaign, 'memberships'> | null | undefined
 ): CampaignMembership | null {
-  return campaign?.memberships?.find((m) => m.role === 'DM') ?? null;
+  return campaign?.memberships?.find((m) => m.role === 'GM') ?? null;
 }
 
 /** The membership of whoever owns the campaign, if it is loaded. */
@@ -47,17 +52,17 @@ export function campaignOwnerMembership(
 }
 
 /**
- * The display name of the DM.
+ * The display name of the GM.
  *
  * Falls back rather than throwing: a campaign summary may arrive without its
  * memberships, and a name is decoration — it must never be the thing that stops
  * a card rendering.
  */
-export function campaignDmName(
+export function campaignGmName(
   campaign: Pick<Campaign, 'memberships'> | null | undefined,
   fallback = 'Unknown'
 ): string {
-  return campaignDmMembership(campaign)?.user?.displayName ?? fallback;
+  return campaignGmMembership(campaign)?.user?.displayName ?? fallback;
 }
 
 /** The display name of the owner, on the same terms. */
@@ -69,21 +74,21 @@ export function campaignOwnerName(
 }
 
 /**
- * Whether the owner is somebody other than the DM.
+ * Whether the owner is somebody other than the GM.
  *
  * Used to decide whether ownership is worth mentioning in the UI at all: while
  * the two are the same person, saying so twice is noise, and it only becomes
  * information once they diverge.
  */
-export function ownerDiffersFromDm(
+export function ownerDiffersFromGm(
   campaign: Pick<Campaign, 'memberships' | 'ownerId'> | null | undefined
 ): boolean {
   if (!campaign) return false;
-  const dm = campaignDmMembership(campaign);
-  // With no DM row loaded there is nothing to differ from; say no rather than
+  const gm = campaignGmMembership(campaign);
+  // With no GM row loaded there is nothing to differ from; say no rather than
   // inventing a distinction out of missing data.
-  if (!dm) return false;
-  return dm.userId !== campaign.ownerId;
+  if (!gm) return false;
+  return gm.userId !== campaign.ownerId;
 }
 
 /** Whether this user owns the campaign, whoever happens to be running it. */
@@ -102,13 +107,13 @@ export function isCampaignOwner(
  * the membership by the API and is the same answer this would derive — and fall
  * back to reading the membership list for callers that hold only a summary.
  */
-export function isCampaignDm(
+export function isCampaignGm(
   campaign: Pick<Campaign, 'memberships' | 'userRole'> | null | undefined,
   userId: string | null | undefined
 ): boolean {
   if (!campaign || !userId) return false;
-  if (campaign.userRole) return campaign.userRole === 'DM';
-  return campaign.memberships?.some((m) => m.userId === userId && m.role === 'DM') ?? false;
+  if (campaign.userRole) return campaign.userRole === 'GM';
+  return campaign.memberships?.some((m) => m.userId === userId && m.role === 'GM') ?? false;
 }
 
 /**
@@ -124,7 +129,7 @@ export function campaignsToPlaceAssetIn<T extends Pick<Campaign, 'memberships' |
   userId: string | null | undefined
 ): T[] {
   return campaigns.filter((c) => {
-    if (isCampaignDm(c, userId)) return true;
+    if (isCampaignGm(c, userId)) return true;
     if (!isTokenArt || !userId) return false;
     const role = c.userRole ?? c.memberships?.find((m) => m.userId === userId)?.role;
     return role === 'PLAYER';

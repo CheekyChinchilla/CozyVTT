@@ -16,7 +16,7 @@ const manifest = {
   exportedAt: '2026-10-18T00:00:00.000Z',
   exportedFrom: 'CozyVTT v1.5.3',
   campaignName: 'The Sunken Keep',
-  gameSystem: 'DND_5E',
+  gameSystem: 'FIFTH_EDITION',
   mapCount: 3,
   tokenCount: 14,
   creatureCount: 2,

@@ -1,5 +1,5 @@
 /**
- * Rolling from a character sheet, as the D&D 5e and Pathfinder 2e sheets do.
+ * Rolling from a character sheet, as the 5E and Fantasy d20 sheets do.
  *
  * - A click or a tap on a d20 test (an ability check, a save, a skill, an
  *   attack) rolls it in the sheet's Roll mode; one on a damage roll or a hit
@@ -45,7 +45,7 @@ export function rollTarget(expression: string, purpose: string, gameSystem: stri
 
 /**
  * The mark of an element that rolls when pressed and is no d20 test (a
- * damage roll, a hit die, a Call of Cthulhu skill), so the roll's feedback
+ * damage roll, a hit die, a Horror d100 skill), so the roll's feedback
  * pulses it as it does a test (hooks/useRollFeedback.ts).
  */
 export const sheetRoll = { 'data-sheet-roll': '' } as const;

@@ -1,12 +1,12 @@
 /**
- * The DM prepares a map on their own page while the table stays where it is.
+ * The GM prepares a map on their own page while the table stays where it is.
  *
  * The page shows the viewed map: the one opened to prepare while there is
  * one, otherwise the table's. The table's map still follows every move of
  * the table, for the banner and the Map Library's Active badge, and the
  * tokens on screen are always the viewed map's. Preparing is kept for the
  * tab across a reload, ends when the table comes to that map, when the map
- * goes, or when the user is no longer the DM, and asks the guards something
+ * goes, or when the user is no longer the GM, and asks the guards something
  * on the page registers before the map on screen changes.
  */
 
@@ -25,7 +25,7 @@ const roleChanged = vi.fn();
 const socketOn = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
-    onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(),
+    onCharacterHpUpdated: vi.fn(), onGmTransferred: vi.fn(),
     onMemberRoleChanged: (cb: (d: unknown) => void) => roleChanged(cb),
     on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
@@ -53,7 +53,7 @@ function Probe() {
 
 const shown = () => useGameStore.getState().tokenOrder;
 
-async function openPage(role = 'DM', currentMapId = 'village') {
+async function openPage(role = 'GM', currentMapId = 'village') {
   getCampaign.mockResolvedValueOnce(campaignAs(role, currentMapId));
   render(
     <MemoryRouter initialEntries={['/campaigns/c1']}>
@@ -93,7 +93,7 @@ describe('opening a map to prepare', () => {
     expect(window.sessionStorage.getItem(preparingMapKey('c1'))).toBe('crypt');
   });
 
-  it('is the DM\'s alone', async () => {
+  it('is the GM\'s alone', async () => {
     await openPage('PLAYER');
     expect(await prepare('crypt')).toBe(false);
     expect(latest!.isPreparing).toBe(false);
@@ -172,7 +172,7 @@ describe('a map that cannot be loaded', () => {
 });
 
 describe('preparing ends', () => {
-  it('when this user is no longer the DM', async () => {
+  it('when this user is no longer the GM', async () => {
     await openPage();
     await prepare('crypt');
     const onRole = roleChanged.mock.calls[roleChanged.mock.calls.length - 1]?.[0] as (d: unknown) => void;
@@ -212,9 +212,9 @@ describe('a reload of the tab', () => {
   });
 
   it.each([
-    ['the table\'s map now', 'DM', 'crypt', 'crypt'],
-    ['a map since deleted', 'DM', 'village', 'gone'],
-    ['kept by someone no longer the DM', 'PLAYER', 'village', 'crypt'],
+    ['the table\'s map now', 'GM', 'crypt', 'crypt'],
+    ['a map since deleted', 'GM', 'village', 'gone'],
+    ['kept by someone no longer the GM', 'PLAYER', 'village', 'crypt'],
   ])('forgets a kept map that is %s', async (_label, role, currentMapId, kept) => {
     window.sessionStorage.setItem(preparingMapKey('c1'), kept);
     await openPage(role, currentMapId);
@@ -228,7 +228,7 @@ describe('a reconnect while preparing', () => {
   it('fetches the table\'s map and the map being prepared, with its tokens', async () => {
     await openPage();
     await prepare('crypt');
-    getCampaign.mockResolvedValueOnce(campaignAs('DM'));
+    getCampaign.mockResolvedValueOnce(campaignAs('GM'));
     getMap.mockImplementation((_c: string, mapId: string) =>
       Promise.resolve({ map: served(mapId, { tokens: [token(`${mapId}-now`)] }), spiritVisible: false }));
     await act(async () => { await latest!.catchUpAfterReconnect(); });
@@ -241,7 +241,7 @@ describe('a reconnect while preparing', () => {
   it('ends preparing when the map was deleted meanwhile', async () => {
     await openPage();
     await prepare('crypt');
-    getCampaign.mockResolvedValueOnce(campaignAs('DM'));
+    getCampaign.mockResolvedValueOnce(campaignAs('GM'));
     getMap.mockImplementation((_c: string, mapId: string) => (mapId === 'crypt'
       ? Promise.reject({ isAxiosError: true, response: { status: 404, data: { message: 'Map not found' } } })
       : Promise.resolve({ map: served(mapId), spiritVisible: false })));
@@ -254,7 +254,7 @@ describe('a reconnect while preparing', () => {
   it('never puts back what an edit of the map being prepared replaced while it was read: it reads it again', async () => {
     await openPage();
     await prepare('crypt');
-    getCampaign.mockResolvedValueOnce(campaignAs('DM'));
+    getCampaign.mockResolvedValueOnce(campaignAs('GM'));
     // The map being prepared is read slowly; Paint's Save lands meanwhile.
     let release: () => void = () => undefined;
     let saved = false;
@@ -278,7 +278,7 @@ describe('a reconnect while preparing', () => {
   it('keeps a map held by a guard as a prepared map when the table moved while the page was away', async () => {
     await openPage();
     act(() => { latest!.registerViewedMapGuard({ mayLeave: () => false, holds: () => true }); });
-    getCampaign.mockResolvedValueOnce(campaignAs('DM', 'tower'));
+    getCampaign.mockResolvedValueOnce(campaignAs('GM', 'tower'));
     await act(async () => { await latest!.catchUpAfterReconnect(); });
     expect(latest!.isPreparing).toBe(true);
     expect(latest!.viewedMap?.id).toBe('village');
@@ -331,7 +331,7 @@ describe('the table moving while the page reads a map', () => {
     let back: Promise<boolean> = Promise.resolve(false);
     act(() => { back = latest!.backToTable(); });
     await waitFor(() => expect(getMap).toHaveBeenLastCalledWith('c1', 'village'));
-    // Set Active on the tower, from the DM's phone.
+    // Set Active on the tower, from the GM's phone.
     let followed = true;
     act(() => { followed = latest!.receiveTableMap(served('tower')); });
     expect(followed).toBe(false);
@@ -357,7 +357,7 @@ describe('the table moving while the page reads a map', () => {
 
   it("nor a reload's return to the map being prepared", async () => {
     window.sessionStorage.setItem(preparingMapKey('c1'), 'crypt');
-    getCampaign.mockResolvedValueOnce(campaignAs('DM'));
+    getCampaign.mockResolvedValueOnce(campaignAs('GM'));
     const releaseTable = heldRead('village');
     const releaseCrypt = heldRead('crypt');
     render(
@@ -387,15 +387,15 @@ describe('preparing ending from elsewhere', () => {
     expect(latest!.preparingEnded).toBeNull();
   });
 
-  it('says this user is no longer the DM', async () => {
+  it('says this user is no longer the GM', async () => {
     await openPage();
     await prepare('crypt');
     const onRole = roleChanged.mock.calls[roleChanged.mock.calls.length - 1]?.[0] as (d: unknown) => void;
     await act(async () => { onRole({ campaignId: 'c1', userId: 'me', role: 'PLAYER' }); });
-    expect(latest!.preparingEnded).toEqual({ mapName: 'Crypt', reason: 'not-dm' });
+    expect(latest!.preparingEnded).toEqual({ mapName: 'Crypt', reason: 'not-gm' });
   });
 
-  it('says nothing when the DM goes back themselves', async () => {
+  it('says nothing when the GM goes back themselves', async () => {
     await openPage();
     await prepare('crypt');
     await act(async () => { await latest!.backToTable(); });
@@ -464,7 +464,7 @@ describe('a guard on the map on screen', () => {
 });
 
 describe('a map deleted from elsewhere', () => {
-  it("ends preparing when the DM's sockets are told the map being prepared went", async () => {
+  it("ends preparing when the GM's sockets are told the map being prepared went", async () => {
     await openPage();
     await prepare('crypt');
     const onDeleted = socketOn.mock.calls.filter(([event]) => event === 'map.deleted').pop()?.[1] as ((d: unknown) => void) | undefined;

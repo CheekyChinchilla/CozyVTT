@@ -1,0 +1,14 @@
+{
+  "characterName": "New Character",
+  "profession": "Student",
+  "era": "Modern",
+  "characteristics": {
+    "STR": 12,
+    "CON": 13,
+    "SIZ": 11,
+    "INT": 15,
+    "POW": 14,
+    "DEX": 16,
+    "CHA": 9
+  }
+}

@@ -1,7 +1,7 @@
 // ============================================
 // Dynamic lighting layer — opaque darkness with the coverage mask
 // subtracted (offscreen compositing: bright 1.0, dim 0.5, dim + dim =
-// bright), warm token/light glows, and the DM's light-source icons.
+// bright), warm token/light glows, and the GM's light-source icons.
 //
 // Pure: no React. The offscreen canvases persist between frames
 // (allocating ~5MB per frame causes GC jank), so the caller passes
@@ -12,7 +12,7 @@
 import type { Token } from '@/types';
 import type { LightSource } from '@/types/walls';
 import { gridYToCentrePx } from '../coords';
-import type { LightToolMode } from '@/components/campaign/DmLightControls';
+import type { LightToolMode } from '@/components/campaign/GmLightControls';
 import { mapSizePx, type Viewport } from './types';
 import type { VisionSource } from '../vision';
 import { applyViewport, withinBackingLimit } from '../layerCanvas';
@@ -156,7 +156,7 @@ const DARKNESS_BLUR_CSS_PX = 4;
 
 /**
  * Player-view darkness pass. Assumes the caller has already decided the
- * viewer should see fog (actual player, or DM in preview mode).
+ * viewer should see fog (actual player, or GM in preview mode).
  */
 export function drawDynamicLighting(
   ctx: CanvasRenderingContext2D,
@@ -198,7 +198,7 @@ export function drawDynamicLighting(
   // of the terrain canvas, kept only where the viewer has been and cannot
   // see now. Screen-sized, in the screen's pixels, so the mask is drawn
   // through the same transform as the layers, on every frame; skipped when
-  // nothing is remembered, which is every DM view and every unlit map.
+  // nothing is remembered, which is every GM view and every unlit map.
   if (state.explored && state.terrainCanvas) {
     const sw = state.terrainCanvas.width;
     const sh = state.terrainCanvas.height;
@@ -520,12 +520,12 @@ export interface LightIconsDrawState {
   selectedLightId: string | null;
   lightMode: LightToolMode;
   /** False in a player preview, which draws nothing here. */
-  isDM: boolean;
+  isGM: boolean;
 }
 
 /**
- * The markers the DM selects and moves lights by. They are a DM tool, so they
- * are drawn in the DM's own view only. A player preview leaves them out: at a
+ * The markers the GM selects and moves lights by. They are a GM tool, so they
+ * are drawn in the GM's own view only. A player preview leaves them out: at a
  * table watching one projected screen, a marker would show where every light
  * on the map is, lit or not, which is exactly what the darkness is hiding.
  */
@@ -534,7 +534,7 @@ export function drawLightIcons(
   state: LightIconsDrawState,
   viewport: Viewport
 ): void {
-  if (!state.isDM) return;
+  if (!state.isGM) return;
   ctx.save();
   for (const light of state.lights) {
     const isSelected = state.selectedLightId === light.id;

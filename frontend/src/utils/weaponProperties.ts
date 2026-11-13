@@ -1,5 +1,5 @@
 /**
- * D&D 5e weapon properties.
+ * 5E weapon properties.
  *
  * The read-only sheet has always drawn these as badges, but only the built-in
  * templates could set them: the editor offered no control at all, and its notes
@@ -7,8 +7,8 @@
  * weapon typed the properties into a free-text note, where they render as
  * italic prose instead of badges and nothing can read them.
  *
- * The eleven below are the complete list from the Basic Rules (p. 48,
- * "Weapon Properties"). Stored lowercase, matching what the templates already
+ * The eleven below are the complete list from SRD 5.1, "Weapon
+ * Properties". Stored lowercase, matching what the templates already
  * write; the sheet capitalises them for display.
  *
  * Anything else a sheet carries is kept and shown. Homebrew weapons are normal,
@@ -16,9 +16,9 @@
  * mistake that filed a player's Thieves' Cant under Weapons.
  */
 
-import { DND5E_WEAPON_PROPERTY_LENGTH_MAX } from '@/constants/sheetLimits';
+import { FIFTH_EDITION_WEAPON_PROPERTY_LENGTH_MAX } from '@/constants/sheetLimits';
 
-export const DND5E_WEAPON_PROPERTIES = [
+export const FIFTH_EDITION_WEAPON_PROPERTIES = [
   'ammunition',
   'finesse',
   'heavy',
@@ -32,9 +32,9 @@ export const DND5E_WEAPON_PROPERTIES = [
   'versatile',
 ] as const;
 
-export type Dnd5eWeaponProperty = (typeof DND5E_WEAPON_PROPERTIES)[number];
+export type FifthEditionWeaponProperty = (typeof FIFTH_EDITION_WEAPON_PROPERTIES)[number];
 
-const CANONICAL = new Set<string>(DND5E_WEAPON_PROPERTIES);
+const CANONICAL = new Set<string>(FIFTH_EDITION_WEAPON_PROPERTIES);
 
 /** Whether a stored value is one of the properties the rules define. */
 export function isCanonicalWeaponProperty(value: string): boolean {
@@ -96,7 +96,7 @@ export function addCustomWeaponProperty(
   value: string
 ): string[] {
   const trimmed = value.trim();
-  if (!trimmed || trimmed.length > DND5E_WEAPON_PROPERTY_LENGTH_MAX) return [...properties];
+  if (!trimmed || trimmed.length > FIFTH_EDITION_WEAPON_PROPERTY_LENGTH_MAX) return [...properties];
   if (hasWeaponProperty(properties, trimmed)) return [...properties];
 
   // Canonical names are always stored lowercase, however they were typed, so

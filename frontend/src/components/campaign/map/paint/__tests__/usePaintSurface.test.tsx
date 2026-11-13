@@ -34,7 +34,7 @@ type Shown = { image: HTMLImageElement; url: string } | null;
 function Harness({ onPaint, seen, on = map, picture = null, make = makeCanvas }: { onPaint: (p: PaintSurface) => void; seen: Array<number | null>; on?: CampaignMap; picture?: Shown; make?: () => HTMLCanvasElement }) {
   const paint = usePaintSurface({
     map: on, campaignId: 'campaign-1', onSaved: () => undefined, onMapRead: () => undefined, picture,
-    pictureKind: on.imageUrl ? 'drawn' : 'none', pictureFailed: false, isDM: true,
+    pictureKind: on.imageUrl ? 'drawn' : 'none', pictureFailed: false, isGM: true,
     mapControls: controls, markDirty: () => undefined, refuse: () => undefined, make,
   });
   onPaint(paint);

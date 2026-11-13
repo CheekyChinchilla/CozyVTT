@@ -28,8 +28,8 @@ describe('useExploredMemory', () => {
     expect([...hook.result.current.exploredCells!]).toEqual([3, 4]);
   });
 
-  it('keeps the memory of the player the DM switches the preview to', () => {
-    // The DM's own view explores as nobody; the listener is registered then.
+  it('keeps the memory of the player the GM switches the preview to', () => {
+    // The GM's own view explores as nobody; the listener is registered then.
     const s = fakeSocket();
     const hook = renderHook(({ who }) => useExploredMemory(s.source, 'map-1', true, who, 1), {
       initialProps: { who: null as string | null },
@@ -49,11 +49,11 @@ describe('useExploredMemory', () => {
     expect([...hook.result.current.exploredCells!]).toEqual([9]);
   });
 
-  // The server sends a player's memory to the DM sockets following them, and
+  // The server sends a player's memory to the GM sockets following them, and
   // a socket follows whoever its last request named. Closing the preview sent
-  // nothing, so the DM went on being sent that player's memory on every
+  // nothing, so the GM went on being sent that player's memory on every
   // reveal. Ending it asks as nobody, which stops the following.
-  it('stops following the player when the DM closes the preview', () => {
+  it('stops following the player when the GM closes the preview', () => {
     const s = fakeSocket();
     const hook = renderHook(({ who }) => useExploredMemory(s.source, 'map-1', true, who, 1), {
       initialProps: { who: 'alice' as string | null },
@@ -114,7 +114,7 @@ describe('useExploredMemory', () => {
 
   // A reconnect throws the socket away and builds a new one. The re-request
   // already followed the rejoin; the listener did not, so the reply to that
-  // request arrived with nobody listening and the DM's reset or another
+  // request arrived with nobody listening and the GM's reset or another
   // tab's reveals never reached this canvas again.
   it('listens on the socket a rejoin built, and no longer on the one it replaced', () => {
     const first = fakeSocket();

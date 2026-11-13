@@ -4,13 +4,13 @@
  * From `sm` up the refused-picture message and "Saves as personal token"
  * were each placed on their own at the foot of the portrait, so with both
  * showing (a refused picture on a character in no campaign) one was drawn
- * over the other. The D&D 5e, Pathfinder 2e, Call of Cthulhu and Flexible
+ * over the other. The 5E, Fantasy d20, Horror d100 and Flexible
  * editors now draw one box under the portrait holding both, one under the
  * other.
  *
  * That box was then hung under the portrait out of the flow, on one line, so
  * from `sm` up "Saves as personal token" ran past the portrait into the field
- * beside it (the Call of Cthulhu Age box). It now stays in the flow of the
+ * beside it (the Horror d100 Age box). It now stays in the flow of the
  * portrait's column at every width, so it takes the portrait's width and
  * wraps. jsdom lays nothing out: the classes are asserted here, and the
  * browser shows the layout.
@@ -53,9 +53,9 @@ describe('the notes under a portrait', () => {
 
 describe('the four editors', () => {
   const SOURCES = import.meta.glob([
-    '/src/components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx',
-    '/src/components/character-sheets/pathfinder2e/Pathfinder2eCharacterEditor.tsx',
-    '/src/components/character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor.tsx',
+    '/src/components/character-sheets/fifth-edition/FifthEditionCharacterEditor.tsx',
+    '/src/components/character-sheets/fantasy-d20/FantasyD20CharacterEditor.tsx',
+    '/src/components/character-sheets/horror-d100/HorrorD100CharacterEditor.tsx',
     '/src/components/character-sheets/flexible/FlexibleCharacterSheetEdit.tsx',
   ], { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
 

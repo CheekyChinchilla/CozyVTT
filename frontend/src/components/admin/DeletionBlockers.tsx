@@ -1,6 +1,6 @@
 /**
  * The campaigns that stop a user being deleted, and what an admin can do
- * about each: hand the DM seat to another member, or delete the campaign.
+ * about each: hand the GM seat to another member, or delete the campaign.
  * Both are routes an admin may call for any campaign. Without this, a user
  * who runs campaigns of their own could keep their account by refusing to
  * hand them over.
@@ -39,7 +39,7 @@ export default function DeletionBlockers({ campaigns, onCleared, onError }: Dele
   return (
     <div className="mb-3 space-y-2">
       <p className="text-xs text-warm-gray">
-        Hand each campaign to another member as DM, or delete it. The campaign then belongs to its new DM.
+        Hand each campaign to another member as GM, or delete it. The campaign then belongs to its new GM.
       </p>
       {campaigns.map((c) => {
         const heir = heirs[c.id] ?? c.members[0]?.userId ?? '';
@@ -50,7 +50,7 @@ export default function DeletionBlockers({ campaigns, onCleared, onError }: Dele
             {c.members.length > 0 ? (
               <div className="flex items-center gap-2">
                 <select
-                  aria-label={`New DM for ${c.name}`}
+                  aria-label={`New GM for ${c.name}`}
                   value={heir}
                   onChange={(e) => setHeirs((prev) => ({ ...prev, [c.id]: e.target.value }))}
                   disabled={busy}
@@ -64,12 +64,12 @@ export default function DeletionBlockers({ campaigns, onCleared, onError }: Dele
                 </select>
                 <button
                   type="button"
-                  onClick={() => act(c.id, () => api.transferDM(c.id, heir), 'Failed to hand over the campaign')}
+                  onClick={() => act(c.id, () => api.transferGM(c.id, heir), 'Failed to hand over the campaign')}
                   disabled={busy || heir === ''}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium bg-moss-green text-brand-text disabled:opacity-50"
                 >
                   {busy && <Loader2 className="w-3 h-3 animate-spin" />}
-                  Make DM
+                  Make GM
                 </button>
               </div>
             ) : (

@@ -1,7 +1,7 @@
 /**
  * The roster's label for a character's game system is the one the rest of the
  * app shows: GAME_SYSTEM_SHORT_LABELS. The roster kept a third copy of the
- * labels, which called Shadowrun 6e "SR6e" where every other place says "SR6".
+ * labels, which named one system differently from every other place.
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
@@ -15,7 +15,7 @@ const socket = { on: vi.fn(), off: vi.fn() };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, viewedMap: null, userRole: 'DM' }),
+  useCampaign: () => ({ campaign: { id: 'c1', memberships: [] }, currentMap: null, viewedMap: null, userRole: 'GM' }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm' } }) }));

@@ -1,6 +1,6 @@
 // ============================================
 // SpiritLayerControls
-// DM slide-over panel for spirit layer management
+// GM slide-over panel for spirit layer management
 // Spirit Layer Implementation
 // ============================================
 
@@ -104,7 +104,7 @@ interface SpiritLayerControlsProps {
 }
 
 export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerControlsProps) {
-  const { campaign, viewedMap, updateCampaignSpiritLayer, dmViewBothPlanes, setDmViewBothPlanes } = useCampaign();
+  const { campaign, viewedMap, updateCampaignSpiritLayer, gmViewBothPlanes, setGmViewBothPlanes } = useCampaign();
   // Lists spirit tokens by name — no need to re-render on token movement.
   const tokens = useTokenListIgnoringMovement();
   const { socket } = useWebSocket();
@@ -278,7 +278,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                   : 'Spirit realm hidden from players'}
               </p>
               <p className="text-xs text-stone-gray mt-0.5">
-                As DM you always see into the spirit realm.
+                As GM you always see into the spirit realm.
                 Enable to let players cross into the ethereal plane.
               </p>
             </div>
@@ -303,27 +303,27 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
             </button>
           </div>
 
-          {/* DM View Mode toggle */}
+          {/* GM View Mode toggle */}
           <div className="glass-panel p-4 flex items-center justify-between mt-3">
             <div>
-              <p className="text-sm font-medium text-charcoal">DM View Mode</p>
+              <p className="text-sm font-medium text-charcoal">GM View Mode</p>
               <p className="text-xs text-stone-gray mt-0.5">
-                {dmViewBothPlanes
+                {gmViewBothPlanes
                   ? 'Seeing both planes at once (may be confusing)'
                   : 'Seeing only the active plane (cleaner view)'}
               </p>
             </div>
             <button
-              onClick={() => setDmViewBothPlanes(!dmViewBothPlanes)}
+              onClick={() => setGmViewBothPlanes(!gmViewBothPlanes)}
               className={`flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
-                dmViewBothPlanes
+                gmViewBothPlanes
                   ? 'bg-spirit-purple/15 text-spirit-ink hover:bg-spirit-purple/30'
                   : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
               }`}
-              title={dmViewBothPlanes ? 'Switch to single-plane view' : 'Switch to dual-plane view'}
+              title={gmViewBothPlanes ? 'Switch to single-plane view' : 'Switch to dual-plane view'}
             >
               <Layers className="w-4 h-4" />
-              {dmViewBothPlanes ? 'Dual Plane' : 'Single Plane'}
+              {gmViewBothPlanes ? 'Dual Plane' : 'Single Plane'}
             </button>
           </div>
         </section>

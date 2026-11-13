@@ -11,7 +11,7 @@ import { render, screen } from '@testing-library/react';
 import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'owner', platformRole: 'USER' } }),
@@ -28,12 +28,12 @@ vi.mock('@/hooks/queries', () => ({
 vi.mock('@/services/api', () => ({
   api: { getUser: vi.fn(), updateCharacter: vi.fn() },
 }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: () => <p>sheet</p>,
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: () => <p>sheet</p>,
 }));
 
 const character = {
-  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'DND_5E', data: {}, campaignId: 'camp-1',
+  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'FIFTH_EDITION', data: {}, campaignId: 'camp-1',
 } as unknown as Character;
 const membership = { userId: 'owner', campaignId: 'camp-1', role: 'PLAYER', characterIds: [] } as unknown as CampaignMembership;
 
@@ -45,9 +45,9 @@ describe('character sheet dialogs', () => {
   });
 
   it('the editor is a dialog named for what it edits', () => {
-    const pf2e = pf2eCharacter();
-    render(<CharacterSheetEditorModal character={pf2e} onClose={() => {}} />);
-    expect(screen.getByRole('dialog', { name: `Edit Character Sheet: ${pf2e.name}` })).toBeInTheDocument();
+    const fantasyD20 = fantasyD20Character();
+    render(<CharacterSheetEditorModal character={fantasyD20} onClose={() => {}} />);
+    expect(screen.getByRole('dialog', { name: `Edit Character Sheet: ${fantasyD20.name}` })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 });

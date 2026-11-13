@@ -8,7 +8,7 @@
  *
  * What you see here is what you may read: your own uploads, anything global,
  * and campaign documents you belong to. Sharing one with a campaign happens
- * from that campaign's settings, where the DM decides.
+ * from that campaign's settings, where the GM decides.
  */
 
 import { useState } from 'react';
@@ -118,7 +118,7 @@ export default function DocumentsPage() {
 
         <p className="text-sm text-ink-secondary">
           PDF, plain text and Markdown, up to the size limit your instance allows. Who can read one
-          depends on where you put it: <strong>Personal</strong> is yours alone until a DM shares it
+          depends on where you put it: <strong>Personal</strong> is yours alone until a GM shares it
           with a campaign; <strong>Campaign</strong> belongs to that table and its members can read
           it; <strong>Global</strong> is readable by everyone on this instance. Text and Markdown
           can be written here and edited later; a PDF is a file you upload.

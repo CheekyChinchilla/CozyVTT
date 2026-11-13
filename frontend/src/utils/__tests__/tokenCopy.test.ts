@@ -81,7 +81,7 @@ describe('clampTokenPosition', () => {
 
 describe('copyController', () => {
   const members = [
-    { userId: 'dm', role: CampaignRole.DM },
+    { userId: 'dm', role: CampaignRole.GM },
     { userId: 'player', role: CampaignRole.PLAYER },
     { userId: 'watcher', role: CampaignRole.SPECTATOR },
   ];
@@ -95,7 +95,7 @@ describe('copyController', () => {
   // stale id made Duplicate fail on a token that moves and draws fine.
   it.each([
     ['who became a spectator', 'watcher'],
-    ['who became the DM', 'dm'],
+    ['who became the GM', 'dm'],
     ['who left the campaign', 'gone'],
   ])('drops a controller %s', (_why, id) => {
     expect(copyController(id, members)).toBeNull();
@@ -109,7 +109,7 @@ describe('copyController', () => {
 
 describe('tokenControllerStanding', () => {
   const members = [
-    { userId: 'dm', role: CampaignRole.DM, user: { displayName: 'Dee' } },
+    { userId: 'dm', role: CampaignRole.GM, user: { displayName: 'Dee' } },
     { userId: 'player', role: CampaignRole.PLAYER, user: { displayName: 'Pia' } },
     { userId: 'watcher', role: CampaignRole.SPECTATOR, user: { displayName: 'Wes' } },
   ];
@@ -122,7 +122,7 @@ describe('tokenControllerStanding', () => {
   // Token had no entry for them, while they could no longer move it.
   it.each([
     ['who became a spectator', 'watcher', 'Wes'],
-    ['who became the DM', 'dm', 'Dee'],
+    ['who became the GM', 'dm', 'Dee'],
     ['who left the campaign', 'gone', null],
   ])('says a controller %s is no longer a player', (_why, id, name) => {
     expect(tokenControllerStanding(id, members)).toEqual({ kind: 'not a player', name });

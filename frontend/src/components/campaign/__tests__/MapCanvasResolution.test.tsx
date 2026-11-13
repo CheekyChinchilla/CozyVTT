@@ -30,7 +30,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
@@ -82,7 +82,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -254,7 +254,7 @@ beforeEach(() => {
   container.height = 600;
   setRatio(1);
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith() });
+  h.set({ userRole: 'GM', currentMap: mapWith() });
 });
 
 /** The three layers, bottom to top. */

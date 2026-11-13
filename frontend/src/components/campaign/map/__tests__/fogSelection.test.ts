@@ -2,7 +2,7 @@
  * Fog rectangle selection tests.
  *
  * The whole point of this tool is that it reveals *exactly* the squares the
- * DM dragged over — the circular brush it replaces caught neighbouring cells
+ * GM dragged over — the circular brush it replaces caught neighbouring cells
  * by accident, which is what the feature request complained about. These
  * tests pin the cell set for a drag, so a regression shows up as a failing
  * count rather than as a player seeing a room they shouldn't.

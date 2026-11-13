@@ -23,14 +23,14 @@ vi.mock('@/services/api', () => ({
 vi.mock('../CharacterSheetEditorModal', () => ({
   default: () => <div role="dialog" aria-label="Editor stand-in" />,
 }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ onEdit }: { onEdit?: () => void }) => (
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ onEdit }: { onEdit?: () => void }) => (
     <button type="button" onClick={onEdit}>Edit</button>
   ),
 }));
 
 const character = {
-  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'DND_5E', data: {}, campaignId: 'camp-1',
+  id: 'char-1', userId: 'owner', name: 'Shadow Assassin', gameSystem: 'FIFTH_EDITION', data: {}, campaignId: 'camp-1',
 } as unknown as Character;
 const membership = { userId: 'owner', campaignId: 'camp-1', role: 'PLAYER', characterIds: [] } as unknown as CampaignMembership;
 

@@ -29,7 +29,7 @@ vi.mock('framer-motion', () => {
 });
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'campaign-1', name: 'Lost Mine', currentMapId: null },
+    campaign: { id: 'campaign-1', name: 'The Hollow Crown', currentMapId: null },
     currentMap: null,
     viewedMap: null,
     setCurrentMap: () => {},

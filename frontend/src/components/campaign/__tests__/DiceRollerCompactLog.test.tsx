@@ -24,7 +24,7 @@ vi.mock('framer-motion', () => ({
   } }),
   AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
 }));
-const seat = vi.hoisted(() => ({ role: 'DM' }));
+const seat = vi.hoisted(() => ({ role: 'GM' }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({ userRole: seat.role, campaign: { id: 'campaign-1', status: 'ACTIVE', memberships: [], characters: [] } }),
 }));
@@ -80,7 +80,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  seat.role = 'DM';
+  seat.role = 'GM';
   history.rolls = [roll('r2', { secret: true, userId: 'p2', userName: 'Cass Wren', purpose: 'Stealth' }), roll('r1')];
 });
 
@@ -102,7 +102,7 @@ it('leaves the panel its own title on the desktop, and to the sheet on the compa
   expect(logAndControls().box.previousElementSibling).toBeNull();
 });
 
-it("keeps Secret and the DM's Clear on the compact layout behind More options, under the controls", async () => {
+it("keeps Secret and the GM's Clear on the compact layout behind More options, under the controls", async () => {
   renderPanel(true);
   const { controls } = logAndControls();
   fireEvent.click(within(controls).getByRole('button', { name: /^More options/ }));

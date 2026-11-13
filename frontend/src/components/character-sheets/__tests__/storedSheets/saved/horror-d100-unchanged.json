@@ -1,0 +1,558 @@
+{
+  "themeColor": "#7c2d12",
+  "characterName": "Ines Okafor",
+  "playerName": "Robin Vale",
+  "profession": "Sailor",
+  "era": "1920s",
+  "age": "38",
+  "sex": "Female",
+  "residence": "Lisbon, by the old harbour",
+  "birthplace": "Porto",
+  "characteristics": {
+    "STR": 12,
+    "CON": 13,
+    "SIZ": 11,
+    "INT": 15,
+    "POW": 14,
+    "DEX": 16,
+    "CHA": 9,
+    "EDU": 17
+  },
+  "hitPoints": {
+    "maximum": 13,
+    "current": 8
+  },
+  "powerPoints": {
+    "maximum": 15,
+    "current": 5
+  },
+  "sanity": {
+    "starting": 70,
+    "maximum": 90,
+    "current": 58
+  },
+  "move": 10,
+  "skills": {
+    "appraise": {
+      "value": 11,
+      "experienceCheck": true,
+      "notes": "Note kept on appraise"
+    },
+    "bargain": {
+      "value": 13,
+      "experienceCheck": false,
+      "notes": "Note kept on bargain"
+    },
+    "brawl": {
+      "value": 15,
+      "experienceCheck": false,
+      "notes": "Note kept on brawl"
+    },
+    "climb": {
+      "value": 17,
+      "experienceCheck": true,
+      "notes": "Note kept on climb"
+    },
+    "command": {
+      "value": 19,
+      "experienceCheck": false,
+      "notes": "Note kept on command"
+    },
+    "demolition": {
+      "value": 21,
+      "experienceCheck": false,
+      "notes": "Note kept on demolition"
+    },
+    "disguise": {
+      "value": 23,
+      "experienceCheck": true,
+      "notes": "Note kept on disguise"
+    },
+    "dodge": {
+      "value": 25,
+      "experienceCheck": false,
+      "notes": "Note kept on dodge"
+    },
+    "fastTalk": {
+      "value": 27,
+      "experienceCheck": false,
+      "notes": "Note kept on fastTalk"
+    },
+    "fineManipulation": {
+      "value": 29,
+      "experienceCheck": true,
+      "notes": "Note kept on fineManipulation"
+    },
+    "firstAid": {
+      "value": 31,
+      "experienceCheck": false,
+      "notes": "Note kept on firstAid"
+    },
+    "gaming": {
+      "value": 33,
+      "experienceCheck": false,
+      "notes": "Note kept on gaming"
+    },
+    "grapple": {
+      "value": 35,
+      "experienceCheck": true,
+      "notes": "Note kept on grapple"
+    },
+    "hide": {
+      "value": 37,
+      "experienceCheck": false,
+      "notes": "Note kept on hide"
+    },
+    "insight": {
+      "value": 39,
+      "experienceCheck": false,
+      "notes": "Note kept on insight"
+    },
+    "jump": {
+      "value": 41,
+      "experienceCheck": true,
+      "notes": "Note kept on jump"
+    },
+    "listen": {
+      "value": 43,
+      "experienceCheck": false,
+      "notes": "Note kept on listen"
+    },
+    "martialArts": {
+      "value": 45,
+      "experienceCheck": false,
+      "notes": "Note kept on martialArts"
+    },
+    "medicine": {
+      "value": 47,
+      "experienceCheck": true,
+      "notes": "Note kept on medicine"
+    },
+    "navigate": {
+      "value": 49,
+      "experienceCheck": false,
+      "notes": "Note kept on navigate"
+    },
+    "perform": {
+      "value": 51,
+      "experienceCheck": false,
+      "notes": "Note kept on perform"
+    },
+    "persuade": {
+      "value": 53,
+      "experienceCheck": true,
+      "notes": "Note kept on persuade"
+    },
+    "psychotherapy": {
+      "value": 55,
+      "experienceCheck": false,
+      "notes": "Note kept on psychotherapy"
+    },
+    "research": {
+      "value": 57,
+      "experienceCheck": false,
+      "notes": "Note kept on research"
+    },
+    "sense": {
+      "value": 59,
+      "experienceCheck": true,
+      "notes": "Note kept on sense"
+    },
+    "sleightOfHand": {
+      "value": 61,
+      "experienceCheck": false,
+      "notes": "Note kept on sleightOfHand"
+    },
+    "spot": {
+      "value": 63,
+      "experienceCheck": false,
+      "notes": "Note kept on spot"
+    },
+    "status": {
+      "value": 65,
+      "experienceCheck": false,
+      "notes": "Note kept on status"
+    },
+    "stealth": {
+      "value": 67,
+      "experienceCheck": false,
+      "notes": "Note kept on stealth"
+    },
+    "strategy": {
+      "value": 69,
+      "experienceCheck": false,
+      "notes": "Note kept on strategy"
+    },
+    "swim": {
+      "value": 71,
+      "experienceCheck": true,
+      "notes": "Note kept on swim"
+    },
+    "teach": {
+      "value": 73,
+      "experienceCheck": false,
+      "notes": "Note kept on teach"
+    },
+    "throw": {
+      "value": 75,
+      "experienceCheck": false,
+      "notes": "Note kept on throw"
+    },
+    "track": {
+      "value": 77,
+      "experienceCheck": true,
+      "notes": "Note kept on track"
+    },
+    "languageOwn": {
+      "language": "Portuguese",
+      "value": 80,
+      "experienceCheck": true,
+      "notes": "Note kept on the own language"
+    },
+    "art": [
+      {
+        "specialty": "Sculpture",
+        "value": 21,
+        "experienceCheck": false,
+        "notes": "Note kept on Sculpture"
+      }
+    ],
+    "artillery": [
+      {
+        "specialty": "Field Gun",
+        "value": 22,
+        "experienceCheck": true,
+        "notes": "Note kept on Field Gun"
+      }
+    ],
+    "craft": [
+      {
+        "specialty": "Carpentry",
+        "value": 23,
+        "experienceCheck": false,
+        "notes": "Note kept on Carpentry"
+      }
+    ],
+    "drive": [
+      {
+        "specialty": "Automobile",
+        "value": 24,
+        "experienceCheck": true,
+        "notes": "Note kept on Automobile"
+      }
+    ],
+    "energyWeapon": [
+      {
+        "specialty": "Arc Lamp",
+        "value": 25,
+        "experienceCheck": false,
+        "notes": "Note kept on Arc Lamp"
+      }
+    ],
+    "etiquette": [
+      {
+        "specialty": "High Society",
+        "value": 26,
+        "experienceCheck": true,
+        "notes": "Note kept on High Society"
+      }
+    ],
+    "firearm": [
+      {
+        "specialty": "Handgun",
+        "value": 27,
+        "experienceCheck": false,
+        "notes": "Note kept on Handgun"
+      },
+      {
+        "specialty": "Rifle",
+        "value": 28,
+        "experienceCheck": true,
+        "notes": "Note kept on Rifle"
+      }
+    ],
+    "heavyMachine": [
+      {
+        "specialty": "Steam Crane",
+        "value": 29,
+        "experienceCheck": false,
+        "notes": "Note kept on Steam Crane"
+      }
+    ],
+    "heavyWeapon": [
+      {
+        "specialty": "Flamethrower",
+        "value": 30,
+        "experienceCheck": true,
+        "notes": "Note kept on Flamethrower"
+      }
+    ],
+    "knowledge": [
+      {
+        "specialty": "Blasphemous Lore",
+        "value": 7,
+        "experienceCheck": false,
+        "notes": "Note kept on Blasphemous Lore"
+      },
+      {
+        "specialty": "Occult",
+        "value": 32,
+        "experienceCheck": true,
+        "notes": "Note kept on Occult"
+      },
+      {
+        "specialty": "Natural History",
+        "value": 33,
+        "experienceCheck": false,
+        "notes": "Note kept on Natural History"
+      }
+    ],
+    "languageOther": [
+      {
+        "specialty": "Latin",
+        "value": 34,
+        "experienceCheck": true,
+        "notes": "Note kept on Latin"
+      },
+      {
+        "specialty": "Greek",
+        "value": 35,
+        "experienceCheck": false,
+        "notes": "Note kept on Greek"
+      }
+    ],
+    "meleeWeapon": [
+      {
+        "specialty": "Sword",
+        "value": 36,
+        "experienceCheck": true,
+        "notes": "Note kept on Sword"
+      }
+    ],
+    "missileWeapon": [
+      {
+        "specialty": "Bow",
+        "value": 37,
+        "experienceCheck": false,
+        "notes": "Note kept on Bow"
+      }
+    ],
+    "parry": [
+      {
+        "specialty": "Staff",
+        "value": 38,
+        "experienceCheck": true,
+        "notes": "Note kept on Staff"
+      }
+    ],
+    "pilot": [
+      {
+        "specialty": "Biplane",
+        "value": 39,
+        "experienceCheck": false,
+        "notes": "Note kept on Biplane"
+      }
+    ],
+    "repair": [
+      {
+        "specialty": "Electrical",
+        "value": 40,
+        "experienceCheck": true,
+        "notes": "Note kept on Electrical"
+      },
+      {
+        "specialty": "Mechanical",
+        "value": 41,
+        "experienceCheck": false,
+        "notes": "Note kept on Mechanical"
+      }
+    ],
+    "ride": [
+      {
+        "specialty": "Horse",
+        "value": 42,
+        "experienceCheck": true,
+        "notes": "Note kept on Horse"
+      }
+    ],
+    "science": [
+      {
+        "specialty": "Chemistry",
+        "value": 43,
+        "experienceCheck": false,
+        "notes": "Note kept on Chemistry"
+      }
+    ],
+    "shield": [
+      {
+        "specialty": "Buckler",
+        "value": 44,
+        "experienceCheck": true,
+        "notes": "Note kept on Buckler"
+      }
+    ],
+    "technicalSkill": [
+      {
+        "specialty": "Telegraphy",
+        "value": 45,
+        "experienceCheck": false,
+        "notes": "Note kept on Telegraphy"
+      }
+    ],
+    "own": [
+      {
+        "name": "Charm",
+        "value": 45,
+        "experienceCheck": true,
+        "notes": "Note kept on an own skill"
+      },
+      {
+        "name": "Art or Craft (Photography)",
+        "value": 30,
+        "experienceCheck": false,
+        "notes": "Note kept on another own skill"
+      }
+    ]
+  },
+  "weapons": [
+    {
+      "name": "Medium Revolver",
+      "skill": "Firearm (Handgun)",
+      "skillValue": 21,
+      "damage": "1D8",
+      "range": "20 yards",
+      "attacks": 1,
+      "ammo": 6,
+      "malfunction": 99,
+      "notes": "Kept in the sea chest"
+    },
+    {
+      "name": "Boat hook",
+      "skill": "Fighting (Staff)",
+      "skillValue": 34,
+      "damage": "1D6+dm",
+      "range": "Long reach",
+      "attacks": 2,
+      "ammo": null,
+      "malfunction": null,
+      "notes": "Borrowed from the Marguerite"
+    }
+  ],
+  "armor": [
+    {
+      "name": "Oilskin coat",
+      "armorValue": 1,
+      "notes": "Heavy when wet"
+    }
+  ],
+  "conditions": {
+    "unconscious": false,
+    "dying": false,
+    "majorWound": true,
+    "temporaryInsanity": true
+  },
+  "distinctiveFeatures": [
+    "A rope burn across the right palm",
+    "One gold earring"
+  ],
+  "spells": [
+    "Call the Grey Lantern",
+    "Ward of Ash"
+  ],
+  "possessions": [
+    {
+      "name": "Brass sextant",
+      "notes": "Her grandmother's - still true"
+    },
+    {
+      "name": "Logbook",
+      "notes": "Three pages torn out"
+    }
+  ],
+  "wealth": {
+    "level": "Poor",
+    "cash": 42,
+    "assets": "A quarter share in a fishing boat",
+    "notes": "Owes the chandler for last winter"
+  },
+  "story": [
+    {
+      "title": "Background & History",
+      "text": "Went to sea at fourteen.\n\nCame back changed."
+    },
+    {
+      "title": "Important People",
+      "text": "Captain Duarte, who taught her the stars."
+    },
+    {
+      "title": "Luck",
+      "text": "  Spent most of it off Madeira.  "
+    }
+  ],
+  "contacts": [
+    {
+      "name": "Dr Edith Vane",
+      "role": "Harbour physician",
+      "notes": "Asks no questions"
+    }
+  ],
+  "appearance": {
+    "age": "Late thirties",
+    "height": "5 ft 6 in",
+    "weight": "140 lb",
+    "eyes": "Grey",
+    "hair": "Black, cropped",
+    "skin": "Weathered"
+  },
+  "notes": "The GM alone reads this: she saw the thing in the hold.",
+  "converted": {
+    "from": 1,
+    "at": "2026-11-12T08:30:00.000Z",
+    "characteristics": {
+      "STR": 60,
+      "CON": 65,
+      "SIZ": 55,
+      "INT": 75,
+      "POW": 70,
+      "DEX": 80,
+      "CHA": 45,
+      "EDU": 85
+    },
+    "luck": 35,
+    "hitPoints": {
+      "maximum": 12,
+      "current": 8
+    },
+    "powerPoints": {
+      "maximum": 14,
+      "current": 5
+    },
+    "sanity": {
+      "starting": 70,
+      "maximum": 92,
+      "current": 58
+    },
+    "damageModifier": "Original damage modifier 0",
+    "build": 0,
+    "move": 8,
+    "skills": [
+      {
+        "name": "Original Charm",
+        "value": 45
+      },
+      {
+        "name": "Original Status",
+        "value": 20,
+        "experienceCheck": true
+      },
+      {
+        "name": "Original Survival (Sea)",
+        "value": 10
+      }
+    ],
+    "kept": [
+      "An unplaced value: \"kept as written\"",
+      "A second unplaced value: 7"
+    ]
+  }
+}

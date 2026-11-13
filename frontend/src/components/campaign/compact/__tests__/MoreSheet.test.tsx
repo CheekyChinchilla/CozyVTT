@@ -7,7 +7,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import SessionToolbar from '@/components/campaign/SessionToolbar';
 
-const seat = vi.hoisted(() => ({ role: 'DM' as string }));
+const seat = vi.hoisted(() => ({ role: 'GM' as string }));
 vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ userRole: seat.role }) }));
 
 import MoreSheet from '../MoreSheet';
@@ -15,7 +15,7 @@ import MoreSheet from '../MoreSheet';
 const onSheetEntry = () => (window.history.state as Record<string, unknown> | null)?.cozyvttSheet === true;
 
 beforeEach(() => {
-  seat.role = 'DM';
+  seat.role = 'GM';
 });
 
 afterEach(async () => {
@@ -53,12 +53,12 @@ describe('More', () => {
     expect(sheet).toHaveAttribute('aria-modal', 'true');
   });
 
-  it("offers the DM the table's panels and every tool of the header's toolbar, in its order", () => {
+  it("offers the GM the table's panels and every tool of the header's toolbar, in its order", () => {
     more();
     render(<SessionToolbar openPanels={{}} onOpen={() => undefined} />);
-    const toolbar = within(screen.getByRole('toolbar', { name: 'DM tools' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+    const toolbar = within(screen.getByRole('toolbar', { name: 'GM tools' })).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
     expect(toolbar).toHaveLength(7);
-    expect(groups()).toEqual([AT_THE_TABLE, ['DM tools', toolbar]]);
+    expect(groups()).toEqual([AT_THE_TABLE, ['GM tools', toolbar]]);
   });
 
   it('offers a player the table alone', () => {
@@ -67,13 +67,13 @@ describe('More', () => {
     expect(groups()).toEqual([AT_THE_TABLE]);
   });
 
-  it('offers an owner who is not the DM Owner Settings, as the desktop header does', () => {
+  it('offers an owner who is not the GM Owner Settings, as the desktop header does', () => {
     seat.role = 'PLAYER';
     more({ isOwner: true });
     expect(groups()).toEqual([AT_THE_TABLE, ['Owner', ['Owner Settings']]]);
   });
 
-  it('offers a DM who owns the campaign Campaign Settings, and no Owner Settings', () => {
+  it('offers a GM who owns the campaign Campaign Settings, and no Owner Settings', () => {
     more({ isOwner: true });
     expect(screen.queryByRole('button', { name: 'Owner Settings' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Campaign Settings' })).toBeInTheDocument();

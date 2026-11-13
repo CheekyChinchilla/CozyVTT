@@ -13,10 +13,10 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
-import { Pathfinder2eCharacterView } from '../pathfinder2e/Pathfinder2eCharacterView';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
+import { FifthEditionCharacterView } from '../fifth-edition/FifthEditionCharacterView';
+import { FantasyD20CharacterView } from '../fantasy-d20/FantasyD20CharacterView';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
 import { contact, mouse } from '@/test/pointer';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
@@ -28,8 +28,8 @@ const at = (clientX: number, clientY: number) => ({ clientX, clientY });
 const wait = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
 const menu = () => screen.queryByRole('menu');
 
-function dnd(onRoll = vi.fn(), overrides: Record<string, unknown> = {}) {
-  render(<DnD5eCharacterView character={dnd5eCharacter(overrides)} onRoll={onRoll} />);
+function fifthEdition(onRoll = vi.fn(), overrides: Record<string, unknown> = {}) {
+  render(<FifthEditionCharacterView character={fifthEditionCharacter(overrides)} onRoll={onRoll} />);
   return onRoll;
 }
 
@@ -38,7 +38,7 @@ afterEach(() => { vi.useRealTimers(); });
 
 describe('press and hold a stat', () => {
   it('opens its roll menu at half a second, where the finger is', () => {
-    dnd();
+    fifthEdition();
     const finger = contact('touch', 1);
 
     finger.down(screen.getByText('dexterity'), at(40, 20));
@@ -50,7 +50,7 @@ describe('press and hold a stat', () => {
   });
 
   it('never also rolls the stat as the finger lifts, and the menu stays open for a tap', () => {
-    const onRoll = dnd();
+    const onRoll = fifthEdition();
     const finger = contact('touch', 1);
 
     finger.down(screen.getByText('dexterity'), at(40, 20));
@@ -72,7 +72,7 @@ describe('press and hold a stat', () => {
   });
 
   it('opens nothing and rolls nothing when the finger moves 8 pixels, as a scroll begins', () => {
-    const onRoll = dnd();
+    const onRoll = fifthEdition();
     const finger = contact('touch', 1);
 
     finger.down(screen.getByText('Stealth'), at(40, 100));
@@ -85,7 +85,7 @@ describe('press and hold a stat', () => {
   });
 
   it('opens nothing when the browser takes the finger to scroll', () => {
-    const onRoll = dnd();
+    const onRoll = fifthEdition();
     const finger = contact('touch', 1);
 
     finger.down(screen.getByText('Stealth'), at(40, 100));
@@ -98,7 +98,7 @@ describe('press and hold a stat', () => {
   });
 
   it('opens the menu of a skill, an ability and an attack too', () => {
-    dnd(vi.fn(), { attacks: [spear] });
+    fifthEdition(vi.fn(), { attacks: [spear] });
 
     const hold = (text: string, pointerId: number) => {
       const finger = contact('touch', pointerId);
@@ -117,7 +117,7 @@ describe('press and hold a stat', () => {
   });
 
   it('opens once when Android sends its own long-press first, and the timer adds nothing', () => {
-    dnd();
+    fifthEdition();
     const finger = contact('touch', 1);
 
     finger.down(screen.getByText('dexterity'), at(40, 20));
@@ -130,8 +130,8 @@ describe('press and hold a stat', () => {
     expect(screen.getByRole('menu')).toHaveStyle({ left: '41px', top: '21px' });
   });
 
-  it('opens Fortune and Misfortune on a Pathfinder 2e strike', () => {
-    render(<Pathfinder2eCharacterView character={pf2eCharacter({ strikes: [longsword] })} onRoll={vi.fn()} />);
+  it('opens Fortune and Misfortune on a Fantasy d20 strike', () => {
+    render(<FantasyD20CharacterView character={fantasyD20Character({ strikes: [longsword] })} onRoll={vi.fn()} />);
     const finger = contact('touch', 1);
 
     finger.down(screen.getByText('Longsword'), at(40, 20));
@@ -144,7 +144,7 @@ describe('press and hold a stat', () => {
 
 describe('away from the stats', () => {
   it('a press held on a heading opens nothing, and the next tap on a stat rolls it', () => {
-    const onRoll = dnd();
+    const onRoll = fifthEdition();
     const finger = contact('touch', 1);
 
     finger.down(screen.getByText('Saving Throws'), at(40, 5));
@@ -157,7 +157,7 @@ describe('away from the stats', () => {
   });
 
   it("leaves Android's own long-press there to the browser", () => {
-    dnd();
+    fifthEdition();
     contact('touch', 1).down(screen.getByText('Saving Throws'), at(40, 5));
 
     expect(fireEvent.contextMenu(screen.getByText('Saving Throws'), at(40, 5))).toBe(true);
@@ -165,7 +165,7 @@ describe('away from the stats', () => {
   });
 
   it('a sheet that cannot roll opens nothing', () => {
-    render(<DnD5eCharacterView character={dnd5eCharacter()} />);
+    render(<FifthEditionCharacterView character={fifthEditionCharacter()} />);
 
     contact('touch', 1).down(screen.getByText('dexterity'), at(40, 20));
     wait(1000);
@@ -176,7 +176,7 @@ describe('away from the stats', () => {
 
 describe('with a mouse, as before', () => {
   it('a click rolls, holding the button opens nothing, and a right-click opens the menu', () => {
-    const onRoll = dnd();
+    const onRoll = fifthEdition();
 
     mouse.down(screen.getByText('dexterity'), at(40, 20));
     wait(1000);
@@ -192,7 +192,7 @@ describe('with a mouse, as before', () => {
 
 describe('the rows', () => {
   it('say how they roll, and take no text selection or iOS callout under a held finger', () => {
-    dnd();
+    fifthEdition();
 
     const save = screen.getByText('dexterity').closest('[data-roll]');
     expect(save).toHaveAttribute('title', 'Click: roll  |  Right-click or press and hold: Advantage / Disadvantage');

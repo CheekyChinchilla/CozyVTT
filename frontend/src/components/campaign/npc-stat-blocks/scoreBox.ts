@@ -1,6 +1,6 @@
 /**
  * The class of a stat block's six score or modifier boxes, in the token
- * editor's stat block and the Creature Library's form. A Call of Cthulhu
+ * editor's stat block and the Creature Library's form. A Horror d100
  * characteristic runs to four digits, and each box is a sixth of a narrow
  * panel: the input's own padding is narrowed, and its spinner hidden, so
  * four digits fit.

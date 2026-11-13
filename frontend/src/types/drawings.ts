@@ -16,7 +16,7 @@ export interface Drawing {
   id: string;
   /** Who drew it; null once their account is deleted. */
   authorId: string | null;
-  audience: 'ALL' | 'DM';
+  audience: 'ALL' | 'GM';
   layer: 'MARKUP' | 'GROUND';
   kind: string;
   color: string;
@@ -91,11 +91,11 @@ export interface DrawingClearMineEvent {
   opId?: string;
 }
 
-/** `drawing:clear`: every drawing on a map's markup layer, or with `authorId` one member's (the DM's). */
+/** `drawing:clear`: every drawing on a map's markup layer, or with `authorId` one member's (the GM's). */
 export interface DrawingClearEvent {
   mapId: string;
   layer?: 'MARKUP';
-  /** A member's user id: only their drawings for everyone, or all of the DM's own. */
+  /** A member's user id: only their drawings for everyone, or all of the GM's own. */
   authorId?: string;
   opId?: string;
 }
@@ -129,7 +129,7 @@ export interface DrawingRemovedBroadcast {
 /**
  * `drawings:cleared`, to the readers who had any of them: every drawing on
  * the layer, or, with `authorId`, that member's, by their Clear mine or the
- * DM's clear naming them.
+ * GM's clear naming them.
  */
 export interface DrawingsClearedBroadcast {
   mapId: string;

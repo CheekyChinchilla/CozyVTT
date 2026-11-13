@@ -21,7 +21,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatMessage from './ChatMessage';
 import JumpToNewest from './JumpToNewest';
 import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
-import { MessageType } from '@/types';
+import { CampaignRole, MessageType } from '@/types';
 import type { Message, ChatMessageBroadcast, ChatMessageEvent, MessageHistoryPage } from '@/types';
 import Button from '@/components/ui/Button';
 import { errorMessage, errorSummary } from '@/utils/errors';
@@ -30,6 +30,7 @@ import { MAX_CHAT_MESSAGE_LENGTH } from '@/constants/chatLimits';
 import { DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 import { useOnlineUserIds } from '@/stores/gameStore';
 import { whisperTargets, readSlashWhisper, isSlashWhisper, slashWhisperRefusal, byLabel } from '@/utils/chatWhisper';
+import { CAMPAIGN_ROLE_LABEL } from '@/utils/campaignRoles';
 
 /** Messages per page. The server caps this at MAX_CHAT_HISTORY_PAGE (constants/chatLimits.ts). */
 const PAGE_SIZE = 50;
@@ -145,7 +146,7 @@ export default function ChatPanel() {
     [campaign?.memberships, campaign?.characters]
   );
   const others = useMemo(() => [...targets.values()].filter((t) => t.userId !== user?.id).sort(byLabel), [targets, user?.id]);
-  const dmUserId = campaign?.memberships?.find((m) => m.role === 'DM')?.userId;
+  const gmUserId = campaign?.memberships?.find((m) => m.role === 'GM')?.userId;
 
   /**
    * Who the next message goes to, or null for everyone. Kept with the name it
@@ -162,7 +163,7 @@ export default function ChatPanel() {
   // Older versions wrote a chat message every time someone connected or
   // dropped, which on a flaky connection buried the actual conversation. They
   // are no longer written, but existing campaigns still carry the backlog —
-  // this lets the DM clear it when they choose rather than a migration doing it
+  // this lets the GM clear it when they choose rather than a migration doing it
   // silently on upgrade.
   const [confirmClearJoins, setConfirmClearJoins] = useState(false);
   const [clearingJoins, setClearingJoins] = useState(false);
@@ -583,7 +584,7 @@ export default function ChatPanel() {
   }, [cooldownSeconds, canSend]);
 
   /**
-   * Start rate limit cooldown (only if the DM has enabled it for this campaign)
+   * Start rate limit cooldown (only if the GM has enabled it for this campaign)
    */
   const startCooldown = () => {
     if (!campaign?.chatCooldownEnabled) return;
@@ -641,8 +642,8 @@ export default function ChatPanel() {
 
   /** Send a message marked Not sent again, under the name it had, to whoever it was for. */
   const retry = (message: Message) => {
-    // A copy still being sent holds the type that was asked for, PLAYER or DM.
-    const asked = message.type === MessageType.DM ? MessageType.DM : MessageType.PLAYER;
+    // A copy still being sent holds the type that was asked for, PLAYER or GM.
+    const asked = message.type === MessageType.GM ? MessageType.GM : MessageType.PLAYER;
     void deliver(message.id.slice('temp-'.length), message.content, asked, message.recipientId ?? undefined);
   };
 
@@ -675,9 +676,9 @@ export default function ChatPanel() {
 
     const clientId = newClientId();
 
-    // The type asked for, PLAYER or DM, also on a whisper: the server makes
+    // The type asked for, PLAYER or GM, also on a whisper: the server makes
     // it a WHISPER, and Retry sends what was asked.
-    const messageType: ChatMessageEvent['type'] = userRole === 'DM' ? MessageType.DM : MessageType.PLAYER;
+    const messageType: ChatMessageEvent['type'] = userRole === 'GM' ? MessageType.GM : MessageType.PLAYER;
 
     const optimisticMessage: Message = {
       id: pendingId(clientId),
@@ -748,8 +749,8 @@ export default function ChatPanel() {
     : typingRefusal
       ? null
       : recipient && { id: recipient.id, name: recipientName ?? recipient.name, gone: recipientGone };
-  const dmTarget = others.find((t) => t.userId === dmUserId);
-  const players = others.filter((t) => t.userId !== dmUserId);
+  const gmTarget = others.find((t) => t.userId === gmUserId);
+  const players = others.filter((t) => t.userId !== gmUserId);
 
   // ============================================
   // Render
@@ -795,10 +796,10 @@ export default function ChatPanel() {
     >
       <option value="">Everyone</option>
       {recipientGone && recipient && <option value={recipient.id}>{recipient.name} (no longer in the campaign)</option>}
-      {/* The DM in a group the app names, which nothing a member writes can copy. */}
-      {dmTarget && (
-        <optgroup label={onlineUserIds.has(dmTarget.userId) ? 'DM' : 'DM, not in session'}>
-          <option value={dmTarget.userId}>{dmTarget.label}</option>
+      {/* The GM in a group the app names, which nothing a member writes can copy. */}
+      {gmTarget && (
+        <optgroup label={onlineUserIds.has(gmTarget.userId) ? CAMPAIGN_ROLE_LABEL[CampaignRole.GM] : `${CAMPAIGN_ROLE_LABEL[CampaignRole.GM]}, not in session`}>
+          <option value={gmTarget.userId}>{gmTarget.label}</option>
         </optgroup>
       )}
       {players.some((t) => onlineUserIds.has(t.userId)) && (
@@ -857,7 +858,7 @@ export default function ChatPanel() {
       {messages.length} shown
     </span>
   );
-  const clearJoinsButton = userRole === 'DM' && (
+  const clearJoinsButton = userRole === 'GM' && (
     <button
       onClick={() => setConfirmClearJoins(true)}
       disabled={clearingJoins}
@@ -892,7 +893,7 @@ export default function ChatPanel() {
     <div className="glass-panel h-full flex flex-col">
       {/* Chat Header. In the compact layout's sheet, whose heading names the
           chat, the panel's heading is read out only, and the count and the
-          DM's eraser go at the top of the log beside Load More, where they
+          GM's eraser go at the top of the log beside Load More, where they
           scroll away with the history. */}
       {compact ? (
         <h3 className="sr-only">Chat</h3>
@@ -943,7 +944,7 @@ export default function ChatPanel() {
         aria-relevant="additions"
         className={compact ? 'flex-1 overflow-y-auto px-2 py-1.5 space-y-1.5' : 'flex-1 overflow-y-auto p-4 space-y-3'}
       >
-        {/* Load More Button; on the compact layout with the count and the DM's eraser */}
+        {/* Load More Button; on the compact layout with the count and the GM's eraser */}
         {compact ? (
           (messages.length > 0 || clearJoinsButton) && (
             <div className="flex items-center gap-2">
@@ -984,7 +985,7 @@ export default function ChatPanel() {
                   onDiscard={discard}
                   whisperLabel={whisper?.label}
                   whisperPeer={whisper?.peer}
-                  sentByDM={!!dmUserId && message.userId === dmUserId}
+                  sentByGM={!!gmUserId && message.userId === gmUserId}
                   onWhisperBack={whisper?.canReply ? whisperBack : undefined}
                 />
               );
@@ -1031,10 +1032,10 @@ export default function ChatPanel() {
           {goesTo && (
             <p className={`text-xs text-center flex items-center justify-center gap-1 ${goesTo.gone ? 'text-warning-ink' : 'text-accent-ink'}`}>
               <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />
-              {/* The shield the log shows beside a DM's message, for the campaign's DM by user id. */}
-              {goesTo.id === dmUserId && <Shield className="w-3 h-3 shrink-0 text-warning-ink" aria-hidden="true" />}
+              {/* The shield the log shows beside a GM's message, for the campaign's GM by user id. */}
+              {goesTo.id === gmUserId && <Shield className="w-3 h-3 shrink-0 text-warning-ink" aria-hidden="true" />}
               <span>{goesTo.gone ? `${goesTo.name} is no longer in the campaign.` : `Only you and ${goesTo.name} can see this.`}</span>
-              {goesTo.id === dmUserId && <span className="sr-only">{goesTo.name} is the DM.</span>}
+              {goesTo.id === gmUserId && <span className="sr-only">{goesTo.name} is the GM.</span>}
             </p>
           )}
           {boxRefusal ? (

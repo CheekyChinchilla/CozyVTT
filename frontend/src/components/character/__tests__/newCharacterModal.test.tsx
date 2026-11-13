@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import NewCharacterModal from '../NewCharacterModal';
 import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { GameSystem } from '@/types';
 
 const listCampaigns = vi.fn();
 const getStarterSheet = vi.fn();
@@ -52,7 +53,7 @@ describe('the game system', () => {
   it('goes back to Flexible when a campaign without one is chosen after one with one', async () => {
     listCampaigns.mockResolvedValue({
       campaigns: [
-        { id: 'camp-dnd', name: 'Dragons', gameSystem: 'DND_5E' },
+        { id: 'camp-lantern', name: 'Lantern Road', gameSystem: 'FIFTH_EDITION' },
         { id: 'camp-flex', name: 'Freeform', gameSystem: null },
       ],
     });
@@ -61,8 +62,8 @@ describe('the game system', () => {
     await screen.findByRole('option', { name: /Freeform/ });
     const systemBox = screen.getByLabelText(/^Game System/);
 
-    fireEvent.change(campaignBox, { target: { value: 'camp-dnd' } });
-    await waitFor(() => expect(systemBox).toHaveValue('DND_5E'));
+    fireEvent.change(campaignBox, { target: { value: 'camp-lantern' } });
+    await waitFor(() => expect(systemBox).toHaveValue('FIFTH_EDITION'));
     fireEvent.click(screen.getByRole('radio', { name: /Level 1 Fighter/ }));
 
     fireEvent.change(campaignBox, { target: { value: 'camp-flex' } });
@@ -83,6 +84,64 @@ describe('the game system', () => {
     await screen.findByRole('option', { name: /Freeform/ });
     fireEvent.change(screen.getByLabelText(/^Campaign/), { target: { value: 'camp-flex' } });
     await waitFor(() => expect(screen.getByLabelText(/^Game System/)).toBeDisabled());
+  });
+});
+
+// A campaign stored with a system this build does not have, such as the
+// value of one CozyVTT no longer supports, is played as one with none.
+describe('a campaign of a system this build does not have', () => {
+  it('chooses Flexible, held, and creates a Flexible character in it', async () => {
+    listCampaigns.mockResolvedValue({ campaigns: [{ id: 'camp-old', name: 'Old Campaign', gameSystem: 'SOMETHING_ELSE' }] });
+    show();
+    await screen.findByRole('option', { name: /Old Campaign/ });
+    fireEvent.change(screen.getByLabelText(/^Campaign/), { target: { value: 'camp-old' } });
+    await waitFor(() => expect(screen.getByLabelText(/^Game System/)).toBeDisabled());
+
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create Character/ }));
+    await waitFor(() => expect(createCharacter).toHaveBeenCalled());
+    expect(getStarterSheet).toHaveBeenCalledWith('null', 'blank');
+    expect(createCharacter.mock.calls[0][0]).toMatchObject({ campaignId: 'camp-old', gameSystem: undefined });
+  });
+});
+
+// The ready-made Horror d100 character is a detective, a profession of the
+// open d100 rules; the server still serves it as `privateinvestigator`.
+describe('the Horror d100 starting sheets', () => {
+  it('offer the private detective example, asked for by its old name', async () => {
+    render(<NewCharacterModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} preselectedGameSystem={GameSystem.HORROR_D100} />);
+    expect(screen.queryByText(/Investigator/)).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: /Private Detective \(Example\)/ }));
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create Character/ }));
+    await waitFor(() => expect(getStarterSheet).toHaveBeenCalledWith(GameSystem.HORROR_D100, 'privateinvestigator'));
+  });
+});
+
+// Each system's first starting sheet is its blank one, chosen as the dialog
+// opens, and Create asks the server for it by the name blank.
+describe('the Blank Character Sheet', () => {
+  it.each([
+    ['5E', GameSystem.FIFTH_EDITION],
+    ['Fantasy d20', GameSystem.FANTASY_D20],
+    ['Horror d100', GameSystem.HORROR_D100],
+  ])('is offered first and chosen for %s, and Create makes the character from it', async (_name, system) => {
+    getStarterSheet.mockResolvedValue({ name: 'Blank', description: '', gameSystem: system, data: { from: 'the blank sheet' } });
+    render(<NewCharacterModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} preselectedGameSystem={system} />);
+    const [first, example] = screen.getAllByRole('radio');
+    expect(first).toHaveAccessibleName(/^Blank Character Sheet/);
+    expect(first).toBeChecked();
+
+    // Chosen again after the example, it is the one used.
+    fireEvent.click(example);
+    fireEvent.click(screen.getByRole('radio', { name: /Blank Character Sheet/ }));
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create Character/ }));
+
+    await waitFor(() => expect(createCharacter).toHaveBeenCalled());
+    expect(getStarterSheet).toHaveBeenCalledTimes(1);
+    expect(getStarterSheet).toHaveBeenCalledWith(system, 'blank');
+    expect(createCharacter.mock.calls[0][0]).toMatchObject({ name: 'Aldra', gameSystem: system, data: { from: 'the blank sheet' } });
   });
 });
 

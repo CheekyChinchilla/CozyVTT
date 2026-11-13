@@ -30,10 +30,10 @@ it('makes the roll and says nothing more when it is made', async () => {
   const { result } = renderHook(() => useTableRoll(socket as never));
 
   let made: boolean | undefined;
-  await act(async () => { made = await result.current({ expression: '1d20+5', purpose: 'Athletics', characterName: 'Brann' }); });
+  await act(async () => { made = await result.current({ expression: '1d20+5', purpose: 'Athletics', characterName: 'Corvel' }); });
 
   expect(made).toBe(true);
-  expect(rollDice).toHaveBeenCalledWith({ expression: '1d20+5', purpose: 'Athletics', characterName: 'Brann' });
+  expect(rollDice).toHaveBeenCalledWith({ expression: '1d20+5', purpose: 'Athletics', characterName: 'Corvel' });
   expect(showToast).not.toHaveBeenCalled();
 });
 

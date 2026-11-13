@@ -3,7 +3,7 @@
  *
  * The tracker found a combatant's character through the token on the map on
  * screen, so a combatant on another map had no menu at all: one on a map the
- * DM is preparing, or one on the table's map while the DM prepares another.
+ * GM is preparing, or one on the table's map while the GM prepares another.
  * The order now names each combatant's character as the server lets this
  * viewer know it, and View Character Sheet opens it from there. Roll... still
  * needs the token itself, so it stays with the map on screen.
@@ -24,7 +24,7 @@ const token = (id: string, name: string, extra: Partial<Token> = {}): Token => (
 });
 
 const seat = vi.hoisted(() => ({
-  role: 'DM',
+  role: 'GM',
   viewedMapId: 'map-prepared',
   tableTokens: [] as Token[],
 }));
@@ -37,14 +37,14 @@ vi.mock('@/contexts/CampaignContext', () => ({
     viewedMap: { id: seat.viewedMapId },
     campaign: {
       id: 'camp-1',
-      gameSystem: 'DND_5E',
+      gameSystem: 'FIFTH_EDITION',
       characters: [{ id: 'char-aldra', userId: 'player' }, { id: 'char-mira', userId: 'dm' }],
-      memberships: [{ userId: 'dm', role: 'DM' }, { userId: 'player', role: 'PLAYER' }],
+      memberships: [{ userId: 'dm', role: 'GM' }, { userId: 'player', role: 'PLAYER' }],
     },
   }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: seat.role === 'DM' ? 'dm' : 'player', platformRole: 'USER' } }),
+  useAuth: () => ({ user: { id: seat.role === 'GM' ? 'dm' : 'player', platformRole: 'USER' } }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({
   useWebSocket: () => ({ socket: { emit: vi.fn(), on: vi.fn(), off: vi.fn() }, isConnected: true }),
@@ -56,7 +56,7 @@ vi.mock('@/services/api', () => ({ api: { getCharacter } }));
 vi.mock('@/components/character/CharacterSheetViewerModal', () => ({
   default: ({ character, publicName, secretRolls }: { character: { id: string }; publicName?: string; secretRolls?: boolean }) => (
     <div role="dialog" aria-label={`Sheet of ${character.id}`}>
-      {`named ${publicName ?? 'by the sheet'}, ${secretRolls ? 'to the DM alone' : 'to the table'}`}
+      {`named ${publicName ?? 'by the sheet'}, ${secretRolls ? 'to the GM alone' : 'to the table'}`}
     </div>
   ),
 }));
@@ -68,7 +68,7 @@ const entry = (tokenId: string, name: string, mapId: string, characterId: string
 const menuItem = (name: string) => screen.queryByRole('button', { name });
 
 beforeEach(() => {
-  seat.role = 'DM';
+  seat.role = 'GM';
   seat.viewedMapId = 'map-prepared';
   seat.tableTokens = [token('aldra', 'Aldra', { characterId: 'char-aldra', type: TokenType.PLAYER, controlledBy: 'player' })];
   getCharacter.mockReset();
@@ -81,7 +81,7 @@ function fight(...combatants: CombatantEntry[]) {
   useGameStore.getState().setCombatState({ active: false, round: 0, currentTokenId: null, combatants });
 }
 
-describe("a combatant whose token is on the table's map, while the DM prepares another", () => {
+describe("a combatant whose token is on the table's map, while the GM prepares another", () => {
   it('offers its character sheet and no rolls', async () => {
     fight(entry('aldra', 'Aldra', 'map-table', 'char-aldra'));
     render(<InitiativeTracker />);
@@ -106,7 +106,7 @@ describe("a combatant whose token is on the table's map, while the DM prepares a
 });
 
 describe('a combatant whose token is on a map the table is not on', () => {
-  it('opens its character sheet, whose rolls go to the DM alone', async () => {
+  it('opens its character sheet, whose rolls go to the GM alone', async () => {
     seat.viewedMapId = 'map-table';
     useGameStore.getState().setTokens(seat.tableTokens);
     fight(entry('mira', 'Mira', 'map-prepared', 'char-mira'));
@@ -116,7 +116,7 @@ describe('a combatant whose token is on a map the table is not on', () => {
     expect(menuItem('Roll...')).not.toBeInTheDocument();
     fireEvent.click(menuItem('View Character Sheet')!);
 
-    expect(await screen.findByRole('dialog', { name: 'Sheet of char-mira' })).toHaveTextContent('to the DM alone');
+    expect(await screen.findByRole('dialog', { name: 'Sheet of char-mira' })).toHaveTextContent('to the GM alone');
   });
 });
 

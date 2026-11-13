@@ -21,6 +21,7 @@ import { storeCharacterInList } from '@/hooks/queries';
 import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
+import { isSupportedOrNoSystem } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiValidationIssues, errorMessage, errorSummary } from '@/utils/errors';
 import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
@@ -117,7 +118,7 @@ export default function CharacterEditorPage() {
     if (!user) return false;
     if (!char.campaignId) return char.userId === user.id;
 
-    // In a campaign, the rule is the campaign's: its DM may edit (the person
+    // In a campaign, the rule is the campaign's: its GM may edit (the person
     // running the game now, not whoever created it), and an owner who is a
     // spectator there may not, as the server refuses the save. Should the
     // campaign not load, ownership alone decides and the server has the last
@@ -416,15 +417,19 @@ export default function CharacterEditorPage() {
                 disabled. Whatever hosts a sheet leaves Save, Cancel and Edit to
                 the sheet itself. */}
 
-            {/* Save as Template — publishes this sheet for everyone to copy */}
-            <Button
-              onClick={() => setShowSaveAsTemplate(true)}
-              variant="secondary" className="flex items-center gap-2"
-              title="Publish this sheet as a template others can copy"
-            >
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Save as Template</span>
-            </Button>
+            {/* Save as Template — publishes this sheet for everyone to copy.
+                Not for a system CozyVTT no longer supports, whose template
+                the server refuses. */}
+            {isSupportedOrNoSystem(character.gameSystem) && (
+              <Button
+                onClick={() => setShowSaveAsTemplate(true)}
+                variant="secondary" className="flex items-center gap-2"
+                title="Publish this sheet as a template others can copy"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Save as Template</span>
+              </Button>
+            )}
 
             {/* Export Button */}
             <Button

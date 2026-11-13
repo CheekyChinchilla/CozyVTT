@@ -32,11 +32,11 @@ beforeEach(() => {
 
 describe('the page title', () => {
   it('is the instance name', async () => {
-    getAppearance.mockResolvedValue(appearance('The Hearthstone Tavern'));
+    getAppearance.mockResolvedValue(appearance('The Mossy Lantern'));
 
     render(<ThemeProvider><div /></ThemeProvider>);
 
-    await waitFor(() => expect(document.title).toBe('The Hearthstone Tavern'));
+    await waitFor(() => expect(document.title).toBe('The Mossy Lantern'));
   });
 
   it('stays CozyVTT when the name is empty', async () => {

@@ -4,13 +4,15 @@
 // ============================================
 
 import { useState } from 'react';
-import { CAMPAIGN_ROLE_LABEL, campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
+import { CAMPAIGN_ROLE_LABEL, campaignGmName, campaignOwnerName, ownerDiffersFromGm } from '@/utils/campaignRoles';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { Info, Users, Crown, Calendar, UserPlus, KeyRound} from 'lucide-react';
+import { CampaignRole } from '@/types';
 import type { AccessRevoked, CampaignStatus } from '@/types';
 import GameSystemBadge from '../common/GameSystemBadge';
 import InvitePlayerModal from './InvitePlayerModal';
 import LeaveCampaign from './LeaveCampaign';
+import { AboutButton } from '../common/AboutDialog';
 
 interface CampaignInfoProps {
   /** Told when the member has left the campaign from here (useAccessRevoked). */
@@ -69,9 +71,9 @@ export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
   const statusBadge = getStatusBadge(campaign.status);
   const memberCount = campaign.memberships?.length || 0;
   // The person running the game, which is not necessarily the person who
-  // created it — this used to resolve the owner and label them "DM".
-  const dmName = campaignDmName(campaign);
-  const showOwner = ownerDiffersFromDm(campaign);
+  // created it.
+  const gmName = campaignGmName(campaign);
+  const showOwner = ownerDiffersFromGm(campaign);
   const ownerName = campaignOwnerName(campaign);
 
   return (
@@ -110,8 +112,8 @@ export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
       <div className="space-y-2 text-sm">
         <div className="flex items-center gap-2 text-stone-gray">
           <Crown className="w-4 h-4 text-brand-ink" />
-          <span className="text-warm-gray">DM:</span>
-          <span className="text-stone-gray font-medium">{dmName}</span>
+          <span className="text-warm-gray">{CAMPAIGN_ROLE_LABEL[CampaignRole.GM]}:</span>
+          <span className="text-stone-gray font-medium">{gmName}</span>
         </div>
 
         {/* Only worth saying once the two have come apart — while the creator
@@ -141,8 +143,8 @@ export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
         )}
       </div>
 
-      {/* DM Actions - Invite Player Button */}
-      {userRole === 'DM' && (
+      {/* GM Actions - Invite Player Button */}
+      {userRole === 'GM' && (
         <div className="pt-2 border-t border-moss-green/20">
           <button
             onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
@@ -161,7 +163,7 @@ export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
             <span className="text-xs text-warm-gray">Your role:</span>
             <div
               className={`inline-block ml-2 px-2.5 py-1 rounded-full border text-xs font-medium ${
-                userRole === 'DM'
+                userRole === 'GM'
                   ? 'bg-moss-green/15 text-brand-ink border-moss-green/40'
                   : 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40'
               }`}
@@ -172,6 +174,11 @@ export default function CampaignInfo({ onLeft }: CampaignInfoProps) {
           <LeaveCampaign campaign={campaign} userRole={userRole} onLeft={onLeft} />
         </div>
       )}
+
+      {/* The credits for the game rules the sheets and creatures here use. */}
+      <div className="pt-2 border-t border-moss-green/20 flex justify-center">
+        <AboutButton />
+      </div>
 
       {/* Invite Player Modal */}
       {/* Mounted from its first opening on, so it fades out on close. */}

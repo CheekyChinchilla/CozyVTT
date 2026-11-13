@@ -4,7 +4,7 @@
  * with none on the plane they are looking at sees nothing at all, on the
  * material plane or in the spirit realm, with Global Illumination or
  * without. The line says so from the player's side, and is shown wherever
- * that holds: to the player, and to the DM previewing them.
+ * that holds: to the player, and to the GM previewing them.
  *
  * The stand-ins are MapCanvasCompactChrome.test.tsx's, with the members and
  * the spirit realm in the store too. Canvas drawing is switched off.
@@ -63,7 +63,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: h.state.playerSpiritVisible,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -108,8 +108,8 @@ import MapCanvasOnly from '../MapCanvas';
 import { LayoutProvider } from '@/contexts/LayoutContext';
 import { useGameStore } from '@/stores/gameStore';
 
-const ON_THIS_MAP = 'You have no token on this map to see through. Ask your DM for one.';
-const IN_THE_SPIRIT_REALM = 'You have no token in the spirit realm to see through. Ask your DM for one.';
+const ON_THIS_MAP = 'You have no token on this map to see through. Ask your GM for one.';
+const IN_THE_SPIRIT_REALM = 'You have no token in the spirit realm to see through. Ask your GM for one.';
 const RULER_NOTE = 'Place your character token on the map to use the ruler';
 
 function mapWith(extra: Partial<CampaignMap> = {}): CampaignMap {
@@ -171,7 +171,7 @@ beforeEach(() => {
     spiritLayerEnabled: false,
     playerSpiritVisible: false,
     memberships: [
-      { userId: 'dm', role: 'DM', user: { displayName: 'Dee' } },
+      { userId: 'dm', role: 'GM', user: { displayName: 'Dee' } },
       { userId: 'me', role: 'PLAYER', user: { displayName: 'Me' } },
     ],
   });
@@ -224,8 +224,8 @@ describe('the line is not shown', () => {
     expect(hint()).toBeNull();
   });
 
-  it('to the DM, outside Player Preview', () => {
-    h.set({ userRole: 'DM' });
+  it('to the GM, outside Player Preview', () => {
+    h.set({ userRole: 'GM' });
     render(<MapCanvas />);
     expect(hint()).toBeNull();
   });
@@ -257,13 +257,13 @@ describe('a player in the spirit realm', () => {
   });
 });
 
-describe("the DM's Player Preview", () => {
+describe("the GM's Player Preview", () => {
   function preview() {
     fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
   }
 
   beforeEach(() => {
-    h.set({ userRole: 'DM' });
+    h.set({ userRole: 'GM' });
   });
 
   it('of a player with no token on the map shows the line as they see it', () => {
@@ -280,7 +280,7 @@ describe("the DM's Player Preview", () => {
     expect(hint()).toBeNull();
   });
 
-  // The DM holds every token; the previewed player is sent only those on
+  // The GM holds every token; the previewed player is sent only those on
   // their own plane, and sees through those alone.
   it('of a player in the spirit realm whose only token is on the material plane shows the spirit realm line', () => {
     h.set({ spiritLayerEnabled: true });
@@ -297,11 +297,11 @@ describe("the DM's Player Preview", () => {
     expect(screen.getByText(ON_THIS_MAP)).toBeInTheDocument();
   });
 
-  it('is gone once the DM goes back to the DM view', () => {
+  it('is gone once the GM goes back to the GM view', () => {
     render(<MapCanvas />);
     preview();
     expect(screen.getByText(ON_THIS_MAP)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'DM View' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GM View' }));
     expect(hint()).toBeNull();
   });
 });
@@ -320,13 +320,13 @@ describe('where the line sits', () => {
   });
 
   it('on the desktop in Player Preview, above Preview\'s controls', () => {
-    h.set({ userRole: 'DM' });
+    h.set({ userRole: 'GM' });
     render(<MapCanvas />);
     fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
     const stack = screen.getByText(ON_THIS_MAP).parentElement!;
     expect(classesOf(stack)).toContain('bottom-32');
-    expect(classesOf(screen.getByRole('button', { name: 'DM View' }).parentElement!)).toContain('bottom-20');
+    expect(classesOf(screen.getByRole('button', { name: 'GM View' }).parentElement!)).toContain('bottom-20');
   });
 
   it('on the compact layout, in the dock at the map\'s foot, letting presses through', () => {

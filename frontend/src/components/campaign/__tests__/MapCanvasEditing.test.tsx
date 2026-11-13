@@ -21,7 +21,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     joinedEpoch: 1,
     characters: [] as Array<{ id: string; userId: string; name: string }>,
@@ -89,7 +89,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: h.setPlayerSpiritVisible,
         activeVibeEffect: null,
@@ -122,7 +122,7 @@ vi.mock('@/contexts/WebSocketContext', async () => {
 });
 
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'dm-user', displayName: 'The DM' } }),
+  useAuth: () => ({ user: { id: 'dm-user', displayName: 'The GM' } }),
 }));
 
 vi.mock('@/services/map.service', () => ({
@@ -190,7 +190,7 @@ beforeEach(() => {
   h.updateToken.mockReset().mockResolvedValue({});
   useGameStore.getState().setTokens([]);
   h.handlers.clear();
-  h.set({ userRole: 'DM', joinedEpoch: 1, characters: [], currentMap: mapWith('map-a', [wall('a1', 100), wall('a2', 300)]) });
+  h.set({ userRole: 'GM', joinedEpoch: 1, characters: [], currentMap: mapWith('map-a', [wall('a1', 100), wall('a2', 300)]) });
 });
 
 function openWallSelect() {
@@ -334,7 +334,7 @@ describe('wall shortcuts while typing', () => {
   });
 });
 
-describe('wall and light events on the DM page', () => {
+describe('wall and light events on the GM page', () => {
   const door = wall('d1', 100, 'door-closed');
   const other = wall('a2', 300);
   const lastReplace = () => {
@@ -346,7 +346,7 @@ describe('wall and light events on the DM page', () => {
     h.set({ currentMap: mapWith('map-a', [door, other]) });
   });
 
-  it("applies a player's door toggle, so the DM's next bulk edit keeps it", () => {
+  it("applies a player's door toggle, so the GM's next bulk edit keeps it", () => {
     render(<MapCanvas />);
     fire('wall:updated', { mapId: 'map-a', segment: { ...door, type: 'door-open' } });
 
@@ -357,7 +357,7 @@ describe('wall and light events on the DM page', () => {
     expect(lastReplace()?.segments.find((s) => s.id === 'd1')?.type).toBe('door-open');
   });
 
-  it("keeps a player's door toggle through the DM's Undo", () => {
+  it("keeps a player's door toggle through the GM's Undo", () => {
     render(<MapCanvas />);
     openWallSelect();
     press('a', { ctrlKey: true });
@@ -418,11 +418,11 @@ describe('wall and light events on the DM page', () => {
     for (const [, payload] of edits) expect(typeof (payload as { opId?: unknown }).opId).toBe('string');
   });
 
-  it('applies what arrived while the DM was a player, after the DM seat comes back', () => {
+  it('applies what arrived while the GM was a player, after the GM seat comes back', () => {
     render(<MapCanvas />);
     act(() => { h.set({ userRole: 'PLAYER' }); });
     fire('wall:added', { mapId: 'map-a', segment: wall('a3', 500) });
-    act(() => { h.set({ userRole: 'DM' }); });
+    act(() => { h.set({ userRole: 'GM' }); });
 
     expect(screen.getByText('(3)')).toBeInTheDocument();
   });
@@ -431,17 +431,17 @@ describe('wall and light events on the DM page', () => {
 describe('map changes after a role change without a reload', () => {
   const changed = (spiritVisible: boolean) => ({ mapId: 'map-a', mapData: mapWith('map-a', []), spiritVisible });
 
-  it('no longer tracks a crossing to the spirit realm for a player who became DM', () => {
+  it('no longer tracks a crossing to the spirit realm for a player who became GM', () => {
     h.set({ userRole: 'PLAYER' });
     render(<MapCanvas />);
-    act(() => { h.set({ userRole: 'DM' }); });
+    act(() => { h.set({ userRole: 'GM' }); });
 
     fire('map.changed', changed(true));
 
     expect(h.setPlayerSpiritVisible).not.toHaveBeenCalled();
   });
 
-  it('tracks their own crossing for a DM who became a player', () => {
+  it('tracks their own crossing for a GM who became a player', () => {
     render(<MapCanvas />);
     act(() => { h.set({ userRole: 'PLAYER' }); });
 
@@ -513,7 +513,7 @@ describe('map settings broadcast', () => {
 
 describe("the token menu's Remove from Map", () => {
   const goblin = {
-    id: 'tok-1', name: 'Goblin Scout', imageUrl: '', position: { x: 0, y: 19 }, size: { width: 1, height: 1 },
+    id: 'tok-1', name: 'Goblin', imageUrl: '', position: { x: 0, y: 19 }, size: { width: 1, height: 1 },
     layer: 'material', visible: true, type: 'npc', conditions: [],
   } as unknown as Token;
 
@@ -531,7 +531,7 @@ describe("the token menu's Remove from Map", () => {
     render(<MapCanvas />);
     openTokenMenu();
 
-    expect(screen.getByText(/Remove "Goblin Scout" from this map\?/)).toBeInTheDocument();
+    expect(screen.getByText(/Remove "Goblin" from this map\?/)).toBeInTheDocument();
     expect(h.deleteToken).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -603,7 +603,7 @@ describe("the token menu's View Character Sheet", () => {
 
 /**
  * Which way a token faces (#89). Rotate Left and Rotate Right turn it by 45
- * degrees, for the DM on any token and for a player on a token they control.
+ * degrees, for the GM on any token and for a player on a token they control.
  * The menu stays open, so a few presses turn it further.
  */
 describe("the token menu's Rotate Left and Rotate Right", () => {
@@ -651,7 +651,7 @@ describe("the token menu's Rotate Left and Rotate Right", () => {
     expect(await screen.findByText(/Network down|Could not turn the token/)).toBeInTheDocument();
   });
 
-  it('is offered to a player on a token they control, with nothing of the DM\'s', async () => {
+  it('is offered to a player on a token they control, with nothing of the GM\'s', async () => {
     h.set({ userRole: 'PLAYER' });
     render(<MapCanvas />);
     openMenuOn(wolf({ controlledBy: 'dm-user' }));

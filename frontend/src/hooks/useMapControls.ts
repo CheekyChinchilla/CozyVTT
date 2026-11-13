@@ -238,7 +238,7 @@ export function useMapControls(config: MapControlsConfig) {
   /**
    * Convert screen coordinates to grid coordinates
    * Screen coords = mouse position on canvas
-   * Grid coords = grid cell position (0,0 = bottom-left, following D&D/VTT convention)
+   * Grid coords = grid cell position (0,0 = bottom-left, the usual VTT convention)
    */
   const screenToGrid = useCallback(
     (screen: ScreenCoordinates): GridCoordinates => {
@@ -250,7 +250,7 @@ export function useMapControls(config: MapControlsConfig) {
       const gridX = Math.floor(worldX / gridSize);
       const gridYFromTop = Math.floor(worldY / gridSize);
 
-      // Invert Y to use bottom-left origin (D&D/VTT standard) — see map/coords.ts
+      // Invert Y to use bottom-left origin (the usual VTT convention) — see map/coords.ts
       const gridY = flipGridY(gridYFromTop, mapHeight);
 
       return { x: gridX, y: gridY };

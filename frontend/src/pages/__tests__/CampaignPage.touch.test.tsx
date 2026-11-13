@@ -31,7 +31,7 @@ vi.mock('react-resizable-panels', () => {
     usePanelRef: () => ({ current: null }),
   };
 });
-vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm', displayName: 'DM' } }) }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm', displayName: 'GM' } }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
   CampaignProvider: ({ children }: { children?: unknown }) => <>{children as never}</>,
   useCampaign: () => ({
@@ -40,7 +40,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
     viewedMap: { id: 'map-1', name: 'Map', tokens: [] },
     loading: false,
     error: null,
-    userRole: 'DM',
+    userRole: 'GM',
     updateCampaignStatus: vi.fn(),
     setActiveSession: vi.fn(),
     refreshCurrentMap: vi.fn(),

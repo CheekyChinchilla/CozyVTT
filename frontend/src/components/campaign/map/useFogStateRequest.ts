@@ -5,7 +5,7 @@
 // load finished before the socket handshake, socket.io buffered the request
 // and flushed it on connect, ahead of the authenticate exchange, and the
 // server drops anything from a socket it has not authenticated, silently.
-// Nothing asked again, so on an instance where that ordering held the DM had
+// Nothing asked again, so on an instance where that ordering held the GM had
 // no fog state on every load: no tint on the map, a preview with everything
 // covered, and reveals that could not be dragged.
 //

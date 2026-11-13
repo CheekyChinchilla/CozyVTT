@@ -121,7 +121,7 @@ describe('gameStore actions', () => {
 
 // A token someone else is carrying: the frames move where it is drawn, and
 // only the drop moves where it stands, which is what sight, lighting and
-// explored memory read. Without that, a DM carrying a player's token about
+// explored memory read. Without that, a GM carrying a player's token about
 // showed that player everything along the way and saved it to their memory.
 describe('receiveTokenMove', () => {
   beforeEach(() => {
@@ -408,12 +408,12 @@ describe("the map's drawings", () => {
   });
 
   it('lets go of one drawing, or of every one a test picks', () => {
-    useGameStore.getState().setDrawings('map-a', [drawing('a'), drawing('b', { authorId: 'them' }), drawing('c', { audience: 'DM' })]);
+    useGameStore.getState().setDrawings('map-a', [drawing('a'), drawing('b', { authorId: 'them' }), drawing('c', { audience: 'GM' })]);
 
     useGameStore.getState().removeDrawing('a');
     expect(ids()).toEqual(['b', 'c']);
 
-    useGameStore.getState().removeDrawings((d) => d.audience === 'DM');
+    useGameStore.getState().removeDrawings((d) => d.audience === 'GM');
     expect(ids()).toEqual(['b']);
   });
 

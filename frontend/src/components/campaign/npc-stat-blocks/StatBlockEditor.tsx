@@ -1,21 +1,24 @@
-﻿/**
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
+/**
  * StatBlockEditor
- * DM inline editor for NPC stat blocks. Provides a compact form to edit
+ * GM inline editor for NPC stat blocks. Provides a compact form to edit
  * all stat block fields. Used inside the NpcQuickEditor panel.
  */
 
 import { useState, useCallback } from 'react';
 import { Plus, X, ChevronDown, ChevronRight } from 'lucide-react';
 import type { NpcStatBlock } from '@/types';
-import { ABILITY_KEYS, CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
+import { ABILITY_KEYS, CHALLENGE_RATINGS } from '@/utils/rules/fifthEdition';
 import ProficiencyEditor from './ProficiencyEditor';
-import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
+import FantasyD20ProficiencyEditor from './FantasyD20ProficiencyEditor';
 import PrintedSkillsEditor from './PrintedSkillsEditor';
 import { creatureModel, scoreLabel, withGameSystem } from './creatureModel';
 import NumberField from '@/components/ui/NumberField';
 import { SCORE_BOX_CLASS } from './scoreBox';
 import { changeAbilitiesOrRating } from './statBlockProficiency';
-import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
+import { readAttributeModifiers, setAttributeModifier } from './fantasyD20StatBlock';
 import { STAT_BLOCK_LIMITS, statBlockNumberBounds } from '@/constants/statBlockLimits';
 
 interface StatBlockEditorProps {
@@ -23,12 +26,12 @@ interface StatBlockEditorProps {
   onChange: (updated: NpcStatBlock) => void;
   /**
    * The campaign's game system. Decides how this stat block is interpreted:
-   * D&D 5e derives saves and skills from ability scores and Challenge Rating,
-   * Pathfinder 2e stores printed modifiers against a creature Level, and Call
-   * of Cthulhu and Shadowrun 6e store their scores and skills as typed
-   * (creatureModel). Defaults to 5e, which is the shape the stat block was
-   * designed around. Every change names the stat block for it, which sets the
-   * bounds the server keeps on its scores and skills.
+   * 5E derives saves and skills from ability scores and Challenge Rating,
+   * Fantasy d20 stores printed modifiers against a creature Level, and Horror
+   * d100 stores its scores and skills as typed (creatureModel). Defaults to
+   * 5E, which is the shape the stat block was designed around. Every change
+   * names the stat block for it, which sets the bounds the server keeps on its
+   * scores and skills.
    */
   gameSystem?: string | null;
 }
@@ -38,7 +41,7 @@ type ActionEntry = { name: string; description: string };
 export default function StatBlockEditor({
   statBlock,
   onChange: onChangeProp,
-  gameSystem = 'DND_5E',
+  gameSystem = 'FIFTH_EDITION',
 }: StatBlockEditorProps) {
   const onChange = useCallback(
     (updated: NpcStatBlock) => onChangeProp(withGameSystem(updated, gameSystem)),
@@ -46,8 +49,8 @@ export default function StatBlockEditor({
   );
   const model = creatureModel(gameSystem);
   const { minScore, maxScore } = statBlockNumberBounds(gameSystem);
-  const isPf2e = model === 'pf2e';
-  const pf2eModifiers = readAttributeModifiers(statBlock);
+  const isFantasyD20 = model === 'fantasyD20';
+  const fantasyD20Modifiers = readAttributeModifiers(statBlock);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['core', 'abilities']));
 
   const toggleSection = (section: string) => {
@@ -132,9 +135,9 @@ export default function StatBlockEditor({
                 className="input-cozy input-cozy-number w-full text-xs text-center"
               />
             </div>
-            {isPf2e ? (
+            {isFantasyD20 ? (
               <div>
-                {/* PF2e rates creatures by Level, not Challenge Rating. */}
+                {/* Fantasy d20 rates creatures by Level, not Challenge Rating. */}
                 <label className="text-[10px] text-ink-muted block mb-0.5" htmlFor="statblock-level">Level</label>
                 <input
                   id="statblock-level"
@@ -194,13 +197,13 @@ export default function StatBlockEditor({
 
       {/* ── Ability Scores ── */}
       <SectionHeader
-        title={isPf2e ? 'Attribute Modifiers' : 'Ability Scores'}
+        title={isFantasyD20 ? 'Attribute Modifiers' : 'Ability Scores'}
         section="abilities"
         expanded={isExpanded('abilities')}
         toggle={toggleSection}
       />
-      {isExpanded('abilities') && isPf2e && (
-        // PF2e stat blocks print modifiers ("Str +4") with no score behind
+      {isExpanded('abilities') && isFantasyD20 && (
+        // Fantasy d20 stat blocks print modifiers ("Str +4") with no score behind
         // them, so these are entered directly rather than derived from a score.
         <div className="grid grid-cols-6 gap-1.5 pl-1">
           {ABILITY_KEYS.map((ab) => (
@@ -211,7 +214,7 @@ export default function StatBlockEditor({
                 aria-label={`${ab} modifier`}
                 min={-10}
                 max={20}
-                value={pf2eModifiers[ab]}
+                value={fantasyD20Modifiers[ab]}
                 onChange={(e) => {
                   const parsed = parseInt(e.target.value, 10);
                   onChange(setAttributeModifier(statBlock, ab, Number.isFinite(parsed) ? parsed : 0));
@@ -222,7 +225,7 @@ export default function StatBlockEditor({
           ))}
         </div>
       )}
-      {isExpanded('abilities') && !isPf2e && (
+      {isExpanded('abilities') && !isFantasyD20 && (
         <div className="grid grid-cols-6 gap-1.5 pl-1">
           {ABILITY_KEYS.map((ab) => (
             <div key={ab} className="text-center">
@@ -234,7 +237,7 @@ export default function StatBlockEditor({
                 fallback={null}
                 value={statBlock.abilities[ab]}
                 onChange={(value) => {
-                  // Only D&D 5e works anything out from a score.
+                  // Only 5E works anything out from a score.
                   if (model === 'derived') updateAbility(ab, value);
                   else update({ abilities: { ...statBlock.abilities, [ab]: value } });
                 }}
@@ -248,8 +251,8 @@ export default function StatBlockEditor({
       {/* ── Saves & Skills ── */}
       <SectionHeader title={model === 'printed' ? 'Skills' : 'Saves & Skills'} section="saves" expanded={isExpanded('saves')} toggle={toggleSection} />
       {isExpanded('saves') &&
-        (model === 'pf2e' ? (
-          <Pf2eProficiencyEditor statBlock={statBlock} onChange={onChange} />
+        (model === 'fantasyD20' ? (
+          <FantasyD20ProficiencyEditor statBlock={statBlock} onChange={onChange} />
         ) : model === 'printed' ? (
           <PrintedSkillsEditor statBlock={statBlock} onChange={onChange} gameSystem={gameSystem} />
         ) : (

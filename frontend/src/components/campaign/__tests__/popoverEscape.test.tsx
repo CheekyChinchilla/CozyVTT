@@ -13,9 +13,9 @@ import CharacterContextMenu from '../CharacterContextMenu';
 import type { Character, CharacterData, GameSystem, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 
-const seelah = {
-  id: 'char-1', userId: 'alice', campaignId: 'camp-1', gameSystem: 'DND_5E' as GameSystem, name: 'Seelah',
-  data: { characterName: 'Seelah' } as unknown as CharacterData, tokenImageUrl: null, createdAt: '', updatedAt: '',
+const maren = {
+  id: 'char-1', userId: 'alice', campaignId: 'camp-1', gameSystem: 'FIFTH_EDITION' as GameSystem, name: 'Maren',
+  data: { characterName: 'Maren' } as unknown as CharacterData, tokenImageUrl: null, createdAt: '', updatedAt: '',
 } as Character;
 
 const goblin = {
@@ -34,7 +34,7 @@ function pressEscape(): boolean {
 describe('Escape in a picker or a menu', () => {
   it('closes the character roll picker, and nothing else hears it', () => {
     const onClose = vi.fn();
-    render(<CharacterRollPicker character={seelah} onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} />);
+    render(<CharacterRollPicker character={maren} onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} />);
 
     expect(pressEscape()).toBe(true);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -42,7 +42,7 @@ describe('Escape in a picker or a menu', () => {
 
   it('closes the creature roll picker, and nothing else hears it', () => {
     const onClose = vi.fn();
-    render(<NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} />);
 
     expect(pressEscape()).toBe(true);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -64,7 +64,7 @@ describe('Escape in a picker or a menu', () => {
   });
 
   it('leaves any other key alone', () => {
-    render(<NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
 
     const event = createEvent.keyDown(document.body, { key: 'ArrowUp' });
     fireEvent(document.body, event);

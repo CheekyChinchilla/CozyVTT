@@ -1,10 +1,10 @@
 // ============================================
 // Explored memory on the client — which cells the viewer has seen before,
-// asked for and kept per "whose eyes": a player's own, or the player the DM
+// asked for and kept per "whose eyes": a player's own, or the player the GM
 // is previewing as.
 //
 // The reply carries the user it belongs to, and only that user's memory is
-// kept. Both effects are keyed on `exploringAs`, so the DM switching the
+// kept. Both effects are keyed on `exploringAs`, so the GM switching the
 // preview from one player to another asks again and compares the reply with
 // the new choice, never with the one the listener was first registered under.
 // ============================================
@@ -34,7 +34,7 @@ export function useExploredMemory(
   mapId: string | undefined,
   /** Lighting and explored memory are both on for this map. */
   active: boolean,
-  /** Whose memory to hold; null when this canvas explores as nobody (the DM's own view). */
+  /** Whose memory to hold; null when this canvas explores as nobody (the GM's own view). */
   exploringAs: string | null,
   /**
    * 0 until the connection has authenticated into the campaign, and a new
@@ -60,9 +60,9 @@ export function useExploredMemory(
     socket?.getSocket()?.emit('exploration:request', { mapId, userId: exploringAs });
   }, [socket, mapId, active, exploringAs, joinedEpoch]);
 
-  // The server sends a player's memory to the DM sockets following them, and
+  // The server sends a player's memory to the GM sockets following them, and
   // a socket follows whoever its last request named. When a preview ends,
-  // ask as nobody, which stops the following: otherwise the DM went on being
+  // ask as nobody, which stops the following: otherwise the GM went on being
   // sent that player's whole memory on every reveal.
   const followed = useRef<string | null>(null);
   useEffect(() => {
@@ -75,7 +75,7 @@ export function useExploredMemory(
   // Keyed on the rejoin as well: a reconnect throws the socket away and
   // builds a new one, and the request above already follows the rejoin. The
   // listener did not, so the reply arrived with nobody listening and the
-  // DM's reset or another tab's reveals never reached this canvas again.
+  // GM's reset or another tab's reveals never reached this canvas again.
   useEffect(() => {
     const live = socket?.getSocket();
     if (!live || !mapId) return;

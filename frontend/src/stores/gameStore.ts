@@ -42,7 +42,7 @@ import { drawingOrder } from '@/components/campaign/map/drawingGeometry';
 import { isSessionTab, type SessionTab } from '@/components/campaign/sessionTabs';
 import { optionalStorage } from '@/utils/optionalStorage';
 
-/** Combat is inactive until the DM starts it; matches the server's default. */
+/** Combat is inactive until the GM starts it; matches the server's default. */
 /** The same record without `key`, or the same record when it has none. */
 function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
   if (!(key in record)) return record;
@@ -76,7 +76,7 @@ interface GameState {
   /**
    * Where a token someone else is carrying is drawn, by id. A drag frame moves
    * only this. `tokens[id].position`, which sight, lighting and explored
-   * memory read, moves when the token is put down, so a DM carrying a
+   * memory read, moves when the token is put down, so a GM carrying a
    * player's token about reveals nothing to that player on the way.
    */
   heldAt: Record<string, Position>;
@@ -183,7 +183,7 @@ interface GameState {
   /** `token.moved` — a drag frame (`dragging`) or where the token was put down. */
   receiveTokenMove: (tokenId: string, position: Position, dragging: boolean) => void;
   /**
-   * New token placed (REST response or DM action). `mapId`, the map the
+   * New token placed (REST response or GM action). `mapId`, the map the
    * request named, when given: a token of another map is not added.
    */
   addToken: (token: Token, mapId?: string) => void;

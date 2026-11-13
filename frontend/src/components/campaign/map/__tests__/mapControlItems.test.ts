@@ -3,7 +3,7 @@ import type { MenuAction, MenuItem } from '@/components/ui/menu';
 import { gridColorLabel, mapControlItems, mapControlsTitle, rulerColorLabel, type MapControlsActions, type MapControlsView } from '../mapControlItems';
 
 const VIEW: MapControlsView = {
-  isDM: false, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
+  isGM: false, hasMap: true, showGrid: true, gridColor: 'black', showRuler: false, rulerColor: 'amber', showAoE: false,
   spiritTokensShown: true, toolsShown: false, paint: null,
 };
 
@@ -24,23 +24,23 @@ describe('the Map controls rows', () => {
     ]);
   });
 
-  it('adds Tools and the spirit tokens for the DM', () => {
-    expect(labels(mapControlItems({ ...VIEW, isDM: true }, actions())).slice(-3)).toEqual(['---', 'Show tools', 'Hide spirit tokens']);
-    expect(labels(mapControlItems({ ...VIEW, isDM: true, toolsShown: true }, actions()))).toContain('Hide tools');
-    expect(row(mapControlItems({ ...VIEW, isDM: true }, actions()), 'tools').title).toBe('Fog, Walls and Lights');
-    expect(labels(mapControlItems({ ...VIEW, isDM: true, spiritTokensShown: false }, actions())).slice(-1)).toEqual(['Show spirit tokens']);
-    expect(row(mapControlItems({ ...VIEW, isDM: true }, actions()), 'spirit-tokens').tone).toBe('spirit');
+  it('adds Tools and the spirit tokens for the GM', () => {
+    expect(labels(mapControlItems({ ...VIEW, isGM: true }, actions())).slice(-3)).toEqual(['---', 'Show tools', 'Hide spirit tokens']);
+    expect(labels(mapControlItems({ ...VIEW, isGM: true, toolsShown: true }, actions()))).toContain('Hide tools');
+    expect(row(mapControlItems({ ...VIEW, isGM: true }, actions()), 'tools').title).toBe('Fog, Walls and Lights');
+    expect(labels(mapControlItems({ ...VIEW, isGM: true, spiritTokensShown: false }, actions())).slice(-1)).toEqual(['Show spirit tokens']);
+    expect(row(mapControlItems({ ...VIEW, isGM: true }, actions()), 'spirit-tokens').tone).toBe('spirit');
   });
 
-  it('gives the DM Paint where it is offered, before Tools, and Put Paint away while it is on', () => {
-    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions())).slice(-4)).toEqual(['---', 'Mapmaker', 'Show tools', 'Hide spirit tokens']);
-    expect(labels(mapControlItems({ ...VIEW, isDM: true, paint: 'on' }, actions()))).toContain('Put Mapmaker away');
-    expect(row(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions()), 'paint').title).toBe('Draw on the map\'s picture, on your screen until it is saved');
-    expect(labels(mapControlItems({ ...VIEW, isDM: true }, actions()))).not.toContain('Mapmaker');
+  it('gives the GM Paint where it is offered, before Tools, and Put Paint away while it is on', () => {
+    expect(labels(mapControlItems({ ...VIEW, isGM: true, paint: 'offered' }, actions())).slice(-4)).toEqual(['---', 'Mapmaker', 'Show tools', 'Hide spirit tokens']);
+    expect(labels(mapControlItems({ ...VIEW, isGM: true, paint: 'on' }, actions()))).toContain('Put Mapmaker away');
+    expect(row(mapControlItems({ ...VIEW, isGM: true, paint: 'offered' }, actions()), 'paint').title).toBe('Draw on the map\'s picture, on your screen until it is saved');
+    expect(labels(mapControlItems({ ...VIEW, isGM: true }, actions()))).not.toContain('Mapmaker');
     const run = actions();
-    row(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, run), 'paint').run();
+    row(mapControlItems({ ...VIEW, isGM: true, paint: 'offered' }, run), 'paint').run();
     expect(run.togglePaint).toHaveBeenCalledTimes(1);
-    expect(mapControlsTitle(mapControlItems({ ...VIEW, isDM: true, paint: 'offered' }, actions())))
+    expect(mapControlsTitle(mapControlItems({ ...VIEW, isGM: true, paint: 'offered' }, actions())))
       .toBe('Map controls: fit, grid, ruler, AoE shape, Mapmaker, tools and spirit tokens');
   });
 
@@ -54,7 +54,7 @@ describe('the Map controls rows', () => {
   // The stack is drawn only on a map: with none, Show tools did nothing
   // but turn itself into Hide tools.
   it('leaves out Tools with no map, keeping the spirit tokens', () => {
-    expect(labels(mapControlItems({ ...VIEW, isDM: true, hasMap: false }, actions())))
+    expect(labels(mapControlItems({ ...VIEW, isGM: true, hasMap: false }, actions())))
       .toEqual(['Fit to Screen', 'Hide grid', 'Grid Color: Black', '---', 'Hide spirit tokens']);
   });
 
@@ -63,14 +63,14 @@ describe('the Map controls rows', () => {
   });
 
   it('keeps the sheet open for the colours only', () => {
-    const items = mapControlItems({ ...VIEW, isDM: true, showRuler: true }, actions());
+    const items = mapControlItems({ ...VIEW, isGM: true, showRuler: true }, actions());
     const kept = items.filter((item): item is MenuAction => item.kind === 'command' && item.keepsOpen === true).map((item) => item.id);
     expect(kept).toEqual(['grid-color', 'ruler-color']);
   });
 
   it('runs what each row is for', () => {
     const run = actions();
-    const items = mapControlItems({ ...VIEW, isDM: true, showRuler: true }, run);
+    const items = mapControlItems({ ...VIEW, isGM: true, showRuler: true }, run);
     for (const [id, action] of [
       ['fit', run.fit], ['grid', run.toggleGrid], ['grid-color', run.nextGridColor], ['ruler', run.toggleRuler],
       ['ruler-color', run.nextRulerColor], ['aoe', run.toggleAoE], ['tools', run.toggleTools], ['spirit-tokens', run.toggleSpiritTokens],
@@ -89,14 +89,14 @@ describe('the Map controls rows', () => {
   // Map controls' tooltip names what its rows are about, from the rows, so
   // a row added or left out changes it.
   it('gives Map controls a tooltip naming what its rows are about', () => {
-    expect(mapControlsTitle(mapControlItems({ ...VIEW, isDM: true }, actions())))
+    expect(mapControlsTitle(mapControlItems({ ...VIEW, isGM: true }, actions())))
       .toBe('Map controls: fit, grid, ruler, AoE shape, tools and spirit tokens');
     expect(mapControlsTitle(mapControlItems(VIEW, actions()))).toBe('Map controls: fit, grid, ruler and AoE shape');
     expect(mapControlsTitle(mapControlItems({ ...VIEW, hasMap: false }, actions()))).toBe('Map controls: fit and grid');
   });
 
   it('names every row but the colours in the tooltip', () => {
-    const items = mapControlItems({ ...VIEW, isDM: true, showRuler: true }, actions());
+    const items = mapControlItems({ ...VIEW, isGM: true, showRuler: true }, actions());
     const title = mapControlsTitle(items);
     const named = items.filter((item) => item.kind === 'command' && !item.id.endsWith('-color'));
     expect(title.split(/, | and /).length).toBe(named.length);

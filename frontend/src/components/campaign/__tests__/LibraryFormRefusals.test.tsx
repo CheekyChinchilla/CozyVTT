@@ -3,7 +3,7 @@
  * their boxes stop where the server's limits are.
  *
  * Every refusal showed a fixed sentence, such as "Failed to create creature",
- * so a stat block over 64 KB, or one field over its limit, gave the DM nothing
+ * so a stat block over 64 KB, or one field over its limit, gave the GM nothing
  * to go on. No text box had a limit, so the form took what the server would
  * refuse. The forms now show the server's reason, and each box stops at the
  * limit the server applies (STAT_BLOCK_LIMITS, kept identical in both
@@ -19,7 +19,7 @@ import { TokenType, TokenDisposition } from '@/types';
 import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'DND_5E' }, currentMap: null, viewedMap: null }),
+  useCampaign: () => ({ campaign: { id: 'campaign-1', gameSystem: 'FIFTH_EDITION' }, currentMap: null, viewedMap: null }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket: null }) }));
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
@@ -50,7 +50,7 @@ import StatBlockEditor from '../npc-stat-blocks/StatBlockEditor';
 const statBlock: NpcStatBlock = { ac: 12, hpMax: 7, speed: '30 ft.', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } };
 
 const bat = {
-  id: 'c1', name: 'Boss Bat', source: 'custom', challengeRating: '1', imageUrl: null, gameSystem: 'DND_5E', statBlock,
+  id: 'c1', name: 'Boss Bat', source: 'custom', challengeRating: '1', imageUrl: null, gameSystem: 'FIFTH_EDITION', statBlock,
   size: { width: 1, height: 1 }, disposition: 'hostile', displayMode: 'pog', campaignId: 'campaign-1',
 } as unknown as CreatureTemplate;
 
@@ -88,7 +88,7 @@ describe('the Creature Library', () => {
     render(<CreatureLibrary isOpen onClose={() => {}} />);
     await waitForDialogFocus();
     await userEvent.click(await screen.findByRole('button', { name: /Create Custom/ }));
-    await userEvent.type(screen.getByPlaceholderText('e.g. Goblin Boss'), 'Goblin Boss');
+    await userEvent.type(screen.getByPlaceholderText('e.g. Hobgoblin'), 'Hobgoblin');
     await userEvent.click(screen.getByRole('button', { name: 'Create Creature' }));
     expect(await screen.findByText(TOO_LARGE)).toBeTruthy();
   });
@@ -119,7 +119,7 @@ describe('the Creature Library', () => {
   it('stops each text box at the server\'s limit', async () => {
     await openBat();
     await userEvent.click(screen.getByRole('button', { name: /Edit/ }));
-    expect(maxLength(screen.getByPlaceholderText('e.g. Goblin Boss'))).toBe(STAT_BLOCK_LIMITS.maxNameLength);
+    expect(maxLength(screen.getByPlaceholderText('e.g. Hobgoblin'))).toBe(STAT_BLOCK_LIMITS.maxNameLength);
     expect(maxLength(screen.getByPlaceholderText('Small humanoid'))).toBe(STAT_BLOCK_LIMITS.maxCreatureTypeLength);
     expect(maxLength(screen.getByPlaceholderText('neutral evil'))).toBe(STAT_BLOCK_LIMITS.maxAlignmentLength);
     expect(maxLength(screen.getByDisplayValue('30 ft.'))).toBe(STAT_BLOCK_LIMITS.maxSpeedLength);

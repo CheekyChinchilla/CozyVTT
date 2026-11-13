@@ -37,7 +37,7 @@ function rollKey(roll: DiceRolledEvent): string {
 
 /**
  * A roll worked out in the browser, for a paused table: no server, no
- * database, no DM visibility. It uses the server's own parser (the same
+ * database, no GM visibility. It uses the server's own parser (the same
  * file, byte for byte), so it reads every expression as a running table
  * would. Call it with an expression `diceExpressionProblem` has passed.
  */
@@ -89,17 +89,17 @@ export default function DiceRoller() {
   const rejoins = Math.max(0, joinedEpoch - 1);
   const { user } = useAuth();
   const { userRole, campaign } = useCampaign();
-  const isPaused = campaign?.status === CampaignStatus.PAUSED && userRole !== 'DM';
+  const isPaused = campaign?.status === CampaignStatus.PAUSED && userRole !== 'GM';
   // A spectator watches the dice; the server refuses their rolls, and so does this.
   const isSpectator = userRole === 'SPECTATOR';
 
   /**
-   * Which campaign members are DMs, so a roll made on someone else's behalf can
+   * Which campaign members are GMs, so a roll made on someone else's behalf can
    * say so. Taken from the campaign's membership list rather than sent with the
    * roll — the roller does not get to assert their own role.
    */
-  const dmUserIds = useMemo(
-    () => new Set((campaign?.memberships ?? []).filter((m) => m.role === 'DM').map((m) => m.userId)),
+  const gmUserIds = useMemo(
+    () => new Set((campaign?.memberships ?? []).filter((m) => m.role === 'GM').map((m) => m.userId)),
     [campaign?.memberships]
   );
 
@@ -196,11 +196,11 @@ export default function DiceRoller() {
    * panel started empty after every refresh even though the rolls still
    * existed. Mirrors ChatPanel's load-then-resync pattern.
    *
-   * Secret rolls are kept: the server has already scoped them — a DM gets every
+   * Secret rolls are kept: the server has already scoped them — a GM gets every
    * one, anyone else gets only their own — so a roll that arrives here is one
    * this viewer is entitled to. `mayDisplayRoll` re-checks rather than trusting
    * that blindly, because a display bug here would be indistinguishable from a
-   * leak. They used to be dropped for everyone but the DM, which meant a player
+   * leak. They used to be dropped for everyone but the GM, which meant a player
    * lost sight of their own secret rolls the moment they refreshed.
    */
   useEffect(() => {
@@ -214,7 +214,7 @@ export default function DiceRoller() {
       try {
         const fetched = await getDiceRolls(campaign.id, 50);
         if (cancelled) return;
-        const visible = fetched.filter((r) => mayDisplayRoll(r, user?.id, userRole === 'DM'));
+        const visible = fetched.filter((r) => mayDisplayRoll(r, user?.id, userRole === 'GM'));
         const arrivedLive = liveDuringRead.current ?? new Set<string>();
         liveDuringRead.current = null;
 
@@ -266,9 +266,9 @@ export default function DiceRoller() {
     };
   }, [campaign?.id]);
 
-  // The role at the moment a roll arrives, which a DM handover can change
+  // The role at the moment a roll arrives, which a GM handover can change
   // while the listener below stays bound.
-  const viewerIsDm = useEffectEvent(() => userRole === 'DM');
+  const viewerIsGm = useEffectEvent(() => userRole === 'GM');
 
   useEffect(() => {
     if (!socket) return;
@@ -298,7 +298,7 @@ export default function DiceRoller() {
 
       // Someone else's secret roll is not mine to see. The server does not send
       // them, so reaching this is already wrong; drop it rather than draw it.
-      if (!mayDisplayRoll(data, user?.id, viewerIsDm())) return;
+      if (!mayDisplayRoll(data, user?.id, viewerIsGm())) return;
       liveDuringRead.current?.add(rollKey(data));
 
       // Newest first in state; the list renders oldest-first, chat style.
@@ -315,14 +315,14 @@ export default function DiceRoller() {
     };
   }, [socket, user, clearPendingRoll]);
 
-  // DM Audit: Listen for secret rolls by other players
+  // GM Audit: Listen for secret rolls by other players
   useEffect(() => {
-    if (!socket || userRole !== 'DM') return;
+    if (!socket || userRole !== 'GM') return;
 
-    console.log('[DiceRoller] Setting up dice.rolled.secret listener for DM audit');
+    console.log('[DiceRoller] Setting up dice.rolled.secret listener for GM audit');
 
     const handleSecretRollAudit = (data: DiceRolledSecretEvent) => {
-      console.log('[DiceRoller] DM received secret roll audit:', data);
+      console.log('[DiceRoller] GM received secret roll audit:', data);
 
       // Add to history with audit marker (convert to DiceRolledEvent format)
       const auditRoll: DiceRolledEvent = {
@@ -368,7 +368,7 @@ export default function DiceRoller() {
     if (!socket) return;
 
     const handleHistoryCleared = () => {
-      console.log('[DiceRoller] Dice history cleared by DM');
+      console.log('[DiceRoller] Dice history cleared by GM');
       setRolls([]);
     };
 
@@ -390,7 +390,7 @@ export default function DiceRoller() {
       setError('Spectators watch the dice; they cannot roll.');
       return;
     }
-    // When session is paused, roll entirely client-side — no server, no DB, no DM visibility
+    // When session is paused, roll entirely client-side — no server, no DB, no GM visibility
     if (isPaused) {
       if (!user) return;
       const validationError = diceExpressionProblem(expr);
@@ -481,11 +481,11 @@ export default function DiceRoller() {
    * The rolls actually drawn: what this viewer is entitled to, minus anything
    * their own "show secret rolls" preference hides.
    */
-  const shownRolls = visibleRolls(rolls, user?.id, userRole === 'DM', showSecretRolls);
+  const shownRolls = visibleRolls(rolls, user?.id, userRole === 'GM', showSecretRolls);
 
   /** Any secret roll this viewer could see — decides whether to offer the toggle. */
   const hasSecretRolls = rolls.some(
-    (roll) => roll.secret && mayDisplayRoll(roll, user?.id, userRole === 'DM')
+    (roll) => roll.secret && mayDisplayRoll(roll, user?.id, userRole === 'GM')
   );
 
   /**
@@ -709,7 +709,7 @@ export default function DiceRoller() {
       className="w-3 h-3 rounded-sm border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
     />
   );
-  // Not "only you": the server sends every secret roll to the DM as well,
+  // Not "only you": the server sends every secret roll to the GM as well,
   // deliberately, for audit and dispute resolution. Saying otherwise promises
   // a privacy the app does not provide.
   const secretRollWords = <span>{compact ? 'Secret Roll' : 'Secret Roll (hidden from other players)'}</span>;
@@ -823,8 +823,8 @@ export default function DiceRoller() {
     </button>
   );
 
-  // DM only.
-  const clearHistoryButton = userRole === 'DM' && rolls.length > 0 && (
+  // GM only.
+  const clearHistoryButton = userRole === 'GM' && rolls.length > 0 && (
     <button
       onClick={handleClearHistory}
       className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 transition-all${compact ? ' touch-target' : ''}`}
@@ -907,7 +907,7 @@ export default function DiceRoller() {
                 key={rollKey(roll)}
                 roll={roll}
                 isCurrentUser={user?.id === roll.userId}
-                rollerIsDM={roll.userId !== null && dmUserIds.has(roll.userId)}
+                rollerIsGM={roll.userId !== null && gmUserIds.has(roll.userId)}
                 dense
               />
             ))}
@@ -1035,13 +1035,14 @@ export default function DiceRoller() {
         }
       >
         <p className="text-xs text-ink-muted -mt-4 mb-4">
-          Hidden from other players — your DM can still see it
+          {userRole === 'GM' ? 'Hidden from the players' : 'Hidden from other players — your GM can still see it'}
         </p>
         {secretRollResult && (
           <div className="bg-paper rounded-lg p-3 shadow-inner">
             <DiceResult
               roll={secretRollResult}
               isCurrentUser={true}
+              rollerIsGM={userRole === 'GM'}
             />
           </div>
         )}

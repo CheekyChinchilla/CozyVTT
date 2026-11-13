@@ -22,9 +22,9 @@ function saveRoundTrip(sheet: Record<string, unknown>): Record<string, unknown> 
 describe('opening a sheet and saving it without edits', () => {
   it('preserves a hand-typed list exactly, in order', () => {
     const typed = [
-      'NakuDama-Amphibious',
-      'NakuDama-Prehensile Tongue',
-      'NakuDama-Frog Leap',
+      'MarshKin-Amphibious',
+      'MarshKin-Prehensile Tongue',
+      'MarshKin-Frog Leap',
       'Aspiring Shadow Warrior',
     ];
 
@@ -37,7 +37,7 @@ describe('opening a sheet and saving it without edits', () => {
 
   it('is stable: saving twice more changes nothing', () => {
     const once = saveRoundTrip({
-      featuresAndTraits: ['NakuDama-Frog Leap', 'Aspiring Shadow Warrior'],
+      featuresAndTraits: ['MarshKin-Frog Leap', 'Aspiring Shadow Warrior'],
     });
     const twice = saveRoundTrip(once);
     const thrice = saveRoundTrip(twice);
@@ -75,13 +75,13 @@ describe('opening a sheet and saving it without edits', () => {
 
   it('leaves the rest of the sheet alone', () => {
     const saved = saveRoundTrip({
-      characterName: 'Nakudama',
+      characterName: 'Marshkin',
       level: 5,
-      featuresAndTraits: ['NakuDama-Frog Leap'],
+      featuresAndTraits: ['MarshKin-Frog Leap'],
       additionalFeaturesAndTraits: 'Some longer notes.',
     });
 
-    expect(saved.characterName).toBe('Nakudama');
+    expect(saved.characterName).toBe('Marshkin');
     expect(saved.level).toBe(5);
     expect(saved.additionalFeaturesAndTraits).toBe('Some longer notes.');
   });
@@ -96,6 +96,6 @@ describe('opening a sheet and saving it without edits', () => {
   });
 
   it('does not invent a feature on a sheet that has none', () => {
-    expect(saveRoundTrip({ characterName: 'Nakudama' }).featuresAndTraits).toEqual([]);
+    expect(saveRoundTrip({ characterName: 'Marshkin' }).featuresAndTraits).toEqual([]);
   });
 });

@@ -18,7 +18,7 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast, CampaignSettingsUpdatedBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings, CharacterHpUpdatedBroadcast, GmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast, CampaignSettingsUpdatedBroadcast } from '@/types';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus, errorSummary } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
@@ -63,10 +63,10 @@ export interface ViewedMapChange {
   toMapId: string | null;
 }
 
-/** Why preparing ended without the DM asking, for the page to say. */
+/** Why preparing ended without the GM asking, for the page to say. */
 export interface PreparingEnded {
   mapName: string;
-  reason: 'deleted' | 'not-dm';
+  reason: 'deleted' | 'not-gm';
 }
 
 /** Back to the table gave up: the table moved each time its map was read. */
@@ -91,12 +91,12 @@ interface CampaignContextState {
   /** The table's map: the campaign's current map, which every player is on. */
   currentMap: CampaignMap | null;
   /**
-   * The map this page shows: the one the DM opened to prepare while they
+   * The map this page shows: the one the GM opened to prepare while they
    * prepare one, otherwise the table's. Everything drawn on the map and
    * every edit made there is for this map.
    */
   viewedMap: CampaignMap | null;
-  /** Whether the DM is preparing a map the table is not on, on this page. */
+  /** Whether the GM is preparing a map the table is not on, on this page. */
   isPreparing: boolean;
 
   // User Role
@@ -109,7 +109,7 @@ interface CampaignContextState {
   // Actions
   loadCampaign: (id: string) => Promise<void>;
   /**
-   * Re-read the campaign after a change to it (settings, members, the DM
+   * Re-read the campaign after a change to it (settings, members, the GM
    * seat) and replace it in place: the table stays as it is, and the map,
    * which arrives over the socket, is not reloaded. A failure is logged and
    * the page keeps what it has.
@@ -155,7 +155,7 @@ interface CampaignContextState {
    */
   showTableMap: (map: CampaignMap) => void;
   /**
-   * DM: show a map of the campaign on this page only, to prepare it while
+   * GM: show a map of the campaign on this page only, to prepare it while
    * the players stay on the table's map. Resolves once its map and tokens
    * are on screen, true; false when a guard said no or another change of
    * the map on screen came first. Rejects when the map could not be loaded,
@@ -174,7 +174,7 @@ interface CampaignContextState {
   /** Ask every registered guard whether the map on screen may change so; false when one says no. */
   mayChangeViewedMap: (change: ViewedMapChange) => Promise<boolean>;
   /**
-   * Why preparing last ended without the DM asking (the map deleted, the DM
+   * Why preparing last ended without the GM asking (the map deleted, the GM
    * seat gone), until clearPreparingEnded: the page says so.
    */
   preparingEnded: PreparingEnded | null;
@@ -191,9 +191,9 @@ interface CampaignContextState {
   removeCampaignMap: (mapId: string) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
   updateCampaignSpiritLayer: (enabled: boolean, style?: string) => void;
-  /** DM-only local preference: show both planes simultaneously or only the active one */
-  dmViewBothPlanes: boolean;
-  setDmViewBothPlanes: (val: boolean) => void;
+  /** GM-only local preference: show both planes simultaneously or only the active one */
+  gmViewBothPlanes: boolean;
+  setGmViewBothPlanes: (val: boolean) => void;
   /** Whether this player personally has spirit layer visibility (individual crossover, not global toggle) */
   playerSpiritVisible: boolean;
   setPlayerSpiritVisible: (val: boolean) => void;
@@ -273,7 +273,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     return () => { shownCampaignId.current = null; };
   }, [campaign?.id]);
   const [currentMap, setCurrentMapState] = useState<CampaignMap | null>(null);
-  // The map the DM opened to prepare on this page, or null to follow the
+  // The map the GM opened to prepare on this page, or null to follow the
   // table. Read through the ref by work that finishes after an await and by
   // the socket handlers, which are registered once.
   const [preparedMap, setPreparedMapState] = useState<CampaignMap | null>(null);
@@ -302,8 +302,8 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   userIdRef.current = user?.id;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // DM local view preference — not persisted, resets each session
-  const [dmViewBothPlanes, setDmViewBothPlanes] = useState(true);
+  // GM local view preference — not persisted, resets each session
+  const [gmViewBothPlanes, setGmViewBothPlanes] = useState(true);
   // Per-player spirit visibility — set from REST on load, updated by WebSocket events
   const [playerSpiritVisible, setPlayerSpiritVisible] = useState(false);
   // Vibe tracker — cached visual effect for the current period
@@ -366,7 +366,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   };
 
   // The atmosphere and the vibe's tint, worked out from a campaign as the
-  // server holds it: on the first load, and after a reconnect, when the DM
+  // server holds it: on the first load, and after a reconnect, when the GM
   // may have changed them while this page was away.
   const applyCampaignEffects = useCallback((data: Campaign) => {
     // Initialize atmosphere state from saved campaign vibeSettings
@@ -428,14 +428,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
         }
       }
 
-      // A map this tab was preparing before a reload: for the DM only, and
+      // A map this tab was preparing before a reload: for the GM only, and
       // only while it is still a map of the campaign the table is not on.
       const kept = optionalSessionStorage.getItem(preparingMapKey(data.id));
-      const isDm = data.memberships?.some((m) => m.userId === userIdRef.current && m.role === 'DM') ?? false;
-      if (kept && (!isDm || kept === data.currentMapId || !data.maps?.some((m) => m.id === kept))) {
+      const isGm = data.memberships?.some((m) => m.userId === userIdRef.current && m.role === 'GM') ?? false;
+      if (kept && (!isGm || kept === data.currentMapId || !data.maps?.some((m) => m.id === kept))) {
         optionalSessionStorage.removeItem(preparingMapKey(data.id));
       } else if (kept) {
-        // Superseded only by something the DM does here, which sets the
+        // Superseded only by something the GM does here, which sets the
         // kept map itself; the table moving meanwhile does not cancel it.
         const seq = ++viewSeq.current;
         useGameStore.getState().expectTokensOf(kept);
@@ -564,7 +564,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     // one arriving after a switch to another would write over it.
     const stillShown = () => shownCampaignId.current === campaignId;
     let mapId = tableMapId();
-    let isDm = userRoleRef.current === 'DM';
+    let isGm = userRoleRef.current === 'GM';
     try {
       const fresh = await campaignService.getCampaign(campaignId);
       if (!stillShown()) return;
@@ -587,21 +587,21 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       mapId = fresh.currentMapId ?? null;
       // The list just read, not the one this page had: the role may have
       // changed while it was away.
-      isDm = fresh.memberships?.some((m) => m.userId === userIdRef.current && m.role === 'DM') ?? false;
+      isGm = fresh.memberships?.some((m) => m.userId === userIdRef.current && m.role === 'GM') ?? false;
     } catch (err) {
       console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', errorSummary(err));
     }
     const seq = ++viewSeq.current;
     // The table moved off the map on screen while the page was away, and
     // something on it holds that map: it stays, as a prepared map.
-    if (!preparedRef.current && isDm && tableMapRef.current && tableMapRef.current.id !== mapId
+    if (!preparedRef.current && isGm && tableMapRef.current && tableMapRef.current.id !== mapId
       && [...guards.current].some((g) => g.holds?.() === true)) {
       setPrepared(tableMapRef.current);
     }
     const prepared = preparedRef.current;
     // Still preparing, and still allowed to: the table may have come to that
-    // map, or this user may no longer be its DM, while the page was away.
-    const keepPreparing = prepared !== null && prepared.id !== mapId && isDm;
+    // map, or this user may no longer be its GM, while the page was away.
+    const keepPreparing = prepared !== null && prepared.id !== mapId && isGm;
     let tableMap: CampaignMap | null = tableMapRef.current;
     if (mapId) {
       const tSeq = tableSeq.current;
@@ -618,7 +618,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
           tableMap = map;
         }
         if (!keepPreparing) {
-          if (prepared) setPrepared(null, prepared.id === mapId ? undefined : 'not-dm');
+          if (prepared) setPrepared(null, prepared.id === mapId ? undefined : 'not-gm');
           if (tSeq === tableSeq.current) showTokensOf(map);
           else stopExpecting(mapId);
           setPlayerSpiritVisible(spiritVisible ?? false);
@@ -661,13 +661,13 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, []);
 
   // The vibe periods as saved, and the vibe they leave in force: from the
-  // DM's own save, and from the broadcast every member's page is sent.
+  // GM's own save, and from the broadcast every member's page is sent.
   const updateVibeSettings = useCallback((settings: VibeSettings, currentVibe: string | null) => {
     setCampaign((prev) => (prev ? { ...prev, vibeSettings: settings, currentVibe } : null));
     setActiveVibeEffect(vibeEffectOf(settings, currentVibe));
   }, []);
 
-  // The DM saved the vibe periods. Every page shows them and the vibe's tint,
+  // The GM saved the vibe periods. Every page shows them and the vibe's tint,
   // so each takes the periods and the vibe the save left: an edited period in
   // force shows its new colour, and one renamed or deleted ends the vibe.
   useEffect(() => {
@@ -681,7 +681,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     };
   }, [updateVibeSettings]);
 
-  // The DM saved Campaign Settings. A player at the table takes them without a
+  // The GM saved Campaign Settings. A player at the table takes them without a
   // reload: the chat box's cooldown, the campaign's name and description, and
   // whether they may draw on the map.
   useEffect(() => {
@@ -730,7 +730,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, []);
 
   // Leave the map being prepared for the table's, at once and asking no
-  // guard: the map was deleted, or this user is no longer the DM. The page
+  // guard: the map was deleted, or this user is no longer the GM. The page
   // says why (preparingEnded). The table's map shows at once with the
   // tokens it was last read with, then as it is now.
   const endPreparing = useCallback((reason: PreparingEnded['reason']) => {
@@ -800,9 +800,9 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     const prepared = preparedRef.current;
     const shown = tableMapRef.current;
     // Unsaved work on the map on screen keeps it there as a prepared map,
-    // for the DM alone: the table moves on without this page.
+    // for the GM alone: the table moves on without this page.
     const held = !prepared && shown !== null && shown.id !== map.id
-      && userRoleRef.current === 'DM' && [...guards.current].some((g) => g.holds?.() === true);
+      && userRoleRef.current === 'GM' && [...guards.current].some((g) => g.holds?.() === true);
     if (held) {
       setPrepared(shown);
       setCurrentMap(map);
@@ -881,7 +881,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
 
   const openToPrepare = useCallback(async (mapId: string): Promise<boolean> => {
     const campaignId = shownCampaignId.current;
-    if (!campaignId || userRoleRef.current !== 'DM') return false;
+    if (!campaignId || userRoleRef.current !== 'GM') return false;
     if (mapId === tableMapId()) return backToTable();
     if (preparedRef.current?.id === mapId) return true;
     if (!(await mayChangeViewedMap({ kind: 'open-other', toMapId: mapId }))) return false;
@@ -889,7 +889,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     useGameStore.getState().expectTokensOf(mapId);
     try {
       const { map } = await api.getMap(campaignId, mapId);
-      if (seq !== viewSeq.current || shownCampaignId.current !== campaignId || userRoleRef.current !== 'DM') {
+      if (seq !== viewSeq.current || shownCampaignId.current !== campaignId || userRoleRef.current !== 'GM') {
         stopExpecting(mapId);
         return false;
       }
@@ -935,25 +935,25 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, []);
 
   /**
-   * The DM seat moved.
+   * The GM seat moved.
    *
    * `userRole` is derived from the membership list, and everything that asks
-   * "am I the DM?" reads it, so patching the list here brings the whole page
-   * into line — the controls a DM gets appear, and the ones a former DM had
+   * "am I the GM?" reads it, so patching the list here brings the whole page
+   * into line — the controls a GM gets appear, and the ones a former GM had
    * disappear, without a reload. The server has already changed what it will
    * accept, so a page still offering the old controls would only produce
    * refusals.
    */
   useEffect(() => {
-    const handleDmTransferred = (data: DmTransferredBroadcast) => {
+    const handleGmTransferred = (data: GmTransferredBroadcast) => {
       setCampaign((prev) => {
         if (!prev || prev.id !== data.campaignId || !prev.memberships) return prev;
         return {
           ...prev,
           memberships: prev.memberships.map((m) =>
-            m.userId === data.newDmId
-              ? { ...m, role: 'DM' as CampaignRole }
-              : m.userId === data.previousDmId
+            m.userId === data.newGmId
+              ? { ...m, role: 'GM' as CampaignRole }
+              : m.userId === data.previousGmId
                 ? { ...m, role: 'PLAYER' as CampaignRole }
                 : m
           ),
@@ -961,9 +961,9 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       });
     };
 
-    socketClient.onDmTransferred(handleDmTransferred);
+    socketClient.onGmTransferred(handleGmTransferred);
     return () => {
-      socketClient.off('campaign.dm.transferred', handleDmTransferred);
+      socketClient.off('campaign.gm.transferred', handleGmTransferred);
     };
   }, []);
 
@@ -1009,7 +1009,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     };
   }, [rereadCampaign]);
 
-  // A map deleted from another of the DM's pages, or by a script: the DM's
+  // A map deleted from another of the GM's pages, or by a script: the GM's
   // sockets are told, so a page preparing it goes back to the table's.
   useEffect(() => {
     const handleMapDeleted = (data: { mapId?: unknown }) => {
@@ -1021,11 +1021,11 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     };
   }, [removeCampaignMap]);
 
-  // A map being prepared is the DM's alone: once this user is not the DM
+  // A map being prepared is the GM's alone: once this user is not the GM
   // (the seat handed over, or their role changed) the page shows the
   // table's map, which is all the server sends them now.
   useEffect(() => {
-    if (userRole !== 'DM' && preparedRef.current) endPreparing('not-dm');
+    if (userRole !== 'GM' && preparedRef.current) endPreparing('not-gm');
   }, [userRole, endPreparing]);
 
   // Update spirit layer enabled/style in local campaign state
@@ -1093,8 +1093,8 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     upsertCampaignMap,
     removeCampaignMap,
     updateCampaignSpiritLayer,
-    dmViewBothPlanes,
-    setDmViewBothPlanes,
+    gmViewBothPlanes,
+    setGmViewBothPlanes,
     playerSpiritVisible,
     setPlayerSpiritVisible,
     currentVibe,
@@ -1133,7 +1133,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     upsertCampaignMap,
     removeCampaignMap,
     updateCampaignSpiritLayer,
-    dmViewBothPlanes,
+    gmViewBothPlanes,
     playerSpiritVisible,
     currentVibe,
     activeVibeEffect,

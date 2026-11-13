@@ -3,7 +3,7 @@
  * and where the panels under it go.
  *
  * With a mouse the toolbar is one row of 34-pixel buttons, and the AoE panel,
- * the Put back bar and the DM's tool stack keep the places they have always
+ * the Put back bar and the GM's tool stack keep the places they have always
  * had. A touch screen's 44-pixel buttons make the toolbar taller, and a
  * narrow map wraps it onto a second row: the panels then start under the
  * band's bottom edge.
@@ -110,7 +110,7 @@ describe('underBand: the Put back bar', () => {
   });
 });
 
-describe('stackCornerTop: the DM tool stack in its corner', () => {
+describe('stackCornerTop: the GM tool stack in its corner', () => {
   // The stack is 200 wide, 8 in from the right: its left edge at 546 on a
   // map 754 wide.
   it('stays beside a toolbar whose buttons end before it', () => {

@@ -7,7 +7,7 @@
  * heading names the chat, so the panel's heading is kept for screen readers
  * only, the box is one line to start with, with a placeholder that fits
  * it, and the hint about the keys is read out but not shown. The count of
- * messages shown and the DM's eraser go at the top of the log, beside Load
+ * messages shown and the GM's eraser go at the top of the log, beside Load
  * More, so no line above the log holds them, and the messages sit closer
  * together. The desktop is as it was.
  */
@@ -59,8 +59,8 @@ it('gives the log the room on the compact layout: the heading for screen readers
   expect(box.parentElement).toContainElement(screen.getByRole('button', { name: 'Send message' }));
 });
 
-it('puts the count and the DM\'s eraser at the top of the log on the compact layout, beside Load More', async () => {
-  seat.role = 'DM';
+it('puts the count and the GM\'s eraser at the top of the log on the compact layout, beside Load More', async () => {
+  seat.role = 'GM';
   history.page = {
     messages: [{ id: 'm1', campaignId: 'campaign-1', userId: 'u2', user: { id: 'u2', displayName: 'Cass' }, type: MessageType.PLAYER, content: 'lol', metadata: null, createdAt: '2026-10-31T23:18:00Z' }],
     pagination: { limit: 50, hasMore: true, nextCursor: 'older' },

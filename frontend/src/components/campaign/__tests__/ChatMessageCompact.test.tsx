@@ -6,7 +6,7 @@
  * now opens at half height like Dice and Initiative, and on the compact
  * layout the sender and the time start the message's own line, at the size
  * they had, the padding is slimmer, and the text keeps its 14 px. A whisper,
- * a system message, the DM's message, one being sent and one Not sent are
+ * a system message, the GM's message, one being sent and one Not sent are
  * told apart as before. The desktop is as it was.
  */
 
@@ -56,14 +56,14 @@ it("puts the sender and the time at the start of the message's own line", () => 
   expect(classes(row)).not.toContain('p-3');
 });
 
-it('keeps your own message, a system message and the DM\'s told apart', () => {
+it('keeps your own message, a system message and the GM\'s told apart', () => {
   const mine = draw(<ChatMessage message={message()} isCurrentUser />);
   expect(within(mine).getByText(/Mara/)).toHaveTextContent('Mara (You)');
 
-  const dm = draw(<ChatMessage message={message({ id: 'm2', type: MessageType.DM, content: 'Roll for initiative.' })} sentByDM />);
-  expect(classes(dm)).toContain('bg-warning/10');
-  expect(classes(within(dm).getByText('Mara'))).toContain('text-warning-ink');
-  expect(dm.querySelector('p svg')).not.toBeNull();
+  const gm = draw(<ChatMessage message={message({ id: 'm2', type: MessageType.GM, content: 'Roll for initiative.' })} sentByGM />);
+  expect(classes(gm)).toContain('bg-warning/10');
+  expect(classes(within(gm).getByText('Mara'))).toContain('text-warning-ink');
+  expect(gm.querySelector('p svg')).not.toBeNull();
 });
 
 it('keeps a whisper recognisable, and its name a way to whisper back', () => {

@@ -1,16 +1,16 @@
-import type { DnD5eHitDice } from '@/types/game-systems/dnd5e';
+import type { FifthEditionHitDice } from '@/types/game-systems/fifthEdition';
 import { isValidDiceExpression } from './diceExpression';
 
 /**
- * D&D 5e hit dice.
+ * 5E hit dice.
  *
  * A pool is "how many" and "of what": `maximum: 5` with `die: "d10"` is five
  * d10 hit dice, and `remaining` is how many are unspent. Spending one rolls a
  * single die plus Constitution.
  *
- * Basic Rules, Short Rest: "For each Hit Die spent in this way, the player
+ * SRD 5.1, "Short Rest": "For each Hit Die spent in this way, the player
  * rolls the die and adds the character's Constitution modifier to it. The
- * character regains hit points equal to the total (minimum of 0)."
+ * character regains hit points equal to the total."
  *
  * `total` is the older field, which packed both into one string ("5d10"). It is
  * still read so sheets written before `die`/`maximum` keep working, but nothing
@@ -60,7 +60,7 @@ function poolCount(total: string): number | null {
  * Constitution ("d10/+2" halves the die). One + at the end is dropped, since
  * "1d10+" did roll as the die plus Constitution and still does.
  */
-export function hitDieExpression(hd: DnD5eHitDice, conModifier: number): string | null {
+export function hitDieExpression(hd: FifthEditionHitDice, conModifier: number): string | null {
   const written = typeof hd.die === 'string' ? hd.die.trim() : '';
   const size = written ? null : hitDieSize(hd.total ?? '');
   const expression = written ? written.replace(/\+$/, '').trimEnd() : size === null ? null : `1d${size}`;
@@ -76,7 +76,7 @@ export function hitDieExpression(hd: DnD5eHitDice, conModifier: number): string 
  * because nothing ever stopped `total` and `remaining` disagreeing. Rather than
  * print "5/1", say nothing and let the caller fall back to a plain count.
  */
-export function hitDiceMaximum(hd: DnD5eHitDice): number | null {
+export function hitDiceMaximum(hd: FifthEditionHitDice): number | null {
   const recorded =
     typeof hd.maximum === 'number' && Number.isInteger(hd.maximum) && hd.maximum >= 0
       ? hd.maximum
@@ -91,6 +91,6 @@ export function spendRoll(expression: string, conModifier: number): string {
 }
 
 /** Whether this entry can be spent: it describes a die, and one is left. */
-export function canSpendHitDie(hd: DnD5eHitDice, conModifier: number): boolean {
+export function canSpendHitDie(hd: FifthEditionHitDice, conModifier: number): boolean {
   return hitDieExpression(hd, conModifier) !== null && (hd.remaining ?? 0) > 0;
 }

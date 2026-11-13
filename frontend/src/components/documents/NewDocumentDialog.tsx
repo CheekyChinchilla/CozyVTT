@@ -1,7 +1,7 @@
 /**
  * Write a text or Markdown document without uploading a file.
  *
- * For the things a DM makes on the fly: session notes, a handout, a house rule
+ * For the things a GM makes on the fly: session notes, a handout, a house rule
  * decided at the table. Opened from the Documents page, where the scope is
  * chosen like an upload's; opened from inside a campaign, the scope is locked
  * to that campaign so members can read it as soon as it exists.
@@ -149,7 +149,7 @@ export default function NewDocumentDialog({
             <div className="flex flex-wrap gap-2 mt-1" role="radiogroup" aria-label="Scope">
               {(
                 [
-                  { value: AssetScope.USER, label: assetScopeLabel(AssetScope.USER), help: 'Yours alone until a DM shares it' },
+                  { value: AssetScope.USER, label: assetScopeLabel(AssetScope.USER), help: 'Yours alone until a GM shares it' },
                   ...(campaignId ? [{ value: AssetScope.CAMPAIGN, label: assetScopeLabel(AssetScope.CAMPAIGN), help: 'Members of this campaign' }] : []),
                   ...(canUploadGlobal ? [{ value: AssetScope.GLOBAL, label: assetScopeLabel(AssetScope.GLOBAL), help: 'Everyone on this instance' }] : []),
                 ]

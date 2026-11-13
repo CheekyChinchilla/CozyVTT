@@ -7,9 +7,9 @@
 // - At the table, for everyone: Notes and Session (the session panels the
 //   rail's tabs open, which the compact layout opens in its session sheet),
 //   Documents and Shortcuts.
-// - DM tools, for the DM: the header's toolbar, every tool in its order
+// - GM tools, for the GM: the header's toolbar, every tool in its order
 //   (SessionToolbar's TOOL_GROUPS), each opening its slide-over or window.
-// - Owner Settings, for an owner who has handed the DM's seat to someone
+// - Owner Settings, for an owner who has handed the GM's seat to someone
 //   else, as the desktop's header offers it.
 //
 // A row closes More and opens what it names; the windows are the page's, so
@@ -37,7 +37,7 @@ export interface MoreSheetProps {
   onClose: () => void;
   /** Whether the viewer owns the campaign, which may differ from running it. */
   isOwner: boolean;
-  /** Open one of the DM's slide-overs; `settings` is also an owner's way to the settings. */
+  /** Open one of the GM's slide-overs; `settings` is also an owner's way to the settings. */
   onOpenTool: (key: SessionToolKey) => void;
   onOpenDocuments: () => void;
   onOpenShortcuts: () => void;
@@ -84,10 +84,10 @@ export default function MoreSheet({
     action('documents', 'Documents', BookOpen, onOpenDocuments),
     action('shortcuts', 'Shortcuts', Keyboard, onOpenShortcuts),
   ];
-  const dmTools = TOOL_GROUPS.flat().map(({ key, label, icon }) =>
+  const gmTools = TOOL_GROUPS.flat().map(({ key, label, icon }) =>
     action(key, label, icon, () => onOpenTool(key), key === 'spirit' ? { tone: 'spirit' } : {})
   );
-  // The settings an owner keeps after handing the DM's seat over: deleting
+  // The settings an owner keeps after handing the GM's seat over: deleting
   // the campaign and taking the seat back.
   const ownerSettings = [action('owner-settings', 'Owner Settings', Settings, () => onOpenTool('settings'))];
 
@@ -95,8 +95,8 @@ export default function MoreSheet({
     <BottomSheet open={open} title="More" height="full" onClose={onClose} edges={edges} id={id}>
       <div className="px-3 pb-3">
         <Group heading="At the table" items={atTheTable} onClose={onClose} />
-        {userRole === 'DM' && <Group heading="DM tools" items={dmTools} onClose={onClose} />}
-        {isOwner && userRole !== 'DM' && <Group heading="Owner" items={ownerSettings} onClose={onClose} />}
+        {userRole === 'GM' && <Group heading="GM tools" items={gmTools} onClose={onClose} />}
+        {isOwner && userRole !== 'GM' && <Group heading="Owner" items={ownerSettings} onClose={onClose} />}
       </div>
     </BottomSheet>
   );

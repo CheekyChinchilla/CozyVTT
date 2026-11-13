@@ -8,9 +8,9 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import CharacterTemplateEditorModal from '../CharacterTemplateEditorModal';
-import { PF2E_BLANK_SHEET } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
-import { DND5E_SHEET } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';
-import { COC_BLANK_SHEET } from '@/components/character-sheets/call-of-cthulhu-7e/__tests__/cocFixture';
+import { FANTASY_D20_BLANK_SHEET } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
+import { FIFTH_EDITION_SHEET } from '@/components/character-sheets/fifth-edition/__tests__/fifthEditionFixture';
+import { blankSheet } from '@/components/character-sheets/horror-d100/__tests__/sheetFixture';
 import type { CharacterTemplate, GameSystem } from '@/types';
 
 vi.mock('@/hooks/queries', async (importOriginal) => ({
@@ -27,9 +27,9 @@ vi.mock('@/services/api', () => {
 });
 
 const sheets: Array<[string, GameSystem | null, Record<string, unknown>]> = [
-  ['D&D 5e', 'DND_5E' as GameSystem, DND5E_SHEET],
-  ['Pathfinder 2e', 'PATHFINDER_2E' as GameSystem, PF2E_BLANK_SHEET],
-  ['Call of Cthulhu', 'CALL_OF_CTHULHU_7E' as GameSystem, COC_BLANK_SHEET],
+  ['5E', 'FIFTH_EDITION' as GameSystem, FIFTH_EDITION_SHEET],
+  ['Fantasy d20', 'FANTASY_D20' as GameSystem, FANTASY_D20_BLANK_SHEET],
+  ['Horror d100', 'HORROR_D100' as GameSystem, { ...blankSheet() }],
   ['Flexible', null, { sections: [] }],
 ];
 
@@ -49,9 +49,9 @@ function template(gameSystem: GameSystem | null, data: Record<string, unknown>):
 
 // The sheets load on demand; loaded first, no test waits on the import.
 beforeAll(async () => {
-  await import('@/components/character-sheets/pathfinder2e/Pathfinder2eCharacterSheet');
-  await import('@/components/character-sheets/dnd5e/DnD5eCharacterSheet');
-  await import('@/components/character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterSheet');
+  await import('@/components/character-sheets/fantasy-d20/FantasyD20CharacterSheet');
+  await import('@/components/character-sheets/fifth-edition/FifthEditionCharacterSheet');
+  await import('@/components/character-sheets/horror-d100/HorrorD100CharacterSheet');
 }, 30_000);
 
 describe.each(sheets)('Edit Template on a %s sheet', (_system, gameSystem, data) => {

@@ -1,37 +1,37 @@
 /**
- * D&D 5e weapon properties.
+ * 5E weapon properties.
  *
  * Reported from a live game: weapons from the built-in templates show badges
  * like Finesse, Light and Thrown, but adding your own weapon offers no way to
  * set them.
  *
- * The list is checked against the Basic Rules table (p. 48), and the
+ * The list is checked against SRD 5.1, "Weapon Properties", and the
  * case-insensitive behaviour exists because templates store lowercase while a
  * hand-edited or imported sheet may not.
  */
 
 import { describe, it, expect } from 'vitest';
 import {
-  DND5E_WEAPON_PROPERTIES,
+  FIFTH_EDITION_WEAPON_PROPERTIES,
   isCanonicalWeaponProperty,
   hasWeaponProperty,
   toggleWeaponProperty,
   customWeaponProperties,
   addCustomWeaponProperty,
 } from '../weaponProperties';
-import { DND5E_WEAPON_PROPERTY_LENGTH_MAX } from '@/constants/sheetLimits';
+import { FIFTH_EDITION_WEAPON_PROPERTY_LENGTH_MAX } from '@/constants/sheetLimits';
 
-describe('DND5E_WEAPON_PROPERTIES', () => {
-  // Basic Rules p. 48, "Weapon Properties" plus the Weapons table.
+describe('FIFTH_EDITION_WEAPON_PROPERTIES', () => {
+  // SRD 5.1, "Weapon Properties" plus the Weapons table.
   it('is the eleven the rules define, and nothing else', () => {
-    expect([...DND5E_WEAPON_PROPERTIES]).toEqual([
+    expect([...FIFTH_EDITION_WEAPON_PROPERTIES]).toEqual([
       'ammunition', 'finesse', 'heavy', 'light', 'loading', 'range',
       'reach', 'special', 'thrown', 'two-handed', 'versatile',
     ]);
   });
 
   it('stores them lowercase, as the templates already do', () => {
-    for (const property of DND5E_WEAPON_PROPERTIES) {
+    for (const property of FIFTH_EDITION_WEAPON_PROPERTIES) {
       expect(property).toBe(property.toLowerCase());
     }
   });
@@ -120,12 +120,12 @@ describe('addCustomWeaponProperty', () => {
   });
 
   it('refuses a value long enough to be used as storage', () => {
-    expect(addCustomWeaponProperty(['light'], 'x'.repeat(DND5E_WEAPON_PROPERTY_LENGTH_MAX + 1)))
+    expect(addCustomWeaponProperty(['light'], 'x'.repeat(FIFTH_EDITION_WEAPON_PROPERTY_LENGTH_MAX + 1)))
       .toEqual(['light']);
   });
 
   it('accepts one exactly at the limit', () => {
-    const atLimit = 'x'.repeat(DND5E_WEAPON_PROPERTY_LENGTH_MAX);
+    const atLimit = 'x'.repeat(FIFTH_EDITION_WEAPON_PROPERTY_LENGTH_MAX);
     expect(addCustomWeaponProperty([], atLimit)).toEqual([atLimit]);
   });
 

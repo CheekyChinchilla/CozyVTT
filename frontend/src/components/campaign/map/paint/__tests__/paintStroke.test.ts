@@ -76,7 +76,7 @@ describe('a picture Paint may change', () => {
   it.each([
     ['without the tag', { ...asset, tags: ['dungeon'] }, 'campaign-1'],
     ['tagged in another case', { ...asset, tags: [DRAWN_MAP_TAG.toUpperCase()] }, 'campaign-1'],
-    // A tag a DM could type before CozyVTT drew maps.
+    // A tag a GM could type before CozyVTT drew maps.
     ['tagged drawn-map', { ...asset, tags: ['drawn-map'] }, 'campaign-1'],
     ['of another campaign', asset, 'campaign-2'],
     ['personal', { ...asset, campaignId: null }, 'campaign-1'],

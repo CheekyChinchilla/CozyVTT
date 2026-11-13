@@ -21,7 +21,7 @@ import userEvent from '@testing-library/user-event';
 import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 import indexCss from '@/index.css?raw';
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -40,7 +40,7 @@ vi.mock('@/services/api', () => ({
   api: { getUser: vi.fn(), getCharacter: vi.fn(), updateCharacter: vi.fn() },
 }));
 
-const sheet = pf2eCharacter();
+const sheet = fantasyD20Character();
 const membership = { userId: 'owner', campaignId: sheet.campaignId, role: 'PLAYER', characterIds: [] } as unknown as CampaignMembership;
 const ownSheet = { ...sheet, userId: 'owner' } as Character;
 

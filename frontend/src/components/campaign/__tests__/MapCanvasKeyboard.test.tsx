@@ -21,7 +21,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
     memberships: [] as Array<{ userId: string; role: string; user: { displayName: string } }>,
@@ -86,7 +86,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -171,7 +171,7 @@ function token(id: string, name: string, x: number, y: number, extra: Partial<To
   } as unknown as Token;
 }
 
-const goblin = () => token('tok-goblin', 'Goblin Scout', 0, 19);
+const goblin = () => token('tok-goblin', 'Goblin', 0, 19);
 const wolf = () => token('tok-wolf', 'Wolf', 4, 19);
 const mine = (x = 2, y = 10) => token('tok-mine', 'Aldra', x, y, { type: TokenType.PLAYER, controlledBy: 'me' });
 
@@ -221,7 +221,7 @@ beforeEach(() => {
   act(() => {
     useGameStore.getState().clearGameState();
   });
-  h.set({ userRole: 'DM', status: 'ACTIVE', memberships: [], characters: [], currentMap: mapNamed('map-a') });
+  h.set({ userRole: 'GM', status: 'ACTIVE', memberships: [], characters: [], currentMap: mapNamed('map-a') });
 });
 
 afterEach(() => {
@@ -237,7 +237,7 @@ describe('what a click selects', () => {
 
     expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a' }]);
     expect(selected()).toBe('tok-goblin');
-    expect(announced()).toBe('Selected Goblin Scout, square 0, 19');
+    expect(announced()).toBe('Selected Goblin, square 0, 19');
   });
 
   it('only selects a token you may not move', () => {
@@ -261,7 +261,7 @@ describe('what a click selects', () => {
 
     expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 17 }]);
     expect(selected()).toBe('tok-goblin');
-    expect(announced()).toBe('Selected Goblin Scout, square 3, 17');
+    expect(announced()).toBe('Selected Goblin, square 3, 17');
   });
 
   it('clears the selection on a click on empty ground', () => {
@@ -317,7 +317,7 @@ describe('what a click selects', () => {
     expect(selected()).toBe('tok-wolf');
   });
 
-  it('leaves the selection as it is while a DM tool takes the click', () => {
+  it('leaves the selection as it is while a GM tool takes the click', () => {
     render(<MapCanvas />);
     show(goblin(), wolf());
     fireEvent.contextMenu(surface(), at(4, 19));
@@ -333,7 +333,7 @@ describe('what a click selects', () => {
 });
 
 /**
- * In Player Preview the DM's canvas shows what the previewed viewer is sent,
+ * In Player Preview the GM's canvas shows what the previewed viewer is sent,
  * so a click selects only what the preview draws: a selection there decides
  * what Follow my selection puts on a shared screen.
  */
@@ -491,7 +491,7 @@ const theMap = () => screen.getByRole('application', { name: 'Map' });
 describe('the arrow keys', () => {
   it('move the selected token a square, with a pick-up and a drop as a click would send', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     press('ArrowRight');
@@ -499,12 +499,12 @@ describe('the arrow keys', () => {
     expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a' }]);
     expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 6, y: 10 }]);
     expect(positionOf('tok-goblin')).toEqual({ x: 6, y: 10 });
-    expect(announced()).toBe('Selected Goblin Scout, square 6, 10');
+    expect(announced()).toBe('Selected Goblin, square 6, 10');
   });
 
   it('move it five squares with Shift, up towards the top of the map', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     press('ArrowUp', { shiftKey: true });
@@ -514,7 +514,7 @@ describe('the arrow keys', () => {
 
   it('end the hold of a token picked up by a click one square over from where it stood', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     click(at(5, 10));
     mouse.move(surface(), at(9, 4));
 
@@ -597,7 +597,7 @@ describe('the arrow keys', () => {
     press('ArrowRight');
     expect(positionOf('tok-mine')).toEqual({ x: 3, y: 10 });
 
-    // The drop was refused (the DM paused in between): the server says where it is.
+    // The drop was refused (the GM paused in between): the server says where it is.
     fire('token.moved', { tokenId: 'tok-mine', mapId: 'map-a', x: 2, y: 10, movedBy: null });
 
     expect(positionOf('tok-mine')).toEqual({ x: 2, y: 10 });
@@ -606,7 +606,7 @@ describe('the arrow keys', () => {
   it('nudge the walls while the wall select tool holds some, and leave the token alone', () => {
     h.set({ currentMap: mapNamed('map-a', { wallSegments: [{ id: 'w1', x1: 100, y1: 100, x2: 200, y2: 100, type: 'wall' }] }) });
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
     fireEvent.click(screen.getByText('Walls'));
     fireEvent.click(screen.getByLabelText('Wall select mode'));
@@ -622,7 +622,7 @@ describe('the arrow keys', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-27T12:00:00Z'));
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 0, 10));
+    show(token('tok-goblin', 'Goblin', 0, 10));
     select('tok-goblin');
 
     // A second of key repeat, about 30 a second.
@@ -642,7 +642,7 @@ describe('the arrow keys', () => {
 describe('the turn keys', () => {
   it('turn the selected token 45 degrees clockwise with ], and anticlockwise with [', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     await act(async () => { press(']'); });
@@ -655,7 +655,7 @@ describe('the turn keys', () => {
 
   it('turn a token while it is held', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     click(at(5, 10));
 
     await act(async () => { press(']'); });
@@ -666,7 +666,7 @@ describe('the turn keys', () => {
 
   it('turn once for a key held down', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     await act(async () => {
@@ -706,7 +706,7 @@ describe('turns sent close together', () => {
     const first = deferred();
     h.updateToken.mockReturnValueOnce(first.promise);
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     await act(async () => { press(']'); });
@@ -728,7 +728,7 @@ describe('turns sent close together', () => {
     const third = deferred();
     h.updateToken.mockResolvedValueOnce({}).mockReturnValueOnce(second.promise).mockReturnValueOnce(third.promise);
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     await act(async () => { press(']'); });
@@ -752,12 +752,12 @@ describe('turns sent close together', () => {
     const second = deferred();
     h.updateToken.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     await act(async () => { press(']'); });
     await act(async () => { press(']'); });
-    fire('map.changed', { mapId: 'map-a', mapData: mapNamed('map-a', { tokens: [token('tok-goblin', 'Goblin Scout', 5, 10, { rotation: 270 })] }) });
+    fire('map.changed', { mapId: 'map-a', mapData: mapNamed('map-a', { tokens: [token('tok-goblin', 'Goblin', 5, 10, { rotation: 270 })] }) });
     await act(async () => { first.reject(new Error('Session paused')); });
     expect(h.updateToken).toHaveBeenLastCalledWith('campaign-1', 'map-a', 'tok-goblin', { rotation: 90 });
     await act(async () => { second.reject(new Error('Session paused')); });
@@ -769,7 +769,7 @@ describe('turns sent close together', () => {
     const first = deferred();
     h.updateToken.mockReturnValueOnce(first.promise).mockResolvedValueOnce({});
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     await act(async () => { press(']'); });
@@ -880,7 +880,7 @@ describe('stepping through tokens with , and .', () => {
 describe('Enter', () => {
   it("opens the selected token's menu at the token, with the cursor on its first item", async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 2, 18));
+    show(token('tok-goblin', 'Goblin', 2, 18));
     select('tok-goblin');
 
     await act(async () => { press('Enter'); });
@@ -895,7 +895,7 @@ describe('Enter', () => {
 
   it('does not press the first item when Enter is held down', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 2, 18));
+    show(token('tok-goblin', 'Goblin', 2, 18));
     select('tok-goblin');
     await act(async () => { press('Enter'); });
     const first = screen.getByText('Rotate Left');
@@ -917,7 +917,7 @@ describe('Enter', () => {
 
   it('closes on Escape and hands the keys back to the map', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 2, 18));
+    show(token('tok-goblin', 'Goblin', 2, 18));
     select('tok-goblin');
     await act(async () => { press('Enter'); });
 
@@ -962,7 +962,7 @@ describe('Enter on a token out of sight', () => {
 
   it('pans a token off the left and the top of the view back into it, and opens the menu inside the map', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 0, 19));
+    show(token('tok-goblin', 'Goblin', 0, 19));
     select('tok-goblin');
     dragMap(-300, -300);
 
@@ -980,7 +980,7 @@ describe('Enter on a token out of sight', () => {
   it('holds the menu inside the map at its right and bottom edges', async () => {
     render(<MapCanvas />);
     // Square (15, 8) has its centre at (775, 575) in the map, inside the view by less than the menu's size.
-    show(token('tok-goblin', 'Goblin Scout', 15, 8));
+    show(token('tok-goblin', 'Goblin', 15, 8));
     select('tok-goblin');
 
     await act(async () => { press('Enter'); });
@@ -992,7 +992,7 @@ describe('Enter on a token out of sight', () => {
 
   it('pans a token an arrow walks out of the view back into it', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 14, 10));
+    show(token('tok-goblin', 'Goblin', 14, 10));
     select('tok-goblin');
 
     press('ArrowRight', { shiftKey: true });
@@ -1006,7 +1006,7 @@ describe('Enter on a token out of sight', () => {
 describe('Escape', () => {
   it('lets go of one thing a press: the menu, the held token, the tool, then the selection', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 2, 18));
+    show(token('tok-goblin', 'Goblin', 2, 18));
     click(at(2, 18));
     mouse.move(surface(), at(6, 14));
     fireEvent.click(screen.getByTitle('AoE Shape — area of effect overlay'));
@@ -1033,7 +1033,7 @@ describe('Escape', () => {
 describe('where the token keys apply', () => {
   it('nowhere while typing in a text box', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
     const chat = document.createElement('textarea');
     document.body.append(chat);
@@ -1049,7 +1049,7 @@ describe('where the token keys apply', () => {
 
   it('nowhere with focus on a button or a tab of the session rail', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
     const zoomIn = screen.getByTitle('Zoom In');
     zoomIn.focus();
@@ -1069,7 +1069,7 @@ describe('where the token keys apply', () => {
 
   it('nowhere while a dialog is open', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     fireEvent.contextMenu(surface(), at(5, 10));
     select('tok-goblin');
     fireEvent.click(screen.getByText('Remove from Map'));
@@ -1085,7 +1085,7 @@ describe('where the token keys apply', () => {
 
   it('with the map focused, after a click on it', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     click(at(5, 10));
     click(at(5, 10));
     expect(document.activeElement).toBe(theMap());
@@ -1102,7 +1102,7 @@ describe('where the token keys apply', () => {
 describe('the token keys and the rest of the page', () => {
   it('leave an arrow pressed on the page itself to the browser, as after a click on the chat log', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
     (document.activeElement as HTMLElement | null)?.blur();
 
@@ -1115,7 +1115,7 @@ describe('the token keys and the rest of the page', () => {
 
   it('leave an arrow to a scrolling panel that has the focus', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
     const log = document.createElement('div');
     log.tabIndex = 0;
@@ -1139,14 +1139,14 @@ describe('the token keys and the rest of the page', () => {
     expect(pressOn(theMap(), ']')).toBe(false);
     expect(pressOn(theMap(), '.')).toBe(false);
 
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     expect(pressOn(theMap(), '.')).toBe(true);
     expect(pressOn(theMap(), 'ArrowRight')).toBe(true);
   });
 
   it('come back to the map when its menu closes by an item or a click elsewhere', async () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 5, 10));
+    show(token('tok-goblin', 'Goblin', 5, 10));
     select('tok-goblin');
 
     await act(async () => { press('Enter'); });
@@ -1174,7 +1174,7 @@ describe('quick arrow presses', () => {
 
   it('send each square on from the last one sent, while the echoes are still coming back', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 0, 10));
+    show(token('tok-goblin', 'Goblin', 0, 10));
     select('tok-goblin');
 
     press('ArrowRight');
@@ -1191,7 +1191,7 @@ describe('quick arrow presses', () => {
 
   it("give way to someone else's move of the token that arrives in the middle", () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 0, 10));
+    show(token('tok-goblin', 'Goblin', 0, 10));
     select('tok-goblin');
     press('ArrowRight');
     press('ArrowRight');
@@ -1211,7 +1211,7 @@ describe('quick arrow presses', () => {
 
   it('draw what the server says once a drop is refused', () => {
     render(<MapCanvas />);
-    show(token('tok-goblin', 'Goblin Scout', 0, 10));
+    show(token('tok-goblin', 'Goblin', 0, 10));
     select('tok-goblin');
     press('ArrowRight');
     press('ArrowRight');
@@ -1257,8 +1257,8 @@ describe('a selection the screen does not draw', () => {
       memberships: [{ userId: 'alice', role: 'PLAYER', user: { displayName: 'Alice' } }],
     });
     render(<MapCanvas />);
-    show(token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' }), token('tok-goblin', 'Goblin Scout', 12, 10));
-    // The DM's fog: everything hidden.
+    show(token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' }), token('tok-goblin', 'Goblin', 12, 10));
+    // The GM's fog: everything hidden.
     fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
     select('tok-goblin');
     fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
@@ -1357,7 +1357,7 @@ describe('turning while the session is paused or ended', () => {
     expect(screen.queryByText('Rotate Right')).not.toBeInTheDocument();
   });
 
-  it('lets the DM turn any token at any time', async () => {
+  it('lets the GM turn any token at any time', async () => {
     h.set({ status: 'PAUSED' });
     render(<MapCanvas />);
     show(goblin());
@@ -1371,10 +1371,10 @@ describe('turning while the session is paused or ended', () => {
 });
 
 /**
- * Follow my selection in Player Preview: the DM's canvas looks through the
+ * Follow my selection in Player Preview: the GM's canvas looks through the
  * selected token, and steps through only what that view shows. Whose eyes
  * the preview uses shows in the explored ground it asks the server for; a
- * hidden token shows in the hover card only in the DM's own view.
+ * hidden token shows in the hover card only in the GM's own view.
  */
 describe('Follow my selection', () => {
   const alya = () => token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' });
@@ -1423,7 +1423,7 @@ describe('Follow my selection', () => {
     expect(memoryAskedFor().slice(-1)).toEqual(['bob']);
   });
 
-  it('keeps the last token it followed when the selection is cleared, never the DM view', () => {
+  it('keeps the last token it followed when the selection is cleared, never the GM view', () => {
     render(<MapCanvas />);
     show(alya(), lurker(), borin());
     mouse.move(surface(), at(3, 10));
@@ -1439,7 +1439,7 @@ describe('Follow my selection', () => {
     expect(sentOf('exploration:request')).toHaveLength(asked);
     mouse.move(surface(), at(3, 10));
     expect(card('Lurker')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'DM View' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GM View' })).toBeInTheDocument();
   });
 
   it("steps through a split party on a lit map, from nothing selected, and never to what is hidden", () => {

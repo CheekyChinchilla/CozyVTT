@@ -3,8 +3,8 @@
  *
  * Switching first reads the tokens on the map on screen, to offer to bring
  * them along. When that read failed, the switch went ahead without the
- * offer and said nothing, so the party could be left behind without the DM
- * being asked. It now stops and says why; the DM can switch again.
+ * offer and said nothing, so the party could be left behind without the GM
+ * being asked. It now stops and says why; the GM can switch again.
  */
 
 import { it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -29,7 +29,7 @@ vi.mock('framer-motion', () => {
 });
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'campaign-1', name: 'Lost Mine', currentMapId: 'map-1' },
+    campaign: { id: 'campaign-1', name: 'The Hollow Crown', currentMapId: 'map-1' },
     currentMap: { id: 'map-1', name: 'Cave', tokens: [] },
     viewedMap: { id: 'map-1', name: 'Cave', tokens: [] },
     setCurrentMap: () => {},

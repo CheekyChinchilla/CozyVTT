@@ -3,7 +3,7 @@
  * menu and the door menu, as each viewer is shown them: their items in order,
  * how each looks (the exact classes, named below), the rules, headings,
  * tooltips and waits, the Move to Map… submenu, and what each item does.
- * These pin the menus as they are, for the DM, a player and a spectator, on
+ * These pin the menus as they are, for the GM, a player and a spectator, on
  * every kind of token and door and in Player Preview, so a change to how
  * they are built shows as a change here.
  *
@@ -25,7 +25,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
     memberships: [] as Array<{ userId: string; role: string; user: { displayName: string } }>,
@@ -89,7 +89,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -184,7 +184,7 @@ const CHARACTERS = {
   alices: { id: 'char-alice', userId: 'alice', name: 'Brannoc' },
 };
 
-const goblin = (extra: Partial<Token> = {}) => token('tok-goblin', 'Goblin Scout', 0, 19, extra);
+const goblin = (extra: Partial<Token> = {}) => token('tok-goblin', 'Goblin', 0, 19, extra);
 /** A player's character on the map. */
 const hero = (characterId: string, controlledBy: string, extra: Partial<Token> = {}) =>
   token('tok-hero', 'Hero', 2, 19, { type: TokenType.PLAYER, characterId, controlledBy, ...extra });
@@ -297,8 +297,8 @@ function rows(): string[] {
 }
 
 const ROTATE = ['Rotate Left [Turn 45 degrees anticlockwise]', 'Rotate Right [Turn 45 degrees clockwise]'];
-/** The DM's items after any Roll... of the creature's, for a creature on the material plane. */
-const DM_ITEMS = [
+/** The GM's items after any Roll... of the creature's, for a creature on the material plane. */
+const GM_ITEMS = [
   'Edit Token (brand, bold)',
   'Add to Initiative (accent)',
   'Duplicate Token',
@@ -334,9 +334,9 @@ beforeEach(() => {
     Promise.resolve({ token: { ...goblin(), ...body, id: 'tok-copy' } }));
   act(() => { useGameStore.getState().clearGameState(); });
   h.set({
-    userRole: 'DM',
+    userRole: 'GM',
     status: 'ACTIVE',
-    memberships: [MEMBERS.me('DM'), MEMBERS.alice],
+    memberships: [MEMBERS.me('GM'), MEMBERS.alice],
     characters: [CHARACTERS.mine, CHARACTERS.alices],
     maps: [{ id: 'map-a', name: 'Map A' }, { id: 'map-b', name: 'Map B' }, { id: 'map-c', name: 'Map C' }],
     currentMap: mapNamed('map-a'),
@@ -344,15 +344,15 @@ beforeEach(() => {
   });
 });
 
-describe("the DM's token menu", () => {
-  it('on a creature: the turns, its Roll..., then every DM item', () => {
+describe("the GM's token menu", () => {
+  it('on a creature: the turns, its Roll..., then every GM item', () => {
     render(<MapCanvas />);
     show(goblin());
     rightClick(0, 19);
 
     expect(theMenu().className).toBe(MENU);
     expect(theMenu().getAttribute('style')).toBe('left: 10px; top: 10px; visibility: visible;');
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS]);
   });
 
   it("on a player's character: the sheet and its Roll... first, and no creature's Roll...", () => {
@@ -360,7 +360,7 @@ describe("the DM's token menu", () => {
     show(hero('char-alice', 'alice'));
     rightClick(2, 19);
 
-    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...DM_ITEMS]);
+    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...GM_ITEMS]);
   });
 
   it("on a creature with a character, a companion: the character's sheet and Roll... only", () => {
@@ -368,19 +368,19 @@ describe("the DM's token menu", () => {
     show(goblin({ characterId: 'char-alice' }));
     rightClick(0, 19);
 
-    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...DM_ITEMS]);
+    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...GM_ITEMS]);
   });
 
-  it("on a character that has left the campaign: no sheet, and the DM's own Roll... only for a creature", () => {
+  it("on a character that has left the campaign: no sheet, and the GM's own Roll... only for a creature", () => {
     render(<MapCanvas />);
     show(hero('char-gone', 'alice'), goblin({ characterId: 'char-gone' }));
 
     rightClick(2, 19);
-    expect(rows()).toEqual([...ROTATE, ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, ...GM_ITEMS]);
     fireEvent.click(document.body);
 
     rightClick(0, 19);
-    expect(rows()).toEqual([...ROTATE, ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, ...GM_ITEMS]);
   });
 
   it('on an object: no Roll... and no crossing to the spirit realm', () => {
@@ -388,7 +388,7 @@ describe("the DM's token menu", () => {
     show(goblin({ type: TokenType.OBJECT }));
     rightClick(0, 19);
 
-    expect(rows()).toEqual([...ROTATE, ...DM_ITEMS.filter((r) => !r.startsWith('Send to Spirit Realm'))]);
+    expect(rows()).toEqual([...ROTATE, ...GM_ITEMS.filter((r) => !r.startsWith('Send to Spirit Realm'))]);
   });
 
   it('on a token with no type: a creature without a character, a player with one', () => {
@@ -396,11 +396,11 @@ describe("the DM's token menu", () => {
     show(goblin({ type: undefined }), hero('char-alice', 'alice', { type: undefined }));
 
     rightClick(0, 19);
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS]);
     fireEvent.click(document.body);
 
     rightClick(2, 19);
-    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...DM_ITEMS]);
+    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...GM_ITEMS]);
   });
 
   it('on a hidden, obscured token in the spirit realm: each switch offers the way back', () => {
@@ -440,30 +440,30 @@ describe("the DM's token menu", () => {
     show(goblin());
     rightClick(0, 19);
 
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS]);
   });
 });
 
 /**
- * In Player Preview the DM still opens the DM's menu, on a token the preview
- * draws and on one it does not: the DM previewing is still the DM.
+ * In Player Preview the GM still opens the GM's menu, on a token the preview
+ * draws and on one it does not: the GM previewing is still the GM.
  */
 describe('the token menu in Player Preview', () => {
   beforeEach(() => {
     h.set({ currentMap: mapNamed('map-a', { lightingEnabled: true, globalIllumination: true }) });
   });
 
-  it("is the DM's, on a token the preview draws and on a hidden one", () => {
+  it("is the GM's, on a token the preview draws and on a hidden one", () => {
     render(<MapCanvas />);
     show(hero('char-alice', 'alice'), goblin({ visible: false, position: { x: 3, y: 10 } }));
     fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
 
     rightClick(2, 19);
-    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...DM_ITEMS]);
+    expect(rows()).toEqual(['View Character Sheet', 'Roll...', ...ROTATE, ...GM_ITEMS]);
     fireEvent.click(document.body);
 
     rightClick(3, 10);
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS.map((r) => (r === 'Hide from Players' ? 'Reveal to Players' : r))]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS.map((r) => (r === 'Hide from Players' ? 'Reveal to Players' : r))]);
   });
 });
 
@@ -565,7 +565,7 @@ describe('Move to Map…', () => {
     expect(rows().slice(-6)).toEqual(['---', 'Move to Map…▶ (accent, opens a submenu)', '› Map B', '› Map C', '---', 'Remove from Map (danger)']);
 
     fireEvent.click(opener);
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS]);
   });
 
   it("opens with its submenu shut on a right-click on another token while it is open", () => {
@@ -577,7 +577,7 @@ describe('Move to Map…', () => {
 
     rightClick(4, 19);
 
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS]);
   });
 
   it('lists every map while the current one is not known to the campaign', () => {
@@ -704,7 +704,7 @@ describe('what each item does', () => {
 
   it('Save as Template saves the token and closes the menu', async () => {
     const { closed } = await chooseOn(goblin(), 'Save as Template');
-    expect(h.api.saveTokenAsTemplate).toHaveBeenCalledWith('campaign-1', expect.objectContaining({ name: 'Goblin Scout', type: 'npc' }));
+    expect(h.api.saveTokenAsTemplate).toHaveBeenCalledWith('campaign-1', expect.objectContaining({ name: 'Goblin', type: 'npc' }));
     expect(closed).toBe(true);
   });
 
@@ -732,7 +732,7 @@ describe('what each item does', () => {
 
   it('Remove from Map asks first and closes the menu', async () => {
     const { closed } = await chooseOn(goblin(), 'Remove from Map');
-    expect(screen.getByText(/Remove "Goblin Scout" from this map\?/)).toBeInTheDocument();
+    expect(screen.getByText(/Remove "Goblin" from this map\?/)).toBeInTheDocument();
     expect(h.api.deleteToken).not.toHaveBeenCalled();
     expect(closed).toBe(true);
   });
@@ -762,6 +762,23 @@ describe('where a roll picker from the token menu opens', () => {
     await choose('Roll...');
 
     expect(placeOf(screen.getByPlaceholderText('e.g. 2d6+3').closest<HTMLElement>('div.fixed')!)).toEqual(['160px', '360px']);
+  });
+
+  // A stat block is read as 5E's when the campaign's system gives no other
+  // rules, so the picker offers 5E's Roll mode: in a campaign with no system,
+  // or one CozyVTT no longer supports.
+  it.each([
+    ['no system', null],
+    ['a system CozyVTT no longer supports', 'SOMETHING_ELSE'],
+  ])("gives a creature's picker the 5E rules in a campaign with %s", async (_case, gameSystem) => {
+    h.set({ gameSystem });
+    render(<MapCanvas />);
+    show(goblin({ statBlock: { ac: 15, speed: '30 ft.', abilities: { str: 8, dex: 14, con: 10, int: 10, wis: 8, cha: 8 } } }));
+    rightClick(0, 19);
+    await choose('Roll...');
+
+    expect(screen.getByText('Roll mode')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'DEX +2' })).toBeInTheDocument();
   });
 
   it("opens a character's picker at the pointer", async () => {
@@ -832,7 +849,7 @@ describe('the door menu', () => {
   const rightClickDoor = () => fireEvent.contextMenu(surface(), { clientX: 150, clientY: 104 });
   const sentDoors = () => sentOf('wall:update').map((p) => (p as { segment: WallSegment }).segment.type);
 
-  it("shows the DM a closed door's state, Open Door and Lock Door, at the point", () => {
+  it("shows the GM a closed door's state, Open Door and Lock Door, at the point", () => {
     renderWithDoor('door-closed');
     rightClickDoor();
 
@@ -844,7 +861,7 @@ describe('the door menu', () => {
   it.each([
     ['door-open', ['# 🚪 Open Door', 'Close Door (brand)', 'Lock Door (danger)']],
     ['door-locked', ['# 🔒 Locked Door', 'Unlock Door (brand)']],
-  ] as const)("shows the DM a door that is %s its state and what it may become", (type, expected) => {
+  ] as const)("shows the GM a door that is %s its state and what it may become", (type, expected) => {
     renderWithDoor(type);
     rightClickDoor();
 
@@ -877,7 +894,7 @@ describe('the door menu', () => {
     ['door-closed', 'Lock Door', 'door-locked'],
     ['door-open', 'Lock Door', 'door-locked'],
     ['door-locked', 'Unlock Door', 'door-closed'],
-  ] as const)("on a door that is %s, the DM's %s sends the change and closes the menu", (type, label, sent) => {
+  ] as const)("on a door that is %s, the GM's %s sends the change and closes the menu", (type, label, sent) => {
     renderWithDoor(type);
     rightClickDoor();
     fireEvent.click(screen.getByText(label));
@@ -1032,7 +1049,7 @@ describe('when a menu opens beside the map', () => {
     act(() => { vi.advanceTimersByTime(500); });
     finger.up(surface(), at(0, 19));
 
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS]);
     expect(screen.queryByText('Loading rolls…')).toBeNull();
   });
 
@@ -1042,7 +1059,7 @@ describe('when a menu opens beside the map', () => {
     const row = await screen.findByText('Brannoc');
     rightClick(0, 19);
     await choose('Roll...');
-    expect(screen.getByText('Roll for Goblin Scout')).toBeInTheDocument();
+    expect(screen.getByText('Roll for Goblin')).toBeInTheDocument();
 
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const finger = contact('touch', 1);
@@ -1051,7 +1068,7 @@ describe('when a menu opens beside the map', () => {
     finger.up(row, point);
 
     expect(openCharacterMenu()).not.toBeNull();
-    expect(screen.queryByText('Roll for Goblin Scout')).toBeNull();
+    expect(screen.queryByText('Roll for Goblin')).toBeNull();
   });
 
   // The other way round: a long-press on the map brings no mousedown, which
@@ -1069,7 +1086,7 @@ describe('when a menu opens beside the map', () => {
     act(() => { vi.advanceTimersByTime(500); });
     finger.up(surface(), at(0, 19));
 
-    expect(rows()).toEqual([...ROTATE, 'Roll...', ...DM_ITEMS]);
+    expect(rows()).toEqual([...ROTATE, 'Roll...', ...GM_ITEMS]);
     expect(openCharacterMenu()).toBeNull();
   });
 });
@@ -1102,7 +1119,7 @@ describe('when the map on screen changes', () => {
 
   // Its Roll Initiative would send the old map's token with the new map's id.
   it("closes a character's Roll... picker opened from the token menu, and nothing is sent", async () => {
-    h.api.getCharacter.mockReset().mockResolvedValue({ character: { id: 'char-alice', name: 'Brannoc', gameSystem: 'DND_5E', data: {} } });
+    h.api.getCharacter.mockReset().mockResolvedValue({ character: { id: 'char-alice', name: 'Brannoc', gameSystem: 'FIFTH_EDITION', data: {} } });
     render(<MapCanvas />);
     show(hero('char-alice', 'alice'));
     act(() => {
@@ -1129,14 +1146,14 @@ describe('when the map on screen changes', () => {
     show(goblin());
     rightClick(0, 19);
     await choose('Roll...');
-    expect(screen.getByText('Roll for Goblin Scout')).toBeInTheDocument();
+    expect(screen.getByText('Roll for Goblin')).toBeInTheDocument();
 
     act(() => { h.set({ currentMap: mapNamed('map-b') }); });
     show();
     act(() => { h.set({ currentMap: mapNamed('map-a') }); });
     show(goblin());
 
-    expect(screen.queryByText('Roll for Goblin Scout')).toBeNull();
+    expect(screen.queryByText('Roll for Goblin')).toBeNull();
   });
 });
 
@@ -1150,8 +1167,8 @@ describe('Temporary HP...', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Grant' })); });
   }
 
-  it("gives a creature the DM grants them to its token's hit points", async () => {
-    h.set({ gameSystem: 'DND_5E' });
+  it("gives a creature the GM grants them to its token's hit points", async () => {
+    h.set({ gameSystem: 'FIFTH_EDITION' });
     render(<MapCanvas />);
     show(goblin({ hp: { current: 7, max: 7, temp: 0 } }));
     rightClick(0, 19);
@@ -1163,7 +1180,7 @@ describe('Temporary HP...', () => {
   });
 
   it('asks a creature with some whether to keep them or take the new ones', async () => {
-    h.set({ gameSystem: 'PATHFINDER_2E' });
+    h.set({ gameSystem: 'FANTASY_D20' });
     render(<MapCanvas />);
     show(goblin({ hp: { current: 7, max: 7, temp: 4 } }));
     rightClick(0, 19);
@@ -1179,8 +1196,8 @@ describe('Temporary HP...', () => {
     h.set({
       userRole: 'PLAYER',
       memberships: [MEMBERS.me('PLAYER'), MEMBERS.alice],
-      characters: [{ ...CHARACTERS.mine, gameSystem: 'DND_5E' }, { ...CHARACTERS.alices, gameSystem: 'DND_5E' }],
-      gameSystem: 'DND_5E',
+      characters: [{ ...CHARACTERS.mine, gameSystem: 'FIFTH_EDITION' }, { ...CHARACTERS.alices, gameSystem: 'FIFTH_EDITION' }],
+      gameSystem: 'FIFTH_EDITION',
     });
     act(() => { useGameStore.getState().setCharacterHp('char-mine', { current: 12, max: 12, temp: 0 }); });
     render(<MapCanvas />);
@@ -1193,12 +1210,12 @@ describe('Temporary HP...', () => {
     expect(h.api.updateToken).not.toHaveBeenCalled();
   });
 
-  it("is not offered on another player's character, nor in Call of Cthulhu", async () => {
+  it("is not offered on another player's character, nor in Horror d100", async () => {
     h.set({
       userRole: 'PLAYER',
       memberships: [MEMBERS.me('PLAYER'), MEMBERS.alice],
-      characters: [{ ...CHARACTERS.alices, gameSystem: 'DND_5E' }],
-      gameSystem: 'DND_5E',
+      characters: [{ ...CHARACTERS.alices, gameSystem: 'FIFTH_EDITION' }],
+      gameSystem: 'FIFTH_EDITION',
     });
     act(() => { useGameStore.getState().setCharacterHp('char-alice', { current: 12, max: 12, temp: 0 }); });
     render(<MapCanvas />);
@@ -1207,7 +1224,7 @@ describe('Temporary HP...', () => {
     expect(screen.queryByText('Temporary HP...')).toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });
 
-    h.set({ userRole: 'DM', memberships: [MEMBERS.me('DM')], gameSystem: 'CALL_OF_CTHULHU_7E' });
+    h.set({ userRole: 'GM', memberships: [MEMBERS.me('GM')], gameSystem: 'HORROR_D100' });
     show(goblin({ hp: { current: 7, max: 7, temp: 0 } }));
     rightClick(0, 19);
     expect(screen.queryByText('Temporary HP...')).toBeNull();

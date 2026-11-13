@@ -45,7 +45,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/services/api', () => ({ api, default: api }));
 
 const goblin: Token = {
-  id: 'goblin', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'goblin', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };
@@ -60,10 +60,10 @@ beforeEach(() => {
 describe('removing a token in the Token Manager', () => {
   it('asks first, naming the token, and Cancel keeps it', async () => {
     render(<TokenManager isOpen onClose={() => {}} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin Boss from map' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin from map' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Remove token' });
-    expect(dialog).toHaveTextContent('Goblin Boss');
+    expect(dialog).toHaveTextContent('Goblin');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
     expect(api.deleteToken).not.toHaveBeenCalled();
@@ -72,7 +72,7 @@ describe('removing a token in the Token Manager', () => {
 
   it('removes it once confirmed', async () => {
     render(<TokenManager isOpen onClose={() => {}} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin Boss from map' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Goblin from map' }));
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Remove token' })).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() => expect(api.deleteToken).toHaveBeenCalledWith('campaign-1', 'map-1', 'goblin'));

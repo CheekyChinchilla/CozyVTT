@@ -1,8 +1,8 @@
 /**
  * ProficiencyEditor
- * Saves and skills for a D&D 5e creature, derived rather than typed.
+ * Saves and skills for a 5E creature, derived rather than typed.
  *
- * Replaces a free-text key/number editor in which a DM had to know how to spell
+ * Replaces a free-text key/number editor in which a GM had to know how to spell
  * "sleightOfHand", nothing tied a bonus to the ability score two fields above
  * it, and any number at all was accepted — a commoner could be given a +30
  * Wisdom save. Here every standard save and skill is listed, ticking a box
@@ -12,7 +12,7 @@
 
 import { AlertTriangle, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import type { NpcStatBlock, ProficiencyLevel } from '@/types';
-import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE, formatModifier } from '@/utils/rules/dnd5e';
+import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE, formatModifier } from '@/utils/rules/fifthEdition';
 import {
   getProficiencyBonus,
   hasProficiencyOverride,

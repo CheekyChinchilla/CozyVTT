@@ -5,7 +5,7 @@ import type { Token } from '@/types';
 export type TokenFlag = 'visible' | 'obscured';
 
 /**
- * Flip one of the DM's two switches on a token, from wherever it is offered:
+ * Flip one of the GM's two switches on a token, from wherever it is offered:
  * the right-click menu, the roster, the quick editor and the Token Manager.
  * Save it and patch the local copy so the change shows at once; the server
  * sends everyone the token as they may see it. Four copies of these calls is

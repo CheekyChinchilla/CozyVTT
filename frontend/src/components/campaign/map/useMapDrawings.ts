@@ -6,7 +6,7 @@
 // the join is dropped), and kept in the game store as the server's events
 // change them. The server also sends the list by itself after Edit Map
 // resizes the map and after a role change, which replaces what the page
-// holds; a page whose role is not the DM's drops every drawing for the DM
+// holds; a page whose role is not the GM's drops every drawing for the GM
 // alone at once. Events for any map but the one on screen are ignored, and a
 // map switch drops everything of the old map's.
 //
@@ -75,9 +75,9 @@ export interface MapDrawings {
   erase(drawing: Drawing): void;
   /** This member's own drawings on the map on screen. */
   clearMine(): void;
-  /** Every drawing on the map on screen (the DM's). */
+  /** Every drawing on the map on screen (the GM's). */
   clearAll(): void;
-  /** One member's drawings on the map on screen, as their Clear mine would (the DM's). */
+  /** One member's drawings on the map on screen, as their Clear mine would (the GM's). */
   clearMember(authorId: string): void;
   /** One frame of this page's own stroke, for the other screens. */
   sendPreview(mapId: string, preview: DrawingPreview): void;
@@ -111,9 +111,9 @@ export function useMapDrawings({ socket, mapId, joinedEpoch, role, userId, markD
   // A font loading: every label is measured again as the map is next drawn.
   useEffect(() => watchLabelFonts(() => markDirty('terrain', 'overlay')), [markDirty]);
 
-  // A page whose role may not have a drawing for the DM alone keeps none.
+  // A page whose role may not have a drawing for the GM alone keeps none.
   useEffect(() => {
-    if (role !== 'DM') useGameStore.getState().removeDrawings((d) => !drawingSentTo(role ?? undefined, d));
+    if (role !== 'GM') useGameStore.getState().removeDrawings((d) => !drawingSentTo(role ?? undefined, d));
   }, [role]);
 
   // Asked for once joined, and on each rejoin, map and role.
@@ -190,7 +190,7 @@ export function useMapDrawings({ socket, mapId, joinedEpoch, role, userId, markD
     const shown: Drawing = {
       id: tempId,
       authorId: me ?? null,
-      audience: viewer === 'DM' ? drawing.audience ?? 'ALL' : 'ALL',
+      audience: viewer === 'GM' ? drawing.audience ?? 'ALL' : 'ALL',
       layer: drawing.layer ?? 'MARKUP',
       kind: drawing.kind,
       color: drawing.color,

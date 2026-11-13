@@ -54,6 +54,7 @@ export default function ImportCharacterModal({
     data: CharacterData;
   } | null>(null);
   const [nameConflict, setNameConflict] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [importName, setImportName] = useState('');
   const [importDescription, setImportDescription] = useState('');
 
@@ -63,6 +64,7 @@ export default function ImportCharacterModal({
     setError(null);
     setPreviewData(null);
     setNameConflict(false);
+    setNotice(null);
 
     try {
       setIsLoading(true);
@@ -76,6 +78,7 @@ export default function ImportCharacterModal({
 
       if (validation.character) {
         setPreviewData(validation.character);
+        setNotice(validation.notice ?? null);
 
         // Check for name conflict
         const characterName = validation.character.name;
@@ -260,6 +263,14 @@ export default function ImportCharacterModal({
                     </p>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* How the file was read, where that needs saying */}
+            {notice && (
+              <div role="note" className="bg-sunset-orange/10 border border-sunset-orange/30 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
+                <p className="text-sm text-ink">{notice}</p>
               </div>
             )}
 

@@ -1,10 +1,10 @@
 /**
  * The vibe tracker's period buttons are only offered while the tracker is
- * on. With it off but periods configured, the DM used to see the buttons
+ * on. With it off but periods configured, the GM used to see the buttons
  * anyway, and clicking one only produced a refused request; the panel now
  * says the tracker is off and how to turn it on. The server treats missing
  * `enabled` as on, so the buttons stay for settings saved before the flag
- * existed. The DM's settings button is named as its tooltip is.
+ * existed. The GM's settings button is named as its tooltip is.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -17,7 +17,7 @@ const mockState: {
   currentVibe: string | null;
 } = {
   campaign: {},
-  userRole: 'DM' as CampaignRole,
+  userRole: 'GM' as CampaignRole,
   currentVibe: null,
 };
 
@@ -40,11 +40,11 @@ const day = { name: 'Day', hue: '#FF9966', filter: 'none' };
 describe('VibeTracker while the tracker is off', () => {
   beforeEach(() => {
     mockState.campaign = { id: 'c1', vibeSettings: { enabled: false, periods: [day] } };
-    mockState.userRole = 'DM' as CampaignRole;
+    mockState.userRole = 'GM' as CampaignRole;
     mockState.currentVibe = null;
   });
 
-  it('offers no period buttons and tells the DM how to turn it on', () => {
+  it('offers no period buttons and tells the GM how to turn it on', () => {
     render(<VibeTracker />);
     expect(screen.queryByTitle('Set vibe to Day')).toBeNull();
     expect(screen.getByText(/vibe tracker is off/i)).toBeTruthy();
@@ -74,7 +74,7 @@ describe("VibeTracker's settings button", () => {
   // It showed only a gear, with the name in a tooltip.
   it('is named as its tooltip is', () => {
     mockState.campaign = { id: 'c1', vibeSettings: { enabled: true, periods: [day] } };
-    mockState.userRole = 'DM' as CampaignRole;
+    mockState.userRole = 'GM' as CampaignRole;
     render(<VibeTracker />);
     expect(screen.getByTitle('Configure periods')).toHaveAttribute('aria-label', 'Configure periods');
   });

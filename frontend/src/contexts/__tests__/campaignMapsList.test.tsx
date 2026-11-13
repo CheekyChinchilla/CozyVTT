@@ -32,7 +32,7 @@ vi.mock('@/services/api', () => ({
 vi.mock('@/services/socket', () => ({
   default: {
     onCharacterHpUpdated: vi.fn(),
-    onDmTransferred: vi.fn(),
+    onGmTransferred: vi.fn(),
     onMemberRoleChanged: vi.fn(),
     on: vi.fn(),
     off: vi.fn(),

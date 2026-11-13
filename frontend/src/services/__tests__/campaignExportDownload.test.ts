@@ -6,7 +6,7 @@
  * held hundreds of megabytes in the tab. Where the browser lets a page
  * write to a file the user picks, the archive now streams there as it
  * arrives; elsewhere it is handed to the browser's download. A refusal is
- * read as the server wrote it, so its message reaches the DM.
+ * read as the server wrote it, so its message reaches the GM.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

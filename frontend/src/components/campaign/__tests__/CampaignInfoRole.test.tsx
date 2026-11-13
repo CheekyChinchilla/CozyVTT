@@ -1,6 +1,7 @@
 /**
- * Campaign Info names your role as the Members tab does: Player and
- * Spectator. It printed the stored PLAYER and SPECTATOR.
+ * Campaign Info names your role as the Members tab does: GM, Player and
+ * Spectator. It printed the stored `PLAYER` and `SPECTATOR`, and the GM's
+ * stored value.
  */
 
 import { it, expect, vi } from 'vitest';
@@ -21,7 +22,7 @@ vi.mock('../InvitePlayerModal', () => ({ default: () => null }));
 import CampaignInfo from '../CampaignInfo';
 
 it.each([
-  [CampaignRole.DM, 'DM'],
+  [CampaignRole.GM, 'GM'],
   [CampaignRole.PLAYER, 'Player'],
   [CampaignRole.SPECTATOR, 'Spectator'],
 ])('names the role %s as %s', (role, label) => {
@@ -29,4 +30,11 @@ it.each([
   render(<CampaignInfo onLeft={vi.fn()} />);
   const badge = screen.getByText('Your role:').nextElementSibling;
   expect(badge?.textContent).toBe(label);
+});
+
+it('names the person running the game as the GM', () => {
+  context.userRole = CampaignRole.PLAYER;
+  render(<CampaignInfo onLeft={vi.fn()} />);
+  expect(screen.getByText('GM:')).toBeTruthy();
+  expect(screen.queryByText(/\bDM\b/)).toBeNull();
 });

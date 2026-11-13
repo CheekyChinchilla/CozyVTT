@@ -99,7 +99,7 @@ export class DraftsUnavailable extends Error {
   }
 }
 
-/** What the DM is told when drafts cannot be kept. */
+/** What the GM is told when drafts cannot be kept. */
 export const draftsFailedMessage = (err: unknown) => (err instanceof DraftsUnavailable && err.full ? DRAFTS_FULL : DRAFTS_UNAVAILABLE);
 
 export const draftKey = (userId: string, campaignId: string, mapId: string, tabId: string) => `${userId}|${campaignId}|${mapId}|${tabId}`;

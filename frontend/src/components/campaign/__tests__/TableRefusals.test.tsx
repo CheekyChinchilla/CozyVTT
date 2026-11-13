@@ -2,7 +2,7 @@
  * A refusal from the table is shown as a message, once.
  *
  * Refusals sent without a request waiting for them (a token moved during a
- * pause, initiative after combat has started, a DM's control) reached only
+ * pause, initiative after combat has started, a GM's control) reached only
  * the Dice panel's banner, in a tab that might not be open; now that the
  * panel shows only its own rolls, they are shown here instead.
  */
@@ -34,8 +34,8 @@ beforeEach(() => {
 
 it('shows a refusal as a message', () => {
   render(<TableRefusals />);
-  act(() => onRefusal!({ message: 'Combat has started — ask your DM to change your initiative' }));
-  expect(showToast).toHaveBeenCalledWith('Combat has started — ask your DM to change your initiative', 'error');
+  act(() => onRefusal!({ message: 'Combat has started — ask your GM to change your initiative' }));
+  expect(showToast).toHaveBeenCalledWith('Combat has started — ask your GM to change your initiative', 'error');
 });
 
 it('shows the same refusal once when it repeats at once', () => {

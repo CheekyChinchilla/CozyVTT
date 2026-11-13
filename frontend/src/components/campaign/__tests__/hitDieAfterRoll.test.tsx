@@ -12,14 +12,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CharacterRollPicker from '../CharacterRollPicker';
 import type { Character, CharacterData, GameSystem } from '@/types';
 
-const brann: Character = {
+const corvel: Character = {
   id: 'char-2',
   userId: 'bob',
   campaignId: 'camp-1',
-  gameSystem: 'DND_5E' as GameSystem,
-  name: 'Brann',
+  gameSystem: 'FIFTH_EDITION' as GameSystem,
+  name: 'Corvel',
   data: {
-    characterName: 'Brann',
+    characterName: 'Corvel',
     stats: {
       strength: { score: 16, modifier: 3 }, dexterity: { score: 12, modifier: 1 }, constitution: { score: 14, modifier: 2 },
       intelligence: { score: 10, modifier: 0 }, wisdom: { score: 10, modifier: 0 }, charisma: { score: 8, modifier: -1 },
@@ -35,10 +35,10 @@ async function spendWith(made: boolean) {
   const onSpendHitDie = vi.fn();
   const onRoll = vi.fn().mockResolvedValue(made);
   render(
-    <CharacterRollPicker character={brann} onRoll={onRoll} onSpendHitDie={onSpendHitDie} onClose={() => undefined} anchorX={0} anchorY={0} />
+    <CharacterRollPicker character={corvel} onRoll={onRoll} onSpendHitDie={onSpendHitDie} onClose={() => undefined} anchorX={0} anchorY={0} />
   );
   fireEvent.click(screen.getByRole('button', { name: /Fighter 1d10/ }));
-  expect(onRoll).toHaveBeenCalledWith('1d10+2', 'Spend a Hit Die (Fighter)', 'Brann');
+  expect(onRoll).toHaveBeenCalledWith('1d10+2', 'Spend a Hit Die (Fighter)', 'Corvel');
   await waitFor(() => expect(onRoll.mock.results[0]?.value).toBeDefined());
   await Promise.resolve();
   return onSpendHitDie;
@@ -55,12 +55,12 @@ it('keeps the hit die when its roll is refused', async () => {
   expect(onSpendHitDie).not.toHaveBeenCalled();
 });
 
-describe('on the D&D 5e sheet', () => {
+describe('on the 5E sheet', () => {
   async function clickHitDie(made: boolean) {
-    const { DnD5eCharacterView } = await import('@/components/character-sheets/dnd5e/DnD5eCharacterView');
+    const { FifthEditionCharacterView } = await import('@/components/character-sheets/fifth-edition/FifthEditionCharacterView');
     const onSpendHitDie = vi.fn();
     const onRoll = vi.fn().mockResolvedValue(made);
-    render(<DnD5eCharacterView character={brann} onRoll={onRoll} onSpendHitDie={onSpendHitDie} />);
+    render(<FifthEditionCharacterView character={corvel} onRoll={onRoll} onSpendHitDie={onSpendHitDie} />);
     fireEvent.click(screen.getByRole('tab', { name: /Combat/ }));
     fireEvent.click(screen.getByTitle('Spend one hit die: roll 1d10+2'));
     expect(onRoll).toHaveBeenCalledWith('1d10+2', 'Spend a Hit Die (Fighter)');

@@ -11,6 +11,7 @@ import { AssetScope } from '@/types';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import NewDocumentDialog from '../NewDocumentDialog';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 
 const authUser = { id: 'u1', platformRole: 'USER', globalAssetManager: false };
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: authUser }) }));
@@ -104,12 +105,16 @@ describe('NewDocumentDialog', () => {
 });
 
 describe('closing a document with text in it', () => {
-  const escape = () => fireEvent.keyDown(document, { key: 'Escape' });
+  // The dialog takes Escape once its focus trap has moved the focus inside.
+  const escape = async () => {
+    await waitForDialogFocus(screen.getByRole('dialog', { name: 'New document' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+  };
 
-  it('closes at once when nothing has been typed', () => {
+  it('closes at once when nothing has been typed', async () => {
     const onClose = vi.fn();
     render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
-    escape();
+    await escape();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: 'Discard this document?' })).not.toBeInTheDocument();
   });
@@ -119,7 +124,7 @@ describe('closing a document with text in it', () => {
     render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Document content'), { target: { value: 'Session 3: the bridge' } });
 
-    escape();
+    await escape();
 
     const ask = await screen.findByRole('dialog', { name: 'Discard this document?' });
     expect(onClose).not.toHaveBeenCalled();
@@ -134,7 +139,7 @@ describe('closing a document with text in it', () => {
     render(<NewDocumentDialog isOpen onClose={onClose} onCreated={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('Document name'), { target: { value: 'Session 3' } });
 
-    escape();
+    await escape();
     fireEvent.click(within(await screen.findByRole('dialog', { name: 'Discard this document?' })).getByRole('button', { name: 'Discard' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);

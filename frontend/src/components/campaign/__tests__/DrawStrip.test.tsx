@@ -15,7 +15,7 @@ import { layScrollRow, readScrollCue } from '@/test/scrollCue';
 
 function strip(extra: Partial<DrawControlsProps> = {}) {
   const props: DrawControlsProps = {
-    kind: 'pen', onKindChange: vi.fn(), settings: DEFAULT_DRAW_SETTINGS, onSettingsChange: vi.fn(), isDM: false,
+    kind: 'pen', onKindChange: vi.fn(), settings: DEFAULT_DRAW_SETTINGS, onSettingsChange: vi.fn(), isGM: false,
     polygonCorners: 0, onPolygonDone: vi.fn(), onPolygonCancel: vi.fn(), clearable: 2, onClear: vi.fn(), onClose: vi.fn(),
     members: [], onClearMember: vi.fn(),
     ...extra,
@@ -54,7 +54,7 @@ describe('the strip', () => {
   });
 
   it('sizes every control for a finger, whatever the pointer', () => {
-    strip({ isDM: true, kind: 'rect' });
+    strip({ isGM: true, kind: 'rect' });
     fireEvent.click(screen.getByRole('button', { name: 'Colour: Red' }));
 
     for (const button of screen.getAllByRole('button')) {
@@ -212,18 +212,18 @@ describe('the chips', () => {
     expect(screen.queryByRole('checkbox', { name: 'Fill shapes' })).toBeNull();
   });
 
-  it('gives the DM Only I can see this, and none under the laser pointer, which everyone sees', () => {
-    const { props, rerender } = strip({ isDM: true });
+  it('gives the GM Only I can see this, and none under the laser pointer, which everyone sees', () => {
+    const { props, rerender } = strip({ isGM: true });
     fireEvent.click(screen.getByRole('checkbox', { name: 'Only I can see this' }));
-    expect(props.onSettingsChange).toHaveBeenCalledWith({ dmOnly: true });
+    expect(props.onSettingsChange).toHaveBeenCalledWith({ gmOnly: true });
 
-    rerender(<DrawStrip {...props} kind="laser" settings={{ ...DEFAULT_DRAW_SETTINGS, dmOnly: true }} />);
+    rerender(<DrawStrip {...props} kind="laser" settings={{ ...DEFAULT_DRAW_SETTINGS, gmOnly: true }} />);
     expect(screen.queryByRole('checkbox', { name: 'Only I can see this' })).toBeNull();
     expect(screen.getByText('Everyone sees the laser pointer.')).toBeInTheDocument();
   });
 
   it('gives a player no Only I can see this', () => {
-    strip({ isDM: false });
+    strip({ isGM: false });
     expect(screen.queryByRole('checkbox', { name: 'Only I can see this' })).toBeNull();
   });
 });
@@ -263,7 +263,7 @@ describe('who may draw what', () => {
 
 describe('clearing', () => {
   it('gives a player Clear mine, at once', () => {
-    const { props } = strip({ isDM: false });
+    const { props } = strip({ isGM: false });
     fireEvent.click(screen.getByRole('button', { name: 'Clear mine' }));
     expect(props.onClear).toHaveBeenCalled();
   });
@@ -271,12 +271,12 @@ describe('clearing', () => {
   it('turns Clear mine and Clear… off with nothing to clear', () => {
     const { props, rerender } = strip({ clearable: 0 });
     expect(screen.getByRole('button', { name: 'Clear mine' })).toBeDisabled();
-    rerender(<DrawStrip {...props} isDM />);
+    rerender(<DrawStrip {...props} isGM />);
     expect(screen.getByRole('button', { name: 'Clear…' })).toBeDisabled();
   });
 
-  it('asks the DM before clearing every drawing, saying how many, with no member’s to choose', () => {
-    const { props } = strip({ isDM: true, clearable: 3 });
+  it('asks the GM before clearing every drawing, saying how many, with no member’s to choose', () => {
+    const { props } = strip({ isGM: true, clearable: 3 });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear…' }));
     expect(props.onClear).not.toHaveBeenCalled();
@@ -289,8 +289,8 @@ describe('clearing', () => {
 
   const members = [{ authorId: 'mara', name: 'Mara', count: 3 }, { authorId: 'tom', name: 'Tom', count: 1 }];
 
-  it('offers the DM every drawing or one member’s, each asked first', () => {
-    const { props } = strip({ isDM: true, clearable: 5, members });
+  it('offers the GM every drawing or one member’s, each asked first', () => {
+    const { props } = strip({ isGM: true, clearable: 5, members });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear…' }));
     const choices = screen.getByRole('dialog', { name: 'Clear drawings on this map' });
@@ -309,8 +309,8 @@ describe('clearing', () => {
     expect(props.onClear).not.toHaveBeenCalled();
   });
 
-  it('asks before clearing every drawing chosen from the DM’s choices', () => {
-    const { props } = strip({ isDM: true, clearable: 5, members });
+  it('asks before clearing every drawing chosen from the GM’s choices', () => {
+    const { props } = strip({ isGM: true, clearable: 5, members });
     fireEvent.click(screen.getByRole('button', { name: 'Clear…' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Clear drawings on this map' })).getByRole('button', { name: 'Clear drawings' }));
 
@@ -338,7 +338,7 @@ describe('the strip’s height', () => {
   const body = () => region().querySelector<HTMLElement>('[data-strip-body]')!;
 
   it('is at most half the map’s height, less on a short screen, its body scrolling under its header', () => {
-    strip({ isDM: true, kind: 'rect' });
+    strip({ isGM: true, kind: 'rect' });
 
     expect(classes(region())).toEqual(expect.arrayContaining(['max-h-[50cqh]', 'short:max-h-[45cqh]', 'flex-col']));
     expect(classes(header())).toContain('shrink-0');

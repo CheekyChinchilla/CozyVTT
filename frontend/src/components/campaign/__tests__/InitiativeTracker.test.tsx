@@ -77,7 +77,7 @@ describe('the tracker from the keyboard', () => {
   });
 
   it('opens Add Combatant as a dialog named for it', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -89,18 +89,18 @@ describe('the tracker from the keyboard', () => {
   // Each choice held a picture whose alt text repeated the name beside it,
   // so it was read as "Orc Orc npc".
   it('names each token in Add Combatant once', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     useGameStore.getState().setTokens([{ ...token('orc', 'Orc'), imageUrl: '/api/assets/tokens/orc' }]);
     render(<InitiativeTracker />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Combatant' }));
 
-    expect(within(screen.getByRole('dialog', { name: 'Add Combatant' })).getByRole('button', { name: 'Orc npc' })).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog', { name: 'Add Combatant' })).getByRole('button', { name: 'Orc NPC' })).toBeInTheDocument();
   });
 
-  it('lets the DM edit a value from a button that says what it holds', () => {
-    seat.role = 'DM';
+  it('lets the GM edit a value from a button that says what it holds', () => {
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -110,7 +110,7 @@ describe('the tracker from the keyboard', () => {
   });
 
   it('moves a combatant one place down with the arrow key, and says where it went', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -125,7 +125,7 @@ describe('the tracker from the keyboard', () => {
   // The map listens for the arrow keys on the window to nudge selected walls,
   // so a move from the grip moved them too.
   it('keeps the arrow key from reaching the map', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
     const onWindowKey = vi.fn();
@@ -139,7 +139,7 @@ describe('the tracker from the keyboard', () => {
   });
 
   it('moves a combatant up, and goes no further than the top', () => {
-    seat.role = 'DM';
+    seat.role = 'GM';
     threeReady();
     render(<InitiativeTracker />);
 
@@ -159,18 +159,18 @@ describe('the tracker from the keyboard', () => {
     expect(within(document.body).getByText('18')).toBeInTheDocument();
   });
 
-  // The DM's Up and Down buttons were drawn on a touch screen only, so with a
+  // The GM's Up and Down buttons were drawn on a touch screen only, so with a
   // keyboard nothing on screen said the grip's arrow keys move a combatant.
   // jsdom evaluates no selector of this kind, so the classes are what is
   // checked: the buttons sit over the row's picture, take no room, and show
   // while a button in the row has the keyboard's focus. A click with a mouse
   // gives a button no visible focus, so it brings no arrows.
-  describe("the DM's Up and Down buttons with a mouse and a keyboard", () => {
+  describe("the GM's Up and Down buttons with a mouse and a keyboard", () => {
     // The grip is draggable too: the row is the draggable around it.
     const rowOf = (name: string) => screen.getByRole('button', { name: `Move ${name}` }).parentElement?.closest('[draggable]') as HTMLElement;
 
     it('are in the row, after the grip and before the value, and move the combatant one place', () => {
-      seat.role = 'DM';
+      seat.role = 'GM';
       threeReady();
       render(<InitiativeTracker />);
 
@@ -193,7 +193,7 @@ describe('the tracker from the keyboard', () => {
     });
 
     it('show only while a button in the row has the keyboard, over the picture, taking no room', () => {
-      seat.role = 'DM';
+      seat.role = 'GM';
       threeReady();
       render(<InitiativeTracker />);
 
@@ -207,7 +207,7 @@ describe('the tracker from the keyboard', () => {
     });
 
     it('go no further than the ends', () => {
-      seat.role = 'DM';
+      seat.role = 'GM';
       threeReady();
       render(<InitiativeTracker />);
 
@@ -227,8 +227,8 @@ describe('the tracker from the keyboard', () => {
   // token": a screen reader moving through the order heard the same two
   // buttons on every row.
   describe("a combatant's die and bin", () => {
-    it("name the combatant for the DM", () => {
-      seat.role = 'DM';
+    it("name the combatant for the GM", () => {
+      seat.role = 'GM';
       threeReady();
       render(<InitiativeTracker />);
 

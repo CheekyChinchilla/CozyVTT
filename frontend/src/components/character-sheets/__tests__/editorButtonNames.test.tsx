@@ -1,19 +1,19 @@
 /**
  * Every button in a sheet editor has a name a screen reader can say.
  *
- * The buttons that remove a D&D 5e attack, spell or inventory item showed
- * "×" and were announced as "times"; most of the Pathfinder 2e editor's
+ * The buttons that remove a 5E attack, spell or inventory item showed
+ * "×" and were announced as "times"; most of the Fantasy d20 editor's
  * remove buttons showed only a bin and were announced as "button". Each now
  * names its row, as the class feature and hit dice rows already did.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
-import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
-import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { FifthEditionCharacterEditor } from '../fifth-edition/FifthEditionCharacterEditor';
+import { FantasyD20CharacterEditor } from '../fantasy-d20/FantasyD20CharacterEditor';
+import { HorrorD100CharacterEditor } from '../horror-d100/HorrorD100CharacterEditor';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -38,9 +38,9 @@ function unnamedButtons(): string[] {
 }
 
 describe.each([
-  ['D&D 5e', () => render(<DnD5eCharacterEditor character={dnd5eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
-  ['Pathfinder 2e', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
-  ['Call of Cthulhu', () => render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['5E', () => render(<FifthEditionCharacterEditor character={fifthEditionCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Fantasy d20', () => render(<FantasyD20CharacterEditor character={fantasyD20Character()} onSave={noop} onCancel={vi.fn()} />)],
+  ['Horror d100', () => render(<HorrorD100CharacterEditor character={horrorD100Character()} onSave={noop} onCancel={vi.fn()} />)],
 ])('the %s editor', (_system, show) => {
   it('names every button on every tab', () => {
     show();

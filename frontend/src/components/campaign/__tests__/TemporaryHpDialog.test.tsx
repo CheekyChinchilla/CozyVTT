@@ -1,7 +1,7 @@
 /**
  * Temporary HP...: how many to grant, then the rule for a second grant.
  *
- * In D&D 5e and Pathfinder 2e temporary hit points never add together: a
+ * In 5E and Fantasy d20 temporary hit points never add together: a
  * creature that already has some keeps them or takes the new ones. So with
  * none the grant is taken at once, and with some the dialog offers Keep N
  * and Take M. Keeping changes nothing.
@@ -12,14 +12,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TemporaryHpDialog from '../TemporaryHpDialog';
 
-function open(current: number, system: string | null = 'DND_5E') {
+function open(current: number, system: string | null = 'FIFTH_EDITION') {
   const onTake = vi.fn();
   const onClose = vi.fn();
-  render(<TemporaryHpDialog name="Brann" current={current} system={system} onTake={onTake} onClose={onClose} />);
+  render(<TemporaryHpDialog name="Corvel" current={current} system={system} onTake={onTake} onClose={onClose} />);
   return { onTake, onClose };
 }
 
-const box = () => screen.getByLabelText('Temporary hit points for Brann');
+const box = () => screen.getByLabelText('Temporary hit points for Corvel');
 const grant = (value: string) => {
   fireEvent.change(box(), { target: { value } });
   fireEvent.click(screen.getByRole('button', { name: 'Grant' }));
@@ -44,7 +44,7 @@ describe('Temporary HP...', () => {
   });
 
   it('changes nothing when the creature keeps what it has', () => {
-    const { onTake, onClose } = open(10, 'PATHFINDER_2E');
+    const { onTake, onClose } = open(10, 'FANTASY_D20');
     grant('4');
     fireEvent.click(screen.getByRole('button', { name: 'Keep 10' }));
     expect(onTake).not.toHaveBeenCalled();
@@ -85,8 +85,8 @@ describe('on a touch screen and from the keyboard', () => {
 
     const takeNew = screen.getByRole('button', { name: 'Take 12' });
     expect(document.activeElement).toBe(takeNew);
-    expect(takeNew).toHaveAccessibleDescription(/Brann already has 10 temporary hit points/);
-    expect(screen.getByRole('button', { name: 'Keep 10' })).toHaveAccessibleDescription(/Brann already has 10 temporary hit points/);
+    expect(takeNew).toHaveAccessibleDescription(/Corvel already has 10 temporary hit points/);
+    expect(screen.getByRole('button', { name: 'Keep 10' })).toHaveAccessibleDescription(/Corvel already has 10 temporary hit points/);
     await user.keyboard('{Enter}');
     expect(onTake).toHaveBeenCalledWith(12);
   });

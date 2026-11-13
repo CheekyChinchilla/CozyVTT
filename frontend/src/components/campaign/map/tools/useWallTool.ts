@@ -1,5 +1,5 @@
 // ============================================
-// The DM's wall tools: Draw, Polygon, Select, Split, Erase and Brush, with the
+// The GM's wall tools: Draw, Polygon, Select, Split, Erase and Brush, with the
 // wall panel they are chosen from, the undo keys and the wall selection
 // (useWallSelection). The walls themselves, and their undo history, stay with
 // MapCanvas, which draws them and keeps them in step with the server.
@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { CampaignMap } from '@/types';
 import type { WallSegment, WallType } from '@/types/walls';
-import type { WallToolMode, DmWallControlsProps } from '@/components/campaign/DmWallControls';
+import type { WallToolMode, GmWallControlsProps } from '@/components/campaign/GmWallControls';
 import { douglasPeucker, edgeSnapPoints } from '@/utils/geometry';
 import { randomId } from '@/utils/uuid';
 import { TOO_MANY_WALLS_MESSAGE } from '@/constants/mapLimits';
@@ -23,7 +23,7 @@ import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types'
 import { DOUBLE_TAP_PX } from '../mapPointer';
 
 interface UseWallToolArgs {
-  isDM: boolean;
+  isGM: boolean;
   currentMap: CampaignMap | null;
   wallMode: WallToolMode;
   setWallMode: (mode: WallToolMode) => void;
@@ -42,12 +42,12 @@ interface UseWallToolArgs {
   socket: ToolSocketSource | null | undefined;
   ownEdits: OwnEdits;
   mapControls: MapControls;
-  /** Set while the right button pans the map under a DM tool. */
+  /** Set while the right button pans the map under a GM tool. */
   rightPanActiveRef: RefObject<boolean>;
   /** The map picture, which the brush snaps to edges in when grid snap is off. */
   mapImage: HTMLImageElement | null;
   markDirty: (...layers: MapLayer[]) => void;
-  /** Tell the DM why a wall was not drawn, or was taken back. */
+  /** Tell the GM why a wall was not drawn, or was taken back. */
   refuse: (message: string) => void;
 }
 
@@ -85,11 +85,11 @@ function withEndpointsAt(
 }
 
 export function useWallTool({
-  isDM, currentMap, wallMode, setWallMode, wallSegments,
+  isGM, currentMap, wallMode, setWallMode, wallSegments,
   pushWallHistory, replaceWallHistory, carryWallHistory, undoWalls, redoWalls, wallHistoryIndex, stepWallHistoryBack, canUndoWalls, canRedoWalls,
   socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty, refuse,
 }: UseWallToolArgs) {
-  // Wall tool state (DM only)
+  // Wall tool state (GM only)
   const [wallType, setWallType] = useState<WallType>('wall');
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [snapToEndpoint, setSnapToEndpoint] = useState(false);
@@ -132,7 +132,7 @@ export function useWallTool({
   /**
    * Send the whole wall list to everyone, as undo and redo do. `before` is
    * the list it replaces: if the server refuses it, that is put back, with
-   * whatever has changed since, and the DM is told why, unless a later list
+   * whatever has changed since, and the GM is told why, unless a later list
    * that carried it is stored (WallSendLog). An undo or a redo passes its
    * `step`, which a refusal puts back instead, while nothing has been done
    * since, so the next Ctrl+Z tries again.
@@ -157,7 +157,7 @@ export function useWallTool({
     }));
   }, [socket, currentMap, ownEdits, refuse, sendLog, stepWallHistoryBack]);
 
-  /** Send one new wall; if the server refuses it, it is taken back and the DM told why, as a list is. */
+  /** Send one new wall; if the server refuses it, it is taken back and the GM told why, as a list is. */
   const sendWallAdd = useCallback((segment: WallSegment) => {
     const socketInstance = socket?.getSocket();
     if (!socketInstance || !currentMap) return;
@@ -179,7 +179,7 @@ export function useWallTool({
 
   /**
    * Whether an edit that takes the walls from `before` to `after` in number
-   * may be drawn: one past the map's cap is not, and the DM is told why.
+   * may be drawn: one past the map's cap is not, and the GM is told why.
    */
   const roomFor = useCallback((before: number, after: number): boolean => {
     if (!pastWallCap(before, after)) return true;
@@ -372,7 +372,7 @@ export function useWallTool({
    * A change someone else made, carried into any drag in progress. A drag
    * previews from the walls as they were when it began and its drop puts that
    * back as the undo point, so without this a player's door toggle in the
-   * middle of the DM's drag was undone for everyone.
+   * middle of the GM's drag was undone for everyone.
    */
   const carryIntoDrags = useCallback((change: (walls: WallSegment[]) => WallSegment[]) => {
     if (wallMoveRef.current) wallMoveRef.current.preDragState = change(wallMoveRef.current.preDragState);
@@ -433,7 +433,7 @@ export function useWallTool({
   const tool: MapTool = {
     down({ e, mapPx, screenX, screenY }: PointerAt) {
       // Wall-draw mode: place a point (or finish polyline on double-click)
-      if (wallMode === 'wall-draw' && isDM) {
+      if (wallMode === 'wall-draw' && isGM) {
         const snapped = snapPoint(mapPx);
 
         if (secondPressEnds(e, snapped, wallInProgress[wallInProgress.length - 1])) {
@@ -510,7 +510,7 @@ export function useWallTool({
       }
 
       // Wall-polygon mode: place corners; close on click-near-first-point or double-click
-      if (wallMode === 'wall-polygon' && isDM) {
+      if (wallMode === 'wall-polygon' && isGM) {
         const snapped = snapPoint(mapPx);
 
         if (secondPressEnds(e, snapped, polygonPoints[polygonPoints.length - 1])) {
@@ -537,7 +537,7 @@ export function useWallTool({
       }
 
       // Wall-select mode: click near an endpoint to start dragging, or click a wall to select it
-      if (wallMode === 'wall-select' && isDM) {
+      if (wallMode === 'wall-select' && isGM) {
         // Check for endpoint hit first (drag-to-move)
         const epHitRadius = 10 / mapControls.zoom;
         let bestEpDist = epHitRadius;
@@ -602,7 +602,7 @@ export function useWallTool({
       }
 
       // Wall-split mode: click to split segment at the closest point
-      if (wallMode === 'wall-split' && isDM) {
+      if (wallMode === 'wall-split' && isGM) {
         const hitThreshold = 14 / mapControls.zoom;
         const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
         if (hit) {
@@ -627,7 +627,7 @@ export function useWallTool({
       }
 
       // Wall-erase mode: start erasing brush
-      if (wallMode === 'wall-erase' && isDM) {
+      if (wallMode === 'wall-erase' && isGM) {
         wallEraseBrushActiveRef.current = true;
         wallErasedIdsRef.current = new Set();
         const r = WALL_ERASE_RADIUS / mapControls.zoom;
@@ -639,7 +639,7 @@ export function useWallTool({
       }
 
       // Wall-brush mode: start painting
-      if (wallMode === 'wall-brush' && isDM) {
+      if (wallMode === 'wall-brush' && isGM) {
         wallBrushActiveRef.current = true;
         const snapped = snapPoint(mapPx);
         wallBrushPointsRef.current = [{ x: snapped.x, y: snapped.y }];
@@ -650,7 +650,7 @@ export function useWallTool({
     },
     move({ e, mapPx }: PointerAt) {
       // Wall-select mode: drag endpoint or update hover
-      if (wallMode === 'wall-select' && isDM) {
+      if (wallMode === 'wall-select' && isGM) {
         if (rightPanActiveRef.current) { mapControls.handleDrag(e); markDirty('terrain', 'tokens', 'overlay'); return true; }
         // Drag endpoint in progress
         if (wallDragEndpointRef.current && (e.buttons & 1)) {
@@ -712,7 +712,7 @@ export function useWallTool({
       }
 
       // Wall-split mode: update split hover point
-      if (wallMode === 'wall-split' && isDM) {
+      if (wallMode === 'wall-split' && isGM) {
         if (rightPanActiveRef.current) mapControls.handleDrag(e);
         const hitThreshold = 14 / mapControls.zoom;
         const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
@@ -727,7 +727,7 @@ export function useWallTool({
       }
 
       // Wall-erase mode: continue erasing while left mouse button held; pan on right
-      if (wallMode === 'wall-erase' && isDM) {
+      if (wallMode === 'wall-erase' && isGM) {
         if (rightPanActiveRef.current) {
           mapControls.handleDrag(e);
         } else if (wallEraseBrushActiveRef.current) {
@@ -741,7 +741,7 @@ export function useWallTool({
       }
 
       // Wall-brush mode: continue painting stroke
-      if (wallMode === 'wall-brush' && isDM) {
+      if (wallMode === 'wall-brush' && isGM) {
         if (rightPanActiveRef.current) {
           mapControls.handleDrag(e);
         } else if (wallBrushActiveRef.current) {
@@ -757,14 +757,14 @@ export function useWallTool({
       }
 
       // Wall-polygon mode: handle right-pan; re-render for ghost line update
-      if (wallMode === 'wall-polygon' && isDM) {
+      if (wallMode === 'wall-polygon' && isGM) {
         if (rightPanActiveRef.current) mapControls.handleDrag(e);
         markDirty('overlay');
         return true;
       }
 
       // Wall-draw mode: just re-render for ghost line update (cursor moves)
-      if (wallMode === 'wall-draw' && isDM) {
+      if (wallMode === 'wall-draw' && isGM) {
         if (rightPanActiveRef.current) mapControls.handleDrag(e);
         markDirty('overlay');
         return true;
@@ -956,7 +956,7 @@ export function useWallTool({
   };
 
   /** What the wall panel shows and does; MapCanvas adds what crosses tools. */
-  const panel: DmWallControlsProps = {
+  const panel: GmWallControlsProps = {
     wallMode,
     onWallModeChange: (mode) => {
       setWallMode(mode);

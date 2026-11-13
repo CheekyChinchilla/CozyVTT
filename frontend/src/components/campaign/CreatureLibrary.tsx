@@ -1,6 +1,9 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * CreatureLibrary
- * DM slide-over panel for browsing, searching, and placing creatures from the library.
+ * GM slide-over panel for browsing, searching, and placing creatures from the library.
  * Supports SRD creatures (global, read-only) and campaign-specific custom creatures.
  * Creatures are placed on the map via a "Place on Map" button that creates a token
  * with the creature's stats copied into the token's statBlock field.
@@ -34,19 +37,21 @@ import {
   StatBlockViewer,
   buildCreatureStatBlock,
   ProficiencyEditor,
-  Pf2eProficiencyEditor,
+  FantasyD20ProficiencyEditor,
 } from './npc-stat-blocks';
 import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency';
-import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
+import { FANTASY_D20_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/fantasyD20StatBlock';
 import PrintedSkillsEditor from './npc-stat-blocks/PrintedSkillsEditor';
 import { creatureModel, scoreLabel, withGameSystem } from './npc-stat-blocks/creatureModel';
 import NumberField from '@/components/ui/NumberField';
 import { SCORE_BOX_CLASS } from './npc-stat-blocks/scoreBox';
-import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
-import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
+import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/fifthEdition';
+import { GAME_SYSTEM_SHORT_LABELS, isGameSystem, playedGameSystem } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import NoticeText from '@/components/common/NoticeText';
+import { SRD_ATTRIBUTION, SRD_MODIFIED } from '@/constants/gameContentNotices';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { extractAssetId } from '@/utils/assetUrl';
 import { cn } from '@/utils/cn';
@@ -63,38 +68,26 @@ const CR_OPTIONS = CHALLENGE_RATINGS;
 
 const SOURCE_FILTERS = [
   { value: '', label: 'All Sources' },
-  { value: 'srd', label: 'SRD (Official)' },
+  { value: 'srd', label: 'SRD 5.1' },
   { value: 'custom', label: 'Custom / Homebrew' },
 ];
 
+/** The game system the SRD import seeds, whatever the campaign's. */
+const SRD_SYSTEM_LABEL = GAME_SYSTEM_SHORT_LABELS[GameSystem.FIFTH_EDITION];
+
 /**
- * The credit the SRD 5.1's licence, CC BY 4.0, asks for wherever its material
- * is shown: beside the import, and at the foot of the library whenever it
- * lists an SRD creature. SRD_ATTRIBUTION.md has the full notice.
+ * The sentence the SRD 5.1's licence, CC BY 4.0, asks for wherever its
+ * material is shown, and the line saying CozyVTT changed it: beside the
+ * import, and at the foot of the library whenever it may list an SRD
+ * creature. GAME_CONTENT_NOTICES.md has the full notices, and About CozyVTT
+ * shows every system's credits.
  */
 function SrdCredit({ className = '' }: { className?: string }) {
   return (
-    <p className={`text-[10px] text-stone-gray/60 ${className}`}>
-      Includes material from the{' '}
-      <a
-        href="https://dnd.wizards.com/resources/systems-reference-document"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline hover:text-brand-ink"
-      >
-        System Reference Document 5.1
-      </a>{' '}
-      by Wizards of the Coast LLC, licensed under{' '}
-      <a
-        href="https://creativecommons.org/licenses/by/4.0/legalcode"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline hover:text-brand-ink"
-      >
-        CC BY 4.0
-      </a>
-      . Served by Open5e.
-    </p>
+    <div className={`space-y-1 ${className}`}>
+      <NoticeText text={SRD_ATTRIBUTION} className="text-xs text-ink-muted" />
+      <NoticeText text={SRD_MODIFIED} className="text-xs text-ink-muted" />
+    </div>
   );
 }
 
@@ -113,6 +106,8 @@ interface CreatureLibraryProps {
 
 export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProps) {
   const { campaign, viewedMap } = useCampaign();
+  // A campaign stored with a system CozyVTT no longer supports is one with none here.
+  const campaignSystem = playedGameSystem(campaign?.gameSystem);
 
   // ── Search & filter state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,9 +117,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   /**
    * Whether to limit the library to this campaign's game system.
    *
-   * Defaults to doing so: a Call of Cthulhu table has no use for 322 D&D
-   * monsters in its browse list. It stays a toggle rather than a hard rule
-   * because only D&D 5e ships SRD content, so a DM running anything else may
+   * Defaults to doing so: a Horror d100 table has no use for the 5E SRD's
+   * 322 monsters in its browse list. It stays a toggle rather than a hard rule
+   * because only 5E ships SRD content, so a GM running anything else may
    * legitimately want to borrow a stat block as a starting point.
    */
   const [matchGameSystem, setMatchGameSystem] = useState(true);
@@ -192,7 +187,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         cr: crFilter || undefined,
         // A campaign with no system set has nothing to match against, so it
         // always sees everything.
-        gameSystem: matchGameSystem ? (campaign.gameSystem ?? undefined) : undefined,
+        gameSystem: matchGameSystem ? (campaignSystem ?? undefined) : undefined,
         limit: LIMIT,
         offset: newOffset,
       });
@@ -207,7 +202,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     } finally {
       setIsLoading(false);
     }
-  }, [campaign, searchQuery, sourceFilter, crFilter, matchGameSystem, offset]);
+  }, [campaign, campaignSystem, searchQuery, sourceFilter, crFilter, matchGameSystem, offset]);
 
   // Fetch on open and when filters change
   useEffect(() => {
@@ -278,7 +273,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     };
 
     // HP from the creature's stat block; creatures saved before HP was tracked
-    // fall back to 10, which the DM can adjust via NpcQuickEditor
+    // fall back to 10, which the GM can adjust via NpcQuickEditor
     const hpMax = creature.statBlock?.hpMax ?? 10;
 
     try {
@@ -418,6 +413,13 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   const hasMore = creatures.length < total;
 
+  // The SRD 5.1 is credited wherever its material may be shown: an SRD
+  // creature in the list or under Favorites, or a custom one on an instance
+  // that holds SRD creatures, as a copy of one is custom and nothing on it
+  // says where it came from.
+  const listed = [...creatures, ...favoriteCreatures];
+  const mayListSrdCreature = listed.some((c) => c.source === 'srd') || ((srdCount ?? 0) > 0 && listed.length > 0);
+
   return (
     <>
     <SlideOver
@@ -493,7 +495,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
               </select>
             </div>
             {/* Only meaningful when the campaign has a system to match. */}
-            {campaign?.gameSystem && (
+            {campaignSystem && (
               <select
                 aria-label="Game system filter"
                 value={matchGameSystem ? 'campaign' : 'all'}
@@ -501,7 +503,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 className="input-cozy text-xs w-full"
               >
                 <option value="campaign">
-                  {GAME_SYSTEM_SHORT_LABELS[campaign.gameSystem]} only (this campaign)
+                  {GAME_SYSTEM_SHORT_LABELS[campaignSystem]} only (this campaign)
                 </option>
                 <option value="all">All game systems</option>
               </select>
@@ -520,7 +522,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           >
             <Plus className="w-3 h-3" /> Create Custom
           </button>
-          {/* The label names the system it imports: this seeds the D&D 5e
+          {/* The label names the system it imports: this seeds the 5E
               bestiary whatever the campaign's system, which was not
               obvious from a bare "Import SRD Creatures". */}
           {srdCount === 0 && canSeed && (
@@ -532,7 +534,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
               {isSeeding ? (
                 <><Loader2 className="w-3 h-3 animate-spin" /> Seeding...</>
               ) : (
-                <><BookOpen className="w-3 h-3" /> Import D&amp;D 5e SRD</>
+                <><BookOpen className="w-3 h-3" /> Import {SRD_SYSTEM_LABEL} SRD</>
               )}
             </button>
           )}
@@ -586,7 +588,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                     isExpanded={expandedId === creature.id}
                     isPlacing={placingId === creature.id}
                     isFavorite={true}
-                    gameSystem={campaign?.gameSystem ?? null}
+                    gameSystem={campaignSystem}
                     onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
                     onPlace={() => handlePlace(creature)}
                     onDuplicate={() => handleDuplicate(creature.id)}
@@ -617,12 +619,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
             <p className="text-sm text-stone-gray/70">
               {searchQuery ? 'No creatures match your search.' : 'No creatures in the library yet.'}
             </p>
-            {/* The likeliest reason a non-D&D campaign looks empty: only
-                D&D 5e ships SRD content, and the library defaults to this
+            {/* The likeliest reason a non-5E campaign looks empty: only
+                5E ships SRD content, and the library defaults to this
                 campaign's system. Say so rather than looking broken. */}
-            {!searchQuery && matchGameSystem && campaign?.gameSystem && (srdCount ?? 0) > 0 && (
+            {!searchQuery && matchGameSystem && campaignSystem && (srdCount ?? 0) > 0 && (
               <p className="mt-2 text-xs text-stone-gray/60">
-                Showing {GAME_SYSTEM_SHORT_LABELS[campaign.gameSystem]} creatures only.{' '}
+                Showing {GAME_SYSTEM_SHORT_LABELS[campaignSystem]} creatures only.{' '}
                 <button
                   type="button"
                   onClick={() => { setMatchGameSystem(false); setShowFilters(true); }}
@@ -635,14 +637,14 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
             )}
             {!searchQuery && srdCount === 0 && !canSeed && (
               <p className="mt-4 text-xs text-stone-gray/60">
-                The ~320 official D&amp;D 5e SRD creatures have not been imported on this server.
+                The ~320 {SRD_SYSTEM_LABEL} SRD creatures have not been imported on this server.
                 Only an administrator can import them, since every campaign shares them. Ask an administrator to import them.
               </p>
             )}
             {!searchQuery && srdCount === 0 && canSeed && (
               <div className="mt-4 space-y-2">
                 <p className="text-xs text-stone-gray/60">
-                  Import ~320 official D&D 5e SRD creatures with full stat blocks, for every campaign on this server.
+                  Import ~320 {SRD_SYSTEM_LABEL} SRD creatures with full stat blocks, for every campaign on this server.
                 </p>
                 <Button
                   onClick={handleSeedSrd}
@@ -652,7 +654,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                   {isSeeding ? (
                     <><Loader2 className="w-3 h-3 animate-spin inline mr-1" /> Importing from Open5e...</>
                   ) : (
-                    'Import D&D 5e SRD Creatures'
+                    `Import ${SRD_SYSTEM_LABEL} SRD Creatures`
                   )}
                 </Button>
                 <SrdCredit />
@@ -673,7 +675,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 isExpanded={expandedId === creature.id}
                 isPlacing={placingId === creature.id}
                 isFavorite={favoriteIds.has(creature.id)}
-                gameSystem={campaign?.gameSystem ?? null}
+                gameSystem={campaignSystem}
                 onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
                 onPlace={() => handlePlace(creature)}
                 onDuplicate={() => handleDuplicate(creature.id)}
@@ -705,7 +707,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           </div>
         )}
       </div>
-      {creatures.some((c) => c.source === 'srd') && (
+      {mayListSrdCreature && (
         <SrdCredit className="px-4 py-2 border-t border-moss-green/10" />
       )}
       </div>{/* the list */}
@@ -723,7 +725,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         <CreatureForm
           key={editingCreature?.id ?? 'new'}
           campaignId={campaign?.id || ''}
-          gameSystem={campaign?.gameSystem ?? null}
+          gameSystem={campaignSystem}
           editingCreature={editingCreature}
           asStep={formAsStep}
           headingRef={formHeadingRef}
@@ -1054,11 +1056,11 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Pathfinder 2e rates creatures by Level rather than Challenge Rating, and
-  // stores printed modifiers instead of deriving them; Call of Cthulhu and
-  // Shadowrun 6e have no rating at all, and store what is typed.
+  // Fantasy d20 rates creatures by Level rather than Challenge Rating, and
+  // stores printed modifiers instead of deriving them; Horror d100 has no
+  // rating at all, and stores what is typed.
   const model = creatureModel(gameSystem);
-  const isPf2e = model === 'pf2e';
+  const isFantasyD20 = model === 'fantasyD20';
   const { minScore, maxScore } = statBlockNumberBounds(gameSystem);
   const [level, setLevel] = useState<number | undefined>(sb?.level);
 
@@ -1076,7 +1078,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
 
   // Ability scores and CR feed every derived save and skill, so a change
   // moves them, as in the token editor: the form used to show the new totals
-  // and save the old ones. Only D&D 5e works anything out from them.
+  // and save the old ones. Only 5E works anything out from them.
   const changeNumbers = (changes: Partial<Pick<NpcStatBlock, 'abilities' | 'challengeRating'>>) => {
     if (model !== 'derived') return;
     const next = changeAbilitiesOrRating(workingStatBlock, changes);
@@ -1090,7 +1092,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
     changeNumbers({ abilities: { ...workingStatBlock.abilities, [ability]: value } });
   };
 
-  // A Pathfinder stat block holds attribute modifiers (the token editor writes
+  // A Fantasy d20 stat block holds attribute modifiers (the token editor writes
   // them, and rolls and the viewer read them); there is no score behind them.
   const [attributeModifiers, setAttributeModifiers] = useState<Record<AbilityKey, number>>(() =>
     readAttributeModifiers(sb ?? workingStatBlock)
@@ -1109,7 +1111,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
     // carry-forward below sees the current saves and skills. The stat block is
     // named for the campaign's game system, as the creature is.
     const source = withGameSystem({ ...sb, ...proficiencyFields }, gameSystem);
-    const statBlock = buildCreatureStatBlock({ ...source, level, ...(isPf2e ? { attributeModifiers } : {}) }, {
+    const statBlock = buildCreatureStatBlock({ ...source, level, ...(isFantasyD20 ? { attributeModifiers } : {}) }, {
       ac,
       hpMax,
       speed,
@@ -1130,9 +1132,12 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
       languages,
     });
 
+    // A creature stored with a system this build does not know keeps it. The
+    // form plays it as none, and sending that would store none in its place.
+    const keepStoredSystem = editingCreature?.gameSystem != null && !isGameSystem(editingCreature.gameSystem);
     const payload = {
       name: name.trim(),
-      gameSystem,
+      ...(keepStoredSystem ? {} : { gameSystem }),
       challengeRating: cr || null,
       creatureType: creatureType || null,
       alignment: alignment || null,
@@ -1188,7 +1193,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Goblin Boss"
+          placeholder="e.g. Hobgoblin"
           maxLength={STAT_BLOCK_LIMITS.maxNameLength}
           className="input-cozy w-full text-sm"
         />
@@ -1245,7 +1250,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
             className="input-cozy w-full text-xs"
           />
         </div>
-        {isPf2e ? (
+        {isFantasyD20 ? (
           <div>
             <label className="text-[10px] text-stone-gray block mb-0.5" htmlFor="creature-level">Level</label>
             <input
@@ -1305,14 +1310,14 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
         </div>
       </div>
 
-      {/* Ability scores, or a Pathfinder creature's attribute modifiers */}
-      {isPf2e ? (
+      {/* Ability scores, or a Fantasy d20 creature's attribute modifiers */}
+      {isFantasyD20 ? (
         <div>
           <label className="text-[10px] text-stone-gray block mb-0.5">Attribute Modifiers</label>
           <div className="grid grid-cols-6 gap-1.5">
             {ABILITY_KEYS.map((ability) => (
               <div key={ability} className="text-center">
-                <label className="text-[8px] font-bold text-brand-ink block">{PF2E_ATTRIBUTE_LABELS[ability]}</label>
+                <label className="text-[8px] font-bold text-brand-ink block">{FANTASY_D20_ATTRIBUTE_LABELS[ability]}</label>
                 <input
                   type="number"
                   value={attributeModifiers[ability]}
@@ -1348,7 +1353,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
         </div>
       )}
 
-      {/* Saves & skills: in D&D 5e derived from the ability scores and CR
+      {/* Saves & skills: in 5E derived from the ability scores and CR
           above, elsewhere typed as printed. This form had no fields for these
           at all, which is why editing a duplicated SRD creature used to delete
           them. */}
@@ -1366,8 +1371,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, asStep, heading
               })
             }
           />
-        ) : isPf2e ? (
-          <Pf2eProficiencyEditor
+        ) : isFantasyD20 ? (
+          <FantasyD20ProficiencyEditor
             statBlock={workingStatBlock}
             onChange={(updated) =>
               setProficiencyFields({

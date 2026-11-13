@@ -1,7 +1,7 @@
 /**
  * Who answers when a non-looping track finishes.
  *
- * The DM's client re-asserts the current vibe's track, so a one-shot sound
+ * The GM's client re-asserts the current vibe's track, so a one-shot sound
  * effect does not leave the table silent until the next vibe switch, and with
  * a track-less vibe it clears the finished track from the stored state so a
  * late joiner does not start it from the top. A player's client answers
@@ -55,7 +55,7 @@ const mockState: {
   campaign: Partial<Campaign>;
   userRole: CampaignRole;
   currentVibe: string | null;
-} = { campaign: {}, userRole: 'DM' as CampaignRole, currentVibe: null };
+} = { campaign: {}, userRole: 'GM' as CampaignRole, currentVibe: null };
 
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
@@ -93,17 +93,17 @@ describe('AtmospherePlayer after a track ends', () => {
         periods: [{ name: 'battle', hue: '#FF9966', filter: 'none', audio: TRACK }],
       },
     };
-    mockState.userRole = 'DM' as CampaignRole;
+    mockState.userRole = 'GM' as CampaignRole;
     mockState.currentVibe = 'battle';
   });
 
-  it("the DM's client re-asserts the vibe's track", () => {
+  it("the GM's client re-asserts the vibe's track", () => {
     render(<AtmospherePlayer />);
     lastAudio().dispatch('ended');
     expect(emitAtmosphereAudioSet).toHaveBeenCalledWith({ assetId: TRACK, volume: 0.7, loop: true });
   });
 
-  it('with a track-less vibe the DM clears the finished track', () => {
+  it('with a track-less vibe the GM clears the finished track', () => {
     mockState.currentVibe = null;
     render(<AtmospherePlayer />);
     lastAudio().dispatch('ended');

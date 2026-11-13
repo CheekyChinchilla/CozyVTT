@@ -1,7 +1,7 @@
 /**
  * Signing out deletes the user's drafts of Paint in this browser.
  *
- * A draft holds the pixels of a map the DM has not saved, which the players
+ * A draft holds the pixels of a map the GM has not saved, which the players
  * have not seen; it is kept in the browser's IndexedDB, which outlives the
  * sign-in. On a shared computer the next person to use the browser could
  * read it there. So an explicit sign-out drops every draft of the user who

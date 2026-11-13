@@ -7,7 +7,7 @@
 // a token, naming it, and Put back does what Esc does. It sits top-centre
 // over the map, under the toolbar and clear of the details card in the
 // bottom-left and the preview controls in the bottom-right. It lies over
-// the DM's tool stack where the two meet, as on a narrow tablet: Put back
+// the GM's tool stack where the two meet, as on a narrow tablet: Put back
 // is the thing to reach while a token is held.
 // ============================================
 

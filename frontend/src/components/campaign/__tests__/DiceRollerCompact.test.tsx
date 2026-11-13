@@ -8,7 +8,7 @@
  * first, each a share of the width; Roll and More options sit beside the
  * expression; and the rest waits behind More options: on the compact layout
  * Adv, Dis, the saved rolls, Saved, Character, Purpose, Secret Roll, clearing
- * the fields, the secret-rolls eye and the DM's Clear; on the desktop
+ * the fields, the secret-rolls eye and the GM's Clear; on the desktop
  * Character and Purpose, the other chips and Secret Roll staying in sight.
  * The log takes the room the controls leave, the panel's one scroll area.
  *

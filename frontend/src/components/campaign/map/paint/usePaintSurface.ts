@@ -1,5 +1,5 @@
 // ============================================
-// Paint: the DM painting a drawn map's picture on the map itself.
+// Paint: the GM painting a drawn map's picture on the map itself.
 //
 // While Paint is on, the picture is held in one canvas of its own pixels,
 // which the terrain layer draws in the picture's place, so the grid, the
@@ -20,7 +20,7 @@
 // (holdsPicture), so the picture is held once, not twice. With nothing left
 // to save, the canvas stays on screen until the map's picture has loaded
 // again, then is let go of (its pixels freed at once); at once when another
-// map is shown, and when the viewer is no longer the DM.
+// map is shown, and when the viewer is no longer the GM.
 //
 // What is painted and not saved is kept as a draft in the browser
 // (paintDrafts.ts): the tiles each change touches, written at least every
@@ -31,7 +31,7 @@
 // Paint not saved is asked about before anything takes it off the screen
 // (usePaintGuards.ts): isUnsaved, whenSaved and discard are for that. A map
 // that leaves the screen without asking (deleted from elsewhere, or the
-// viewer no longer the DM) leaves the painting behind as `leftover`, kept
+// viewer no longer the GM) leaves the painting behind as `leftover`, kept
 // as a draft and offered as a picture to download.
 //
 // Paint is the first of the map's tools: while it is on it takes every left
@@ -151,7 +151,7 @@ export const PAINT_UNDO_BUDGET_BYTES = 48 * 1024 * 1024;
 /** The most steps that may be undone, within the budget. */
 export const PAINT_UNDO_STEPS = 50;
 
-/** Why Paint did not open, said to the DM. */
+/** Why Paint did not open, said to the GM. */
 export const PAINT_TOO_LARGE = `This map is too large to paint: it has more than ${MOST_DRAWN_SQUARES.toLocaleString('en-US')} squares. Choose fewer squares in Edit Map.`;
 export const PAINT_NO_CANVAS = 'This browser could not open a picture that large to paint.';
 export const FILL_TOO_LARGE = 'This device could not fill an area that large.';
@@ -254,12 +254,12 @@ function pendingRoom(walls: WallLine[]): { room: PendingRoom; note: PaintStepNot
   return { room, note: { undone: () => { room.live = false; }, redone: () => { room.live = true; } } };
 }
 
-/** Paint not saved on a map that left the screen without asking, until the DM says what to do with it. */
+/** Paint not saved on a map that left the screen without asking, until the GM says what to do with it. */
 export interface PaintLeftover {
   mapId: string;
   mapName: string;
-  /** The map is no longer on screen, or the viewer is no longer the DM. */
-  reason: 'map' | 'not-dm';
+  /** The map is no longer on screen, or the viewer is no longer the GM. */
+  reason: 'map' | 'not-gm';
   canvas: HTMLCanvasElement;
 }
 
@@ -377,12 +377,12 @@ export interface PaintSurfaceOptions {
   pictureKind: MapPictureKind;
   /** The picture at the map's own address failed to load. */
   pictureFailed: boolean;
-  isDM: boolean;
+  isGM: boolean;
   mapControls: MapControls;
   markDirty: (...layers: MapLayer[]) => void;
-  /** Tells the DM why Paint did not open, or a save failed. */
+  /** Tells the GM why Paint did not open, or a save failed. */
   refuse: (message: string) => void;
-  /** Tells the DM something to bear in mind, such as that no draft can be kept. */
+  /** Tells the GM something to bear in mind, such as that no draft can be kept. */
   warn?: (message: string) => void;
   /**
    * Where drafts are kept; null in a browser that keeps none, which is said
@@ -402,7 +402,7 @@ const stillPoint = (a: PaintPoint | undefined, b: PaintPoint) => !!a && a[0] ===
 const strokeTexture = (stroke: Stroke): ShadedTexture | null => (stroke.texture ? { kind: stroke.texture, colour: stroke.colour } : null);
 
 export function usePaintSurface(options: PaintSurfaceOptions) {
-  const { map, picture, pictureKind, pictureFailed, campaignId, onSaved, onMapRead, mapsSharing, isDM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
+  const { map, picture, pictureKind, pictureFailed, campaignId, onSaved, onMapRead, mapsSharing, isGM, mapControls, markDirty, refuse, warn, drafts, userId, tab, make } = options;
   // What Paint opens on: the picture at the map's own address, once it has
   // loaded, so a save never writes the picture before it, still drawn while a
   // new one loads or after it failed, over the new one. A map with no
@@ -540,7 +540,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const draftChain = useRef<Promise<unknown>>(Promise.resolve());
   /** A write has failed, or the store did not answer: no more are tried while the page is open. */
   const draftsOff = useRef(false);
-  /** What the DM is told of it, once there is paint to keep. */
+  /** What the GM is told of it, once there is paint to keep. */
   const noDraftsWhy = useRef(DRAFTS_UNAVAILABLE);
   const toldNoDrafts = useRef(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -552,7 +552,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   }, []);
   /**
    * Run `job` on the store after everything before it. A failure turns
-   * drafts off for the page; the DM is told once there is paint to keep.
+   * drafts off for the page; the GM is told once there is paint to keep.
    */
   const inDraftQueue = useCallback(<T,>(job: (store: DraftStore) => Promise<T>): Promise<T | undefined> => {
     const store = draftsRef.current;
@@ -689,7 +689,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     s.takenFrom = null;
   }, [clearDraft, dropDraft]);
   // The newest draft of the map on screen, this tab's or a closed tab's,
-  // looked for as it is shown to the DM. A press of Paint waits for it at
+  // looked for as it is shown to the GM. A press of Paint waits for it at
   // most DRAFT_LOOKUP_MS, so Paint is never held up; one found later, behind
   // a large write still under way for instance, is offered at the next press
   // while no canvas has been made on the map since (a canvas made meanwhile
@@ -697,7 +697,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   // store that takes as long to answer the lookup itself, once its turn has
   // come, does not answer at all: drafts are off for the page.
   const mapIdShown = map?.id ?? null;
-  const lookupKey = mapIdShown && isDM && userId && campaignId && drafts ? `${userId}|${campaignId}|${mapIdShown}` : null;
+  const lookupKey = mapIdShown && isGM && userId && campaignId && drafts ? `${userId}|${campaignId}|${mapIdShown}` : null;
   useEffect(() => {
     if (!lookupKey || !mapIdShown || !userId || !campaignId) return undefined;
     let live = true;
@@ -782,7 +782,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   const [leftover, setLeftover] = useState<PaintLeftover | null>(null);
   /**
    * Let go of everything but the picture, which stays as `leftover` for the
-   * DM to download or discard: its map left the screen without asking.
+   * GM to download or discard: its map left the screen without asking.
    */
   const strand = useCallback((s: Surface, reason: PaintLeftover['reason']) => {
     textRef.current = null;
@@ -814,7 +814,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
    * stretched to that size, or a map with none starts blank.
    */
   const open = useCallback((how?: OpenWith): boolean => {
-    if (!map || !isDM) return false;
+    if (!map || !isGM) return false;
     const held = surfaceRef.current;
     // Paint held over a picture changed elsewhere: asked about first.
     if (held && held.mapId === map.id && (map.imageUrl ?? '') !== held.baseUrl && unsavedWith(held, selectionRef.current)) {
@@ -879,7 +879,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
       keep: (tile, pixels) => remember(tile, tileStore.keep(tile, pixels)),
     };
     // The map's own colour: what the eraser paints, and the second colour to
-    // start with the first time this map is opened, the DM's after. Kept with
+    // start with the first time this map is opened, the GM's after. Kept with
     // a map drawn in CozyVTT; read off the picture's top-left pixel for one
     // drawn before it was kept.
     const background = map.drawnBackground ?? readColour(ctx, 0, 0) ?? DRAWN_MAP_BACKGROUND;
@@ -953,7 +953,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     onRef.current = true;
     markDirty('terrain', 'overlay');
     return true;
-  }, [map, isDM, opensOn, ownPicture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound]);
+  }, [map, isGM, opensOn, ownPicture, refuse, make, dispose, show, bump, markDirty, touched, draftKnown, draftFound]);
 
   /** The latest open, for an answer given after an await, on the map as it is then. */
   const openRef = useRef(open);
@@ -999,34 +999,34 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     return true;
   }, [markDirty]);
 
-  // Another map, or no longer the DM: the picture goes. (Asking first about
+  // Another map, or no longer the GM: the picture goes. (Asking first about
   // paint not saved is the page's, before the map changes.)
   const mapId = map?.id ?? null;
   useEffect(() => {
     const s = surfaceRef.current;
-    if (s && (s.mapId !== mapId || !isDM)) {
+    if (s && (s.mapId !== mapId || !isGM)) {
       // Pixels moved or pasted and not yet put down join the painting kept.
       endSelectionRef.current();
       writeDraft(s);
-      if (unsavedWith(s, selectionRef.current)) strand(s, isDM ? 'map' : 'not-dm');
+      if (unsavedWith(s, selectionRef.current)) strand(s, isGM ? 'map' : 'not-gm');
       else dispose();
       setOn(false);
       onRef.current = false;
-    } else if (!s && on && !isDM) {
+    } else if (!s && on && !isGM) {
       setOn(false);
       onRef.current = false;
     }
-  }, [mapId, isDM, on, dispose, writeDraft, strand]);
-  // A polygon kept while Mapmaker is put away goes with its map, and with the DM.
+  }, [mapId, isGM, on, dispose, writeDraft, strand]);
+  // A polygon kept while Mapmaker is put away goes with its map, and with the GM.
   useEffect(() => {
     const polygon = polygonRef.current;
-    if (polygon && (polygon.mapId !== mapId || !isDM)) polygonRef.current = null;
-  }, [mapId, isDM]);
+    if (polygon && (polygon.mapId !== mapId || !isGM)) polygonRef.current = null;
+  }, [mapId, isGM]);
   // A draft offered for a map no longer on screen, or to a viewer no longer
-  // the DM, is no longer asked about: its answer would act on nothing.
+  // the GM, is no longer asked about: its answer would act on nothing.
   useEffect(() => {
-    setOffer((offered) => (offered && (offered.header.mapId !== mapId || !isDM) ? null : offered));
-  }, [mapId, isDM]);
+    setOffer((offered) => (offered && (offered.header.mapId !== mapId || !isGM) ? null : offered));
+  }, [mapId, isGM]);
   // And when the map goes from the page.
   const leftoverRef = useRef(leftover);
   useEffect(() => {
@@ -1063,7 +1063,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   // save under way uploaded is this page's own.
   const stale = surface !== null && map !== null && surface.mapId === map.id && (map.imageUrl ?? '') !== surface.baseUrl
     && (map.imageUrl ?? '') !== surface.savingUrl;
-  // Paint not saved over a picture changed elsewhere: kept, and the DM is
+  // Paint not saved over a picture changed elsewhere: kept, and the GM is
   // asked what to do with it, here and each time Paint is pressed until
   // they say. With nothing to save, the canvas simply goes.
   const stranded = stale && unsaved;
@@ -1443,7 +1443,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     toRelease.current.push(left.canvas);
   }, [clearDraft]);
 
-  /** The DM's answer about paint not saved over a picture changed elsewhere. */
+  /** The GM's answer about paint not saved over a picture changed elsewhere. */
   const answer = useCallback((choice: 'save' | 'discard' | 'later') => {
     setAsking(false);
     if (choice === 'save') void save(true);
@@ -1456,7 +1456,7 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
   }, [save, dispose, clearDrafts]);
 
   /**
-   * The DM's answer to the draft offered back: Restore opens Paint with its
+   * The GM's answer to the draft offered back: Restore opens Paint with its
    * tiles put back, Discard drops it and opens Paint on the picture as it
    * is, and Not now leaves both as they are.
    */
@@ -2210,11 +2210,11 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     /** Paint not saved is held over a picture changed elsewhere: Paint stays offered, to ask about it. */
     stranded,
     /**
-     * Paint is offered to the DM, and open() opens: on the map's own picture,
+     * Paint is offered to the GM, and open() opens: on the map's own picture,
      * or blank, or on the canvas held for the map; or to ask about paint held
      * over a picture changed elsewhere.
      */
-    offered: isDM && map !== null && (stranded || source !== null || opensOn),
+    offered: isGM && map !== null && (stranded || source !== null || opensOn),
     /** The question about it is open. */
     asking,
     answer,
@@ -2256,13 +2256,13 @@ export function usePaintSurface(options: PaintSurfaceOptions) {
     whenSaved: (): Promise<unknown> => saveRun.current ?? Promise.resolve(),
     discard,
     download,
-    /** Paint not saved left behind by a map gone without asking, and what the DM may do with it. */
+    /** Paint not saved left behind by a map gone without asking, and what the GM may do with it. */
     leftover,
     downloadLeftover,
     discardLeftover,
     /** The draft of the map on screen has been looked for, so Paint can open. */
     ready: draftKnown,
-    /** A draft offered back as Paint opens, while the question is open, and the DM's answer to it. */
+    /** A draft offered back as Paint opens, while the question is open, and the GM's answer to it. */
     offer,
     answerOffer,
   };

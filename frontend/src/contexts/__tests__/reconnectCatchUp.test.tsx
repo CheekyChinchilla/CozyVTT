@@ -22,7 +22,7 @@ vi.mock('@/services/api', () => ({
 const socketOn = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
-    onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
+    onCharacterHpUpdated: vi.fn(), onGmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
     on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));
@@ -76,7 +76,7 @@ it('picks up the session state, the role and the map the table is now on', async
 // member list, which Duplicate and every role check read, followed only a
 // full load, so a token duplicated after a player joined lost its controller.
 it('refreshes the member list when the roster changes', async () => {
-  getCampaign.mockResolvedValueOnce(campaignAs('ACTIVE', 'm1', 'DM'));
+  getCampaign.mockResolvedValueOnce(campaignAs('ACTIVE', 'm1', 'GM'));
   render(
     <MemoryRouter initialEntries={['/campaigns/c1']}>
       <Routes>
@@ -89,8 +89,8 @@ it('refreshes the member list when the roster changes', async () => {
   expect(onRoster).toBeDefined();
 
   getCampaign.mockResolvedValueOnce({
-    ...campaignAs('ACTIVE', 'm1', 'DM'),
-    memberships: [{ userId: 'me', role: 'DM' }, { userId: 'newcomer', role: 'PLAYER' }],
+    ...campaignAs('ACTIVE', 'm1', 'GM'),
+    memberships: [{ userId: 'me', role: 'GM' }, { userId: 'newcomer', role: 'PLAYER' }],
   });
   await act(async () => { onRoster!({ action: 'member.joined', campaignId: 'c1', userId: 'newcomer' }); });
   await waitFor(() => expect(latest!.campaign?.memberships?.map((m) => m.userId)).toEqual(['me', 'newcomer']));
@@ -100,7 +100,7 @@ it('refreshes the member list when the roster changes', async () => {
 // campaign's character list decides which tokens offer View Character Sheet
 // and Roll..., so it follows too.
 it('refreshes the character list when a character is brought in', async () => {
-  getCampaign.mockResolvedValueOnce({ ...campaignAs('ACTIVE', 'm1', 'DM'), characters: [] });
+  getCampaign.mockResolvedValueOnce({ ...campaignAs('ACTIVE', 'm1', 'GM'), characters: [] });
   render(
     <MemoryRouter initialEntries={['/campaigns/c1']}>
       <Routes>
@@ -112,7 +112,7 @@ it('refreshes the character list when a character is brought in', async () => {
   const onRoster = socketOn.mock.calls.filter(([event]) => event === 'roster.updated').pop()?.[1] as ((d: unknown) => void) | undefined;
 
   getCampaign.mockResolvedValueOnce({
-    ...campaignAs('ACTIVE', 'm1', 'DM'),
+    ...campaignAs('ACTIVE', 'm1', 'GM'),
     characters: [{ id: 'char-new', userId: 'newcomer', name: 'Aldra' }],
   });
   await act(async () => { onRoster!({ action: 'character.assigned', campaignId: 'c1', characterId: 'char-new', userId: 'newcomer' }); });
@@ -186,7 +186,7 @@ it('writes nothing once the page has closed', async () => {
 });
 
 // The vibe, the weather, the ambient track and the spirit layer were left as
-// they were before the drop: a player who missed the DM moving the vibe to
+// they were before the drop: a player who missed the GM moving the vibe to
 // night, stopping the rain and the music, kept the old tint, the rain and the
 // track until they reloaded, while the chat said the time had changed.
 it('picks up the vibe, the atmosphere and the spirit layer', async () => {

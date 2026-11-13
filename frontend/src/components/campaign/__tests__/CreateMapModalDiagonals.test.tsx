@@ -33,3 +33,13 @@ it('describes the alternating rule at the Grid Scale chosen, a custom one includ
   fireEvent.change(screen.getByPlaceholderText('ft'), { target: { value: '3' } });
   expect(screen.getByText('Alternating — 3/6/3/6 ft diagonals')).toBeInTheDocument();
 });
+
+it('names the game system whose default the flat rule is by its short name', () => {
+  render(<CreateMapModal isOpen campaignId="campaign-1" onClose={vi.fn()} onCreated={vi.fn()} />);
+  expect(screen.getByText('5E default')).toBeInTheDocument();
+});
+
+it('names the game system whose default the alternating rule is by its short name', () => {
+  render(<CreateMapModal isOpen campaignId="campaign-1" onClose={vi.fn()} onCreated={vi.fn()} />);
+  expect(screen.getByText('ORC d20 default')).toBeInTheDocument();
+});

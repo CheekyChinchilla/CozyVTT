@@ -1,8 +1,8 @@
 /**
  * PrintedSkillsEditor
  * Skills for a creature whose system prints its numbers and has nothing to
- * work them out from: Call of Cthulhu's percentages, Shadowrun 6e's dice
- * pools. Each skill is a name and the number the DM types, stored as given.
+ * work them out from, such as Horror d100's percentages. Each skill is a name
+ * and the number the GM types, stored as given.
  */
 
 import { X } from 'lucide-react';

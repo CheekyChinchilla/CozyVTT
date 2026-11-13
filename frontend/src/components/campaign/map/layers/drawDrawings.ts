@@ -1,5 +1,5 @@
 // ============================================
-// Drawing layer: what the DM and the players draw on a map (pen strokes,
+// Drawing layer: what the GM and the players draw on a map (pen strokes,
 // lines, arrows, rectangles, ellipses, polygons and text labels), and the
 // previews of strokes on their way and of the laser pointer.
 //
@@ -7,9 +7,9 @@
 // tokens, a player's fog and the lit map's darkness, so a table can plan
 // over ground it cannot see. The strokes on their way are drawn over it,
 // and the laser pointer and the pings over them, since pointing is a signal.
-// The ground layer, under the grid, is kept for a DM's map art.
+// The ground layer, under the grid, is kept for a GM's map art.
 //
-// A drawing for the DM alone is drawn, dashed and faded, in the DM's own
+// A drawing for the GM alone is drawn, dashed and faded, in the GM's own
 // view, and in no other: Player Preview shows what a player is sent, which
 // never holds one.
 //
@@ -31,8 +31,8 @@ import {
 
 /** A filled shape's fill shows the map through it. */
 const FILL_ALPHA = 0.3;
-/** A drawing for the DM alone, in the DM's own view. */
-const DM_ONLY_ALPHA = 0.6;
+/** A drawing for the GM alone, in the GM's own view. */
+const GM_ONLY_ALPHA = 0.6;
 const LABEL_FONT = "600 SIZEpx 'Inter', system-ui, sans-serif";
 /** The laser pointer's core and glow, in screen pixels at any zoom. */
 const LASER_CORE_PX = 4;
@@ -85,8 +85,8 @@ export interface DrawingsDrawState {
   /** In drawing order (drawingOrder). */
   drawings: readonly Drawing[];
   layer: 'MARKUP' | 'GROUND';
-  /** The DM's own view: drawings for the DM alone are drawn, marked. Anywhere else they are left out. */
-  showDmOnly: boolean;
+  /** The GM's own view: drawings for the GM alone are drawn, marked. Anywhere else they are left out. */
+  showGmOnly: boolean;
   /** The part of the map on screen, in map pixels; drawings wholly outside it are skipped. Omitted: all are drawn. */
   visible?: Box | null;
   cache?: DrawingCache;
@@ -179,8 +179,8 @@ function tracedFor(ctx: CanvasRenderingContext2D, d: Drawing, cache: DrawingCach
 interface Look {
   color: string;
   width: number;
-  /** For the DM alone, in the DM's view: dashed and faded. */
-  dmOnly: boolean;
+  /** For the GM alone, in the GM's view: dashed and faded. */
+  gmOnly: boolean;
   /** 0 to 1, over whatever the context's alpha already is. */
   alpha: number;
 }
@@ -191,8 +191,8 @@ function strokeStyleFor(ctx: CanvasRenderingContext2D, look: Look): void {
   ctx.lineWidth = look.width;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.globalAlpha = look.alpha * (look.dmOnly ? DM_ONLY_ALPHA : 1);
-  ctx.setLineDash(look.dmOnly ? [Math.max(6, look.width * 2), Math.max(4, look.width * 1.5)] : []);
+  ctx.globalAlpha = look.alpha * (look.gmOnly ? GM_ONLY_ALPHA : 1);
+  ctx.setLineDash(look.gmOnly ? [Math.max(6, look.width * 2), Math.max(4, look.width * 1.5)] : []);
 }
 
 /** Draw one shape (not a label) in its look: stroked, an arrow's head and a closed shape's fill filled. */
@@ -247,14 +247,14 @@ function brightness(color: string): number {
  * opposite of its colour so it reads over any map. It is clipped to its own
  * lines, so marks stacked on its letters paint no further.
  */
-function drawLabel(ctx: CanvasRenderingContext2D, d: Drawing, dmOnly: boolean): void {
+function drawLabel(ctx: CanvasRenderingContext2D, d: Drawing, gmOnly: boolean): void {
   const [x, y] = d.points[0] ?? [0, 0];
   const size = labelFontSize(d.width);
   const text = d.text ?? '';
   ctx.font = labelFont(d.width);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  ctx.globalAlpha = dmOnly ? DM_ONLY_ALPHA : 1;
+  ctx.globalAlpha = gmOnly ? GM_ONLY_ALPHA : 1;
   ctx.setLineDash([]);
   // As wide as it was measured, once, as it was first drawn.
   const textWidth = labelBox(d).maxX - x;
@@ -269,7 +269,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, d: Drawing, dmOnly: boolean): 
   ctx.fillStyle = d.color;
   ctx.fillText(text, x, y);
   ctx.restore();
-  if (dmOnly) {
+  if (gmOnly) {
     ctx.strokeStyle = d.color;
     ctx.lineWidth = Math.max(1, size / 12);
     ctx.setLineDash([size / 3, size / 4]);
@@ -284,8 +284,8 @@ function drawLabel(ctx: CanvasRenderingContext2D, d: Drawing, dmOnly: boolean): 
 export function drawDrawings(ctx: CanvasRenderingContext2D, state: DrawingsDrawState, _viewport: Viewport): void {
   for (const d of state.drawings) {
     if (d.layer !== state.layer || !KNOWN_KINDS.has(d.kind)) continue;
-    const dmOnly = d.audience === 'DM';
-    if (dmOnly && !state.showDmOnly) continue;
+    const gmOnly = d.audience === 'GM';
+    if (gmOnly && !state.showGmOnly) continue;
     const traced = tracedFor(ctx, d, state.cache);
     if (state.visible && !boxesMeet(traced.bounds, state.visible)) continue;
 
@@ -296,8 +296,8 @@ export function drawDrawings(ctx: CanvasRenderingContext2D, state: DrawingsDrawS
       ctx.rotate((d.rotation * Math.PI) / 180);
       ctx.translate(-centre.x, -centre.y);
     }
-    if (d.kind === 'text') drawLabel(ctx, d, dmOnly);
-    else drawShape(ctx, d, d.fillColor, { color: d.color, width: d.width, dmOnly, alpha: 1 }, traced);
+    if (d.kind === 'text') drawLabel(ctx, d, gmOnly);
+    else drawShape(ctx, d, d.fillColor, { color: d.color, width: d.width, gmOnly, alpha: 1 }, traced);
     ctx.restore();
   }
 }
@@ -326,7 +326,7 @@ export function drawMarkupLayer(ctx: CanvasRenderingContext2D, state: MarkupDraw
   const at = ctx.getTransform();
   const seen = state.visible;
   const key = [
-    state.drawings, state.showDmOnly, viewport.zoom, viewport.panOffset.x, viewport.panOffset.y, target.width, target.height,
+    state.drawings, state.showGmOnly, viewport.zoom, viewport.panOffset.x, viewport.panOffset.y, target.width, target.height,
     at.a, at.b, at.c, at.d, at.e, at.f, seen?.minX, seen?.minY, seen?.maxX, seen?.maxY, labelMeasureEpoch(),
   ];
   const kept = state.cache.markup;
@@ -355,7 +355,7 @@ export interface ActivePreview {
   kind: string;
   color: string;
   width: number;
-  audience: 'ALL' | 'DM';
+  audience: 'ALL' | 'GM';
   laser: boolean;
   points: Array<[number, number]>;
   /** When each point arrived, for the laser's trail, which fades point by point. */
@@ -368,8 +368,8 @@ export interface PreviewDrawState {
   previews: readonly ActivePreview[];
   now: number;
   reducedMotion: boolean;
-  /** As for drawings: the DM's own view. */
-  showDmOnly: boolean;
+  /** As for drawings: the GM's own view. */
+  showGmOnly: boolean;
   /** The laser pointer's pass, over a player's fog; otherwise the strokes', under it. */
   laser: boolean;
 }
@@ -443,14 +443,14 @@ function drawLaser(ctx: CanvasRenderingContext2D, p: ActivePreview, now: number,
 export function drawDrawingPreviews(ctx: CanvasRenderingContext2D, state: PreviewDrawState, viewport: Viewport): void {
   for (const p of state.previews) {
     if (p.laser !== state.laser) continue;
-    const dmOnly = p.audience === 'DM';
-    if (dmOnly && !state.showDmOnly) continue;
+    const gmOnly = p.audience === 'GM';
+    if (gmOnly && !state.showGmOnly) continue;
     ctx.save();
     if (p.laser) {
       drawLaser(ctx, p, state.now, state.reducedMotion, viewport.zoom);
     } else if (KNOWN_KINDS.has(p.kind) && p.kind !== 'text' && p.points.length > 0) {
       const alpha = previewOpacity(p.lastAt, state.now, state.reducedMotion);
-      if (alpha > 0) drawShape(ctx, p, null, { color: p.color, width: p.width, dmOnly, alpha }, null);
+      if (alpha > 0) drawShape(ctx, p, null, { color: p.color, width: p.width, gmOnly, alpha }, null);
     }
     ctx.restore();
   }

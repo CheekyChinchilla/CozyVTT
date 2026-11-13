@@ -16,8 +16,8 @@
 export const DRAWING_KINDS = ['pen', 'line', 'arrow', 'rect', 'ellipse', 'polygon', 'text'] as const;
 export type DrawingKind = (typeof DRAWING_KINDS)[number];
 
-/** Who a drawing is sent to: everyone who may read the map, or the DM alone. */
-export const DRAWING_AUDIENCES = ['ALL', 'DM'] as const;
+/** Who a drawing is sent to: everyone who may read the map, or the GM alone. */
+export const DRAWING_AUDIENCES = ['ALL', 'GM'] as const;
 export type DrawingAudience = (typeof DRAWING_AUDIENCES)[number];
 
 /**
@@ -29,14 +29,14 @@ export type DrawingLayer = (typeof DRAWING_LAYERS)[number];
 
 /**
  * The shares of one map's markup layer, each with room of its own: the
- * DM's, every drawing for the DM alone, whoever wrote it, and those for
- * everyone whose author is the campaign's DM as an add is counted, and the
- * players', every other drawing for everyone (a player's, a former DM's, a
+ * GM's, every drawing for the GM alone, whoever wrote it, and those for
+ * everyone whose author is the campaign's GM as an add is counted, and the
+ * players', every other drawing for everyone (a player's, a former GM's, a
  * removed member's, one whose author's account is gone). One player can
- * fill the players' share, and never the DM's, and it holds only drawings
+ * fill the players' share, and never the GM's, and it holds only drawings
  * a player is sent.
  */
-export const MARKUP_SHARES = ['DM', 'PLAYERS'] as const;
+export const MARKUP_SHARES = ['GM', 'PLAYERS'] as const;
 export type MarkupShare = (typeof MARKUP_SHARES)[number];
 
 export const DRAWING_LIMITS = {
@@ -46,7 +46,7 @@ export const DRAWING_LIMITS = {
    * fit in one file of a campaign archive, with room for tokens beside them.
    */
   markupShares: {
-    DM: { drawings: 1000, points: 100000 },
+    GM: { drawings: 1000, points: 100000 },
     PLAYERS: { drawings: 1000, points: 100000 },
   },
   /** Points in one drawing, after the draw tool simplifies a stroke. */

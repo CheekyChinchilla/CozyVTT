@@ -2,8 +2,8 @@
  * Vibe Tracker
  * Vibe Tracker Details
  *
- * Displays the current time-of-day period and lets the DM switch between periods.
- * All users see the current period indicator; only the DM can change it or configure periods.
+ * Displays the current time-of-day period and lets the GM switch between periods.
+ * All users see the current period indicator; only the GM can change it or configure periods.
  * Visual effects (CSS filter + hue overlay) are applied to the MapCanvas separately.
  */
 
@@ -43,7 +43,7 @@ export default function VibeTracker() {
   const vibeEnabled = campaign?.vibeSettings?.enabled !== false;
 
   // ============================================
-  // Period Change (DM only)
+  // Period Change (GM only)
   // ============================================
 
   const handleChangePeriod = async (periodName: string) => {
@@ -73,7 +73,7 @@ export default function VibeTracker() {
             <h3 className="text-sm font-semibold text-brand-ink">Vibe Tracker</h3>
           </div>
 
-          {userRole === 'DM' && (
+          {userRole === 'GM' && (
             <button
               onClick={() => setIsConfigureOpen(true)}
               className="p-1.5 rounded-lg hover:bg-moss-green/10 transition-colors text-stone-gray hover:text-brand-ink"
@@ -107,15 +107,15 @@ export default function VibeTracker() {
         </div>
 
         {/* With the tracker off, saving the period editor turns it on. */}
-        {userRole === 'DM' && !vibeEnabled && (
+        {userRole === 'GM' && !vibeEnabled && (
           <p className="text-xs text-warm-gray">
             The vibe tracker is off for this campaign. Open the period editor
             with the gear above and save its periods to turn it on.
           </p>
         )}
 
-        {/* Period Selection Grid — DM only, while the tracker is on */}
-        {userRole === 'DM' && vibeEnabled && periods.length > 0 && (
+        {/* Period Selection Grid — GM only, while the tracker is on */}
+        {userRole === 'GM' && vibeEnabled && periods.length > 0 && (
           <div className="grid grid-cols-2 gap-2">
             {periods.map((period) => {
               const isActive = currentVibe === period.name;
@@ -150,9 +150,9 @@ export default function VibeTracker() {
         )}
 
         {/* Player-only hint when no vibe is set */}
-        {userRole !== 'DM' && !currentVibe && (
+        {userRole !== 'GM' && !currentVibe && (
           <p className="text-xs text-warm-gray text-center italic">
-            Waiting for the DM to set the scene...
+            Waiting for the GM to set the scene...
           </p>
         )}
       </div>

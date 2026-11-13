@@ -5,19 +5,16 @@
  * and backend/src/__tests__/keepInStep.test.ts fails when one drifts.
  */
 
-// Export all D&D 5e types
-export * from './dnd5e';
-// Export all Pathfinder 2e types
-export * from './pathfinder2e';
-// Export all Shadowrun 6e types
-export * from './shadowrun6e';
-// Export all Call of Cthulhu 7e types
-export * from './callOfCthulhu7e';
+// Export all 5E types
+export * from './fifthEdition';
+// Export all Fantasy d20 types
+export * from './fantasyD20';
+// Export all Horror d100 types
+export * from './horrorD100Sheet';
 
-import type { DnD5eCharacterData } from './dnd5e';
-import type { PF2eCharacterData } from './pathfinder2e';
-import type { SR6CharacterData } from './shadowrun6e';
-import type { CoC7eCharacterData } from './callOfCthulhu7e';
+import type { FifthEditionCharacterData } from './fifthEdition';
+import type { FantasyD20CharacterData } from './fantasyD20';
+import type { HorrorD100Sheet } from './horrorD100Sheet';
 
 import { GameSystem } from '../gameSystem';
 
@@ -27,19 +24,17 @@ export { GameSystem };
  * Mapped type for character data by game system
  */
 export type CharacterDataBySystem = {
-  [GameSystem.DND_5E]: DnD5eCharacterData;
-  [GameSystem.PATHFINDER_2E]: PF2eCharacterData;
-  [GameSystem.SHADOWRUN_6E]: SR6CharacterData;
-  [GameSystem.CALL_OF_CTHULHU_7E]: CoC7eCharacterData;
+  [GameSystem.FIFTH_EDITION]: FifthEditionCharacterData;
+  [GameSystem.FANTASY_D20]: FantasyD20CharacterData;
+  [GameSystem.HORROR_D100]: HorrorD100Sheet;
 };
 
 /**
  * Union type of all game system character data
  */
 export type GameSystemCharacterData =
-  | DnD5eCharacterData
-  | PF2eCharacterData
-  | SR6CharacterData
-  | CoC7eCharacterData;
+  | FifthEditionCharacterData
+  | FantasyD20CharacterData
+  | HorrorD100Sheet;
 
 export type { SheetChrome } from './sheetChrome';

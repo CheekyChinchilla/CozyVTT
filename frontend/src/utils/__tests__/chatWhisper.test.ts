@@ -36,7 +36,7 @@ it('reads /whisper as the long form of /w', () => {
 
 it('does not let a member named after another plus a word catch a /w for the other', () => {
   const table = [target('dana', 'Dana'), target('trap', 'Dana I')];
-  expect(readSlashWhisper('/w Dana I think Vex is the traitor', table)).toEqual({ kind: 'several', labels: ['Dana', 'Dana I'] });
+  expect(readSlashWhisper('/w Dana I think Nesk is the traitor', table)).toEqual({ kind: 'several', labels: ['Dana', 'Dana I'] });
 });
 
 it('does not let a member named after the first word of another\'s name catch a /w for the other', () => {
@@ -77,14 +77,14 @@ describe('the names the chat shows for members', () => {
   const day = (d: number) => joinedDay(at(d));
 
   it('leaves a name nobody else has as it is', () => {
-    expect(labels([member('dm', 'Dana', CampaignRole.DM, at(1)), member('ash', 'Ash', CampaignRole.PLAYER, at(2))])).toEqual({ dm: 'Dana', ash: 'Ash' });
+    expect(labels([member('dm', 'Dana', CampaignRole.GM, at(1)), member('ash', 'Ash', CampaignRole.PLAYER, at(2))])).toEqual({ dm: 'Dana', ash: 'Ash' });
   });
 
   it('puts the role first beside a shared name, then a player\'s character', () => {
     expect(labels(
-      [member('dm', 'Mara', CampaignRole.DM, at(1)), member('p1', ' mara', CampaignRole.PLAYER, at(2), ['vex']), member('s1', 'MARA', CampaignRole.SPECTATOR, at(3))],
-      [character('vex', 'p1', 'Vex')]
-    )).toEqual({ dm: 'Mara (DM)', p1: ' mara (Player, Vex)', s1: 'MARA (Spectator)' });
+      [member('dm', 'Mara', CampaignRole.GM, at(1)), member('p1', ' mara', CampaignRole.PLAYER, at(2), ['nesk']), member('s1', 'MARA', CampaignRole.SPECTATOR, at(3))],
+      [character('nesk', 'p1', 'Nesk')]
+    )).toEqual({ dm: 'Mara (GM)', p1: ' mara (Player, Nesk)', s1: 'MARA (Spectator)' });
   });
 
   it('tells two characterless players of one name apart by the day each joined', () => {
@@ -97,8 +97,8 @@ describe('the names the chat shows for members', () => {
   it('tells two players with one character name apart by the day each joined', () => {
     expect(labels(
       [member('p1', 'Mara', CampaignRole.PLAYER, at(3), ['a']), member('p2', 'Mara', CampaignRole.PLAYER, at(9), ['b'])],
-      [character('a', 'p1', 'Vex'), character('b', 'p2', 'Vex')]
-    )).toEqual({ p1: `Mara (Player, Vex, joined ${day(3)})`, p2: `Mara (Player, Vex, joined ${day(9)})` });
+      [character('a', 'p1', 'Nesk'), character('b', 'p2', 'Nesk')]
+    )).toEqual({ p1: `Mara (Player, Nesk, joined ${day(3)})`, p2: `Mara (Player, Nesk, joined ${day(9)})` });
   });
 
   it('numbers those who joined on the same day in the order they joined, the earlier keeping 1', () => {
@@ -110,11 +110,11 @@ describe('the names the chat shows for members', () => {
     });
   });
 
-  it('cannot let a character named DM pass a player off as the DM', () => {
+  it('cannot let a character named GM pass a player off as the GM', () => {
     expect(labels(
-      [member('dm', 'Dana', CampaignRole.DM, at(1)), member('p1', 'Dana', CampaignRole.PLAYER, at(2), ['x'])],
-      [character('x', 'p1', 'DM')]
-    )).toEqual({ dm: 'Dana (DM)', p1: 'Dana (Player, DM)' });
+      [member('dm', 'Dana', CampaignRole.GM, at(1)), member('p1', 'Dana', CampaignRole.PLAYER, at(2), ['x'])],
+      [character('x', 'p1', 'GM')]
+    )).toEqual({ dm: 'Dana (GM)', p1: 'Dana (Player, GM)' });
   });
 
   it('never gives two members equal names, however a name is written', () => {

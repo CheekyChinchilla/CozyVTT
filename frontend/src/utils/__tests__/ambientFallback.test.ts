@@ -2,7 +2,7 @@
  * When the vibe's own track comes back after an Atmosphere-panel override.
  * Stopping an override returns to the vibe's track; stopping the vibe's own
  * track means silence; a finished one-shot brings the vibe's track back on
- * the DM's say-so and on nobody else's.
+ * the GM's say-so and on nobody else's.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -41,7 +41,7 @@ describe('stopTarget', () => {
 });
 
 describe('trackEndTarget', () => {
-  it("the DM's client re-asserts the vibe track, or clears the finished one", () => {
+  it("the GM's client re-asserts the vibe track, or clears the finished one", () => {
     expect(trackEndTarget(true, TRACK)).toEqual({ assetId: TRACK });
     expect(trackEndTarget(true, null)).toEqual({ assetId: null });
   });

@@ -90,14 +90,14 @@ const standIn = vi.hoisted(() => (name: string) => async () => {
 // What the contexts give is the same from one render to the next, as in the
 // app, so an effect keyed on it runs again only when something remounts.
 const page = vi.hoisted(() => ({
-  user: { id: 'dm', displayName: 'DM' },
+  user: { id: 'dm', displayName: 'GM' },
   campaign: {
     campaign: { id: 'campaign-1', name: 'Test', status: 'ACTIVE', ownerId: 'dm', memberships: [], characters: [] },
     currentMap: { id: 'map-1', name: 'Map', tokens: [] },
     viewedMap: { id: 'map-1', name: 'Map', tokens: [] },
     loading: false,
     error: null,
-    userRole: 'DM',
+    userRole: 'GM',
     updateCampaignStatus: () => undefined,
     setActiveSession: () => undefined,
     refreshCurrentMap: () => undefined,
@@ -275,6 +275,24 @@ describe('the desktop arrangement, from 1,024 px wide', () => {
     expect(page.className.split(/\s+/)).toContain('h-dvh');
     expect(page.className.split(/\s+/)).not.toContain('h-screen');
   });
+
+  // The header's tools are the GM's. The page decides by the stored role,
+  // whatever the label says.
+  it.each([
+    ['GM', 1],
+    ['PLAYER', 0],
+    ['SPECTATOR', 0],
+  ] as const)('shows the GM tools in the header to the stored role %s %d times', async (role, count) => {
+    const before = page.campaign.userRole;
+    page.campaign.userRole = role;
+    try {
+      await openPage();
+      expect(screen.queryAllByRole('toolbar', { name: 'GM tools' })).toHaveLength(count);
+      expect(screen.queryAllByRole('button', { name: 'Map Library' })).toHaveLength(count);
+    } finally {
+      page.campaign.userRole = before;
+    }
+  });
 });
 
 describe('the compact arrangement, below 1,024 px', () => {
@@ -307,7 +325,7 @@ describe('the compact arrangement, below 1,024 px', () => {
     read.mockRestore();
   });
 
-  it("opens the DM's windows from More", async () => {
+  it("opens the GM's windows from More", async () => {
     screenWidth.state.compact = true;
     await openPage();
     press('More');

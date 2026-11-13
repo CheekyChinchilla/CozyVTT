@@ -12,7 +12,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
-import { dnd5eCharacter } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';
+import { fifthEditionCharacter } from '@/components/character-sheets/fifth-edition/__tests__/fifthEditionFixture';
 import type { Character } from '@/types';
 
 const auth = { user: { id: 'user-1', platformRole: 'USER' } };
@@ -53,11 +53,11 @@ function renderPage() {
 // The sheet loads on demand. Loaded here first, the first test does not wait
 // on the import, which on a busy machine outlasted the default wait.
 beforeAll(async () => {
-  await import('@/components/character-sheets/dnd5e/DnD5eCharacterSheet');
+  await import('@/components/character-sheets/fifth-edition/FifthEditionCharacterSheet');
 }, 30_000);
 
 beforeEach(() => {
-  getCharacter.mockReset().mockResolvedValue(dnd5eCharacter());
+  getCharacter.mockReset().mockResolvedValue(fifthEditionCharacter());
   updateCharacter.mockReset();
 });
 
@@ -74,7 +74,7 @@ describe('typing during a full-page save', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bolder' } });
     await act(async () =>
-      finish({ ...dnd5eCharacter({ characterName: 'Aldra the Bold' }), updatedAt: '2026-01-01T00:00:09.000Z' })
+      finish({ ...fifthEditionCharacter({ characterName: 'Aldra the Bold' }), updatedAt: '2026-01-01T00:00:09.000Z' })
     );
 
     expect(screen.getByPlaceholderText('Character Name')).toHaveValue('Aldra the Bolder');
@@ -84,7 +84,7 @@ describe('typing during a full-page save', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stay' }));
 
     updateCharacter.mockResolvedValueOnce({
-      ...dnd5eCharacter({ characterName: 'Aldra the Bolder' }), updatedAt: '2026-01-01T00:00:12.000Z',
+      ...fifthEditionCharacter({ characterName: 'Aldra the Bolder' }), updatedAt: '2026-01-01T00:00:12.000Z',
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(updateCharacter).toHaveBeenCalledTimes(2));

@@ -409,7 +409,7 @@ describe("the browser's own long-press", () => {
   });
 });
 
-// Under a DM tool a press is the tool's for as long as it is held, so a DM
+// Under a GM tool a press is the tool's for as long as it is held, so a GM
 // who rests a finger on a wall's end before dragging it still drags it.
 describe('a press that may not long-press', () => {
   it('becomes a drag after any time held still', () => {

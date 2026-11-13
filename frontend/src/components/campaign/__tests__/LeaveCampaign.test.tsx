@@ -1,9 +1,9 @@
 /**
  * A player or a spectator leaves the campaign from the Campaign Info panel.
  *
- * Only the DM could take a member out, so a spectator who no longer wanted
+ * Only the GM could take a member out, so a spectator who no longer wanted
  * to watch had to ask for it. **Leave Campaign** asks first, then the
- * server takes them out; the DM and the owner, whom the server refuses, are
+ * server takes them out; the GM and the owner, whom the server refuses, are
  * told how to get out instead. The tab that leaves hears it twice, from the
  * server's answer and from its socket, in either order, and says it once.
  */
@@ -93,10 +93,10 @@ describe('who is offered it', () => {
     expect(screen.getByRole('button', { name: 'Leave Campaign' })).toBeInTheDocument();
   });
 
-  it('the DM is told to hand the seat over first', () => {
-    renderAlone(CampaignRole.DM);
+  it('the GM is told to hand the seat over first', () => {
+    renderAlone(CampaignRole.GM);
     expect(screen.queryByRole('button', { name: 'Leave Campaign' })).toBeNull();
-    expect(screen.getByText(/hand the DM seat to another member first/)).toBeInTheDocument();
+    expect(screen.getByText(/hand the GM seat to another member first/)).toBeInTheDocument();
   });
 
   it('the owner sitting as a player is told they cannot leave, and how to delete it', () => {
@@ -106,11 +106,11 @@ describe('who is offered it', () => {
     expect(screen.getByText(/You own this campaign, so you cannot leave it/)).toHaveTextContent('Owner Settings');
   });
 
-  it('the owner in the DM seat is told about owning it', () => {
+  it('the owner in the GM seat is told about owning it', () => {
     me = 'owner-1';
-    renderAlone(CampaignRole.DM);
+    renderAlone(CampaignRole.GM);
     expect(screen.getByText(/You own this campaign, so you cannot leave it/)).toHaveTextContent('Campaign Settings');
-    expect(screen.queryByText(/hand the DM seat/)).toBeNull();
+    expect(screen.queryByText(/hand the GM seat/)).toBeNull();
   });
 });
 
@@ -123,7 +123,7 @@ describe('asking first', () => {
     expect(within(dialog).getByText('Leave The Sunken Crown?')).toBeInTheDocument();
     expect(dialog).toHaveTextContent('Your characters in it go back to My Characters');
     expect(dialog).toHaveTextContent('Notes From Campaigns You Have Left');
-    expect(dialog).toHaveTextContent('the DM has to invite you again');
+    expect(dialog).toHaveTextContent('the GM has to invite you again');
   });
 
   it('sends nothing on Cancel', () => {
@@ -146,13 +146,13 @@ describe('asking first', () => {
   });
 
   it("shows the server's refusal and stays", async () => {
-    leaveCampaign.mockRejectedValue({ response: { status: 409, data: { message: 'You run this campaign. Hand the DM seat to someone else in the campaign\'s settings, then leave it.' } } });
+    leaveCampaign.mockRejectedValue({ response: { status: 409, data: { message: 'You run this campaign. Hand the GM seat to someone else in the campaign\'s settings, then leave it.' } } });
     const onLeft = renderAlone(CampaignRole.PLAYER);
 
     confirmLeave();
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith(
-      "You run this campaign. Hand the DM seat to someone else in the campaign's settings, then leave it.",
+      "You run this campaign. Hand the GM seat to someone else in the campaign's settings, then leave it.",
       'error'
     ));
     expect(onLeft).not.toHaveBeenCalled();

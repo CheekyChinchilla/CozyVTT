@@ -3,7 +3,7 @@ import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '../t
 
 describe('tokenDisplayName', () => {
   it('names a token this viewer was sent whole', () => {
-    expect(tokenDisplayName({ name: 'Goblin Boss', obscured: false })).toBe('Goblin Boss');
+    expect(tokenDisplayName({ name: 'Goblin', obscured: false })).toBe('Goblin');
   });
 
   it('calls a masked token an unknown creature', () => {
@@ -11,28 +11,28 @@ describe('tokenDisplayName', () => {
     expect(tokenDisplayName({ name: '', obscured: true })).toBe('Unknown creature');
   });
 
-  it('shows the DM the real name of a token they obscured', () => {
-    expect(tokenDisplayName({ name: 'Goblin Boss', obscured: true })).toBe('Goblin Boss');
+  it('shows the GM the real name of a token they obscured', () => {
+    expect(tokenDisplayName({ name: 'Goblin', obscured: true })).toBe('Goblin');
   });
 });
 
 describe('tokenPublicName', () => {
   it('is the name in front of the whole table, so an obscured token is never named', () => {
-    expect(tokenPublicName({ name: 'Goblin Boss', obscured: true })).toBe('Unknown creature');
-    expect(tokenPublicName({ name: 'Goblin Boss', obscured: false })).toBe('Goblin Boss');
-    expect(tokenPublicName({ name: 'Goblin Boss' })).toBe('Goblin Boss');
+    expect(tokenPublicName({ name: 'Goblin', obscured: true })).toBe('Unknown creature');
+    expect(tokenPublicName({ name: 'Goblin', obscured: false })).toBe('Goblin');
+    expect(tokenPublicName({ name: 'Goblin' })).toBe('Goblin');
   });
 
   it('never names a hidden token either, which players are not sent at all', () => {
     expect(tokenPublicName({ name: 'Ambusher', visible: false })).toBe('Unknown creature');
-    expect(tokenPublicName({ name: 'Goblin Boss', visible: true })).toBe('Goblin Boss');
+    expect(tokenPublicName({ name: 'Goblin', visible: true })).toBe('Goblin');
   });
 });
 
 describe('tokenPublicName on the spirit layer', () => {
   it('never names a spirit-plane token, which players on the material plane are not sent', () => {
     expect(tokenPublicName({ name: 'Wraith', layer: 'spirit' })).toBe('Unknown creature');
-    expect(tokenPublicName({ name: 'Goblin Boss', layer: 'token' })).toBe('Goblin Boss');
+    expect(tokenPublicName({ name: 'Goblin', layer: 'token' })).toBe('Goblin');
   });
 });
 

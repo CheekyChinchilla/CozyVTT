@@ -159,7 +159,7 @@ describe('NumberField', () => {
 });
 
 // Leaving a box reported its value again even when nothing had changed, so a
-// keyboard user tabbing through a row counted as editing it: a D&D 5e row
+// keyboard user tabbing through a row counted as editing it: a 5E row
 // added and never typed in was then kept and refused for having no name.
 describe('NumberField left unchanged', () => {
   it('reports nothing when focus passes through', () => {

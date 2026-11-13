@@ -14,7 +14,7 @@ import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry } from '@/types';
 
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: 'DM', currentMap: { id: 'map-1' }, viewedMap: { id: 'map-1' } }),
+  useCampaign: () => ({ userRole: 'GM', currentMap: { id: 'map-1' }, viewedMap: { id: 'map-1' } }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }) }));
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));

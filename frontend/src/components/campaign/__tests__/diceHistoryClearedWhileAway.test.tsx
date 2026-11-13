@@ -1,5 +1,5 @@
 /**
- * A dice history the DM cleared while this page was away is cleared here too.
+ * A dice history the GM cleared while this page was away is cleared here too.
  *
  * The clear reaches only the pages online at the time. A page that rejoined
  * afterwards merged the server's list into what it held, which only adds, so
@@ -51,7 +51,7 @@ const roll = (id: string, purpose: string): DiceRolledEvent => ({
   breakdown: { expression: '1d6', rolls: [], total: 3, formula: '3' }, purpose, timestamp: '2026-10-18T19:00:00.000Z', secret: false,
 });
 
-it('drops rolls the DM cleared while the page was away', async () => {
+it('drops rolls the GM cleared while the page was away', async () => {
   getDiceRolls.mockResolvedValueOnce([roll('r-1', 'Before the clear')]);
   const view = render(<DiceRoller />);
   expect(await screen.findByText('Before the clear')).toBeTruthy();

@@ -10,7 +10,7 @@
 //   session panels (SessionPanels) on the chosen one; More's Notes and
 //   Session open the same sheet on theirs, at full height.
 // - Party opens a sheet with the campaign's info, its roster and, for the
-//   DM, the Token Roster.
+//   GM, the Token Roster.
 // - More lists what the desktop's header offers (MoreSheet); its windows
 //   and slide-overs are the page's, which this only asks to open.
 //
@@ -84,7 +84,7 @@ export interface CompactTableProps {
   campaign: Campaign;
   /** Whether the viewer owns the campaign, which may differ from running it. */
   isOwner: boolean;
-  /** Open one of the DM's slide-overs; `settings` is also an owner's way to the settings. */
+  /** Open one of the GM's slide-overs; `settings` is also an owner's way to the settings. */
   onOpenTool: (key: SessionToolKey) => void;
   onOpenDocuments: () => void;
   onOpenShortcuts: () => void;
@@ -171,7 +171,7 @@ export default function CompactTable({ campaign, isOwner, onOpenTool, onOpenDocu
     <>
       <CompactHeader ref={headerRef} campaign={campaign} bar={sideways ? bar : undefined} />
 
-      {campaign.status === CampaignStatus.PAUSED && userRole !== 'DM' && <SessionPausedBanner />}
+      {campaign.status === CampaignStatus.PAUSED && userRole !== 'GM' && <SessionPausedBanner />}
 
       {/* The map is the page's, moved in here (tableHosts.tsx). */}
       <main ref={mapSlot.ref} className="finger-controls relative min-h-0 flex-1 overflow-hidden" />

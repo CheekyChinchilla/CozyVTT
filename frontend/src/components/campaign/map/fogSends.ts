@@ -1,5 +1,5 @@
 // ============================================
-// What the DM's fog box and a viewer's explored ground send the server, in
+// What the GM's fog box and a viewer's explored ground send the server, in
 // parts it takes. The live table reads no message longer than
 // MAX_SOCKET_MESSAGE_BYTES, which a box of more than about 142,000 squares
 // passes, and refuses a report of explored ground naming more than

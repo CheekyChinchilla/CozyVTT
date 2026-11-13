@@ -2,7 +2,7 @@
  * Export Campaign in the settings dialog.
  *
  * The export was fetched as a Blob, so a refusal arrived as a Blob too and
- * its message could not be read: the DM saw "Failed to export campaign"
+ * its message could not be read: the GM saw "Failed to export campaign"
  * whatever the server had said, including why a campaign was too large to
  * export.
  */
@@ -14,9 +14,9 @@ import type { Campaign } from '@/types';
 const { showToast, downloadCampaignExport } = vi.hoisted(() => ({ showToast: vi.fn(), downloadCampaignExport: vi.fn() }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'c1', name: 'The Keep', description: '', memberships: [], userRole: 'DM', ownerId: 'dm' } as unknown as Campaign,
+    campaign: { id: 'c1', name: 'The Keep', description: '', memberships: [], userRole: 'GM', ownerId: 'dm' } as unknown as Campaign,
     refreshCampaign: vi.fn(),
-    userRole: 'DM',
+    userRole: 'GM',
   }),
 }));
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
@@ -57,7 +57,7 @@ describe('Export Campaign', () => {
     expect(downloadCampaignExport).toHaveBeenCalledWith('c1', { includeAudio: true }, 'The_Keep-export.cozyvtt');
   });
 
-  it('says nothing when the DM cancels the save dialog', async () => {
+  it('says nothing when the GM cancels the save dialog', async () => {
     downloadCampaignExport.mockResolvedValue('cancelled');
     render(<CampaignSettingsModal onDeleted={() => undefined} isOpen onClose={() => undefined} />);
 

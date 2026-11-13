@@ -16,10 +16,12 @@ import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
 import { SHEET_SHELL_DIALOG, SHEET_SHELL_OVERLAY } from './sheetShell';
 
 // Import editor components
-import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor';
-import Pathfinder2eCharacterEditor from '../character-sheets/pathfinder2e/Pathfinder2eCharacterEditor';
-import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
+import FifthEditionCharacterEditor from '../character-sheets/fifth-edition/FifthEditionCharacterEditor';
+import FantasyD20CharacterEditor from '../character-sheets/fantasy-d20/FantasyD20CharacterEditor';
+import HorrorD100CharacterEditor from '../character-sheets/horror-d100/HorrorD100CharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
+import { UnsupportedSystemSheet } from '../character-sheets/UnsupportedSystemSheet';
+import { isSupportedOrNoSystem } from '@/constants/game-systems';
 import { apiErrorMessage, apiValidationIssues, errorSummary } from '@/utils/errors';
 import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
@@ -148,10 +150,14 @@ export default function CharacterSheetEditorModal({
 
   // Render appropriate character sheet editor based on game system
   const renderCharacterEditor = () => {
+    // A system CozyVTT no longer supports has no editor: its data, read-only.
+    if (!isSupportedOrNoSystem(character.gameSystem)) {
+      return <UnsupportedSystemSheet character={character} />;
+    }
     switch (character.gameSystem) {
-      case 'DND_5E':
+      case 'FIFTH_EDITION':
         return (
-          <DnD5eCharacterEditor
+          <FifthEditionCharacterEditor
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
@@ -159,9 +165,9 @@ export default function CharacterSheetEditorModal({
             onDone={onClose}
           />
         );
-      case 'PATHFINDER_2E':
+      case 'FANTASY_D20':
         return (
-          <Pathfinder2eCharacterEditor
+          <FantasyD20CharacterEditor
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
@@ -169,35 +175,15 @@ export default function CharacterSheetEditorModal({
             onDone={onClose}
           />
         );
-      case 'CALL_OF_CTHULHU_7E':
+      case 'HORROR_D100':
         return (
-          <CallOfCthulhu7eCharacterEditor
+          <HorrorD100CharacterEditor
             character={character}
             onSave={handleSave}
             onCancel={handleCancel}
             onDirtyChange={setHasUnsavedChanges}
             onDone={onClose}
           />
-        );
-      case 'SHADOWRUN_6E':
-        // Shadowrun editor not yet implemented
-        return (
-          <div className="glass-panel p-6">
-            <div className="flex flex-col items-center justify-center py-12 space-y-4">
-              <h3 className="text-xl font-semibold text-warm-gray">
-                Shadowrun 6e Character Editor
-              </h3>
-              <p className="text-stone-gray text-center max-w-md">
-                The Shadowrun 6th Edition character editor is not yet implemented.
-              </p>
-              <button
-                onClick={onClose}
-                className="px-6 py-2 rounded-lg bg-moss-green text-brand-text hover:bg-brand-hover transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
         );
       default:
         // Flexible character sheet

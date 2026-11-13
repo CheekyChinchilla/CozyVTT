@@ -1,5 +1,5 @@
 /**
- * The settings form keeps what the DM is typing when the campaign is
+ * The settings form keeps what the GM is typing when the campaign is
  * refreshed in the background.
  *
  * The page now fetches the campaign again when someone joins or leaves and
@@ -16,7 +16,7 @@ import type realApi from '@/services/api';
 import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 let current: Campaign;
-const viewer = vi.hoisted(() => ({ role: 'DM', user: { id: 'dm', platformRole: 'USER' } }));
+const viewer = vi.hoisted(() => ({ role: 'GM', user: { id: 'dm', platformRole: 'USER' } }));
 const updateCampaign = vi.hoisted(() => vi.fn());
 const invitationsApi = vi.hoisted(() => ({
   listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn(), removeCampaignMember: vi.fn(), changeCampaignMemberRole: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock('@/services/campaign.service', () => ({ default: { updateCampaign, delet
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
 beforeEach(() => {
-  viewer.role = 'DM';
+  viewer.role = 'GM';
   viewer.user = { id: 'dm', platformRole: 'USER' };
   updateCampaign.mockReset().mockResolvedValue({});
   invitationsApi.listCampaignInvitations.mockReset().mockResolvedValue({ invitations: [] });
@@ -50,7 +50,7 @@ import CampaignSettingsModal from '../CampaignSettingsModal';
 
 const campaign = (): Campaign => ({
   id: 'c1', name: 'The Keep', description: 'Saved words', chatCooldownEnabled: false, chatCooldownSeconds: 0,
-  memberships: [], userRole: 'DM', ownerId: 'dm',
+  memberships: [], userRole: 'GM', ownerId: 'dm',
 }) as unknown as Campaign;
 
 describe('CampaignSettingsModal', () => {
@@ -80,20 +80,20 @@ describe('CampaignSettingsModal', () => {
 
 // Only the owner or an administrator may delete a campaign, and the server
 // refused anyone else; the Danger Zone, which holds only Delete Campaign, was
-// offered to every DM, such as one the game was handed to.
+// offered to every GM, such as one the game was handed to.
 describe('the Danger Zone', () => {
   const tabs = () => screen.queryByRole('button', { name: 'Danger Zone' });
 
-  it('is not offered to a DM who is neither the owner nor an administrator', () => {
+  it('is not offered to a GM who is neither the owner nor an administrator', () => {
     current = { ...campaign(), ownerId: 'someone-else' } as Campaign;
     render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
     expect(tabs()).toBeNull();
   });
 
   it.each([
-    ['the owner, as DM', 'DM', 'USER', 'dm'],
+    ['the owner, as GM', 'GM', 'USER', 'dm'],
     ['the owner, as a player after handing the seat over', 'PLAYER', 'USER', 'dm'],
-    ['an administrator who does not own it', 'DM', 'ADMIN', 'someone-else'],
+    ['an administrator who does not own it', 'GM', 'ADMIN', 'someone-else'],
   ])('is offered to %s', (_who, role, platformRole, ownerId) => {
     viewer.role = role;
     viewer.user = { id: 'dm', platformRole };
@@ -122,7 +122,7 @@ describe('deleting the campaign', () => {
   });
 });
 
-// A DM could not see who had been invited, nor take an invitation back.
+// A GM could not see who had been invited, nor take an invitation back.
 describe('pending invitations', () => {
   it('lists them under Members and withdraws one', async () => {
     invitationsApi.listCampaignInvitations.mockResolvedValue({
@@ -198,12 +198,12 @@ describe('the Campaign Settings panel as a dialog', () => {
   });
 });
 
-// Players may draw on the map unless the DM turns it off here; it takes
+// Players may draw on the map unless the GM turns it off here; it takes
 // effect at once, for a table in play.
 describe('Players may draw', () => {
   const toggle = () => screen.getByRole('switch', { name: 'Players may draw' });
 
-  it('shows the campaign’s setting, on unless the DM turned it off', () => {
+  it('shows the campaign’s setting, on unless the GM turned it off', () => {
     current = { ...campaign(), playersMayDraw: true } as Campaign;
     const { unmount } = render(<CampaignSettingsModal isOpen onDeleted={() => undefined} onClose={() => undefined} />);
     expect(toggle()).toHaveAttribute('aria-checked', 'true');
@@ -237,7 +237,7 @@ describe('Players may draw', () => {
   });
 });
 
-// A DM the game was handed to was offered Remove beside the owner, who sits
+// A GM the game was handed to was offered Remove beside the owner, who sits
 // at the table as a player, and the server then refused it.
 describe('Remove under Members', () => {
   it('is not offered beside the owner, and is beside another player', () => {
@@ -246,7 +246,7 @@ describe('Remove under Members', () => {
       ownerId: 'owner-1',
       memberships: [
         { userId: 'owner-1', role: 'PLAYER', user: { displayName: 'Olwen' } },
-        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'dm', role: 'GM', user: { displayName: 'Tolver' } },
         { userId: 'player-1', role: 'PLAYER', user: { displayName: 'Pip' } },
       ],
     } as unknown as Campaign;
@@ -261,7 +261,7 @@ describe('Remove under Members', () => {
 // The badge printed the stored role, so a player read PLAYER and a
 // spectator SPECTATOR.
 describe("Members' role badges", () => {
-  // Seen by an owner who handed the seat over: the DM has the Role picker.
+  // Seen by an owner who handed the seat over: the GM has the Role picker.
   it('name each role as the rest of the page does', () => {
     viewer.role = 'PLAYER';
     viewer.user = { id: 'pia', platformRole: 'USER' };
@@ -269,7 +269,7 @@ describe("Members' role badges", () => {
       ...campaign(),
       ownerId: 'pia',
       memberships: [
-        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'dm', role: 'GM', user: { displayName: 'Tolver' } },
         { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
         { userId: 'sam', role: 'SPECTATOR', user: { displayName: 'Sam' } },
       ],
@@ -283,7 +283,7 @@ describe("Members' role badges", () => {
       if (!found) throw new Error(`no row for ${name}`);
       return found;
     };
-    expect(within(row('Dain')).getByText('DM')).toBeTruthy();
+    expect(within(row('Tolver')).getByText('GM')).toBeTruthy();
     expect(within(row('Pia')).getByText('Player')).toBeTruthy();
     expect(within(row('Sam')).getByText('Spectator')).toBeTruthy();
   });
@@ -329,7 +329,7 @@ describe("Remove's question and its toast", () => {
   });
 });
 
-// The DM could make someone a spectator only by calling the server directly:
+// The GM could make someone a spectator only by calling the server directly:
 // every invitation makes a player, and nothing in the app changed a role.
 describe('the Role picker under Members', () => {
   const table = (): Campaign => ({
@@ -337,7 +337,7 @@ describe('the Role picker under Members', () => {
     ownerId: 'owner-1',
     memberships: [
       { userId: 'owner-1', role: 'PLAYER', user: { displayName: 'Olwen' } },
-      { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+      { userId: 'dm', role: 'GM', user: { displayName: 'Tolver' } },
       { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
       { userId: 'sam', role: 'SPECTATOR', user: { displayName: 'Sam' } },
     ],
@@ -349,11 +349,11 @@ describe('the Role picker under Members', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Members' }));
   }
 
-  it('asks for only the roles the server lets a DM give', () => {
+  it('asks for only the roles the server lets a GM give', () => {
     expectTypeOf<Parameters<typeof realApi.changeCampaignMemberRole>[2]>().toEqualTypeOf<CampaignRole.PLAYER | CampaignRole.SPECTATOR>();
   });
 
-  it('offers Player and Spectator beside every member but the DM, the owner included', () => {
+  it('offers Player and Spectator beside every member but the GM, the owner included', () => {
     current = table();
     openMembers();
 
@@ -361,7 +361,7 @@ describe('the Role picker under Members', () => {
     expect(picker('Sam').value).toBe(CampaignRole.SPECTATOR);
     expect(picker('Olwen').value).toBe(CampaignRole.PLAYER);
     expect(within(picker('Pia')).getAllByRole('option').map((o) => o.textContent)).toEqual(['Player', 'Spectator']);
-    expect(screen.queryByRole('combobox', { name: 'Role of Dain' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Role of Tolver' })).toBeNull();
   });
 
   it('is not offered to an owner who has handed the seat over', () => {
@@ -415,7 +415,7 @@ describe('the Role picker under Members', () => {
 
   // A change made from the keyboard is sent at once. The picker was disabled
   // while it was asked, and a browser moves the focus off a control that is
-  // disabled under it, so the DM lost their place in the list. jsdom does not
+  // disabled under it, so the GM lost their place in the list. jsdom does not
   // move the focus, so the picker must never be disabled while it holds it.
   it('keeps the focus on the picker while its change is asked, and sends no second change meanwhile', async () => {
     current = table();
@@ -500,7 +500,7 @@ describe('the Role picker under Members', () => {
 
     it('goes to Invite Player when no other member has a control', async () => {
       current = { ...campaign(), memberships: [
-        { userId: 'dm', role: 'DM', user: { displayName: 'Dain' } },
+        { userId: 'dm', role: 'GM', user: { displayName: 'Tolver' } },
         { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
       ] } as unknown as Campaign;
       goesOnRemoval('pia');
@@ -531,7 +531,7 @@ describe('the Role picker under Members', () => {
 
     const controls = [
       picker('Pia'),
-      screen.getByRole('button', { name: 'Make Pia the Dungeon Master' }),
+      screen.getByRole('button', { name: 'Make Pia the GM' }),
       screen.getByRole('button', { name: 'Remove Pia from campaign' }),
       await screen.findByRole('button', { name: 'Withdraw the invitation to Gwen' }),
     ];

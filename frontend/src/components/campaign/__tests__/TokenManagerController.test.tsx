@@ -49,13 +49,13 @@ vi.mock('@/services/api', () => ({ api, default: api }));
 import TokenManager from '../TokenManager';
 
 const goblin: Token = {
-  id: 'goblin', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'goblin', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };
 
 /** The token's own row in the list, apart from the add form above it. */
-const row = () => within(screen.getByText('Goblin Boss').closest('.glass-panel') as HTMLElement);
+const row = () => within(screen.getByText('Goblin').closest('.glass-panel') as HTMLElement);
 
 beforeEach(() => {
   vi.clearAllMocks();

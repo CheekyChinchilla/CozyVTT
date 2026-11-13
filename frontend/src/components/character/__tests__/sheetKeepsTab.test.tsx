@@ -3,14 +3,14 @@
  *
  * Hit points changed at the table, a hit die spent and a save each bring a new
  * version of the character into the open sheet. The sheet shows the new
- * numbers and stays where it was, so a DM watching a player's Combat tab is
+ * numbers and stays where it was, so a GM watching a player's Combat tab is
  * not sent back to Stats & Skills on every hit.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
-import { dnd5eCharacter } from '../../character-sheets/dnd5e/__tests__/dnd5eFixture';
+import { fifthEditionCharacter } from '../../character-sheets/fifth-edition/__tests__/fifthEditionFixture';
 
 type Handler = (payload: unknown) => void;
 const handlers = new Map<string, Handler>();
@@ -40,11 +40,11 @@ vi.mock('@/services/api', () => ({
   },
 }));
 
-const membership = { userId: 'dm', campaignId: 'camp-1', role: 'DM', characterIds: [] } as unknown as CampaignMembership;
+const membership = { userId: 'dm', campaignId: 'camp-1', role: 'GM', characterIds: [] } as unknown as CampaignMembership;
 
 /** The fixture character in the campaign, with these hit points, at this version. */
 function aldra(current: number, updatedAt: string): Character {
-  const character = dnd5eCharacter({ hp: { maximum: 12, current, temporary: 0 } });
+  const character = fifthEditionCharacter({ hp: { maximum: 12, current, temporary: 0 } });
   return { ...character, userId: 'owner', campaignId: 'camp-1', updatedAt } as Character;
 }
 

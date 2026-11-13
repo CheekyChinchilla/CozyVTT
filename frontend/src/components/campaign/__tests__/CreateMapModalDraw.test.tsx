@@ -1,6 +1,6 @@
 /**
  * Draw a map, in the Create Map window: a blank map of the size and colour
- * the DM chooses, which the browser makes as a picture, uploads into the
+ * the GM chooses, which the browser makes as a picture, uploads into the
  * campaign's library tagged DRAWN_MAP_TAG, and then creates the map with.
  *
  * The map is painted at the grid size asked for, or at fewer pixels a

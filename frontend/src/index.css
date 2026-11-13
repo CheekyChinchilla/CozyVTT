@@ -70,7 +70,7 @@
   --color-spirit-red: rgb(var(--rgb-danger));
   --color-spirit-purple: rgb(var(--rgb-spirit));
 
-  /* The Call of Cthulhu sheet's Deep Sepia header colour (colorPresets.ts): a
+  /* The Horror d100 sheet's Deep Sepia header colour (colorPresets.ts): a
      header is the player's choice and does not follow the theme. */
   --color-sepia-100: #f5ebd9;
   --color-sepia-200: #e8d5b7;

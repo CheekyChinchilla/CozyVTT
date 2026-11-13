@@ -1,7 +1,7 @@
 /**
  * Refreshing the campaign leaves the table standing.
  *
- * Saving Campaign Settings, removing a member and handing over the DM seat
+ * Saving Campaign Settings, removing a member and handing over the GM seat
  * re-read the campaign through the first load, which shows the page's
  * loading screen: the whole table was taken down and built again, every
  * token picture fetched once more, the chat draft lost and the settings
@@ -30,7 +30,7 @@ const socketOn = vi.fn();
 const onCharacterHpUpdated = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
-    onCharacterHpUpdated: (...a: unknown[]) => onCharacterHpUpdated(...a), onDmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
+    onCharacterHpUpdated: (...a: unknown[]) => onCharacterHpUpdated(...a), onGmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
     on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));
@@ -41,7 +41,7 @@ import { useGameStore } from '@/stores/gameStore';
 import type { Token } from '@/types';
 
 const campaign = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
-  id, name, status: 'ACTIVE', currentMapId: 'm1', maps: [], memberships: [{ userId: 'me', role: 'DM' }], ...extra,
+  id, name, status: 'ACTIVE', currentMapId: 'm1', maps: [], memberships: [{ userId: 'me', role: 'GM' }], ...extra,
 });
 
 /** A promise and the means to settle it, for answers that arrive out of order. */
@@ -181,7 +181,7 @@ it('keeps the newest member list when roster answers arrive out of order', async
   const older = deferred<ReturnType<typeof campaign>>();
   getCampaign.mockReturnValueOnce(older.promise);
   getCampaign.mockResolvedValueOnce(campaign('c1', 'Table', {
-    memberships: [{ userId: 'me', role: 'DM' }, { userId: 'newcomer', role: 'PLAYER' }],
+    memberships: [{ userId: 'me', role: 'GM' }, { userId: 'newcomer', role: 'PLAYER' }],
   }));
   await act(async () => { rosterHandler()({ campaignId: 'c1' }); });
   await act(async () => { rosterHandler()({ campaignId: 'c1' }); });

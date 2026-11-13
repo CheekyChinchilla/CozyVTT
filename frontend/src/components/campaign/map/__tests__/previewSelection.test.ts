@@ -104,7 +104,7 @@ describe('previewOwnFor', () => {
 });
 
 // Which plane the previewed viewer is on, by the server's rule: the spirit
-// plane for everyone while the DM has it open, else for a player who controls
+// plane for everyone while the GM has it open, else for a player who controls
 // a visible token on the spirit layer. A preview that stayed on the material
 // plane drew a player whose token had crossed over as darkness, with no
 // token to see through, while their own screen showed the spirit layer.
@@ -127,7 +127,7 @@ describe('previewPlane', () => {
     expect(previewPlane({ kind: 'token', tokenId: 'hero' }, withUnseen, false)).toBe('material');
   });
 
-  it('everyone is on the spirit plane while the DM has it open to all, and the party only then', () => {
+  it('everyone is on the spirit plane while the GM has it open to all, and the party only then', () => {
     expect(previewPlane(bob, withUnseen, true)).toBe('spirit');
     expect(previewPlane({ kind: 'token', tokenId: 'hero' }, withUnseen, true)).toBe('spirit');
     expect(previewPlane({ kind: 'party' }, withUnseen, true)).toBe('spirit');
@@ -161,7 +161,7 @@ describe('tokensShownInPreview', () => {
 });
 
 describe('previewMemoryUser', () => {
-  const seated = [member('dm', 'DM', 'The DM'), member('alice', 'PLAYER', 'Alice'), member('bob', 'PLAYER', 'Bob'), member('watcher', 'SPECTATOR', 'Watcher')];
+  const seated = [member('dm', 'GM', 'The GM'), member('alice', 'PLAYER', 'Alice'), member('bob', 'PLAYER', 'Bob'), member('watcher', 'SPECTATOR', 'Watcher')];
 
   it('a player preview shows that player\'s remembered ground', () => {
     expect(previewMemoryUser({ kind: 'player', userId: 'bob' }, all, seated)).toBe('bob');
@@ -201,7 +201,7 @@ describe('previewMemoryUser', () => {
 
 
 describe('previewOptions', () => {
-  const members = [member('dm', 'DM', 'The DM'), member('bob', 'PLAYER', 'Bob'), member('watcher', 'SPECTATOR', 'Watcher')];
+  const members = [member('dm', 'GM', 'The GM'), member('bob', 'PLAYER', 'Bob'), member('watcher', 'SPECTATOR', 'Watcher')];
 
   it('lists players, then the party, then player tokens, then the rest, spirit ones named as such', () => {
     expect(previewOptions(members, all).map((o) => [o.group, o.value, o.label])).toEqual([
@@ -251,7 +251,7 @@ describe('defaultPreviewSelection', () => {
   });
 
   it('starts on the party for a table with no player accounts', () => {
-    expect(defaultPreviewSelection([member('dm', 'DM', 'The DM')], all)).toEqual({ kind: 'party' });
+    expect(defaultPreviewSelection([member('dm', 'GM', 'The GM')], all)).toEqual({ kind: 'party' });
   });
 
   it('falls back to the first token, then to nothing', () => {
@@ -289,7 +289,7 @@ describe('previewTokens', () => {
   const nobody = () => false;
 
   it('shows an obscured token the previewed player does not control as the server sends it', () => {
-    const veiled = token({ id: 'v', name: 'Goblin Boss', imageUrl: '/api/assets/tokens/v', obscured: true, conditions: ['prone'], hp: { current: 3, max: 9, temp: 0 } });
+    const veiled = token({ id: 'v', name: 'Goblin', imageUrl: '/api/assets/tokens/v', obscured: true, conditions: ['prone'], hp: { current: 3, max: 9, temp: 0 } });
     const [seen] = previewTokens([veiled], nobody, nobody, null, viewport, 'material');
     expect(seen.name).toBe('');
     expect(seen.imageUrl).toBe('');
@@ -334,8 +334,8 @@ describe('previewTokens', () => {
 });
 
 /**
- * Follow my selection: the preview looks through whichever token the DM has
- * selected. It must never fall back to the DM's own view, which on a
+ * Follow my selection: the preview looks through whichever token the GM has
+ * selected. It must never fall back to the GM's own view, which on a
  * projector would show every hidden token and the whole fog.
  */
 describe('Follow my selection', () => {

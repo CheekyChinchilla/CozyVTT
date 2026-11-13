@@ -24,9 +24,9 @@ afterEach(async () => {
   await waitFor(() => expect(onSheetEntry()).toBe(false));
 });
 
-const seelah = {
-  id: 'char-1', userId: 'alice', campaignId: 'camp-1', gameSystem: 'DND_5E' as GameSystem, name: 'Seelah',
-  data: { characterName: 'Seelah', stats: { strength: { score: 14, modifier: 2 } } } as unknown as CharacterData, tokenImageUrl: null, createdAt: '', updatedAt: '',
+const maren = {
+  id: 'char-1', userId: 'alice', campaignId: 'camp-1', gameSystem: 'FIFTH_EDITION' as GameSystem, name: 'Maren',
+  data: { characterName: 'Maren', stats: { strength: { score: 14, modifier: 2 } } } as unknown as CharacterData, tokenImageUrl: null, createdAt: '', updatedAt: '',
 } as Character;
 
 const goblin = {
@@ -44,13 +44,13 @@ describe("a character's menu on the compact layout", () => {
       { kind: 'command', id: 'view', icon: Eye, label: 'View Character Sheet', run },
       { kind: 'command', id: 'roll', icon: Dices, label: 'Roll...', run },
     ];
-    render(<Compact><CharacterContextMenu x={10} y={10} title="Seelah" items={items} onClose={onClose} /></Compact>);
+    render(<Compact><CharacterContextMenu x={10} y={10} title="Maren" items={items} onClose={onClose} /></Compact>);
     return { run, onClose };
   }
 
   it('is an action sheet named by the character, with its items and no popover', () => {
     menu();
-    const sheet = screen.getByRole('dialog', { name: 'Seelah' });
+    const sheet = screen.getByRole('dialog', { name: 'Maren' });
     expect(within(sheet).getByRole('button', { name: 'View Character Sheet' })).toBeInTheDocument();
     expect(within(sheet).getByRole('button', { name: 'Roll...' })).toBeInTheDocument();
     expect(document.querySelector('div.fixed.z-50.bg-soft-cream')).toBeNull();
@@ -77,32 +77,32 @@ describe("a character's menu on the compact layout", () => {
 
 describe("a character's roll picker on the compact layout", () => {
   it('is a modal sheet at full height, named for the character, with rows a finger can press', () => {
-    render(<Compact><CharacterRollPicker character={seelah} onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} /></Compact>);
-    const sheet = screen.getByRole('dialog', { name: 'Roll for Seelah' });
+    render(<Compact><CharacterRollPicker character={maren} onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} /></Compact>);
+    const sheet = screen.getByRole('dialog', { name: 'Roll for Maren' });
     expect(sheet).toHaveAttribute('aria-modal', 'true');
     const rolls = within(sheet).getAllByRole('button').filter((b) => b.className.includes('px-3 py-1.5'));
     expect(rolls.length).toBeGreaterThan(0);
     for (const row of rolls) expect(row.className).toContain('min-h-11');
     // No popover's close button: the sheet has its own X.
     expect(within(sheet).queryByRole('button', { name: 'Close' })).toBeNull();
-    expect(within(sheet).getByRole('button', { name: 'Close Roll for Seelah' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: 'Close Roll for Maren' })).toBeInTheDocument();
   });
 
   it('rolls and closes', () => {
     const onRoll = vi.fn();
     const onClose = vi.fn();
-    render(<Compact><CharacterRollPicker character={seelah} onRoll={onRoll} onClose={onClose} anchorX={0} anchorY={0} /></Compact>);
-    const sheet = screen.getByRole('dialog', { name: 'Roll for Seelah' });
+    render(<Compact><CharacterRollPicker character={maren} onRoll={onRoll} onClose={onClose} anchorX={0} anchorY={0} /></Compact>);
+    const sheet = screen.getByRole('dialog', { name: 'Roll for Maren' });
     const first = within(sheet).getAllByRole('button').find((b) => b.className.includes('min-h-11') && b.className.includes('px-3 py-1.5'));
     fireEvent.click(first as HTMLElement);
     expect(onRoll).toHaveBeenCalledTimes(1);
-    expect(onRoll.mock.calls[0][2]).toBe('Seelah');
+    expect(onRoll.mock.calls[0][2]).toBe('Maren');
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('is not closed by a press elsewhere, and once by Escape', async () => {
     const onClose = vi.fn();
-    render(<Compact><CharacterRollPicker character={seelah} onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} /></Compact>);
+    render(<Compact><CharacterRollPicker character={maren} onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} /></Compact>);
     fireEvent.mouseDown(document.body);
     expect(onClose).not.toHaveBeenCalled();
     await nextFrame();
@@ -113,7 +113,7 @@ describe("a character's roll picker on the compact layout", () => {
 
 describe("a creature's roll picker on the compact layout", () => {
   it('is a modal sheet at full height, named for the creature, with rows a finger can press', () => {
-    render(<Compact><NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} /></Compact>);
+    render(<Compact><NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} /></Compact>);
     const sheet = screen.getByRole('dialog', { name: 'Roll for Goblin' });
     expect(sheet).toHaveAttribute('aria-modal', 'true');
     const rolls = within(sheet).getAllByRole('button').filter((b) => b.className.includes('px-3 py-1.5'));
@@ -124,7 +124,7 @@ describe("a creature's roll picker on the compact layout", () => {
 
   it('is not closed by a press elsewhere, and once by Escape', async () => {
     const onClose = vi.fn();
-    render(<Compact><NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} /></Compact>);
+    render(<Compact><NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={onClose} anchorX={0} anchorY={0} /></Compact>);
     fireEvent.mouseDown(document.body);
     expect(onClose).not.toHaveBeenCalled();
     await nextFrame();
@@ -135,7 +135,7 @@ describe("a creature's roll picker on the compact layout", () => {
 
 describe('the popovers off the compact layout', () => {
   it('keep their rows as they were', () => {
-    render(<NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
     const rows = screen.getAllByRole('button').filter((b) => b.className.includes('px-3 py-1.5'));
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
@@ -147,8 +147,8 @@ describe('the popovers off the compact layout', () => {
 
 describe("the pickers' custom roll on the compact layout", () => {
   it.each([
-    ['character', () => <CharacterRollPicker character={seelah} onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />],
-    ['creature', () => <NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />],
+    ['character', () => <CharacterRollPicker character={maren} onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />],
+    ['creature', () => <NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />],
   ] as const)("in the %s's picker, takes a finger: its boxes and Roll at 44 px", (_kind, picker) => {
     render(<Compact>{picker()}</Compact>);
     const sheet = screen.getByRole('dialog', { name: /^Roll for / });
@@ -159,7 +159,7 @@ describe("the pickers' custom roll on the compact layout", () => {
   });
 
   it("keeps the popover's custom roll as it was", () => {
-    render(<NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
     expect(screen.getByPlaceholderText('e.g. 2d6+3').className).toBe('input-cozy flex-1 text-xs py-1');
     expect(screen.getByPlaceholderText('Label (optional, e.g. Fireball Damage)').className).toBe('input-cozy w-full text-xs py-1');
     expect(screen.getByTitle('Roll').className).toBe('flex items-center gap-1 px-2 py-1 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/15 transition-colors');
@@ -168,13 +168,13 @@ describe("the pickers' custom roll on the compact layout", () => {
 
 describe("the pickers' list on the compact layout", () => {
   it('keeps a scroll at its end from moving the page under it', () => {
-    render(<Compact><NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} /></Compact>);
+    render(<Compact><NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} /></Compact>);
     const list = screen.getByText('Abilities').closest('div.overflow-y-auto') as HTMLElement;
     expect(list.className).toContain('overscroll-contain');
   });
 
   it("is the popover's list as it was off the compact layout", () => {
-    render(<NpcRollPicker token={goblin} gameSystem="DND_5E" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
+    render(<NpcRollPicker token={goblin} gameSystem="FIFTH_EDITION" onRoll={() => undefined} onClose={() => undefined} anchorX={0} anchorY={0} />);
     expect((screen.getByText('Abilities').closest('div.overflow-y-auto') as HTMLElement).className).toBe('flex-1 min-h-0 overflow-y-auto');
   });
 });
@@ -190,8 +190,8 @@ function Switchable({ children }: { children: ReactNode }) {
 describe("a character's menu open as the layout switches to the desktop", () => {
   it('is placed and shown as the popover', () => {
     const items: FlatMenuItem[] = [{ kind: 'command', id: 'view', icon: Eye, label: 'View Character Sheet', run: () => undefined }];
-    render(<Switchable><CharacterContextMenu x={10} y={10} title="Seelah" items={items} onClose={() => undefined} /></Switchable>);
-    expect(screen.getByRole('dialog', { name: 'Seelah' })).toBeInTheDocument();
+    render(<Switchable><CharacterContextMenu x={10} y={10} title="Maren" items={items} onClose={() => undefined} /></Switchable>);
+    expect(screen.getByRole('dialog', { name: 'Maren' })).toBeInTheDocument();
 
     act(() => { switchLayout(false); });
     const popover = document.querySelector<HTMLElement>('div.fixed.z-50.bg-soft-cream');

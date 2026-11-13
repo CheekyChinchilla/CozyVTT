@@ -3,7 +3,7 @@
  * and no sheet under it.
  *
  * A row of More, or of a token's action sheet, closes its sheet and opens a
- * window: one of the DM's slide-overs, Edit Token, the character sheet. The
+ * window: one of the GM's slide-overs, Edit Token, the character sheet. The
  * sheet took its history entry back off as it closed, so the window held
  * none and Back left the campaign page, losing whatever was typed in it. A
  * window on the compact layout now holds the entry as a sheet does: Back
@@ -22,7 +22,7 @@ import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/Slide
 import Modal from '@/components/ui/Modal';
 import type { MenuItem } from '@/components/ui/menu';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 import { waitForDialogFocus } from '@/test/dialogFocus';
 import { CampaignStatus } from '@/types';
 import type { Campaign, CampaignMembership, Character } from '@/types';
@@ -31,7 +31,7 @@ import ActionSheet from '../ActionSheet';
 import { BottomSheet } from '../BottomSheet';
 
 vi.mock('react-router', () => ({ useNavigate: () => () => undefined }));
-vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ userRole: 'DM' }) }));
+vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ userRole: 'GM' }) }));
 vi.mock('@/contexts/WebSocketContext', () => ({
   useWebSocket: () => ({ status: 'connected', error: null, reconnect: () => undefined }),
   useOptionalWebSocket: () => null,
@@ -190,7 +190,7 @@ describe('Back with a window opened over a sheet', () => {
   });
 });
 
-const sheetCharacter = { ...pf2eCharacter(), userId: 'owner' } as Character;
+const sheetCharacter = { ...fantasyD20Character(), userId: 'owner' } as Character;
 const membership = { userId: 'owner', campaignId: sheetCharacter.campaignId, role: 'PLAYER', characterIds: [] } as unknown as CampaignMembership;
 const editor = () => screen.queryByRole('dialog', { name: `Edit Character Sheet: ${sheetCharacter.name}` });
 const viewer = () => screen.queryByRole('dialog', { name: sheetCharacter.name });
@@ -212,7 +212,7 @@ describe("Back with a window a token's action sheet opened", () => {
     ];
     return (
       <LayoutProvider compact>
-        {menu && <ActionSheet open title="Valeros" items={items} onClose={() => setMenu(false)} />}
+        {menu && <ActionSheet open title="Tobin" items={items} onClose={() => setMenu(false)} />}
         {viewing && (
           <CharacterSheetViewerModal character={viewing} campaignId={viewing.campaignId ?? undefined} membership={membership} onClose={() => setViewing(null)} />
         )}
@@ -234,7 +234,7 @@ describe("Back with a window a token's action sheet opened", () => {
     fireEvent.click(within(viewer() as HTMLElement).getByRole('button', { name: /Edit/ }));
     await waitFor(() => expect(editor()).toBeInTheDocument());
     await waitForDialogFocus(editor() as HTMLElement);
-    await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
+    await userEvent.type(screen.getByPlaceholderText('Deity'), 'The Quiet Forge');
 
     await pressBack();
     expect(window.location.pathname).toBe('/campaigns/c4');
@@ -244,7 +244,7 @@ describe("Back with a window a token's action sheet opened", () => {
     // Keep Editing keeps the editor, what was typed and the page.
     fireEvent.click(screen.getByRole('button', { name: 'Keep Editing' }));
     await waitFor(() => expect(discardQuestion()).toBeNull());
-    expect(screen.getByPlaceholderText('Deity')).toHaveValue('Torag');
+    expect(screen.getByPlaceholderText('Deity')).toHaveValue('The Quiet Forge');
     expect(window.location.pathname).toBe('/campaigns/c4');
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
     expect(onSheetEntry()).toBe(true);
@@ -307,7 +307,7 @@ describe('Back after the layout turns compact with a window open over a window',
     fireEvent.click(within(viewer() as HTMLElement).getByRole('button', { name: /Edit/ }));
     await waitFor(() => expect(editor()).toBeInTheDocument());
     await waitForDialogFocus(editor() as HTMLElement);
-    await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
+    await userEvent.type(screen.getByPlaceholderText('Deity'), 'The Quiet Forge');
 
     rerender(<Viewer compact />);
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
@@ -365,15 +365,15 @@ describe('Back after the layout turns compact with a window open over a window',
     function Picker({ onClose }: { onClose: () => void }) {
       const content = <button type="button">Perception</button>;
       return useCompactLayout()
-        ? <BottomSheet open title="Roll for Valeros" height="full" onClose={onClose}>{content}</BottomSheet>
-        : <div role="menu" aria-label="Roll for Valeros">{content}</div>;
+        ? <BottomSheet open title="Roll for Tobin" height="full" onClose={onClose}>{content}</BottomSheet>
+        : <div role="menu" aria-label="Roll for Tobin">{content}</div>;
     }
     function WindowWithPicker({ compact }: { compact: boolean }) {
       const [windowOpen, setWindowOpen] = useState(true);
       const [picking, setPicking] = useState(false);
       return (
         <LayoutProvider compact={compact}>
-          <Modal open={windowOpen} onClose={() => setWindowOpen(false)} title="Valeros">
+          <Modal open={windowOpen} onClose={() => setWindowOpen(false)} title="Tobin">
             <button type="button" onClick={() => setPicking(true)}>Roll</button>
             {picking && <Picker onClose={() => setPicking(false)} />}
           </Modal>
@@ -381,21 +381,21 @@ describe('Back after the layout turns compact with a window open over a window',
       );
     }
     const { rerender } = render(<WindowWithPicker compact={false} />);
-    await waitForDialogFocus(screen.getByRole('dialog', { name: 'Valeros' }));
+    await waitForDialogFocus(screen.getByRole('dialog', { name: 'Tobin' }));
     fireEvent.click(screen.getByRole('button', { name: 'Roll' }));
-    expect(screen.getByRole('menu', { name: 'Roll for Valeros' })).toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: 'Roll for Tobin' })).toBeInTheDocument();
 
     rerender(<WindowWithPicker compact />);
     await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
-    expect(screen.getByRole('dialog', { name: 'Roll for Valeros' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Roll for Tobin' })).toBeInTheDocument();
 
     await pressBack();
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Roll for Valeros' })).toBeNull());
-    expect(screen.getByRole('dialog', { name: 'Valeros' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Roll for Tobin' })).toBeNull());
+    expect(screen.getByRole('dialog', { name: 'Tobin' })).toBeInTheDocument();
     expect(onSheetEntry()).toBe(true);
 
     await pressBack();
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Valeros' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tobin' })).toBeNull());
     await waitFor(() => expect(onSheetEntry()).toBe(false));
   });
 

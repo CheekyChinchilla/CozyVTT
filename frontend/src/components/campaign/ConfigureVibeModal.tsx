@@ -2,7 +2,7 @@
  * Configure Vibe Modal
  * Vibe Tracker Details
  *
- * DM-only modal for adding, editing, and removing time-of-day periods.
+ * GM-only modal for adding, editing, and removing time-of-day periods.
  * Each period has a name, hue color, CSS filter (built via sliders), and audio track (stub).
  * Saves to PUT /api/campaigns/:id/vibe — backend validates and persists.
  */
@@ -74,7 +74,7 @@ interface PeriodEditorProps {
   period: VibePeriod;
   index: number;
   canDelete: boolean;
-  /** The tracks this DM may open to the table; the picker offers nothing else. */
+  /** The tracks this GM may open to the table; the picker offers nothing else. */
   audioAssets: Asset[];
   audioLoading: boolean;
   onChange: (index: number, updated: VibePeriod) => void;
@@ -369,7 +369,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
 
     if (!campaign) return;
 
-    // The server refuses a save whose audio is not a track this DM may set,
+    // The server refuses a save whose audio is not a track this GM may set,
     // so a free-text note from the old field, or a track that has since gone,
     // saves as no audio. When the library failed to load the values pass
     // through untouched, so a blip cannot silently strip every period.
@@ -382,7 +382,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
 
     const newSettings: VibeSettings = {
       ...(campaign.vibeSettings ?? {}),
-      enabled: true, // always keep enabled when DM is actively managing it
+      enabled: true, // always keep enabled when GM is actively managing it
       periods: periods.map((p) => ({
         ...p,
         name: p.name.trim(),

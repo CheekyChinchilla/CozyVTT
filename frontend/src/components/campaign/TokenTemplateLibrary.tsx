@@ -1,6 +1,6 @@
 /**
  * TokenTemplateLibrary
- * DM slide-over panel for browsing, creating, editing, and placing saved token templates.
+ * GM slide-over panel for browsing, creating, editing, and placing saved token templates.
  * Tokens saved here can be reused across maps and copied to other campaigns.
  */
 
@@ -25,6 +25,7 @@ import { useGameStore } from '@/stores/gameStore';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
+import { playedGameSystem } from '@/constants/game-systems';
 import type { TokenTemplate, NpcStatBlock, Campaign } from '@/types';
 import { TokenType, AssetType, AssetScope, CampaignRole } from '@/types';
 import type { TokenDisplayMode } from '@/types';
@@ -87,7 +88,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   const [copyingId, setCopyingId] = useState<string | null>(null);
   // What the last copy did, named for the campaign it went to.
   const [notice, setNotice] = useState<string | null>(null);
-  const [dmCampaigns, setDmCampaigns] = useState<Campaign[]>([]);
+  const [gmCampaigns, setGmCampaigns] = useState<Campaign[]>([]);
   // On a narrow screen the form is a step of its own, in place of the list.
   const {
     asStep: formAsStep,
@@ -137,13 +138,13 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the search text changes, after a pause in typing
   }, [searchQuery]);
 
-  // Fetch campaigns user is DM of (for copy-to feature)
+  // Fetch campaigns user is GM of (for copy-to feature)
   useEffect(() => {
     if (!isOpen) return;
     api.listCampaigns().then(({ campaigns }) => {
-      setDmCampaigns(
+      setGmCampaigns(
         campaigns.filter(
-          (c) => c.userRole === CampaignRole.DM && c.id !== campaign?.id
+          (c) => c.userRole === CampaignRole.GM && c.id !== campaign?.id
         )
       );
     }).catch(() => {});
@@ -337,7 +338,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
                 isExpanded={expandedId === template.id}
                 isPlacing={placingId === template.id}
                 showCopyMenu={copyMenuId === template.id}
-                dmCampaigns={dmCampaigns}
+                gmCampaigns={gmCampaigns}
                 onToggle={() => setExpandedId(expandedId === template.id ? null : template.id)}
                 onPlace={() => handlePlace(template)}
                 onEdit={(opener) => handleEdit(template, opener)}
@@ -403,7 +404,7 @@ interface TemplateRowProps {
   showCopyMenu: boolean;
   /** A copy of this template is on its way. */
   isCopying: boolean;
-  dmCampaigns: Campaign[];
+  gmCampaigns: Campaign[];
   onToggle: () => void;
   onPlace: () => void;
   /** Called with the Edit button, which takes focus back when the form's step closes. */
@@ -419,7 +420,7 @@ function TemplateRow({
   isPlacing,
   showCopyMenu,
   isCopying,
-  dmCampaigns,
+  gmCampaigns,
   onToggle,
   onPlace,
   onEdit,
@@ -497,12 +498,12 @@ function TemplateRow({
               >
                 <Copy className="w-3 h-3" /> Copy
               </button>
-              {showCopyMenu && dmCampaigns.length > 0 && (
+              {showCopyMenu && gmCampaigns.length > 0 && (
                 <div className="absolute left-0 top-full mt-1 z-20 bg-paper-white border border-moss-green/20 rounded-cozy shadow-lg py-1 min-w-[180px] max-h-48 overflow-y-auto">
                   <div className="px-2 py-1 text-[9px] text-stone-gray/60 uppercase tracking-wide font-semibold">
                     Copy to campaign
                   </div>
-                  {dmCampaigns.map((c) => (
+                  {gmCampaigns.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => onCopyToCampaign(c)}
@@ -514,9 +515,9 @@ function TemplateRow({
                   ))}
                 </div>
               )}
-              {showCopyMenu && dmCampaigns.length === 0 && (
+              {showCopyMenu && gmCampaigns.length === 0 && (
                 <div className="absolute left-0 top-full mt-1 z-20 bg-paper-white border border-moss-green/20 rounded-cozy shadow-lg p-3 min-w-[180px]">
-                  <p className="text-[10px] text-stone-gray/60">No other campaigns where you are DM.</p>
+                  <p className="text-[10px] text-stone-gray/60">No other campaigns where you are GM.</p>
                 </div>
               )}
             </div>
@@ -567,7 +568,7 @@ function readTemplateHpMax(text: string): number | null | undefined {
 
 /**
  * The fields of an edited template that differ from what is stored, so an
- * update sends only what the DM changed and leaves the rest as it is: a
+ * update sends only what the GM changed and leaves the rest as it is: a
  * template's current hit points, a stat block on a template that is not an
  * NPC, and anything the form does not show.
  */
@@ -870,7 +871,7 @@ function TemplateForm({ campaignId, editingTemplate, asStep, headingRef, onCreat
               <StatBlockEditor
                 statBlock={statBlock}
                 onChange={setStatBlock}
-                gameSystem={campaign?.gameSystem ?? null}
+                gameSystem={playedGameSystem(campaign?.gameSystem)}
               />
               <button
                 type="button"

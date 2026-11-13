@@ -1,8 +1,8 @@
 /**
- * The dashboard's invitations name the campaign's DM.
+ * The dashboard's invitations name the campaign's GM.
  *
- * Each card said "DM:" and the campaign's owner, who no longer runs the game
- * once it has been handed over. It now names the member who is the DM.
+ * Each card said "GM:" and the campaign's owner, who no longer runs the game
+ * once it has been handed over. It now names the member who is the GM.
  */
 
 import { it, expect, vi } from 'vitest';
@@ -14,7 +14,7 @@ const invitation: CampaignInvitation = {
   createdAt: '2026-10-18T00:00:00.000Z', expiresAt: null,
   campaign: {
     id: 'camp-1', name: 'Handed over', description: null, gameSystem: null, status: CampaignStatus.ACTIVE,
-    owner: { displayName: 'Olwen the Owner' }, dm: { displayName: 'Dara the DM' },
+    owner: { displayName: 'Olwen the Owner' }, gm: { displayName: 'Dara the GM' },
   },
 };
 
@@ -35,8 +35,8 @@ vi.mock('@/components/CreateCampaignModal', () => ({ default: () => null }));
 
 import DashboardPage from '../DashboardPage';
 
-it('names the member who runs the campaign as its DM', () => {
+it('names the member who runs the campaign as its GM', () => {
   render(<DashboardPage />);
-  expect(screen.getByText(/DM: Dara the DM/)).toBeTruthy();
+  expect(screen.getByText(/GM: Dara the GM/)).toBeTruthy();
   expect(screen.queryByText(/Olwen the Owner/)).toBeNull();
 });

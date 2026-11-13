@@ -5,7 +5,7 @@
  *
  * Private: the server scopes every request by the signed-in user, so there is
  * nothing here that could show someone else's notes even if it tried. Nobody
- * else reads these — the DM included.
+ * else reads these — the GM included.
  *
  * Markdown is rendered through the app's one Markdown component
  * (`components/common/Markdown`), which keeps raw HTML off, so a note containing

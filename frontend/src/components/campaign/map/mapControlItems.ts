@@ -5,9 +5,9 @@
 // zoom buttons and their readout, Ping, Draw and Map controls. Map controls
 // opens the rest of what the toolbar holds for the viewer as an action
 // sheet: Fit to Screen, the grid and its colour, and on a map the ruler and
-// its colour and the AoE shape; for the DM also, on a map, Paint where it is
+// its colour and the AoE shape; for the GM also, on a map, Paint where it is
 // offered (on a map drawn in CozyVTT or one with no picture), Tools, which
-// shows and hides the DM's tool stack (Fog, Walls and Lights), and the spirit
+// shows and hides the GM's tool stack (Fog, Walls and Lights), and the spirit
 // tokens. Each row says what pressing it does now, since a row has no
 // pressed state to show. A colour's row keeps the sheet open, so presses go
 // round the colours; the others close it.
@@ -34,7 +34,7 @@ export const rulerColorLabel = (color: RulerColor) =>
 
 /** What the viewer sees of the map's controls now. */
 export interface MapControlsView {
-  isDM: boolean;
+  isGM: boolean;
   /** A map is open, which the ruler and the AoE shape measure on. */
   hasMap: boolean;
   showGrid: boolean;
@@ -42,11 +42,11 @@ export interface MapControlsView {
   showRuler: boolean;
   rulerColor: RulerColor;
   showAoE: boolean;
-  /** For the DM: tokens on the spirit plane are drawn. */
+  /** For the GM: tokens on the spirit plane are drawn. */
   spiritTokensShown: boolean;
-  /** For the DM: the tool stack shows. */
+  /** For the GM: the tool stack shows. */
   toolsShown: boolean;
-  /** For the DM: Paint is offered on this map, or on; null where it is not offered. */
+  /** For the GM: Paint is offered on this map, or on; null where it is not offered. */
   paint: 'offered' | 'on' | null;
 }
 
@@ -82,8 +82,8 @@ export function mapControlItems(view: MapControlsView, actions: MapControlsActio
     items.push(row('aoe', view.showAoE ? 'Put the AoE shape away' : 'AoE Shape', Zap, actions.toggleAoE, { title: 'Area of effect overlay' }));
   }
 
-  if (view.isDM) {
-    items.push({ kind: 'separator', id: 'dm' });
+  if (view.isGM) {
+    items.push({ kind: 'separator', id: 'gm' });
     if (view.hasMap && view.paint) {
       items.push(row('paint', view.paint === 'on' ? 'Put Mapmaker away' : 'Mapmaker', Paintbrush, actions.togglePaint, { title: 'Draw on the map\'s picture, on your screen until it is saved' }));
     }

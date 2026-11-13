@@ -1,7 +1,7 @@
 /**
  * The quick editor reads the scale of the map on screen.
  *
- * While the DM prepares a map, the map on screen is not the table's, and its
+ * While the GM prepares a map, the map on screen is not the table's, and its
  * feet per square can differ: a token's vision is shown in feet as that map
  * measures them.
  */
@@ -44,7 +44,7 @@ vi.mock('@/components/assets/AssetGrid', () => ({ default: () => null }));
 import NpcQuickEditor from '../NpcQuickEditor';
 
 const goblin: Token = {
-  id: 'goblin', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'goblin', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };

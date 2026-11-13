@@ -25,7 +25,7 @@ const MAX_REREADS = 3;
  * has `message` itself.
  *
  * That read goes by count, and the history can change in between. A message
- * at or after `message` deleted meanwhile (the DM clearing join and leave
+ * at or after `message` deleted meanwhile (the GM clearing join and leave
  * notices, say) ends the read one message older, past `message`, and the
  * cursor after it would skip that one for good; so such a read is read again
  * in turn, asking for the messages it had at or after `message`. A message

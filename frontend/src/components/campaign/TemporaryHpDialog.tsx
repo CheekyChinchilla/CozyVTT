@@ -5,7 +5,7 @@
 // many to grant, then the rule for a creature that already has some
 // (utils/rules/hitPoints). Temporary hit points never add together, so it
 // keeps the ones it has or takes the new ones, and the dialog asks which:
-// whoever grants them chooses, the DM for the table. The cursor goes to
+// whoever grants them chooses, the GM for the table. The cursor goes to
 // Take M, and both choices carry the question, so a screen reader says it.
 // ============================================
 

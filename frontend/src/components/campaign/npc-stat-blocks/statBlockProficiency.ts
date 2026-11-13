@@ -1,6 +1,6 @@
 /**
  * statBlockProficiency.ts
- * Reads and writes the proficiency side of a D&D 5e creature stat block.
+ * Reads and writes the proficiency side of a 5E creature stat block.
  *
  * A stat block stores saves and skills as final totals — that is the format the
  * roll picker, the viewer, campaign export and every seeded SRD creature use,
@@ -21,7 +21,7 @@ import type { NpcProficiencies, NpcStatBlock, ProficiencyLevel } from '@/types';
 import {
   ABILITY_KEYS,
   ABILITY_LABELS,
-  DND5E_SKILLS,
+  FIFTH_EDITION_SKILLS,
   abilityModifier,
   decomposeBonus,
   derivedBonus,
@@ -29,7 +29,7 @@ import {
   formatModifier,
   proficiencyBonusForCR,
   type AbilityKey,
-} from '@/utils/rules/dnd5e';
+} from '@/utils/rules/fifthEdition';
 
 /** One row in the saves or skills editor. */
 export interface ProficiencyRow {
@@ -155,7 +155,7 @@ function resolveRow(
   return { key, label, ability, level, bonus, derived: bonus, isCustomSkill, implausible: false };
 }
 
-/** The six saving throws, always all of them so the DM can pick any. */
+/** The six saving throws, always all of them so the GM can pick any. */
 export function readSaveRows(statBlock: NpcStatBlock): ProficiencyRow[] {
   const totals = statBlock.savingThrows ?? {};
   const levels = statBlock.proficiencies?.saves ?? {};
@@ -176,7 +176,7 @@ export function readSaveRows(statBlock: NpcStatBlock): ProficiencyRow[] {
 /**
  * The eighteen 5e skills, plus any custom skill the stat block already carries.
  *
- * Standard skills always appear so a DM can tick one without knowing how to
+ * Standard skills always appear so a GM can tick one without knowing how to
  * spell it — the previous editor required typing the key by hand, which
  * accepted "perceptoin" as a distinct skill.
  */
@@ -184,7 +184,7 @@ export function readSkillRows(statBlock: NpcStatBlock): ProficiencyRow[] {
   const totals = statBlock.skills ?? {};
   const levels = statBlock.proficiencies?.skills ?? {};
 
-  const standard = DND5E_SKILLS.map((skill) =>
+  const standard = FIFTH_EDITION_SKILLS.map((skill) =>
     resolveRow(
       statBlock,
       skill.key,
@@ -259,7 +259,7 @@ export function setProficiencyLevel(
     if (row.key !== key) return row;
     if (level === 'custom') {
       // Entering override mode keeps whatever the value already was, so the
-      // number does not jump the moment the DM chooses to edit it.
+      // number does not jump the moment the GM chooses to edit it.
       return { ...row, level, derived: derivedBonus(abilityMod, pb, 'proficient') };
     }
     const bonus = derivedBonus(abilityMod, pb, level);
@@ -329,7 +329,7 @@ export function formatSaveList(saves: Record<string, number>): string {
   return Object.entries(saves)
     .map(([key, bonus]) => {
       // Stat blocks abbreviate the six abilities' saves ("Dex +5"); any other
-      // save (a Pathfinder "fortitude" seen in another system) is printed
+      // save (a Fantasy d20 "fortitude" seen in another system) is printed
       // whole, where cutting it made "for".
       const label = ABILITY_LABELS[key as AbilityKey];
       const shown = label ? label.slice(0, 3) : key.charAt(0).toUpperCase() + key.slice(1);

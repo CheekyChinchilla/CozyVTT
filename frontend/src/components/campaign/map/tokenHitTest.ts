@@ -57,12 +57,12 @@ export function isTokenDowned(
  * — the same convention the fog layer uses.
  */
 export interface TokenVisibility {
-  isDM: boolean;
+  isGM: boolean;
   revealedCells: Set<number> | null;
   /** Players always see their own tokens; you know where you are. */
   isOwnToken: (token: Token) => boolean;
-  /** DM-only view preference: spirit-layer tokens hidden from the canvas. */
-  dmShowSpiritTokens: boolean;
+  /** GM-only view preference: spirit-layer tokens hidden from the canvas. */
+  gmShowSpiritTokens: boolean;
   mapWidth: number;
   mapHeight: number;
 }
@@ -75,17 +75,17 @@ export interface TokenVisibility {
  * lower-left panel happily named a creature standing in unrevealed dark that
  * the player could not see and had been given no other hint about. Fog is a
  * *rendering* filter — the token really is in the client's data, unlike a
- * DM-hidden one, which the server never sends at all.
+ * GM-hidden one, which the server never sends at all.
  *
  * Deliberately excludes the dragged-token skip: that is a drawing concern (it
  * is drawn as a ghost instead), and a dragged token must stay hit-testable.
  */
 export function isTokenVisibleTo(token: Token, view: TokenVisibility): boolean {
   // The server filters these out for players already; this is the safeguard.
-  if (!token.visible && !view.isDM) return false;
+  if (!token.visible && !view.isGM) return false;
 
-  if (view.isDM) {
-    if (!view.dmShowSpiritTokens && token.layer === TokenLayer.SPIRIT) return false;
+  if (view.isGM) {
+    if (!view.gmShowSpiritTokens && token.layer === TokenLayer.SPIRIT) return false;
     return true;
   }
 
@@ -105,13 +105,13 @@ export function isTokenVisibleTo(token: Token, view: TokenVisibility): boolean {
  * The hit points a viewer is allowed to see on a token.
  *
  * A player token follows its character sheet, which every campaign member may
- * already read. An NPC's own hit points are the DM's to reveal, so they show
- * only when the DM has turned the bar on — or to the DM themselves.
+ * already read. An NPC's own hit points are the GM's to reveal, so they show
+ * only when the GM has turned the bar on — or to the GM themselves.
  */
 export function visibleTokenHp(
   token: Token,
   characterHpCache: Record<string, CharacterHpInfo>,
-  isDM: boolean
+  isGM: boolean
 ): CharacterHpInfo | null {
   // The sheet, when it is loaded. A character's hit points are readable by
   // every campaign member already, so this needs no gate.
@@ -121,9 +121,9 @@ export function visibleTokenHp(
   // Falling back to the token's own copy does NOT skip the gate. It briefly
   // did: a bound token whose character was not in the cache — the window before
   // the roster fetch returns, or a character no member holds — returned
-  // `token.hp` outright, showing hit points a DM had chosen to keep hidden.
+  // `token.hp` outright, showing hit points a GM had chosen to keep hidden.
   if (!token.hp || token.hp.max <= 0) return null;
-  return isDM || token.showHpBar ? token.hp : null;
+  return isGM || token.showHpBar ? token.hp : null;
 }
 
 /**
@@ -188,7 +188,7 @@ function footprintsOverlap(
 /**
  * Tokens standing where `moving` is trying to end up.
  *
- * The Basic Rules are blunt about this (p. 74, "Moving Around Other
+ * The rules are blunt about this (SRD 5.1, "Moving Around Other
  * Creatures"): "Whether a creature is a friend or an enemy, you can't willingly
  * end your move in its space." A token at zero hit points is treated as no
  * longer holding its space, so a body can be stood on — that part is a house

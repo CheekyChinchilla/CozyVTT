@@ -1,13 +1,13 @@
 /**
  * The game system badge, for every code it can be given: the systems this
  * build knows, none (a Flexible sheet), and a code it does not know, such as
- * one read from a file made on an instance with another system.
+ * the value of a system CozyVTT no longer supports.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import GameSystemBadge from '../GameSystemBadge';
 import { GameSystem } from '@/types';
-import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
+import { GAME_SYSTEM_SHORT_LABELS, UNSUPPORTED_SYSTEM_LABEL } from '@/constants/game-systems';
 
 describe('GameSystemBadge', () => {
   it('shows each system by its short label', () => {
@@ -23,9 +23,10 @@ describe('GameSystemBadge', () => {
     expect(screen.getByText('Flexible')).toBeTruthy();
   });
 
-  it('shows a code it does not know as written, in the Flexible badge\'s colours', () => {
+  it('shows a code it does not know as Unsupported system, in the Flexible badge\'s colours', () => {
     render(<GameSystemBadge gameSystem={'MY_SYSTEM' as GameSystem} showFull />);
-    const badge = screen.getByText('MY_SYSTEM');
+    expect(screen.queryByText('MY_SYSTEM')).toBeNull();
+    const badge = screen.getByText(UNSUPPORTED_SYSTEM_LABEL);
     expect(badge.className).toContain('text-ink-muted');
   });
 });

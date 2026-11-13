@@ -90,8 +90,8 @@ const WIDER = new Set(['sm', 'md', 'lg', 'xl', '2xl']);
  * class, each with the reason it fits.
  */
 const KEEP_ON_A_PHONE: Record<string, string> = {
-  '/src/components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx grid-cols-[minmax(0,1fr)_3.5rem_0.75rem_3.5rem_2.75rem]':
-    "The D&D 5e editor's hit dice rows (HIT_DICE_COLUMNS). The class takes a line of its own (col-span-5); the die, left, slash, at full and remove share the next, in about 200 px of fixed columns and gaps, which leaves the die box at least about 60 px on a 360 px phone.",
+  '/src/components/character-sheets/fifth-edition/FifthEditionCharacterEditor.tsx grid-cols-[minmax(0,1fr)_3.5rem_0.75rem_3.5rem_2.75rem]':
+    "The 5E editor's hit dice rows (HIT_DICE_COLUMNS). The class takes a line of its own (col-span-5); the die, left, slash, at full and remove share the next, in about 200 px of fixed columns and gaps, which leaves the die box at least about 60 px on a 360 px phone.",
 };
 
 /**
@@ -142,7 +142,7 @@ describe('the sheets on a phone', () => {
   it('are read, so the check is looking at the right files', () => {
     const files = Object.keys(SOURCES);
     expect(files.length).toBeGreaterThan(40);
-    expect(files).toContain('/src/components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx');
+    expect(files).toContain('/src/components/character-sheets/fifth-edition/FifthEditionCharacterEditor.tsx');
     expect(files).toContain('/src/components/character/sheetShell.ts');
     expect(files.some((file) => file.includes('/__tests__/'))).toBe(false);
   });

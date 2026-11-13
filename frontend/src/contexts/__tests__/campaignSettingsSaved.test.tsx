@@ -1,7 +1,7 @@
 /**
- * The campaign page takes the Campaign Settings the DM saved.
+ * The campaign page takes the Campaign Settings the GM saved.
  *
- * Every page kept the settings it loaded, so a chat cooldown the DM turned
+ * Every page kept the settings it loaded, so a chat cooldown the GM turned
  * on during play reached a player only as a refusal of their second message,
  * and their chat box never counted down until they reloaded. A save now sends
  * everyone `campaign.settings.updated`, and the page takes the name,
@@ -21,7 +21,7 @@ vi.mock('@/services/api', () => ({
 const socketOn = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
-    onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
+    onCharacterHpUpdated: vi.fn(), onGmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
     on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));
@@ -37,7 +37,7 @@ function Probe() {
 
 async function open() {
   getCampaign.mockResolvedValueOnce({
-    id: 'c1', name: 'The Sunken Crown', description: 'A crown', gameSystem: 'DND_5E', status: 'ACTIVE', currentMapId: null, maps: [],
+    id: 'c1', name: 'The Sunken Crown', description: 'A crown', gameSystem: 'FIFTH_EDITION', status: 'ACTIVE', currentMapId: null, maps: [],
     memberships: [{ userId: 'me', role: 'PLAYER' }], chatCooldownEnabled: false, chatCooldownSeconds: 5,
   });
   render(
@@ -54,7 +54,7 @@ const saved = (data: unknown) => {
   act(() => handler!(data));
 };
 
-const settings = { campaignId: 'c1', name: 'The Drowned Bell', description: '', gameSystem: 'DND_5E', chatCooldownEnabled: true, chatCooldownSeconds: 7 };
+const settings = { campaignId: 'c1', name: 'The Drowned Bell', description: '', gameSystem: 'FIFTH_EDITION', chatCooldownEnabled: true, chatCooldownSeconds: 7 };
 
 beforeEach(() => {
   latest = null;
@@ -62,7 +62,7 @@ beforeEach(() => {
   socketOn.mockReset();
 });
 
-it('takes the chat cooldown, name and description the DM saved', async () => {
+it('takes the chat cooldown, name and description the GM saved', async () => {
   await open();
   saved(settings);
 
@@ -77,7 +77,7 @@ it("ignores another campaign's settings", async () => {
   expect(latest!.campaign).toMatchObject({ name: 'The Sunken Crown', chatCooldownEnabled: false });
 });
 
-// A player's Draw button follows the setting, so it goes the moment the DM
+// A player's Draw button follows the setting, so it goes the moment the GM
 // turns Players may draw off, and comes back when they turn it on.
 it('takes whether players may draw', async () => {
   await open();

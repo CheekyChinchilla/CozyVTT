@@ -12,7 +12,7 @@ import type {
 import { randomId } from '../../../../utils/uuid';
 
 /**
- * Calculate modifier from stat value (D&D-style)
+ * Calculate modifier from stat value (5E-style)
  * Formula: floor((value - 10) / 2)
  */
 export const calculateModifier = (value: number): number => {

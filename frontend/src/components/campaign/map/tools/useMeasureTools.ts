@@ -1,10 +1,10 @@
 // ============================================
 // The measuring tools on the map toolbar: the ruler, and the AoE template.
-// Only one is up at a time. Either can stay up beside a DM tool, which takes
+// Only one is up at a time. Either can stay up beside a GM tool, which takes
 // the click first; the template's Escape steps come last for that reason.
 //
 // A mouse's ruler ends wherever the pointer is. A finger has no hover, so
-// a finger or a pen pins the ruler's end instead: for the DM the first tap
+// a finger or a pen pins the ruler's end instead: for the GM the first tap
 // sets the start, the second the end and the third starts again, and a
 // press that drags measures from where it lands and ends where it lifts.
 // A player's ruler starts at their token, so their tap or drag sets the
@@ -21,7 +21,7 @@ import type { MapTool, PointerAt } from './types';
 type Square = { x: number; y: number };
 
 interface UseMeasureToolsArgs {
-  isDM: boolean;
+  isGM: boolean;
   markDirty: (...layers: MapLayer[]) => void;
   /** A player has a token on the map for their ruler to start from; asked at a press. */
   measuresFromToken?: () => boolean;
@@ -33,7 +33,7 @@ interface UseMeasureToolsArgs {
 
 const sameSquare = (a: Square, b: Square) => a.x === b.x && a.y === b.y;
 
-export function useMeasureTools({ isDM, markDirty, measuresFromToken = () => false, picksUpAt = () => false, holdsToken = () => false }: UseMeasureToolsArgs) {
+export function useMeasureTools({ isGM, markDirty, measuresFromToken = () => false, picksUpAt = () => false, holdsToken = () => false }: UseMeasureToolsArgs) {
   const [measureTool, setMeasureTool] = useState<'ruler' | 'aoe' | null>(null);
   const showRuler = measureTool === 'ruler';
   const showAoE = measureTool === 'aoe';
@@ -42,7 +42,7 @@ export function useMeasureTools({ isDM, markDirty, measuresFromToken = () => fal
   const [rulerOrigin, setRulerOrigin] = useState<{ x: number; y: number } | null>(null);
   // Where a finger or a pen ended the ruler; a mouse's end is the hover.
   const [rulerEnd, setRulerEnd] = useState<Square | null>(null);
-  // A finger or a pen set the DM's start and no end yet: with no hover to
+  // A finger or a pen set the GM's start and no end yet: with no hover to
   // measure to, the start is shown alone, so the first tap is seen.
   const [rulerStartByTouch, setRulerStartByTouch] = useState(false);
   // The press a finger or a pen gave the ruler, until it lifts: a drag's
@@ -155,7 +155,7 @@ export function useMeasureTools({ isDM, markDirty, measuresFromToken = () => fal
     down({ e, via, mapPx, gridCoords }: PointerAt) {
       if (showRuler && !holdsToken()) {
         const pins = e.kind !== 'mouse';
-        if (isDM) {
+        if (isGM) {
           // A mouse's click sets the start, as it always has.
           if (!pins) {
             setRulerOrigin(gridCoords);
@@ -207,7 +207,7 @@ export function useMeasureTools({ isDM, markDirty, measuresFromToken = () => fal
     escape() {
       if (!showAoE) return false;
       // Drop the placement first, then close the tool — the same two-stage
-      // escape as the wall tools. The DM guide has always promised Esc
+      // escape as the wall tools. The GM guide has always promised Esc
       // dismisses this, but nothing ever handled it.
       if (aoeAnchor) setAoEAnchor(null);
       else setMeasureTool((prev) => (prev === 'aoe' ? null : prev));

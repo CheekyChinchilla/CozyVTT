@@ -30,7 +30,7 @@ export function tokenCopyRequest(token: Token, position: Position): CreateTokenR
 /**
  * Who controls a copy of a token: its controller, while they are still a
  * player of the campaign, otherwise nobody. `controlledBy` is not cleared
- * when a member leaves, becomes a spectator or takes the DM's seat, and the
+ * when a member leaves, becomes a spectator or takes the GM's seat, and the
  * server creates a token for a player or for nobody, so copying the stale id
  * made Duplicate fail on a token that still moves and draws normally.
  */
@@ -50,7 +50,7 @@ export type TokenControllerStanding =
 
 /**
  * Where a token's controller stands: a player, who may move the token, or
- * someone who no longer is (a spectator, the DM, or a member who left), who
+ * someone who no longer is (a spectator, the GM, or a member who left), who
  * may not. `controlledBy` is not cleared when that changes, so everything
  * that names a token's controller asks here, as a copy does.
  */

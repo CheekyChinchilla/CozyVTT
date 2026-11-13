@@ -14,13 +14,13 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import type { ComponentType } from 'react';
 import type { Character } from '@/types';
 import type { CharacterSheetProps } from '../types';
-import { DnD5eCharacterSheet } from '../dnd5e/DnD5eCharacterSheet';
-import { Pathfinder2eCharacterSheet } from '../pathfinder2e/Pathfinder2eCharacterSheet';
-import { CallOfCthulhu7eCharacterSheet } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterSheet';
+import { FifthEditionCharacterSheet } from '../fifth-edition/FifthEditionCharacterSheet';
+import { FantasyD20CharacterSheet } from '../fantasy-d20/FantasyD20CharacterSheet';
+import { HorrorD100CharacterSheet } from '../horror-d100/HorrorD100CharacterSheet';
 import { FlexibleCharacterSheet } from '../FlexibleCharacterSheet';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 
 vi.mock('@/hooks/queries', () => ({
   useServerConfigQuery: () => ({ data: undefined }),
@@ -40,9 +40,9 @@ interface Case {
 }
 
 const cases: Case[] = [
-  { name: 'D&D 5e', Sheet: DnD5eCharacterSheet, character: () => dnd5eCharacter(), field: 'Character Name' },
-  { name: 'Pathfinder 2e', Sheet: Pathfinder2eCharacterSheet, character: () => pf2eCharacter(), field: 'Deity' },
-  { name: 'Call of Cthulhu', Sheet: CallOfCthulhu7eCharacterSheet, character: () => cocCharacter(), field: 'Occupation' },
+  { name: '5E', Sheet: FifthEditionCharacterSheet, character: () => fifthEditionCharacter(), field: 'Character Name' },
+  { name: 'Fantasy d20', Sheet: FantasyD20CharacterSheet, character: () => fantasyD20Character(), field: 'Deity' },
+  { name: 'Horror d100', Sheet: HorrorD100CharacterSheet, character: () => horrorD100Character(), field: 'Profession' },
   { name: 'Flexible', Sheet: FlexibleCharacterSheet, character: () => flexible, field: 'Enter text content...' },
 ];
 

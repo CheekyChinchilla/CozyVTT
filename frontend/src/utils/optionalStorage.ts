@@ -26,7 +26,7 @@ export const optionalStorage = {
 
 /**
  * The same for this tab's sessionStorage, for what belongs to one tab and
- * should survive its reload: a map the DM is preparing there, which a second
+ * should survive its reload: a map the GM is preparing there, which a second
  * tab of theirs does not share.
  */
 export const optionalSessionStorage = {

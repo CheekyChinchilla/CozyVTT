@@ -1,5 +1,5 @@
 /**
- * The campaign page takes the vibe periods the DM saved.
+ * The campaign page takes the vibe periods the GM saved.
  *
  * Every page kept the periods it loaded, so an edit to the period in force
  * changed nothing on screen until a reload, a period added and switched to
@@ -22,7 +22,7 @@ vi.mock('@/services/api', () => ({
 const socketOn = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
-    onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
+    onCharacterHpUpdated: vi.fn(), onGmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
     on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));

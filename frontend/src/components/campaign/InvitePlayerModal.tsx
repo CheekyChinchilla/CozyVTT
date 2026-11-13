@@ -23,7 +23,7 @@ import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '@/constants
 const SEARCH_DELAY_MS = 300;
 
 /**
- * How long an invitation from the app stands before it runs out. The DM can
+ * How long an invitation from the app stands before it runs out. The GM can
  * withdraw one sooner from Campaign Settings → Members.
  */
 const INVITATION_EXPIRY_DAYS = 14;
@@ -247,7 +247,7 @@ export default function InvitePlayerModal({
         {/* Email is opt-in. The invitation shows up on the player's dashboard
             regardless, so most of the time telling them yourself is enough.
             Note the label cannot name their email address — the invitable-users
-            endpoint withholds addresses so a DM cannot harvest them. */}
+            endpoint withholds addresses so a GM cannot harvest them. */}
         <label
           className={`flex items-start gap-3 ${
             emailAvailable ? 'cursor-pointer' : 'cursor-not-allowed opacity-70'

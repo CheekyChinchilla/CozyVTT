@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 import { waitForDialogFocus } from '@/test/dialogFocus';
 
 const showToast = vi.fn();
@@ -36,32 +36,32 @@ describe('saving from the in-page editor while signed out', () => {
   it('keeps the editor and the edits, and says how to carry on', async () => {
     updateCharacter.mockRejectedValue(signedOut);
     const onClose = vi.fn();
-    render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={fantasyD20Character()} onClose={onClose} />);
     await waitForDialogFocus();
 
-    await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
+    await userEvent.type(screen.getByPlaceholderText('Deity'), 'The Quiet Forge');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/signed out/i));
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('href', '/auth/login');
     expect(screen.getByRole('link', { name: /sign in/i })).toHaveAttribute('target', '_blank');
-    expect(screen.getByPlaceholderText('Deity')).toHaveValue('Torag');
+    expect(screen.getByPlaceholderText('Deity')).toHaveValue('The Quiet Forge');
     expect(onClose).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/signed out/i), 'error');
   });
 
   it('saves with the same button once signed in again', async () => {
-    updateCharacter.mockRejectedValueOnce(signedOut).mockResolvedValueOnce({ character: pf2eCharacter() });
+    updateCharacter.mockRejectedValueOnce(signedOut).mockResolvedValueOnce({ character: fantasyD20Character() });
     const onClose = vi.fn();
-    render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={fantasyD20Character()} onClose={onClose} />);
     await waitForDialogFocus();
 
-    await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
+    await userEvent.type(screen.getByPlaceholderText('Deity'), 'The Quiet Forge');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect((updateCharacter.mock.calls[1][1] as { data: { deity?: string } }).data.deity).toBe('Torag');
+    expect((updateCharacter.mock.calls[1][1] as { data: { deity?: string } }).data.deity).toBe('The Quiet Forge');
   });
 });

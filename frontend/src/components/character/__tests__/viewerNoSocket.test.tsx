@@ -16,8 +16,8 @@ vi.mock('@/contexts/WebSocketContext', () => ({
   useOptionalWebSocket: () => undefined,
 }));
 vi.mock('@/services/api', () => ({ api: {} }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ onRoll, onSpendHitDie }: { onRoll?: unknown; onSpendHitDie?: unknown }) => (
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ onRoll, onSpendHitDie }: { onRoll?: unknown; onSpendHitDie?: unknown }) => (
     <div>
       {onRoll ? <button type="button">Roll Stealth</button> : <span>Stealth</span>}
       {onSpendHitDie ? <button type="button">Spend hit die</button> : null}
@@ -26,7 +26,7 @@ vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
 }));
 
 const character = {
-  id: 'char-1', userId: 'owner', name: 'Aldra', gameSystem: 'DND_5E', data: {}, campaignId: null,
+  id: 'char-1', userId: 'owner', name: 'Aldra', gameSystem: 'FIFTH_EDITION', data: {}, campaignId: null,
 } as unknown as Character;
 
 describe('CharacterSheetViewerModal with no table', () => {

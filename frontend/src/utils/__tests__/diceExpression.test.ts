@@ -2,7 +2,7 @@
  * Whether a value on a sheet is offered as a roll.
  *
  * The check looked only at which characters a value held, so it offered
- * values the dice parser refuses, such as `2d6+`, `dddd` and a Pathfinder 2e
+ * values the dice parser refuses, such as `2d6+`, `dddd` and a Fantasy d20
  * strike's `1d8+4 S`, and the roll failed once it reached the server. It now
  * asks the parser, the one the server and a paused table roll by, so the two
  * verdicts cannot part.

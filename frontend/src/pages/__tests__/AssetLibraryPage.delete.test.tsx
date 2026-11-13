@@ -68,7 +68,7 @@ const inUse = {
       error: 'Conflict',
       code: 'ASSET_IN_USE',
       message: 'This asset is still in use.',
-      usage: [{ kind: 'creature', name: 'Imp', campaignId: 'c-1', campaignName: 'Lost Mine', count: 1 }],
+      usage: [{ kind: 'creature', name: 'Imp', campaignId: 'c-1', campaignName: 'The Hollow Crown', count: 1 }],
       omitted: 0,
     },
   },
@@ -113,7 +113,7 @@ describe('Asset Library delete', () => {
 
     const warning = await screen.findByRole('dialog', { name: 'Asset is in use' });
     expect(warning).toHaveTextContent('Imp token');
-    expect(warning).toHaveTextContent('Creature "Imp" (Lost Mine)');
+    expect(warning).toHaveTextContent('Creature "Imp" (The Hollow Crown)');
     expect(api.deleteAsset).toHaveBeenCalledTimes(1);
 
     await userEvent.click(within(warning).getByRole('button', { name: 'Delete anyway' }));

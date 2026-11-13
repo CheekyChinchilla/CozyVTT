@@ -2,15 +2,15 @@
 // Doors, when no wall, fog or light tool is up: a click or a tap opens or
 // closes one, hovering one shows the pointer, and a right-click opens its menu
 // (which MapCanvas draws). Only a door the map offers this viewer counts
-// (doorAccess.ts): the DM any, a player one they can see, a spectator none,
+// (doorAccess.ts): the GM any, a player one they can see, a spectator none,
 // as the server's wall:update checks.
 // ============================================
 
 import { useCallback, useState } from 'react';
 import type { WallSegment, WallType } from '@/types/walls';
-import type { WallToolMode } from '@/components/campaign/DmWallControls';
-import type { FogToolMode } from '@/components/campaign/DmFogControls';
-import type { LightToolMode } from '@/components/campaign/DmLightControls';
+import type { WallToolMode } from '@/components/campaign/GmWallControls';
+import type { FogToolMode } from '@/components/campaign/GmFogControls';
+import type { LightToolMode } from '@/components/campaign/GmLightControls';
 import type { ToastType } from '@/components/Toast';
 import { offeredDoorAt, type DoorViewer } from '../doorAccess';
 import type { OwnEdits } from '../ownEdits';

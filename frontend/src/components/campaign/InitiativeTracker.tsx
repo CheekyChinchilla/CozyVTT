@@ -2,7 +2,7 @@
  * Initiative Tracker
  * Displays and controls combat turn order for all campaign participants.
  *
- * DM sees: full controls (add/remove combatants, set/roll initiative, next turn, end combat)
+ * GM sees: full controls (add/remove combatants, set/roll initiative, next turn, end combat)
  * Players see: read-only ordered list with current turn highlighted
  *
  * Architecture:
@@ -57,6 +57,7 @@ import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/ut
 import { controlsToken } from '@/utils/tokenOwnership';
 import { campaignHasCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
 import { useCompactLayout } from '@/contexts/LayoutContext';
+import { playedGameSystem } from '@/constants/game-systems';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,8 +77,15 @@ function dispositionIcon(entry: CombatantEntry) {
 }
 
 // ---------------------------------------------------------------------------
-// AddCombatantModal — DM picks a map token to add to initiative
+// AddCombatantModal — GM picks a map token to add to initiative
 // ---------------------------------------------------------------------------
+
+/** What each kind of token is called where a list names it. */
+const TOKEN_TYPE_NAMES: Record<TokenType, string> = {
+  [TokenType.PLAYER]: 'Player',
+  [TokenType.NPC]: 'NPC',
+  [TokenType.OBJECT]: 'Object',
+};
 
 interface AddCombatantModalProps {
   open: boolean;
@@ -118,8 +126,9 @@ function AddCombatantModal({ open, tokens, combatantIds, onAdd, onClose }: AddCo
               )}
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm text-brand-ink truncate">{token.name}</div>
-                <div className="text-xs text-stone-gray capitalize">
-                  {token.type ?? 'npc'}{token.disposition ? ` · ${token.disposition}` : ''}
+                <div className="text-xs text-stone-gray">
+                  {TOKEN_TYPE_NAMES[token.type ?? TokenType.NPC]}
+                  {token.disposition ? <> · <span className="capitalize">{token.disposition}</span></> : null}
                 </div>
               </div>
               {/*
@@ -149,11 +158,11 @@ interface CombatantRowProps {
   isActive: boolean;
   /** This token is being pointed at — from this list, or from the map. */
   isPeeked: boolean;
-  isDM: boolean;
-  /** The primary pointer is a finger: the DM drags the row by its grip only. */
+  isGM: boolean;
+  /** The primary pointer is a finger: the GM drags the row by its grip only. */
   coarsePointer: boolean;
   /**
-   * Whether this viewer may roll initiative for this combatant. True for the DM
+   * Whether this viewer may roll initiative for this combatant. True for the GM
    * on every row, and for a player only on a token they control — so a player
    * sees one die, beside their own name.
    */
@@ -237,7 +246,7 @@ function menuPoint(e: React.MouseEvent): { x: number; y: number; byKeyboard: boo
 }
 
 function CombatantRow({
-  entry, isActive, isPeeked, isDM, coarsePointer, canRoll, isDragOver, reorderHintId,
+  entry, isActive, isPeeked, isGM, coarsePointer, canRoll, isDragOver, reorderHintId,
   onSetInitiative, onRoll, onRemove,
   onDragStart, onDragOver, onDrop, onDragEnd, onMove, isFirst, isLast,
   hasMenu, hasSheet, onOpenMenu, onOpenSheet,
@@ -256,7 +265,7 @@ function CombatantRow({
   // On a touch screen the row drags by its grip only, so the long-press is
   // free to open the menu: an iPad's own drag would otherwise lift the row
   // at about the same moment.
-  const rowDrags = isDM && !coarsePointer;
+  const rowDrags = isGM && !coarsePointer;
 
   useEffect(() => {
     if (editing) {
@@ -267,7 +276,7 @@ function CombatantRow({
     }
   }, [editing]);
 
-  // Sync external changes (e.g. another DM updates value)
+  // Sync external changes (e.g. another GM updates value)
   useEffect(() => {
     if (!editing) setInputVal(entry.initiative !== null ? String(entry.initiative) : '');
   }, [entry.initiative, editing]);
@@ -284,13 +293,13 @@ function CombatantRow({
   return (
     <div
       draggable={rowDrags}
-      onDragStart={isDM ? (e) => {
+      onDragStart={isGM ? (e) => {
         showRowWhileDraggedByGrip(e);
         onDragStart(e, entry.tokenId);
       } : undefined}
-      onDragOver={isDM ? (e) => onDragOver(e, entry.tokenId) : undefined}
-      onDrop={isDM ? (e) => onDrop(e, entry.tokenId) : undefined}
-      onDragEnd={isDM ? onDragEnd : undefined}
+      onDragOver={isGM ? (e) => onDragOver(e, entry.tokenId) : undefined}
+      onDrop={isGM ? (e) => onDrop(e, entry.tokenId) : undefined}
+      onDragEnd={isGM ? onDragEnd : undefined}
       onMouseEnter={() => useGameStore.getState().setPeekToken(entry.tokenId, 'tracker')}
       onMouseLeave={() => useGameStore.getState().setPeekToken(null, 'tracker')}
       onPointerDown={hasMenu ? longPress.onPointerDown : undefined}
@@ -327,10 +336,10 @@ function CombatantRow({
               : 'hover:bg-moss-green/5 border border-transparent'
       } ${rowDrags ? 'cursor-grab active:cursor-grabbing' : ''}`}
     >
-      {/* Drag handle (DM) or active dot (players). The handle also takes the
+      {/* Drag handle (GM) or active dot (players). The handle also takes the
           Up and Down arrow keys, which move the row one place. It drags with
           every pointer, and is the only part of the row a finger drags. */}
-      {isDM
+      {isGM
         ? (
           <button
             type="button"
@@ -355,8 +364,8 @@ function CombatantRow({
         : <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />
       }
 
-      {/* Active dot always shown for DM too, alongside grip */}
-      {isDM && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />}
+      {/* Active dot always shown for GM too, alongside grip */}
+      {isGM && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />}
 
       {/* Token image */}
       <div className="relative shrink-0">
@@ -378,13 +387,13 @@ function CombatantRow({
             <User className="w-4 h-4 text-stone-gray" />
           </div>
         )}
-        {/* With a mouse, the DM's Up and Down buttons cover the picture while
+        {/* With a mouse, the GM's Up and Down buttons cover the picture while
             a button in the row has the keyboard's focus, so they take no room
             and nothing moves when they show. A mouse click gives a button no
             visible focus, so it brings no arrows; on a touch screen they sit
             beside the die. They stay in the tab order while unseen, and show
             as the Tab key reaches them. */}
-        {isDM && !coarsePointer && (
+        {isGM && !coarsePointer && (
           <div className="absolute inset-x-0 -inset-y-1 z-10 flex flex-col rounded-sm bg-soft-cream opacity-0 pointer-events-none group-has-[button:focus-visible]/combatant:opacity-100 group-has-[button:focus-visible]/combatant:pointer-events-auto">
             <MoveButtons
               tokenId={entry.tokenId}
@@ -436,9 +445,9 @@ function CombatantRow({
         {dispositionIcon(entry)}
       </span>
 
-      {/* Initiative value — editable for DM */}
+      {/* Initiative value — editable for GM */}
       <div className="shrink-0 w-12 text-right">
-        {isDM && editing ? (
+        {isGM && editing ? (
           <input
             ref={inputRef}
             type="number"
@@ -452,7 +461,7 @@ function CombatantRow({
             aria-label={`Initiative for ${name}`}
             className="w-12 text-center text-sm font-bold bg-paper/70 text-ink border border-warm-amber/50 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-1 focus:ring-warm-amber"
           />
-        ) : isDM ? (
+        ) : isGM ? (
           <button
             ref={valueButtonRef}
             type="button"
@@ -471,12 +480,12 @@ function CombatantRow({
       </div>
 
       {/* Actions. Rolling and removing are gated separately: a player may roll
-          for their own combatant, but only the DM decides who is in the fight. */}
-      {(canRoll || isDM) && (
+          for their own combatant, but only the GM decides who is in the fight. */}
+      {(canRoll || isGM) && (
         <div className="flex items-center gap-1 shrink-0 pointer-coarse:ml-auto">
           {/* The grip's Up and Down arrow keys, as buttons, where a finger is
               the pointer: a drag by touch may not work in every browser. */}
-          {isDM && coarsePointer && (
+          {isGM && coarsePointer && (
             <MoveButtons
               tokenId={entry.tokenId}
               name={name}
@@ -491,13 +500,13 @@ function CombatantRow({
               type="button"
               onClick={() => onRoll(entry.tokenId)}
               aria-label={`Roll initiative for ${name}`}
-              title={isDM ? 'Roll initiative for this token' : 'Roll your initiative'}
+              title={isGM ? 'Roll initiative for this token' : 'Roll your initiative'}
               className="p-1 touch-target inline-flex items-center justify-center rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
             >
               <Dices className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           )}
-          {isDM && (
+          {isGM && (
             <button
               type="button"
               onClick={() => onRemove(entry.tokenId)}
@@ -538,7 +547,7 @@ export default function InitiativeTracker() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
-  // Drag-to-reorder state (DM only)
+  // Drag-to-reorder state (GM only)
   const dragTokenId = useRef<string | null>(null);
   const [dragOverTokenId, setDragOverTokenId] = useState<string | null>(null);
   // A move of one place: what the live region last said, and which control
@@ -549,9 +558,9 @@ export default function InitiativeTracker() {
   const listRef = useRef<HTMLDivElement>(null);
   const reorderHintId = useId();
 
-  const isDM = userRole === 'DM';
+  const isGM = userRole === 'GM';
   // The table's map, where a combatant is unless its entry says otherwise,
-  // and the map on screen, whose tokens the Add list offers: a DM preparing
+  // and the map on screen, whose tokens the Add list offers: a GM preparing
   // a map adds its tokens to the order from there.
   const mapId = currentMap?.id ?? null;
   const viewedMapId = viewedMap?.id ?? null;
@@ -560,7 +569,7 @@ export default function InitiativeTracker() {
   // ── A combatant's sheet and rolls ────────────────────────────────────────
   //
   // What the map's right-click menu offers about a token's character, by the
-  // same rules (utils/tokenCharacter), and the DM a creature's rolls. The
+  // same rules (utils/tokenCharacter), and the GM a creature's rolls. The
   // sheet is found from the combatant's entry, which names its character
   // wherever its token stands; the rolls need the token itself, so only one
   // on the map on screen offers them.
@@ -579,10 +588,10 @@ export default function InitiativeTracker() {
   const combatantOf = (tokenId: string): CombatantEntry | undefined => combatState.combatants.find((c) => c.tokenId === tokenId);
   const offersSheet = (entry: CombatantEntry | undefined): boolean => !!entry && campaignHasCharacter(campaign, entry.characterId);
   const offersCharacterRolls = (token: Token | undefined): boolean => !!token && canRollTokenCharacter(user, campaign, token);
-  // As on the map: a creature's rolls are the DM's, and a token bound to a
+  // As on the map: a creature's rolls are the GM's, and a token bound to a
   // character rolls from the sheet whatever its type says.
   const offersCreatureRolls = (token: Token | undefined): boolean =>
-    !!token && isDM && !token.characterId && (token.type ?? TokenType.NPC) === TokenType.NPC;
+    !!token && isGM && !token.characterId && (token.type ?? TokenType.NPC) === TokenType.NPC;
 
   /**
    * What a combatant's menu offers this viewer, in order. A row has a menu
@@ -612,7 +621,7 @@ export default function InitiativeTracker() {
     return items;
   };
 
-  /** A combatant's token on the table's map, which the DM keeps while preparing another. */
+  /** A combatant's token on the table's map, which the GM keeps while preparing another. */
   const tableTokenOf = (tokenId: string): Token | undefined => currentMap?.tokens?.find((t) => t.id === tokenId);
 
   const openSheet = async (tokenId: string) => {
@@ -636,28 +645,28 @@ export default function InitiativeTracker() {
   };
 
   /**
-   * Who may roll for a given combatant: the DM for anyone, a player only for a
+   * Who may roll for a given combatant: the GM for anyone, a player only for a
    * token they control. `controlledBy` is the same field that decides who may
    * move a token, so the die appears exactly where the player already has
    * authority. The server enforces the same rule — this only decides whether to
    * draw the button.
    */
   const canRollFor = useCallback((tokenId: string) => {
-    if (isDM) return true;
+    if (isGM) return true;
     // Only before the fight starts: re-rolling re-sorts the order, and the turn
     // pointer walks it by position, so a mid-combat change can skip someone's
     // turn. The server enforces the same rule, and that a spectator controls
     // no token.
     if (combatState.active) return false;
     return tokens.some((t) => t.id === tokenId && controlsToken(t, user?.id, userRole));
-  }, [isDM, user, userRole, combatState.active, tokens]);
+  }, [isGM, user, userRole, combatState.active, tokens]);
 
   /** A player has a combatant of their own that still has no initiative value. */
-  const playerNeedsToRoll = !isDM && combatState.combatants.some(
+  const playerNeedsToRoll = !isGM && combatState.combatants.some(
     (c) => c.initiative === null && canRollFor(c.tokenId)
   );
 
-  // ── DM Actions ───────────────────────────────────────────────────────────
+  // ── GM Actions ───────────────────────────────────────────────────────────
 
   const handleAddToken = useCallback((token: Token) => {
     if (!socket || !viewedMapId) return;
@@ -677,7 +686,7 @@ export default function InitiativeTracker() {
     combatState.combatants.find((c) => c.tokenId === tokenId)?.mapId ?? mapId,
   [combatState.combatants, mapId]);
   /**
-   * The rolls of a combatant on a map the table is not on go to the DM
+   * The rolls of a combatant on a map the table is not on go to the GM
    * alone: its name, or what it rolls, would tell the players of a map
    * being prepared. As the server does with its initiative roll.
    */
@@ -821,7 +830,7 @@ export default function InitiativeTracker() {
   return (
     <>
       <div className="bg-soft-cream border border-moss-green/20 rounded-xl shadow-xs overflow-hidden">
-        {isDM && (
+        {isGM && (
           <>
             <p id={reorderHintId} className="sr-only">
               Use the Up and Down arrow keys to move this combatant one place in the order.
@@ -879,11 +888,11 @@ export default function InitiativeTracker() {
                     entry={entry}
                     isActive={combatState.active && entry.tokenId === combatState.currentTokenId}
                     isPeeked={entry.tokenId === peekTokenId}
-                    isDM={isDM}
+                    isGM={isGM}
                     coarsePointer={coarsePointer}
                     canRoll={canRollFor(entry.tokenId)}
                     mapId={mapId}
-                    isDragOver={isDM && dragOverTokenId === entry.tokenId}
+                    isDragOver={isGM && dragOverTokenId === entry.tokenId}
                     reorderHintId={reorderHintId}
                     onSetInitiative={handleSetInitiative}
                     onRoll={handleRollForToken}
@@ -911,14 +920,14 @@ export default function InitiativeTracker() {
               <div className="text-center py-4 text-stone-gray">
                 <Swords className="w-8 h-8 mx-auto mb-2 opacity-30" />
                 <p className="text-xs">No combatants yet</p>
-                {isDM && (
+                {isGM && (
                   <p className="text-xs mt-1">Add tokens from the map to begin</p>
                 )}
               </div>
             )}
 
-            {/* DM controls */}
-            {isDM && (
+            {/* GM controls */}
+            {isGM && (
               <div className="space-y-2 pt-1 border-t border-moss-green/10">
                 {/* Add combatant */}
                 {viewedMapId && (
@@ -965,8 +974,8 @@ export default function InitiativeTracker() {
               </div>
             )}
 
-            {/* Initiative hint for DM */}
-            {isDM && hasCombatants && !combatState.active && (
+            {/* Initiative hint for GM */}
+            {isGM && hasCombatants && !combatState.active && (
               <p className="text-xs text-stone-gray text-center">
                 Drag to reorder · Click a value to edit · <Dices className="w-3 h-3 inline" /> to roll
               </p>
@@ -974,7 +983,7 @@ export default function InitiativeTracker() {
 
             {/* The same nudge for a player who has a combatant of their own and
                 has not rolled yet — the die is small and easy to miss. */}
-            {!isDM && hasCombatants && !combatState.active && playerNeedsToRoll && (
+            {!isGM && hasCombatants && !combatState.active && playerNeedsToRoll && (
               <p className="text-xs text-stone-gray text-center">
                 <Dices className="w-3 h-3 inline" /> to roll your initiative
               </p>
@@ -1014,9 +1023,9 @@ export default function InitiativeTracker() {
           campaignId={campaign.id}
           membership={membership}
           // Rolls from it reach the whole table, as from Roll... below,
-          // or the DM alone for a combatant on a map the table is not on.
+          // or the GM alone for a combatant on a map the table is not on.
           // Named as the map names the token, read from the table's map
-          // when the DM has another on screen.
+          // when the GM has another on screen.
           publicName={characterRollPublicName(tokenOf(sheet.tokenId) ?? tableTokenOf(sheet.tokenId), user?.id)}
           secretRolls={mapOf(sheet.tokenId) !== mapId}
           onClose={() => setSheet(null)}
@@ -1042,7 +1051,7 @@ export default function InitiativeTracker() {
         return (
           <NpcRollPicker
             token={token}
-            gameSystem={campaign?.gameSystem ?? 'DND_5E'}
+            gameSystem={playedGameSystem(campaign?.gameSystem) ?? 'FIFTH_EDITION'}
             anchorX={creatureRolls.x}
             anchorY={creatureRolls.y}
             onRoll={rollFor(creatureRolls.tokenId)}

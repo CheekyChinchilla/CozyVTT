@@ -16,7 +16,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 
 const showToast = vi.fn();
 // One object for every render, as the real context gives: the page refetches
@@ -57,7 +57,7 @@ function renderPage() {
 
 beforeEach(() => {
   showToast.mockReset();
-  getCharacter.mockReset().mockResolvedValue(pf2eCharacter());
+  getCharacter.mockReset().mockResolvedValue(fantasyD20Character());
   updateCharacter.mockReset();
 });
 
@@ -75,7 +75,7 @@ describe('a refused save', () => {
     renderPage();
 
     const name = (await screen.findByPlaceholderText('Character Name')) as HTMLInputElement;
-    fireEvent.change(name, { target: { value: 'Seelah the Bold' } });
+    fireEvent.change(name, { target: { value: 'Maren the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(updateCharacter).toHaveBeenCalled());
@@ -83,15 +83,15 @@ describe('a refused save', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy());
 
     expect(screen.queryByText('Failed to Load Character')).toBeNull();
-    expect((screen.getByPlaceholderText('Character Name') as HTMLInputElement).value).toBe('Seelah the Bold');
+    expect((screen.getByPlaceholderText('Character Name') as HTMLInputElement).value).toBe('Maren the Bold');
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('class: Too small'), 'error');
   });
 });
 
 describe('the version a save is made from', () => {
   it('sends the updatedAt the character was loaded with, and no unchanged picture', async () => {
-    updateCharacter.mockResolvedValue({ ...pf2eCharacter(), updatedAt: '2026-01-01T00:00:09.000Z' });
-    getCharacter.mockResolvedValue({ ...pf2eCharacter(), tokenImageUrl: '/api/assets/tokens/abc' });
+    updateCharacter.mockResolvedValue({ ...fantasyD20Character(), updatedAt: '2026-01-01T00:00:09.000Z' });
+    getCharacter.mockResolvedValue({ ...fantasyD20Character(), tokenImageUrl: '/api/assets/tokens/abc' });
     renderPage();
 
     await screen.findByPlaceholderText('Character Name');

@@ -1,5 +1,5 @@
 /**
- * The four proficiency boxes on a D&D 5e sheet: armour, weapons, tools and
+ * The four proficiency boxes on a 5E sheet: armour, weapons, tools and
  * languages.
  *
  * The sheet stores them twice. `proficiencies` is the structured object the

@@ -2,7 +2,7 @@
  * Whispering from the chat panel.
  *
  * A **To** list beside the box sends the next message to **Everyone** or to
- * one member: the DM in a group of their own, then those in session; `/w
+ * one member: the GM in a group of their own, then those in session; `/w
  * <name> <message>` (or `/whisper`) in the box does the same for one message.
  * Display names are not unique and may hold spaces, so the list is keyed by
  * user id, no two members are ever shown alike (chatWhisper.test.ts has the
@@ -11,7 +11,7 @@
  * (Mara and Mara Lee), `/w` with either could mean both, and anyone may take
  * such a name to catch whispers meant for the other, so it is refused. While
  * the box holds a `/w`, the line under it names who it will reach, with the
- * DM's shield when it is the DM; one that fits nobody, or more than one
+ * GM's shield when it is the GM; one that fits nobody, or more than one
  * person, says so as it is typed, and is refused on send.
  *
  * The panel never turns a chosen whisper into a message to everyone: the copy
@@ -20,7 +20,7 @@
  * them is refused by the server and marked **Not sent**.
  *
  * A whisper shows as "Whisper to" or "Whisper from" the other person, with a
- * lock, and the DM's shield when the DM sent it; choosing that name sets the
+ * lock, and the GM's shield when the GM sent it; choosing that name sets the
  * **To** list to them.
  */
 
@@ -38,22 +38,22 @@ const character = (id: string, userId: string, name: string) => ({ id, userId, n
 
 const TABLE = [
   membership('me', 'Ash', CampaignRole.PLAYER),
-  membership('dm', 'Dana', CampaignRole.DM),
+  membership('dm', 'Dana', CampaignRole.GM),
   membership('mara', 'Mara', CampaignRole.PLAYER),
   membership('maralee', 'Mara Lee', CampaignRole.PLAYER),
   membership('cole', 'Cole', CampaignRole.SPECTATOR),
 ];
 const TWO_MARAS = [
   membership('me', 'Ash', CampaignRole.PLAYER),
-  membership('dm', 'Dana', CampaignRole.DM),
-  membership('mara', 'Mara', CampaignRole.PLAYER, ['vex']),
+  membership('dm', 'Dana', CampaignRole.GM),
+  membership('mara', 'Mara', CampaignRole.PLAYER, ['nesk']),
   membership('mara2', 'mara', CampaignRole.SPECTATOR),
 ];
-// A member who names themselves to look like the DM.
-const LOOKALIKE_DM = [
+// A member who names themselves to look like the GM.
+const LOOKALIKE_GM = [
   membership('me', 'Ash', CampaignRole.PLAYER),
-  membership('dm', 'Dana', CampaignRole.DM),
-  membership('fake', 'Dana (DM)', CampaignRole.PLAYER),
+  membership('dm', 'Dana', CampaignRole.GM),
+  membership('fake', 'Dana (GM)', CampaignRole.PLAYER),
 ];
 
 let memberships: CampaignMembership[] = TABLE;
@@ -117,29 +117,29 @@ beforeEach(() => {
   useGameStore.getState().clearGameState();
 });
 
-it('lists Everyone, the DM in a group of their own, then every other member by id, those in session first', async () => {
+it('lists Everyone, the GM in a group of their own, then every other member by id, those in session first', async () => {
   useGameStore.getState().setOnlineUserIds(['me', 'cole', 'mara']);
   await openPanel();
 
   const options = within(picker()).getAllByRole('option').map((o) => [(o as HTMLOptionElement).value, o.textContent]);
   expect(options).toEqual([['', 'Everyone'], ['dm', 'Dana'], ['cole', 'Cole'], ['mara', 'Mara'], ['maralee', 'Mara Lee']]);
-  expect(within(picker()).getAllByRole('group').map((g) => g.getAttribute('label'))).toEqual(['DM, not in session', 'In session', 'Not in session']);
+  expect(within(picker()).getAllByRole('group').map((g) => g.getAttribute('label'))).toEqual(['GM, not in session', 'In session', 'Not in session']);
   expect(picker().value).toBe('');
 
   act(() => useGameStore.getState().setOnlineUserIds(['dm']));
-  expect(within(picker()).getAllByRole('group')[0].getAttribute('label')).toBe('DM');
+  expect(within(picker()).getAllByRole('group')[0].getAttribute('label')).toBe('GM');
 });
 
-it('keeps the DM alone in the DM group, and shows the DM\'s shield beside the real DM alone', async () => {
-  memberships = LOOKALIKE_DM;
+it('keeps the GM alone in the GM group, and shows the GM\'s shield beside the real GM alone', async () => {
+  memberships = LOOKALIKE_GM;
   await openPanel();
 
   const groups = within(picker()).getAllByRole('group');
   expect(within(groups[0]).getAllByRole('option').map((o) => (o as HTMLOptionElement).value)).toEqual(['dm']);
-  expect(within(groups[1]).getAllByRole('option').map((o) => o.textContent)).toEqual(['Dana (DM)']);
+  expect(within(groups[1]).getAllByRole('option').map((o) => o.textContent)).toEqual(['Dana (GM)']);
 
   fireEvent.change(picker(), { target: { value: 'fake' } });
-  expect(screen.getByText('Only you and Dana (DM) can see this.').closest('p')!.querySelector('.lucide-shield')).toBeNull();
+  expect(screen.getByText('Only you and Dana (GM) can see this.').closest('p')!.querySelector('.lucide-shield')).toBeNull();
 
   fireEvent.change(picker(), { target: { value: 'dm' } });
   expect(screen.getByText('Only you and Dana can see this.').closest('p')!.querySelector('.lucide-shield')).not.toBeNull();
@@ -147,11 +147,11 @@ it('keeps the DM alone in the DM group, and shows the DM\'s shield beside the re
 
 it('tells two members of one name apart by character or role', async () => {
   memberships = TWO_MARAS;
-  characters = [character('vex', 'mara', 'Vex')];
+  characters = [character('nesk', 'mara', 'Nesk')];
   await openPanel();
 
   const names = within(picker()).getAllByRole('option').map((o) => o.textContent);
-  expect(names).toEqual(['Everyone', 'Dana', 'Mara (Player, Vex)', 'mara (Spectator)']);
+  expect(names).toEqual(['Everyone', 'Dana', 'Mara (Player, Nesk)', 'mara (Spectator)']);
 });
 
 it('sends to the member chosen, and shows the message as a whisper while it goes', async () => {
@@ -225,12 +225,12 @@ it.each([
   ['/w Ma hi', TABLE, 'That name fits more than one person: Mara, Mara Lee. Choose one in the To list.'],
   ['/w Mara Lee Over here', TABLE, 'That name fits more than one person: Mara, Mara Lee. Choose one in the To list.'],
   ['/w Mara hi', TABLE, 'That name fits more than one person: Mara, Mara Lee. Choose one in the To list.'],
-  ['/w Mara hi', TWO_MARAS, 'That name fits more than one person: Mara (Player, Vex), mara (Spectator). Choose one in the To list.'],
+  ['/w Mara hi', TWO_MARAS, 'That name fits more than one person: Mara (Player, Nesk), mara (Spectator). Choose one in the To list.'],
   ['/w Zed hi', TABLE, 'Nobody in this campaign is called "Zed".'],
   ['/w Mara', NO_MARA_LEE, 'Write your message after the name.'],
 ])('refuses %p itself, and sends it to no one', async (text, table, refusal) => {
   memberships = table;
-  characters = [character('vex', 'mara', 'Vex')];
+  characters = [character('nesk', 'mara', 'Nesk')];
   await openPanel();
 
   send(text);
@@ -268,9 +268,9 @@ it('names a member whose capital İ is two letters in lower case as their /w is 
   expect(screen.getByText('Only you and İlker can see this.')).toBeTruthy();
 });
 
-it('shows a whisper with the other person\'s name, a lock, and the DM\'s shield on the DM\'s', async () => {
+it('shows a whisper with the other person\'s name, a lock, and the GM\'s shield on the GM\'s', async () => {
   getMessages.mockResolvedValue(page([
-    stored({ id: 'w-3', content: 'From the DM', userId: 'dm', user: { id: 'dm', displayName: 'Dana' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),
+    stored({ id: 'w-3', content: 'From the GM', userId: 'dm', user: { id: 'dm', displayName: 'Dana' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),
     stored({ id: 'w-2', content: 'To Cole', type: MessageType.WHISPER, recipientId: 'cole', recipient: { id: 'cole', displayName: 'Cole' } }),
     stored({ id: 'w-1', content: 'From Mara', userId: 'mara', user: { id: 'mara', displayName: 'Mara' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),
   ]));
@@ -291,7 +291,7 @@ it('shows a whisper with the other person\'s name, a lock, and the DM\'s shield 
 // what is checked; the browser pass has the pictures.
 it('lets a whisper\'s name wrap from the left beside icons and a time that keep their size', async () => {
   getMessages.mockResolvedValue(page([
-    stored({ id: 'w-3', content: 'From the DM', userId: 'dm', user: { id: 'dm', displayName: 'Dana' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),
+    stored({ id: 'w-3', content: 'From the GM', userId: 'dm', user: { id: 'dm', displayName: 'Dana' }, type: MessageType.WHISPER, recipientId: 'me', recipient: { id: 'me', displayName: 'Ash' } }),
   ]));
   await openPanel();
 

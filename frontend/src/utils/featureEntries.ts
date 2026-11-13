@@ -1,5 +1,5 @@
 /**
- * Reading a D&D 5e sheet's features and traits, whatever shape they are in.
+ * Reading a 5E sheet's features and traits, whatever shape they are in.
  *
  * ---------------------------------------------------------------------------
  * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
@@ -15,7 +15,7 @@
  *
  *   1. `featuresAndTraits: string[]` — what the editor has always written. The
  *      field is a comma-separated textbox, so these are whatever the player
- *      typed: "NakuDama-Amphibious", "Aspiring Shadow Warrior". They are names,
+ *      typed: "MarshKin-Amphibious", "Aspiring Shadow Warrior". They are names,
  *      with no description, and frequently contain punctuation.
  *   2. `features: [{ name, description }]` — what the built-in templates write.
  *      Nothing ever read it, which is the bug this all comes from, so the
@@ -24,7 +24,7 @@
  *
  * **A player's string is never parsed.** The whole string becomes the name and
  * the description is left empty. Splitting on a hyphen or a colon would turn
- * "NakuDama-Amphibious" into a feature called "NakuDama" described as
+ * "MarshKin-Amphibious" into a feature called "MarshKin" described as
  * "Amphibious", and there is no way to tell that apart from a genuine
  * "Second Wind: regain 1d10 hit points". Guessing would corrupt real sheets to
  * make a handful of built-in ones prettier, so nothing is guessed.

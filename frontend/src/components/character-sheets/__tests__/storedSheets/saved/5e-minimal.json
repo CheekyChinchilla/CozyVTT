@@ -1,0 +1,256 @@
+{
+  "characterName": "New Character",
+  "class": "Fighter",
+  "level": 1,
+  "race": "Human",
+  "experiencePoints": 0,
+  "inspiration": false,
+  "proficiencyBonus": 2,
+  "stats": {
+    "strength": {
+      "score": 10,
+      "modifier": 0
+    },
+    "dexterity": {
+      "score": 10,
+      "modifier": 0
+    },
+    "constitution": {
+      "score": 10,
+      "modifier": 0
+    },
+    "intelligence": {
+      "score": 10,
+      "modifier": 0
+    },
+    "wisdom": {
+      "score": 10,
+      "modifier": 0
+    },
+    "charisma": {
+      "score": 10,
+      "modifier": 0
+    }
+  },
+  "savingThrows": {
+    "strength": {
+      "proficient": true,
+      "bonus": 2
+    },
+    "dexterity": {
+      "proficient": false,
+      "bonus": 0
+    },
+    "constitution": {
+      "proficient": true,
+      "bonus": 2
+    },
+    "intelligence": {
+      "proficient": false,
+      "bonus": 0
+    },
+    "wisdom": {
+      "proficient": false,
+      "bonus": 0
+    },
+    "charisma": {
+      "proficient": false,
+      "bonus": 0
+    }
+  },
+  "skills": {
+    "acrobatics": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "animalHandling": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "arcana": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "athletics": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "deception": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "history": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "insight": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "intimidation": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "investigation": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "medicine": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "nature": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "perception": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "performance": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "persuasion": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "religion": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "sleightOfHand": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "stealth": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    },
+    "survival": {
+      "proficient": false,
+      "expertise": false,
+      "bonus": 0
+    }
+  },
+  "passivePerception": 10,
+  "armorClass": 10,
+  "initiative": 0,
+  "speed": 30,
+  "hp": {
+    "maximum": 10,
+    "current": 10,
+    "temporary": 0
+  },
+  "conditions": [],
+  "hitDice": [
+    {
+      "class": "Fighter",
+      "die": "d10",
+      "maximum": 1,
+      "remaining": 1
+    }
+  ],
+  "deathSaves": {
+    "successes": 0,
+    "failures": 0
+  },
+  "attacks": [],
+  "currency": {
+    "cp": 0,
+    "sp": 0,
+    "ep": 0,
+    "gp": 0,
+    "pp": 0
+  },
+  "inventory": [],
+  "spellcasting": {
+    "class": "",
+    "ability": "",
+    "cantrips": [],
+    "slots": {
+      "1": {
+        "total": 0,
+        "expended": 0
+      },
+      "2": {
+        "total": 0,
+        "expended": 0
+      },
+      "3": {
+        "total": 0,
+        "expended": 0
+      },
+      "4": {
+        "total": 0,
+        "expended": 0
+      },
+      "5": {
+        "total": 0,
+        "expended": 0
+      },
+      "6": {
+        "total": 0,
+        "expended": 0
+      },
+      "7": {
+        "total": 0,
+        "expended": 0
+      },
+      "8": {
+        "total": 0,
+        "expended": 0
+      },
+      "9": {
+        "total": 0,
+        "expended": 0
+      }
+    },
+    "spells": [],
+    "spellSaveDCOtherBonus": 0,
+    "spellAttackOtherBonus": 0,
+    "spellSaveDC": 10,
+    "spellAttackBonus": 2
+  },
+  "proficienciesAndLanguages": [],
+  "featuresAndTraits": [],
+  "personality": {
+    "traits": "",
+    "ideals": "",
+    "bonds": "",
+    "flaws": ""
+  },
+  "backstory": "",
+  "alliesAndOrganizations": {
+    "name": "",
+    "description": ""
+  },
+  "treasure": "",
+  "additionalFeaturesAndTraits": "",
+  "proficiencies": {
+    "armor": "",
+    "weapons": "",
+    "tools": "",
+    "languages": ""
+  },
+  "appearance": {},
+  "passivePerceptionBonus": 0,
+  "themeColor": "Classic Red"
+}

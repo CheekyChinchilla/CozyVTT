@@ -35,18 +35,18 @@ vi.mock('@/services/api', () => ({
     getCharacter: (id: string) => getCharacter(id),
   },
 }));
-vi.mock('../../character-sheets/dnd5e/DnD5eCharacterView', () => ({
-  DnD5eCharacterView: ({ character }: { character: Character }) => (
+vi.mock('../../character-sheets/fifth-edition/FifthEditionCharacterView', () => ({
+  FifthEditionCharacterView: ({ character }: { character: Character }) => (
     <p>HP {(character.data as { hp: { current: number } }).hp.current}</p>
   ),
 }));
 
 const withHp = (current: number, updatedAt: string) =>
   ({
-    id: 'char-1', userId: 'owner', name: 'Aldra', gameSystem: 'DND_5E', campaignId: 'camp-1', updatedAt,
+    id: 'char-1', userId: 'owner', name: 'Aldra', gameSystem: 'FIFTH_EDITION', campaignId: 'camp-1', updatedAt,
     data: { hp: { current, maximum: 20, temporary: 0 } },
   }) as unknown as Character;
-const membership = { userId: 'dm', campaignId: 'camp-1', role: 'DM', characterIds: [] } as unknown as CampaignMembership;
+const membership = { userId: 'dm', campaignId: 'camp-1', role: 'GM', characterIds: [] } as unknown as CampaignMembership;
 
 describe('CharacterSheetViewerModal and hit points changed at the table', () => {
   it('loads the character again when its hit points change', async () => {

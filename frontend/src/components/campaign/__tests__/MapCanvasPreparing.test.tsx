@@ -1,5 +1,5 @@
 /**
- * The canvas on a map the DM is preparing while the table is on another.
+ * The canvas on a map the GM is preparing while the table is on another.
  *
  * Everything the canvas sends, asks for and applies is for the map it shows,
  * the viewed map, and never the table's: a request or an edit that named the
@@ -7,7 +7,7 @@
  * map applied here would move a token of the map being prepared that shares
  * its id. The switches that write the map's own flags change the map being
  * prepared and leave the table where it is. Rolls from its tokens go to the
- * DM alone, and Player Preview, which records a player's explored memory, is
+ * GM alone, and Player Preview, which records a player's explored memory, is
  * off there.
  *
  * The stand-ins are those of MapCanvasTools.test.tsx, with the context's two
@@ -79,7 +79,7 @@ vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => 
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
   const noop = () => undefined;
-  const campaign = { id: 'campaign-1', name: 'Test', status: 'ACTIVE', spiritLayerEnabled: false, memberships: [], characters: [], gameSystem: 'DND_5E' };
+  const campaign = { id: 'campaign-1', name: 'Test', status: 'ACTIVE', spiritLayerEnabled: false, memberships: [], characters: [], gameSystem: 'FIFTH_EDITION' };
   return {
     useCampaign: () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
@@ -91,10 +91,10 @@ vi.mock('@/contexts/CampaignContext', async () => {
         receiveTableMap: h.receiveTableMap,
         updateMap: h.updateMap,
         registerViewedMapGuard: () => () => undefined,
-        userRole: 'DM',
+        userRole: 'GM',
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -225,7 +225,7 @@ beforeEach(() => {
   h.set({ tableMap: TABLE, viewedMap: PREPARED });
 });
 
-/** What the DM does on the map, and the event it sends. */
+/** What the GM does on the map, and the event it sends. */
 const EDITS: Array<[string, string, () => void]> = [
   ['drawing a wall', 'wall:add', () => {
     fireEvent.click(screen.getByText('Walls'));
@@ -258,14 +258,14 @@ const EDITS: Array<[string, string, () => void]> = [
   }],
 ];
 
-/** The DM's choice from a token's menu, the token at square (0, 19). */
+/** The GM's choice from a token's menu, the token at square (0, 19). */
 function fromMenu(item: string) {
   show(token('tok-lich', 0, 19));
   fireEvent.contextMenu(surface(), square(0, 19));
   fireEvent.click(screen.getByText(item));
 }
 
-/** What the DM does on the map that goes over REST, and the request it sends: its map id is the second argument. */
+/** What the GM does on the map that goes over REST, and the request it sends: its map id is the second argument. */
 const REQUESTS: Array<[string, () => ReturnType<typeof vi.fn>, () => Promise<void> | void]> = [
   ['hiding a token', () => h.updateToken, () => fromMenu('Hide from Players')],
   ['obscuring a token', () => h.updateToken, () => fromMenu('Obscure Identity')],
@@ -404,7 +404,7 @@ describe('on a map being prepared', () => {
     expect(screen.getByText('Off while you prepare a map')).toBeInTheDocument();
   });
 
-  it("rolls from a token's Roll... for the DM alone", async () => {
+  it("rolls from a token's Roll... for the GM alone", async () => {
     render(<MapCanvas />);
     show(token('tok-lich', 0, 19));
     fireEvent.contextMenu(surface(), square(0, 19));

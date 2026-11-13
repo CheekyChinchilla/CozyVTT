@@ -1,9 +1,9 @@
 /**
  * The spirit layer panel shows what the server holds.
  *
- * Opening the veil marked the spirit realm open on the DM's page at once,
+ * Opening the veil marked the spirit realm open on the GM's page at once,
  * before the server had answered, so a refused switch (a dropped connection,
- * the flood ceiling) left the DM's page saying the players could cross while
+ * the flood ceiling) left the GM's page saying the players could cross while
  * they could not. A refused style change left the new style picked, though
  * the table kept the old one. The switch now waits for the server's
  * broadcast, and a refused style puts the picker back.
@@ -38,8 +38,8 @@ vi.mock('@/contexts/CampaignContext', () => ({
     currentMap: { id: 'map-table' },
     viewedMap: { id: 'map-1' },
     updateCampaignSpiritLayer,
-    dmViewBothPlanes: true,
-    setDmViewBothPlanes: vi.fn(),
+    gmViewBothPlanes: true,
+    setGmViewBothPlanes: vi.fn(),
   }),
 }));
 const emitSpiritLayerToggle = vi.fn();
@@ -80,7 +80,7 @@ it('puts the style back when the server refuses it', async () => {
 });
 
 // The save's answer put the veil back to how it was when the save began: a
-// veil opened by the server meanwhile showed closed again on the DM's page.
+// veil opened by the server meanwhile showed closed again on the GM's page.
 it('keeps a veil opened while a style was being saved', async () => {
   let answer: () => void = () => {};
   updateCampaign.mockReturnValue(new Promise<void>((resolve) => { answer = resolve; }));
@@ -105,7 +105,7 @@ it('is announced by name, and Escape and its Close button close it', async () =>
   expect(onClose).toHaveBeenCalledTimes(2);
 });
 
-// A DM preparing a map shows or hides a spirit token of that map, not of the
+// A GM preparing a map shows or hides a spirit token of that map, not of the
 // table's.
 it("toggles a spirit token of the map on screen", async () => {
   useGameStore.getState().setTokens([{

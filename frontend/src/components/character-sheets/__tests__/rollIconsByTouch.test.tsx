@@ -14,12 +14,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
-import { Pathfinder2eCharacterView } from '../pathfinder2e/Pathfinder2eCharacterView';
-import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
-import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
-import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
-import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
+import { FifthEditionCharacterView } from '../fifth-edition/FifthEditionCharacterView';
+import { FantasyD20CharacterView } from '../fantasy-d20/FantasyD20CharacterView';
+import { HorrorD100CharacterView } from '../horror-d100/HorrorD100CharacterView';
+import { fifthEditionCharacter } from '../fifth-edition/__tests__/fifthEditionFixture';
+import { fantasyD20Character } from '../fantasy-d20/__tests__/fantasyD20Fixture';
+import { horrorD100Character } from '../horror-d100/__tests__/sheetFixture';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -71,9 +71,9 @@ describe('the sheets\' hover-only marks', () => {
     expect(missing).toEqual([]);
   });
 
-  it('show on the D&D 5e sheet\'s abilities, saves, skills, hit dice and attacks', async () => {
+  it('show on the 5E sheet\'s abilities, saves, skills, hit dice and attacks', async () => {
     const attack = { name: 'Spear', attackBonus: 4, damageRoll: '1d6+2', damageType: 'piercing', range: 20, properties: [], notes: '' };
-    const { container } = render(<DnD5eCharacterView character={dnd5eCharacter({ attacks: [attack] })} onRoll={vi.fn()} />);
+    const { container } = render(<FifthEditionCharacterView character={fifthEditionCharacter({ attacks: [attack] })} onRoll={vi.fn()} />);
     expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBeGreaterThan(20);
     expect(hiddenFromTouch(container)).toEqual([]);
     await userEvent.click(screen.getByRole('tab', { name: 'Combat' }));
@@ -81,15 +81,16 @@ describe('the sheets\' hover-only marks', () => {
     expect(hiddenFromTouch(container)).toEqual([]);
   });
 
-  it('show on the Pathfinder 2e sheet', () => {
-    const { container } = render(<Pathfinder2eCharacterView character={pf2eCharacter()} onRoll={vi.fn()} />);
+  it('show on the Fantasy d20 sheet', () => {
+    const { container } = render(<FantasyD20CharacterView character={fantasyD20Character()} onRoll={vi.fn()} />);
     expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBeGreaterThan(20);
     expect(hiddenFromTouch(container)).toEqual([]);
   });
 
-  it('show on the Call of Cthulhu sheet\'s characteristics and skills', async () => {
-    const { container } = render(<CallOfCthulhu7eCharacterView character={cocCharacter()} onRoll={vi.fn()} />);
-    expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBe(8);
+  it('show on the Horror d100 sheet\'s characteristics and skills', async () => {
+    const { container } = render(<HorrorD100CharacterView character={horrorD100Character()} onRoll={vi.fn()} />);
+    // Seven of the eight characteristics give a roll; SIZ gives none.
+    expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBe(7);
     await userEvent.click(screen.getByRole('tab', { name: 'Skills' }));
     expect(container.querySelectorAll('[class*="[@media(hover:none)]:opacity-"]').length).toBeGreaterThan(20);
     expect(hiddenFromTouch(container)).toEqual([]);

@@ -12,8 +12,8 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterTemplateEditorModal from '../CharacterTemplateEditorModal';
 import CharacterTemplatesPage from '@/pages/CharacterTemplatesPage';
-import { PF2E_BLANK_SHEET } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
-import { DND5E_SHEET } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';
+import { FANTASY_D20_BLANK_SHEET } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
+import { FIFTH_EDITION_SHEET } from '@/components/character-sheets/fifth-edition/__tests__/fifthEditionFixture';
 import type { CharacterTemplate } from '@/types';
 
 const showToast = vi.fn();
@@ -40,13 +40,13 @@ vi.mock('@/services/api', () => {
   return { default: api, api };
 });
 
-function template(gameSystem: 'PATHFINDER_2E' | 'DND_5E'): CharacterTemplate {
+function template(gameSystem: 'FANTASY_D20' | 'FIFTH_EDITION'): CharacterTemplate {
   return {
     id: 'tpl-1',
     name: 'Level 1 Fighter',
     description: null,
     gameSystem,
-    data: JSON.parse(JSON.stringify(gameSystem === 'DND_5E' ? DND5E_SHEET : PF2E_BLANK_SHEET)),
+    data: JSON.parse(JSON.stringify(gameSystem === 'FIFTH_EDITION' ? FIFTH_EDITION_SHEET : FANTASY_D20_BLANK_SHEET)),
     tokenImageUrl: null,
     createdById: 'user-1',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -61,8 +61,8 @@ const refused = {
 // The sheets load on demand. Loaded here first, the first test does not wait
 // on the import, which on a busy machine outlasted the default wait.
 beforeAll(async () => {
-  await import('@/components/character-sheets/pathfinder2e/Pathfinder2eCharacterSheet');
-  await import('@/components/character-sheets/dnd5e/DnD5eCharacterSheet');
+  await import('@/components/character-sheets/fantasy-d20/FantasyD20CharacterSheet');
+  await import('@/components/character-sheets/fifth-edition/FifthEditionCharacterSheet');
 }, 30_000);
 
 beforeEach(() => {
@@ -77,7 +77,7 @@ const stale = {
 
 /** The template as someone else saved it meanwhile. */
 function latestTemplate(overrides: Record<string, unknown> = {}, details: Partial<CharacterTemplate> = {}): CharacterTemplate {
-  const latest = template('PATHFINDER_2E');
+  const latest = template('FANTASY_D20');
   Object.assign(latest.data as Record<string, unknown>, overrides);
   return { ...latest, ...details, updatedAt: '2026-01-01T00:00:05.000Z' };
 }
@@ -85,36 +85,36 @@ function latestTemplate(overrides: Record<string, unknown> = {}, details: Partia
 describe('Edit Template', () => {
   it('keeps the sheet editor and its edits when the save is refused', async () => {
     updateCharacterTemplate.mockRejectedValue(refused);
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'The Quiet Forge' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/schema/), 'error'));
 
-    expect(screen.getByPlaceholderText('Deity')).toHaveValue('Torag');
+    expect(screen.getByPlaceholderText('Deity')).toHaveValue('The Quiet Forge');
   });
 
   it('shows the saved sheet once the save has gone through', async () => {
-    const saved = template('PATHFINDER_2E');
-    (saved.data as Record<string, unknown>).deity = 'Torag';
+    const saved = template('FANTASY_D20');
+    (saved.data as Record<string, unknown>).deity = 'The Quiet Forge';
     updateCharacterTemplate.mockResolvedValue(saved);
     const onSaved = vi.fn();
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={onSaved} />);
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={vi.fn()} onSaved={onSaved} />);
 
-    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'The Quiet Forge' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(screen.queryByPlaceholderText('Deity')).toBeNull());
-    expect(screen.getByText(/Torag/)).toBeInTheDocument();
+    expect(screen.getByText(/The Quiet Forge/)).toBeInTheDocument();
     expect(onSaved).toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith('Template sheet saved', 'success');
   });
 
   it('asks before closing over unsaved sheet edits', async () => {
     const onClose = vi.fn();
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={onClose} onSaved={vi.fn()} />);
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={onClose} onSaved={vi.fn()} />);
 
-    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'The Quiet Forge' } });
     fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
 
     expect(await screen.findByText('Discard Changes?')).toBeInTheDocument();
@@ -124,11 +124,11 @@ describe('Edit Template', () => {
   });
 
   it('stays open with unsaved sheet edits after Save Details', async () => {
-    updateCharacterTemplate.mockResolvedValue(template('PATHFINDER_2E'));
+    updateCharacterTemplate.mockResolvedValue(template('FANTASY_D20'));
     // The list carries no sheets; Edit fetches the template with its own.
-    const { data: _sheet, ...summary } = template('PATHFINDER_2E');
+    const { data: _sheet, ...summary } = template('FANTASY_D20');
     listCharacterTemplates.mockResolvedValue({ templates: [summary] });
-    getCharacterTemplate.mockResolvedValue(template('PATHFINDER_2E'));
+    getCharacterTemplate.mockResolvedValue(template('FANTASY_D20'));
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <MemoryRouter>
@@ -138,19 +138,19 @@ describe('Edit Template', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Level 1 Fighter' }));
-    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'The Quiet Forge' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Details' }));
 
     await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalled());
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Template updated', 'success'));
     expect(screen.getByRole('dialog', { name: 'Edit Template' })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Deity')).toHaveValue('Torag');
+    expect(screen.getByPlaceholderText('Deity')).toHaveValue('The Quiet Forge');
   });
 
   it('closes after Save Details when the sheet has nothing unsaved', async () => {
-    updateCharacterTemplate.mockResolvedValue(template('PATHFINDER_2E'));
+    updateCharacterTemplate.mockResolvedValue(template('FANTASY_D20'));
     const onClose = vi.fn();
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={onClose} onSaved={vi.fn()} />);
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={onClose} onSaved={vi.fn()} />);
 
     await screen.findByPlaceholderText('Deity');
     fireEvent.click(screen.getByRole('button', { name: 'Save Details' }));
@@ -159,10 +159,10 @@ describe('Edit Template', () => {
   });
 
   it('sends the version it opened with each save', async () => {
-    updateCharacterTemplate.mockResolvedValue({ ...template('PATHFINDER_2E'), updatedAt: '2026-01-01T00:00:01.000Z' });
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+    updateCharacterTemplate.mockResolvedValue({ ...template('FANTASY_D20'), updatedAt: '2026-01-01T00:00:01.000Z' });
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'The Quiet Forge' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalledTimes(1));
     expect(updateCharacterTemplate.mock.calls[0][1]).toMatchObject({ updatedAt: '2026-01-01T00:00:00.000Z' });
@@ -175,23 +175,23 @@ describe('Edit Template', () => {
   it('carries sheet edits onto a version someone else saved meanwhile, and saves them when told to', async () => {
     updateCharacterTemplate.mockRejectedValueOnce(stale);
     getCharacterTemplate.mockResolvedValue(latestTemplate({ age: '40' }));
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={vi.fn()} onSaved={vi.fn()} />);
 
-    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'The Quiet Forge' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'This template has changed' });
-    expect(within(dialog).getByText(/Torag/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/The Quiet Forge/)).toBeInTheDocument();
     expect(updateCharacterTemplate).toHaveBeenCalledTimes(1);
     expect(showToast).not.toHaveBeenCalledWith(expect.anything(), 'error');
 
-    updateCharacterTemplate.mockResolvedValueOnce(latestTemplate({ age: '40', deity: 'Torag' }));
+    updateCharacterTemplate.mockResolvedValueOnce(latestTemplate({ age: '40', deity: 'The Quiet Forge' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save my changes' }));
 
     await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalledTimes(2));
     const second = updateCharacterTemplate.mock.calls[1][1] as { updatedAt: string; data: Record<string, unknown> };
     expect(second.updatedAt).toBe('2026-01-01T00:00:05.000Z');
-    expect(second.data).toMatchObject({ deity: 'Torag', age: '40' });
+    expect(second.data).toMatchObject({ deity: 'The Quiet Forge', age: '40' });
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Template sheet saved', 'success'));
   });
 
@@ -199,7 +199,7 @@ describe('Edit Template', () => {
     updateCharacterTemplate.mockRejectedValueOnce(stale);
     getCharacterTemplate.mockResolvedValue(latestTemplate({ age: '40' }));
     updateCharacterTemplate.mockResolvedValueOnce(latestTemplate({ age: '40' }, { name: 'Veteran Fighter' }));
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={vi.fn()} onSaved={vi.fn()} />);
 
     await screen.findByPlaceholderText('Deity');
     fireEvent.change(screen.getByLabelText(/Template name/), { target: { value: 'Veteran Fighter' } });
@@ -217,7 +217,7 @@ describe('Edit Template', () => {
   it('says so when someone else renamed the template meanwhile, and saves on the next press', async () => {
     updateCharacterTemplate.mockRejectedValueOnce(stale);
     getCharacterTemplate.mockResolvedValue(latestTemplate({}, { name: 'Champion' }));
-    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<CharacterTemplateEditorModal template={template('FANTASY_D20')} onClose={vi.fn()} onSaved={vi.fn()} />);
 
     await screen.findByPlaceholderText('Deity');
     fireEvent.change(screen.getByLabelText(/Template name/), { target: { value: 'Veteran Fighter' } });

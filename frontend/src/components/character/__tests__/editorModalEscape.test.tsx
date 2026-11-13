@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
-import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { fantasyD20Character } from '@/components/character-sheets/fantasy-d20/__tests__/fantasyD20Fixture';
 import { waitForDialogFocus } from '@/test/dialogFocus';
 
 vi.mock('@/hooks/queries', () => ({
@@ -25,7 +25,7 @@ vi.mock('@/services/api', () => ({
 describe('Escape in the in-page editor', () => {
   it('closes at once when nothing was changed', async () => {
     const onClose = vi.fn();
-    render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={fantasyD20Character()} onClose={onClose} />);
     await waitForDialogFocus();
 
     await userEvent.keyboard('{Escape}');
@@ -35,10 +35,10 @@ describe('Escape in the in-page editor', () => {
 
   it('asks before throwing away something typed', async () => {
     const onClose = vi.fn();
-    render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={fantasyD20Character()} onClose={onClose} />);
     await waitForDialogFocus();
 
-    await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
+    await userEvent.type(screen.getByPlaceholderText('Deity'), 'The Quiet Forge');
     await userEvent.keyboard('{Escape}');
 
     expect(screen.getByText('Discard Changes?')).toBeInTheDocument();
@@ -47,15 +47,15 @@ describe('Escape in the in-page editor', () => {
 
   it('a second Escape closes the question and keeps the edits', async () => {
     const onClose = vi.fn();
-    render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={fantasyD20Character()} onClose={onClose} />);
     await waitForDialogFocus();
 
-    await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
+    await userEvent.type(screen.getByPlaceholderText('Deity'), 'The Quiet Forge');
     await userEvent.keyboard('{Escape}');
     await userEvent.keyboard('{Escape}');
 
     await waitFor(() => expect(screen.queryByText('Discard Changes?')).not.toBeInTheDocument());
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByPlaceholderText('Deity')).toHaveValue('Torag');
+    expect(screen.getByPlaceholderText('Deity')).toHaveValue('The Quiet Forge');
   });
 });

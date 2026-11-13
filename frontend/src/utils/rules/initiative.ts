@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * rules/initiative.ts
  * How each supported game system determines initiative.
@@ -7,7 +10,7 @@
  *   frontend/src/utils/rules/initiative.ts
  *   backend/src/utils/rules/initiative.ts
  * ---------------------------------------------------------------------------
- * Same arrangement as rules/dnd5e.ts beside it: the frontend and backend are
+ * Same arrangement as rules/fifthEdition.ts beside it: the frontend and backend are
  * separate TypeScript projects with no shared package, and a parity test in the
  * backend suite compares the two files and fails on any difference. Edit one,
  * copy it to the other.
@@ -18,18 +21,18 @@
  * twice from one file is what keeps the shown value and the rolled value equal.
  *
  * Rules references, per system:
- *   D&D 5e   — Basic Rules, "Initiative": d20 + Dexterity modifier.
- *              With advantage, two d20s and the higher kept; advantage and
- *              disadvantage together cancel to one d20.
- *   PF2e     — initiative is a Perception check, or another skill the GM calls
- *              for (Stealth when sneaking up on someone, and so on).
- *   CoC 7e   — Keeper Rulebook, "Rank in DEX Order: Highest goes first."
- *              There is NO initiative roll. See the note on CALL_OF_CTHULHU_7E.
- *   SR6      — Initiative = (Reaction + Intuition) + initiative dice.
+ *   5E          — SRD 5.1, "Initiative": d20 + Dexterity modifier.
+ *                 With advantage, two d20s and the higher kept; advantage and
+ *                 disadvantage together cancel to one d20.
+ *   Fantasy d20 — initiative is a Perception check, or another skill the GM
+ *                 calls for (Stealth when sneaking up on someone, and so on).
+ *   Horror d100 — combatants act in DEX order, highest first.
+ *                 There is NO initiative roll. See the note on HORROR_D100.
  */
 
-import { abilityModifier, exhaustionLevel, formatModifier } from './dnd5e';
-import { pf2ePerceptionTotal, pf2eSkillTotal } from './pathfinder2e';
+import { abilityModifier, exhaustionLevel, formatModifier } from './fifthEdition';
+import { fantasyD20PerceptionTotal, fantasyD20SkillTotal } from './fantasyD20';
+import { normaliseGameSystem } from '../../legacy/gameSystemAliases';
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -39,7 +42,7 @@ import { pf2ePerceptionTotal, pf2eSkillTotal } from './pathfinder2e';
  * What initiative means for a particular combatant.
  *
  * Two shapes rather than one dice expression, because not every system rolls.
- * Call of Cthulhu orders combat by Dexterity with no die involved at all, and
+ * Horror d100 orders combat by Dexterity with no die involved at all, and
  * squeezing that into an expression would mean inventing dice the rules do not
  * have — which is exactly the bug this module replaces.
  */
@@ -55,7 +58,7 @@ export type InitiativeResolution =
       kind: 'fixed';
       /** The initiative value itself. Nothing is rolled. */
       value: number;
-      /** Short human label, e.g. "DEX 65". */
+      /** Short human label, e.g. "DEX 13". */
       label: string;
     };
 
@@ -85,29 +88,12 @@ function d20With(modifier: number, advantage = false): InitiativeResolution {
   return { kind: 'roll', expression, label: expression };
 }
 
-/**
- * Is this a plain "XdY" dice pool we can safely build an expression from?
- *
- * Shadowrun stores its initiative dice as free text, so it can hold anything a
- * user typed. Anything that is not a simple pool is rejected rather than
- * concatenated into an expression the dice parser would then throw on.
- */
-function parseDicePool(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const match = value.replace(/\s+/g, '').match(/^(\d*)d(\d+)$/i);
-  if (!match) return null;
-  const count = match[1] === '' ? 1 : Number(match[1]);
-  const sides = Number(match[2]);
-  if (!count || !sides || count > 100 || sides > 1000) return null;
-  return `${count}d${sides}`;
-}
-
 // ---------------------------------------------------------------------------
-// D&D 5e
+// 5E
 // ---------------------------------------------------------------------------
 
 /**
- * The total initiative modifier for a 5e character: Dexterity modifier plus
+ * The total initiative modifier for a 5E character: Dexterity modifier plus
  * whatever `initiativeBonus` holds.
  *
  * The second half exists because Dexterity is not the whole story. A feat can
@@ -120,18 +106,18 @@ function parseDicePool(value: unknown): string | null {
  * it is recomputed here from the score when present so a stale stored modifier
  * cannot skew the roll.
  */
-export function dnd5eInitiativeModifier(data: unknown): number {
-  return dnd5eDexModifier(data) + dnd5eEffectiveInitiativeBonus(data);
+export function fifthEditionInitiativeModifier(data: unknown): number {
+  return fifthEditionDexModifier(data) + fifthEditionEffectiveInitiativeBonus(data);
 }
 
 /**
- * The Dexterity modifier a 5e sheet implies.
+ * The Dexterity modifier a 5E sheet implies.
  *
  * Recomputed from the score where one is recorded, so a stored modifier that has
  * fallen out of step cannot skew the roll; the stored modifier is used only when
  * there is no score to work from.
  */
-function dnd5eDexModifier(data: unknown): number {
+function fifthEditionDexModifier(data: unknown): number {
   const dexRecord = rec(rec(rec(data)?.stats)?.dexterity);
   if (!dexRecord) return 0;
   return typeof dexRecord.score === 'number'
@@ -149,7 +135,7 @@ function dnd5eDexModifier(data: unknown): number {
  * and re-save it first. Without this the sheet would display one modifier and
  * the dice would use another — the exact split this module exists to close.
  */
-function dnd5eEffectiveInitiativeBonus(data: unknown): number {
+function fifthEditionEffectiveInitiativeBonus(data: unknown): number {
   const d = rec(data);
   if (!d) return 0;
   if (d.initiativeBonus !== undefined && d.initiativeBonus !== null) {
@@ -163,7 +149,7 @@ function dnd5eEffectiveInitiativeBonus(data: unknown): number {
   // reading: the old code ignored this field when rolling anyway, so there is
   // no previous roll behaviour to preserve, only the displayed number.
   if (typeof d.initiative === 'number' && Number.isFinite(d.initiative) && d.initiative !== 0) {
-    return d.initiative - dnd5eDexModifier(d);
+    return d.initiative - fifthEditionDexModifier(d);
   }
   return 0;
 }
@@ -181,22 +167,22 @@ function dnd5eEffectiveInitiativeBonus(data: unknown): number {
  * Returns null when there is nothing to convert (the field already exists, or
  * no initiative was ever stored), so callers can leave the sheet alone.
  */
-export function dnd5eBackfilledInitiativeBonus(data: unknown): number | null {
+export function fifthEditionBackfilledInitiativeBonus(data: unknown): number | null {
   const d = rec(data);
   if (!d) return null;
   if (d.initiativeBonus !== undefined && d.initiativeBonus !== null) return null;
   if (typeof d.initiative !== 'number' || !Number.isFinite(d.initiative)) return null;
-  // See the note in dnd5eEffectiveInitiativeBonus: a stored zero means the
+  // See the note in fifthEditionEffectiveInitiativeBonus: a stored zero means the
   // field was never filled in, so there is nothing to convert.
   if (d.initiative === 0) return null;
 
   // The same reading the roll already uses — this only reports it so the editor
   // can write it into the sheet and stop inferring it.
-  return dnd5eEffectiveInitiativeBonus(d);
+  return fifthEditionEffectiveInitiativeBonus(d);
 }
 
 /**
- * Conditions a 5e sheet can record that give disadvantage on every ability
+ * Conditions a 5E sheet can record that give disadvantage on every ability
  * check, and so on initiative, which is a Dexterity check. Named in lower case,
  * as the sheet's condition boxes write them, and matched in any case.
  *
@@ -207,12 +193,12 @@ export function dnd5eBackfilledInitiativeBonus(data: unknown): number | null {
  *
  * Only the ones that always apply. Frightened gives disadvantage only while the
  * source of the fear is in sight, which a sheet cannot tell, so it is left to
- * the DM, who can set anyone's initiative by hand.
+ * the GM, who can set anyone's initiative by hand.
  */
-export const DND5E_CHECK_DISADVANTAGE_CONDITIONS: readonly string[] = ['poisoned', 'exhausted'];
+export const FIFTH_EDITION_CHECK_DISADVANTAGE_CONDITIONS: readonly string[] = ['poisoned', 'exhausted'];
 
 /**
- * Whether a 5e character rolls initiative with advantage:
+ * Whether a 5E character rolls initiative with advantage:
  *
  * - `advantage`: the sheet's box is ticked, and nothing on the sheet gives
  *   disadvantage on the roll.
@@ -224,29 +210,29 @@ export const DND5E_CHECK_DISADVANTAGE_CONDITIONS: readonly string[] = ['poisoned
  * Exhaustion and conditions give no disadvantage of their own here. No roll
  * from a sheet applies them, so they only cancel a box the player ticked.
  */
-export type DnD5eInitiativeAdvantage = 'advantage' | 'cancelled' | 'none';
+export type FifthEditionInitiativeAdvantage = 'advantage' | 'cancelled' | 'none';
 
-export function dnd5eInitiativeAdvantage(data: unknown): DnD5eInitiativeAdvantage {
+export function fifthEditionInitiativeAdvantage(data: unknown): FifthEditionInitiativeAdvantage {
   const d = rec(data);
   if (d?.initiativeAdvantage !== true) return 'none';
-  return dnd5eHasCheckDisadvantage(d) ? 'cancelled' : 'advantage';
+  return fifthEditionHasCheckDisadvantage(d) ? 'cancelled' : 'advantage';
 }
 
-/** Whether a 5e sheet records something that gives disadvantage on every ability check. */
-function dnd5eHasCheckDisadvantage(d: Record<string, unknown>): boolean {
+/** Whether a 5E sheet records something that gives disadvantage on every ability check. */
+function fifthEditionHasCheckDisadvantage(d: Record<string, unknown>): boolean {
   if (exhaustionLevel(d.exhaustionLevel) > 0) return true;
   return Array.isArray(d.conditions) && d.conditions.some(
     (condition) => typeof condition === 'string'
-      && DND5E_CHECK_DISADVANTAGE_CONDITIONS.includes(condition.toLowerCase())
+      && FIFTH_EDITION_CHECK_DISADVANTAGE_CONDITIONS.includes(condition.toLowerCase())
   );
 }
 
 // ---------------------------------------------------------------------------
-// Pathfinder 2e
+// Fantasy d20
 // ---------------------------------------------------------------------------
 
 /**
- * The initiative bonus for a PF2e character.
+ * The initiative bonus for a Fantasy d20 character.
  *
  * Initiative is a Perception check by default, but the GM can call for a skill
  * instead — Stealth to sneak up on someone, Deception to feint. The sheet
@@ -256,7 +242,7 @@ function dnd5eHasCheckDisadvantage(d: Record<string, unknown>): boolean {
  * so read +0 for every character ever made. The stat's total is worked out from
  * its parts, as the sheet shows it, not read from what was last stored.
  */
-export function pf2eInitiativeBonus(data: unknown): number {
+export function fantasyD20InitiativeBonus(data: unknown): number {
   const d = rec(data);
   if (!d) return 0;
 
@@ -264,26 +250,23 @@ export function pf2eInitiativeBonus(data: unknown): number {
     ? String(rec(d.initiative)!.usedStat)
     : 'perception';
 
-  if (usedStat === 'perception') return pf2ePerceptionTotal(d);
+  if (usedStat === 'perception') return fantasyD20PerceptionTotal(d);
 
   const skill = rec(rec(d.skills)?.[usedStat]);
-  if (skill) return pf2eSkillTotal(d, skill);
+  if (skill) return fantasyD20SkillTotal(d, skill);
 
   // A lore skill, or a name the sheet no longer offers — fall back to
   // Perception, which is the system default, rather than silently rolling flat.
-  return pf2ePerceptionTotal(d);
+  return fantasyD20PerceptionTotal(d);
 }
 
 // ---------------------------------------------------------------------------
-// Call of Cthulhu 7e
+// Horror d100
 // ---------------------------------------------------------------------------
 
-/** An investigator's DEX, which is their place in the order. */
-function cocDexterity(data: unknown): number {
-  const characteristics = rec(rec(data)?.characteristics);
-  if (!characteristics) return 0;
-  const dex = rec(characteristics.DEX) ?? rec(characteristics.dex);
-  return num(dex?.regular);
+/** A character's DEX, which is their place in the order. */
+function horrorD100Dexterity(data: unknown): number {
+  return num(rec(rec(data)?.characteristics)?.DEX);
 }
 
 // ---------------------------------------------------------------------------
@@ -304,28 +287,20 @@ export function resolveCharacterInitiative(
   if (!data) return null;
 
   switch (gameSystem) {
-    case 'DND_5E':
-      return d20With(dnd5eInitiativeModifier(data), dnd5eInitiativeAdvantage(data) === 'advantage');
+    case 'FIFTH_EDITION':
+      return d20With(fifthEditionInitiativeModifier(data), fifthEditionInitiativeAdvantage(data) === 'advantage');
 
-    case 'PATHFINDER_2E':
-      return d20With(pf2eInitiativeBonus(data));
+    case 'FANTASY_D20':
+      return d20With(fantasyD20InitiativeBonus(data));
 
-    case 'CALL_OF_CTHULHU_7E': {
-      // Deliberately not a roll. Call of Cthulhu ranks combatants in DEX order,
-      // highest first — there is no initiative die in the game. (A readied
-      // firearm acts at DEX + 50, but that is a property of the round rather
-      // than of the investigator, so the Keeper applies it by hand.)
-      const dex = cocDexterity(data);
+    case 'HORROR_D100': {
+      // Not a roll. Horror d100 ranks combatants in DEX order, highest
+      // first: the rules have no initiative die. (Whatever moves a
+      // character's place in one round belongs to the round and not to the
+      // character, so the GM applies it by hand: a spell is cast one DEX rank
+      // later for each of its levels; open d100 rules, p. 57, Casting Time.)
+      const dex = horrorD100Dexterity(data);
       return { kind: 'fixed', value: dex, label: `DEX ${dex}` };
-    }
-
-    case 'SHADOWRUN_6E': {
-      const meat = rec(rec(rec(data)?.derivedStats)?.initiative)?.meatspace;
-      const pool = parseDicePool(rec(meat)?.dicePools);
-      if (!pool) return null;
-      const base = num(rec(meat)?.base);
-      const expression = `${pool}${formatModifier(base)}`;
-      return { kind: 'roll', expression, label: expression };
     }
 
     default:
@@ -336,22 +311,24 @@ export function resolveCharacterInitiative(
 /**
  * How initiative should be determined for an NPC token, from its stat block.
  *
- * Only D&D 5e stat blocks carry enough structure to derive this — abilities are
+ * Only 5E stat blocks carry enough structure to derive this — abilities are
  * stored as raw scores keyed by `dex`. Everything else returns null and rolls a
  * plain d20, which is what a stat block without recorded ability scores can
  * honestly support.
  *
  * So does a stat block labelled with a game system other than the campaign's:
- * its scores are on that system's scale, and a Call of Cthulhu DEX of 80 read
- * as a D&D score would be +35.
+ * its scores are on that system's scale, and a Horror d100 DEX of 80 read
+ * as a 5E score would be +35. A label an older version wrote names its
+ * system as the new one does (legacy/gameSystemAliases.ts).
  */
 export function resolveStatBlockInitiative(
   gameSystem: string | null | undefined,
   statBlock: unknown
 ): InitiativeResolution | null {
-  if (gameSystem !== 'DND_5E') return null;
+  if (gameSystem !== 'FIFTH_EDITION') return null;
   const block = rec(statBlock);
-  if (typeof block?.gameSystem === 'string' && block.gameSystem !== '' && block.gameSystem !== gameSystem) {
+  const label = block?.gameSystem;
+  if (typeof label === 'string' && label !== '' && (normaliseGameSystem(label) ?? label) !== gameSystem) {
     return null;
   }
   const abilities = rec(block?.abilities);

@@ -2,7 +2,7 @@
  * A Universal VTT import shows the server's answer, however long it takes.
  *
  * Once the upload has arrived, the server can take up to 50 seconds to
- * answer: an import waits up to 20 seconds behind other DMs' imports, then
+ * answer: an import waits up to 20 seconds behind other GMs' imports, then
  * runs for up to 30, and reaching either limit answers 503 with a message
  * saying which. The request used to share every request's 30-second timeout,
  * which counts the upload as well, so the page gave up first and showed only
@@ -32,7 +32,7 @@ vi.mock('framer-motion', () => {
 });
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'campaign-1', name: 'Lost Mine', currentMapId: null },
+    campaign: { id: 'campaign-1', name: 'The Hollow Crown', currentMapId: null },
     currentMap: null,
     viewedMap: null,
     setCurrentMap: () => {},

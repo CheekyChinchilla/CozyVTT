@@ -1,6 +1,6 @@
 // ============================================
 // MapManager Component
-// Slide-over panel for DMs to manage campaign maps
+// Slide-over panel for GMs to manage campaign maps
 // ============================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -54,7 +54,7 @@ interface MapManagerProps {
 interface MapCardProps {
   map: CampaignMap;
   isActive: boolean;
-  /** The map the DM has open to prepare on this page. */
+  /** The map the GM has open to prepare on this page. */
   isPrepared: boolean;
   onSetActive: (map: CampaignMap) => void;
   onOpenToPrepare: (map: CampaignMap) => void;
@@ -245,7 +245,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   // Confirm delete
   const [mapToDelete, setMapToDelete] = useState<CampaignMap | null>(null);
   /**
-   * For a drawn map: its picture can go with it, if the DM ticks the box
+   * For a drawn map: its picture can go with it, if the GM ticks the box
    * (null while it is not a drawn map, or not yet known to be one).
    */
   const [deletePicture, setDeletePicture] = useState<boolean | null>(null);

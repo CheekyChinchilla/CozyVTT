@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
-import { dnd5eCharacter } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';
+import { fifthEditionCharacter } from '@/components/character-sheets/fifth-edition/__tests__/fifthEditionFixture';
 import type { Character } from '@/types';
 
 const updateCharacter = vi.fn();
@@ -33,7 +33,7 @@ describe('typing while the editor saves', () => {
     updateCharacter.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const onClose = vi.fn();
     const onSaved = vi.fn();
-    render(<CharacterSheetEditorModal character={dnd5eCharacter()} onClose={onClose} onSaved={onSaved} />);
+    render(<CharacterSheetEditorModal character={fifthEditionCharacter()} onClose={onClose} onSaved={onSaved} />);
 
     fireEvent.change(screen.getByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -41,14 +41,14 @@ describe('typing while the editor saves', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bolder' } });
     await act(async () =>
-      finish({ character: { ...dnd5eCharacter({ characterName: 'Aldra the Bold' }), updatedAt: '2026-01-01T00:00:09.000Z' } })
+      finish({ character: { ...fifthEditionCharacter({ characterName: 'Aldra the Bold' }), updatedAt: '2026-01-01T00:00:09.000Z' } })
     );
 
     expect(onClose).not.toHaveBeenCalled();
     expect(onSaved).toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Character Name')).toHaveValue('Aldra the Bolder');
 
-    updateCharacter.mockResolvedValueOnce({ character: dnd5eCharacter() });
+    updateCharacter.mockResolvedValueOnce({ character: fifthEditionCharacter() });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(updateCharacter).toHaveBeenCalledTimes(2));
     expect((updateCharacter.mock.calls[1][1] as { updatedAt?: string }).updatedAt).toBe('2026-01-01T00:00:09.000Z');
@@ -56,9 +56,9 @@ describe('typing while the editor saves', () => {
   });
 
   it('closes once saved when nothing was typed meanwhile', async () => {
-    updateCharacter.mockResolvedValue({ character: dnd5eCharacter() });
+    updateCharacter.mockResolvedValue({ character: fifthEditionCharacter() });
     const onClose = vi.fn();
-    render(<CharacterSheetEditorModal character={dnd5eCharacter()} onClose={onClose} />);
+    render(<CharacterSheetEditorModal character={fifthEditionCharacter()} onClose={onClose} />);
 
     fireEvent.change(screen.getByPlaceholderText('Character Name'), { target: { value: 'Aldra the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));

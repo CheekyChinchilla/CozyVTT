@@ -45,7 +45,7 @@ vi.mock('@/components/assets/AssetGrid', () => ({ default: () => null }));
 import NpcQuickEditor from '../NpcQuickEditor';
 
 const goblin: Token = {
-  id: 'goblin', name: 'Goblin Boss', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
+  id: 'goblin', name: 'Goblin', characterId: null, imageUrl: '', position: { x: 0, y: 0 }, size: { width: 1, height: 1 },
   layer: TokenLayer.TOKEN, visible: true, controlledBy: null, rotation: 0, conditions: [], metadata: {},
   type: TokenType.NPC, disposition: null, hp: null, showHpBar: false, notes: '', initiative: null, obscured: false,
 };
@@ -66,7 +66,7 @@ describe('Remove in the quick editor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     const dialog = await screen.findByRole('dialog', { name: 'Remove token' });
-    expect(dialog).toHaveTextContent('Goblin Boss');
+    expect(dialog).toHaveTextContent('Goblin');
     expect(api.deleteToken).not.toHaveBeenCalled();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
@@ -86,12 +86,12 @@ describe('Remove in the quick editor', () => {
   });
 
   it('says so when the server refuses', async () => {
-    api.deleteToken.mockRejectedValue({ response: { status: 403, data: { message: 'Only the DM can remove tokens' } } });
+    api.deleteToken.mockRejectedValue({ response: { status: 403, data: { message: 'Only the GM can remove tokens' } } });
     renderEditor();
     await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
     await userEvent.click(within(await screen.findByRole('dialog', { name: 'Remove token' })).getByRole('button', { name: 'Remove' }));
 
-    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Only the DM can remove tokens', 'error'));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Only the GM can remove tokens', 'error'));
     expect(onClose).not.toHaveBeenCalled();
   });
 });

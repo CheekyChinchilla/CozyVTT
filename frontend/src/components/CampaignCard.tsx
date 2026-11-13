@@ -5,7 +5,7 @@
 // ============================================
 
 import { useNavigate } from 'react-router';
-import { CAMPAIGN_ROLE_LABEL, campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
+import { CAMPAIGN_ROLE_LABEL, campaignGmName, campaignOwnerName, ownerDiffersFromGm } from '@/utils/campaignRoles';
 import { CampaignRole } from '@/types';
 import type { Campaign, CampaignStatus } from '@/types';
 import { Users, Calendar, Crown, Eye, Gamepad2, KeyRound} from 'lucide-react';
@@ -54,8 +54,8 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
   // Get role badge styling
   const getRoleBadge = (role: CampaignRole) => {
     const badges = {
-      DM: {
-        label: CAMPAIGN_ROLE_LABEL[CampaignRole.DM],
+      GM: {
+        label: CAMPAIGN_ROLE_LABEL[CampaignRole.GM],
         icon: Crown,
         class: 'bg-moss-green/15 text-brand-ink border-moss-green/40',
       },
@@ -100,9 +100,9 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
 
   // Who runs it, and who owns it — the same person until somebody hands the
   // game over, and different facts regardless. This card used to look up the
-  // owner and print them under a "DM:" label.
-  const dmName = campaignDmName(campaign);
-  const showOwner = ownerDiffersFromDm(campaign);
+  // owner and print them under a "GM:" label.
+  const gmName = campaignGmName(campaign);
+  const showOwner = ownerDiffersFromGm(campaign);
   const ownerName = campaignOwnerName(campaign);
 
   return (
@@ -147,11 +147,11 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
 
       {/* Info Grid */}
       <div className="space-y-2 text-sm">
-        {/* DM Name */}
+        {/* GM Name */}
         <div className="flex items-center gap-2 text-stone-gray">
           <Crown className="w-4 h-4 text-brand-ink" />
-          <span className="text-warm-gray">DM:</span>
-          <span className="text-stone-gray font-medium">{dmName}</span>
+          <span className="text-warm-gray">{CAMPAIGN_ROLE_LABEL[CampaignRole.GM]}:</span>
+          <span className="text-stone-gray font-medium">{gmName}</span>
         </div>
 
         {/* Only worth saying once the two have come apart — while the creator

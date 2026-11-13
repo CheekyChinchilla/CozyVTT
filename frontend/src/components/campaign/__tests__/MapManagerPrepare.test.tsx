@@ -2,7 +2,7 @@
  * Opening a map to prepare from the Map Library.
  *
  * Every card but the active map's offers Open to prepare, which shows that
- * map on the DM's screen only and gets the library out of the way; the
+ * map on the GM's screen only and gets the library out of the way; the
  * card of the map being prepared says Preparing. Set Active and deleting
  * the map on screen ask whatever holds that map (an editor with unsaved
  * work) first.
@@ -37,7 +37,7 @@ vi.mock('framer-motion', () => {
 });
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'campaign-1', name: 'Lost Mine', currentMapId: 'village' },
+    campaign: { id: 'campaign-1', name: 'The Hollow Crown', currentMapId: 'village' },
     currentMap: { id: 'village', name: 'Village', tokens: [] },
     viewedMap: h.preparing ? { id: h.preparing, name: h.preparing, tokens: [] } : { id: 'village', name: 'Village', tokens: [] },
     isPreparing: h.preparing !== null,

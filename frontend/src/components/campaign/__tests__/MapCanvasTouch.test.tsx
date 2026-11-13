@@ -23,7 +23,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
     memberships: [] as Array<{ userId: string; role: string; user: { displayName: string } }>,
@@ -83,7 +83,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: false,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -237,7 +237,7 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith(), status: 'ACTIVE', memberships: [], characters: [] });
+  h.set({ userRole: 'GM', currentMap: mapWith(), status: 'ACTIVE', memberships: [], characters: [] });
 });
 
 describe('what the map asks of the browser', () => {
@@ -310,10 +310,10 @@ describe('a token picked up by a tap', () => {
 });
 
 describe('a held token that leaves the map', () => {
-  // Since a finger or a pen can hold a token for as long as it likes, the DM
+  // Since a finger or a pen can hold a token for as long as it likes, the GM
   // can remove, hide or move it meanwhile. The page must not go on holding a
   // token it no longer has, and send its put-down.
-  it('is let go when the DM removes it, and the next tap sends nothing for it', () => {
+  it('is let go when the GM removes it, and the next tap sends nothing for it', () => {
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19), token('tok-wolf', 'Wolf', 9, 9));
     tap(1, square(0, 19));
@@ -814,7 +814,7 @@ describe('a long-press', () => {
   });
 
   it.each([
-    ['the DM, on a creature', 'DM', () => token('tok-goblin', 'Goblin', 0, 19)],
+    ['the GM, on a creature', 'GM', () => token('tok-goblin', 'Goblin', 0, 19)],
     ['a player, on their own character', 'PLAYER', () => token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me', characterId: 'char-me' })],
     ['a spectator, on a character', 'SPECTATOR', () => token('tok-mara', 'Mara', 0, 19, { type: TokenType.PLAYER, controlledBy: 'other', characterId: 'char-other' })],
   ] as const)('offers %s what a right-click there offers, in the same order', (_who, userRole, which) => {
@@ -919,8 +919,8 @@ describe('a long-press', () => {
     other.up(surface(), px(45, 25));
   });
 
-  // A press under a DM tool is the tool's for as long as it is held.
-  it('does not exist under a DM tool: a press held 600 ms then dragged draws a fog box', () => {
+  // A press under a GM tool is the tool's for as long as it is held.
+  it('does not exist under a GM tool: a press held 600 ms then dragged draws a fog box', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
     render(<MapCanvas />);
     show(goblin());
@@ -1043,7 +1043,7 @@ describe('a long-press', () => {
       expect(sentOf('map.ping')).toHaveLength(1);
     });
 
-    it('opens nothing under a DM tool, and the press can still drag', () => {
+    it('opens nothing under a GM tool, and the press can still drag', () => {
       h.set({ currentMap: mapWith({ fogEnabled: true }) });
       render(<MapCanvas />);
       fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
@@ -1392,7 +1392,7 @@ describe('a double tap', () => {
     ['the pen', () => draw('Pen')],
     ['the eraser', () => draw('Eraser')],
     ['the laser pointer', () => draw('Laser pointer')],
-    ["the DM's ruler", () => fireEvent.click(screen.getByTitle('Ruler — measure distance'))],
+    ["the GM's ruler", () => fireEvent.click(screen.getByTitle('Ruler — measure distance'))],
     ['the AoE template', () => fireEvent.click(screen.getByTitle('AoE Shape — area of effect overlay'))],
   ])('pings nothing with %s up', (_tool, choose, map = {}) => {
     h.set({ currentMap: mapWith(map) });
@@ -1477,7 +1477,7 @@ describe('a double tap', () => {
 
   it.each([
     ['a player, on their own token', 'PLAYER', () => token('tok-mine', 'Aldra', 0, 19, { type: TokenType.PLAYER, controlledBy: 'me' })],
-    ['the DM, on a creature', 'DM', () => token('tok-goblin', 'Goblin', 0, 19)],
+    ['the GM, on a creature', 'GM', () => token('tok-goblin', 'Goblin', 0, 19)],
   ] as const)('picks the token up and puts it back for %s, and pings nothing', (_who, userRole, which) => {
     h.set({ userRole });
     render(<MapCanvas />);
@@ -1942,7 +1942,7 @@ describe('the details of the selected token', () => {
       expect(card()).toBeNull();
     });
 
-    it('show nothing once spirit tokens are hidden from the DM', () => {
+    it('show nothing once spirit tokens are hidden from the GM', () => {
       render(<MapCanvas />);
       show(token('tok-wolf', 'Dire Wolf', 4, 19, { layer: TokenLayer.SPIRIT }));
       tap(1, square(4, 19));
@@ -1962,7 +1962,7 @@ describe('the details of the selected token', () => {
       render(<MapCanvas />);
       show(token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' }), token('tok-wolf', 'Dire Wolf', 4, 19, { visible: false }));
       fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(true) } });
-      // The DM taps the hidden creature, picking it up, and taps it down again.
+      // The GM taps the hidden creature, picking it up, and taps it down again.
       tap(1, square(4, 19));
       tap(2, square(4, 19));
       expect(card()).not.toBeNull();
@@ -2505,7 +2505,7 @@ describe('a pen', () => {
   });
 });
 
-describe('choosing another DM tool', () => {
+describe('choosing another GM tool', () => {
   // Leaving Select keeps a wall being moved, so the finger's lift under the
   // new tool dropped the wall where it was.
   it("drops a finger's drag under way, putting a moved wall back", () => {
@@ -2711,7 +2711,7 @@ describe('the ruler by touch', () => {
     };
   }
 
-  it("gives the DM a start at the first tap, an end at the second that stays after the lift, and a new start at the third", async () => {
+  it("gives the GM a start at the first tap, an end at the second that stays after the lift, and a new start at the third", async () => {
     await shown();
 
     tap(1, square(0, 19));
@@ -2770,7 +2770,7 @@ describe('the ruler by touch', () => {
 
   // A token held by a tap stays held while the ruler goes up, and the ruler
   // took every tap, so the token could not be put down.
-  it.each([['the DM', 'DM'], ['a player', 'PLAYER']])("lets %s put a token held by a tap down with a tap while the ruler is up", async (_who, role) => {
+  it.each([['the GM', 'GM'], ['a player', 'PLAYER']])("lets %s put a token held by a tap down with a tap while the ruler is up", async (_who, role) => {
     h.set({ userRole: role });
     render(<MapCanvas />);
     pictures.find((p) => p.src === '/api/assets/maps/x')!.load();

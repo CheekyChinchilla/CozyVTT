@@ -23,7 +23,7 @@ const UNSEEN: Record<AssetUseKind, [one: string, many: string]> = {
   document: ['document', 'documents'],
 };
 
-/** One use as a line of text, e.g. `3 tokens on the map "Ambush Road" (Lost Mine)`. */
+/** One use as a line of text, e.g. `3 tokens on the map "Ambush Road" (The Hollow Crown)`. */
 export function describeAssetUse(use: AssetUse): string {
   if (use.name === null) {
     const [one, many] = UNSEEN[use.kind];

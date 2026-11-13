@@ -3,7 +3,7 @@
 // ============================================
 //
 // For the short lists a select offers in full: the sound files the
-// Atmosphere panel and the vibe periods can play, and the documents a DM can
+// Atmosphere panel and the vibe periods can play, and the documents a GM can
 // share. Each fetched one page, the newest 50 or 100 assets of every campaign
 // the user is in, and then kept the ones it could offer, so an asset past that
 // page was never offered. The picture pickers, whose libraries can be large,

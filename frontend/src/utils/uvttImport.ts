@@ -2,7 +2,7 @@
 // Importing a Universal VTT file
 //
 // A UVTT holds one map image and the geometry that belongs with it. Two things
-// about a file can need the DM's answer before it becomes a map.
+// about a file can need the GM's answer before it becomes a map.
 //
 // Some exporters crop the image to part of the map and then write out the walls
 // for the whole of it, so the import would land a map with bare areas and walls
@@ -11,7 +11,7 @@
 //
 // And a file may carry walls for its furniture, pillars and crates, kept apart
 // from the architecture in `objects_line_of_sight`. They block sight like any
-// other wall, but whether a table should is the DM's call.
+// other wall, but whether a table should is the GM's call.
 //
 // The server answers 409 with `UVTT_IMPORT_NEEDS_CONFIRMATION` and creates
 // nothing until it is told to go ahead. What follows reads that reply and puts
@@ -91,7 +91,7 @@ export function uvttImportTitle(decision?: UvttImportDecision): string {
   return "Some walls sit outside this map's picture";
 }
 
-/** What the DM reads before deciding. */
+/** What the GM reads before deciding. */
 export function uvttImportMessage(decision?: UvttImportDecision): string {
   if (!decision) {
     return 'Some of this file\'s walls sit outside its map picture. Import it anyway?';

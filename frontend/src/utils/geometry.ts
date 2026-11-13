@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 // ============================================
 // Pure geometry helpers for the map canvas
 // Extracted from MapCanvas.tsx so the math is
@@ -11,8 +14,8 @@ export interface Point {
 
 /**
  * Calculate grid distance in feet between two positions.
- * flat: Chebyshev — every diagonal costs the same as a straight move (D&D 5e)
- * alternating: every second diagonal costs two squares instead of one (PF2e:
+ * flat: Chebyshev — every diagonal costs the same as a straight move (5E)
+ * alternating: every second diagonal costs two squares instead of one (Fantasy d20:
  * 5 ft, then 10 ft, on 5 ft squares)
  */
 export function calcGridDistance(

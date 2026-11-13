@@ -13,7 +13,7 @@ import type { DiceRolledEvent } from '@/types';
  * the dice panel survives a refresh or a reconnect instead of starting empty.
  *
  * Visibility is decided by the server, not here: a player receives public rolls
- * plus their own secret ones, and a DM receives everything. Nothing that the
+ * plus their own secret ones, and a GM receives everything. Nothing that the
  * caller is not entitled to see is sent over the wire, so there is no filtering
  * to do on this side.
  *

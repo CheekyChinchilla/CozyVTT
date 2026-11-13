@@ -41,8 +41,8 @@ const mapAsset: Asset = {
   description: null,
   tags: [],
   createdAt: '2026-01-01T00:00:00.000Z',
-  uploadedBy: { id: 'u-dm', displayName: 'Dana the DM' },
-  campaign: { id: 'c-1', name: 'Lost Mine' },
+  uploadedBy: { id: 'u-dm', displayName: 'Dana the GM' },
+  campaign: { id: 'c-1', name: 'The Hollow Crown' },
 };
 
 const regularUser = {
@@ -111,8 +111,8 @@ describe('the asset bin in the Admin Panel', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Goblin Cave');
-    expect(dialog).toHaveTextContent('Dana the DM');
-    expect(dialog).toHaveTextContent('Lost Mine');
+    expect(dialog).toHaveTextContent('Dana the GM');
+    expect(dialog).toHaveTextContent('The Hollow Crown');
     expect(api.deleteAsset).not.toHaveBeenCalled();
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -140,8 +140,8 @@ describe('the asset bin in the Admin Panel', () => {
           code: 'ASSET_IN_USE',
           message: 'This asset is still in use.',
           usage: [
-            { kind: 'map', name: 'Goblin Cave', campaignId: 'c-1', campaignName: 'Lost Mine', count: 1 },
-            { kind: 'token', name: 'Ambush Road', campaignId: 'c-1', campaignName: 'Lost Mine', count: 3 },
+            { kind: 'map', name: 'Goblin Cave', campaignId: 'c-1', campaignName: 'The Hollow Crown', count: 1 },
+            { kind: 'token', name: 'Ambush Road', campaignId: 'c-1', campaignName: 'The Hollow Crown', count: 3 },
           ],
           omitted: 0,
         },
@@ -153,8 +153,8 @@ describe('the asset bin in the Admin Panel', () => {
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
 
     const inUse = await screen.findByRole('dialog', { name: 'Asset is in use' });
-    expect(inUse).toHaveTextContent('Map "Goblin Cave" (Lost Mine)');
-    expect(inUse).toHaveTextContent('3 tokens on the map "Ambush Road" (Lost Mine)');
+    expect(inUse).toHaveTextContent('Map "Goblin Cave" (The Hollow Crown)');
+    expect(inUse).toHaveTextContent('3 tokens on the map "Ambush Road" (The Hollow Crown)');
     expect(api.deleteAsset).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Goblin Cave', { selector: 'p' })).toBeInTheDocument();
 

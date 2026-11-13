@@ -33,7 +33,7 @@ interface AssetUploadModalProps {
   /**
    * When set, the only choice is Personal, selected at first, or this
    * campaign's library, each with a line saying what it means: for a
-   * picture the DM may be preparing in secret, as Create Map's is.
+   * picture the GM may be preparing in secret, as Create Map's is.
    */
   campaignOption?: string;
 }
@@ -113,7 +113,7 @@ export default function AssetUploadModal({
   }, [isOpen, defaultCampaignId, campaignOption]);
 
   // Campaigns shown in dropdown: those the server lets this user put this
-  // kind of asset into (the DM's for anything, a player's for token art).
+  // kind of asset into (the GM's for anything, a player's for token art).
   const dropdownCampaigns = campaignsToPlaceAssetIn(allCampaigns ?? [], assetType === AssetType.TOKEN, user?.id);
 
   // Whether the Campaign scope option should be available
@@ -506,7 +506,7 @@ export default function AssetUploadModal({
                   <p className="mt-2 text-sm text-stone-gray/70">
                     {assetType === AssetType.TOKEN
                       ? 'You need to play in or run a campaign to upload tokens to it.'
-                      : 'You need to be a DM of a campaign to upload campaign assets.'}
+                      : 'You need to be a GM of a campaign to upload campaign assets.'}
                   </p>
                 )}
               </div>

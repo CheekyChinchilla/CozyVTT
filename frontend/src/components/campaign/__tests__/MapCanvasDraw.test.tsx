@@ -23,7 +23,7 @@ const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
   let version = 0;
   const state = {
-    userRole: 'DM' as string,
+    userRole: 'GM' as string,
     currentMap: null as unknown,
     status: 'ACTIVE' as string,
     playersMayDraw: true as boolean,
@@ -89,7 +89,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         userRole: h.state.userRole,
         campaign,
         updateCampaignSpiritLayer: noop,
-        dmViewBothPlanes: false,
+        gmViewBothPlanes: false,
         playerSpiritVisible: h.state.playerSpiritVisible,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
@@ -224,7 +224,7 @@ beforeEach(() => {
   h.answers.add = async () => ({ ok: true, id: 'stored-1' });
   h.answers.done = async () => ({ ok: true });
   useGameStore.getState().clearGameState();
-  h.set({ userRole: 'DM', currentMap: mapWith(), status: 'ACTIVE', playersMayDraw: true, playerSpiritVisible: false, memberships: [] });
+  h.set({ userRole: 'GM', currentMap: mapWith(), status: 'ACTIVE', playersMayDraw: true, playerSpiritVisible: false, memberships: [] });
 });
 
 describe('the drawings on the map', () => {
@@ -276,17 +276,17 @@ describe('the drawings on the map', () => {
     expect(indexOf(overlay, 'lineTo', 123, 77)).toBeGreaterThan(fog);
   });
 
-  it('draws one for the DM alone on the DM’s screen, and not in Preview Player View', async () => {
+  it('draws one for the GM alone on the GM’s screen, and not in Preview Player View', async () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }), memberships: [{ userId: 'p1', role: 'PLAYER', user: { displayName: 'Mara' } }] });
     await open();
-    fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ audience: 'DM', points: [[11, 13], [123, 77]] }), drawing({ points: [[11, 13], [321, 45]] })] });
+    fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ audience: 'GM', points: [[11, 13], [123, 77]] }), drawing({ points: [[11, 13], [321, 45]] })] });
     await nextFrame();
     let top = composite(layers()[2]);
     expect(indexOf(top, 'lineTo', 123, 77)).toBeGreaterThan(-1);
     expect(indexOf(top, 'lineTo', 321, 45)).toBeGreaterThan(-1);
 
     // The preview shows drawings over its fog, as a player sees them, and
-    // none for the DM alone.
+    // none for the GM alone.
     fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
     await nextFrame();
     top = composite(layers()[2]);
@@ -297,11 +297,11 @@ describe('the drawings on the map', () => {
 
   // The server sends a player none; a page that holds one, from before a
   // demotion, draws none either.
-  it('draws none for the DM alone on a player’s screen', async () => {
+  it('draws none for the GM alone on a player’s screen', async () => {
     h.set({ userRole: 'PLAYER' });
     await open();
 
-    fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ audience: 'DM' })] });
+    fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ audience: 'GM' })] });
     await nextFrame();
 
     expect(indexOf(composite(layers()[2]), 'lineTo', 123, 77)).toBe(-1);
@@ -504,7 +504,7 @@ function stroke(from: { clientX: number; clientY: number }, ...to: Array<{ clien
 }
 
 describe('the Draw button', () => {
-  it('is in the toolbar for the DM, beside Ping, in the group that wraps together, sized for a finger', () => {
+  it('is in the toolbar for the GM, beside Ping, in the group that wraps together, sized for a finger', () => {
     render(<MapCanvas />);
 
     const button = drawButton()!;
@@ -571,8 +571,8 @@ describe('the Draw button', () => {
   });
 
   // One tool takes a press at a time: the ruler and the template would take
-  // the clicks before the pen, and the pen the DM tools'.
-  it('puts the ruler, the area template and a DM tool away, and is put away by them', () => {
+  // the clicks before the pen, and the pen the GM tools'.
+  it('puts the ruler, the area template and a GM tool away, and is put away by them', () => {
     render(<MapCanvas />);
     fireEvent.click(screen.getByTitle('Ruler — measure distance'));
     fireEvent.click(drawButton()!);
@@ -892,16 +892,16 @@ describe('each kind of drawing', () => {
   });
 });
 
-describe('a drawing for the DM alone', () => {
-  it('is what the DM draws with Only I can see this ticked', () => {
+describe('a drawing for the GM alone', () => {
+  it('is what the GM draws with Only I can see this ticked', () => {
     render(<MapCanvas />);
     draw('Line');
     fireEvent.click(screen.getByRole('checkbox', { name: 'Only I can see this' }));
 
     stroke(px(100, 100), px(200, 100));
 
-    expect(added()[0].drawing.audience).toBe('DM');
-    expect(frames()[0].preview.audience).toBe('DM');
+    expect(added()[0].drawing.audience).toBe('GM');
+    expect(frames()[0].preview.audience).toBe('GM');
   });
 
   it('is not offered to a player', () => {
@@ -1028,7 +1028,7 @@ describe('the frames of a stroke on its way', () => {
   });
 
   // The other screens fade a stroke 2 seconds after its last frame; a
-  // polygon sends a frame per corner, which a DM placing them slowly can
+  // polygon sends a frame per corner, which a GM placing them slowly can
   // leave further apart than that.
   it('keep a polygon alive between its corners, one a second, under one preview', () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
@@ -1135,7 +1135,7 @@ describe('the eraser', () => {
     expect(screen.getByText('You can erase only your own drawings')).toBeInTheDocument();
   });
 
-  it('erases anyone’s for the DM, the topmost where two cross', () => {
+  it('erases anyone’s for the GM, the topmost where two cross', () => {
     render(<MapCanvas />);
     fire('drawings:state', {
       mapId: 'map-a',
@@ -1150,10 +1150,10 @@ describe('the eraser', () => {
   });
 
   // Player Preview shows what a player is sent: the eraser finds only that.
-  it('passes over a drawing for the DM alone in Preview Player View', () => {
+  it('passes over a drawing for the GM alone in Preview Player View', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }), memberships: [{ userId: 'p1', role: 'PLAYER', user: { displayName: 'Mara' } }] });
     render(<MapCanvas />);
-    fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'secret', audience: 'DM', points: [[100, 100], [300, 100]] })] });
+    fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'secret', audience: 'GM', points: [[100, 100], [300, 100]] })] });
     fireEvent.click(screen.getByRole('button', { name: 'Preview Player View' }));
     draw('Eraser');
 
@@ -1271,7 +1271,7 @@ describe('Clear mine and Clear drawings', () => {
     expect(screen.queryByRole('button', { name: 'Clear drawings' })).not.toBeInTheDocument();
   });
 
-  it('lets the DM clear one player’s drawings, by name, and nobody else’s', () => {
+  it('lets the GM clear one player’s drawings, by name, and nobody else’s', () => {
     h.set({ memberships: [{ userId: 'p1', role: 'PLAYER', user: { displayName: 'Mara' } }, { userId: 'p2', role: 'PLAYER', user: { displayName: 'Tom' } }] });
     render(<MapCanvas />);
     fire('drawings:state', {
@@ -1296,7 +1296,7 @@ describe('Clear mine and Clear drawings', () => {
     expect(screen.getByRole('button', { name: 'Clear the drawings of someone who has left (1)' })).toBeInTheDocument();
   });
 
-  it('asks the DM before clearing every drawing on the map', () => {
+  it('asks the GM before clearing every drawing on the map', () => {
     render(<MapCanvas />);
     fire('drawings:state', { mapId: 'map-a', drawings: [drawing({ id: 'a' })] });
     draw('Pen');

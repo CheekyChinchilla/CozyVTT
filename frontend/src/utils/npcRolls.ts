@@ -1,3 +1,6 @@
+// This file holds material under the ORC License, beside CozyVTT's own code under the AGPL-3.0.
+// See GAME_CONTENT_NOTICES.md for the notice and credits.
+
 /**
  * npcRolls.ts
  * Builds the rollable options offered for an NPC token's stat block.
@@ -6,8 +9,8 @@
  * inside the description text — so attacks and damage are parsed out of that
  * prose. Abilities, saves and skills come from the structured fields.
  *
- * Dispatches on game system. This previously applied D&D 5e maths to every
- * system, so a Call of Cthulhu NPC was offered 1d20 + ability modifier rolls
+ * Dispatches on game system. This previously applied 5E maths to every
+ * system, so a Horror d100 NPC was offered 1d20 + ability modifier rolls
  * for a game that has neither d20s nor ability modifiers. Systems without a
  * derived model now return no options and the caller falls back to the
  * free-form custom roll input, which is honest rather than confidently wrong.
@@ -26,13 +29,13 @@ import {
   findSkill,
   formatModifier,
   skillLabel,
-} from './rules/dnd5e';
+} from './rules/fifthEdition';
 
 // A creature's stat block carries a `hitDice` string for working out its hit
 // points, not a pool it spends on a short rest, so there is nothing to offer.
 const EMPTY_ROLLS: CharacterRolls = { abilities: [], skills: [], savingThrows: [], combat: [], hitDice: [] };
 
-/** D&D 5e ability modifier: floor((score - 10) / 2). */
+/** 5E ability modifier: floor((score - 10) / 2). */
 export { abilityModifier as abilityMod };
 
 /**
@@ -116,10 +119,10 @@ function buildCombatRolls(statBlock: NpcStatBlock): RollOption[] {
 }
 
 // ---------------------------------------------------------------------------
-// D&D 5e
+// 5E
 // ---------------------------------------------------------------------------
 
-function buildDnd5eRolls(statBlock: NpcStatBlock): CharacterRolls {
+function buildFifthEditionRolls(statBlock: NpcStatBlock): CharacterRolls {
   const abilities:    RollOption[] = [];
   const skills:       RollOption[] = [];
   const savingThrows: RollOption[] = [];
@@ -139,7 +142,7 @@ function buildDnd5eRolls(statBlock: NpcStatBlock): CharacterRolls {
   }
 
   // Saving throws — all six, using the stored total where the creature is
-  // proficient and the bare ability modifier otherwise, so the DM always has
+  // proficient and the bare ability modifier otherwise, so the GM always has
   // every save available.
   const storedSaves = statBlock.savingThrows ?? {};
   for (const ability of ABILITY_KEYS) {
@@ -180,32 +183,32 @@ function buildDnd5eRolls(statBlock: NpcStatBlock): CharacterRolls {
 }
 
 // ---------------------------------------------------------------------------
-// Pathfinder 2e
+// Fantasy d20
 // ---------------------------------------------------------------------------
 
 /**
- * Pathfinder 2e creature stat blocks print final modifiers rather than the
- * components behind them — Paizo builds creatures from level benchmark tables,
- * not from "level + proficiency rank + attribute". So nothing is derived here:
- * whatever the stat block records is what gets rolled.
+ * Fantasy d20 creature stat blocks print final modifiers rather than the
+ * components behind them: the game's creature guidance builds creatures from
+ * benchmarks by level, not from level, proficiency rank and attribute. So
+ * nothing is derived here: whatever the stat block records is what gets rolled.
  *
  * Saves are Fortitude/Reflex/Will rather than six ability saves, and only
  * trained-or-better skills appear, both of which the stat block already
  * represents as plain keyed records. The stat block takes any save key, so
  * the labels are a Map: "constructor" found Object in a plain object.
  */
-const PF2E_SAVE_LABELS: ReadonlyMap<string, string> = new Map([
+const FANTASY_D20_SAVE_LABELS: ReadonlyMap<string, string> = new Map([
   ['fortitude', 'Fortitude'],
   ['reflex', 'Reflex'],
   ['will', 'Will'],
 ]);
 
-function buildPf2eRolls(statBlock: NpcStatBlock): CharacterRolls {
+function buildFantasyD20Rolls(statBlock: NpcStatBlock): CharacterRolls {
   const abilities:    RollOption[] = [];
   const skills:       RollOption[] = [];
   const savingThrows: RollOption[] = [];
 
-  // PF2e stat blocks list attribute modifiers directly. Where a creature was
+  // Fantasy d20 stat blocks list attribute modifiers directly. Where a creature was
   // entered with 5e-style scores instead, fall back to deriving the modifier so
   // the option is still offered rather than silently dropped.
   for (const ability of ABILITY_KEYS) {
@@ -225,7 +228,7 @@ function buildPf2eRolls(statBlock: NpcStatBlock): CharacterRolls {
 
   for (const [key, bonus] of Object.entries(statBlock.savingThrows ?? {})) {
     if (typeof bonus !== 'number') continue;
-    const label = PF2E_SAVE_LABELS.get(key.toLowerCase()) ?? key;
+    const label = FANTASY_D20_SAVE_LABELS.get(key.toLowerCase()) ?? key;
     savingThrows.push({
       label:             `${label} ${formatModifier(bonus)}`,
       expression:        `1d20${formatModifier(bonus)}`,
@@ -254,39 +257,38 @@ function buildPf2eRolls(statBlock: NpcStatBlock): CharacterRolls {
 
 /** Game systems for which NPC stat blocks have a modelled roll structure. */
 export function systemSupportsNpcRolls(gameSystem: string | null | undefined): boolean {
-  return gameSystem === 'DND_5E' || gameSystem === 'PATHFINDER_2E';
+  return gameSystem === 'FIFTH_EDITION' || gameSystem === 'FANTASY_D20';
 }
 
 /**
  * Build the rollable options for an NPC stat block.
  *
  * @param statBlock  The token's stat block, if it has one.
- * @param gameSystem The campaign's game system. Defaults to D&D 5e, which is
+ * @param gameSystem The campaign's game system. Defaults to 5E, which is
  *                   what the stat block structure was designed around and what
  *                   the only seeded content uses.
  *
- * Call of Cthulhu 7e and Shadowrun 6e return no options: they use d100 and dice
- * pools respectively, with no ability-modifier or proficiency concept, so there
- * is nothing correct to offer from this data. Callers fall back to the custom
- * roll input.
+ * Horror d100 returns no options: it uses d100 skills, with no ability-modifier
+ * or proficiency concept, so there is nothing correct to offer from this data.
+ * Callers fall back to the custom roll input. A system CozyVTT no longer
+ * supports is read as one with none.
  */
 export function buildNpcRolls(
   statBlock: NpcStatBlock | null | undefined,
-  gameSystem: string | null = 'DND_5E'
+  gameSystem: string | null = 'FIFTH_EDITION'
 ): CharacterRolls {
   if (!statBlock) return EMPTY_ROLLS;
 
   switch (gameSystem) {
-    case 'PATHFINDER_2E':
-      return buildPf2eRolls(statBlock);
-    case 'DND_5E':
-      return buildDnd5eRolls(statBlock);
-    case 'CALL_OF_CTHULHU_7E':
-    case 'SHADOWRUN_6E':
+    case 'FANTASY_D20':
+      return buildFantasyD20Rolls(statBlock);
+    case 'FIFTH_EDITION':
+      return buildFifthEditionRolls(statBlock);
+    case 'HORROR_D100':
       return EMPTY_ROLLS;
     default:
       // Unknown or unset system: the stat block shape is 5e's, so treat it as
       // 5e rather than offering nothing at all.
-      return buildDnd5eRolls(statBlock);
+      return buildFifthEditionRolls(statBlock);
   }
 }

@@ -2,7 +2,7 @@
  * Session Controls
  * Session State Management
  *
- * DM-only panel for starting, pausing, ending, and resuming sessions.
+ * GM-only panel for starting, pausing, ending, and resuming sessions.
  * Shows session timer and session number.
  * Players see a read-only session status indicator instead.
  */
@@ -81,7 +81,7 @@ export default function SessionControls() {
     setIsLoading(true);
     try {
       const result = await api.startSession(campaign.id);
-      // REST broadcast handles WebSocket; also update local state immediately for DM
+      // REST broadcast handles WebSocket; also update local state immediately for GM
       updateCampaignStatus(CampaignStatus.ACTIVE);
       setActiveSession({
         id: result.session.id,
@@ -152,7 +152,7 @@ export default function SessionControls() {
   // Render
   // ============================================
 
-  if (userRole !== 'DM') return null;
+  if (userRole !== 'GM') return null;
 
   const isInactive = !activeSession && status === CampaignStatus.INACTIVE;
   const isPrep = status === CampaignStatus.PREPARATION;
@@ -212,7 +212,7 @@ export default function SessionControls() {
             </Button>
           )}
 
-          {/* Resume Session: a paused session, the map as the DM left it */}
+          {/* Resume Session: a paused session, the map as the GM left it */}
           {isPaused && (
             <Button
               onClick={handleResume}

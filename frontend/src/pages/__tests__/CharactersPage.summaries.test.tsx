@@ -14,10 +14,10 @@ import type { Character, CharacterSummary } from '@/types';
 import CharactersPage from '../CharactersPage';
 
 const summary = {
-  id: 'char-1', userId: 'u1', name: 'Sheet A', gameSystem: 'DND_5E', campaignId: null, campaign: null,
+  id: 'char-1', userId: 'u1', name: 'Sheet A', gameSystem: 'FIFTH_EDITION', campaignId: null, campaign: null,
   tokenImageUrl: null, updatedAt: '2026-01-01T00:00:00.000Z', createdAt: '2026-01-01T00:00:00.000Z',
 } as unknown as CharacterSummary;
-const full = { ...summary, data: { background: 'Sage' } } as unknown as Character;
+const full = { ...summary, data: { background: 'Acolyte' } } as unknown as Character;
 
 const getCharacter = vi.fn();
 const exportCharacterJSON = vi.fn();
@@ -69,7 +69,7 @@ describe('Characters page with a list that carries no sheets', () => {
     renderPage();
     await userEvent.click(await screen.findByText('Sheet A'));
 
-    expect(await screen.findByText('Background: Sage')).toBeInTheDocument();
+    expect(await screen.findByText('Background: Acolyte')).toBeInTheDocument();
     expect(getCharacter).toHaveBeenCalledWith('char-1');
   });
 

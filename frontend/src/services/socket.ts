@@ -32,7 +32,7 @@ import type {
   CharacterHpUpdateEvent,
   CharacterTemporaryHpEvent,
   CharacterHpUpdatedBroadcast,
-  DmTransferredBroadcast,
+  GmTransferredBroadcast,
   MemberRoleChangedBroadcast,
   HitDiceSpendEvent,
   CombatState,
@@ -541,7 +541,7 @@ class SocketClient {
     this.addListener('dice.rolled.secret', callback);
   }
 
-  /** Clear the dice history for everyone (the DM's), and wait for the answer. */
+  /** Clear the dice history for everyone (the GM's), and wait for the answer. */
   clearDiceHistory(): Promise<DoneAck> {
     return this.askFor<DoneAck>('dice.clearHistory', undefined, ROLL_ANSWER_TIMEOUT_MS, 'No answer from the server');
   }
@@ -719,11 +719,11 @@ class SocketClient {
   }
 
   /**
-   * The DM seat moved. Everyone in the campaign hears this, because everyone's
+   * The GM seat moved. Everyone in the campaign hears this, because everyone's
    * view of who may do what changes with it — not just the two people involved.
    */
-  onDmTransferred(callback: EventCallback<DmTransferredBroadcast>) {
-    this.addListener('campaign.dm.transferred', callback);
+  onGmTransferred(callback: EventCallback<GmTransferredBroadcast>) {
+    this.addListener('campaign.gm.transferred', callback);
   }
 
   /**
@@ -823,7 +823,7 @@ class SocketClient {
     return this.askFor<DoneAck>('drawing:clear_mine', data, DRAWING_ANSWER_TIMEOUT_MS, 'No answer from the server');
   }
 
-  /** Erase every drawing on a map (the DM's), and wait for the answer. */
+  /** Erase every drawing on a map (the GM's), and wait for the answer. */
   clearDrawings(data: DrawingClearEvent): Promise<DoneAck> {
     return this.askFor<DoneAck>('drawing:clear', data, DRAWING_ANSWER_TIMEOUT_MS, 'No answer from the server');
   }

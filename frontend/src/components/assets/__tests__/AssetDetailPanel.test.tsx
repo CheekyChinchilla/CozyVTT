@@ -67,7 +67,7 @@ describe('AssetDetailPanel', () => {
 describe('a move the server refuses', () => {
   it('says why', async () => {
     patchAssetScope.mockRejectedValue(Object.assign(new Error('Request failed with status code 403'), {
-      response: { status: 403, data: { error: 'Forbidden', message: 'Only the asset owner or campaign DM can move this asset' } },
+      response: { status: 403, data: { error: 'Forbidden', message: 'Only the asset owner or campaign GM can move this asset' } },
     }));
     const art = { ...asset, type: AssetType.TOKEN, scope: AssetScope.CAMPAIGN, campaignId: 'c1', canChange: true } as unknown as Asset;
     render(<AssetDetailPanel asset={art} onClose={vi.fn()} onDelete={vi.fn()} />);
@@ -75,7 +75,7 @@ describe('a move the server refuses', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Personal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Move to Personal' }));
 
-    expect(await screen.findByText('Only the asset owner or campaign DM can move this asset')).toBeInTheDocument();
+    expect(await screen.findByText('Only the asset owner or campaign GM can move this asset')).toBeInTheDocument();
     expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
   });
 });
@@ -85,7 +85,7 @@ describe('Delete and Move in the panel', () => {
   const campaignArt = (over: Partial<Asset>) =>
     ({ ...asset, type: AssetType.TOKEN, scope: AssetScope.CAMPAIGN, campaignId: 'c1', ...over }) as unknown as Asset;
 
-  it('are offered where the server will allow them, to the campaign\'s DM say', () => {
+  it('are offered where the server will allow them, to the campaign\'s GM say', () => {
     me.user.globalAssetManager = true;
     render(<AssetDetailPanel asset={campaignArt({ uploadedById: 'a-player', canChange: true })} onClose={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe('Delete and Move in the panel', () => {
   });
 });
 
-// A map goes into a campaign its DM runs. A player was offered Campaign for
+// A map goes into a campaign its GM runs. A player was offered Campaign for
 // their own map anyway, with nothing in the list to choose.
 describe('the Campaign choice', () => {
   const myMap = { ...asset, type: AssetType.MAP, scope: AssetScope.USER, uploadedById: 'u1', canChange: true } as unknown as Asset;
@@ -126,7 +126,7 @@ describe('the Campaign choice', () => {
   });
 
   it('is offered with the campaigns the user runs', async () => {
-    myCampaigns.list = [{ id: 'c1', name: 'Friday game', userRole: 'PLAYER' }, { id: 'c2', name: 'My table', userRole: 'DM' }];
+    myCampaigns.list = [{ id: 'c1', name: 'Friday game', userRole: 'PLAYER' }, { id: 'c2', name: 'My table', userRole: 'GM' }];
     render(<AssetDetailPanel asset={myMap} onClose={vi.fn()} onDelete={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Campaign' }));
     expect(screen.getByRole('option', { name: 'My table' })).toBeInTheDocument();

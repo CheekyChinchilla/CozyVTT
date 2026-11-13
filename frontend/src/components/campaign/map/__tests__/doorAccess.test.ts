@@ -3,7 +3,7 @@
  *
  * Doors were found by distance alone: a player could open one none of their
  * tokens could see, and a spectator was given the toggle, drawn at once on
- * their page, which the server then refused. The map now offers the DM every
+ * their page, which the server then refused. The map now offers the GM every
  * door, a player only a door they can see (on a lit map, by the rule the
  * walls layer shows doors by), and a spectator none. The server checks the
  * same.
@@ -20,8 +20,8 @@ const seesNothing = () => false;
 const seesAll = () => true;
 
 describe('offeredDoorAt', () => {
-  it('offers the DM a door under the pointer, seen or not', () => {
-    expect(offeredDoorAt(walls, 125, 102, 12, { role: 'DM', lightingEnabled: true, canSee: seesNothing })).toBe(door);
+  it('offers the GM a door under the pointer, seen or not', () => {
+    expect(offeredDoorAt(walls, 125, 102, 12, { role: 'GM', lightingEnabled: true, canSee: seesNothing })).toBe(door);
   });
 
   it('offers a player a door they can see, and not one they cannot, on a lit map', () => {
@@ -48,8 +48,8 @@ describe('offeredDoorAt', () => {
       expect(offeredDoorAt(walls, 125, 102, 12, player([0, 41, 43]))).toBeUndefined();
     });
 
-    it('offers the DM every door', () => {
-      expect(offeredDoorAt(walls, 125, 102, 12, { role: 'DM', lightingEnabled: false, canSee: seesAll, fog: { grid, isRevealed: () => false } })).toBe(door);
+    it('offers the GM every door', () => {
+      expect(offeredDoorAt(walls, 125, 102, 12, { role: 'GM', lightingEnabled: false, canSee: seesAll, fog: { grid, isRevealed: () => false } })).toBe(door);
     });
   });
 
@@ -62,7 +62,7 @@ describe('offeredDoorAt', () => {
   });
 
   it('never offers a plain wall, or a door out of reach of the pointer', () => {
-    expect(offeredDoorAt(walls, 350, 102, 12, { role: 'DM', lightingEnabled: false, canSee: seesAll })).toBeUndefined();
-    expect(offeredDoorAt(walls, 125, 140, 12, { role: 'DM', lightingEnabled: false, canSee: seesAll })).toBeUndefined();
+    expect(offeredDoorAt(walls, 350, 102, 12, { role: 'GM', lightingEnabled: false, canSee: seesAll })).toBeUndefined();
+    expect(offeredDoorAt(walls, 125, 140, 12, { role: 'GM', lightingEnabled: false, canSee: seesAll })).toBeUndefined();
   });
 });

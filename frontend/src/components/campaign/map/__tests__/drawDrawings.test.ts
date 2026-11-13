@@ -76,7 +76,7 @@ function drawing(extra: Partial<Drawing> = {}): Drawing {
 
 function draw(drawings: Drawing[], extra: Partial<DrawingsDrawState> = {}) {
   const { ctx, calls } = recorder();
-  drawDrawings(ctx, { drawings, layer: 'MARKUP', showDmOnly: true, ...extra }, viewport);
+  drawDrawings(ctx, { drawings, layer: 'MARKUP', showGmOnly: true, ...extra }, viewport);
   return calls;
 }
 
@@ -196,9 +196,9 @@ describe('the order and the layer', () => {
   });
 });
 
-describe('a drawing for the DM alone', () => {
-  it('is dashed and faded in the DM’s own view, so the DM can tell what the table does not see', () => {
-    const calls = draw([drawing({ audience: 'DM', color: '#111111' }), drawing({ color: '#222222' })]);
+describe('a drawing for the GM alone', () => {
+  it('is dashed and faded in the GM’s own view, so the GM can tell what the table does not see', () => {
+    const calls = draw([drawing({ audience: 'GM', color: '#111111' }), drawing({ color: '#222222' })]);
 
     const [secret, open] = named(calls, 'stroke');
     expect(secret.dash.length).toBeGreaterThan(0);
@@ -207,15 +207,15 @@ describe('a drawing for the DM alone', () => {
     expect(open.globalAlpha).toBe(1);
   });
 
-  it('marks a label for the DM alone with a dashed box round it', () => {
-    const calls = draw([drawing({ kind: 'text', audience: 'DM', points: [[0, 0]], text: 'Trap' })]);
+  it('marks a label for the GM alone with a dashed box round it', () => {
+    const calls = draw([drawing({ kind: 'text', audience: 'GM', points: [[0, 0]], text: 'Trap' })]);
 
     expect(named(calls, 'strokeRect').some((c) => c.dash.length > 0)).toBe(true);
   });
 
   // Player Preview draws what a player is sent, which never holds one.
-  it('is not drawn at all outside the DM’s own view', () => {
-    const calls = draw([drawing({ audience: 'DM', kind: 'text', points: [[0, 0]], text: 'Secret' }), drawing({ audience: 'DM' })], { showDmOnly: false });
+  it('is not drawn at all outside the GM’s own view', () => {
+    const calls = draw([drawing({ audience: 'GM', kind: 'text', points: [[0, 0]], text: 'Secret' }), drawing({ audience: 'GM' })], { showGmOnly: false });
 
     expect(calls.filter((c) => ['stroke', 'fill', 'fillText', 'strokeRect'].includes(c.method))).toEqual([]);
   });
@@ -241,10 +241,10 @@ describe('the drawing cache', () => {
     const drawings = [drawing({ kind: 'pen', points: [[0, 0], [10, 10], [20, 0]] }), drawing({ kind: 'arrow' })];
 
     const first = recorder();
-    drawDrawings(first.ctx, { drawings, layer: 'MARKUP', showDmOnly: true, cache }, viewport);
+    drawDrawings(first.ctx, { drawings, layer: 'MARKUP', showGmOnly: true, cache }, viewport);
     const traced = FakePath.made;
     const second = recorder();
-    drawDrawings(second.ctx, { drawings, layer: 'MARKUP', showDmOnly: true, cache }, { ...viewport, panOffset: { x: 300, y: -40 } });
+    drawDrawings(second.ctx, { drawings, layer: 'MARKUP', showGmOnly: true, cache }, { ...viewport, panOffset: { x: 300, y: -40 } });
 
     expect(traced).toBe(3); // the stroke, the arrow's shaft and its head
     expect(FakePath.made).toBe(traced);
@@ -261,8 +261,8 @@ describe('the drawing cache', () => {
     const cache = createDrawingCache();
     const before = drawing({ kind: 'line' });
 
-    drawDrawings(recorder().ctx, { drawings: [before], layer: 'MARKUP', showDmOnly: true, cache }, viewport);
-    drawDrawings(recorder().ctx, { drawings: [{ ...before, points: [[0, 0], [5, 5]] }], layer: 'MARKUP', showDmOnly: true, cache }, viewport);
+    drawDrawings(recorder().ctx, { drawings: [before], layer: 'MARKUP', showGmOnly: true, cache }, viewport);
+    drawDrawings(recorder().ctx, { drawings: [{ ...before, points: [[0, 0], [5, 5]] }], layer: 'MARKUP', showGmOnly: true, cache }, viewport);
 
     expect(FakePath.made).toBe(2);
   });
@@ -278,7 +278,7 @@ describe('the part of the map on screen', () => {
     const label = drawing({ kind: 'text', points: [[100, 100]], width: 4, text: '北口で待ち合わせ' });
     const { ctx, calls } = recorder((text) => [...text].length * 16);
 
-    drawDrawings(ctx, { drawings: [label], layer: 'MARKUP', showDmOnly: true, visible: visibleFrom(200), cache: createDrawingCache() }, viewport);
+    drawDrawings(ctx, { drawings: [label], layer: 'MARKUP', showGmOnly: true, visible: visibleFrom(200), cache: createDrawingCache() }, viewport);
 
     expect(labelDrawn(calls)).toBe(true);
   });
@@ -287,7 +287,7 @@ describe('the part of the map on screen', () => {
     const label = drawing({ kind: 'text', points: [[100, 100]], width: 4, text: 'iiiiiiii' });
     const { ctx, calls } = recorder((text) => text.length * 4);
 
-    drawDrawings(ctx, { drawings: [label], layer: 'MARKUP', showDmOnly: true, visible: visibleFrom(170), cache: createDrawingCache() }, viewport);
+    drawDrawings(ctx, { drawings: [label], layer: 'MARKUP', showGmOnly: true, visible: visibleFrom(170), cache: createDrawingCache() }, viewport);
 
     expect(labelDrawn(calls)).toBe(false);
   });
@@ -299,9 +299,9 @@ describe('the part of the map on screen', () => {
     const cache = createDrawingCache();
 
     const first = recorder();
-    drawDrawings(first.ctx, { drawings: [label], layer: 'MARKUP', showDmOnly: true, cache }, viewport);
+    drawDrawings(first.ctx, { drawings: [label], layer: 'MARKUP', showGmOnly: true, cache }, viewport);
     const second = recorder();
-    drawDrawings(second.ctx, { drawings: [label], layer: 'MARKUP', showDmOnly: true, cache }, { ...viewport, panOffset: { x: 40, y: 0 } });
+    drawDrawings(second.ctx, { drawings: [label], layer: 'MARKUP', showGmOnly: true, cache }, { ...viewport, panOffset: { x: 40, y: 0 } });
 
     expect(named(first.calls, 'measureText')).toHaveLength(1);
     expect(named(second.calls, 'measureText')).toHaveLength(0);
@@ -320,11 +320,11 @@ describe('the part of the map on screen', () => {
       const label = drawing({ kind: 'text', points: [[100, 100]], width: 4, text: 'Gate' });
       const cache = createDrawingCache();
       const fallback = recorder((text) => text.length * 10);
-      drawDrawings(fallback.ctx, { drawings: [label], layer: 'MARKUP', showDmOnly: true, cache }, viewport);
+      drawDrawings(fallback.ctx, { drawings: [label], layer: 'MARKUP', showGmOnly: true, cache }, viewport);
 
       fonts.dispatchEvent(new Event('loadingdone'));
       const inter = recorder((text) => text.length * 20);
-      drawDrawings(inter.ctx, { drawings: [label], layer: 'MARKUP', showDmOnly: true, cache }, viewport);
+      drawDrawings(inter.ctx, { drawings: [label], layer: 'MARKUP', showGmOnly: true, cache }, viewport);
 
       expect(loaded).toHaveBeenCalledTimes(1);
       expect(named(inter.calls, 'measureText')).toHaveLength(1);
@@ -373,7 +373,7 @@ describe('the markup layer', () => {
 
   it('draws the drawings once, and copies them on while nothing they show changes', () => {
     const { ctx, kept } = overlay();
-    const state = { drawings: [drawing()], showDmOnly: true, visible: null, cache: createDrawingCache() };
+    const state = { drawings: [drawing()], showGmOnly: true, visible: null, cache: createDrawingCache() };
 
     drawMarkupLayer(ctx, state, viewport);
     drawMarkupLayer(ctx, state, viewport);
@@ -386,7 +386,7 @@ describe('the markup layer', () => {
   it('draws them again when the drawings, the view, the canvas or whose view it is change', () => {
     const { ctx, kept } = overlay();
     const cache = createDrawingCache();
-    const state = { drawings: [drawing()], showDmOnly: true, visible: null, cache };
+    const state = { drawings: [drawing()], showGmOnly: true, visible: null, cache };
     drawMarkupLayer(ctx, state, viewport);
     strokes(kept());
 
@@ -397,17 +397,17 @@ describe('the markup layer', () => {
     expect(strokes(kept())).toBe(2);
     drawMarkupLayer(ctx, more, { ...viewport, zoom: 2, panOffset: { x: 30, y: 0 } });
     expect(strokes(kept())).toBe(2);
-    drawMarkupLayer(ctx, { ...more, showDmOnly: false }, { ...viewport, zoom: 2, panOffset: { x: 30, y: 0 } });
+    drawMarkupLayer(ctx, { ...more, showGmOnly: false }, { ...viewport, zoom: 2, panOffset: { x: 30, y: 0 } });
     expect(strokes(kept())).toBe(2);
     ctx.canvas.width = 1024;
-    drawMarkupLayer(ctx, { ...more, showDmOnly: false }, { ...viewport, zoom: 2, panOffset: { x: 30, y: 0 } });
+    drawMarkupLayer(ctx, { ...more, showGmOnly: false }, { ...viewport, zoom: 2, panOffset: { x: 30, y: 0 } });
     expect(strokes(kept())).toBe(2);
   });
 
   it('copies nothing onto a map with no drawings', () => {
     const { ctx } = overlay();
 
-    drawMarkupLayer(ctx, { drawings: [], showDmOnly: true, visible: null, cache: createDrawingCache() }, viewport);
+    drawMarkupLayer(ctx, { drawings: [], showGmOnly: true, visible: null, cache: createDrawingCache() }, viewport);
 
     expect(drawn.take(ctx.canvas).filter((c) => c.method === 'drawImage')).toEqual([]);
   });
@@ -420,9 +420,9 @@ function preview(extra: Partial<ActivePreview> = {}): ActivePreview {
   };
 }
 
-function drawPreviews(previews: ActivePreview[], now: number, extra: { reducedMotion?: boolean; showDmOnly?: boolean; laser?: boolean } = {}) {
+function drawPreviews(previews: ActivePreview[], now: number, extra: { reducedMotion?: boolean; showGmOnly?: boolean; laser?: boolean } = {}) {
   const { ctx, calls } = recorder();
-  drawDrawingPreviews(ctx, { previews, now, reducedMotion: false, showDmOnly: true, laser: false, ...extra }, viewport);
+  drawDrawingPreviews(ctx, { previews, now, reducedMotion: false, showGmOnly: true, laser: false, ...extra }, viewport);
   return calls;
 }
 
@@ -459,11 +459,11 @@ describe('a stroke on its way', () => {
     expect(named(drawPreviews([laser, stroke], 100, { laser: true }), 'stroke').every((c) => c.strokeStyle !== '#111111')).toBe(true);
   });
 
-  it('for the DM alone is dashed in the DM’s view and left out of any other', () => {
-    const secret = preview({ audience: 'DM' });
+  it('for the GM alone is dashed in the GM’s view and left out of any other', () => {
+    const secret = preview({ audience: 'GM' });
 
     expect(named(drawPreviews([secret], 100), 'stroke')[0].dash.length).toBeGreaterThan(0);
-    expect(named(drawPreviews([secret], 100, { showDmOnly: false }), 'stroke')).toEqual([]);
+    expect(named(drawPreviews([secret], 100, { showGmOnly: false }), 'stroke')).toEqual([]);
   });
 });
 
@@ -510,7 +510,7 @@ describe('the laser pointer', () => {
       const { ctx, calls } = recorder();
       drawDrawingPreviews(ctx, {
         previews: [preview({ laser: true, points: [[0, 0], [10, 0]], times: [0, 0], lastAt: 0 })],
-        now: 10, reducedMotion: false, showDmOnly: true, laser: true,
+        now: 10, reducedMotion: false, showGmOnly: true, laser: true,
       }, { ...viewport, zoom });
       return named(calls, 'stroke').map((c) => Number(c.lineWidth) * zoom);
     };

@@ -1,0 +1,193 @@
+{
+  "characterName": "New Character",
+  "profession": "Student",
+  "era": "Modern",
+  "characteristics": {
+    "STR": 12,
+    "CON": 13,
+    "SIZ": 11,
+    "INT": 15,
+    "POW": 14,
+    "DEX": 16,
+    "CHA": 9
+  },
+  "hitPoints": {
+    "maximum": 12,
+    "current": 12
+  },
+  "powerPoints": {
+    "maximum": 14,
+    "current": 14
+  },
+  "skills": {
+    "appraise": {
+      "value": 15,
+      "experienceCheck": false
+    },
+    "bargain": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "brawl": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "climb": {
+      "value": 40,
+      "experienceCheck": false
+    },
+    "command": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "demolition": {
+      "value": 1,
+      "experienceCheck": false
+    },
+    "disguise": {
+      "value": 1,
+      "experienceCheck": false
+    },
+    "dodge": {
+      "value": 32,
+      "experienceCheck": false
+    },
+    "fastTalk": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "fineManipulation": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "firstAid": {
+      "value": 30,
+      "experienceCheck": false
+    },
+    "gaming": {
+      "value": 29,
+      "experienceCheck": false
+    },
+    "grapple": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "hide": {
+      "value": 10,
+      "experienceCheck": false
+    },
+    "insight": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "jump": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "listen": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "martialArts": {
+      "value": 1,
+      "experienceCheck": false
+    },
+    "medicine": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "navigate": {
+      "value": 10,
+      "experienceCheck": false
+    },
+    "perform": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "persuade": {
+      "value": 15,
+      "experienceCheck": false
+    },
+    "psychotherapy": {
+      "value": 1,
+      "experienceCheck": false
+    },
+    "research": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "sense": {
+      "value": 10,
+      "experienceCheck": false
+    },
+    "sleightOfHand": {
+      "value": 5,
+      "experienceCheck": false
+    },
+    "spot": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "status": {
+      "value": 15,
+      "experienceCheck": false
+    },
+    "stealth": {
+      "value": 10,
+      "experienceCheck": false
+    },
+    "strategy": {
+      "value": 1,
+      "experienceCheck": false
+    },
+    "swim": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "teach": {
+      "value": 10,
+      "experienceCheck": false
+    },
+    "throw": {
+      "value": 25,
+      "experienceCheck": false
+    },
+    "track": {
+      "value": 10,
+      "experienceCheck": false
+    },
+    "art": [],
+    "artillery": [],
+    "craft": [],
+    "drive": [],
+    "energyWeapon": [],
+    "etiquette": [],
+    "firearm": [],
+    "heavyMachine": [],
+    "heavyWeapon": [],
+    "knowledge": [],
+    "languageOther": [],
+    "meleeWeapon": [],
+    "missileWeapon": [],
+    "parry": [],
+    "pilot": [],
+    "repair": [],
+    "ride": [],
+    "science": [],
+    "shield": [],
+    "technicalSkill": [],
+    "languageOwn": {
+      "language": "",
+      "value": 75,
+      "experienceCheck": false
+    },
+    "own": []
+  },
+  "sanity": {
+    "starting": 70,
+    "maximum": 99,
+    "current": 70
+  },
+  "move": 10,
+  "themeColor": "Dark Forest"
+}

@@ -1,6 +1,6 @@
 /**
  * PaintQuestions
- * What Paint asks the DM: before Save writes over the map's picture (Save
+ * What Paint asks the GM: before Save writes over the map's picture (Save
  * over it, or Not now, which Esc is too), naming the other maps using it;
  * about paint not saved, before something takes it off the screen (Save my
  * painting, Discard my painting, or Not now, which Esc is too; before the
@@ -100,10 +100,10 @@ export function PaintLeaveQuestion({ leaving, mapName, overwrites, answering, on
   );
 }
 
-/** Why the painting was left behind, as the DM is told. */
+/** Why the painting was left behind, as the GM is told. */
 export function leftoverWords(leftover: PaintLeftover): string {
-  return leftover.reason === 'not-dm'
-    ? `You are no longer the DM, so your painting of ${leftover.mapName} cannot be saved. Download it to keep it as a picture; a draft also stays in this browser until you sign out, offered back if you are the DM again.`
+  return leftover.reason === 'not-gm'
+    ? `You are no longer the GM, so your painting of ${leftover.mapName} cannot be saved. Download it to keep it as a picture; a draft also stays in this browser until you sign out, offered back if you are the GM again.`
     : `${leftover.mapName} is no longer on your screen, so your painting of it was not saved. Download it to keep it as a picture.`;
 }
 

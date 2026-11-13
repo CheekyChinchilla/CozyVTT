@@ -4,9 +4,9 @@
 // The server sends every wall and light change to everyone on the map, the
 // sender included. The sending page has drawn its change already, and may
 // have made another before the echo arrives, so applying its own echo would
-// put back an older list. The DM's page used to skip every wall and light
+// put back an older list. The GM's page used to skip every wall and light
 // event for that reason, which also threw away a player's door toggle and
-// any change made through the API, and the DM's next bulk edit then sent the
+// any change made through the API, and the GM's next bulk edit then sent the
 // stale list back to everyone.
 //
 // Each edit now carries a random operation id, which the server echoes. A

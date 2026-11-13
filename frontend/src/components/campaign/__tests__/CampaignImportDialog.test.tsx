@@ -66,7 +66,7 @@ describe('CampaignImportDialog', () => {
   it('says the same when the import itself is refused with 413', async () => {
     previewCampaignImport.mockResolvedValue({
       formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT v1.5.0', campaignName: 'Keep',
-      gameSystem: 'DND_5E', mapCount: 1, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+      gameSystem: 'FIFTH_EDITION', mapCount: 1, tokenCount: 0, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
       includesAudio: false, totalSizeBytes: 100,
     });
     importCampaign.mockRejectedValue(httpError(413, ''));
@@ -82,7 +82,7 @@ describe('CampaignImportDialog', () => {
 describe('CampaignImportDialog done screen', () => {
   const preview = {
     formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT v1.4.0', campaignName: 'Keep',
-    gameSystem: 'DND_5E', mapCount: 3, tokenCount: 12, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+    gameSystem: 'FIFTH_EDITION', mapCount: 3, tokenCount: 12, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
     includesAudio: false, totalSizeBytes: 100,
   };
 
@@ -188,7 +188,7 @@ describe('CampaignImportDialog as a dialog', () => {
 describe('CampaignImportDialog while an import is running', () => {
   const preview = {
     formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT v1.5.1', campaignName: 'Keep',
-    gameSystem: 'DND_5E', mapCount: 3, tokenCount: 12, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+    gameSystem: 'FIFTH_EDITION', mapCount: 3, tokenCount: 12, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
     includesAudio: false, totalSizeBytes: 100,
   };
 
@@ -234,7 +234,7 @@ describe('CampaignImportDialog while an import is running', () => {
 describe('CampaignImportDialog sends the archive once', () => {
   const manifest = {
     formatVersion: 1, exportedAt: '2026-10-18T00:00:00.000Z', exportedFrom: 'CozyVTT v1.5.3', campaignName: 'The Sunken Keep',
-    gameSystem: 'DND_5E', mapCount: 3, tokenCount: 14, creatureCount: 2, tokenTemplateCount: 1, assetCount: 4,
+    gameSystem: 'FIFTH_EDITION', mapCount: 3, tokenCount: 14, creatureCount: 2, tokenTemplateCount: 1, assetCount: 4,
     includesAudio: false, totalSizeBytes: 2048,
   };
 

@@ -1,7 +1,7 @@
 // ============================================
 // Fog rectangle selection — drag corners to fog cell indices
 //
-// The DM drags a box; these functions turn the two corners into the exact set
+// The GM drags a box; these functions turn the two corners into the exact set
 // of fog cells it covers. Everything is in MAP PIXELS, which are already
 // top-left origin like the fog raster — so the bottom-left token convention
 // never enters the picture and there is no flip to get wrong. See coords.ts.
@@ -97,8 +97,8 @@ export function fogRectToPx(
 
 /**
  * The revealed cells of a full fog grid, as the set a player's view is drawn
- * from. Lets the DM's Player Preview draw fog the way a player sees it from
- * the grid the DM already holds. No grid (or no fog) means nothing revealed.
+ * from. Lets the GM's Player Preview draw fog the way a player sees it from
+ * the grid the GM already holds. No grid (or no fog) means nothing revealed.
  */
 export function revealedSetFromFogState(fog: FogState | null): Set<number> {
   const revealed = new Set<number>();

@@ -37,7 +37,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
     campaign: {
       id: 'campaign-1',
       memberships: [
-        { userId: 'dm', role: 'DM', user: { displayName: 'Dee' } },
+        { userId: 'dm', role: 'GM', user: { displayName: 'Dee' } },
         { userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } },
       ],
       maps: [{ id: 'map-1', name: 'Cave' }],
@@ -56,11 +56,11 @@ vi.mock('@/services/api', () => ({ api, default: api }));
 import TokenManager from '../TokenManager';
 
 const aldra = { id: 'char-aldra', userId: 'pia', name: 'Aldra', tokenImageUrl: '/api/assets/tokens/aldra' };
-const npcOfDms = { id: 'char-mayor', userId: 'dm', name: 'The Mayor', tokenImageUrl: null };
+const npcOfGms = { id: 'char-mayor', userId: 'dm', name: 'The Mayor', tokenImageUrl: null };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  characters.list = [aldra, npcOfDms];
+  characters.list = [aldra, npcOfGms];
   api.listAssets.mockResolvedValue({ assets: [], pagination: {} });
   api.addToken.mockImplementation((_c: string, _m: string, payload: Partial<Token>) => Promise.resolve({ token: { id: 'new', ...payload } }));
   useGameStore.getState().setTokens([]);
@@ -77,7 +77,7 @@ const sent = () => api.addToken.mock.calls[0][2];
 it('links a Player token to the character picked, named after it and controlled by its owner', async () => {
   await choosePlayer();
   await userEvent.selectOptions(screen.getByLabelText('Character'), 'char-aldra');
-  expect(screen.getByPlaceholderText('e.g. Goblin Scout, Party Wizard…')).toHaveValue('Aldra');
+  expect(screen.getByPlaceholderText('e.g. Goblin, Party Wizard…')).toHaveValue('Aldra');
   expect(screen.getByLabelText('Controlled by')).toHaveValue('pia');
 
   await userEvent.click(screen.getByRole('button', { name: 'Place on Map' }));
@@ -91,9 +91,9 @@ it('names each character with its owner', async () => {
   expect(options).toEqual(['No character', 'Aldra (Pia)', 'The Mayor (Dee)']);
 });
 
-it('keeps a name already typed, and leaves a DM\'s character with nobody controlling it', async () => {
+it('keeps a name already typed, and leaves a GM\'s character with nobody controlling it', async () => {
   await choosePlayer();
-  await userEvent.type(screen.getByPlaceholderText('e.g. Goblin Scout, Party Wizard…'), 'Mayor Hollis');
+  await userEvent.type(screen.getByPlaceholderText('e.g. Goblin, Party Wizard…'), 'Mayor Hollis');
   await userEvent.selectOptions(screen.getByLabelText('Character'), 'char-mayor');
   await userEvent.click(screen.getByRole('button', { name: 'Place on Map' }));
 

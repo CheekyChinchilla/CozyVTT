@@ -19,7 +19,7 @@ const socket = { on: vi.fn(), off: vi.fn() };
 
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'DM' }] }, currentMap: null, viewedMap: null, userRole: 'DM' }),
+  useCampaign: () => ({ campaign: { id: 'c1', memberships: [{ userId: 'dm', role: 'GM' }] }, currentMap: null, viewedMap: null, userRole: 'GM' }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({ useWebSocket: () => ({ socket }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm' } }) }));
@@ -34,7 +34,7 @@ vi.mock('@/services/api', () => {
 import CampaignRoster from '../CampaignRoster';
 
 const roster = (): RosterMember[] => [
-  { userId: 'dm', userName: 'Mara', userAvatar: null, role: CampaignRole.DM, joinedAt: '2026-10-01T00:00:00.000Z', characters: [] },
+  { userId: 'dm', userName: 'Mara', userAvatar: null, role: CampaignRole.GM, joinedAt: '2026-10-01T00:00:00.000Z', characters: [] },
   {
     userId: 'p1', userName: 'Ash', userAvatar: null, role: CampaignRole.PLAYER, joinedAt: '2026-10-01T00:00:00.000Z',
     characters: [{ id: 'ash-hero', name: "Ash's hero", tokenImageUrl: null, gameSystem: null, userId: 'p1', hp: { current: 7, max: 10, temp: 0 } }],
@@ -69,7 +69,7 @@ it('removes nothing when the confirmation is cancelled', async () => {
 });
 
 // The question said "this character", so a menu opened on the wrong row
-// could remove someone the DM did not mean.
+// could remove someone the GM did not mean.
 it('names the character it asks about', async () => {
   render(<CampaignRoster />);
   fireEvent.contextMenu(await screen.findByText("Ash's hero"), { clientX: 40, clientY: 40 });

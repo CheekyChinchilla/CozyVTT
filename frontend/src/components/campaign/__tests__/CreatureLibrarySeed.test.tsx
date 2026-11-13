@@ -2,7 +2,7 @@
  * Importing the SRD creatures is offered to administrators only.
  *
  * The import fills the library every campaign on the server shares, so the
- * server now lets only an administrator run it. A DM who is not one is told
+ * server now lets only an administrator run it. A GM who is not one is told
  * to ask one, instead of being offered a button the server refuses, and a
  * refused or failed import shows the server's reason.
  */
@@ -34,13 +34,13 @@ beforeEach(() => {
 });
 
 describe('the SRD import in an empty library', () => {
-  it('tells a DM who is not an administrator to ask one, with no button', async () => {
+  it('tells a GM who is not an administrator to ask one, with no button', async () => {
     api.getSeedStatus.mockResolvedValue({ srdCount: 0, customCount: 0, seedInProgress: false, canSeed: false });
     render(<CreatureLibrary isOpen onClose={() => {}} />);
 
     expect(await screen.findByText(/Ask an administrator to import them/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Import D&D 5e SRD Creatures' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Import D&D 5e SRD$/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import 5E SRD Creatures' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Import 5E SRD$/ })).not.toBeInTheDocument();
   });
 
   it('offers an administrator the import, and shows the server\'s reason when it fails', async () => {
@@ -50,7 +50,7 @@ describe('the SRD import in an empty library', () => {
     });
     render(<CreatureLibrary isOpen onClose={() => {}} />);
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Import D&D 5e SRD Creatures' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Import 5E SRD Creatures' }));
 
     expect(await screen.findByText('api.open5e.com did not answer within 15 seconds.')).toBeInTheDocument();
   });
@@ -66,7 +66,7 @@ describe('the SRD import in an empty library', () => {
     render(<CreatureLibrary isOpen onClose={() => {}} />);
     await waitForDialogFocus();
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Import D&D 5e SRD Creatures' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Import 5E SRD Creatures' }));
     expect(await screen.findByText('api.open5e.com did not answer within 15 seconds.')).toBeInTheDocument();
 
     const loadsBefore = api.listCreatures.mock.calls.length;
@@ -83,7 +83,7 @@ describe('loading the library', () => {
     api.getSeedStatus.mockResolvedValue({ srdCount: 0, customCount: 0, seedInProgress: false, canSeed: true });
     render(<CreatureLibrary isOpen onClose={() => {}} />);
 
-    await screen.findByRole('button', { name: 'Import D&D 5e SRD Creatures' });
+    await screen.findByRole('button', { name: 'Import 5E SRD Creatures' });
     await new Promise((resolve) => setTimeout(resolve, 600));
     expect(api.listCreatures).toHaveBeenCalledTimes(1);
   });

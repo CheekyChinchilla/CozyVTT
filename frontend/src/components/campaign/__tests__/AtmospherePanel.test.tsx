@@ -1,14 +1,14 @@
 /**
  * Which tracks the atmosphere panel offers.
  *
- * The asset list a DM can see is wider than the set they may actually play:
+ * The asset list a GM can see is wider than the set they may actually play:
  * it also holds audio scoped to other campaigns they belong to, which the
  * server refuses because a track belongs to the table it was uploaded for.
  * Offering one of those produced a button that silently did nothing, since a
  * refused set only reaches the console.
  *
  * The scope line had the same shape of bug: a two-way label that called every
- * non-campaign track "Global", so a DM's own personal track was described as
+ * non-campaign track "Global", so a GM's own personal track was described as
  * something the whole instance could see.
  */
 
@@ -69,7 +69,7 @@ beforeEach(() => {
 });
 
 describe('AtmospherePanel audio list', () => {
-  it('offers the DM\'s own track, a global one, and this campaign\'s own', async () => {
+  it('offers the GM\'s own track, a global one, and this campaign\'s own', async () => {
     listAssets.mockResolvedValue({
       assets: [
         track('a1', 'My Rain', AssetScope.USER),
@@ -85,7 +85,7 @@ describe('AtmospherePanel audio list', () => {
     expect(screen.getByText('This Table')).toBeInTheDocument();
   });
 
-  // The panel fetched one page, the newest 50 tracks of every campaign the DM
+  // The panel fetched one page, the newest 50 tracks of every campaign the GM
   // is in, then kept this campaign's, so a track past them was not offered.
   it('offers a track from a later page of the library', async () => {
     const others = Array.from({ length: 50 }, (_, i) => track(`o${i}`, `Other ${i}`, AssetScope.CAMPAIGN, { campaignId: 'c2' }));
