@@ -1033,7 +1033,7 @@ describe('the game content notices', () => {
     expect(exists('SRD_ATTRIBUTION.md') || exists('SRD_LICENSE.txt')).toBe(false);
     const pointing = [
       'README.md',
-      'THIRD_PARTY_LICENSES.md',
+      'THIRD_PARTY_CREDITS.md',
       'THIRD_PARTY_NOTICES.txt',
       'docs/GAME_SYSTEMS.md',
       'backend/src/services/creatureSeed.ts',

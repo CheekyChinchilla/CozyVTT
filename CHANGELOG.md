@@ -188,6 +188,8 @@ The restore also takes back everything done since the upgrade. After going back,
 
 - **The three game systems have new names.** The fifth edition fantasy system is **5E (SRD 5.1)**, the three-action fantasy system is **Fantasy d20 (ORC)**, whose first **Theme Color** choice is now called **Royal Blue**, and the percentile horror system is **Horror d100**. See [Character Sheets by Game System](docs/USER_GUIDE.md#character-sheets-by-game-system).
 
+- **The third-party credits are now in `THIRD_PARTY_CREDITS.md`.** The file was `THIRD_PARTY_LICENSES.md`; its content is the same, and a bookmark to the old name needs the new one.
+
 ### Removed
 
 - **The unfinished sheet for a fourth game system is gone.** The app never offered it, but a script could make campaigns, characters, templates and creatures for it. All are kept, with no game system: such a campaign plays as one with none, and such a character or template opens as a Flexible sheet. See [Unsupported system](docs/USER_GUIDE.md#unsupported-system).

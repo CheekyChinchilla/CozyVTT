@@ -260,7 +260,7 @@ Pictures also have fixed limits: at most 16,384 pixels on each side, and for an 
 | [Future Features](docs/FUTURE_FEATURES.md) | Backlog of planned work |
 | [Security Policy](SECURITY.md) | How to report vulnerabilities |
 | [Changelog](CHANGELOG.md) | Release history |
-| [Third-Party Licenses](THIRD_PARTY_LICENSES.md) | Licences of the fonts, icons, pictures, libraries and game content CozyVTT uses |
+| [Third-Party Credits](THIRD_PARTY_CREDITS.md) | Licences of the fonts, icons, pictures, libraries and game content CozyVTT uses |
 | [Game Content Notices](GAME_CONTENT_NOTICES.md) | The licences of the game rules CozyVTT uses, and the credits they ask for |
 
 ---
@@ -302,6 +302,6 @@ GNU Affero General Public License v3.0 — see [LICENSE](LICENSE) for details.
 
 CozyVTT is free to use, self-host, and fork. The AGPLv3 requires that any modified version you run as a network service must also make its source code available under the same license.
 
-For third-party font and content licenses, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+For third-party font and content licenses, see [THIRD_PARTY_CREDITS.md](THIRD_PARTY_CREDITS.md).
 
 The open game rules CozyVTT draws on are not under the AGPLv3: the SRD 5.1 material stays under Creative Commons Attribution 4.0, and the material taken from rules released under the ORC License stays under that licence. [GAME_CONTENT_NOTICES.md](GAME_CONTENT_NOTICES.md) has their notices and says what each game system takes from them, and the app shows their credits in **About CozyVTT**. If you host CozyVTT for others, leave that window reachable: the rules' licences ask for these credits.
